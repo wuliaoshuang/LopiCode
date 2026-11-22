@@ -170,3 +170,7 @@ extension AppColorsX on BuildContext {
 
 /// 等宽字体族（代码、终端）。Android 自带 monospace；CJK 走系统回退。
 const String kMonoFont = 'monospace';
+
+/// 等宽字体里没有的字（中文）退到这个字体族。真机上系统会自动回退，
+/// 这个名字只在截图测试里对应一个真实加载的字体。
+const List<String> kMonoFallback = ['LopiCJK'];

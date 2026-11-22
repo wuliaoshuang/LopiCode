@@ -37,7 +37,10 @@ String _ind(int n) => '  ' * n;
 
 String _node(LcNode n, LcNode? parent, int i) {
   final inRow = parent?.type == 'row';
-  String wrapFill(String w) => n.fillWidth && inRow ? 'Expanded(\n${_ind(i + 1)}child: ${_reindent(w, 1)},\n${_ind(i)})' : w;
+  // 行里的容器类组件：没给固定宽度就用 Expanded 平分剩余空间。
+  // 否则行套行、行里放“拉伸”的列会拿到无限宽度，Flutter 直接报布局错误。
+  final expand = inRow && (n.fillWidth || (n.isContainer && n.props['width'] is! num));
+  String wrapFill(String w) => expand ? 'Expanded(\n${_ind(i + 1)}child: ${_reindent(w, 1)},\n${_ind(i)})' : w;
 
   switch (n.type) {
     case 'page':
@@ -91,7 +94,8 @@ String _node(LcNode n, LcNode? parent, int i) {
           '${n.props['width'] is num ? 'width: ${_d(n.props['width'] as num)}, ' : (n.fillWidth && !inRow ? 'width: double.infinity, ' : '')}';
       final img = src == null
           ? 'Container(${size}color: const Color(0xFFD3DEE4), alignment: Alignment.center, child: const Icon(Icons.image_outlined))'
-          : 'Image.network(${_s(src)}, ${size}fit: BoxFit.cover)';
+          // 图片加载失败（没网、地址错）时显示占位，而不是抛异常。
+          : 'Image.network(${_s(src)}, ${size}fit: BoxFit.cover, errorBuilder: (context, error, stack) => const Icon(Icons.broken_image_outlined))';
       final clipped = 'ClipRRect(\n${_ind(i + 1)}borderRadius: BorderRadius.circular($radius),\n${_ind(i + 1)}child: $img,\n${_ind(i)})';
       return wrapFill(_margin(n, i, clipped));
     case 'input':

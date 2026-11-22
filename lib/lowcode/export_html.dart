@@ -100,7 +100,8 @@ List<String> _rules(LcNode n, LcNode? parent) {
     return ['flex: 0 0 ${size}px;', if (parent?.type == 'row') 'width: ${size}px;' else 'height: ${size}px;'];
   }
   final width = n.props['width'];
-  if (width == 'fill') {
+  // 行里的容器类组件：没给固定宽度就平分剩余空间（和导出的 Flutter 代码规则一致）。
+  if (width == 'fill' || (parent?.type == 'row' && n.isContainer && width is! num)) {
     r.add(parent?.type == 'row' ? 'flex: 1; min-width: 0;' : 'align-self: stretch;');
   } else if (width is num) {
     r.add('width: ${_n(width)}px;');

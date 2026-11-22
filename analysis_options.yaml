@@ -13,6 +13,8 @@ analyzer:
   exclude:
     - build/**
     - android/**
+    # 低代码导出器的真实输出（编译检查样本），按导出原样保留
+    - test/generated/**
 
 linter:
   # The lint rules applied to this project can be customized in the

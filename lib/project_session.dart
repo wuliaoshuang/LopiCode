@@ -79,6 +79,11 @@ class ProjectSession extends ChangeNotifier {
       title: '本机 ${++_terminalCounter}',
       backend: PipeShellBackend(project.dir),
     );
+    session.append(
+      'LopiCode 基础终端 · 项目目录\n'
+      '这里跑的是手机自带的 sh：有 ls、cat、cp、mkdir 这类基础命令，没有 git、node、python 和编译器。\n'
+      '一次一条命令；不支持 vim、top 这类全屏程序。\n\n',
+    );
     terminals.add(session);
     activeTerminal = terminals.length - 1;
     notifyListeners();

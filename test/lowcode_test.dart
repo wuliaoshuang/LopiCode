@@ -5,47 +5,7 @@ import 'package:lopicode/lowcode/export_dart.dart';
 import 'package:lopicode/lowcode/export_html.dart';
 import 'package:lopicode/lowcode/model.dart';
 
-LcDocument sample() => LcDocument.parse(jsonEncode({
-  'version': 1,
-  'title': '登录页 Demo',
-  'root': {
-    'id': 'root',
-    'type': 'page',
-    'props': {'padding': 16, 'gap': 12, 'bg': '#f6fbfd'},
-    'children': [
-      {'id': 't1', 'type': 'text', 'props': {'text': "欢迎 <b>'回来'</b> \$5", 'fontSize': 24, 'bold': true, 'textAlign': 'center', 'width': 'fill'}},
-      {
-        'id': 'card',
-        'type': 'card',
-        'props': {'padding': 16, 'gap': 8, 'bg': '#FFFFFF', 'radius': 12, 'width': 'fill'},
-        'children': [
-          {'id': 'in', 'type': 'input', 'props': {'placeholder': '手机号', 'width': 'fill'}},
-          {
-            'id': 'row',
-            'type': 'row',
-            'props': {'gap': 8, 'justify': 'between', 'width': 'fill'},
-            'children': [
-              {'id': 'b1', 'type': 'button', 'props': {'text': '登录', 'bg': '#058654', 'color': '#FFFFFF', 'width': 'fill'}},
-              {'id': 'b2', 'type': 'button', 'props': {'text': '注册', 'width': 120}},
-              {'id': 'in2', 'type': 'input', 'props': {'placeholder': '行内输入'}},
-              {'id': 'tx', 'type': 'text', 'props': {'text': '行内文本'}},
-              {'id': 'dv', 'type': 'divider'},
-              {'id': 'sp', 'type': 'spacer', 'props': {'size': 8}},
-            ],
-          },
-        ],
-      },
-      {'id': 'img', 'type': 'image', 'props': {'height': 120, 'radius': 8, 'width': 'fill'}},
-      {'id': 'img2', 'type': 'image', 'props': {'src': 'https://example.com/a.png', 'height': 80, 'width': 80}},
-      {'id': 'ls', 'type': 'list', 'props': {'items': ['一', '二 & 三'], 'padding': 8, 'bg': '#FFFFFF'}},
-      {'id': 'col', 'type': 'column', 'props': {'gap': 4, 'align': 'stretch'}, 'children': [
-        {'id': 'c1', 'type': 'container', 'props': {'height': 40, 'bg': '#D3DEE4', 'margin': 4}},
-      ]},
-      {'id': 'dv2', 'type': 'divider', 'props': {'margin': 8}},
-      {'id': 'sp2', 'type': 'spacer', 'props': {'size': 24}},
-    ],
-  },
-}));
+import 'support/sample_doc.dart';
 
 void main() {
   group('模型 ↔ JSON', () {
@@ -120,7 +80,7 @@ void main() {
       expect(doc.insert('root', LcNode(id: 'p', type: 'page')), isFalse);
 
       // 同一父级内往后移：下标要按移除后的位置算
-      final rootKids = () => doc.root.children.map((c) => c.id).toList();
+      List<String> rootKids() => doc.root.children.map((c) => c.id).toList();
       expect(rootKids().take(3), ['t1', 'card', 'img']);
       expect(doc.move('t1', 'root', 2), isTrue);
       expect(rootKids().take(3), ['card', 't1', 'img']);
@@ -195,7 +155,7 @@ void main() {
       for (final tag in ['div', 'button', 'ul', 'li', 'p']) {
         expect(RegExp('<$tag[ >]').allMatches(out.html).length, '</$tag>'.allMatches(out.html).length, reason: tag);
       }
-      expect(out.css, contains('#b1'));
+      expect(out.css, contains('.n-b1 {'));
       expect(out.css, contains('background: #058654'));
       expect(out.css, contains('justify-content: space-between'));
       expect(out.css, contains('border-radius: 12px'));
