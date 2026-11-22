@@ -1,0 +1,186 @@
+import 'package:lopicode/lowcode/model.dart';
+
+/// 把页面导出成一个可直接放进 Flutter 项目的 Dart 文件（一个 StatelessWidget）。
+String exportDart(LcDocument doc, {String? className}) {
+  final name = className ?? dartClassName(doc.title);
+  final body = _node(doc.root, null, 3);
+  return '''// 由 LopiCode 低代码搭建器生成，重新导出会覆盖本文件。
+import 'package:flutter/material.dart';
+
+class $name extends StatelessWidget {
+  const $name({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return $body;
+  }
+}
+''';
+}
+
+/// 标题 → 合法的 Dart 类名（非 ASCII 字符会被丢掉，全丢光就用默认名）。
+String dartClassName(String title) {
+  final parts = title.split(RegExp(r'[^A-Za-z0-9]+')).where((s) => s.isNotEmpty);
+  var name = parts.map((s) => s[0].toUpperCase() + s.substring(1)).join();
+  if (name.isEmpty || RegExp(r'^[0-9]').hasMatch(name)) name = 'Lowcode$name';
+  return name.endsWith('Page') ? name : '${name}Page';
+}
+
+String _s(String v) =>
+    "'${v.replaceAll('\\', r'\\').replaceAll("'", r"\'").replaceAll(r'$', r'\$').replaceAll('\r', '').replaceAll('\n', r'\n')}'";
+
+String _d(num v) => v == v.roundToDouble() ? '${v.round()}' : '$v';
+
+String _color(String hex) => 'const Color(0xFF${hex.substring(1).toUpperCase()})';
+
+String _ind(int n) => '  ' * n;
+
+String _node(LcNode n, LcNode? parent, int i) {
+  final inRow = parent?.type == 'row';
+  String wrapFill(String w) => n.fillWidth && inRow ? 'Expanded(\n${_ind(i + 1)}child: ${_reindent(w, 1)},\n${_ind(i)})' : w;
+
+  switch (n.type) {
+    case 'page':
+      final bg = n.strProp('bg');
+      return 'Scaffold(\n'
+          '${bg != null ? '${_ind(i + 1)}backgroundColor: ${_color(bg)},\n' : ''}'
+          '${_ind(i + 1)}body: SafeArea(\n'
+          '${_ind(i + 2)}child: SingleChildScrollView(\n'
+          '${_ind(i + 3)}padding: const EdgeInsets.all(${_d(n.numProp('padding') ?? 0)}),\n'
+          '${_ind(i + 3)}child: ${_flex(n, i + 3, column: true, forceStretchWidth: true)},\n'
+          '${_ind(i + 2)}),\n'
+          '${_ind(i + 1)}),\n'
+          '${_ind(i)})';
+    case 'container' || 'column' || 'card' || 'row':
+      final inner = _flex(n, i + 1, column: n.type != 'row');
+      return wrapFill(_box(n, i, inner, inRow: inRow, shadow: n.type == 'card'));
+    case 'text':
+      final style = <String>[
+        if (n.numProp('fontSize') != null) 'fontSize: ${_d(n.numProp('fontSize')!)}',
+        if (n.props['bold'] == true) 'fontWeight: FontWeight.w600',
+        if (n.strProp('color') != null) 'color: ${_color(n.strProp('color')!)}',
+        'height: 1.5',
+      ];
+      final ta = n.strProp('textAlign');
+      final text = 'Text(\n${_ind(i + 1)}${_s(n.strProp('text') ?? '')},\n'
+          '${ta != null ? '${_ind(i + 1)}textAlign: TextAlign.$ta,\n' : ''}'
+          '${_ind(i + 1)}style: const TextStyle(${style.join(', ')}),\n${_ind(i)})';
+      final boxed = _needsBox(n) ? _box(n, i, _reindent(text, 1), inRow: inRow) : text;
+      if (inRow && !n.fillWidth && n.props['width'] == null) {
+        return 'Flexible(\n${_ind(i + 1)}child: ${_reindent(boxed, 1)},\n${_ind(i)})';
+      }
+      return wrapFill(boxed);
+    case 'button':
+      final styles = <String>[
+        if (n.strProp('bg') != null) 'backgroundColor: ${_color(n.strProp('bg')!)}',
+        if (n.strProp('color') != null) 'foregroundColor: ${_color(n.strProp('color')!)}',
+        if (n.numProp('padding') != null) 'padding: const EdgeInsets.all(${_d(n.numProp('padding')!)})',
+        if (n.numProp('radius') != null)
+          'shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(${_d(n.numProp('radius')!)}))',
+        if (n.numProp('fontSize') != null) 'textStyle: const TextStyle(fontSize: ${_d(n.numProp('fontSize')!)})',
+      ];
+      final button = 'FilledButton(\n${_ind(i + 1)}onPressed: () {},\n'
+          '${_ind(i + 1)}style: FilledButton.styleFrom(${styles.join(', ')}),\n'
+          '${_ind(i + 1)}child: Text(${_s(n.strProp('text') ?? '')}),\n${_ind(i)})';
+      return wrapFill(_sized(n, i, button, inRow: inRow));
+    case 'image':
+      final radius = _d(n.numProp('radius') ?? 0);
+      final h = n.numProp('height');
+      final src = n.strProp('src');
+      final size = '${h != null ? 'height: ${_d(h)}, ' : ''}'
+          '${n.props['width'] is num ? 'width: ${_d(n.props['width'] as num)}, ' : (n.fillWidth && !inRow ? 'width: double.infinity, ' : '')}';
+      final img = src == null
+          ? 'Container(${size}color: const Color(0xFFD3DEE4), alignment: Alignment.center, child: const Icon(Icons.image_outlined))'
+          : 'Image.network(${_s(src)}, ${size}fit: BoxFit.cover)';
+      final clipped = 'ClipRRect(\n${_ind(i + 1)}borderRadius: BorderRadius.circular($radius),\n${_ind(i + 1)}child: $img,\n${_ind(i)})';
+      return wrapFill(_margin(n, i, clipped));
+    case 'input':
+      final field = 'TextField(\n${_ind(i + 1)}decoration: InputDecoration(\n'
+          '${_ind(i + 2)}hintText: ${_s(n.strProp('placeholder') ?? '')},\n'
+          '${_ind(i + 2)}border: OutlineInputBorder(borderRadius: BorderRadius.circular(${_d(n.numProp('radius') ?? 4)})),\n'
+          '${_ind(i + 1)}),\n${_ind(i)})';
+      // 行里的输入框必须有确定宽度，否则 Flutter 会报布局错误。
+      final w = n.props['width'];
+      if (inRow && w == null) {
+        return _margin(n, i, 'SizedBox(\n${_ind(i + 1)}width: 160,\n${_ind(i + 1)}child: ${_reindent(field, 1)},\n${_ind(i)})');
+      }
+      return wrapFill(_sized(n, i, field, inRow: inRow));
+    case 'list':
+      final style = <String>[
+        if (n.numProp('fontSize') != null) 'fontSize: ${_d(n.numProp('fontSize')!)}',
+        if (n.strProp('color') != null) 'color: ${_color(n.strProp('color')!)}',
+        'height: 1.75',
+      ];
+      final items = [
+        for (final item in (n.props['items'] as List?) ?? const [])
+          '${_ind(i + 2)}Text(${_s('• $item')}, style: const TextStyle(${style.join(', ')})),\n',
+      ].join();
+      final col = 'Column(\n${_ind(i + 1)}crossAxisAlignment: CrossAxisAlignment.start,\n'
+          '${_ind(i + 1)}mainAxisSize: MainAxisSize.min,\n${_ind(i + 1)}children: [\n$items${_ind(i + 1)}],\n${_ind(i)})';
+      return wrapFill(_needsBox(n) ? _box(n, i, _reindent(col, 1), inRow: inRow) : col);
+    case 'divider':
+      return _margin(n, i, inRow ? 'const SizedBox(height: 24, child: VerticalDivider(width: 1))' : 'const Divider(height: 1)');
+    case 'spacer':
+      final size = _d(n.numProp('size') ?? 16);
+      return inRow ? 'const SizedBox(width: $size)' : 'const SizedBox(height: $size)';
+  }
+  return 'const SizedBox.shrink()';
+}
+
+bool _needsBox(LcNode n) =>
+    n.props['width'] != null || n.numProp('padding') != null || n.numProp('margin') != null || n.strProp('bg') != null;
+
+String _reindent(String code, int by) => code.replaceAll('\n', '\n${_ind(by)}');
+
+String _flex(LcNode n, int i, {required bool column, bool forceStretchWidth = false}) {
+  const cross = {'start': 'start', 'center': 'center', 'end': 'end', 'stretch': 'stretch'};
+  const main = {'start': 'start', 'center': 'center', 'end': 'end', 'between': 'spaceBetween'};
+  final a = n.strProp('align') ?? (column ? 'start' : 'center');
+  final j = n.strProp('justify');
+  final children = [for (final c in n.children) '${_ind(i + 2)}${_node(c, n, i + 2)},\n'].join();
+  final flex = '${column ? 'Column' : 'Row'}(\n'
+      '${_ind(i + 1)}mainAxisSize: ${column ? 'MainAxisSize.min' : 'MainAxisSize.max'},\n'
+      '${_ind(i + 1)}crossAxisAlignment: CrossAxisAlignment.${cross[a]},\n'
+      '${j != null ? '${_ind(i + 1)}mainAxisAlignment: MainAxisAlignment.${main[j]},\n' : ''}'
+      '${n.numProp('gap') != null ? '${_ind(i + 1)}spacing: ${_d(n.numProp('gap')!)},\n' : ''}'
+      '${_ind(i + 1)}children: [\n$children${_ind(i + 1)}],\n${_ind(i)})';
+  if (forceStretchWidth) {
+    return 'SizedBox(\n${_ind(i + 1)}width: double.infinity,\n${_ind(i + 1)}child: ${_reindent(flex, 1)},\n${_ind(i)})';
+  }
+  return flex;
+}
+
+/// Container 包一层：尺寸、内外边距、背景、圆角、阴影。
+String _box(LcNode n, int i, String child, {required bool inRow, bool shadow = false}) {
+  final w = n.props['width'];
+  final deco = <String>[
+    if (n.strProp('bg') != null) 'color: ${_color(n.strProp('bg')!)}',
+    if (n.numProp('radius') != null) 'borderRadius: BorderRadius.circular(${_d(n.numProp('radius')!)})',
+    if (shadow) 'boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 3, offset: Offset(0, 1))]',
+  ];
+  return 'Container(\n'
+      '${w is num ? '${_ind(i + 1)}width: ${_d(w)},\n' : (w == 'fill' && !inRow ? '${_ind(i + 1)}width: double.infinity,\n' : '')}'
+      '${n.numProp('height') != null ? '${_ind(i + 1)}height: ${_d(n.numProp('height')!)},\n' : ''}'
+      '${n.numProp('margin') != null ? '${_ind(i + 1)}margin: const EdgeInsets.all(${_d(n.numProp('margin')!)}),\n' : ''}'
+      '${n.numProp('padding') != null ? '${_ind(i + 1)}padding: const EdgeInsets.all(${_d(n.numProp('padding')!)}),\n' : ''}'
+      '${deco.isNotEmpty ? '${_ind(i + 1)}decoration: BoxDecoration(${deco.join(', ')}),\n' : ''}'
+      '${_ind(i + 1)}child: $child,\n${_ind(i)})';
+}
+
+/// 只管宽度和外边距（按钮、输入框自己处理内边距和背景）。
+String _sized(LcNode n, int i, String child, {required bool inRow}) {
+  final w = n.props['width'];
+  var out = child;
+  if (w is num) {
+    out = 'SizedBox(\n${_ind(i + 1)}width: ${_d(w)},\n${_ind(i + 1)}child: ${_reindent(out, 1)},\n${_ind(i)})';
+  } else if (w == 'fill' && !inRow) {
+    out = 'SizedBox(\n${_ind(i + 1)}width: double.infinity,\n${_ind(i + 1)}child: ${_reindent(out, 1)},\n${_ind(i)})';
+  }
+  return _margin(n, i, out);
+}
+
+String _margin(LcNode n, int i, String child) {
+  final m = n.numProp('margin');
+  if (m == null || m == 0) return child;
+  return 'Padding(\n${_ind(i + 1)}padding: const EdgeInsets.all(${_d(m)}),\n${_ind(i + 1)}child: ${_reindent(child, 1)},\n${_ind(i)})';
+}
