@@ -145,7 +145,7 @@ class _BuildScreenState extends State<BuildScreen> {
     final job = _job;
     final busy = job?.busy ?? false;
     return Scaffold(
-      appBar: AppBar(titleSpacing: 0, title: const Text('APK 打包')),
+      appBar: AppBar(titleSpacing: Navigator.canPop(context) ? 0 : Space.x4, title: const Text('APK 打包')),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(Space.x4, Space.x2, Space.x4, Space.x8),
         children: [

@@ -41,10 +41,15 @@ IconData lcIcon(String type) => switch (type) {
   _ => Icons.widgets_outlined,
 };
 
-Color _hex(String hex) => Color(0xFF000000 | int.parse(hex.substring(1), radix: 16));
+Color _hex(String hex) =>
+    Color(0xFF000000 | int.parse(hex.substring(1), radix: 16));
 
 class BuilderScreen extends StatefulWidget {
-  const BuilderScreen({super.key, required this.session, this.initialSelection});
+  const BuilderScreen({
+    super.key,
+    required this.session,
+    this.initialSelection,
+  });
   final ProjectSession session;
 
   /// 测试 / 截图用。
@@ -223,12 +228,18 @@ class _BuilderScreenState extends State<BuilderScreen> {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      builder: (context) => _CodeSheet(title: 'Flutter 代码', note: '已保存到项目的 $path', code: code),
+      builder: (context) =>
+          _CodeSheet(title: 'Flutter 代码', note: '已保存到项目的 $path', code: code),
     );
   }
 
   Future<void> _renamePage() async {
-    final name = await promptDialog(context, title: '页面标题', initial: _doc!.title, confirmLabel: '保存');
+    final name = await promptDialog(
+      context,
+      title: '页面标题',
+      initial: _doc!.title,
+      confirmLabel: '保存',
+    );
     if (name == null || name.trim().isEmpty) return;
     _apply((d) => d.title = name.trim());
   }
@@ -239,14 +250,34 @@ class _BuilderScreenState extends State<BuilderScreen> {
     final history = _history;
     return Scaffold(
       appBar: AppBar(
-        titleSpacing: 0,
-        title: Text(doc?.title ?? '低代码搭建', maxLines: 1, overflow: TextOverflow.ellipsis),
+        titleSpacing: Navigator.canPop(context) ? 0 : Space.x4,
+        title: Text(
+          doc?.title ?? '低代码搭建',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
         actions: doc == null
             ? null
             : [
-                IconButton(tooltip: '撤销', icon: const Icon(Icons.undo), onPressed: history!.canUndo ? () => _restore(history.undo()) : null),
-                IconButton(tooltip: '重做', icon: const Icon(Icons.redo), onPressed: history.canRedo ? () => _restore(history.redo()) : null),
-                IconButton(tooltip: '图层', icon: const Icon(Icons.layers_outlined), onPressed: _openLayers),
+                IconButton(
+                  tooltip: '撤销',
+                  icon: const Icon(Icons.undo),
+                  onPressed: history!.canUndo
+                      ? () => _restore(history.undo())
+                      : null,
+                ),
+                IconButton(
+                  tooltip: '重做',
+                  icon: const Icon(Icons.redo),
+                  onPressed: history.canRedo
+                      ? () => _restore(history.redo())
+                      : null,
+                ),
+                IconButton(
+                  tooltip: '图层',
+                  icon: const Icon(Icons.layers_outlined),
+                  onPressed: _openLayers,
+                ),
                 PopupMenuButton<String>(
                   tooltip: '更多',
                   onSelected: (v) {
@@ -267,14 +298,21 @@ class _BuilderScreenState extends State<BuilderScreen> {
               icon: Icons.error_outline,
               title: '页面文件打不开',
               message: '$kLowcodePageFile 的内容有问题：$_loadError',
-              action: OutlinedButton(onPressed: _createFresh, child: const Text('用一个新页面覆盖')),
+              action: OutlinedButton(
+                onPressed: _createFresh,
+                child: const Text('用一个新页面覆盖'),
+              ),
             )
           : _missing
           ? EmptyState(
               icon: Icons.dashboard_customize_outlined,
               title: '这个项目还没有低代码页面',
-              message: '新建后会在项目里生成 $kLowcodePageFile，\n并自动导出 index.html 和 style.css。',
-              action: FilledButton(onPressed: _createFresh, child: const Text('新建页面')),
+              message:
+                  '新建后会在项目里生成 $kLowcodePageFile，\n并自动导出 index.html 和 style.css。',
+              action: FilledButton(
+                onPressed: _createFresh,
+                child: const Text('新建页面'),
+              ),
             )
           : doc == null
           ? const Center(child: CircularProgressIndicator())
@@ -283,20 +321,24 @@ class _BuilderScreenState extends State<BuilderScreen> {
                 Expanded(
                   child: GestureDetector(
                     onTap: () => setState(() => _selected = null),
-                    child: SingleChildScrollView(
-                      child: _Canvas(
-                        doc: doc,
-                        selected: _selected,
-                        dragging: _dragging,
-                        onSelect: (id) => setState(() => _selected = id),
-                        onDrop: _drop,
-                        canDrop: _canDrop,
-                        onDragging: _setDragging,
+                    child: LayoutBuilder(
+                      builder: (context, box) => SingleChildScrollView(
+                        child: _Canvas(
+                          minHeight: box.maxHeight,
+                          doc: doc,
+                          selected: _selected,
+                          dragging: _dragging,
+                          onSelect: (id) => setState(() => _selected = id),
+                          onDrop: _drop,
+                          canDrop: _canDrop,
+                          onDragging: _setDragging,
+                        ),
                       ),
                     ),
                   ),
                 ),
-                if (_selected != null && doc.find(_selected!) != null) _selectionBar(context, doc.find(_selected!)!),
+                if (_selected != null && doc.find(_selected!) != null)
+                  _selectionBar(context, doc.find(_selected!)!),
                 _Palette(onTap: _addByTap, onDragging: _setDragging),
               ],
             ),
@@ -314,17 +356,35 @@ class _BuilderScreenState extends State<BuilderScreen> {
       onPressed: onTap,
     );
     return Container(
-      decoration: BoxDecoration(color: c.surface, border: Border(top: BorderSide(color: c.border))),
+      decoration: BoxDecoration(
+        color: c.surface,
+        border: Border(top: BorderSide(color: c.border)),
+      ),
       padding: const EdgeInsets.only(left: Space.x4, right: Space.x2),
       height: 48,
       child: Row(
         children: [
           Icon(lcIcon(node.type), size: 18, color: c.accent),
           const SizedBox(width: Space.x2),
-          Expanded(child: Text(node.spec.label, style: t.titleSmall, maxLines: 1, overflow: TextOverflow.ellipsis)),
+          Expanded(
+            child: Text(
+              node.spec.label,
+              style: t.titleSmall,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
           if (!isRoot) ...[
-            action(Icons.arrow_upward, '上移', () => _apply((d) => d.shift(node.id, -1))),
-            action(Icons.arrow_downward, '下移', () => _apply((d) => d.shift(node.id, 1))),
+            action(
+              Icons.arrow_upward,
+              '上移',
+              () => _apply((d) => d.shift(node.id, -1)),
+            ),
+            action(
+              Icons.arrow_downward,
+              '下移',
+              () => _apply((d) => d.shift(node.id, 1)),
+            ),
             action(Icons.copy_outlined, '复制', () {
               String? copy;
               _apply((d) => copy = d.duplicate(node.id));
@@ -338,7 +398,10 @@ class _BuilderScreenState extends State<BuilderScreen> {
           const SizedBox(width: Space.x1),
           FilledButton(
             onPressed: _openProps,
-            style: FilledButton.styleFrom(minimumSize: const Size(0, 36), padding: const EdgeInsets.symmetric(horizontal: Space.x3)),
+            style: FilledButton.styleFrom(
+              minimumSize: const Size(0, 36),
+              padding: const EdgeInsets.symmetric(horizontal: Space.x3),
+            ),
             child: const Text('属性'),
           ),
         ],
@@ -359,7 +422,10 @@ class _Palette extends StatelessWidget {
     final c = context.colors;
     final t = Theme.of(context).textTheme;
     return Container(
-      decoration: BoxDecoration(color: c.surface, border: Border(top: BorderSide(color: c.border))),
+      decoration: BoxDecoration(
+        color: c.surface,
+        border: Border(top: BorderSide(color: c.border)),
+      ),
       child: SafeArea(
         top: false,
         child: Column(
@@ -367,14 +433,24 @@ class _Palette extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(Space.x4, Space.x2, Space.x4, Space.x1),
+              padding: const EdgeInsets.fromLTRB(
+                Space.x4,
+                Space.x2,
+                Space.x4,
+                Space.x1,
+              ),
               child: Text('组件 · 点一下添加，长按拖到画布', style: t.labelSmall),
             ),
             SizedBox(
               height: 64,
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x2),
+                padding: const EdgeInsets.fromLTRB(
+                  Space.x4,
+                  0,
+                  Space.x4,
+                  Space.x2,
+                ),
                 itemCount: lcPaletteTypes.length,
                 separatorBuilder: (_, _) => const SizedBox(width: Space.x2),
                 itemBuilder: (context, i) {
@@ -384,14 +460,25 @@ class _Palette extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: lifted ? c.accentSoft : c.bg,
                       borderRadius: BorderRadius.circular(Radii.md),
-                      border: Border.all(color: lifted ? c.accentFill : c.border),
+                      border: Border.all(
+                        color: lifted ? c.accentFill : c.border,
+                      ),
                     ),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(lcIcon(type), size: 20, color: lifted ? c.accent : c.textMuted),
+                        Icon(
+                          lcIcon(type),
+                          size: 20,
+                          color: lifted ? c.accent : c.textMuted,
+                        ),
                         const SizedBox(height: 2),
-                        Text(lcSpecs[type]!.label, style: t.labelSmall?.copyWith(color: lifted ? c.accent : c.text)),
+                        Text(
+                          lcSpecs[type]!.label,
+                          style: t.labelSmall?.copyWith(
+                            color: lifted ? c.accent : c.text,
+                          ),
+                        ),
                       ],
                     ),
                   );
@@ -401,8 +488,14 @@ class _Palette extends StatelessWidget {
                     onDragStarted: () => onDragging(true),
                     onDragEnd: (_) => onDragging(false),
                     onDraggableCanceled: (_, _) => onDragging(false),
-                    feedback: Material(color: Colors.transparent, child: SizedBox(height: 56, child: chip(lifted: true))),
-                    child: GestureDetector(onTap: () => onTap(type), child: chip()),
+                    feedback: Material(
+                      color: Colors.transparent,
+                      child: SizedBox(height: 56, child: chip(lifted: true)),
+                    ),
+                    child: GestureDetector(
+                      onTap: () => onTap(type),
+                      child: chip(),
+                    ),
                   );
                 },
               ),
@@ -418,6 +511,7 @@ class _Palette extends StatelessWidget {
 
 class _Canvas extends StatelessWidget {
   const _Canvas({
+    required this.minHeight,
     required this.doc,
     required this.selected,
     required this.dragging,
@@ -426,6 +520,9 @@ class _Canvas extends StatelessWidget {
     required this.canDrop,
     required this.onDragging,
   });
+
+  /// 画布至少铺满可见区域，页面背景不会只盖到内容那么高。
+  final double minHeight;
 
   final LcDocument doc;
   final String? selected;
@@ -441,16 +538,29 @@ class _Canvas extends StatelessWidget {
     final bg = root.strProp('bg');
     // 画布里的内容用固定的浅色主题渲染：它是“用户页面”的样子，不跟随应用深色模式。
     return Theme(
-      data: ThemeData(useMaterial3: true, colorSchemeSeed: Palette.primary700, fontFamily: Theme.of(context).textTheme.bodyMedium?.fontFamily),
+      data: ThemeData(
+        useMaterial3: true,
+        colorSchemeSeed: Palette.primary700,
+        fontFamily: Theme.of(context).textTheme.bodyMedium?.fontFamily,
+      ),
       child: DefaultTextStyle(
-        style: TextStyle(fontSize: 16, color: Palette.neutral900, height: 1.5, fontFamily: Theme.of(context).textTheme.bodyMedium?.fontFamily),
+        style: TextStyle(
+          fontSize: 16,
+          color: Palette.neutral900,
+          height: 1.5,
+          fontFamily: Theme.of(context).textTheme.bodyMedium?.fontFamily,
+        ),
         child: GestureDetector(
           onTap: () => onSelect(root.id),
           child: Container(
             width: double.infinity,
-            constraints: BoxConstraints(minHeight: MediaQuery.sizeOf(context).height * 0.5),
+            constraints: BoxConstraints(minHeight: minHeight),
             color: bg != null ? _hex(bg) : Colors.white,
-            foregroundDecoration: selected == root.id ? BoxDecoration(border: Border.all(color: Palette.primary500, width: 2)) : null,
+            foregroundDecoration: selected == root.id
+                ? BoxDecoration(
+                    border: Border.all(color: Palette.primary500, width: 2),
+                  )
+                : null,
             padding: EdgeInsets.all((root.numProp('padding') ?? 0).toDouble()),
             child: _flex(context, root, column: true),
           ),
@@ -490,15 +600,17 @@ class _Canvas extends StatelessWidget {
     final children = <Widget>[];
     for (var i = 0; i <= n.children.length; i++) {
       final edge = i == 0 || i == n.children.length;
-      children.add(_Slot(
-        parentId: n.id,
-        index: i,
-        vertical: !column,
-        idle: edge ? 0 : gap,
-        dragging: dragging,
-        onDrop: onDrop,
-        canDrop: canDrop,
-      ));
+      children.add(
+        _Slot(
+          parentId: n.id,
+          index: i,
+          vertical: !column,
+          idle: edge ? 0 : gap,
+          dragging: dragging,
+          onDrop: onDrop,
+          canDrop: canDrop,
+        ),
+      );
       if (i < n.children.length) children.add(_node(context, n.children[i], n));
     }
     return Flex(
@@ -516,7 +628,12 @@ class _Canvas extends StatelessWidget {
     Widget inner;
     switch (n.type) {
       case 'container' || 'column' || 'card' || 'row':
-        inner = _box(n, _flex(context, n, column: n.type != 'row'), inRow: inRow, shadow: n.type == 'card');
+        inner = _box(
+          n,
+          _flex(context, n, column: n.type != 'row'),
+          inRow: inRow,
+          shadow: n.type == 'card',
+        );
       case 'text':
         final text = Text(
           n.strProp('text') ?? '',
@@ -529,7 +646,9 @@ class _Canvas extends StatelessWidget {
           style: TextStyle(
             fontSize: n.numProp('fontSize')?.toDouble(),
             fontWeight: n.props['bold'] == true ? FontWeight.w600 : null,
-            color: n.strProp('color') != null ? _hex(n.strProp('color')!) : null,
+            color: n.strProp('color') != null
+                ? _hex(n.strProp('color')!)
+                : null,
             height: 1.5,
           ),
         );
@@ -541,11 +660,25 @@ class _Canvas extends StatelessWidget {
           FilledButton(
             onPressed: () {},
             style: FilledButton.styleFrom(
-              backgroundColor: n.strProp('bg') != null ? _hex(n.strProp('bg')!) : null,
-              foregroundColor: n.strProp('color') != null ? _hex(n.strProp('color')!) : null,
-              padding: n.numProp('padding') != null ? EdgeInsets.all(n.numProp('padding')!.toDouble()) : null,
-              shape: r != null ? RoundedRectangleBorder(borderRadius: BorderRadius.circular(r.toDouble())) : null,
-              textStyle: n.numProp('fontSize') != null ? TextStyle(fontSize: n.numProp('fontSize')!.toDouble()) : null,
+              backgroundColor: n.strProp('bg') != null
+                  ? _hex(n.strProp('bg')!)
+                  : null,
+              foregroundColor: n.strProp('color') != null
+                  ? _hex(n.strProp('color')!)
+                  : null,
+              padding: n.numProp('padding') != null
+                  ? EdgeInsets.all(n.numProp('padding')!.toDouble())
+                  : null,
+              shape: r != null
+                  ? RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(r.toDouble()),
+                    )
+                  : null,
+              // 只改字号：整个替换 textStyle 会丢掉主题里的字体和字重
+              textStyle: n.numProp('fontSize') != null
+                  ? Theme.of(context).textTheme.labelLarge
+                        ?.copyWith(fontSize: n.numProp('fontSize')!.toDouble())
+                  : null,
             ),
             child: Text(n.strProp('text') ?? ''),
           ),
@@ -553,19 +686,26 @@ class _Canvas extends StatelessWidget {
         );
       case 'image':
         final h = n.numProp('height')?.toDouble();
-        final width = w is num ? w.toDouble() : (n.fillWidth && !inRow ? double.infinity : null);
+        final width = w is num
+            ? w.toDouble()
+            : (n.fillWidth && !inRow ? double.infinity : null);
         final src = n.strProp('src');
         inner = _margin(
           n,
           ClipRRect(
-            borderRadius: BorderRadius.circular((n.numProp('radius') ?? 0).toDouble()),
+            borderRadius: BorderRadius.circular(
+              (n.numProp('radius') ?? 0).toDouble(),
+            ),
             child: src == null
                 ? Container(
                     height: h,
                     width: width,
                     color: Palette.neutral200,
                     alignment: Alignment.center,
-                    child: const Icon(Icons.image_outlined, color: Palette.neutral500),
+                    child: const Icon(
+                      Icons.image_outlined,
+                      color: Palette.neutral500,
+                    ),
                   )
                 : Image.network(
                     src,
@@ -577,7 +717,10 @@ class _Canvas extends StatelessWidget {
                       width: width,
                       color: Palette.neutral200,
                       alignment: Alignment.center,
-                      child: const Icon(Icons.broken_image_outlined, color: Palette.neutral500),
+                      child: const Icon(
+                        Icons.broken_image_outlined,
+                        color: Palette.neutral500,
+                      ),
                     ),
                   ),
           ),
@@ -587,10 +730,16 @@ class _Canvas extends StatelessWidget {
           enabled: false,
           decoration: InputDecoration(
             hintText: n.strProp('placeholder') ?? '',
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular((n.numProp('radius') ?? 4).toDouble())),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(
+                (n.numProp('radius') ?? 4).toDouble(),
+              ),
+            ),
           ),
         );
-        inner = inRow && w == null ? _margin(n, SizedBox(width: 160, child: field)) : _sized(n, field, inRow: inRow);
+        inner = inRow && w == null
+            ? _margin(n, SizedBox(width: 160, child: field))
+            : _sized(n, field, inRow: inRow);
       case 'list':
         final style = TextStyle(
           fontSize: n.numProp('fontSize')?.toDouble(),
@@ -600,11 +749,19 @@ class _Canvas extends StatelessWidget {
         final col = Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
-          children: [for (final item in (n.props['items'] as List?) ?? const []) Text('• $item', style: style)],
+          children: [
+            for (final item in (n.props['items'] as List?) ?? const [])
+              Text('• $item', style: style),
+          ],
         );
         inner = _needsBox(n) ? _box(n, col, inRow: inRow) : col;
       case 'divider':
-        inner = _margin(n, inRow ? const SizedBox(height: 24, child: VerticalDivider(width: 1)) : const Divider(height: 1));
+        inner = _margin(
+          n,
+          inRow
+              ? const SizedBox(height: 24, child: VerticalDivider(width: 1))
+              : const Divider(height: 1),
+        );
       case 'spacer':
         final size = (n.numProp('size') ?? 16).toDouble();
         inner = inRow ? SizedBox(width: size) : SizedBox(height: size);
@@ -619,8 +776,12 @@ class _Canvas extends StatelessWidget {
       onTap: () => onSelect(n.id),
       child: Container(
         foregroundDecoration: isSelected
-            ? BoxDecoration(border: Border.all(color: Palette.primary500, width: 2))
-            : (dragging && n.isContainer ? BoxDecoration(border: Border.all(color: Palette.neutral300)) : null),
+            ? BoxDecoration(
+                border: Border.all(color: Palette.primary500, width: 2),
+              )
+            : (dragging && n.isContainer
+                  ? BoxDecoration(border: Border.all(color: Palette.neutral300))
+                  : null),
         child: n.isContainer ? inner : IgnorePointer(child: inner),
       ),
     );
@@ -637,8 +798,14 @@ class _Canvas extends StatelessWidget {
         color: Colors.transparent,
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(color: Palette.primary700, borderRadius: BorderRadius.circular(Radii.md)),
-          child: Text('移动 ${n.spec.label}', style: const TextStyle(color: Colors.white, fontSize: 14)),
+          decoration: BoxDecoration(
+            color: Palette.primary700,
+            borderRadius: BorderRadius.circular(Radii.md),
+          ),
+          child: Text(
+            '移动 ${n.spec.label}',
+            style: const TextStyle(color: Colors.white, fontSize: 14),
+          ),
         ),
       ),
       childWhenDragging: Opacity(opacity: 0.35, child: wrapped),
@@ -647,30 +814,53 @@ class _Canvas extends StatelessWidget {
 
     // 和导出规则一致：行里撑满的组件、没给固定宽度的容器用 Expanded；自适应的文本用 Flexible。
     if (inRow) {
-      if (n.fillWidth || (n.isContainer && w is! num)) return Expanded(child: wrapped);
+      if (n.fillWidth || (n.isContainer && w is! num)) {
+        return Expanded(child: wrapped);
+      }
       if (n.type == 'text' && w == null) return Flexible(child: wrapped);
     }
     return wrapped;
   }
 
   static bool _needsBox(LcNode n) =>
-      n.props['width'] != null || n.numProp('padding') != null || n.numProp('margin') != null || n.strProp('bg') != null;
+      n.props['width'] != null ||
+      n.numProp('padding') != null ||
+      n.numProp('margin') != null ||
+      n.strProp('bg') != null;
 
-  Widget _box(LcNode n, Widget child, {required bool inRow, bool shadow = false}) {
+  Widget _box(
+    LcNode n,
+    Widget child, {
+    required bool inRow,
+    bool shadow = false,
+  }) {
     final w = n.props['width'];
     final m = n.numProp('margin');
     final p = n.numProp('padding');
-    final hasDeco = n.strProp('bg') != null || n.numProp('radius') != null || shadow;
+    final hasDeco =
+        n.strProp('bg') != null || n.numProp('radius') != null || shadow;
     return Container(
-      width: w is num ? w.toDouble() : (w == 'fill' && !inRow ? double.infinity : null),
+      width: w is num
+          ? w.toDouble()
+          : (w == 'fill' && !inRow ? double.infinity : null),
       height: n.numProp('height')?.toDouble(),
       margin: m != null ? EdgeInsets.all(m.toDouble()) : null,
       padding: p != null ? EdgeInsets.all(p.toDouble()) : null,
       decoration: hasDeco
           ? BoxDecoration(
               color: n.strProp('bg') != null ? _hex(n.strProp('bg')!) : null,
-              borderRadius: n.numProp('radius') != null ? BorderRadius.circular(n.numProp('radius')!.toDouble()) : null,
-              boxShadow: shadow ? const [BoxShadow(color: Color(0x33000000), blurRadius: 3, offset: Offset(0, 1))] : null,
+              borderRadius: n.numProp('radius') != null
+                  ? BorderRadius.circular(n.numProp('radius')!.toDouble())
+                  : null,
+              boxShadow: shadow
+                  ? const [
+                      BoxShadow(
+                        color: Color(0x33000000),
+                        blurRadius: 3,
+                        offset: Offset(0, 1),
+                      ),
+                    ]
+                  : null,
             )
           : null,
       child: child,
@@ -736,9 +926,14 @@ class _Slot extends StatelessWidget {
             decoration: BoxDecoration(
               color: hover ? Palette.primary200 : const Color(0x0F000000),
               borderRadius: BorderRadius.circular(Radii.sm),
-              border: Border.all(color: hover ? Palette.primary500 : Palette.neutral300),
+              border: Border.all(
+                color: hover ? Palette.primary500 : Palette.neutral300,
+              ),
             ),
-            child: Text(hover ? '松手放进来' : '空的 · 拖组件到这里', style: const TextStyle(fontSize: 12, color: Palette.neutral600)),
+            child: Text(
+              hover ? '松手放进来' : '空的 · 拖组件到这里',
+              style: const TextStyle(fontSize: 12, color: Palette.neutral600),
+            ),
           );
         }
         final size = dragging ? (idle < 20 ? 20.0 : idle) : idle;
@@ -752,7 +947,9 @@ class _Slot extends StatelessWidget {
               ? Container(
                   width: vertical ? (hover ? 6 : 2) : double.infinity,
                   height: vertical ? double.infinity : (hover ? 6 : 2),
-                  constraints: vertical ? const BoxConstraints(minHeight: 24, maxHeight: 64) : null,
+                  constraints: vertical
+                      ? const BoxConstraints(minHeight: 24, maxHeight: 64)
+                      : null,
                   decoration: BoxDecoration(
                     color: hover ? Palette.primary500 : Palette.primary200,
                     borderRadius: BorderRadius.circular(3),
@@ -790,8 +987,16 @@ const Map<String, String> _fieldLabels = {
 };
 
 const List<String> _swatches = [
-  '#FFFFFF', '#F6FBFD', '#D3DEE4', '#707A8F', '#222435',
-  '#058654', '#29D2B2', '#DC3545', '#D98A0B', '#3B6FE0',
+  '#FFFFFF',
+  '#F6FBFD',
+  '#D3DEE4',
+  '#707A8F',
+  '#222435',
+  '#058654',
+  '#29D2B2',
+  '#DC3545',
+  '#D98A0B',
+  '#3B6FE0',
 ];
 
 class _PropertySheet extends StatefulWidget {
@@ -834,7 +1039,12 @@ class _PropertySheetState extends State<_PropertySheet> {
       maxChildSize: 0.9,
       builder: (context, scroll) => ListView(
         controller: scroll,
-        padding: EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, MediaQuery.viewInsetsOf(context).bottom + Space.x6),
+        padding: EdgeInsets.fromLTRB(
+          Space.x4,
+          0,
+          Space.x4,
+          MediaQuery.viewInsetsOf(context).bottom + Space.x6,
+        ),
         children: [
           Text('${n.spec.label}属性', style: t.titleLarge),
           const SizedBox(height: Space.x2),
@@ -850,7 +1060,10 @@ class _PropertySheetState extends State<_PropertySheet> {
   Widget _labeled(BuildContext context, String key, Widget child) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      Text(_fieldLabels[key] ?? key, style: Theme.of(context).textTheme.labelMedium),
+      Text(
+        _fieldLabels[key] ?? key,
+        style: Theme.of(context).textTheme.labelMedium,
+      ),
       const SizedBox(height: 6),
       child,
     ],
@@ -869,7 +1082,9 @@ class _PropertySheetState extends State<_PropertySheet> {
             minLines: 1,
             maxLines: key == 'text' ? 4 : 1,
             keyboardType: key == 'src' ? TextInputType.url : null,
-            decoration: InputDecoration(hintText: key == 'src' ? 'https://…（留空显示占位图）' : null),
+            decoration: InputDecoration(
+              hintText: key == 'src' ? 'https://…（留空显示占位图）' : null,
+            ),
             onChanged: (v) => _set(key, v),
           ),
         );
@@ -882,7 +1097,10 @@ class _PropertySheetState extends State<_PropertySheet> {
             controller: _controller(key, items),
             minLines: 3,
             maxLines: 8,
-            onChanged: (v) => _set(key, v.split('\n').where((s) => s.trim().isNotEmpty).toList()),
+            onChanged: (v) => _set(
+              key,
+              v.split('\n').where((s) => s.trim().isNotEmpty).toList(),
+            ),
           ),
         );
       case 'width':
@@ -910,12 +1128,22 @@ class _PropertySheetState extends State<_PropertySheet> {
               ),
               if (w is num) ...[
                 const SizedBox(height: Space.x2),
-                _Stepper(value: w, step: 8, onChanged: (v) => _set('width', v ?? 0)),
+                _Stepper(
+                  value: w,
+                  step: 8,
+                  onChanged: (v) => _set('width', v ?? 0),
+                ),
               ],
             ],
           ),
         );
-      case 'height' || 'padding' || 'margin' || 'radius' || 'gap' || 'fontSize' || 'size':
+      case 'height' ||
+          'padding' ||
+          'margin' ||
+          'radius' ||
+          'gap' ||
+          'fontSize' ||
+          'size':
         return Row(
           children: [
             Expanded(child: Text(_fieldLabels[key]!, style: t.bodyMedium)),
@@ -937,16 +1165,34 @@ class _PropertySheetState extends State<_PropertySheet> {
             runSpacing: Space.x2,
             children: [
               if (key == 'bg')
-                _Swatch(color: null, selected: current == null, onTap: () => _set(key, null)),
+                _Swatch(
+                  color: null,
+                  selected: current == null,
+                  onTap: () => _set(key, null),
+                ),
               for (final hex in _swatches)
-                _Swatch(color: _hex(hex), selected: current == hex, onTap: () => _set(key, hex)),
+                _Swatch(
+                  color: _hex(hex),
+                  selected: current == hex,
+                  onTap: () => _set(key, hex),
+                ),
             ],
           ),
         );
       case 'align' || 'justify' || 'textAlign':
         final options = switch (key) {
-          'align' => const {'start': '起点', 'center': '居中', 'end': '终点', 'stretch': '拉伸'},
-          'justify' => const {'start': '起点', 'center': '居中', 'end': '终点', 'between': '两端'},
+          'align' => const {
+            'start': '起点',
+            'center': '居中',
+            'end': '终点',
+            'stretch': '拉伸',
+          },
+          'justify' => const {
+            'start': '起点',
+            'center': '居中',
+            'end': '终点',
+            'between': '两端',
+          },
           _ => const {'left': '靠左', 'center': '居中', 'right': '靠右'},
         };
         final fallback = switch (key) {
@@ -961,7 +1207,10 @@ class _PropertySheetState extends State<_PropertySheet> {
             width: double.infinity,
             child: SegmentedButton<String>(
               showSelectedIcon: false,
-              segments: [for (final e in options.entries) ButtonSegment(value: e.key, label: Text(e.value))],
+              segments: [
+                for (final e in options.entries)
+                  ButtonSegment(value: e.key, label: Text(e.value)),
+              ],
               selected: {n.strProp(key) ?? fallback},
               onSelectionChanged: (s) => _set(key, s.first),
             ),
@@ -971,7 +1220,10 @@ class _PropertySheetState extends State<_PropertySheet> {
         return Row(
           children: [
             Expanded(child: Text(_fieldLabels[key]!, style: t.bodyMedium)),
-            Switch(value: n.props['bold'] == true, onChanged: (v) => _set('bold', v ? true : null)),
+            Switch(
+              value: n.props['bold'] == true,
+              onChanged: (v) => _set('bold', v ? true : null),
+            ),
           ],
         );
     }
@@ -980,7 +1232,12 @@ class _PropertySheetState extends State<_PropertySheet> {
 }
 
 class _Stepper extends StatelessWidget {
-  const _Stepper({required this.value, required this.step, required this.onChanged, this.clearable = true});
+  const _Stepper({
+    required this.value,
+    required this.step,
+    required this.onChanged,
+    this.clearable = true,
+  });
   final num? value;
   final num step;
   final bool clearable;
@@ -993,7 +1250,11 @@ class _Stepper extends StatelessWidget {
     final v = value;
     Widget btn(IconData icon, VoidCallback? onTap) => InkWell(
       onTap: onTap,
-      child: SizedBox(width: 40, height: 40, child: Icon(icon, size: 18, color: onTap == null ? c.border : c.text)),
+      child: SizedBox(
+        width: 40,
+        height: 40,
+        child: Icon(icon, size: 18, color: onTap == null ? c.border : c.text),
+      ),
     );
     return Container(
       decoration: BoxDecoration(
@@ -1018,7 +1279,9 @@ class _Stepper extends StatelessWidget {
           SizedBox(
             width: 56,
             child: Text(
-              v == null ? '默认' : (v == v.roundToDouble() ? '${v.round()}' : '$v'),
+              v == null
+                  ? '默认'
+                  : (v == v.roundToDouble() ? '${v.round()}' : '$v'),
               textAlign: TextAlign.center,
               style: v == null ? t.bodySmall : t.titleSmall,
             ),
@@ -1031,7 +1294,11 @@ class _Stepper extends StatelessWidget {
 }
 
 class _Swatch extends StatelessWidget {
-  const _Swatch({required this.color, required this.selected, required this.onTap});
+  const _Swatch({
+    required this.color,
+    required this.selected,
+    required this.onTap,
+  });
   final Color? color;
   final bool selected;
   final VoidCallback onTap;
@@ -1044,12 +1311,25 @@ class _Swatch extends StatelessWidget {
       child: Container(
         width: 36,
         height: 36,
+        // 选中 = 外圈一道环 + 留白，和色块本身的颜色无关（绿色块上的绿边框看不出来）
+        padding: EdgeInsets.all(selected ? 3 : 0),
         decoration: BoxDecoration(
-          color: color ?? c.surface,
           shape: BoxShape.circle,
-          border: Border.all(color: selected ? c.accentFill : c.border, width: selected ? 3 : 1),
+          border: Border.all(
+            color: selected ? c.text : Colors.transparent,
+            width: 2,
+          ),
         ),
-        child: color == null ? Icon(Icons.block, size: 16, color: c.textFaint) : null,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: color ?? c.surface,
+            shape: BoxShape.circle,
+            border: Border.all(color: c.border),
+          ),
+          child: color == null
+              ? Icon(Icons.block, size: 16, color: c.textFaint)
+              : null,
+        ),
       ),
     );
   }
@@ -1058,7 +1338,11 @@ class _Swatch extends StatelessWidget {
 // ───────────────────────── 图层树 ─────────────────────────
 
 class _LayerSheet extends StatelessWidget {
-  const _LayerSheet({required this.doc, required this.selected, required this.onSelect});
+  const _LayerSheet({
+    required this.doc,
+    required this.selected,
+    required this.onSelect,
+  });
   final LcDocument doc;
   final String? selected;
   final void Function(String id) onSelect;
@@ -1087,25 +1371,52 @@ class _LayerSheet extends StatelessWidget {
         itemBuilder: (context, i) {
           if (i == 0) {
             return Padding(
-              padding: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x2),
+              padding: const EdgeInsets.fromLTRB(
+                Space.x4,
+                0,
+                Space.x4,
+                Space.x2,
+              ),
               child: Text('图层 · ${rows.length} 个组件', style: t.titleLarge),
             );
           }
           final (node, depth) = rows[i - 1];
           final active = node.id == selected;
-          final hint = node.strProp('text') ?? node.strProp('placeholder') ?? '';
+          final hint =
+              node.strProp('text') ?? node.strProp('placeholder') ?? '';
           return InkWell(
             onTap: () => onSelect(node.id),
             child: Container(
               color: active ? c.accentSoft : null,
-              padding: EdgeInsets.fromLTRB(Space.x4 + depth * Space.x4, 10, Space.x4, 10),
+              padding: EdgeInsets.fromLTRB(
+                Space.x4 + depth * Space.x4,
+                10,
+                Space.x4,
+                10,
+              ),
               child: Row(
                 children: [
-                  Icon(lcIcon(node.type), size: 18, color: active ? c.accent : c.textFaint),
+                  Icon(
+                    lcIcon(node.type),
+                    size: 18,
+                    color: active ? c.accent : c.textFaint,
+                  ),
                   const SizedBox(width: Space.x2),
-                  Text(node.spec.label, style: t.titleSmall?.copyWith(color: active ? c.accent : c.text)),
+                  Text(
+                    node.spec.label,
+                    style: t.titleSmall?.copyWith(
+                      color: active ? c.accent : c.text,
+                    ),
+                  ),
                   const SizedBox(width: Space.x2),
-                  Expanded(child: Text(hint, style: t.bodySmall, maxLines: 1, overflow: TextOverflow.ellipsis)),
+                  Expanded(
+                    child: Text(
+                      hint,
+                      style: t.bodySmall,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -1119,18 +1430,29 @@ class _LayerSheet extends StatelessWidget {
 // ───────────────────────── 代码面板 ─────────────────────────
 
 class _CodeSheet extends StatelessWidget {
-  const _CodeSheet({required this.title, required this.note, required this.code});
+  const _CodeSheet({
+    required this.title,
+    required this.note,
+    required this.code,
+  });
   final String title;
   final String note;
   final String code;
 
   @override
-  Widget build(BuildContext context) => CodeSheetBody(title: title, note: note, code: code);
+  Widget build(BuildContext context) =>
+      CodeSheetBody(title: title, note: note, code: code);
 }
 
 /// 显示一段代码 + “复制”按钮的底部面板内容（APK 打包页的工作流模板也用它）。
 class CodeSheetBody extends StatelessWidget {
-  const CodeSheetBody({super.key, required this.title, required this.note, required this.code, this.extraAction});
+  const CodeSheetBody({
+    super.key,
+    required this.title,
+    required this.note,
+    required this.code,
+    this.extraAction,
+  });
   final String title;
   final String note;
   final String code;
@@ -1166,7 +1488,13 @@ class CodeSheetBody extends StatelessWidget {
                 padding: const EdgeInsets.all(Space.x3),
                 child: SelectableText(
                   code,
-                  style: TextStyle(fontFamily: kMonoFont, fontFamilyFallback: kMonoFallback, fontSize: FontSize.xs, height: 1.5, color: c.text),
+                  style: TextStyle(
+                    fontFamily: kMonoFont,
+                    fontFamilyFallback: kMonoFallback,
+                    fontSize: FontSize.xs,
+                    height: 1.5,
+                    color: c.text,
+                  ),
                 ),
               ),
             ),
@@ -1177,7 +1505,10 @@ class CodeSheetBody extends StatelessWidget {
               padding: const EdgeInsets.all(Space.x4),
               child: Row(
                 children: [
-                  if (extraAction != null) ...[Expanded(child: extraAction!), const SizedBox(width: Space.x2)],
+                  if (extraAction != null) ...[
+                    Expanded(child: extraAction!),
+                    const SizedBox(width: Space.x2),
+                  ],
                   Expanded(
                     child: FilledButton.icon(
                       onPressed: () async {

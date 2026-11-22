@@ -1,6 +1,8 @@
 import 'dart:io';
 
-import 'package:material_ui/material_ui.dart';
+// 导出的代码用的是 package:flutter/material.dart（各版本 Flutter 都认），这里必须用同一套。
+// ignore: deprecated_member_use
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lopicode/lowcode/export_dart.dart';
 

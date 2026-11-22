@@ -5,6 +5,7 @@
 import 'package:lopicode/app_services.dart';
 import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/project_session.dart';
+import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/agent_tab.dart';
 import 'package:lopicode/ui/files_tab.dart';
 import 'package:lopicode/ui/preview_tab.dart';
@@ -54,7 +55,7 @@ class _ProjectShellState extends State<ProjectShell> {
     Widget lazy(int i, Widget Function() build) => _visited.contains(i) ? build() : const SizedBox.shrink();
     return Scaffold(
       appBar: AppBar(
-        titleSpacing: 0,
+        titleSpacing: Navigator.canPop(context) ? 0 : Space.x4,
         title: Text(widget.project.name, maxLines: 1, overflow: TextOverflow.ellipsis),
       ),
       body: IndexedStack(
