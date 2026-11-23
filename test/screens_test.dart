@@ -11,12 +11,12 @@ import 'package:lopicode/build/build_screen.dart';
 import 'package:lopicode/build/github_client.dart';
 import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/core/templates.dart';
-import 'package:lopicode/lowcode/builder_screen.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/ui/preview_tab.dart';
 import 'package:lopicode/ui/project_list_screen.dart';
 import 'package:lopicode/ui/project_shell.dart';
 import 'package:lopicode/ui/settings_screen.dart';
+import 'package:lopicode/ui/shell.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'support/harness.dart';
@@ -87,7 +87,7 @@ void main() {
       late TestEnv env;
       await tester.runAsync(() async => env = await TestEnv.create());
       addTearDown(env.dispose);
-      await tester.pumpWidget(appFor(env, const ProjectListScreen(), mode: mode, font: font));
+      await tester.pumpWidget(appFor(env, ProjectListScreen(onOpen: (_) {}), mode: mode, font: font));
       await settle(tester);
       expect(find.text('还没有项目'), findsOneWidget);
       await shot(tester, '01-projects-empty-$suffix');
@@ -105,7 +105,7 @@ void main() {
         await env.services.projects.create('活动报名页', ProjectTemplate.lowcode);
         await env.services.projects.create('脚本练习', ProjectTemplate.empty);
       });
-      await tester.pumpWidget(appFor(env, ProjectListScreen(key: UniqueKey()), mode: mode, font: font));
+      await tester.pumpWidget(appFor(env, ProjectListScreen(key: UniqueKey(), onOpen: (_) {}), mode: mode, font: font));
       // 列表要读每个项目的元数据：一连串真实 IO，每一步都要让出一轮
       await settle(tester, rounds: 40, ms: 5);
       expect(find.text('个人主页'), findsOneWidget);
@@ -115,14 +115,14 @@ void main() {
 
     testWidgets('文件与编辑器 ($suffix)', (tester) async {
       final (env, project, session) = await open(tester, ProjectTemplate.web);
-      await tester.pumpWidget(appFor(env, ProjectShell(project: project, session: session), mode: mode, font: font));
+      await tester.pumpWidget(appFor(env, ProjectShell(project: project, session: session, initial: ShellDest.files), mode: mode, font: font));
       await settle(tester, rounds: 20, ms: 5);
       expect(find.text('index.html'), findsWidgets);
-      await shot(tester, '04-files-$suffix');
+      await shot(tester, '08-files-$suffix');
       await tester.tap(find.text('style.css').first);
       await settle(tester, rounds: 20, ms: 5);
       expect(find.textContaining('box-sizing'), findsWidgets);
-      await shot(tester, '05-editor-$suffix');
+      await shot(tester, '09-editor-$suffix');
     });
 
     testWidgets('Agent：工具卡片、确认卡 ($suffix)', (tester) async {
@@ -142,10 +142,23 @@ void main() {
         );
       });
       final (_, project, session) = await open(tester, ProjectTemplate.web, env: env);
-      await tester.pumpWidget(appFor(env, ProjectShell(project: project, session: session, initialTab: 1), mode: mode, font: font));
+      await tester.pumpWidget(appFor(env, ProjectShell(project: project, session: session, initial: ShellDest.chat), mode: mode, font: font));
       await settle(tester);
-      expect(find.textContaining('Agent'), findsWidgets);
-      await shot(tester, '06-agent-empty-$suffix');
+      expect(find.text('新对话'), findsOneWidget);
+      expect(find.textContaining('我的小站 / '), findsOneWidget);
+      expect(find.text('项目规则'), findsOneWidget);
+      expect(find.byType(NavigationBar), findsNothing, reason: '不应该再有底部导航');
+      await shot(tester, '04-chat-empty-$suffix');
+
+      await tester.tap(find.byTooltip('打开侧边栏'));
+      await settle(tester, rounds: 3);
+      expect(find.text('低代码搭建'), findsOneWidget);
+      await shot(tester, '05-drawer-$suffix');
+      await tester.tapAt(const Offset(370, 400));
+      for (var i = 0; i < 12; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      expect(find.byType(Drawer), findsNothing);
 
       late Future<void> sending;
       await tester.runAsync(() async {
@@ -158,19 +171,19 @@ void main() {
       expect(session.pendingApproval, isNotNull, reason: '执行命令前必须停下来等确认');
       expect(File('${project.dir}/dark.css').existsSync(), isTrue);
       expect(find.text('允许这一次'), findsOneWidget);
-      await shot(tester, '07-agent-approval-$suffix');
+      await shot(tester, '06-chat-approval-$suffix');
 
       await tester.tap(find.text('允许这一次'));
       await tester.runAsync(() => sending.timeout(const Duration(seconds: 20)));
       await settle(tester, rounds: 3);
       expect(session.agentBusy, isFalse);
       expect(find.textContaining('已经加好 dark.css'), findsOneWidget);
-      await shot(tester, '08-agent-done-$suffix');
+      await shot(tester, '07-chat-done-$suffix');
     });
 
     testWidgets('终端：真的跑一条命令 ($suffix)', (tester) async {
       final (env, project, session) = await open(tester, ProjectTemplate.web);
-      await tester.pumpWidget(appFor(env, ProjectShell(project: project, session: session, initialTab: 2), mode: mode, font: font));
+      await tester.pumpWidget(appFor(env, ProjectShell(project: project, session: session, initial: ShellDest.terminal), mode: mode, font: font));
       await settle(tester);
       await tester.runAsync(() async {
         session.terminals[session.activeTerminal].run('ls');
@@ -178,27 +191,22 @@ void main() {
       });
       await settle(tester, rounds: 2);
       expect(session.terminals[session.activeTerminal].text, contains('index.html'));
-      await shot(tester, '09-terminal-$suffix');
+      await shot(tester, '10-terminal-$suffix');
     });
 
     testWidgets('预览 ($suffix)', (tester) async {
       final (env, project, session) = await open(tester, ProjectTemplate.web);
-      await tester.pumpWidget(appFor(env, ProjectShell(project: project, session: session, initialTab: 3), mode: mode, font: font));
+      await tester.pumpWidget(appFor(env, ProjectShell(project: project, session: session, initial: ShellDest.preview), mode: mode, font: font));
       await settle(tester, rounds: 6);
       expect(session.preview.port, isNotNull);
-      await shot(tester, '10-preview-$suffix');
+      await shot(tester, '11-preview-$suffix');
     });
 
-    testWidgets('工具页与低代码搭建器 ($suffix)', (tester) async {
+    testWidgets('低代码搭建器 ($suffix)', (tester) async {
       final (env, project, session) = await open(tester, ProjectTemplate.lowcode);
-      await tester.pumpWidget(appFor(env, ProjectShell(project: project, session: session, initialTab: 4), mode: mode, font: font));
-      await settle(tester);
-      expect(find.text('低代码搭建'), findsOneWidget);
-      expect(find.text('APK 打包'), findsOneWidget);
-      await shot(tester, '11-tools-$suffix');
-
-      await tester.pumpWidget(appFor(env, BuilderScreen(key: UniqueKey(), session: session), mode: mode, font: font));
+      await tester.pumpWidget(appFor(env, ProjectShell(project: project, session: session, initial: ShellDest.builder), mode: mode, font: font));
       await settle(tester, rounds: 8);
+      expect(find.byTooltip('打开侧边栏'), findsOneWidget);
       await shot(tester, '12-builder-$suffix');
 
       // 点画布上的按钮选中它 → 打开属性面板

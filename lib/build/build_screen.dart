@@ -16,6 +16,7 @@ import 'package:lopicode/lowcode/builder_screen.dart' show CodeSheetBody;
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/widgets.dart';
+import 'package:lopicode/ui/shell.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -145,7 +146,7 @@ class _BuildScreenState extends State<BuildScreen> {
     final job = _job;
     final busy = job?.busy ?? false;
     return Scaffold(
-      appBar: AppBar(titleSpacing: Navigator.canPop(context) ? 0 : Space.x4, title: const Text('APK 打包')),
+      appBar: const ShellAppBar(title: 'APK 打包'),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(Space.x4, Space.x2, Space.x4, Space.x8),
         children: [

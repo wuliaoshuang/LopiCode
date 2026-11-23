@@ -1,6 +1,6 @@
 import 'package:lopicode/app_services.dart';
 import 'package:lopicode/theme/app_theme.dart';
-import 'package:lopicode/ui/project_list_screen.dart';
+import 'package:lopicode/ui/home_gate.dart';
 import 'package:material_ui/material_ui.dart';
 
 class LopiCodeApp extends StatelessWidget {
@@ -25,7 +25,7 @@ class LopiCodeApp extends StatelessWidget {
           theme: buildAppTheme(Brightness.light, fontFamily: fontFamily),
           darkTheme: buildAppTheme(Brightness.dark, fontFamily: fontFamily),
           themeMode: forceThemeMode ?? services.themeMode,
-          home: home ?? const ProjectListScreen(),
+          home: home ?? const HomeGate(),
         ),
       ),
     );

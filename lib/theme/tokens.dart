@@ -4,7 +4,7 @@
 //   由 refactoring-ui 的 generate_palette.py 生成，界面里不出现表外的颜色。
 // - 字号阶：12 / 14 / 16 / 18 / 20 / 24 / 30；字重只用 400 和 600。
 // - 间距阶：4 / 8 / 12 / 16 / 24 / 32 / 48。
-// - 圆角：6（小控件）/ 10（卡片、输入框）/ 16（底部面板）。
+// - 圆角：6（小控件）/ 10（卡片、输入框）/ 16（底部面板）/ 24（对话输入卡片）。
 // - 层级靠字重和颜色深浅拉开，不靠加大字号；次要信息用 muted 色。
 import 'package:material_ui/material_ui.dart';
 
@@ -60,6 +60,7 @@ abstract final class Radii {
   static const double sm = 6;
   static const double md = 10;
   static const double lg = 16;
+  static const double xl = 24;
 }
 
 abstract final class FontSize {

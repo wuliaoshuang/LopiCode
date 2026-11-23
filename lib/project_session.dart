@@ -44,6 +44,16 @@ class NoticeItem extends ChatItem {
   final bool isError;
 }
 
+/// 项目里的一段对话。
+class Conversation {
+  Conversation(this.id, this.title, this.updatedAt);
+  final String id;
+  String title;
+  DateTime updatedAt;
+
+  Map<String, dynamic> toJson() => {'id': id, 'title': title, 'updatedAt': updatedAt.toIso8601String()};
+}
+
 /// 等用户点“允许 / 拒绝”的确认卡。
 class PendingApproval {
   PendingApproval(this.request);
@@ -52,7 +62,7 @@ class PendingApproval {
 }
 
 /// 打开一个项目期间的全部运行状态：终端会话、预览服务器、Agent 对话。
-/// 五个页签共用这一个对象，切页签不丢状态。
+/// 各个页面共用这一个对象，切页面不丢状态。
 class ProjectSession extends ChangeNotifier {
   ProjectSession(this.app, this.project) : guard = project.guard {
     preview = PreviewServer(project.dir);
@@ -120,26 +130,110 @@ class ProjectSession extends ChangeNotifier {
     notifyListeners();
   }
 
-  File get _chatFile => File(guard.resolve('${PathGuard.reservedDir}/chat.json', allowReserved: true));
+  // 对话：一个项目可以有多段对话。索引在 chats.json，每段对话的消息各存一个文件
+  // （第一段沿用 chat.json，其余是 chat-<id>.json）。
+  final List<Conversation> conversations = [];
+  String activeConversationId = 'main';
 
-  Future<void> loadChat() async {
-    if (_chatLoaded) return;
-    _chatLoaded = true;
+  Conversation get activeConversation =>
+      conversations.firstWhere((c) => c.id == activeConversationId, orElse: () => Conversation('main', '', DateTime.now()));
+
+  /// 顶栏标题：还没说话的对话叫“新对话”。
+  String get conversationTitle => activeConversation.title.isEmpty ? '新对话' : activeConversation.title;
+
+  File _reserved(String name) => File(guard.resolve('${PathGuard.reservedDir}/$name', allowReserved: true));
+  File get _indexFile => _reserved('chats.json');
+  File _chatFileOf(String id) => _reserved(id == 'main' ? 'chat.json' : 'chat-$id.json');
+  File get _chatFile => _chatFileOf(activeConversationId);
+  File get _rulesFile => _reserved('rules.md');
+
+  /// 项目规则：她写给 Agent 的长期要求，拼在系统提示词后面。
+  String projectRules = '';
+
+  Future<void> setProjectRules(String text) async {
+    projectRules = text.trim();
     try {
-      if (await _chatFile.exists()) {
-        final decoded = jsonDecode(await _chatFile.readAsString());
+      await _rulesFile.parent.create(recursive: true);
+      await _rulesFile.writeAsString(projectRules);
+    } on FileSystemException {
+      // 存不了：这次打开期间仍然生效
+    }
+    notifyListeners();
+  }
+
+  String get systemPrompt => projectRules.isEmpty
+      ? AgentRunner.defaultSystemPrompt
+      : '${AgentRunner.defaultSystemPrompt}\n\n用户给这个项目定的规则（必须遵守）：\n$projectRules';
+
+  Future<List<Map<String, dynamic>>> _readMessages(String id) async {
+    try {
+      final file = _chatFileOf(id);
+      if (await file.exists()) {
+        final decoded = jsonDecode(await file.readAsString());
         if (decoded is List) {
-          _messages = [
+          return [
             for (final m in decoded)
               if (m is Map<String, dynamic>) m,
           ];
         }
       }
     } on Exception {
-      _messages = [];
+      // 文件坏了就当空对话
     }
+    return [];
+  }
+
+  Future<void> loadChat() async {
+    if (_chatLoaded) return;
+    _chatLoaded = true;
+    try {
+      if (await _rulesFile.exists()) projectRules = (await _rulesFile.readAsString()).trim();
+    } on FileSystemException {
+      projectRules = '';
+    }
+    conversations.clear();
+    try {
+      if (await _indexFile.exists()) {
+        final decoded = jsonDecode(await _indexFile.readAsString());
+        if (decoded is List) {
+          for (final m in decoded) {
+            if (m is! Map) continue;
+            final id = '${m['id'] ?? ''}';
+            if (!RegExp(r'^[a-z0-9]{1,24}$').hasMatch(id)) continue;
+            conversations.add(
+              Conversation(id, '${m['title'] ?? ''}', DateTime.tryParse('${m['updatedAt']}') ?? DateTime.fromMillisecondsSinceEpoch(0)),
+            );
+          }
+        }
+      }
+    } on Exception {
+      conversations.clear();
+    }
+    if (conversations.isEmpty) conversations.add(Conversation('main', '', DateTime.now()));
+    conversations.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    activeConversationId = conversations.first.id;
+    _messages = await _readMessages(activeConversationId);
+    // 老版本只有一个 chat.json、没有标题：从第一句话补一个。
+    if (activeConversation.title.isEmpty) _retitle();
     _rebuildItems();
     notifyListeners();
+  }
+
+  void _retitle() {
+    final first = _messages.where((m) => m['role'] == 'user').firstOrNull;
+    if (first == null) return;
+    final line = '${first['content'] ?? ''}'.trim().split('\n').first.trim();
+    if (line.isEmpty) return;
+    activeConversation.title = line.length > 18 ? '${line.substring(0, 18)}…' : line;
+  }
+
+  Future<void> _saveIndex() async {
+    try {
+      await _indexFile.parent.create(recursive: true);
+      await _indexFile.writeAsString(jsonEncode([for (final c in conversations) c.toJson()]));
+    } on FileSystemException {
+      // 存不了就算了
+    }
   }
 
   Future<void> _saveChat() async {
@@ -149,6 +243,52 @@ class ProjectSession extends ChangeNotifier {
     } on FileSystemException {
       // 存不了就算了：不影响当前对话
     }
+    await _saveIndex();
+  }
+
+  /// 开一段新对话。当前这段还是空的就直接留在这里，不堆空对话。
+  Future<void> newConversation() async {
+    if (agentBusy) return;
+    await loadChat();
+    if (_messages.isEmpty && chat.isEmpty) return;
+    var id = DateTime.now().millisecondsSinceEpoch.toRadixString(36);
+    while (conversations.any((c) => c.id == id)) {
+      id = '${id}x';
+    }
+    conversations.insert(0, Conversation(id, '', DateTime.now()));
+    activeConversationId = id;
+    _messages = [];
+    chat.clear();
+    await _saveIndex();
+    notifyListeners();
+  }
+
+  Future<void> selectConversation(String id) async {
+    if (agentBusy || id == activeConversationId || !conversations.any((c) => c.id == id)) return;
+    await loadChat();
+    activeConversationId = id;
+    _messages = await _readMessages(id);
+    _rebuildItems();
+    notifyListeners();
+  }
+
+  /// 删除当前对话（文件不受影响）。删到一段不剩时留一段空的。
+  Future<void> deleteConversation() async {
+    if (agentBusy) return;
+    final id = activeConversationId;
+    try {
+      final file = _chatFileOf(id);
+      if (await file.exists()) await file.delete();
+    } on FileSystemException {
+      // 删不掉：索引里照样移除
+    }
+    conversations.removeWhere((c) => c.id == id);
+    if (conversations.isEmpty) conversations.add(Conversation('main', '', DateTime.now()));
+    activeConversationId = conversations.first.id;
+    _messages = await _readMessages(activeConversationId);
+    _rebuildItems();
+    await _saveIndex();
+    notifyListeners();
   }
 
   /// 从接口格式的消息记录重建界面条目（记录是唯一的事实来源）。
@@ -202,12 +342,22 @@ class ProjectSession extends ChangeNotifier {
     agentBusy = true;
     restoredDraft = null;
     chat.add(UserItem(text));
+    final conv = activeConversation..updatedAt = DateTime.now();
+    if (conv.title.isEmpty) {
+      final line = text.trim().split('\n').first.trim();
+      conv.title = line.length > 18 ? '${line.substring(0, 18)}…' : line;
+    }
+    // 最近说过话的排最前
+    conversations
+      ..remove(conv)
+      ..insert(0, conv);
     notifyListeners();
 
     final client = await app.createChatClient();
     final runner = AgentRunner(
       client: client,
       history: _messages,
+      systemPrompt: systemPrompt,
       toolbox: AgentToolbox(
         guard: guard,
         runner: LocalShellRunner(onOutput: (t) => terminals.first.append(t)),
@@ -268,14 +418,6 @@ class ProjectSession extends ChangeNotifier {
   void stopAgent() {
     _runner?.cancel();
     if (pendingApproval != null) resolveApproval(false);
-  }
-
-  Future<void> clearChat() async {
-    if (agentBusy) return;
-    _messages.clear();
-    chat.clear();
-    await _saveChat();
-    notifyListeners();
   }
 
   @override

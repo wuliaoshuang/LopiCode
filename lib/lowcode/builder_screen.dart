@@ -15,6 +15,7 @@ import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/widgets.dart';
+import 'package:lopicode/ui/shell.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// 拖动中携带的东西：新组件的类型，或画布上已有组件的 id。
@@ -249,13 +250,9 @@ class _BuilderScreenState extends State<BuilderScreen> {
     final doc = _doc;
     final history = _history;
     return Scaffold(
-      appBar: AppBar(
-        titleSpacing: Navigator.canPop(context) ? 0 : Space.x4,
-        title: Text(
-          doc?.title ?? '低代码搭建',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
+      appBar: ShellAppBar(
+        title: '低代码搭建',
+        subtitle: doc?.title,
         actions: doc == null
             ? null
             : [
@@ -282,7 +279,14 @@ class _BuilderScreenState extends State<BuilderScreen> {
                   tooltip: '更多',
                   onSelected: (v) {
                     if (v == 'dart') _exportDart();
-                    if (v == 'preview') Navigator.pop(context, 'preview');
+                    if (v == 'preview') {
+                      final shell = ShellScope.maybeOf(context);
+                      if (shell != null) {
+                        shell.go(ShellDest.preview);
+                      } else {
+                        Navigator.pop(context, 'preview');
+                      }
+                    }
                     if (v == 'title') _renamePage();
                   },
                   itemBuilder: (_) => const [

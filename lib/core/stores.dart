@@ -83,6 +83,7 @@ class SettingKeys {
   static const sshAuth = 'ssh.auth'; // password / key
   static const sshBuildCommand = 'ssh.buildCommand';
   static const sshBuildOutput = 'ssh.buildOutput';
+  static const lastProject = 'ui.lastProject';
   static String autoApprove(String projectId) => 'project.$projectId.autoApprove';
 }
 

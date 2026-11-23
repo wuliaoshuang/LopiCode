@@ -6,6 +6,7 @@ import 'package:lopicode/app_services.dart';
 import 'package:lopicode/core/stores.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/widgets.dart';
+import 'package:lopicode/ui/shell.dart';
 import 'package:material_ui/material_ui.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -72,7 +73,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final c = context.colors;
     final t = Theme.of(context).textTheme;
     return Scaffold(
-      appBar: AppBar(title: const Text('设置')),
+      appBar: const ShellAppBar(title: '设置', subtitle: 'LopiCode'),
       body: ListView(
         padding: const EdgeInsets.only(bottom: Space.x8),
         children: [

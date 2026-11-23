@@ -1,13 +1,14 @@
 // 设计约束（项目列表 · 390×844）
 // - 这一页只回答一个问题：“我要打开哪个项目”。主操作只有“新建项目”。
 // - 每行一个项目：名字（强）＋ 模板和创建日期（弱）；改名 / 删除收进行尾菜单。
-// - 设置是次要入口，放右上角图标。
+// - 顶栏和别的页面一样：没打开项目时左边是汉堡按钮（侧边栏里有“设置”）；从项目里进来切换时是返回箭头。
+// - 当前开着的项目在列表里标出来。
 // - 没有项目时给真正的空状态和同一个主操作，不放假数据。
 import 'package:lopicode/app_services.dart';
 import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/core/templates.dart';
 import 'package:lopicode/theme/tokens.dart';
-import 'package:lopicode/ui/project_shell.dart';
+import 'package:lopicode/ui/shell.dart';
 import 'package:lopicode/ui/settings_screen.dart';
 import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
@@ -19,7 +20,13 @@ IconData templateIcon(ProjectTemplate t) => switch (t) {
 };
 
 class ProjectListScreen extends StatefulWidget {
-  const ProjectListScreen({super.key});
+  const ProjectListScreen({super.key, this.onOpen, this.currentProjectId});
+
+  /// 作为首页时：选中 / 新建项目后交给上层打开。为空表示是从项目里推进来的，选中后带着项目返回。
+  final void Function(Project project)? onOpen;
+
+  /// 从项目里进来切换时，当前开着的是哪个。
+  final String? currentProjectId;
 
   @override
   State<ProjectListScreen> createState() => _ProjectListScreenState();
@@ -62,9 +69,12 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
   }
 
   void _open(Project project) {
-    Navigator.of(context)
-        .push(MaterialPageRoute<void>(builder: (_) => ProjectShell(project: project)))
-        .then((_) => _reload());
+    final onOpen = widget.onOpen;
+    if (onOpen != null) {
+      onOpen(project);
+    } else {
+      Navigator.of(context).pop(project);
+    }
   }
 
   Future<void> _rename(Project project) async {
@@ -97,21 +107,21 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
   Widget build(BuildContext context) {
     final projects = _projects;
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('LopiCode'),
-        actions: [
-          IconButton(
-            tooltip: '设置',
-            icon: const Icon(Icons.settings_outlined),
-            onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const SettingsScreen())),
-          ),
-          const SizedBox(width: Space.x2),
-        ],
-      ),
+      appBar: ShellAppBar(title: '项目', subtitle: projects == null || projects.isEmpty ? 'LopiCode' : '${projects.length} 个项目'),
+      drawer: widget.onOpen == null
+          ? null
+          : AppDrawer(
+              onProjects: () => Navigator.pop(context),
+              onSettings: () {
+                Navigator.pop(context);
+                Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const SettingsScreen()));
+              },
+            ),
       floatingActionButton: projects != null && projects.isNotEmpty
           ? FloatingActionButton.extended(
               onPressed: _create,
               elevation: 2,
+              shape: const StadiumBorder(),
               icon: const Icon(Icons.add),
               label: const Text('新建项目'),
             )
@@ -133,6 +143,7 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
               separatorBuilder: (_, _) => const SizedBox(height: Space.x3),
               itemBuilder: (context, i) => _ProjectCard(
                 project: projects[i],
+                current: projects[i].id == widget.currentProjectId,
                 onOpen: () => _open(projects[i]),
                 onRename: () => _rename(projects[i]),
                 onDelete: () => _delete(projects[i]),
@@ -143,8 +154,9 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
 }
 
 class _ProjectCard extends StatelessWidget {
-  const _ProjectCard({required this.project, required this.onOpen, required this.onRename, required this.onDelete});
+  const _ProjectCard({required this.project, required this.current, required this.onOpen, required this.onRename, required this.onDelete});
   final Project project;
+  final bool current;
   final VoidCallback onOpen;
   final VoidCallback onRename;
   final VoidCallback onDelete;
@@ -175,7 +187,10 @@ class _ProjectCard extends StatelessWidget {
                   children: [
                     Text(project.name, style: t.titleMedium, maxLines: 1, overflow: TextOverflow.ellipsis),
                     const SizedBox(height: 2),
-                    Text('${project.template.label} · ${d.year}-${_pad2(d.month)}-${_pad2(d.day)}', style: t.bodySmall),
+                    Text(
+                      '${current ? '当前项目 · ' : ''}${project.template.label} · ${d.year}-${_pad2(d.month)}-${_pad2(d.day)}',
+                      style: t.bodySmall?.copyWith(color: current ? c.accent : null),
+                    ),
                   ],
                 ),
               ),
