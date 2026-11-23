@@ -1,5 +1,6 @@
 // 额度上限（DeepSeek 余额）与用量统计：判定、解析、累计、拦截、各协议用量映射、一轮里多次请求累加、持久化。
 // 不调用任何真实接口：余额走 MockClient，模型走脚本客户端或本机假服务器。
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -15,6 +16,9 @@ import 'package:lopicode/agent/usage.dart';
 import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/core/templates.dart';
 import 'package:lopicode/project_session.dart';
+import 'package:lopicode/state/app_providers.dart';
+import 'package:lopicode/state/quota_state.dart';
+import 'package:riverpod/riverpod.dart';
 
 import 'agent_system_test.dart' show FakeApi, sseOf;
 import 'agent_test.dart' show RecordingRunner;
@@ -33,12 +37,25 @@ class FakeBalance {
   final List<String?> auth = [];
   final List<Uri> urls = [];
 
+  /// 不为空时：请求先停在这里，等测试放行（用来造“请求还在路上”的时刻）。
+  Completer<void>? gate;
+
   http.Client get client => MockClient((req) async {
     calls++;
     auth.add(req.headers['Authorization']);
     urls.add(req.url);
+    final wait = gate;
+    final answer = cny; // 请求发出那一刻的余额（旧 Key 那个账号的）
+    if (wait != null) {
+      await wait.future;
+      if (!offline && status == 200) return _ok(answer);
+    }
     if (offline) throw const SocketException('没网');
     if (status != 200) return http.Response('{"error":{"message":"Authentication Fails"}}', status);
+    return _ok(cny);
+  });
+
+  http.Response _ok(double cny) {
     return http.Response(
       jsonEncode({
         'is_available': available,
@@ -50,10 +67,15 @@ class FakeBalance {
       200,
       headers: {'content-type': 'application/json'},
     );
-  });
+  }
 }
 
 TokenUsage u(int miss, int hit, int out, {int? think, int write = 0}) => TokenUsage(uncached: miss, cacheRead: hit, cacheWrite: write, output: out, reasoning: think, hasCache: true);
+
+/// 一个独立的状态容器（相当于“重开应用”）：同一份设置文件，换假网络和假时钟。
+ProviderContainer quotaBox(TestEnv env, {http.Client? client, DateTime Function()? now}) => ProviderContainer(
+  overrides: [appServicesProvider.overrideWithValue(env.services), if (client != null) quotaHttpProvider.overrideWithValue(client), if (now != null) clockProvider.overrideWithValue(now)],
+);
 
 void main() {
   group('判定是不是 DeepSeek 官方', () {
@@ -115,7 +137,8 @@ void main() {
     late Channel ds;
     late Channel other;
     late DateTime clock;
-    late QuotaStore quota;
+    late QuotaNotifier quota;
+    late ProviderContainer box;
 
     setUp(() async {
       fake = FakeBalance();
@@ -135,9 +158,13 @@ void main() {
         models: [ModelSpec(id: 'm')],
       );
       clock = DateTime(2026, 11, 23, 18);
-      quota = QuotaStore(env.services.settings, env.services.models, httpClient: fake.client, now: () => clock);
+      box = quotaBox(env, client: fake.client, now: () => clock);
+      quota = box.read(quotaProvider.notifier);
     });
-    tearDown(() => env.dispose());
+    tearDown(() {
+      box.dispose();
+      env.dispose();
+    });
 
     test('非 DeepSeek 渠道：不查余额、不拦', () async {
       await quota.refresh(other, force: true);
@@ -149,31 +176,31 @@ void main() {
     test('已用 = 设上限之后余额减少的累计；百分比、剩余；到 100% 才拦', () async {
       await quota.setLimit(ds, limit: 20, currency: 'CNY');
       expect(fake.calls, 1, reason: '设上限时查一次当起点');
-      final q = quota.quotaOf(ds.id)!;
-      expect(q.used, 0);
-      expect(q.lastBalance, 100);
+      ChannelQuota q() => quota.quotaOf(ds.id)!; // 状态不可变：每次重新读
+      expect(q().used, 0);
+      expect(q().lastBalance, 100);
 
       fake.cny = 95;
       await quota.refresh(ds, force: true);
-      expect(q.used, 5);
-      expect(q.percent, 25);
-      expect(q.remaining, 15);
+      expect(q().used, 5);
+      expect(q().percent, 25);
+      expect(q().remaining, 15);
       expect(quota.blockReason(ds), isNull);
 
       fake.cny = 80.01;
       await quota.refresh(ds, force: true);
-      expect(q.percent, 99);
-      expect(q.reached, isFalse);
+      expect(q().percent, 99);
+      expect(q().reached, isFalse);
       expect(quota.blockReason(ds), isNull, reason: '99% 不拦');
 
       fake.cny = 80;
       await quota.refresh(ds, force: true);
-      expect(q.reached, isTrue);
+      expect(q().reached, isTrue);
       expect(quota.blockReason(ds), startsWith(kQuotaBlockedPrefix));
 
       // 调高上限就放行；已用不清零
       await quota.setLimit(ds, limit: 50, currency: 'CNY');
-      expect(q.used, 20);
+      expect(q().used, 20);
       expect(quota.blockReason(ds), isNull);
     });
 
@@ -183,17 +210,17 @@ void main() {
       await quota.refresh(ds, force: true);
       fake.cny = 194; // 充了 100
       await quota.refresh(ds, force: true);
-      final q = quota.quotaOf(ds.id)!;
-      expect(q.used, 6);
-      expect(q.recharge, isTrue);
+      ChannelQuota q() => quota.quotaOf(ds.id)!; // 状态不可变：每次重新读
+      expect(q().used, 6);
+      expect(q().recharge, isTrue);
       fake.cny = 190;
       await quota.refresh(ds, force: true);
-      expect(q.used, 10, reason: '充值之后的花费接着累计');
+      expect(q().used, 10, reason: '充值之后的花费接着累计');
 
       await quota.restart(ds);
-      expect(q.used, 0);
-      expect(q.recharge, isFalse);
-      expect(q.lastBalance, 190);
+      expect(q().used, 0);
+      expect(q().recharge, isFalse);
+      expect(q().lastBalance, 190);
     });
 
     test('节流：一分钟内自动刷新只查一次；手动（force）不受限', () async {
@@ -226,8 +253,8 @@ void main() {
         ..offline = false
         ..status = 401;
       await quota.refresh(ds, force: true);
-      expect(s.keyInvalid, isTrue);
-      expect(s.error, contains('Key 无效，查不到余额'));
+      expect(quota.stateOf(ds.id).keyInvalid, isTrue);
+      expect(quota.stateOf(ds.id).error, contains('Key 无效，查不到余额'));
       expect(quota.blockReason(ds), isNull);
     });
 
@@ -262,15 +289,86 @@ void main() {
       expect(await quota.afterRun(ds), startsWith(kQuotaBlockedPrefix));
     });
 
+    test('换 Key：还在路上的旧请求回来不算数；新 Key 第一次查到的余额当新起点，不和旧账号相减', () async {
+      await quota.setLimit(ds, limit: 20, currency: 'CNY');
+      expect(quota.quotaOf(ds.id)!.lastBalance, 100);
+
+      // 旧 Key 的请求发出去了，还没回来（它会带回“旧账号余额 60”）
+      fake
+        ..cny = 60
+        ..gate = Completer<void>();
+      final old = quota.refresh(ds, force: true);
+      await Future<void>.delayed(Duration.zero);
+      expect(quota.stateOf(ds.id).loading, isTrue);
+
+      // 这时候换了 Key（另一个账号，余额 500）
+      final gate = fake.gate!;
+      fake.gate = null;
+      await env.services.models.upsert(id: ds.id, name: ds.name, protocol: ds.protocol, baseUrl: ds.baseUrl, apiKey: 'sk-another-account');
+      expect(quota.quotaOf(ds.id)!.lastBalance, isNull, reason: '起点清掉，等新 Key 第一次查到');
+      expect(quota.stateOf(ds.id).loading, isFalse);
+
+      // 旧请求现在才回来：整个丢掉
+      gate.complete();
+      await old;
+      expect(quota.quotaOf(ds.id)!.used, 0, reason: '旧账号少的 40 不能算成已用');
+      expect(quota.quotaOf(ds.id)!.lastBalance, isNull);
+      expect(quota.stateOf(ds.id).result, isNull, reason: '旧账号的余额不显示');
+
+      // 新 Key 查到 500：当起点，不算充值也不算花费
+      fake.cny = 500;
+      await quota.refresh(ds, force: true);
+      final q = quota.quotaOf(ds.id)!;
+      expect((q.used, q.lastBalance, q.recharge), (0, 500, false));
+      expect(fake.auth.last, 'Bearer sk-another-account');
+
+      // 之后的花费照常累计
+      fake.cny = 497;
+      await quota.refresh(ds, force: true);
+      expect(quota.quotaOf(ds.id)!.used, 3);
+    });
+
+    test('Key 没变（只改了渠道名）：不作废、不清起点', () async {
+      await quota.setLimit(ds, limit: 20, currency: 'CNY');
+      final key = await env.services.models.apiKey(ds.id);
+      await env.services.models.upsert(id: ds.id, name: '改个名', protocol: ds.protocol, baseUrl: ds.baseUrl, apiKey: key);
+      expect(quota.quotaOf(ds.id)!.lastBalance, 100);
+      expect(quota.stateOf(ds.id).result, isNotNull);
+    });
+
+    test('容器销毁以后回来的结果不再写状态（不报错）', () async {
+      fake.gate = Completer<void>();
+      final pending = quota.refresh(ds, force: true);
+      await Future<void>.delayed(Duration.zero);
+      final gate = fake.gate!;
+      box.dispose();
+      gate.complete();
+      await pending; // 不抛异常就是过
+      expect(quota.blockReason(ds), isNull, reason: '销毁后还能问“到上限了吗”，照最后的状态答');
+      quota.dismissLow(ds.id); // 销毁后写：丢掉，不报错
+      box = quotaBox(env, client: fake.client, now: () => clock);
+    });
+
+    test('状态变化会通知订阅的人', () async {
+      var notified = 0;
+      final sub = box.listen(quotaProvider, (_, _) => notified++);
+      await quota.setLimit(ds, limit: 20, currency: 'CNY');
+      expect(notified, greaterThan(0));
+      final before = notified;
+      quota.dismissLow(ds.id);
+      expect(notified, before + 1);
+      sub.close();
+    });
+
     test('上限、已用存盘：重开还在', () async {
       await quota.setLimit(ds, limit: 20, currency: 'CNY', warnPct: 50);
       fake.cny = 93;
       await quota.refresh(ds, force: true);
-      final again = QuotaStore(env.services.settings, env.services.models, httpClient: fake.client);
+      final again = (quotaBox(env, client: fake.client)..listen(quotaProvider, (_, _) {})).read(quotaProvider.notifier);
       final q = again.quotaOf(ds.id)!;
       expect((q.limit, q.used, q.warnPct, q.currency), (20, 7, 50, 'CNY'));
       await again.clearLimit(ds.id);
-      expect(QuotaStore(env.services.settings, env.services.models).quotaOf(ds.id), isNull);
+      expect(quotaBox(env).read(quotaProvider.notifier).quotaOf(ds.id), isNull);
     });
 
     test('低余额提醒线：默认 5 元；低于才提示；关掉后这次运行不再出现；0＝不提醒', () async {

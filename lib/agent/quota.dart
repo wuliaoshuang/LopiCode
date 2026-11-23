@@ -10,11 +10,8 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:lopicode/agent/chat_client.dart';
-import 'package:lopicode/agent/model_config.dart';
-import 'package:lopicode/core/stores.dart';
 
 /// 被拦住时提示语的开头（聊天页据此给“去调上限”的入口）。
 const String kQuotaBlockedPrefix = '已达到你设的额度上限';
@@ -129,9 +126,7 @@ String currencySymbol(String currency) => switch (currency) {
 
 String formatMoney(String currency, double amount) => '${currencySymbol(currency)}${amount.toStringAsFixed(2)}';
 
-double _round4(double v) => (v * 10000).round() / 10000;
-
-/// 一个渠道的额度上限（存进普通设置，不含任何密钥）。
+/// 一个渠道的额度上限（存进普通设置，不含任何密钥）。不可变：要改就 [copyWith] 出一个新的。
 class ChannelQuota {
   ChannelQuota({required this.limit, required this.currency, this.used = 0, this.lastBalance, this.warnPct = defaultWarnPct, this.warned = false, this.recharge = false, DateTime? since})
     : since = since ?? DateTime.now();
@@ -139,27 +134,39 @@ class ChannelQuota {
   static const int defaultWarnPct = 80;
 
   /// 上限金额（> 0），币种见 [currency]。
-  double limit;
-  String currency;
+  final double limit;
+  final String currency;
 
   /// 设上限（或“重新算”）以来花掉的钱。
-  double used;
+  final double used;
 
   /// 上一次查到的余额；还没查到过是 null（第一次查到时记为起点）。
-  double? lastBalance;
+  final double? lastBalance;
 
   /// 到这个百分比时提醒一次（只提醒不拦）。0 表示不提醒。
-  int warnPct;
-  bool warned;
+  final int warnPct;
+  final bool warned;
 
   /// 查到余额比上次多了（充值，或者换了 Key）。
-  bool recharge;
-  DateTime since;
+  final bool recharge;
+  final DateTime since;
 
   double get fraction => limit <= 0 ? 0 : (used / limit).clamp(0.0, 1.0);
   int get percent => (fraction * 100 + 1e-9).floor();
   bool get reached => used + 1e-9 >= limit;
   double get remaining => (limit - used).clamp(0.0, limit);
+
+  /// [lastBalance] 要清成 null 时传 `clearLastBalance: true`。
+  ChannelQuota copyWith({double? limit, double? used, double? lastBalance, bool clearLastBalance = false, int? warnPct, bool? warned, bool? recharge, DateTime? since}) => ChannelQuota(
+    limit: limit ?? this.limit,
+    currency: currency,
+    used: used ?? this.used,
+    lastBalance: clearLastBalance ? null : (lastBalance ?? this.lastBalance),
+    warnPct: warnPct ?? this.warnPct,
+    warned: warned ?? this.warned,
+    recharge: recharge ?? this.recharge,
+    since: since ?? this.since,
+  );
 
   Map<String, dynamic> toJson() => {
     'limit': limit,
@@ -190,249 +197,22 @@ class ChannelQuota {
   }
 }
 
-/// 最近一次查余额的结果（只在内存里）。
+/// 最近一次查余额的结果（只在内存里）。不可变。
 class BalanceState {
-  BalanceResult? result;
+  const BalanceState({this.result, this.error, this.keyInvalid = false, this.at, this.loading = false});
+
+  final BalanceResult? result;
 
   /// 最近一次没查到的原因；查到了是 null。
-  String? error;
+  final String? error;
 
   /// 最近一次是不是因为 Key 无效（401 / 403）没查到。断网、服务器出错不算。
-  bool keyInvalid = false;
-  DateTime? at;
-  bool loading = false;
+  final bool keyInvalid;
+  final DateTime? at;
+  final bool loading;
+
+  static const empty = BalanceState();
 }
 
-/// 各渠道的余额和额度上限。
-class QuotaStore extends ChangeNotifier {
-  QuotaStore(this.settings, this.models, {this.httpClient, DateTime Function()? now}) : _now = now ?? DateTime.now;
-
-  final SettingsStore settings;
-  final ModelConfigStore models;
-
-  /// 测试钩子：替换真实的网络。
-  final http.Client? httpClient;
-  final DateTime Function() _now;
-
-  static const kQuotas = 'quota.channels';
-
-  /// 自动刷新（打开聊天或设置、打开用量弹层、对话结束、发请求前）最短间隔：最多每分钟查一次。手动刷新不受限。
-  static const Duration throttle = Duration(minutes: 1);
-
-  /// DeepSeek 充值页（网址来自 dsh-Go 的做法，没在官方文档里核对到）。
-  static const String topUpUrl = 'https://platform.deepseek.com/top_up';
-
-  /// 低余额提醒线（金额，和余额同币种）。0＝不提醒。
-  static const kLowLine = 'quota.lowLine';
-  static const List<int> lowLineChoices = [0, 1, 5, 10, 20, 50];
-  static const int defaultLowLine = 5;
-
-  int get lowLine {
-    final v = settings.get<int>(kLowLine);
-    return v != null && lowLineChoices.contains(v) ? v : defaultLowLine;
-  }
-
-  Future<void> setLowLine(int value) async {
-    await settings.set(kLowLine, value);
-    notifyListeners();
-  }
-
-  final Set<String> _lowDismissed = {};
-
-  /// 余额低于提醒线时返回那一条余额（聊天输入框上方的小提示用）；这次运行里关掉过就不再返回。
-  BalanceInfo? lowBalance(Channel ch) {
-    if (!isDeepSeekOfficial(ch.baseUrl) || lowLine <= 0 || _lowDismissed.contains(ch.id)) return null;
-    final info = stateOf(ch.id).result?.preferred;
-    return info != null && info.total < lowLine ? info : null;
-  }
-
-  /// 关掉低余额提示：这次运行不再出现。
-  void dismissLow(String channelId) {
-    _lowDismissed.add(channelId);
-    notifyListeners();
-  }
-
-  final Map<String, ChannelQuota> _quotas = {};
-  final Map<String, BalanceState> _states = {};
-  final Map<String, DateTime> _lastAttempt = {};
-  final Map<String, Future<void>> _inFlight = {};
-  final Set<String> _toldReached = {};
-  bool _loaded = false;
-
-  void _load() {
-    if (_loaded) return;
-    _loaded = true;
-    final raw = settings.get<Map<String, dynamic>>(kQuotas);
-    for (final e in (raw ?? const <String, dynamic>{}).entries) {
-      final q = ChannelQuota.fromJson(e.value);
-      if (q != null) _quotas[e.key] = q;
-    }
-  }
-
-  Future<void> _save() => settings.set(kQuotas, _quotas.isEmpty ? null : {for (final e in _quotas.entries) e.key: e.value.toJson()});
-
-  ChannelQuota? quotaOf(String channelId) {
-    _load();
-    return _quotas[channelId];
-  }
-
-  BalanceState stateOf(String channelId) => _states.putIfAbsent(channelId, BalanceState.new);
-
-  /// 被拦住的原因；没被拦是 null。不发网络请求，只看已经记下的数。
-  String? blockReason(Channel ch) {
-    if (!isDeepSeekOfficial(ch.baseUrl)) return null;
-    final q = quotaOf(ch.id);
-    if (q == null || !q.reached) return null;
-    return '$kQuotaBlockedPrefix（${formatMoney(q.currency, q.limit)}，渠道“${ch.name}”）。这个渠道的新请求已被拦住，到“设置 → 额度上限”调高上限或重新开始计算后才能继续。';
-  }
-
-  /// 查一次余额并更新“已用”。[force] 为 false 时一分钟内不重复查。查不到只记原因，不改已用。
-  Future<void> refresh(Channel ch, {bool force = false}) {
-    if (!isDeepSeekOfficial(ch.baseUrl)) return Future.value();
-    final running = _inFlight[ch.id];
-    if (running != null) return running;
-    final last = _lastAttempt[ch.id];
-    if (!force && last != null && _now().difference(last) < throttle) return Future.value();
-    _lastAttempt[ch.id] = _now();
-    // 注意要用花括号：箭头写法会把 remove 的返回值（就是这个 Future 自己）交给 whenComplete 去等，永远等不完。
-    final future = _refresh(ch).whenComplete(() {
-      _inFlight.remove(ch.id);
-    });
-    _inFlight[ch.id] = future;
-    return future;
-  }
-
-  Future<void> _refresh(Channel ch) async {
-    final state = stateOf(ch.id)..loading = true;
-    notifyListeners();
-    try {
-      final result = await fetchDeepSeekBalance(baseUrl: ch.baseUrl, apiKey: await models.apiKey(ch.id), httpClient: httpClient);
-      state
-        ..result = result
-        ..keyInvalid = false
-        ..error = null
-        ..at = _now();
-      await _apply(ch.id, result);
-    } on BalanceException catch (e) {
-      state
-        ..keyInvalid = e.keyInvalid
-        ..error = e.message
-        ..at = _now();
-    } on Exception catch (e) {
-      state
-        ..error = shortError(e)
-        ..at = _now();
-    } finally {
-      state.loading = false;
-      notifyListeners();
-    }
-  }
-
-  Future<void> _apply(String channelId, BalanceResult result) async {
-    final q = quotaOf(channelId);
-    if (q == null) return;
-    final info = result.of(q.currency);
-    if (info == null) {
-      stateOf(channelId).error = '这次没有返回 ${q.currency} 的余额，已用没有更新';
-      return;
-    }
-    final before = q.lastBalance;
-    if (before != null) {
-      final spent = _round4(before - info.total);
-      if (spent > 0) {
-        q.used = _round4(q.used + spent);
-      } else if (spent < 0) {
-        q.recharge = true;
-      }
-    }
-    q.lastBalance = info.total;
-    if (q.warnPct > 0 && q.percent < q.warnPct) q.warned = false;
-    await _save();
-  }
-
-  /// 设上限（或改上限、改提醒阈值）。新设的会先查一次余额当起点；改已有的不清零已用。
-  Future<void> setLimit(Channel ch, {required double limit, required String currency, int warnPct = ChannelQuota.defaultWarnPct}) async {
-    if (!(limit > 0) || !limit.isFinite) throw ArgumentError('上限要大于 0');
-    final old = quotaOf(ch.id);
-    if (old != null && old.currency == currency) {
-      old
-        ..limit = limit
-        ..warnPct = warnPct.clamp(0, 99);
-      if (old.warnPct == 0 || old.percent < old.warnPct) old.warned = false;
-    } else {
-      _quotas[ch.id] = ChannelQuota(limit: limit, currency: currency, warnPct: warnPct.clamp(0, 99), since: _now());
-      // 记起点：用刚查到的余额；没查到就等第一次查到时再记。
-      final known = stateOf(ch.id).result?.of(currency);
-      if (known != null) _quotas[ch.id]!.lastBalance = known.total;
-    }
-    await _save();
-    notifyListeners();
-    if (_quotas[ch.id]!.lastBalance == null) await refresh(ch, force: true);
-  }
-
-  /// 从现在重新算：已用清零，起点改成当前余额。
-  Future<void> restart(Channel ch) async {
-    final q = quotaOf(ch.id);
-    if (q == null) return;
-    q
-      ..used = 0
-      ..warned = false
-      ..recharge = false
-      ..since = _now()
-      ..lastBalance = stateOf(ch.id).result?.of(q.currency)?.total;
-    await _save();
-    notifyListeners();
-    await refresh(ch, force: true);
-  }
-
-  Future<void> clearLimit(String channelId) async {
-    _load();
-    _quotas.remove(channelId);
-    await _save();
-    notifyListeners();
-  }
-
-  /// 一段对话结束后调用：刷新余额（有节流），需要提醒时返回给用户看的一句话。
-  Future<String?> afterRun(Channel ch) async {
-    if (!isDeepSeekOfficial(ch.baseUrl)) return null;
-    await refresh(ch);
-    final q = quotaOf(ch.id);
-    if (q == null) return null;
-    if (q.reached) {
-      // 到顶只说一次（之后每次被拦都会有拦截提示）。
-      if (!_toldReached.add(ch.id)) return null;
-      return '$kQuotaBlockedPrefix（${formatMoney(q.currency, q.limit)}）。这个渠道接下来的请求会被拦住，到“设置 → 额度上限”可以调。';
-    }
-    _toldReached.remove(ch.id);
-    if (q.warnPct > 0 && q.percent >= q.warnPct && !q.warned) {
-      q.warned = true;
-      await _save();
-      return '额度提醒：渠道“${ch.name}”已经用了你设的上限的 ${q.percent}%（还剩 ${formatMoney(q.currency, q.remaining)}）。到 100% 会被拦住。';
-    }
-    return null;
-  }
-
-  /// 给模型客户端套上额度检查。不是 DeepSeek 官方渠道原样返回。
-  ChatClient guard(Channel ch, ChatClient inner) => isDeepSeekOfficial(ch.baseUrl) ? _QuotaGuardClient(this, ch, inner) : inner;
-}
-
-/// 每次向模型发请求之前检查额度（主对话、子代理、自动化任务、压缩对话都经过这里）。
-class _QuotaGuardClient implements ChatClient {
-  _QuotaGuardClient(this.store, this.channel, this.inner);
-  final QuotaStore store;
-  final Channel channel;
-  final ChatClient inner;
-
-  @override
-  Stream<ChatDelta> streamChat({required List<Map<String, dynamic>> messages, List<Map<String, dynamic>> tools = const []}) async* {
-    // 设了上限才值得在发请求前多查一次余额（有节流；查不到不拦）。
-    if (store.quotaOf(channel.id) != null) await store.refresh(channel);
-    final reason = store.blockReason(channel);
-    if (reason != null) {
-      // 拦截提示本身已经说了“到上限”，对话结束后的提醒就不再重复说一遍。
-      store._toldReached.add(channel.id);
-      throw ChatApiException(reason);
-    }
-    yield* inner.streamChat(messages: messages, tools: tools);
-  }
-}
+/// 金额保留四位小数（余额相减会有浮点尾巴）。
+double roundMoney4(double v) => (v * 10000).round() / 10000;

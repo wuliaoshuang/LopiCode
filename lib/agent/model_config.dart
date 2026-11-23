@@ -210,6 +210,15 @@ class ModelConfigStore {
 
   List<Channel> channels = [];
 
+  /// 某个渠道的 Key 换了、清了，或者渠道被删了（额度那边据此作废旧的余额请求）。
+  final List<void Function(String channelId)> keyListeners = [];
+
+  void _keyChanged(String channelId) {
+    for (final listener in List.of(keyListeners)) {
+      listener(channelId);
+    }
+  }
+
   /// 读配置；第一次运行新版时把老的“单一接口”设置搬成一个渠道。
   Future<void> load() async {
     final raw = settings.get<List<dynamic>>(kChannels);
@@ -274,7 +283,11 @@ class ModelConfigStore {
       }
     }
     if (ch.name.trim().isEmpty) ch.name = protocol.label;
-    if (apiKey != null && apiKey.trim().isNotEmpty) await secrets.write(keyName(ch.id), apiKey.trim());
+    if (apiKey != null && apiKey.trim().isNotEmpty) {
+      final changed = (await secrets.read(keyName(ch.id))) != apiKey.trim();
+      await secrets.write(keyName(ch.id), apiKey.trim());
+      if (changed) _keyChanged(ch.id);
+    }
     await save();
     return ch;
   }
@@ -282,12 +295,16 @@ class ModelConfigStore {
   Future<void> remove(String id) async {
     channels.removeWhere((c) => c.id == id);
     await secrets.delete(keyName(id));
+    _keyChanged(id);
     await save();
   }
 
   Future<bool> hasKey(String id) async => ((await secrets.read(keyName(id))) ?? '').isNotEmpty;
   Future<String> apiKey(String id) async => (await secrets.read(keyName(id))) ?? '';
-  Future<void> clearKey(String id) => secrets.delete(keyName(id));
+  Future<void> clearKey(String id) async {
+    await secrets.delete(keyName(id));
+    _keyChanged(id);
+  }
 
   // ── 选择 ─────────────────────────────────────────────
   bool get newChatUsesFixed => settings.getString(kDefaultMode, 'last') == 'fixed';

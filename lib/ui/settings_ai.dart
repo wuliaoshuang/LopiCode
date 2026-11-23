@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lopicode/agent/chat_client.dart';
 // 设计约束（模型与渠道 · 390×844）
 // - 渠道列表：一行一个渠道（名字强，协议 + 模型数弱）。最上面一块是“新对话用哪个模型”。主操作只有“添加渠道”。
@@ -10,8 +11,9 @@ import 'package:lopicode/agent/chat_client.dart';
 import 'package:lopicode/agent/model_config.dart';
 import 'package:lopicode/agent/protocols.dart';
 import 'package:lopicode/agent/provider_presets.dart';
-import 'package:lopicode/app_services.dart';
+import 'package:lopicode/state/config_providers.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/app_ref.dart';
 import 'package:lopicode/ui/chat_panels.dart';
 import 'package:lopicode/ui/chrome.dart';
 import 'package:lopicode/ui/model_setup.dart';
@@ -19,14 +21,14 @@ import 'package:lopicode/ui/provider_icon.dart';
 import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
 
-class ChannelsScreen extends StatefulWidget {
+class ChannelsScreen extends ConsumerStatefulWidget {
   const ChannelsScreen({super.key});
 
   @override
-  State<ChannelsScreen> createState() => _ChannelsScreenState();
+  ConsumerState<ChannelsScreen> createState() => _ChannelsScreenState();
 }
 
-class _ChannelsScreenState extends State<ChannelsScreen> {
+class _ChannelsScreenState extends ConsumerState<ChannelsScreen> {
   /// 点已有渠道进编辑页；“添加渠道”先去选服务商。
   Future<void> _edit([Channel? channel]) async {
     await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => channel == null ? const ProviderPickerScreen() : ChannelEditScreen(channel: channel)));
@@ -34,7 +36,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
   }
 
   Future<void> _pickFixed() async {
-    final app = AppScope.of(context);
+    final app = appOf(context);
     final picked = await showModalBottomSheet<Object>(
       context: context,
       isScrollControlled: true,
@@ -43,14 +45,14 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
     if (picked is ModelSelectionResult) {
       await app.models.setFixedSelection(picked.selection);
       await app.models.setNewChatUsesFixed(true);
-      app.touch();
       if (mounted) setState(() {});
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final app = AppScope.of(context);
+    ref.watch(modelsRevProvider);
+    final app = appOf(context);
     final t = Theme.of(context).textTheme;
     final channels = app.models.channels;
     final fixed = app.models.resolve(app.models.fixedSelection);
@@ -85,7 +87,6 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
                         await _pickFixed();
                       } else {
                         await app.models.setNewChatUsesFixed(v.first);
-                        app.touch();
                         if (mounted) setState(() {});
                       }
                     },
@@ -119,7 +120,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
   }
 }
 
-class ChannelEditScreen extends StatefulWidget {
+class ChannelEditScreen extends ConsumerStatefulWidget {
   const ChannelEditScreen({super.key, this.channel, this.preset});
   final Channel? channel;
 
@@ -127,10 +128,10 @@ class ChannelEditScreen extends StatefulWidget {
   final ProviderPreset? preset;
 
   @override
-  State<ChannelEditScreen> createState() => _ChannelEditScreenState();
+  ConsumerState<ChannelEditScreen> createState() => _ChannelEditScreenState();
 }
 
-class _ChannelEditScreenState extends State<ChannelEditScreen> {
+class _ChannelEditScreenState extends ConsumerState<ChannelEditScreen> {
   final _name = TextEditingController();
   final _baseUrl = TextEditingController();
   final _key = TextEditingController();
@@ -167,7 +168,7 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
     super.didChangeDependencies();
     final ch = widget.channel;
     if (ch != null) {
-      AppScope.of(context).models.hasKey(ch.id).then((v) {
+      appOf(context).models.hasKey(ch.id).then((v) {
         if (mounted) setState(() => _hasKey = v);
       });
     }
@@ -185,7 +186,7 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
   Future<String> _effectiveKey() async {
     if (_key.text.trim().isNotEmpty) return _key.text.trim();
     final ch = widget.channel;
-    return ch == null ? '' : AppScope.of(context).models.apiKey(ch.id);
+    return ch == null ? '' : appOf(context).models.apiKey(ch.id);
   }
 
   Future<List<RemoteModel>?> _fetch() async {
@@ -272,7 +273,7 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
   }
 
   Future<void> _save() async {
-    final app = AppScope.of(context);
+    final app = appOf(context);
     if (_baseUrl.text.trim().isEmpty) {
       showSnack(context, '接口地址不能为空');
       return;
@@ -287,28 +288,27 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
     );
     // 换了 Key：马上重查余额（不是 DeepSeek 官方渠道什么都不做）。
     if (_key.text.trim().isNotEmpty) unawaited(app.quota.refresh(saved, force: true));
-    app.touch();
     if (mounted) Navigator.pop(context, true);
   }
 
   Future<void> _delete() async {
-    final app = AppScope.of(context);
+    final app = appOf(context);
     final ok = await confirmDialog(context, title: '删除这个渠道？', message: '渠道和它保存的 API Key 会被删除。用着它的对话会改用别的可用模型。', confirmLabel: '删除', danger: true);
     if (!ok) return;
     await app.models.remove(widget.channel!.id);
     await app.quota.clearLimit(widget.channel!.id);
-    app.touch();
     if (mounted) Navigator.pop(context);
   }
 
   Future<void> _clearKey() async {
-    await AppScope.of(context).models.clearKey(widget.channel!.id);
+    await appOf(context).models.clearKey(widget.channel!.id);
     if (mounted) setState(() => _hasKey = false);
   }
 
   @override
   Widget build(BuildContext context) {
-    final app = AppScope.of(context);
+    ref.watch(modelsRevProvider);
+    final app = appOf(context);
     final c = context.colors;
     final t = Theme.of(context).textTheme;
     final recognized = presetForBaseUrl(_baseUrl.text);

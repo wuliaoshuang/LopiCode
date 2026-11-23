@@ -11,16 +11,18 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lopicode/agent/agent_tools.dart';
 import 'package:lopicode/agent/quota.dart';
 import 'package:lopicode/agent/usage.dart';
-import 'package:lopicode/app_services.dart';
-import 'package:lopicode/core/project_store.dart';
-import 'package:lopicode/core/stores.dart';
 import 'package:lopicode/project_session.dart';
+import 'package:lopicode/state/config_providers.dart';
+import 'package:lopicode/state/ui_prefs.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/app_ref.dart';
 import 'package:lopicode/ui/chat_panels.dart';
 import 'package:lopicode/ui/chrome.dart';
+import 'package:lopicode/ui/file_picker_sheet.dart';
 import 'package:lopicode/ui/model_setup.dart';
 import 'package:lopicode/ui/settings_ai.dart';
 import 'package:lopicode/ui/settings_quota.dart';
@@ -33,15 +35,15 @@ import 'package:material_ui/material_ui.dart';
 /// `/` 指令。
 const List<(String, String)> kSlashCommands = [('/new', '开一段新对话'), ('/model', '换模型和思考深度'), ('/plan', '开 / 关计划模式'), ('/compact', '把前面的对话压缩成摘要'), ('/export', '把对话导出成文件'), ('/permission', '改这段对话的权限')];
 
-class ChatScreen extends StatefulWidget {
+class ChatScreen extends ConsumerStatefulWidget {
   const ChatScreen({super.key, required this.session});
   final ProjectSession session;
 
   @override
-  State<ChatScreen> createState() => _ChatScreenState();
+  ConsumerState<ChatScreen> createState() => _ChatScreenState();
 }
 
-class _ChatScreenState extends State<ChatScreen> {
+class _ChatScreenState extends ConsumerState<ChatScreen> {
   final _input = TextEditingController();
   final _focus = FocusNode();
   final _scroll = ScrollController();
@@ -218,7 +220,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _pickPreset() async {
-    final app = AppScope.of(context);
+    final app = appOf(context);
     final id = await showModalBottomSheet<String>(
       context: context,
       builder: (_) => PresetPickerSheet(presets: app.presets.all, current: s.preset.id),
@@ -263,7 +265,7 @@ class _ChatScreenState extends State<ChatScreen> {
     if (choice == 'ref') {
       final path = await showModalBottomSheet<String>(
         context: context,
-        builder: (_) => _FilePickerSheet(session: s),
+        builder: (_) => FilePickerSheet(session: s),
       );
       if (path != null) _insertReference(path);
       return;
@@ -278,7 +280,7 @@ class _ChatScreenState extends State<ChatScreen> {
       if (choice == 'file') {
         final path = await showModalBottomSheet<String>(
           context: context,
-          builder: (_) => _FilePickerSheet(session: s, imagesOnly: true),
+          builder: (_) => FilePickerSheet(session: s, imagesOnly: true),
         );
         if (path != null) added.add(s.attachWorkspaceFile(path));
       } else {
@@ -324,7 +326,11 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final app = AppScope.of(context);
+    ref
+      ..watch(modelsRevProvider)
+      ..watch(presetsRevProvider);
+    final prefs = ref.watch(chatPrefsProvider);
+    final app = appOf(context);
     final c = context.colors;
     final pending = s.pendingApproval;
     final question = s.pendingQuestion;
@@ -381,7 +387,7 @@ class _ChatScreenState extends State<ChatScreen> {
               child: s.chat.isEmpty
                   ? Padding(
                       padding: EdgeInsets.only(top: topInset),
-                      child: _EmptyChat(configured: app.agentConfigured, showIdeas: app.settings.getBool(SettingKeys.chatSuggestions), onPick: _send),
+                      child: _EmptyChat(configured: app.agentConfigured, showIdeas: prefs.suggestions, onPick: _send),
                     )
                   : ListView.builder(
                       controller: _scroll,
@@ -602,66 +608,6 @@ class _EmptyChat extends StatelessWidget {
   }
 }
 
-class _FilePickerSheet extends StatelessWidget {
-  const _FilePickerSheet({required this.session, this.imagesOnly = false});
-  final ProjectSession session;
-
-  /// 只列图片（当附件用）。
-  final bool imagesOnly;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.colors;
-    final t = Theme.of(context).textTheme;
-    return SafeArea(
-      top: false,
-      child: FutureBuilder<List<String>>(
-        future: listProjectFiles(session.guard),
-        builder: (context, snap) {
-          final files = (snap.data ?? const <String>[]).where((f) => !f.endsWith('/') && (!imagesOnly || ProjectSession.imageMimeOf(f) != null)).toList();
-          return Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x2),
-                child: Text(imagesOnly ? '选工作区里的图片' : '引用项目文件', style: t.titleLarge),
-              ),
-              if (snap.connectionState != ConnectionState.done)
-                const Padding(
-                  padding: EdgeInsets.all(Space.x6),
-                  child: Center(child: CircularProgressIndicator()),
-                )
-              else if (files.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.all(Space.x6),
-                  child: Text(
-                    imagesOnly ? '工作区里还没有图片。' : '项目里还没有文件。',
-                    style: t.bodyMedium?.copyWith(color: c.textMuted),
-                    textAlign: TextAlign.center,
-                  ),
-                )
-              else
-                Flexible(
-                  child: ListView.builder(
-                    shrinkWrap: true,
-                    itemCount: files.length,
-                    itemBuilder: (context, i) => ListTile(
-                      dense: true,
-                      leading: const Icon(Icons.insert_drive_file_outlined, size: 20),
-                      title: Text(files[i], style: t.bodyMedium, maxLines: 1, overflow: TextOverflow.ellipsis),
-                      onTap: () => Navigator.pop(context, files[i]),
-                    ),
-                  ),
-                ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-}
-
 class _NeedsSetup extends StatelessWidget {
   const _NeedsSetup();
 
@@ -693,7 +639,7 @@ class _Working extends StatelessWidget {
   );
 }
 
-class ChatItemView extends StatelessWidget {
+class ChatItemView extends ConsumerWidget {
   const ChatItemView({super.key, required this.item, this.onOpenChild, this.onOpenQuota, this.onOpenTurn});
 
   /// 点回合脚注时打开本轮轨迹。
@@ -707,7 +653,8 @@ class ChatItemView extends StatelessWidget {
   final void Function(String conversationId)? onOpenChild;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final showUsage = ref.watch(chatPrefsProvider).usage;
     final c = context.colors;
     final t = Theme.of(context).textTheme;
     switch (item) {
@@ -766,7 +713,7 @@ class ChatItemView extends StatelessWidget {
       case final ToolItem tool:
         return _ToolCard(tool: tool, onOpenChild: onOpenChild);
       case UsageItem(:final turn):
-        if (!AppScope.of(context).settings.getBool(SettingKeys.chatUsage, true)) return const SizedBox.shrink();
+        if (!showUsage) return const SizedBox.shrink();
         return TurnFootnote(turn: turn, onTap: onOpenTurn == null ? null : () => onOpenTurn!(turn));
       case NoticeItem(:final text, :final isError):
         final banner = InfoBanner(

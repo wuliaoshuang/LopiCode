@@ -6,19 +6,20 @@ import 'package:lopicode/agent/chat_client.dart';
 import 'package:lopicode/agent/model_config.dart';
 import 'package:lopicode/agent/presets.dart';
 import 'package:lopicode/agent/protocols.dart';
-import 'package:lopicode/agent/quota.dart';
 import 'package:lopicode/agent/skills.dart';
 import 'package:lopicode/automation_scheduler.dart';
 import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/core/secure_secret_store.dart';
 import 'package:lopicode/core/stores.dart';
 import 'package:lopicode/runtime/linux_runtime.dart';
-import 'package:material_ui/material_ui.dart';
+import 'package:lopicode/state/app_providers.dart';
+import 'package:lopicode/state/quota_state.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:riverpod/riverpod.dart';
 
 /// 全应用共用的服务：设置、密钥、项目仓库。测试里可以整体替换。
-class AppServices extends ChangeNotifier {
+class AppServices {
   AppServices({required this.settings, required this.secrets, required this.projects, this.chatClientFactory, this.quotaHttp, LinuxRuntime? runtime})
     : runtime = runtime ?? LinuxRuntime(settings: settings, baseDir: p.join(settings.file.parent.path, 'runtime')),
       models = ModelConfigStore(settings, secrets),
@@ -27,14 +28,30 @@ class AppServices extends ChangeNotifier {
       automations = AutomationStore(File(p.join(settings.file.parent.path, 'automations.json'))) {
     projects.linuxRootfs ??= this.runtime.rootfsDir;
     scheduler = AutomationScheduler(this);
-    quota = QuotaStore(settings, models, httpClient: quotaHttp);
+    container = ProviderContainer(overrides: [appServicesProvider.overrideWithValue(this)]);
+    // 现在就建好：销毁以后还在收尾的对话也能拿到它（那时只读快照、不再写）
+    quota = container.read(quotaProvider.notifier);
+  }
+
+  /// 全应用的状态容器（Riverpod）。界面最外层用它，逻辑层要读状态也从它读。
+  late final ProviderContainer container;
+
+  /// 已经销毁（应用退出 / 测试收尾）。销毁后还没跑完的后台活儿不许再往状态里写。
+  bool get disposed => _disposed;
+  bool _disposed = false;
+
+  void dispose() {
+    if (_disposed) return;
+    _disposed = true;
+    scheduler.stop();
+    container.dispose();
   }
 
   /// 测试钩子：查余额用的网络。
   final http.Client? quotaHttp;
 
-  /// DeepSeek 官方渠道的余额和额度上限。
-  late final QuotaStore quota;
+  /// DeepSeek 官方渠道的余额和额度上限（状态在 [quotaProvider]，这里给逻辑层一个取用入口）。
+  late final QuotaNotifier quota;
 
   /// 自动化任务的调度（App 开着时才会触发）。
   late final AutomationScheduler scheduler;
@@ -91,17 +108,6 @@ class AppServices extends ChangeNotifier {
     return app;
   }
 
-  ThemeMode get themeMode => switch (settings.getString(SettingKeys.themeMode, 'system')) {
-    'light' => ThemeMode.light,
-    'dark' => ThemeMode.dark,
-    _ => ThemeMode.system,
-  };
-
-  Future<void> setThemeMode(ThemeMode mode) async {
-    await settings.set(SettingKeys.themeMode, mode.name);
-    notifyListeners();
-  }
-
   bool get agentConfigured => chatClientFactory != null || models.configured;
 
   /// 按选中的“渠道 + 模型 + 思考档位”造客户端。
@@ -114,15 +120,6 @@ class AppServices extends ChangeNotifier {
     // 额度上限在这里统一把关：主对话、子代理、自动化任务、压缩对话都从这里拿客户端。
     return quota.guard(r.channel, buildChatClient(r, await models.apiKey(r.channel.id)));
   }
-
-  /// 设置改动后通知界面刷新。
-  void touch() => notifyListeners();
-}
-
-class AppScope extends InheritedNotifier<AppServices> {
-  const AppScope({super.key, required AppServices services, required super.child}) : super(notifier: services);
-
-  static AppServices of(BuildContext context) => context.dependOnInheritedWidgetOfExactType<AppScope>()!.notifier!;
 }
 
 class _UnconfiguredClient implements ChatClient {

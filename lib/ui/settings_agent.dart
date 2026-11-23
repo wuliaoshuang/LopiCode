@@ -4,27 +4,29 @@
 // - 预设编辑页：名称 → 系统提示词 → 工具勾选（一行一个工具）→ 保存。内置“标准模式”只能看不能改。
 // - 技能页：分“这个工作区”和“全局”两段，一行一个技能，右边是开关；点行看全文，删除在全文页的菜单里。
 // - Key 输入框默认遮住，已保存的不回显。
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lopicode/agent/agent_tools.dart';
 import 'package:lopicode/agent/presets.dart';
 import 'package:lopicode/agent/skills.dart';
 import 'package:lopicode/agent/web_search.dart';
-import 'package:lopicode/app_services.dart';
 import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/core/stores.dart';
+import 'package:lopicode/state/config_providers.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/app_ref.dart';
 import 'package:lopicode/ui/chrome.dart';
 import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
 
 // ── 个性化 ───────────────────────────────────────────
-class PersonalizeScreen extends StatefulWidget {
+class PersonalizeScreen extends ConsumerStatefulWidget {
   const PersonalizeScreen({super.key});
 
   @override
-  State<PersonalizeScreen> createState() => _PersonalizeScreenState();
+  ConsumerState<PersonalizeScreen> createState() => _PersonalizeScreenState();
 }
 
-class _PersonalizeScreenState extends State<PersonalizeScreen> {
+class _PersonalizeScreenState extends ConsumerState<PersonalizeScreen> {
   final _prefs = TextEditingController();
   bool _loaded = false;
 
@@ -33,7 +35,7 @@ class _PersonalizeScreenState extends State<PersonalizeScreen> {
     super.didChangeDependencies();
     if (!_loaded) {
       _loaded = true;
-      _prefs.text = AppScope.of(context).presets.preferences;
+      _prefs.text = appOf(context).presets.preferences;
     }
   }
 
@@ -44,9 +46,8 @@ class _PersonalizeScreenState extends State<PersonalizeScreen> {
   }
 
   Future<void> _savePrefs() async {
-    final app = AppScope.of(context);
+    final app = appOf(context);
     await app.presets.setPreferences(_prefs.text);
-    app.touch();
     if (mounted) {
       FocusScope.of(context).unfocus();
       showSnack(context, _prefs.text.trim().isEmpty ? '已清空：不再带个人偏好' : '已保存：之后的对话都会带上');
@@ -60,7 +61,8 @@ class _PersonalizeScreenState extends State<PersonalizeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final app = AppScope.of(context);
+    ref.watch(presetsRevProvider);
+    final app = appOf(context);
     final c = context.colors;
     final t = Theme.of(context).textTheme;
     final defaultId = app.presets.defaultId;
@@ -111,7 +113,6 @@ class _PersonalizeScreenState extends State<PersonalizeScreen> {
                     final ok = await confirmDialog(context, title: '删除预设“${p.name}”？', message: '用着它的对话会改回“标准模式”。', confirmLabel: '删除', danger: true);
                     if (ok) await app.presets.delete(p.id);
                   }
-                  app.touch();
                   if (mounted) setState(() {});
                 },
                 itemBuilder: (_) => [
@@ -159,10 +160,9 @@ class _PresetEditScreenState extends State<PresetEditScreen> {
   }
 
   Future<void> _save() async {
-    final app = AppScope.of(context);
+    final app = appOf(context);
     final all = _tools.length == kToolLabels.length;
     await app.presets.upsert(id: widget.preset?.id, name: _name.text, prompt: _prompt.text, tools: all ? null : {..._tools});
-    app.touch();
     if (mounted) Navigator.pop(context);
   }
 
@@ -215,24 +215,26 @@ class _PresetEditScreenState extends State<PresetEditScreen> {
 }
 
 // ── 子代理与团队 ─────────────────────────────────────
-class SubagentSettingsScreen extends StatefulWidget {
+class SubagentSettingsScreen extends ConsumerStatefulWidget {
   const SubagentSettingsScreen({super.key});
 
   @override
-  State<SubagentSettingsScreen> createState() => _SubagentSettingsScreenState();
+  ConsumerState<SubagentSettingsScreen> createState() => _SubagentSettingsScreenState();
 }
 
-class _SubagentSettingsScreenState extends State<SubagentSettingsScreen> {
+class _SubagentSettingsScreenState extends ConsumerState<SubagentSettingsScreen> {
   Future<void> _set(String key, Object? value) async {
-    final app = AppScope.of(context);
+    final app = appOf(context);
     await app.settings.set(key, value);
-    app.touch();
     if (mounted) setState(() {});
   }
 
   @override
   Widget build(BuildContext context) {
-    final app = AppScope.of(context);
+    ref
+      ..watch(agentSettingsRevProvider)
+      ..watch(modelsRevProvider);
+    final app = appOf(context);
     final t = Theme.of(context).textTheme;
     final on = app.settings.getBool(SettingKeys.subagentEnabled, true);
     final depth = (app.settings.get<int>(SettingKeys.subagentMaxDepth) ?? 1).clamp(0, 3);
@@ -361,7 +363,7 @@ class _WebSearchSettingsScreenState extends State<WebSearchSettingsScreen> {
     super.didChangeDependencies();
     if (_loaded) return;
     _loaded = true;
-    final app = AppScope.of(context);
+    final app = appOf(context);
     _url.text = app.settings.getString(WebSearchConfig.kUrl);
     app.secrets.read(WebSearchConfig.secretKey).then((v) {
       if (mounted) setState(() => _hasKey = v != null && v.isNotEmpty);
@@ -376,14 +378,14 @@ class _WebSearchSettingsScreenState extends State<WebSearchSettingsScreen> {
   }
 
   Future<void> _save() async {
-    final app = AppScope.of(context);
+    final app = appOf(context);
     await app.settings.set(WebSearchConfig.kUrl, _url.text.trim().isEmpty ? null : _url.text.trim());
     if (_key.text.trim().isNotEmpty) {
       await app.secrets.write(WebSearchConfig.secretKey, _key.text.trim());
       _key.clear();
       _hasKey = true;
     }
-    app.touch();
+    app.container.read(webSearchRevProvider.notifier).bump();
     if (mounted) {
       setState(() {});
       FocusScope.of(context).unfocus();
@@ -392,14 +394,14 @@ class _WebSearchSettingsScreenState extends State<WebSearchSettingsScreen> {
   }
 
   Future<void> _clear() async {
-    final app = AppScope.of(context);
+    final app = appOf(context);
     await app.secrets.delete(WebSearchConfig.secretKey);
-    app.touch();
+    app.container.read(webSearchRevProvider.notifier).bump();
     if (mounted) setState(() => _hasKey = false);
   }
 
   Future<void> _test() async {
-    final app = AppScope.of(context);
+    final app = appOf(context);
     final ok = await confirmDialog(context, title: '搜一次试试？', message: '会真的向搜索服务发一次搜索（关键词“LopiCode”），按服务商的规则可能消耗一次额度。', confirmLabel: '搜一次');
     if (!ok) return;
     setState(() {
@@ -476,15 +478,15 @@ class _WebSearchSettingsScreenState extends State<WebSearchSettingsScreen> {
 }
 
 // ── 技能 ─────────────────────────────────────────────
-class SkillsScreen extends StatefulWidget {
+class SkillsScreen extends ConsumerStatefulWidget {
   const SkillsScreen({super.key, this.workspace});
   final Project? workspace;
 
   @override
-  State<SkillsScreen> createState() => _SkillsScreenState();
+  ConsumerState<SkillsScreen> createState() => _SkillsScreenState();
 }
 
-class _SkillsScreenState extends State<SkillsScreen> {
+class _SkillsScreenState extends ConsumerState<SkillsScreen> {
   List<Skill>? _skills;
 
   @override
@@ -494,7 +496,7 @@ class _SkillsScreenState extends State<SkillsScreen> {
   }
 
   Future<void> _reload() async {
-    final list = await AppScope.of(context).skills.list(workspaceDir: widget.workspace?.dir);
+    final list = await appOf(context).skills.list(workspaceDir: widget.workspace?.dir);
     if (mounted) setState(() => _skills = list);
   }
 
@@ -510,7 +512,8 @@ class _SkillsScreenState extends State<SkillsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final app = AppScope.of(context);
+    ref.watch(skillsRevProvider);
+    final app = appOf(context);
     final t = Theme.of(context).textTheme;
     final skills = _skills;
     final ws = skills?.where((s) => !s.global).toList() ?? const <Skill>[];
@@ -593,7 +596,7 @@ class _SkillEditScreenState extends State<SkillEditScreen> {
   }
 
   Future<void> _save() async {
-    final app = AppScope.of(context);
+    final app = appOf(context);
     try {
       await app.skills.create(name: _name.text, description: _desc.text, body: _body.text, workspaceDir: _global ? null : widget.workspace!.dir);
       if (mounted) Navigator.pop(context, true);
@@ -656,7 +659,7 @@ class SkillViewScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final app = AppScope.of(context);
+    final app = appOf(context);
     final c = context.colors;
     final t = Theme.of(context).textTheme;
     return Scaffold(

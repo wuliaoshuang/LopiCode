@@ -35,6 +35,16 @@ class SkillStore {
   final String globalDir;
 
   static const kDisabled = 'skills.disabled';
+
+  /// 技能文件增删了（状态层据此通知界面）。
+  final List<void Function()> changeListeners = [];
+
+  void _changed() {
+    for (final listener in List.of(changeListeners)) {
+      listener();
+    }
+  }
+
   static const int maxSkillChars = 40000;
 
   static String workspaceSkillsDir(String workspaceDir) => p.join(workspaceDir, PathGuard.reservedDir, 'skills');
@@ -138,6 +148,7 @@ class SkillStore {
     await dir.create(recursive: true);
     final desc = description.trim().replaceAll('\n', ' ');
     await File(p.join(dir.path, 'SKILL.md')).writeAsString('---\nname: $clean\ndescription: $desc\n---\n\n${body.trim()}\n');
+    _changed();
     return Skill(name: clean, description: desc, dir: dir.path, global: global, enabled: true);
   }
 
@@ -148,6 +159,7 @@ class SkillStore {
       throw SkillException('这不是一个技能目录，已拒绝删除');
     }
     await dir.delete(recursive: true);
+    _changed();
     final d = _disabled..remove(skill.key);
     await settings.set(kDisabled, d.toList()..sort());
   }

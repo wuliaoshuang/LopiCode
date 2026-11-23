@@ -3,11 +3,14 @@
 // - 额度上限页从上到下：余额卡（大字余额、明细、更新时间、刷新）→ 已用卡（设了上限才有：进度条 + “已使用 x%（剩余 ¥y）”）
 //   → 上限表单（金额、币种、提醒阈值、保存）→ 危险操作（从现在重新算、取消上限）→ 说明。
 // - 数字全部来自 DeepSeek 余额接口；查不到就写“余额没查到”和原因，不显示任何估的数。
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lopicode/agent/model_config.dart';
 import 'package:lopicode/agent/quota.dart';
 import 'package:lopicode/app_services.dart';
 import 'package:lopicode/project_session.dart';
+import 'package:lopicode/state/config_providers.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/app_ref.dart';
 import 'package:lopicode/ui/chrome.dart';
 import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
@@ -23,15 +26,15 @@ String _day(DateTime t) {
 }
 
 /// 一个 DeepSeek 官方渠道的余额和额度上限。
-class QuotaScreen extends StatefulWidget {
+class QuotaScreen extends ConsumerStatefulWidget {
   const QuotaScreen({super.key, required this.channelId});
   final String channelId;
 
   @override
-  State<QuotaScreen> createState() => _QuotaScreenState();
+  ConsumerState<QuotaScreen> createState() => _QuotaScreenState();
 }
 
-class _QuotaScreenState extends State<QuotaScreen> {
+class _QuotaScreenState extends ConsumerState<QuotaScreen> {
   final _limit = TextEditingController();
   final _warn = TextEditingController();
   String? _currency;
@@ -43,7 +46,7 @@ class _QuotaScreenState extends State<QuotaScreen> {
     super.didChangeDependencies();
     if (_loaded) return;
     _loaded = true;
-    final app = AppScope.of(context);
+    final app = appOf(context);
     final q = app.quota.quotaOf(widget.channelId);
     _limit.text = q == null ? '' : _trim(q.limit);
     _warn.text = '${q?.warnPct ?? ChannelQuota.defaultWarnPct}';
@@ -99,7 +102,8 @@ class _QuotaScreenState extends State<QuotaScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final app = AppScope.of(context);
+    ref.watch(modelsRevProvider);
+    final app = appOf(context);
     final c = context.colors;
     final t = Theme.of(context).textTheme;
     final ch = _channel(app);
@@ -108,8 +112,7 @@ class _QuotaScreenState extends State<QuotaScreen> {
       appBar: PageBar(background: c.canvas, title: const Text('额度上限')),
       body: ch == null || !isDeepSeekOfficial(ch.baseUrl)
           ? const Padding(padding: EdgeInsets.all(Space.x4), child: InfoBanner('这个渠道不是 DeepSeek 官方接口（api.deepseek.com），查不了余额，也就设不了额度上限。'))
-          : AnimatedBuilder(
-              animation: app.quota,
+          : QuotaBuilder(
               builder: (context, _) {
                 final state = app.quota.stateOf(ch.id);
                 final q = app.quota.quotaOf(ch.id);

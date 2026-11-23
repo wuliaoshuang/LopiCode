@@ -7,7 +7,6 @@
 import 'dart:io';
 
 import 'package:flutter/services.dart';
-import 'package:lopicode/app_services.dart';
 import 'package:lopicode/build/build_controller.dart';
 import 'package:lopicode/build/github_client.dart';
 import 'package:lopicode/build/remote_exec.dart';
@@ -21,6 +20,7 @@ import 'package:lopicode/ssh/ssh_config.dart';
 import 'package:lopicode/ssh/ssh_connect_screen.dart';
 import 'package:lopicode/ssh/ssh_connector.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/app_ref.dart';
 import 'package:lopicode/ui/shell.dart';
 import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
@@ -60,7 +60,7 @@ class _BuildScreenState extends State<BuildScreen> {
     super.didChangeDependencies();
     if (_loaded) return;
     _loaded = true;
-    final app = AppScope.of(context);
+    final app = appOf(context);
     final owner = app.settings.getString(SettingKeys.githubOwner);
     final repo = app.settings.getString(SettingKeys.githubRepo);
     _repo.text = owner.isEmpty || repo.isEmpty ? '' : '$owner/$repo';
@@ -94,7 +94,7 @@ class _BuildScreenState extends State<BuildScreen> {
   }
 
   Future<void> _start() async {
-    final app = AppScope.of(context);
+    final app = appOf(context);
     final parts = _repo.text.trim().split('/');
     if (parts.length != 2 || parts.any((s) => s.trim().isEmpty)) {
       showSnack(context, '仓库请写成 用户名/仓库名');
@@ -143,7 +143,7 @@ class _BuildScreenState extends State<BuildScreen> {
   }
 
   Future<void> _startSsh() async {
-    final app = AppScope.of(context);
+    final app = appOf(context);
     final navigator = Navigator.of(context);
     final config = SshConfig.load(app.settings);
     final dir = _sshDir.text.trim();
@@ -190,13 +190,13 @@ class _BuildScreenState extends State<BuildScreen> {
 
   Future<void> _setMode(bool ssh) async {
     setState(() => _ssh = ssh);
-    await AppScope.of(context).settings.set(SettingKeys.apkBuildMode, ssh ? 'ssh' : 'github');
+    await appOf(context).settings.set(SettingKeys.apkBuildMode, ssh ? 'ssh' : 'github');
   }
 
   List<Widget> _sshForm(BuildContext context, bool busy) {
     final c = context.colors;
     final t = Theme.of(context).textTheme;
-    final config = SshConfig.load(AppScope.of(context).settings);
+    final config = SshConfig.load(appOf(context).settings);
     final job = _job;
     return [
       Text('① 构建机', style: t.titleMedium),

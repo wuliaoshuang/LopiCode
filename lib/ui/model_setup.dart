@@ -6,8 +6,8 @@
 //   列表最下面是“自定义”，走原来的全手填。
 import 'package:lopicode/agent/model_config.dart';
 import 'package:lopicode/agent/provider_presets.dart';
-import 'package:lopicode/app_services.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/app_ref.dart';
 import 'package:lopicode/ui/chrome.dart';
 import 'package:lopicode/ui/provider_icon.dart';
 import 'package:lopicode/ui/settings_ai.dart';
@@ -17,7 +17,7 @@ import 'package:material_ui/material_ui.dart';
 ///
 /// [auto] 为真表示“进聊天页时自动检查”：这次运行里已经弹过就不再弹。
 Future<bool> ensureModelReady(BuildContext context, {ResolvedModel? current, bool auto = false}) async {
-  final app = AppScope.of(context);
+  final app = appOf(context);
   if (app.chatClientFactory != null) return true; // 测试里换掉了模型客户端
   if (auto && app.modelSetupPrompted) return true;
   final gap = await app.models.readiness(current);
@@ -46,7 +46,6 @@ Future<bool> ensureModelReady(BuildContext context, {ResolvedModel? current, boo
   if (go != true || !context.mounted) return false;
   final ch = gap.channel;
   await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => ch == null ? const ProviderPickerScreen() : ChannelEditScreen(channel: ch)));
-  app.touch();
   return false; // 配完回来让她自己再点一次发送，不替她发
 }
 

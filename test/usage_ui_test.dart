@@ -187,7 +187,6 @@ void main() {
       await settle(tester, rounds: 3);
 
       await tester.runAsync(() => env.services.settings.set(SettingKeys.chatUsage, false));
-      env.services.touch();
       await settle(tester, rounds: 2);
       expect(find.byKey(const Key('turn-footnote')), findsNothing, reason: '“在回复下方显示用量”关掉后不显示');
     });

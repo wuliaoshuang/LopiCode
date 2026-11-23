@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lopicode/core/safe_file.dart';
 import 'package:lopicode/core/stores.dart';
 import 'package:lopicode/runtime/linux_runtime.dart';
 import 'package:lopicode/runtime/linux_shell_backend.dart';
@@ -43,7 +44,9 @@ void main() {
     Link(p.join(runtime.rootfsDir, 'bin')).createSync('usr/bin');
     await runtime.init();
   });
-  tearDown(() {
+  tearDown(() async {
+    // 运行环境会“顺手”存设置（不等它写完）：先等写完再删目录，不然机器忙的时候会删到一半撞上。
+    await pendingWrites();
     if (tmp.existsSync()) tmp.deleteSync(recursive: true);
   });
 

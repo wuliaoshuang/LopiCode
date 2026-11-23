@@ -25,10 +25,7 @@ bool isUiFile(String path) => path.startsWith('lib/ui/') || path.startsWith('lib
 final _uiPackages = RegExp(r'^package:(material_ui/|flutter/(material|widgets|cupertino|rendering|gestures|painting|animation)\.dart|flutter_svg/|webview_flutter|xterm/|re_editor/|image_picker/)');
 
 /// 规则 1 的已知例外：`文件 -> import` ⇒ 原因。
-const _uiImportExceptions = {
-  'lib/app_services.dart -> package:material_ui/material_ui.dart': 'AppScope（InheritedNotifier）和 ThemeMode 放在这里；迁到 Riverpod 或拆出 app_scope.dart 时一起解决',
-  'lib/terminal/terminal_session.dart -> package:xterm/xterm.dart': '终端会话持有 xterm 的 Terminal 缓冲区（数据模型，不是控件）',
-};
+const _uiImportExceptions = {'lib/terminal/terminal_session.dart -> package:xterm/xterm.dart': '终端会话持有 xterm 的 Terminal 缓冲区（数据模型，不是控件）'};
 
 /// 规则 2 的已知例外。
 const _layerExceptions = {'lib/core/templates.dart -> lowcode': '新建“低代码页面”项目时要生成初始页面文件', 'lib/agent/agent_tools.dart -> lowcode': 'Agent 的“改低代码页面”工具要读写页面模型并导出'};
@@ -48,8 +45,8 @@ const int kMaxLines = 600;
 const _oversized = {
   'lib/lowcode/builder_screen.dart': 1180,
   'lib/project_session.dart': 1445,
-  'lib/ui/chat_screen.dart': 910,
-  'lib/ui/chat_panels.dart': 920,
+  'lib/ui/chat_screen.dart': 860,
+  'lib/ui/chat_panels.dart': 800,
   'lib/ui/usage_ui.dart': 890,
   'lib/ui/settings_agent.dart': 725,
   'lib/ui/settings_ai.dart': 650,

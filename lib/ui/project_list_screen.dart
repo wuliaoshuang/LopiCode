@@ -6,10 +6,10 @@
 // - 顶栏和别的页面一样：没打开工作区时左边是汉堡按钮；从工作区里进来切换时是返回箭头。
 // - “移除”只是从列表去掉，文件不动；“删除”才会删文件，而且只对应用目录里的项目开放。
 // - 没有工作区时给真正的空状态和同一个主操作，不放假数据。
-import 'package:lopicode/app_services.dart';
 import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/core/templates.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/app_ref.dart';
 import 'package:lopicode/ui/push_drawer.dart';
 import 'package:lopicode/ui/settings_screen.dart';
 import 'package:lopicode/ui/shell.dart';
@@ -56,7 +56,7 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
 
   Future<void> _reload() async {
     try {
-      final store = AppScope.of(context).projects;
+      final store = appOf(context).projects;
       final list = await store.list();
       final hidden = await store.list(hidden: true);
       final counts = {for (final p in list) p.id: await ProjectStore.conversationCount(p)};
@@ -93,7 +93,7 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
   }
 
   Future<void> _create() async {
-    final store = AppScope.of(context).projects;
+    final store = appOf(context).projects;
     final result = await showModalBottomSheet<(String, ProjectTemplate)>(context: context, isScrollControlled: true, builder: (_) => const _NewProjectSheet());
     if (result == null || !mounted) return;
     await _guard(() async {
@@ -104,7 +104,7 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
   }
 
   Future<void> _addLinux() async {
-    final store = AppScope.of(context).projects;
+    final store = appOf(context).projects;
     final path = await promptDialog(context, title: '添加 Ubuntu 里的目录', hint: '完整路径，如 /root/myapp', confirmLabel: '添加');
     if (path == null || path.trim().isEmpty || !mounted) return;
     await _guard(() async {
@@ -115,7 +115,7 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
   }
 
   Future<void> _restore() async {
-    final store = AppScope.of(context).projects;
+    final store = appOf(context).projects;
     final picked = await showModalBottomSheet<Project>(
       context: context,
       builder: (context) => SafeArea(
@@ -136,7 +136,7 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
   }
 
   void _open(Project project, {bool newConversation = false}) {
-    if (newConversation) AppScope.of(context).newConversationFor = project.id;
+    if (newConversation) appOf(context).newConversationFor = project.id;
     final onOpen = widget.onOpen;
     if (onOpen != null) {
       onOpen(project);
@@ -146,21 +146,21 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
   }
 
   Future<void> _rename(Project project) async {
-    final store = AppScope.of(context).projects;
+    final store = appOf(context).projects;
     final name = await promptDialog(context, title: '重命名工作区', initial: project.name, confirmLabel: '保存');
     if (name == null || !mounted) return;
     await _guard(() => store.rename(project, name));
   }
 
   Future<void> _group(Project project) async {
-    final store = AppScope.of(context).projects;
+    final store = appOf(context).projects;
     final name = await promptDialog(context, title: '放进哪个分组', initial: project.group, hint: '分组名；留空＝不分组', confirmLabel: '保存');
     if (name == null || !mounted) return;
     await _guard(() => store.setGroup(project, name));
   }
 
   Future<void> _remove(Project project) async {
-    final store = AppScope.of(context).projects;
+    final store = appOf(context).projects;
     final ok = await confirmDialog(
       context,
       title: '把“${project.name}”从列表移除？',
@@ -171,14 +171,14 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
   }
 
   Future<void> _delete(Project project) async {
-    final store = AppScope.of(context).projects;
+    final store = appOf(context).projects;
     final ok = await confirmDialog(context, title: '删除“${project.name}”？', message: '项目里的所有文件和对话记录都会被删除，无法恢复。', confirmLabel: '删除', danger: true);
     if (ok) await _guard(() => store.delete(project));
   }
 
   @override
   Widget build(BuildContext context) {
-    final store = AppScope.of(context).projects;
+    final store = appOf(context).projects;
     final projects = _projects;
     final groups = <String>[
       if (projects != null && projects.any((p) => p.group.isEmpty)) '',

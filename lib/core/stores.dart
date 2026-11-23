@@ -57,8 +57,21 @@ class SettingsStore {
     } else {
       _data[key] = value;
     }
+    // 内存里的值已经换了：先告诉关心这个键的人（界面立刻跟着变），再去写盘。
+    for (final listener in List.of(_keyListeners)) {
+      listener(key);
+    }
     await writeJsonAtomic(file, _data);
   }
+
+  final List<void Function(String key)> _keyListeners = [];
+
+  /// 某个键被 [set] 之后回调（状态层用它做到“哪个设置变了，只通知关心它的界面”）。
+  /// 现在挂着几个监听（测试用来确认订阅取消后没有残留）。
+  int get keyListenerCount => _keyListeners.length;
+
+  void addKeyListener(void Function(String key) listener) => _keyListeners.add(listener);
+  void removeKeyListener(void Function(String key) listener) => _keyListeners.remove(listener);
 }
 
 /// 设置项的键名集中在这里。

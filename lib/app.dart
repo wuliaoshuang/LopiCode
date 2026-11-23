@@ -1,4 +1,6 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lopicode/app_services.dart';
+import 'package:lopicode/state/ui_prefs.dart';
 import 'package:lopicode/theme/app_theme.dart';
 import 'package:lopicode/ui/error_guard.dart';
 import 'package:lopicode/ui/home_gate.dart';
@@ -24,11 +26,11 @@ class _LopiCodeAppState extends State<LopiCodeApp> {
   @override
   Widget build(BuildContext context) {
     final services = widget.services;
-    return AppScope(
-      services: services,
-      child: ListenableBuilder(
-        listenable: services,
-        builder: (context, _) => MaterialApp(
+    return UncontrolledProviderScope(
+      container: services.container,
+      // 应用外壳只订阅“外观模式”这一项：别的设置变了不会让整个应用重建。
+      child: Consumer(
+        builder: (context, ref, _) => MaterialApp(
           title: 'LopiCode',
           navigatorKey: _navigatorKey,
           // 有没被接住的错误时，在所有页面上面出一条可点开的提示（见 ui/error_guard.dart）。
@@ -36,7 +38,13 @@ class _LopiCodeAppState extends State<LopiCodeApp> {
           debugShowCheckedModeBanner: false,
           theme: buildAppTheme(Brightness.light, fontFamily: widget.fontFamily),
           darkTheme: buildAppTheme(Brightness.dark, fontFamily: widget.fontFamily),
-          themeMode: widget.forceThemeMode ?? services.themeMode,
+          themeMode:
+              widget.forceThemeMode ??
+              switch (ref.watch(themeModeProvider)) {
+                AppThemeMode.light => ThemeMode.light,
+                AppThemeMode.dark => ThemeMode.dark,
+                AppThemeMode.system => ThemeMode.system,
+              },
           home: widget.home ?? const HomeGate(),
         ),
       ),

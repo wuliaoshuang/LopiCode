@@ -34,6 +34,7 @@ class TestEnv {
   }
 
   void dispose() {
+    services.dispose();
     if (tmp.existsSync()) tmp.deleteSync(recursive: true);
   }
 }

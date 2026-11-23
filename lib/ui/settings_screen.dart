@@ -6,6 +6,7 @@
 //     DeepSeek 没设上限只写余额；其他渠道只写模型名和渠道名，没有进度条和百分比。②运行环境 Ubuntu（装好 = 满，下载中 = 真实进度）。
 // - 其余卡片按 AI / 能力 / 通用 / 关于 分组，每行一件事：左线性图标 + 名称 + 右侧弱化的当前值 + 右箭头；行间缩进的细分隔线。
 // - 这一页只是目录，不放输入框；外观是唯一就地切换的项（三段选择）。
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lopicode/agent/agent_tools.dart';
 import 'package:lopicode/agent/model_config.dart';
 import 'package:lopicode/agent/quota.dart';
@@ -16,7 +17,11 @@ import 'package:lopicode/core/stores.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/runtime/linux_runtime.dart';
 import 'package:lopicode/runtime/runtime_screen.dart';
+import 'package:lopicode/state/app_providers.dart';
+import 'package:lopicode/state/config_providers.dart';
+import 'package:lopicode/state/ui_prefs.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/app_ref.dart';
 import 'package:lopicode/ui/automation_screen.dart';
 import 'package:lopicode/ui/chat_panels.dart';
 import 'package:lopicode/ui/chrome.dart';
@@ -27,7 +32,7 @@ import 'package:lopicode/ui/settings_quota.dart';
 import 'package:lopicode/ui/third_party_screen.dart';
 import 'package:material_ui/material_ui.dart';
 
-class SettingsScreen extends StatelessWidget {
+class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key, this.workspace, this.session});
 
   /// 当前打开的工作区的会话（项目规则是按工作区存的，要靠它读写）。
@@ -37,8 +42,14 @@ class SettingsScreen extends StatelessWidget {
   final Project? workspace;
 
   @override
-  Widget build(BuildContext context) {
-    final app = AppScope.of(context);
+  Widget build(BuildContext context, WidgetRef ref) {
+    ref
+      ..watch(settingsAnyRevProvider)
+      ..watch(channelKeyRevProvider)
+      ..watch(automationsRevProvider)
+      ..watch(skillFilesRevProvider)
+      ..watch(webSearchRevProvider);
+    final app = appOf(context);
     final c = context.colors;
     final t = Theme.of(context).textTheme;
     void go(Widget page) => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => page));
@@ -53,7 +64,6 @@ class SettingsScreen extends StatelessWidget {
     ];
     Future<void> toggle(String key, bool value) async {
       await app.settings.set(key, value);
-      app.touch();
     }
 
     return Scaffold(
@@ -85,8 +95,7 @@ class SettingsScreen extends StatelessWidget {
                 onTap: () => go(const PersonalizeScreen()),
               ),
               for (final ch in deepseek)
-                AnimatedBuilder(
-                  animation: app.quota,
+                QuotaBuilder(
                   builder: (context, _) {
                     final q = app.quota.quotaOf(ch.id);
                     return GroupRow(
@@ -131,7 +140,6 @@ class SettingsScreen extends StatelessWidget {
                   if (picked == null || picked == level || !context.mounted) return;
                   if (picked == PermissionLevel.full && !await confirmFullPermission(context)) return;
                   await app.settings.set(SettingKeys.defaultPermission, picked.id);
-                  app.touch();
                 },
               ),
               GroupRow(
@@ -201,15 +209,17 @@ class SettingsScreen extends StatelessWidget {
               ),
               Padding(
                 padding: const EdgeInsets.only(top: Space.x3),
-                child: SegmentedButton<ThemeMode>(
-                  showSelectedIcon: false,
-                  segments: const [
-                    ButtonSegment(value: ThemeMode.system, label: Text('跟随系统')),
-                    ButtonSegment(value: ThemeMode.light, label: Text('浅色')),
-                    ButtonSegment(value: ThemeMode.dark, label: Text('深色')),
-                  ],
-                  selected: {app.themeMode},
-                  onSelectionChanged: (s) => app.setThemeMode(s.first),
+                child: Consumer(
+                  builder: (context, ref, _) => SegmentedButton<AppThemeMode>(
+                    showSelectedIcon: false,
+                    segments: const [
+                      ButtonSegment(value: AppThemeMode.system, label: Text('跟随系统')),
+                      ButtonSegment(value: AppThemeMode.light, label: Text('浅色')),
+                      ButtonSegment(value: AppThemeMode.dark, label: Text('深色')),
+                    ],
+                    selected: {ref.watch(themeModeProvider)},
+                    onSelectionChanged: (s) => ref.read(themeModeProvider.notifier).set(s.first),
+                  ),
                 ),
               ),
             ],
@@ -232,17 +242,17 @@ class SettingsScreen extends StatelessWidget {
 }
 
 /// 概况卡：新对话用的模型 + 运行环境。版式照参考图的“套餐 / 用量”卡，内容是真实状态。
-class _OverviewCard extends StatefulWidget {
+class _OverviewCard extends ConsumerStatefulWidget {
   const _OverviewCard({required this.onModels, required this.onRuntime, required this.onQuota});
   final VoidCallback onModels;
   final VoidCallback? onRuntime;
   final void Function(Channel channel) onQuota;
 
   @override
-  State<_OverviewCard> createState() => _OverviewCardState();
+  ConsumerState<_OverviewCard> createState() => _OverviewCardState();
 }
 
-class _OverviewCardState extends State<_OverviewCard> {
+class _OverviewCardState extends ConsumerState<_OverviewCard> {
   bool _asked = false;
 
   ResolvedModel? _model(AppServices app) {
@@ -256,14 +266,15 @@ class _OverviewCardState extends State<_OverviewCard> {
     if (_asked) return;
     _asked = true;
     // 进设置页查一次余额（有节流；不是 DeepSeek 官方渠道什么都不做）。
-    final app = AppScope.of(context);
+    final app = appOf(context);
     final model = _model(app);
     if (model != null) app.quota.refresh(model.channel);
   }
 
   @override
   Widget build(BuildContext context) {
-    final app = AppScope.of(context);
+    ref.watch(modelsRevProvider);
+    final app = appOf(context);
     final c = context.colors;
     final t = Theme.of(context).textTheme;
     final model = _model(app);
@@ -320,8 +331,7 @@ class _OverviewCardState extends State<_OverviewCard> {
       final sub = '新对话用的模型 · ${model.channel.name}';
       // 不是 DeepSeek 官方：只有模型名和渠道名。
       if (!isDeepSeekOfficial(model.channel.baseUrl)) return block(title: model.model.name, sub: sub, bar: false);
-      return AnimatedBuilder(
-        animation: app.quota,
+      return QuotaBuilder(
         builder: (context, _) {
           final q = app.quota.quotaOf(model.channel.id);
           final state = app.quota.stateOf(model.channel.id);
@@ -377,8 +387,7 @@ class _OverviewCardState extends State<_OverviewCard> {
           children: [
             TextButton(key: const Key('overview-models'), style: link, onPressed: widget.onModels, child: Text(model == null ? '添加模型' : '管理模型')),
             if (deepseek)
-              AnimatedBuilder(
-                animation: app.quota,
+              QuotaBuilder(
                 builder: (context, _) => TextButton(
                   key: const Key('overview-set-quota'),
                   style: link,

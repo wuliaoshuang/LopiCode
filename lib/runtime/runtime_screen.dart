@@ -1,8 +1,8 @@
 import 'package:flutter/services.dart';
-import 'package:lopicode/app_services.dart';
 import 'package:lopicode/runtime/linux_runtime.dart';
 import 'package:lopicode/runtime/runtime_sources.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/app_ref.dart';
 import 'package:lopicode/ui/shell.dart';
 import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
@@ -16,7 +16,7 @@ class RuntimeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final runtime = AppScope.of(context).runtime;
+    final runtime = appOf(context).runtime;
     return Scaffold(
       appBar: const ShellAppBar(title: '运行环境'),
       body: ListenableBuilder(

@@ -6,7 +6,6 @@
 //   “中文”也在这排：默认每按一个键立刻进终端；点亮后才让输入法攒拼音选字。
 // - Ubuntu 进去后一直没输出：终端下方出一条提示，三个出路各占一个按钮，不让人对着空屏。
 // - 没有单独的输入行：真正的终端里输入就在光标处。
-import 'package:lopicode/app_services.dart';
 import 'package:lopicode/core/stores.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/runtime/linux_shell_backend.dart';
@@ -15,6 +14,7 @@ import 'package:lopicode/ssh/ssh_connect_screen.dart';
 import 'package:lopicode/terminal/terminal_input.dart';
 import 'package:lopicode/terminal/terminal_session.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/app_ref.dart';
 import 'package:lopicode/ui/shell.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:xterm/xterm.dart';
@@ -81,14 +81,14 @@ class _TerminalTabState extends State<TerminalTab> {
   }
 
   void _newSession() {
-    final saved = SshConfig.load(AppScope.of(context).settings);
+    final saved = SshConfig.load(appOf(context).settings);
     showModalBottomSheet<void>(
       context: context,
       builder: (context) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (AppScope.of(context).runtime.usable)
+            if (appOf(context).runtime.usable)
               ListTile(
                 key: const Key('new-linux-session'),
                 leading: const Icon(Icons.memory_outlined),
@@ -96,7 +96,7 @@ class _TerminalTabState extends State<TerminalTab> {
                 subtitle: const Text('能跑 node、python，项目目录在 /workspace'),
                 onTap: () {
                   Navigator.pop(context);
-                  AppScope.of(this.context).runtime.resetLaunchFailures();
+                  appOf(this.context).runtime.resetLaunchFailures();
                   s.addTerminal();
                 },
               ),
@@ -157,7 +157,7 @@ class _TerminalTabState extends State<TerminalTab> {
     final c = context.colors;
     final t = Theme.of(context).textTheme;
     final dark = Theme.of(context).brightness == Brightness.dark;
-    final settings = AppScope.of(context).settings;
+    final settings = appOf(context).settings;
     final chinese = settings.getBool(SettingKeys.terminalChineseIme);
     final backend = term.backend;
     final stalledBackend = backend is LinuxShellBackend && backend.stalled.value ? backend : null;

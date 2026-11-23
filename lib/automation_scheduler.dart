@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:lopicode/agent/automation.dart';
 import 'package:lopicode/app_services.dart';
 import 'package:lopicode/project_session.dart';
+import 'package:lopicode/state/config_providers.dart';
 
 /// 自动化任务的调度：App 开着的时候每半分钟看一眼有没有到点的任务。
 ///
@@ -11,6 +12,12 @@ import 'package:lopicode/project_session.dart';
 class AutomationScheduler {
   AutomationScheduler(this.app);
   final AppServices app;
+
+  /// “哪些任务正在跑”变了：告诉订阅自动化状态的界面（别的界面不受影响）。
+  void _notify() {
+    if (app.disposed) return; // 销毁后不写
+    app.container.read(automationsRevProvider.notifier).bump();
+  }
 
   Timer? _timer;
   bool _ticking = false;
@@ -33,7 +40,7 @@ class AutomationScheduler {
 
   /// 处理一遍到点 / 错过的任务。返回这次真正运行了几个。
   Future<int> tick(DateTime now) async {
-    if (_ticking) return 0;
+    if (_ticking || app.disposed) return 0;
     _ticking = true;
     var ran = 0;
     var changed = false;
@@ -58,7 +65,7 @@ class AutomationScheduler {
       _ticking = false;
     }
     // 只有真的记了“错过”或启动了任务才通知界面；以前每 30 秒无条件通知一次，等于整个界面定时白白重建。
-    if (changed) app.touch();
+    if (changed) _notify();
     return ran;
   }
 
@@ -71,7 +78,7 @@ class AutomationScheduler {
       await app.automations.record(a, skipped, advance: false);
       return skipped;
     }
-    app.touch();
+    _notify();
     AutomationRun result;
     try {
       final live = liveSessions[a.workspaceId];
@@ -96,7 +103,7 @@ class AutomationScheduler {
       running.remove(a.id);
     }
     await app.automations.record(a, result, advance: false);
-    app.touch();
+    _notify();
     return result;
   }
 }

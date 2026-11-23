@@ -3,10 +3,10 @@
 // - 地址和端口同一行（端口窄），其余一行一项。
 // - 主按钮只有一个，文字随来源变（“保存并连接” / “保存”）；“忘记指纹”是次要操作，放最下面、弱化。
 // - 已保存的密码 / 私钥不回显，只说“已保存，留空表示不改”。
-import 'package:lopicode/app_services.dart';
 import 'package:lopicode/core/stores.dart';
 import 'package:lopicode/ssh/ssh_config.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/app_ref.dart';
 import 'package:lopicode/ui/chrome.dart';
 import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
@@ -44,7 +44,7 @@ class _SshConnectScreenState extends State<SshConnectScreen> {
     super.didChangeDependencies();
     if (_loaded) return;
     _loaded = true;
-    final app = AppScope.of(context);
+    final app = appOf(context);
     final config = SshConfig.load(app.settings);
     _host.text = config.host;
     _port.text = '${config.port}';
@@ -74,7 +74,7 @@ class _SshConnectScreenState extends State<SshConnectScreen> {
   }
 
   Future<void> _submit() async {
-    final app = AppScope.of(context);
+    final app = appOf(context);
     var error = SshConfig.validate(host: _host.text, port: _port.text, user: _user.text);
     if (error == null) {
       if (_useKey && !_hasKey && _key.text.trim().isEmpty) error = '请粘贴私钥';
@@ -104,7 +104,7 @@ class _SshConnectScreenState extends State<SshConnectScreen> {
   }
 
   Future<void> _forgetFingerprint() async {
-    final app = AppScope.of(context);
+    final app = appOf(context);
     final config = SshConfig.load(app.settings);
     await KnownHosts(app.settings).forget(config.hostPort);
     if (!mounted) return;
@@ -114,7 +114,7 @@ class _SshConnectScreenState extends State<SshConnectScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final app = AppScope.of(context);
+    final app = appOf(context);
     final c = context.colors;
     final t = Theme.of(context).textTheme;
     return Scaffold(

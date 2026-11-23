@@ -240,7 +240,9 @@ class AutomationStore {
   static const int maxTasks = 50;
 
   final List<Automation> items = [];
-  void Function()? onChanged;
+
+  /// 任务清单或运行记录变了（[save] 时回调；状态层据此通知界面）。
+  final List<void Function()> changeListeners = [];
 
   Future<void> load() async {
     items.clear();
@@ -259,7 +261,9 @@ class AutomationStore {
   }
 
   Future<void> save() async {
-    onChanged?.call();
+    for (final listener in List.of(changeListeners)) {
+      listener();
+    }
     try {
       await writeJsonAtomic(file, [for (final a in items) a.toJson()]);
     } on FileSystemException {

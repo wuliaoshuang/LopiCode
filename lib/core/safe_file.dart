@@ -10,6 +10,13 @@ import 'package:lopicode/core/crash_log.dart';
 /// 同一个文件的写入排队做，免得两次写抢同一个临时文件。
 final Map<String, Future<void>> _writeQueue = {};
 
+/// 等所有排着队的写入做完（成功或失败都算完）。测试收尾删临时目录之前先等它，免得删到一半还有写入在跑。
+Future<void> pendingWrites() async {
+  while (_writeQueue.isNotEmpty) {
+    await Future.wait([for (final f in _writeQueue.values.toList()) f.catchError((Object _) {})]);
+  }
+}
+
 /// 原子写：临时文件 → flush → 改名。目录不存在会先建。
 Future<void> writeFileAtomic(File file, List<int> bytes) {
   final key = file.absolute.path;

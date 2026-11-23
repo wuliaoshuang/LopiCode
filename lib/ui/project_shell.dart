@@ -7,12 +7,12 @@
 // - 系统返回键：侧边栏开着先关它；不在聊天页时先回聊天页，在聊天页才退出。
 import 'dart:io';
 
-import 'package:lopicode/app_services.dart';
 import 'package:lopicode/build/build_screen.dart';
 import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/lowcode/builder_screen.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/runtime/runtime_screen.dart';
+import 'package:lopicode/ui/app_ref.dart';
 import 'package:lopicode/ui/chat_screen.dart';
 import 'package:lopicode/ui/chrome.dart';
 import 'package:lopicode/ui/files_tab.dart';
@@ -50,16 +50,16 @@ class _ProjectShellState extends State<ProjectShell> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (_session == null) {
-      _session = widget.session ?? ProjectSession(AppScope.of(context), widget.project);
+      _session = widget.session ?? ProjectSession(appOf(context), widget.project);
       _session!.addListener(_onSession);
-      final app = AppScope.of(context);
+      final app = appOf(context);
       _session!.loadChat().then((_) {
         if (app.newConversationFor == widget.project.id) {
           app.newConversationFor = null;
           _session?.newConversation();
         }
       });
-      AppScope.of(context).scheduler.liveSessions[widget.project.id] = _session!;
+      appOf(context).scheduler.liveSessions[widget.project.id] = _session!;
     }
     _visited.add(_dest);
   }
@@ -102,7 +102,7 @@ class _ProjectShellState extends State<ProjectShell> {
     } else if (!Directory(widget.project.dir).existsSync()) {
       widget.onSwitchProject?.call(null); // 当前项目在列表里被删了
     } else {
-      final app = AppScope.of(context);
+      final app = appOf(context);
       if (app.newConversationFor == widget.project.id) {
         app.newConversationFor = null;
         await _session?.newConversation();

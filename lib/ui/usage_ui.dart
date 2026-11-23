@@ -15,9 +15,10 @@ import 'package:flutter/services.dart';
 import 'package:lopicode/agent/model_config.dart';
 import 'package:lopicode/agent/quota.dart';
 import 'package:lopicode/agent/usage.dart';
-import 'package:lopicode/app_services.dart';
 import 'package:lopicode/project_session.dart';
+import 'package:lopicode/state/quota_state.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/app_ref.dart';
 import 'package:lopicode/ui/chrome.dart';
 import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
@@ -582,12 +583,11 @@ class _UsageSheetState extends State<UsageSheet> {
     });
     // 打开用量弹层时查一次余额（最多每分钟一次）。
     final ch = widget.session.currentModel?.channel;
-    if (ch != null) AppScope.of(context).quota.refresh(ch);
+    if (ch != null) appOf(context).quota.refresh(ch);
   }
 
   @override
   Widget build(BuildContext context) {
-    final app = AppScope.of(context);
     final c = context.colors;
     final t = Theme.of(context).textTheme;
     final s = widget.session;
@@ -712,8 +712,7 @@ class _UsageSheetState extends State<UsageSheet> {
               const SizedBox(height: Space.x4),
               Divider(height: 1, color: c.border),
               const SizedBox(height: Space.x4),
-              AnimatedBuilder(
-                animation: app.quota,
+              QuotaBuilder(
                 builder: (context, _) => BalanceCard(channel: ch, onOpenQuota: widget.onOpenQuota == null ? null : () => widget.onOpenQuota!(ch)),
               ),
             ],
@@ -734,7 +733,7 @@ class BalanceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final app = AppScope.of(context);
+    final app = appOf(context);
     final c = context.colors;
     final t = Theme.of(context).textTheme;
     final state = app.quota.stateOf(channel.id);
@@ -807,7 +806,7 @@ class BalanceCard extends StatelessWidget {
               key: const Key('balance-low-line'),
               value: line,
               underline: const SizedBox.shrink(),
-              items: [for (final v in QuotaStore.lowLineChoices) DropdownMenuItem(value: v, child: Text(v == 0 ? '不提醒' : '$v 元'))],
+              items: [for (final v in QuotaNotifier.lowLineChoices) DropdownMenuItem(value: v, child: Text(v == 0 ? '不提醒' : '$v 元'))],
               onChanged: (v) => v == null ? null : app.quota.setLowLine(v),
             ),
           ],
@@ -827,8 +826,8 @@ class BalanceCard extends StatelessWidget {
 
 /// “去充值”：LopiCode 没带打开外部浏览器的组件，这里把充值页网址复制到剪贴板，由用户贴进浏览器。
 Future<void> copyTopUpLink(BuildContext context) async {
-  await Clipboard.setData(const ClipboardData(text: QuotaStore.topUpUrl));
-  if (context.mounted) showSnack(context, '充值页网址已复制，贴到浏览器里打开：${QuotaStore.topUpUrl}');
+  await Clipboard.setData(const ClipboardData(text: QuotaNotifier.topUpUrl));
+  if (context.mounted) showSnack(context, '充值页网址已复制，贴到浏览器里打开：${QuotaNotifier.topUpUrl}');
 }
 
 /// 输入框上方的低余额小提示：“余额仅剩 ¥x · 低于 ¥y　去充值 ×”。关掉后这次运行不再出现。
@@ -838,9 +837,8 @@ class LowBalanceStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final app = AppScope.of(context);
-    return AnimatedBuilder(
-      animation: app.quota,
+    final app = appOf(context);
+    return QuotaBuilder(
       builder: (context, _) {
         final info = app.quota.lowBalance(channel);
         if (info == null) return const SizedBox.shrink();

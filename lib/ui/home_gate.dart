@@ -1,9 +1,9 @@
 // 应用打开后先到哪：
 // - 上次开着某个项目 → 直接回到那个项目的对话页。
 // - 没有（第一次用、或那个项目删了）→ 项目列表（没有项目时就是空状态 + “新建项目”）。
-import 'package:lopicode/app_services.dart';
 import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/core/stores.dart';
+import 'package:lopicode/ui/app_ref.dart';
 import 'package:lopicode/ui/project_list_screen.dart';
 import 'package:lopicode/ui/project_shell.dart';
 import 'package:material_ui/material_ui.dart';
@@ -26,7 +26,7 @@ class _HomeGateState extends State<HomeGate> {
   }
 
   Future<void> _restore() async {
-    final app = AppScope.of(context);
+    final app = appOf(context);
     final last = app.settings.getString(SettingKeys.lastProject);
     Project? found;
     if (last.isNotEmpty) {
@@ -45,7 +45,7 @@ class _HomeGateState extends State<HomeGate> {
   }
 
   void _open(Project? project) {
-    AppScope.of(context).settings.set(SettingKeys.lastProject, project?.id);
+    appOf(context).settings.set(SettingKeys.lastProject, project?.id);
     setState(() => _project = project);
   }
 
