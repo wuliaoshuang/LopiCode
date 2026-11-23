@@ -134,8 +134,8 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _togglePlan() async {
+    // 不弹底部提示条：它会盖住输入框。开着时输入框上方有常驻提示条。
     await s.setPlanMode(!s.planMode);
-    if (mounted) showSnack(context, s.planMode ? '计划模式已开：Agent 只出计划，不改文件、不跑命令' : '计划模式已关');
   }
 
   Future<void> _compact() async {
