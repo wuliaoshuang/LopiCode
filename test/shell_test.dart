@@ -95,6 +95,7 @@ void main() {
       ShellDest.preview: find.text('手机'),
       ShellDest.builder: find.byTooltip('图层'),
       ShellDest.apk: find.textContaining('手机上跑不了 Android SDK 和 Gradle'),
+      ShellDest.runtime: find.byKey(const Key('runtime-status')),
     };
     for (final d in ShellDest.values.skip(1)) {
       await openDrawer(tester);
