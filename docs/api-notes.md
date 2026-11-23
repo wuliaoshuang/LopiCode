@@ -116,3 +116,64 @@
 - 接口不给缓存字段时，我们不显示命中率（显示“—”），不当成 0%。
 - DeepSeek 默认开思考模式；思考内容走 `delta.reasoning_content`，我们的客户端目前不读它，所以步骤详情里的“首字”是第一个**回答字或工具调用**到达的时间，思考时间算在首字之前。
 - **待核实的旧问题**（不是这次改的）：第三方整理的 DeepSeek 指南说，思考模式下带工具调用的助手消息回传时要保留 `reasoning_content`；我们现在不保存也不回传它。真接口上会不会因此报错，没有 Key 验证不了。
+
+# 2026-11-23 补充：服务商预设的接口地址（`lib/agent/provider_presets.dart`）
+
+核对日期 2026-11-23。做法：当天用网页抓取打开各家**官方域名**的文档页，在正文里看到这个地址才算“已核对”。
+没有 Key、没注册、**一个真实接口都没调用过**——“已核对”只表示官方文档上这么写，不表示实际连通过。
+完整过程（每家转述了什么、哪些页面没打开）在 [provider-presets-research.md](provider-presets-research.md)。
+
+地址怎么拼：我们的代码是 `{接口地址}/chat/completions`、`{接口地址}/messages`、`{接口地址}/models`，**不会自动补 `/v1`**，
+所以预设里的地址是官方完整地址去掉最后那一段。Anthropic 协议的地址必须自己带 `/v1`。
+
+## 放进预设的（18 家，地址均已核对官方文档）
+
+| 服务商 | 协议 | 接口地址 | 官方来源（核对时打开的页面） |
+| --- | --- | --- | --- |
+| DeepSeek | OpenAI Chat Completions | `https://api.deepseek.com` | https://api-docs.deepseek.com/ |
+| OpenAI | OpenAI Chat Completions | `https://api.openai.com/v1` | https://developers.openai.com/api/reference/resources/models/methods/list |
+| Anthropic | Anthropic Messages | `https://api.anthropic.com/v1` | https://platform.claude.com/docs/en/api/http/models/retrieve |
+| Google Gemini | OpenAI Chat Completions | `https://generativelanguage.googleapis.com/v1beta/openai` | https://aistudio.google.com/docs/openai?hl=pt |
+| 智谱 BigModel | OpenAI Chat Completions | `https://open.bigmodel.cn/api/paas/v4` | https://docs.bigmodel.cn/cn/guide/develop/openai/introduction |
+| 阿里云百炼 | OpenAI Chat Completions | `https://dashscope.aliyuncs.com/compatible-mode/v1` | https://help.aliyun.com/zh/model-studio/model-calling-in-sub-workspace |
+| 月之暗面 Kimi | OpenAI Chat Completions | `https://api.moonshot.cn/v1` | https://platform.kimi.com/docs/api/overview |
+| 火山方舟（豆包） | OpenAI Chat Completions | `https://ark.cn-beijing.volces.com/api/v3` | https://ark.volcengine.com/region:cn-beijing/docs/compatible-with-openai-sdk |
+| 硅基流动 | OpenAI Chat Completions | `https://api.siliconflow.cn/v1` | https://docs.siliconflow.cn/docs/usercases/use-siliconcloud-in-yan |
+| OpenRouter | OpenAI Chat Completions | `https://openrouter.ai/api/v1` | https://openrouter.ai/docs/api/api-reference/models/list-all-models-and-their-properties |
+| MiniMax | OpenAI Chat Completions | `https://api.minimax.cn/v1` | https://platform.minimax.cn/docs/guides/quickstart-preparation |
+| xAI | OpenAI Chat Completions | `https://api.x.ai/v1` | https://docs.x.ai/developers/model-capabilities/legacy/chat-completions.md |
+| Groq | OpenAI Chat Completions | `https://api.groq.com/openai/v1` | https://console.groq.com/docs/openai |
+| 腾讯混元 | OpenAI Chat Completions | `https://tokenhub.tencentmaas.com/v1` | https://cloud.tencent.com/document/product/1823/132252 |
+| 百度千帆 | OpenAI Chat Completions | `https://qianfan.baidubce.com/v2` | https://cloud.baidu.com/doc/qianfan/s/Hmh4suq26 |
+| 阶跃星辰 | OpenAI Chat Completions | `https://api.stepfun.com/v1` | https://platform.stepfun.com/docs/zh/guides/developer/openai |
+| Cerebras | OpenAI Chat Completions | `https://api.cerebras.ai/v1` | https://inference-docs.cerebras.ai/resources/openai |
+| Ollama（本机） | OpenAI Chat Completions | `http://localhost:11434/v1` | https://docs.ollama.com/api/openai-compatibility |
+
+**放进去了但要留意的**
+
+- MiniMax：官方文档页今天写的是 `api.minimax.cn`；多篇第三方文章写 `api.minimaxi.com`（国内）、`api.minimax.io`（国际）。哪个现在能用没实测，预设里给了提示，图标两种主机名都认。
+- 腾讯混元：放的是腾讯云 TokenHub 新地址（官方页已核对）。旧地址 `https://api.hunyuan.cloud.tencent.com/v1` 只在官方域名的搜索摘录里看到、官方页没打开成功，**没放进预设**（只用来认图标）；两边的 Key 不通用。
+- 阿里云百炼：放的是北京地域；其他地域地址不同、Key 不通用；新加坡地址带 `{WorkspaceId}` 占位，做不成一键预设。
+- Anthropic：地址已核对。但官方示例页现在用 `Authorization: Bearer` 加较新的 `anthropic-version`，我们的代码发的是 `x-api-key` 加自己的版本常量；旧写法是否仍被接受**没测**，要用真 Key 试一次。
+- xAI：官方把 Chat Completions 标成旧接口、主推 Responses；预设仍用 Chat Completions（地址相同，可在编辑页改协议）。
+- Ollama：官方文档说本机服务会忽略 Key，所以这个预设允许不填 Key。`localhost` 在手机上指手机自己（这句是我们自己的提醒，不是文档内容）。
+- “获取模型”（`GET {地址}/models`）：只有 OpenAI、Anthropic、Gemini、Moonshot、OpenRouter、Ollama、阶跃星辰在官方文档里确认有这个接口；DeepSeek 是官方域名搜索摘录；其余各家**未确认**，按钮可能失败，失败时可以“手动添加模型 ID”。
+- 各家“去哪拿 Key”的提示：只有 Gemini（aistudio.google.com/apikey）、xAI（console.x.ai）、硅基流动（cloud.siliconflow.cn）是官方页里看到的具体位置，其余是按文档里的文字描述写的，没有逐个打开核对。
+
+## 没放进预设的（没能核对官方文档，不凭记忆放）
+
+| 服务商 | 情况 |
+| --- | --- |
+| 讯飞星火 | 官方页打开了，但地址在代码块里没显示出来；地址只在第三方看到 |
+| Mistral | 只在第三方看到，没拿到官方页 |
+| Together AI | 只在第三方看到，而且有两种说法 |
+| Fireworks | 只在第三方看到，而且两处说法不一致 |
+| Perplexity | 只在一个预览文档站的搜索摘录里看到，没打开 |
+| 零一万物、百川 | 没查 |
+
+这些要用就走“自定义”。
+
+## 图标
+
+`@lobehub/icons-static-svg` 1.106.0（MIT，Copyright (c) 2023 LobeHub）。许可证取自 https://raw.githubusercontent.com/lobehub/lobe-icons/master/LICENSE （2026-11-23）。
+包从 npm 镜像 registry.npmmirror.com 下载，sha512 与 npm 登记的一致。详见 `third_party/lobe-icons/README.md`。

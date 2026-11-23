@@ -127,11 +127,54 @@ const List<ThirdPartyComponent> bundledComponents = [
   ),
 ];
 
+/// 随包的服务商图标（不是二进制，单独记）。清单与校验值在 third_party/lobe-icons/。
+class BundledIconPack {
+  const BundledIconPack({
+    required this.name,
+    required this.version,
+    required this.purpose,
+    required this.license,
+    required this.licenseAsset,
+    required this.copyright,
+    required this.packageUrl,
+    required this.packageIntegrity,
+    required this.sourceUrl,
+    required this.trademarkNote,
+  });
+
+  final String name;
+  final String version;
+  final String purpose;
+  final String license;
+  final String licenseAsset;
+  final String copyright;
+  final String packageUrl;
+
+  /// npm 登记的包完整性校验值（sha512，下载后核对过）。
+  final String packageIntegrity;
+  final String sourceUrl;
+  final String trademarkNote;
+}
+
+const BundledIconPack providerIconPack = BundledIconPack(
+  name: 'Lobe Icons（@lobehub/icons-static-svg）',
+  version: '1.106.0',
+  purpose: '“模型与渠道”里各家服务商的图标。只带了预设用到的那几个 SVG 文件，内容没有改动。',
+  license: 'MIT',
+  licenseAsset: 'assets/licenses/lobe-icons-MIT.txt',
+  copyright: 'Copyright (c) 2023 LobeHub',
+  packageUrl: 'https://registry.npmmirror.com/@lobehub/icons-static-svg/-/icons-static-svg-1.106.0.tgz',
+  packageIntegrity: 'sha512-yRLkEGfCKg7ztuAmwPKOlRY2nDvB6GJHtHvb8YGWZaZkCzMXrUOcvUbTNO3RDE0QVrR/nYD7p5oPWhUTpEi/uA==',
+  sourceUrl: 'https://github.com/lobehub/lobe-icons',
+  trademarkNote: '图标里的品牌标志和名称是各家公司的商标，归它们各自所有。这里只用来标明渠道连的是哪家服务，不代表它们与 LopiCode 有合作或认可关系。MIT 许可证只管图标文件本身，不授予商标权利。',
+);
+
 /// 许可证全文文件的显示名。
 String licenseTitle(String asset) => switch (asset) {
       'assets/licenses/GPL-2.0.txt' => 'GNU 通用公共许可证 第 2 版（GPL-2.0）全文',
       'assets/licenses/GPL-3.0.txt' => 'GNU 通用公共许可证 第 3 版（GPL-3.0）全文',
       'assets/licenses/LGPL-3.0.txt' => 'GNU 宽通用公共许可证 第 3 版（LGPL-3.0）全文',
       'assets/licenses/libandroid-shmem.txt' => 'libandroid-shmem 许可证全文',
+      'assets/licenses/lobe-icons-MIT.txt' => 'Lobe Icons 许可证（MIT）全文',
       _ => asset,
     };

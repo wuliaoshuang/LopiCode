@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:lopicode/agent/provider_presets.dart';
 import 'package:lopicode/core/stores.dart';
 
 /// 渠道用哪种接口协议。
@@ -176,6 +177,29 @@ class ResolvedModel {
   ModelSelection get selection => ModelSelection(channel.id, model.id, level);
 }
 
+/// 现在为什么还不能和模型对话。
+enum ModelGapKind { noChannel, noModel, noKey }
+
+class ModelGap {
+  const ModelGap(this.kind, [this.channel]);
+  final ModelGapKind kind;
+
+  /// 缺东西的那个渠道；一个渠道都没有时是 null。
+  final Channel? channel;
+
+  String get title => switch (kind) {
+    ModelGapKind.noChannel => '还没有配置模型',
+    ModelGapKind.noModel => '还没有选模型',
+    ModelGapKind.noKey => '还没有填 API Key',
+  };
+
+  String get message => switch (kind) {
+    ModelGapKind.noChannel => 'Agent 要连上一个模型服务才能干活。选一个服务商，填上 API Key 就行。',
+    ModelGapKind.noModel => '渠道“${channel?.name ?? ''}”里还没有勾选模型。进去点“获取模型”勾上要用的，或者手动添加模型 ID。',
+    ModelGapKind.noKey => '渠道“${channel?.name ?? ''}”还没有保存 API Key，发出去的消息会被拒绝。',
+  };
+}
+
 /// 渠道与模型的配置。普通信息在设置文件里，Key 只进安全存储（每个渠道一个）。
 class ModelConfigStore {
   ModelConfigStore(this.settings, this.secrets);
@@ -312,6 +336,16 @@ class ModelConfigStore {
       (newChatUsesFixed ? resolve(fixedSelection) : null) ?? resolve(lastSelection) ?? resolve(fixedSelection) ?? firstAvailable;
 
   bool get configured => firstAvailable != null;
+
+  /// 现在能不能发消息；能就返回 null。[current] 是这段对话选的模型，不传就看新对话默认用的那个。
+  /// 本机 / 局域网的服务（Ollama 之类）不要求 Key。
+  Future<ModelGap?> readiness([ResolvedModel? current]) async {
+    if (channels.isEmpty) return const ModelGap(ModelGapKind.noChannel);
+    final r = current ?? defaultForNewChat();
+    if (r == null) return ModelGap(ModelGapKind.noModel, channels.first);
+    if (!isLocalBaseUrl(r.channel.baseUrl) && !await hasKey(r.channel.id)) return ModelGap(ModelGapKind.noKey, r.channel);
+    return null;
+  }
 
   /// 调试 / 测试用：配置的 JSON（不含任何 Key）。
   String dump() => jsonEncode([for (final c in channels) c.toJson()]);

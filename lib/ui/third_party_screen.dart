@@ -24,7 +24,7 @@ class ThirdPartyScreen extends StatelessWidget {
         children: [
           const Padding(
             padding: EdgeInsets.fromLTRB(Space.x4, Space.x4, Space.x4, 0),
-            child: InfoBanner('下面三个组件用来进入 Ubuntu 环境。它们是 Termux 官方软件源里的原样文件，内容没有改动，只改了文件名。每个组件有自己的许可证，全文在各自那一组里。'),
+            child: InfoBanner('前三个组件用来进入 Ubuntu 环境。它们是 Termux 官方软件源里的原样文件，内容没有改动，只改了文件名。每个组件有自己的许可证，全文在各自那一组里。最后一组是服务商图标。'),
           ),
           for (final component in bundledComponents) ...[
             SectionLabel('${component.name} ${component.version}'),
@@ -69,6 +69,43 @@ class ThirdPartyScreen extends StatelessWidget {
               ],
             ),
           ],
+          SectionLabel('${providerIconPack.name} ${providerIconPack.version}'),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: Space.x4),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(providerIconPack.purpose, style: t.bodyMedium?.copyWith(height: 1.5)),
+                const SizedBox(height: Space.x2),
+                Text('许可证：${providerIconPack.license}', style: t.bodySmall?.copyWith(color: c.textMuted)),
+                const SizedBox(height: Space.x1),
+                Text(providerIconPack.copyright, style: t.bodySmall?.copyWith(color: c.textMuted, height: 1.5)),
+                const SizedBox(height: Space.x2),
+                Text(providerIconPack.trademarkNote, key: const Key('third-party-trademark'), style: t.bodySmall?.copyWith(color: c.textMuted, height: 1.5)),
+              ],
+            ),
+          ),
+          ListTile(
+            key: Key('license-${providerIconPack.licenseAsset}'),
+            leading: const Icon(Icons.description_outlined),
+            title: Text(licenseTitle(providerIconPack.licenseAsset)),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(builder: (_) => LicenseTextScreen(asset: providerIconPack.licenseAsset)),
+            ),
+          ),
+          ExpansionTile(
+            key: const Key('source-lobe-icons'),
+            leading: const Icon(Icons.link),
+            title: const Text('来源和校验值'),
+            childrenPadding: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x3),
+            expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _Fact('图标包（npm 镜像）', providerIconPack.packageUrl),
+              _Fact('这个包的完整性校验值', providerIconPack.packageIntegrity),
+              _Fact('项目仓库', providerIconPack.sourceUrl),
+            ],
+          ),
           const SectionLabel('怎么拿到源码'),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: Space.x4),

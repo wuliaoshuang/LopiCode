@@ -60,6 +60,9 @@ class AppServices extends ChangeNotifier {
   /// 工作区列表里点了“在这里新建对话”：打开那个工作区后开一段新对话。
   String? newConversationFor;
 
+  /// 这次运行里“没配好模型”的引导是不是已经自动弹过（弹过就只在点发送时再提示）。
+  bool modelSetupPrompted = false;
+
   Future<void>? _ready;
 
   /// 读渠道配置（含老设置迁移）和自动化任务。可以反复调用，只做一次。

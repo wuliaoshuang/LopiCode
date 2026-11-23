@@ -7,10 +7,13 @@ import 'dart:async';
 // - 单个模型的细节（显示名、上下文、最大输出、能不能看图、思考档位）在底部面板里改，不挤在列表行上。
 import 'package:lopicode/agent/model_config.dart';
 import 'package:lopicode/agent/protocols.dart';
+import 'package:lopicode/agent/provider_presets.dart';
 import 'package:lopicode/agent/chat_client.dart';
 import 'package:lopicode/app_services.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/chat_panels.dart';
+import 'package:lopicode/ui/model_setup.dart';
+import 'package:lopicode/ui/provider_icon.dart';
 import 'package:lopicode/ui/widgets.dart';
 import 'package:lopicode/ui/chrome.dart';
 import 'package:material_ui/material_ui.dart';
@@ -23,8 +26,11 @@ class ChannelsScreen extends StatefulWidget {
 }
 
 class _ChannelsScreenState extends State<ChannelsScreen> {
+  /// 点已有渠道进编辑页；“添加渠道”先去选服务商。
   Future<void> _edit([Channel? channel]) async {
-    await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => ChannelEditScreen(channel: channel)));
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => channel == null ? const ProviderPickerScreen() : ChannelEditScreen(channel: channel)),
+    );
     if (mounted) setState(() {});
   }
 
@@ -46,7 +52,6 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
   @override
   Widget build(BuildContext context) {
     final app = AppScope.of(context);
-    final c = context.colors;
     final t = Theme.of(context).textTheme;
     final channels = app.models.channels;
     final fixed = app.models.resolve(app.models.fixedSelection);
@@ -66,7 +71,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
           ? EmptyState(
               icon: Icons.hub_outlined,
               title: '还没有渠道',
-              message: '渠道就是一个模型服务：接口地址加 API Key。\n添加后勾选要用的模型。',
+              message: '渠道就是一个模型服务。\n选一个服务商、填上 API Key，再勾选要用的模型。',
               action: FilledButton.icon(onPressed: _edit, icon: const Icon(Icons.add), label: const Text('添加渠道')),
             )
           : SectionedList(
@@ -109,12 +114,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
                 const SectionLabel('渠道'),
                 for (final ch in channels)
                   ListTile(
-                    leading: Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(color: c.accentSoft, borderRadius: BorderRadius.circular(Radii.md)),
-                      child: Icon(Icons.hub_outlined, color: c.accent, size: 20),
-                    ),
+                    leading: ProviderIcon.forBaseUrl(ch.baseUrl),
                     title: Text(ch.name, maxLines: 1, overflow: TextOverflow.ellipsis),
                     subtitle: Text('${ch.protocol.label} · ${ch.models.isEmpty ? '还没勾选模型' : '${ch.models.length} 个模型'}', maxLines: 1, overflow: TextOverflow.ellipsis),
                     trailing: const Icon(Icons.chevron_right),
@@ -127,8 +127,11 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
 }
 
 class ChannelEditScreen extends StatefulWidget {
-  const ChannelEditScreen({super.key, this.channel});
+  const ChannelEditScreen({super.key, this.channel, this.preset});
   final Channel? channel;
+
+  /// 新建时选的服务商：名称、协议、接口地址先填好。
+  final ProviderPreset? preset;
 
   @override
   State<ChannelEditScreen> createState() => _ChannelEditScreenState();
@@ -154,7 +157,16 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
       _baseUrl.text = ch.baseUrl;
       _protocol = ch.protocol;
       _models.addAll([for (final m in ch.models) ModelSpec.fromJson(m.toJson())!]);
+    } else if (widget.preset case final p?) {
+      _name.text = p.name;
+      _baseUrl.text = p.baseUrl;
+      _protocol = p.protocol;
     }
+    _baseUrl.addListener(_onUrl);
+  }
+
+  void _onUrl() {
+    if (mounted) setState(() {}); // 图标和“要不要 Key”跟着地址变
   }
 
   @override
@@ -279,7 +291,7 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
     // 换了 Key：马上重查余额（不是 DeepSeek 官方渠道什么都不做）。
     if (_key.text.trim().isNotEmpty) unawaited(app.quota.refresh(saved, force: true));
     app.touch();
-    if (mounted) Navigator.pop(context);
+    if (mounted) Navigator.pop(context, true);
   }
 
   Future<void> _delete() async {
@@ -302,9 +314,15 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
     final app = AppScope.of(context);
     final c = context.colors;
     final t = Theme.of(context).textTheme;
+    final recognized = presetForBaseUrl(_baseUrl.text);
+    // 提醒只在地址还是这家的时候显示（改成别家的地址就不该再说这句）。
+    final note = recognized?.note;
+    final keyHint = recognized?.keyHint;
+    final local = isLocalBaseUrl(_baseUrl.text);
     return Scaffold(
       backgroundColor: context.colors.canvas,
-      appBar: PageBar(background: context.colors.canvas, 
+      appBar: PageBar(
+        background: context.colors.canvas,
         title: Text(widget.channel == null ? '添加渠道' : '编辑渠道'),
         actions: [
           if (widget.channel != null)
@@ -318,7 +336,16 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
       body: SectionedList(
         inner: const EdgeInsets.all(Space.x4),
         children: [
-          TextField(controller: _name, decoration: const InputDecoration(labelText: '渠道名称', hintText: '给自己看的名字，不填就用协议名')),
+          Row(
+            children: [
+              ProviderIcon(key: const Key('channel-icon'), preset: recognized),
+              const SizedBox(width: Space.x3),
+              Expanded(
+                child: TextField(controller: _name, decoration: const InputDecoration(labelText: '渠道名称', hintText: '给自己看的名字，不填就用协议名')),
+              ),
+            ],
+          ),
+          if (note != null) InfoBanner(note, margin: const EdgeInsets.only(top: Space.x3)),
           const SizedBox(height: Space.x3),
           DropdownButtonFormField<ChatProtocol>(
             key: const Key('channel-protocol'),
@@ -344,8 +371,9 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
             enableSuggestions: false,
             decoration: InputDecoration(
               labelText: 'API Key',
-              hintText: _hasKey ? '已保存，留空表示不改' : '粘贴你的 Key',
-              helperText: _hasKey ? '已保存一个 Key（不显示明文）' : null,
+              hintText: _hasKey ? '已保存，留空表示不改' : (local ? '本机服务可以不填' : '粘贴你的 Key'),
+              helperText: _hasKey ? '已保存一个 Key（不显示明文）' : keyHint,
+              helperMaxLines: 2,
               suffixIcon: _hasKey ? IconButton(tooltip: '清除已保存的 Key', icon: const Icon(Icons.delete_outline), onPressed: _clearKey) : null,
             ),
           ),

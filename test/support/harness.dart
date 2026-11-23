@@ -33,6 +33,9 @@ class TestEnv {
     );
     // 真实文件读写只能在 runAsync 里完成：先把渠道配置和自动化任务读好。
     await services.ready();
+    // “没配好模型”的引导弹窗默认当作已经弹过，免得每个界面测试一进聊天页就被它挡住；
+    // 专门测它的用例（test/model_setup_test.dart）自己把这个开关拨回去。
+    services.modelSetupPrompted = true;
     return TestEnv._(tmp, services);
   }
 

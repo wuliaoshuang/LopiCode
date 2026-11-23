@@ -22,6 +22,7 @@ import 'package:lopicode/project_session.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/chat_panels.dart';
 import 'package:lopicode/ui/chrome.dart';
+import 'package:lopicode/ui/model_setup.dart';
 import 'package:lopicode/ui/settings_ai.dart';
 import 'package:lopicode/ui/shell.dart';
 import 'package:lopicode/ui/team_screen.dart';
@@ -67,6 +68,8 @@ class _ChatScreenState extends State<ChatScreen> {
     s.loadChat().then((_) {
       final ch = s.currentModel?.channel;
       if (mounted && ch != null) s.app.quota.refresh(ch);
+      // 没配好模型：进聊天页时引导一次（这次运行里弹过就不再自动弹）。
+      if (mounted) ensureModelReady(context, current: s.currentModel, auto: true);
     });
   }
 
@@ -103,13 +106,15 @@ class _ChatScreenState extends State<ChatScreen> {
 
   bool get _canSend => _input.text.trim().isNotEmpty || _attachments.isNotEmpty;
 
-  void _send([String? preset, SendMode mode = SendMode.queue]) {
+  Future<void> _send([String? preset, SendMode mode = SendMode.queue]) async {
     final text = (preset ?? _input.text).trim();
     if (text.isEmpty && _attachments.isEmpty) return;
     if (preset == null && _attachments.isEmpty && _runSlash(text)) {
       _input.clear();
       return;
     }
+    // 没有可用模型就不发：弹窗说明并带她去配置，输入的字留着。
+    if (!await ensureModelReady(context, current: s.currentModel) || !mounted) return;
     final images = [..._attachments];
     _input.clear();
     setState(_attachments.clear);

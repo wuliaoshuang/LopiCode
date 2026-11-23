@@ -102,6 +102,8 @@ PRoot 启动器已随安装包带上（Termux 官方软件源的现成包，文�
 - Ubuntu 基础系统、Node.js、Python、Git：由用户在应用内点击后从上游或镜像下载，不随安装包分发。
 - dsh-Go（AGPL-3.0）只作为做法参考，没有使用它的代码。
 
+- 服务商图标：`@lobehub/icons-static-svg` 1.106.0（MIT，Copyright (c) 2023 LobeHub），只带预设用到的 18 个 SVG，内容没有改动；来源和校验值见 [third_party/lobe-icons/README.md](third_party/lobe-icons/README.md)。图标里的品牌标志和名称是各家公司的商标，归它们各自所有，这里只用来标明渠道连的是哪家服务。
+
 ## 目录结构
 
 ```
@@ -130,6 +132,8 @@ docs/api-notes.md              OpenAI / GitHub 接口核对笔记
 docs/screenshots/              390×844 截图（浅色、深色）
 assets/licenses/               随包组件的许可证全文（应用内“第三方声明”读这里）
 third_party/termux/            PRoot 等随包二进制的来源记录、原始包、校验值、许可证
+third_party/lobe-icons/        服务商图标的来源、版本、校验值、许可证
+assets/provider_icons/         随包的服务商图标（SVG，原样）
 ```
 
 ## 怎么构建

@@ -50,6 +50,7 @@ dependencies:
   flutter_secure_storage: ^11.2.0
   crypto: ^3.0.6
   image_picker: ^1.2.4
+  flutter_svg: ^2.5.0
 
 dev_dependencies:
   flutter_test:
@@ -76,6 +77,8 @@ flutter:
   # 第三方组件的许可证全文（应用内“第三方声明”页读取）。
   assets:
     - assets/licenses/
+    # 服务商图标（@lobehub/icons-static-svg，MIT；清单见 third_party/lobe-icons/）
+    - assets/provider_icons/
 
   # To add assets to your application, add an assets section, like this:
   # assets:

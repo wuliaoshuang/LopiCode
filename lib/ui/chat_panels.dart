@@ -16,6 +16,7 @@ import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/chat_screen.dart';
 import 'package:lopicode/ui/chrome.dart';
 import 'package:lopicode/ui/widgets.dart';
+import 'package:lopicode/ui/provider_icon.dart';
 import 'package:material_ui/material_ui.dart';
 
 // ── 模型选择 ─────────────────────────────────────────
@@ -80,6 +81,7 @@ class _ModelPickerSheetState extends State<ModelPickerSheet> {
                   itemCount: channels.length,
                   separatorBuilder: (_, _) => const SizedBox(width: Space.x2),
                   itemBuilder: (context, i) => ChoiceChip(
+                    avatar: ProviderIcon.forBaseUrl(channels[i].baseUrl, size: 24),
                     label: Text(channels[i].name),
                     selected: channels[i].id == channel?.id,
                     onSelected: (_) => setState(() {
