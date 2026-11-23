@@ -91,7 +91,7 @@ class _PersonalizeScreenState extends State<PersonalizeScreen> {
           const SectionLabel('Agent 预设'),
           Padding(
             padding: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x2),
-            child: Text('预设＝一套系统提示词加上允许用的工具。新对话用“默认”那个，对话里可以在 ⋮ 菜单换。', style: t.bodySmall),
+            child: Text('预设＝一套系统提示词加上允许用的工具。新对话用“默认”那个，对话里可以在右上角的菜单里换。', style: t.bodySmall),
           ),
           for (final p in app.presets.all)
             ListTile(
@@ -326,7 +326,7 @@ class _SubagentSettingsScreenState extends State<SubagentSettingsScreen> {
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(Space.x4, Space.x1, Space.x4, 0),
-            child: Text('默认关闭。开启后在对话页右上角 ⋮ 菜单里能看到“智能体团队”。团队会明显多花钱，适合大任务。', style: t.bodySmall),
+            child: Text('默认关闭。开启后在对话页右上角的菜单里能看到“智能体团队”。团队会明显多花钱，适合大任务。', style: t.bodySmall),
           ),
         ],
       ),

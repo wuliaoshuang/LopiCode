@@ -601,7 +601,11 @@ void main() {
       runtime.recordLaunchFailure('x');
       expect(runtime.compatMode, isTrue);
       runtime.recordLaunchSuccess();
-      await Future<void>.delayed(Duration.zero);
+      // 设置是“不等结果”写盘的：等它真的落盘，否则机器忙时收尾删临时目录会抢在写盘前面。
+      for (var i = 0; i < 100 && !(runtime.settings.file.existsSync() && runtime.settings.file.readAsStringSync().contains('true')); i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 50));
       expect(runtime.launchFailures, 0);
       expect(runtime.settings.getBool(SettingKeys.runtimeCompat), isTrue);
       expect(runtime.prootCommand(guestCommand: guestLoginShell).environment['PROOT_NO_SECCOMP'], '1');

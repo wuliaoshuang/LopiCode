@@ -734,6 +734,30 @@ void main() {
       expect(log, isEmpty);
     });
 
+    test('工作区没打开也能跑（后台开一个会话）；从列表移除的工作区不跑', () async {
+      final a = await env.services.automations.upsert(
+        title: '写报告',
+        instruction: '写 report.md',
+        workspaceId: project.id,
+        rule: TimeRule(kind: RuleKind.daily, hour: 8, tzOffsetMinutes: 0),
+        now: DateTime.utc(2026, 11, 23, 0),
+      );
+      var n = 0;
+      turn = (m, t) => n++ == 0 ? use('write_file', {'path': 'report.md', 'content': '后台写的'}) : reply('写好了');
+      expect(env.services.scheduler.liveSessions, isEmpty);
+      final run = await env.services.scheduler.runNow(a);
+      expect(run.status, 'ok', reason: run.summary);
+      expect(f('report.md').readAsStringSync(), '后台写的');
+      expect(File('${project.dir}/.lopicode/chats.json').readAsStringSync(), contains('"auto":true'), reason: '后台跑的对话也存进了这个工作区');
+
+      await env.services.projects.removeFromList(project);
+      n = 0;
+      f('report.md').deleteSync();
+      final gone = await env.services.scheduler.runNow(a);
+      expect(gone.status, 'failed');
+      expect(f('report.md').existsSync(), isFalse);
+    });
+
     test('工作区没了：记失败，不乱跑', () async {
       final a = await env.services.automations.upsert(
         title: '孤儿',

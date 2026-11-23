@@ -25,12 +25,13 @@ class AutomationListScreen extends StatefulWidget {
 }
 
 class _AutomationListScreenState extends State<AutomationListScreen> {
-  Map<String, String> _names = {};
+  /// null＝工作区列表还没读完（这时不能说“已不在”）。
+  Map<String, String>? _names;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    AppScope.of(context).projects.list(hidden: true).then((list) {
+    AppScope.of(context).projects.list().then((list) {
       if (mounted) setState(() => _names = {for (final p in list) p.id: p.name});
     }, onError: (_) {});
   }
@@ -73,7 +74,7 @@ class _AutomationListScreenState extends State<AutomationListScreen> {
               subtitle: Text(
                 [
                   a.rule.describe(),
-                  _names[a.workspaceId] ?? '工作区已不在',
+                  _names == null ? '工作区：读取中…' : (_names![a.workspaceId] == null ? '工作区已不在' : '工作区：${_names![a.workspaceId]}'),
                   if (app.scheduler.running.contains(a.id))
                     '正在运行'
                   else if (!a.enabled)
@@ -95,7 +96,7 @@ class _AutomationListScreenState extends State<AutomationListScreen> {
                 },
               ),
               onTap: () async {
-                await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => AutomationDetailScreen(id: a.id, workspaceName: _names[a.workspaceId])));
+                await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => AutomationDetailScreen(id: a.id, workspaceName: _names?[a.workspaceId], workspaceKnown: _names != null)));
                 if (mounted) setState(() {});
               },
             ),
@@ -106,7 +107,8 @@ class _AutomationListScreenState extends State<AutomationListScreen> {
 }
 
 class AutomationDetailScreen extends StatefulWidget {
-  const AutomationDetailScreen({super.key, required this.id, this.workspaceName});
+  const AutomationDetailScreen({super.key, required this.id, this.workspaceName, this.workspaceKnown = true});
+  final bool workspaceKnown;
   final String id;
   final String? workspaceName;
 
@@ -158,7 +160,7 @@ class _AutomationDetailScreenState extends State<AutomationDetailScreen> {
           Text(a.rule.describe(), style: t.titleMedium),
           const SizedBox(height: Space.x1),
           Text(
-            '工作区：${widget.workspaceName ?? '已不在'} · 权限：${PermissionLevel.byId(a.permission).label}\n'
+            '工作区：${widget.workspaceName ?? (widget.workspaceKnown ? '已不在' : '读取中…')} · 权限：${PermissionLevel.byId(a.permission).label}\n'
             '${!a.enabled ? '已停用' : next == null ? '不会再触发' : '下一次：${ProjectSession.formatLocal(next, a.rule.tzOffsetMinutes)}'}',
             style: t.bodySmall?.copyWith(height: 1.6),
           ),

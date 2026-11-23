@@ -484,16 +484,15 @@ class _InputCard extends StatelessWidget {
                 if (busy && !canSend)
                   _RoundButton(tooltip: '停止', icon: Icons.stop_rounded, bg: c.danger, fg: c.surface, onPressed: onStop)
                 else
-                  GestureDetector(
+                  // 生成中：长按选发送方式。这时不能挂 Tooltip——它自己也认长按，会把长按抢走只弹出提示文字。
+                  _RoundButton(
                     key: const ValueKey('send-button'),
+                    tooltip: busy ? '排队发送（长按选方式）' : '发送',
+                    icon: Icons.arrow_upward_rounded,
+                    bg: canSend ? c.accentFill : c.surfaceMuted,
+                    fg: canSend ? c.onAccent : c.textFaint,
+                    onPressed: canSend ? onSend : null,
                     onLongPress: busy && canSend ? onLongSend : null,
-                    child: _RoundButton(
-                      tooltip: busy ? '排队发送（长按选方式）' : '发送',
-                      icon: Icons.arrow_upward_rounded,
-                      bg: canSend ? c.accentFill : c.surfaceMuted,
-                      fg: canSend ? c.onAccent : c.textFaint,
-                      onPressed: canSend ? onSend : null,
-                    ),
                   ),
               ],
             ),
@@ -505,7 +504,8 @@ class _InputCard extends StatelessWidget {
 }
 
 class _RoundButton extends StatelessWidget {
-  const _RoundButton({required this.tooltip, required this.icon, required this.bg, required this.fg, required this.onPressed});
+  const _RoundButton({super.key, required this.tooltip, required this.icon, required this.bg, required this.fg, required this.onPressed, this.onLongPress});
+  final VoidCallback? onLongPress;
   final String tooltip;
   final IconData icon;
   final Color bg;
@@ -513,9 +513,12 @@ class _RoundButton extends StatelessWidget {
   final VoidCallback? onPressed;
 
   @override
-  Widget build(BuildContext context) => IconButton(
-    tooltip: tooltip,
+  Widget build(BuildContext context) => onLongPress == null ? _button(tooltip) : Semantics(label: tooltip, child: _button(null));
+
+  Widget _button(String? tip) => IconButton(
+    tooltip: tip,
     onPressed: onPressed,
+    onLongPress: onLongPress,
     style: IconButton.styleFrom(
       backgroundColor: bg,
       disabledBackgroundColor: bg,

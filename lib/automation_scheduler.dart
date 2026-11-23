@@ -74,9 +74,9 @@ class AutomationScheduler {
       if (live != null) {
         result = await live.runAutomation(a);
       } else {
-        final project = (await app.projects.list(hidden: true)).where((p) => p.id == a.workspaceId).firstOrNull;
+        final project = (await app.projects.list()).where((p) => p.id == a.workspaceId).firstOrNull;
         if (project == null) {
-          result = AutomationRun(startedAt, 'failed', '找不到这个任务的工作区（可能已被删除）');
+          result = AutomationRun(startedAt, 'failed', '找不到这个任务的工作区（已被删除或从列表移除）');
         } else {
           final session = ProjectSession(app, project, headless: true);
           try {
