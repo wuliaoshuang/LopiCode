@@ -1,9 +1,11 @@
 // “运行环境”页和 Ubuntu 终端在 390×844 上的渲染与交互检查（浅色 + 深色）。
 // LOPI_SHOTS=1 时把截图写到 docs/screenshots/。
+import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lopicode/app.dart';
 import 'package:lopicode/app_services.dart';
@@ -14,6 +16,8 @@ import 'package:lopicode/project_session.dart';
 import 'package:lopicode/runtime/linux_runtime.dart';
 import 'package:lopicode/runtime/runtime_screen.dart';
 import 'package:lopicode/ui/project_shell.dart';
+import 'package:lopicode/ui/settings_screen.dart';
+import 'package:lopicode/ui/third_party_screen.dart';
 import 'package:lopicode/ui/shell.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:path/path.dart' as p;
@@ -177,6 +181,54 @@ void main() {
       await shot(tester, '27-runtime-no-proot-$suffix');
     });
 
+    testWidgets('设置 › 第三方声明：三个组件、许可证全文、来源和校验值 ($suffix)', (tester) async {
+      usePhoneViewport(tester);
+      final env = await tester.runAsync(Env.create);
+      addTearDown(() => env!.tmp.deleteSync(recursive: true));
+      await tester.pumpWidget(env!.app(const SettingsScreen(), mode));
+      await tester.pump();
+      await tester.scrollUntilVisible(find.byKey(const Key('settings-third-party')), 200, scrollable: find.byType(Scrollable).first);
+      await tester.pumpAndSettle();
+      await shot(tester, '30-settings-third-party-entry-$suffix');
+      await tester.tap(find.byKey(const Key('settings-third-party')));
+      await tester.pumpAndSettle();
+      expect(find.text('第三方声明'), findsOneWidget);
+      expect(find.text('PRoot（Termux 版） 5.1.107.102'), findsOneWidget);
+      expect(find.text('许可证：GPL-2.0-or-later'), findsOneWidget);
+      await shot(tester, '31-third-party-$suffix');
+
+      // 展开 PRoot 的来源：能看到包地址、校验值、源码地址
+      await tester.tap(find.byKey(const Key('source-PRoot（Termux 版）')));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('packages.termux.dev/apt/termux-main/pool/main/p/proot/proot_5.1.107.102_aarch64.deb'), findsOneWidget);
+      expect(find.text('10a394b585c2fc2b2c8502544f4e5f1be581dc8bfff79e8ba62f16207423e030'), findsOneWidget);
+      await tester.scrollUntilVisible(find.text('https://github.com/termux/proot/archive/v5.1.107.102.zip'), 200, scrollable: find.descendant(of: find.byKey(const Key('third-party-list')), matching: find.byType(Scrollable)).first);
+      await tester.pumpAndSettle();
+      await shot(tester, '31b-third-party-source-$suffix');
+
+      // 另外两个组件和“怎么拿到源码”都在
+      final list = find.descendant(of: find.byKey(const Key('third-party-list')), matching: find.byType(Scrollable)).first;
+      await tester.scrollUntilVisible(find.text('talloc 2.5.0'), 200, scrollable: list);
+      expect(find.text('许可证：LGPL-3.0-or-later'), findsOneWidget);
+      await tester.scrollUntilVisible(find.text('libandroid-shmem 0.7'), 200, scrollable: list);
+      await tester.scrollUntilVisible(find.byKey(const Key('third-party-source-offer')), 200, scrollable: list);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('许可证全文页：GPL-2.0 原文能读出来 ($suffix)', (tester) async {
+      usePhoneViewport(tester);
+      final env = await tester.runAsync(Env.create);
+      addTearDown(() => env!.tmp.deleteSync(recursive: true));
+      final text = File('assets/licenses/GPL-2.0.txt').readAsStringSync();
+      await tester.pumpWidget(env!.app(LicenseTextScreen(asset: 'assets/licenses/GPL-2.0.txt', bundle: _FixedBundle(text)), mode));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('license-text')), findsOneWidget);
+      expect(find.textContaining('GNU GENERAL PUBLIC LICENSE'), findsOneWidget);
+      expect(find.textContaining('END OF TERMS AND CONDITIONS'), findsOneWidget);
+      await shot(tester, '32-license-text-$suffix');
+    });
+
     testWidgets('终端：环境可用时新会话是 Ubuntu；侧边栏有“运行环境”入口 ($suffix)', (tester) async {
       usePhoneViewport(tester);
       final env = await tester.runAsync(() => Env.create(installed: true));
@@ -221,4 +273,16 @@ void main() {
       await tester.runAsync(() async => session.dispose());
     });
   }
+}
+
+/// 测试里直接给出文件内容的资源包。
+class _FixedBundle extends CachingAssetBundle {
+  _FixedBundle(this.text);
+  final String text;
+
+  @override
+  Future<ByteData> load(String key) async => ByteData.sublistView(Uint8List.fromList(utf8.encode(text)));
+
+  @override
+  Future<String> loadString(String key, {bool cache = true}) async => text;
 }

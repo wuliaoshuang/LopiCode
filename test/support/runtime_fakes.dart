@@ -166,9 +166,11 @@ class FakePty implements PtyProcess {
 String makeFakeNativeDir(Directory tmp) {
   final dir = Directory(p.join(tmp.path, 'nativelib'))..createSync();
   final proot = File(p.join(dir.path, 'libproot.so'))
-    ..writeAsStringSync('#!/bin/sh\necho "ARGS=\$*"\necho "LOADER=\$PROOT_LOADER"\necho "HOSTPATH=\${HOME:-unset}"\n');
+    ..writeAsStringSync('#!/bin/sh\necho "ARGS=\$*"\necho "LOADER=\$PROOT_LOADER"\necho "LIBPATH=\$LD_LIBRARY_PATH"\necho "HOSTPATH=\${HOME:-unset}"\n');
   Process.runSync('chmod', ['755', proot.path]);
   File(p.join(dir.path, 'libproot-loader.so')).writeAsStringSync('');
+  File(p.join(dir.path, 'libtalloc.so')).writeAsStringSync('talloc');
+  File(p.join(dir.path, 'libandroid-shmem.so')).writeAsStringSync('shmem');
   return dir.path;
 }
 

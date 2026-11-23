@@ -217,6 +217,7 @@ void main() {
   group('PRoot 启动命令', () {
     final command = buildProotCommand(
       nativeLibDir: '/data/app/x/lib/arm64',
+      libDir: '/data/user/0/com.lopicode.app/files/runtime/hostlib',
       rootfs: '/data/user/0/com.lopicode.app/files/runtime/rootfs',
       tmpDir: '/data/user/0/com.lopicode.app/files/runtime/tmp',
       guestCommand: guestLoginShell,
@@ -227,6 +228,9 @@ void main() {
       expect(command.executable, '/data/app/x/lib/arm64/libproot.so');
       expect(command.environment['PROOT_LOADER'], '/data/app/x/lib/arm64/libproot-loader.so');
       expect(command.environment['PROOT_TMP_DIR'], endsWith('/runtime/tmp'));
+      // PRoot 依赖的两个库：先找放了 libtalloc.so.2 链接的目录，再找安装包的原生库目录
+      expect(command.environment['LD_LIBRARY_PATH'],
+          '/data/user/0/com.lopicode.app/files/runtime/hostlib:/data/app/x/lib/arm64');
       expect(command.environment['LD_PRELOAD'], '');
       expect(command.environment.containsKey('PROOT_NO_SECCOMP'), isFalse);
     });
@@ -254,7 +258,7 @@ void main() {
     });
 
     test('兼容模式加 PROOT_NO_SECCOMP；没有项目时工作目录是 /root', () {
-      final c = buildProotCommand(nativeLibDir: '/n', rootfs: '/r', tmpDir: '/t', guestCommand: guestRun('echo hi'), noSeccomp: true);
+      final c = buildProotCommand(nativeLibDir: '/n', libDir: '/l', rootfs: '/r', tmpDir: '/t', guestCommand: guestRun('echo hi'), noSeccomp: true);
       expect(c.environment['PROOT_NO_SECCOMP'], '1');
       expect(c.arguments[c.arguments.indexOf('-w') + 1], '/root');
       expect(c.arguments.sublist(c.arguments.length - 3), ['/bin/bash', '-lc', 'echo hi']);
@@ -395,6 +399,92 @@ void main() {
       expect(runtime.installed, isTrue);
       expect(runtime.prootBundled, isFalse);
       expect(runtime.shouldUseLinux, isFalse);
+    });
+  });
+
+  group('PRoot 随包文件和依赖库', () {
+    late Directory tmp;
+    setUp(() => tmp = Directory.systemTemp.createTempSync('lopi_launcher'));
+    tearDown(() => tmp.deleteSync(recursive: true));
+
+    LinuxRuntime make(String? nativeDir) => LinuxRuntime(
+          settings: SettingsStore(File(p.join(tmp.path, 's.json'))),
+          baseDir: p.join(tmp.path, 'runtime'),
+          host: FakeRuntimeHost(nativeDir: nativeDir),
+        );
+
+    test('四个文件齐全才算带了 PRoot；缺哪个说哪个', () async {
+      final native = makeFakeNativeDir(tmp);
+      final runtime = make(native);
+      await runtime.init();
+      expect(runtime.prootBundled, isTrue);
+      expect(runtime.missingLauncherFiles, isEmpty);
+
+      File(p.join(native, 'libtalloc.so')).deleteSync();
+      await runtime.init();
+      expect(runtime.prootBundled, isFalse);
+      expect(runtime.missingLauncherFiles, ['libtalloc.so']);
+
+      final none = make(null);
+      await none.init();
+      expect(none.missingLauncherFiles, ['libproot.so', 'libproot-loader.so', 'libtalloc.so', 'libandroid-shmem.so']);
+    });
+
+    test('libtalloc.so.2 链接：第一次建好，重复调用不动它', () async {
+      final native = makeFakeNativeDir(tmp);
+      final runtime = make(native);
+      await runtime.init();
+      expect(runtime.prepareLauncherLibs(), isNull);
+      final link = Link(p.join(runtime.hostLibDir, 'libtalloc.so.2'));
+      expect(link.targetSync(), p.join(native, 'libtalloc.so'));
+      expect(runtime.prepareLauncherLibs(), isNull);
+      expect(link.targetSync(), p.join(native, 'libtalloc.so'));
+    });
+
+    test('应用更新后原生库目录换了地方：链接跟着改过去', () async {
+      final native = makeFakeNativeDir(tmp);
+      final runtime = make(native);
+      await runtime.init();
+      runtime.prepareLauncherLibs();
+      final moved = Directory(p.join(tmp.path, 'nativelib-v2'))..createSync();
+      for (final f in Directory(native).listSync().whereType<File>()) {
+        f.copySync(p.join(moved.path, p.basename(f.path)));
+      }
+      File(p.join(moved.path, 'libtalloc.so')).writeAsStringSync('talloc-v2');
+      runtime.nativeLibDir = moved.path;
+      expect(runtime.prepareLauncherLibs(), isNull);
+      expect(Link(p.join(runtime.hostLibDir, 'libtalloc.so.2')).targetSync(), p.join(moved.path, 'libtalloc.so'));
+      expect(File(p.join(runtime.hostLibDir, 'libtalloc.so.2')).readAsStringSync(), 'talloc-v2');
+    });
+
+    test('卸载环境后链接目录没了：下次拼命令时自动重建', () async {
+      final native = makeFakeNativeDir(tmp);
+      final runtime = make(native);
+      markInstalled(runtime);
+      await runtime.init();
+      runtime.prootCommand(guestCommand: guestLoginShell);
+      expect(Directory(runtime.hostLibDir).existsSync(), isTrue);
+      await runtime.uninstall();
+      expect(Directory(runtime.hostLibDir).existsSync(), isFalse);
+      final command = runtime.prootCommand(guestCommand: guestLoginShell);
+      expect(command.environment['LD_LIBRARY_PATH'], '${runtime.hostLibDir}:$native');
+      expect(File(p.join(runtime.hostLibDir, 'libtalloc.so.2')).existsSync(), isTrue);
+    });
+
+    test('上次是复制的旧文件（不是链接）：大小不同就换成新的', () async {
+      final native = makeFakeNativeDir(tmp);
+      final runtime = make(native);
+      await runtime.init();
+      Directory(runtime.hostLibDir).createSync(recursive: true);
+      File(p.join(runtime.hostLibDir, 'libtalloc.so.2')).writeAsStringSync('old-copy-of-different-size');
+      expect(runtime.prepareLauncherLibs(), isNull);
+      expect(File(p.join(runtime.hostLibDir, 'libtalloc.so.2')).readAsStringSync(), 'talloc');
+    });
+
+    test('拿不到原生库目录：返回原因，不抛异常', () async {
+      final runtime = make(null);
+      await runtime.init();
+      expect(runtime.prepareLauncherLibs(), isNotNull);
     });
   });
 
@@ -563,6 +653,9 @@ void main() {
       expect(result.output, contains('-w /workspace'));
       expect(result.output, contains('/bin/bash -lc node -v'));
       expect(result.output, contains('LOADER=${p.join(host.nativeDir!, 'libproot-loader.so')}'));
+      expect(result.output, contains('LIBPATH=${runtime.hostLibDir}:${host.nativeDir!}'));
+      // PRoot 本体要找的 libtalloc.so.2 已经指向安装包里的 libtalloc.so
+      expect(File(p.join(runtime.hostLibDir, 'libtalloc.so.2')).readAsStringSync(), 'talloc');
       expect(result.output, contains('HOSTPATH=unset'), reason: '不能把应用自己的环境变量带进去');
       expect(echoed.toString(), contains('[Agent · Ubuntu] \$ node -v'));
       expect(host.keepAliveStarts, 1);
