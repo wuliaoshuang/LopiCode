@@ -161,6 +161,7 @@ class AutomationRun {
   Map<String, dynamic> toJson() => {'at': at.toUtc().toIso8601String(), 'status': status, 'summary': summary};
 }
 
+/// 一个自动化任务。不可变：要改走 [AutomationStore] 的方法，它会换一份新的。
 class Automation {
   Automation({
     required this.id,
@@ -174,19 +175,34 @@ class Automation {
     this.lastRunAt,
     List<AutomationRun>? history,
   }) : createdAt = createdAt ?? DateTime.now().toUtc(),
-       history = history ?? [];
+       history = List.unmodifiable(history ?? const []);
   final String id;
-  String title;
-  String instruction;
-  String workspaceId;
-  TimeRule rule;
+  final String title;
+  final String instruction;
+  final String workspaceId;
+  final TimeRule rule;
 
   /// 运行时的权限档位（没人在场，需要确认的操作一律按拒绝处理，除非是“完全权限”）。
-  String permission;
-  bool enabled;
+  final String permission;
+  final bool enabled;
   final DateTime createdAt;
-  DateTime? lastRunAt;
+  final DateTime? lastRunAt;
+
+  /// 运行历史，新的在前。
   final List<AutomationRun> history;
+
+  Automation copyWith({String? title, String? instruction, String? workspaceId, TimeRule? rule, String? permission, bool? enabled, DateTime? lastRunAt, List<AutomationRun>? history}) => Automation(
+    id: id,
+    title: title ?? this.title,
+    instruction: instruction ?? this.instruction,
+    workspaceId: workspaceId ?? this.workspaceId,
+    rule: rule ?? this.rule,
+    permission: permission ?? this.permission,
+    enabled: enabled ?? this.enabled,
+    createdAt: createdAt,
+    lastRunAt: lastRunAt ?? this.lastRunAt,
+    history: history ?? this.history,
+  );
 
   /// 下一次触发时刻（UTC）。已经过点的那一次不算（那一次由 [AutomationStore.pending] 处理）。
   DateTime? nextRun(DateTime now) {
@@ -211,11 +227,14 @@ class Automation {
   };
 
   static Automation? fromJson(Object? j) {
-    if (j is! Map || j['id'] is! String) return null;
+    if (j is! Map) return null;
+    final id = j['id'];
+    if (id is! String) return null;
     final rule = TimeRule.fromJson(j['rule']);
     if (rule == null) return null;
+    final history = j['history'];
     return Automation(
-      id: j['id'] as String,
+      id: id,
       title: '${j['title'] ?? ''}',
       instruction: '${j['instruction'] ?? ''}',
       workspaceId: '${j['workspace'] ?? ''}',
@@ -225,7 +244,7 @@ class Automation {
       createdAt: DateTime.tryParse('${j['createdAt']}')?.toUtc(),
       lastRunAt: DateTime.tryParse('${j['lastRunAt']}')?.toUtc(),
       history: [
-        for (final r in (j['history'] as List?) ?? const [])
+        for (final r in history is List ? history : const [])
           if (r is Map) AutomationRun(DateTime.tryParse('${r['at']}')?.toUtc() ?? DateTime.fromMillisecondsSinceEpoch(0, isUtc: true), '${r['status']}', '${r['summary'] ?? ''}'),
       ],
     );
@@ -239,31 +258,48 @@ class AutomationStore {
   static const int maxHistory = 30;
   static const int maxTasks = 50;
 
-  final List<Automation> items = [];
+  /// 现有的任务（列表不可改；每次增删改都换一份新的）。
+  List<Automation> get items => _items;
+  List<Automation> _items = const [];
 
-  /// 任务清单或运行记录变了（[save] 时回调；状态层据此通知界面）。
+  /// 任务清单或运行记录变了（状态层据此换快照）。
   final List<void Function()> changeListeners = [];
 
+  void _setItems(Iterable<Automation> next) {
+    _items = List.unmodifiable(next);
+    for (final listener in List.of(changeListeners)) {
+      listener();
+    }
+  }
+
+  /// 把 [id] 那个任务换成 [change] 算出来的新一份并存盘；任务已经不在了返回 null（什么都不做）。
+  Future<Automation?> _update(String id, Automation Function(Automation a) change) async {
+    final old = byId(id);
+    if (old == null) return null;
+    final next = change(old);
+    _setItems([for (final a in _items) a.id == id ? next : a]);
+    await save();
+    return next;
+  }
+
   Future<void> load() async {
-    items.clear();
+    final loaded = <Automation>[];
     // 文件坏了：备份后当没有任务
     final j = await readJsonFile(file, accept: (j) => j is List, label: '自动化任务');
     if (j is List) {
       for (final a in j) {
         try {
           final item = Automation.fromJson(a);
-          if (item != null) items.add(item);
+          if (item != null) loaded.add(item);
         } catch (_) {
           // 单条读不懂（老版本字段不对）：跳过这一条，不连累别的
         }
       }
     }
+    _setItems(loaded);
   }
 
   Future<void> save() async {
-    for (final listener in List.of(changeListeners)) {
-      listener();
-    }
     try {
       await writeJsonAtomic(file, [for (final a in items) a.toJson()]);
     } on FileSystemException {
@@ -280,7 +316,7 @@ class AutomationStore {
     rule.validate();
   }
 
-  /// 新建或修改。**调用前必须已经让用户在确认卡上点过头**（见 ProjectSession / 自动化页面）。
+  /// 新建或修改，返回存好的那一份。**调用前必须已经让用户在确认卡上点过头**（见 automation_tools.dart / 自动化页面）。
   Future<Automation> upsert({
     String? id,
     required String title,
@@ -291,47 +327,42 @@ class AutomationStore {
     DateTime? now,
   }) async {
     validate(title: title, instruction: instruction, rule: rule);
-    var a = byId(id);
-    if (a == null) {
-      if (items.length >= maxTasks) throw AutomationException('自动化任务最多 $maxTasks 个');
-      var newId = 'a${DateTime.now().microsecondsSinceEpoch.toRadixString(36)}';
-      while (byId(newId) != null) {
-        newId = '${newId}x';
-      }
-      a = Automation(id: newId, title: title.trim(), instruction: instruction.trim(), workspaceId: workspaceId, rule: rule, permission: permission, createdAt: (now ?? DateTime.now()).toUtc());
-      items.add(a);
-    } else {
-      a
-        ..title = title.trim()
-        ..instruction = instruction.trim()
-        ..workspaceId = workspaceId
-        ..rule = rule
-        ..permission = permission
-        // 改了规则：从现在起重新算，之前错过的不补。
-        ..lastRunAt = (now ?? DateTime.now()).toUtc();
+    final at = (now ?? DateTime.now()).toUtc();
+    final old = byId(id);
+    if (old != null) {
+      // 改了规则：从现在起重新算，之前错过的不补。
+      final next = old.copyWith(title: title.trim(), instruction: instruction.trim(), workspaceId: workspaceId, rule: rule, permission: permission, lastRunAt: at);
+      _setItems([for (final a in _items) a.id == old.id ? next : a]);
+      await save();
+      return next;
     }
+    if (items.length >= maxTasks) throw AutomationException('自动化任务最多 $maxTasks 个');
+    var newId = 'a${DateTime.now().microsecondsSinceEpoch.toRadixString(36)}';
+    while (byId(newId) != null) {
+      newId = '${newId}x';
+    }
+    final a = Automation(id: newId, title: title.trim(), instruction: instruction.trim(), workspaceId: workspaceId, rule: rule, permission: permission, createdAt: at);
+    _setItems([..._items, a]);
     await save();
     return a;
   }
 
   Future<void> remove(String id) async {
-    items.removeWhere((a) => a.id == id);
+    _setItems(_items.where((a) => a.id != id));
     await save();
   }
 
-  Future<void> setEnabled(Automation a, bool on, {DateTime? now}) async {
-    a.enabled = on;
-    if (on) a.lastRunAt = (now ?? DateTime.now()).toUtc(); // 重新开启：从现在起算
-    await save();
-  }
+  /// 开 / 关一个任务。重新开启：从现在起算。
+  Future<Automation?> setEnabled(String id, bool on, {DateTime? now}) => _update(id, (a) => a.copyWith(enabled: on, lastRunAt: on ? (now ?? DateTime.now()).toUtc() : null));
 
-  Future<void> record(Automation a, AutomationRun run, {bool advance = true}) async {
-    a.history.insert(0, run);
-    if (a.history.length > maxHistory) a.history.removeRange(maxHistory, a.history.length);
-    if (advance) a.lastRunAt = run.at.toUtc();
-    if (a.rule.kind == RuleKind.once && advance) a.enabled = false;
-    await save();
-  }
+  /// 到点了、马上要跑：先把时间推进到 [startedAt]（跑的过程很长也不会被下一次检查重复触发）；只运行一次的顺手停用。
+  Future<Automation?> markStarted(String id, DateTime startedAt) => _update(id, (a) => a.copyWith(lastRunAt: startedAt.toUtc(), enabled: a.rule.kind == RuleKind.once ? false : null));
+
+  /// 记一笔运行结果（最多留 [maxHistory] 笔）。[advance] 为 true 时顺便把时间推进到这一笔。
+  Future<Automation?> record(String id, AutomationRun run, {bool advance = true}) => _update(
+    id,
+    (a) => a.copyWith(history: [run, ...a.history].take(maxHistory).toList(), lastRunAt: advance ? run.at.toUtc() : null, enabled: a.rule.kind == RuleKind.once && advance ? false : null),
+  );
 
   /// 现在该处理的任务：到点的（[due]）和错过的（[missed]，早就过点了，App 当时没在运行）。
   /// 过点不超过 [grace] 的算到点，照常运行；超过的只记一笔“错过”，不补跑。

@@ -710,9 +710,9 @@ void main() {
       env.services.scheduler.liveSessions[project.id] = session;
       expect(await env.services.scheduler.tick(DateTime.utc(2026, 11, 23, 7, 59)), 0);
       expect(await env.services.scheduler.tick(DateTime.utc(2026, 11, 23, 8, 1)), 1);
-      await waitFor(() => a.history.isNotEmpty && !env.services.scheduler.running.contains(a.id), what: '自动化跑完');
-      expect(a.history.first.status, 'ok');
-      expect(a.history.first.summary, contains('检查完了'));
+      await waitFor(() => env.services.automations.byId(a.id)!.history.isNotEmpty && !env.services.scheduler.running.contains(a.id), what: '自动化跑完');
+      expect(env.services.automations.byId(a.id)!.history.first.status, 'ok');
+      expect(env.services.automations.byId(a.id)!.history.first.summary, contains('检查完了'));
       expect(shell.commands, isEmpty, reason: '命令需要确认，没人在场＝拒绝');
       expect(f('report.md').readAsStringSync(), '没问题', reason: '工作区内修改权限下可以写文件');
       expect(session.pendingApproval, isNull);
@@ -734,7 +734,7 @@ void main() {
       );
       env.services.scheduler.liveSessions[project.id] = session;
       expect(await env.services.scheduler.tick(DateTime.utc(2026, 11, 23, 15)), 0);
-      expect(a.history.single.status, 'missed');
+      expect(env.services.automations.byId(a.id)!.history.single.status, 'missed');
       expect(log, isEmpty);
     });
 
@@ -771,8 +771,8 @@ void main() {
         now: DateTime.utc(2026, 11, 23, 0),
       );
       await env.services.scheduler.tick(DateTime.utc(2026, 11, 23, 8, 1));
-      await waitFor(() => a.history.isNotEmpty);
-      expect(a.history.first.status, 'failed');
+      await waitFor(() => env.services.automations.byId(a.id)!.history.isNotEmpty);
+      expect(env.services.automations.byId(a.id)!.history.first.status, 'failed');
       expect(log, isEmpty);
     });
   });

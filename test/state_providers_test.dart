@@ -1,10 +1,12 @@
 // 状态层（lib/state/）的小订阅入口：设置键、外观、聊天开关、渠道 / 预设 / 技能 / 自动化的“变了”信号。
 // 额度的状态见 test/quota_usage_test.dart。
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lopicode/agent/automation.dart';
 import 'package:lopicode/agent/model_config.dart';
 import 'package:lopicode/agent/presets.dart';
 import 'package:lopicode/core/stores.dart';
 import 'package:lopicode/state/app_providers.dart';
+import 'package:lopicode/state/automations_state.dart';
 import 'package:lopicode/state/config_providers.dart';
 import 'package:lopicode/state/models_state.dart';
 import 'package:lopicode/state/presets_state.dart';
@@ -139,11 +141,16 @@ void main() {
     expect(n(), greaterThanOrEqualTo(3));
   });
 
-  test('自动化：存盘通知；调度器说“谁在跑变了”也通知', () async {
-    final n = count(automationsRevProvider);
-    await env.services.automations.save();
+  test('自动化：任务变了通知；调度器说“谁在跑变了”也通知', () async {
+    final n = count(automationsProvider);
+    final a = await env.services.automations.upsert(
+      title: '晨检',
+      instruction: 'x',
+      workspaceId: 'w',
+      rule: TimeRule(kind: RuleKind.daily, hour: 8, tzOffsetMinutes: 0),
+    );
     expect(n(), 1);
-    box.read(automationsRevProvider.notifier).bump();
+    box.read(automationsProvider.notifier).setRunning({a.id});
     expect(n(), 2);
   });
 
@@ -155,15 +162,20 @@ void main() {
 
   test('容器销毁后再来通知：不报错、不写状态', () async {
     final bare = ProviderContainer(overrides: [appServicesProvider.overrideWithValue(env.services)]);
-    bare.listen(automationsRevProvider, (_, _) {});
-    final rev = bare.read(automationsRevProvider.notifier);
+    bare.listen(automationsProvider, (_, _) {});
+    final rev = bare.read(automationsProvider.notifier);
     final web = bare.read(webSearchRevProvider.notifier);
     final listeners = env.services.automations.changeListeners.length;
     bare.dispose();
     expect(env.services.automations.changeListeners.length, listeners - 1);
-    rev.bump();
+    rev.setRunning({'x'});
     web.bump();
-    await env.services.automations.save();
+    await env.services.automations.upsert(
+      title: '晨检',
+      instruction: 'x',
+      workspaceId: 'w',
+      rule: TimeRule(kind: RuleKind.daily, hour: 8, tzOffsetMinutes: 0),
+    );
   });
 
   test('运行环境：它一通知，订阅的人就收到；容器销毁后不再监听', () {

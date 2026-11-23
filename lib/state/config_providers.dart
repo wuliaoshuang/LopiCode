@@ -44,25 +44,6 @@ final skillFilesRevProvider = NotifierProvider<SkillFilesRev, int>(SkillFilesRev
 /// 技能（有哪些、哪些开着）变了。
 final skillsRevProvider = Provider<int>((ref) => ref.watch(settingRevProvider(SkillStore.kDisabled)) + ref.watch(skillFilesRevProvider));
 
-/// 自动化任务（任务清单、运行记录、哪些正在跑）变了。
-class AutomationsRev extends Notifier<int> {
-  @override
-  int build() {
-    final store = ref.watch(appServicesProvider).automations;
-    void onChange() => state = state + 1;
-    store.changeListeners.add(onChange);
-    ref.onDispose(() => store.changeListeners.remove(onChange));
-    return 0;
-  }
-
-  /// “哪些正在跑”变了（不落盘，所以调度器直接来说一声）。
-  void bump() {
-    if (ref.mounted) state = state + 1;
-  }
-}
-
-final automationsRevProvider = NotifierProvider<AutomationsRev, int>(AutomationsRev.new);
-
 /// 联网搜索的配置变了（Key 存在安全存储里，不走设置文件，所以保存 / 清除后来这里说一声）。
 class WebSearchRev extends Notifier<int> {
   @override

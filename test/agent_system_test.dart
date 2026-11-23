@@ -913,15 +913,16 @@ void main() {
       final late = store.pending(utc(2026, 11, 23, 12));
       expect(late.due, isEmpty);
       expect(late.missed.single.id, a.id);
-      await store.record(a, AutomationRun(utc(2026, 11, 23, 12), 'missed', '错过'));
+      await store.record(a.id, AutomationRun(utc(2026, 11, 23, 12), 'missed', '错过'));
       expect(store.pending(utc(2026, 11, 23, 12, 1)).missed, isEmpty, reason: '记过一次错过后不重复记');
-      expect(a.nextRun(utc(2026, 11, 23, 12, 1)), utc(2026, 11, 24, 9));
+      expect(a.history, isEmpty, reason: '手里那份是旧快照，不跟着变');
+      expect(store.byId(a.id)!.nextRun(utc(2026, 11, 23, 12, 1)), utc(2026, 11, 24, 9));
 
       final again = AutomationStore(File(p.join(tmp.path, 'auto.json')));
       await again.load();
       expect(again.items.single.title, '晨检');
       expect(again.items.single.history.single.status, 'missed');
-      await again.setEnabled(again.items.single, false);
+      await again.setEnabled(again.items.single.id, false);
       expect(again.pending(utc(2026, 11, 25, 9, 1)).due, isEmpty, reason: '停用的不触发');
       await expectLater(
         again.upsert(

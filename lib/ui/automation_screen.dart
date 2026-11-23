@@ -9,7 +9,7 @@ import 'package:lopicode/agent/agent_tools.dart';
 import 'package:lopicode/agent/automation.dart';
 import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/session/automation_tools.dart';
-import 'package:lopicode/state/config_providers.dart';
+import 'package:lopicode/state/automations_state.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/app_ref.dart';
 import 'package:lopicode/ui/chat_panels.dart';
@@ -46,11 +46,10 @@ class _AutomationListScreenState extends ConsumerState<AutomationListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    ref.watch(automationsRevProvider);
-    final app = appOf(context);
+    final autos = ref.watch(automationsProvider);
     final c = context.colors;
     final t = Theme.of(context).textTheme;
-    final items = app.automations.items;
+    final items = autos.items;
     final now = DateTime.now();
     return Scaffold(
       backgroundColor: context.colors.canvas,
@@ -78,25 +77,12 @@ class _AutomationListScreenState extends ConsumerState<AutomationListScreen> {
                 [
                   a.rule.describe(),
                   _names == null ? '工作区：读取中…' : (_names![a.workspaceId] == null ? '工作区已不在' : '工作区：${_names![a.workspaceId]}'),
-                  if (app.scheduler.running.contains(a.id))
-                    '正在运行'
-                  else if (!a.enabled)
-                    '已停用'
-                  else if (a.nextRun(now) case final next?)
-                    '下一次 ${formatLocalTime(next, a.rule.tzOffsetMinutes)}'
-                  else
-                    '不会再触发',
+                  if (autos.isRunning(a.id)) '正在运行' else if (!a.enabled) '已停用' else if (a.nextRun(now) case final next?) '下一次 ${formatLocalTime(next, a.rule.tzOffsetMinutes)}' else '不会再触发',
                 ].join('\n'),
                 style: t.bodySmall?.copyWith(color: a.enabled ? null : c.textFaint),
               ),
               isThreeLine: true,
-              trailing: Switch(
-                value: a.enabled,
-                onChanged: (v) async {
-                  await app.automations.setEnabled(a, v);
-                  if (mounted) setState(() {});
-                },
-              ),
+              trailing: Switch(value: a.enabled, onChanged: (v) => ref.read(automationsProvider.notifier).setEnabled(a.id, v)),
               onTap: () async {
                 await Navigator.of(context).push(
                   MaterialPageRoute<void>(
@@ -134,11 +120,10 @@ class _AutomationDetailScreenState extends ConsumerState<AutomationDetailScreen>
 
   @override
   Widget build(BuildContext context) {
-    ref.watch(automationsRevProvider);
-    final app = appOf(context);
+    final autos = ref.watch(automationsProvider);
     final c = context.colors;
     final t = Theme.of(context).textTheme;
-    final a = app.automations.byId(widget.id);
+    final a = autos.byId(widget.id);
     if (a == null) {
       return Scaffold(
         backgroundColor: context.colors.canvas,
@@ -147,7 +132,7 @@ class _AutomationDetailScreenState extends ConsumerState<AutomationDetailScreen>
       );
     }
     final next = a.nextRun(DateTime.now());
-    final running = app.scheduler.running.contains(a.id);
+    final running = autos.isRunning(a.id);
     return Scaffold(
       backgroundColor: context.colors.canvas,
       appBar: PageBar(
@@ -159,7 +144,7 @@ class _AutomationDetailScreenState extends ConsumerState<AutomationDetailScreen>
             onSelected: (_) async {
               final ok = await confirmDialog(context, title: '删除任务“${a.title}”？', message: '任务和它的运行历史会被删除。它以前跑出来的对话不受影响。', confirmLabel: '删除', danger: true);
               if (!ok) return;
-              await app.automations.remove(a.id);
+              await ref.read(automationsProvider.notifier).remove(a.id);
               if (context.mounted) Navigator.pop(context);
             },
             itemBuilder: (_) => [
@@ -245,16 +230,16 @@ class _AutomationDetailScreenState extends ConsumerState<AutomationDetailScreen>
   }
 }
 
-class AutomationEditScreen extends StatefulWidget {
+class AutomationEditScreen extends ConsumerStatefulWidget {
   const AutomationEditScreen({super.key, this.existing, this.workspace});
   final Automation? existing;
   final Project? workspace;
 
   @override
-  State<AutomationEditScreen> createState() => _AutomationEditScreenState();
+  ConsumerState<AutomationEditScreen> createState() => _AutomationEditScreenState();
 }
 
-class _AutomationEditScreenState extends State<AutomationEditScreen> {
+class _AutomationEditScreenState extends ConsumerState<AutomationEditScreen> {
   final _title = TextEditingController();
   final _instruction = TextEditingController();
   final _time = TextEditingController(text: '09:00');
@@ -345,7 +330,6 @@ class _AutomationEditScreenState extends State<AutomationEditScreen> {
   }
 
   Future<void> _save() async {
-    final app = appOf(context);
     final ws = _workspaces.where((p) => p.id == _workspaceId).firstOrNull;
     if (ws == null) {
       showSnack(context, '先选一个工作区');
@@ -384,7 +368,7 @@ class _AutomationEditScreenState extends State<AutomationEditScreen> {
         ),
       );
       if (ok != true) return;
-      await app.automations.upsert(id: widget.existing?.id, title: _title.text, instruction: _instruction.text, workspaceId: ws.id, rule: rule, permission: _permission.id);
+      await ref.read(automationsProvider.notifier).upsert(id: widget.existing?.id, title: _title.text, instruction: _instruction.text, workspaceId: ws.id, rule: rule, permission: _permission.id);
       if (mounted) Navigator.pop(context);
     } on AutomationException catch (e) {
       if (mounted) showSnack(context, e.message);

@@ -499,10 +499,10 @@ void main() {
       );
       env.services.scheduler.liveSessions[project.id] = session;
       expect(await env.services.scheduler.tick(DateTime.utc(2026, 11, 23, 8, 1)), 1);
-      await waitFor(() => a.history.isNotEmpty && !env.services.scheduler.running.contains(a.id), what: '自动化跑完');
+      await waitFor(() => env.services.automations.byId(a.id)!.history.isNotEmpty && !env.services.scheduler.running.contains(a.id), what: '自动化跑完');
       expect(log, isEmpty);
-      expect(a.history.first.status, isNot('ok'));
-      expect(a.history.first.summary, contains(kQuotaBlockedPrefix));
+      expect(env.services.automations.byId(a.id)!.history.first.status, isNot('ok'));
+      expect(env.services.automations.byId(a.id)!.history.first.summary, contains(kQuotaBlockedPrefix));
     });
 
     test('别的渠道不受影响', () async {

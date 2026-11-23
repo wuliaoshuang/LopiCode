@@ -18,6 +18,7 @@ import 'package:lopicode/project_session.dart';
 import 'package:lopicode/runtime/linux_runtime.dart';
 import 'package:lopicode/runtime/runtime_screen.dart';
 import 'package:lopicode/state/app_providers.dart';
+import 'package:lopicode/state/automations_state.dart';
 import 'package:lopicode/state/config_providers.dart';
 import 'package:lopicode/state/models_state.dart';
 import 'package:lopicode/state/presets_state.dart';
@@ -50,9 +51,9 @@ class SettingsScreen extends ConsumerWidget {
     ref
       ..watch(settingsAnyRevProvider)
       ..watch(modelsProvider)
-      ..watch(automationsRevProvider)
       ..watch(skillFilesRevProvider)
       ..watch(webSearchRevProvider);
+    final automationCount = ref.watch(automationsProvider.select((s) => s.items.length));
     final app = appOf(context);
     final c = context.colors;
     final t = Theme.of(context).textTheme;
@@ -156,7 +157,7 @@ class SettingsScreen extends ConsumerWidget {
                 key: const Key('settings-automations'),
                 icon: Icons.event_repeat,
                 title: '自动化任务',
-                value: app.automations.items.isEmpty ? '还没有任务' : '${app.automations.items.length} 个任务',
+                value: automationCount == 0 ? '还没有任务' : '$automationCount 个任务',
                 onTap: () => go(AutomationListScreen(workspace: workspace)),
               ),
               FutureBuilder<WebSearchConfig?>(

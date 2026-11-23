@@ -466,8 +466,8 @@ void main() {
           workspaceId: project.id,
           rule: TimeRule(kind: RuleKind.daily, hour: 8, minute: 30, tzOffsetMinutes: 480),
         );
-        await env.services.automations.record(a, AutomationRun(DateTime.utc(2026, 11, 22, 0, 30), 'ok', '依赖都是最新的。'));
-        await env.services.automations.record(a, AutomationRun(DateTime.utc(2026, 11, 23, 0, 30), 'missed', 'App 当时没在运行'));
+        await env.services.automations.record(a.id, AutomationRun(DateTime.utc(2026, 11, 22, 0, 30), 'ok', '依赖都是最新的。'));
+        await env.services.automations.record(a.id, AutomationRun(DateTime.utc(2026, 11, 23, 0, 30), 'missed', 'App 当时没在运行'));
       });
       await show(tester, AutomationListScreen(workspace: project), rounds: 40);
       expect(find.textContaining('工作区：我的小站'), findsOneWidget);

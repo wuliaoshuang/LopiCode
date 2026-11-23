@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:lopicode/agent/automation.dart';
 import 'package:lopicode/app_services.dart';
 import 'package:lopicode/project_session.dart';
-import 'package:lopicode/state/config_providers.dart';
+import 'package:lopicode/state/automations_state.dart';
 
 /// 自动化任务的调度：App 开着的时候每半分钟看一眼有没有到点的任务。
 ///
@@ -16,7 +16,7 @@ class AutomationScheduler {
   /// “哪些任务正在跑”变了：告诉订阅自动化状态的界面（别的界面不受影响）。
   void _notify() {
     if (app.disposed) return; // 销毁后不写
-    app.container.read(automationsRevProvider.notifier).bump();
+    app.container.read(automationsProvider.notifier).setRunning(running);
   }
 
   Timer? _timer;
@@ -49,17 +49,16 @@ class AutomationScheduler {
       final p = app.automations.pending(now);
       for (final a in p.missed) {
         changed = true;
-        await app.automations.record(a, AutomationRun(now.toUtc(), 'missed', '到点时 App 没在运行，这一次没有执行'));
+        await app.automations.record(a.id, AutomationRun(now.toUtc(), 'missed', '到点时 App 没在运行，这一次没有执行'));
       }
       for (final a in p.due) {
         // 先推进时间再跑：跑的过程很长也不会被下一次检查重复触发。
         final startedAt = now.toUtc();
-        a.lastRunAt = startedAt;
-        if (a.rule.kind == RuleKind.once) a.enabled = false;
-        await app.automations.save();
+        final started = await app.automations.markStarted(a.id, startedAt);
+        if (started == null) continue; // 刚好被删了
         ran++;
         changed = true;
-        unawaited(_run(a, startedAt));
+        unawaited(_run(started, startedAt));
       }
     } finally {
       _ticking = false;
@@ -75,7 +74,7 @@ class AutomationScheduler {
   Future<AutomationRun> _run(Automation a, DateTime startedAt) async {
     if (!running.add(a.id)) {
       final skipped = AutomationRun(startedAt, 'skipped', '上一次还没跑完，这一次跳过');
-      await app.automations.record(a, skipped, advance: false);
+      await app.automations.record(a.id, skipped, advance: false);
       return skipped;
     }
     _notify();
@@ -102,7 +101,7 @@ class AutomationScheduler {
     } finally {
       running.remove(a.id);
     }
-    await app.automations.record(a, result, advance: false);
+    await app.automations.record(a.id, result, advance: false);
     _notify();
     return result;
   }
