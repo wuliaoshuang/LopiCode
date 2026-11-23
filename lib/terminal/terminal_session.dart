@@ -92,7 +92,7 @@ class LocalShellBackend implements TerminalBackend {
       final pty = _spawn(shellPath, workingDirectory: workingDirectory, environment: _environment, rows: rows, columns: columns);
       _pty = pty;
       mode = LocalShellMode.pty;
-      pty.output.transform(const Utf8Decoder(allowMalformed: true)).listen(_emit, onError: (_) {});
+      pty.output.cast<List<int>>().transform(const Utf8Decoder(allowMalformed: true)).listen(_emit, onError: (_) {});
       unawaited(
         pty.exitCode.then((code) {
           if (identical(_pty, pty)) {

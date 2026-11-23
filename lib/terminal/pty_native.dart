@@ -40,7 +40,9 @@ class FlutterPtyProcess implements PtyProcess {
   );
 
   @override
-  Stream<List<int>> get output => _pty.output;
+  // flutter_pty 给的是 Stream<Uint8List>。直接拿去接 Utf8Decoder 会在运行时报类型错误
+  // （真机上表现为终端一片空白），所以在这里统一转成 Stream<List<int>>。
+  Stream<List<int>> get output => _pty.output.cast<List<int>>();
 
   @override
   Future<int> get exitCode => _pty.exitCode;

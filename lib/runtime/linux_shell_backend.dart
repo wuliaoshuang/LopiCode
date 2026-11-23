@@ -125,7 +125,7 @@ class LinuxShellBackend implements TerminalBackend {
         '下面有三个办法：改用兼容模式重试、先退回本机 shell、去“运行环境”页做一键诊断。\x1b[0m\r\n',
       );
     });
-    pty.output.transform(const Utf8Decoder(allowMalformed: true)).listen((text) {
+    pty.output.cast<List<int>>().transform(const Utf8Decoder(allowMalformed: true)).listen((text) {
       if (text.isNotEmpty && !sawOutput) {
         sawOutput = true;
         _stallTimer?.cancel();

@@ -368,7 +368,7 @@ step
 return false;
 }
 final seen = StringBuffer();
-final sub = pty.output.transform(const Utf8Decoder(allowMalformed: true)).listen(seen.write, onError: (_) {});
+final sub = pty.output.cast<List<int>>().transform(const Utf8Decoder(allowMalformed: true)).listen(seen.write, onError: (_) {});
 final watch = Stopwatch()..start();
 // 写进去的是 $((40+2))，结果里才会出现 42：能分清“回显”和“命令真的执行了”。
 const typed = r'echo lopi-$((40+2))';
@@ -409,7 +409,7 @@ step.add('伪终端里启动不了 PRoot：$e');
 return false;
 }
 final seen = StringBuffer();
-final sub = pty.output.transform(const Utf8Decoder(allowMalformed: true)).listen(seen.write, onError: (_) {});
+final sub = pty.output.cast<List<int>>().transform(const Utf8Decoder(allowMalformed: true)).listen(seen.write, onError: (_) {});
 final watch = Stopwatch()..start();
 int? code;
 unawaited(pty.exitCode.then((c) => code = c));
