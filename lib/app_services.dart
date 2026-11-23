@@ -1,7 +1,7 @@
 import 'dart:io';
 
 import 'package:lopicode/agent/chat_client.dart';
-import 'package:lopicode/core/keystore_secret_store.dart';
+import 'package:lopicode/core/secure_secret_store.dart';
 import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/core/stores.dart';
 import 'package:material_ui/material_ui.dart';
@@ -28,7 +28,7 @@ class AppServices extends ChangeNotifier {
     final docs = await getApplicationDocumentsDirectory();
     final settings = SettingsStore(File(p.join(docs.path, 'settings.json')));
     await settings.load();
-    final secrets = KeystoreSecretStore();
+    final secrets = SecureSecretStore();
     await secrets.probe();
     return AppServices(
       settings: settings,
