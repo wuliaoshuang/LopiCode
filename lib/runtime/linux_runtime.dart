@@ -421,7 +421,7 @@ class LinuxRuntime extends ChangeNotifier {
     }
   }
 
-  ProotCommand prootCommand({required List<String> guestCommand, String? projectDir, String term = 'xterm-256color'}) {
+  ProotCommand prootCommand({required List<String> guestCommand, String? projectDir, String? guestCwd, String term = 'xterm-256color'}) {
     prepareLauncherLibs();
     return buildProotCommand(
         nativeLibDir: nativeLibDir ?? '',
@@ -430,6 +430,7 @@ class LinuxRuntime extends ChangeNotifier {
         tmpDir: tmpDir,
         guestCommand: guestCommand,
         projectDir: projectDir,
+        guestCwd: guestCwd,
         term: term,
         noSeccomp: compatMode,
       );

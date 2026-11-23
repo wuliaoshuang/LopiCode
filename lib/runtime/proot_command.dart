@@ -61,6 +61,7 @@ ProotCommand buildProotCommand({
   required String tmpDir,
   required List<String> guestCommand,
   String? projectDir,
+  String? guestCwd,
   String term = 'xterm-256color',
   bool noSeccomp = false,
   Map<String, String> guestEnv = const {},
@@ -88,8 +89,9 @@ ProotCommand buildProotCommand({
       '-b', '/sys',
       // Android 没有 /dev/shm，拿环境自己的 /tmp 顶上。
       '-b', '$rootfs/tmp:/dev/shm',
-      if (projectDir != null) ...['-b', '$projectDir:$guestWorkspace'],
-      '-w', projectDir != null ? guestWorkspace : '/root',
+      // [guestCwd]：工作区本来就是环境里的目录，不用挂载，直接进去。
+      if (projectDir != null && guestCwd == null) ...['-b', '$projectDir:$guestWorkspace'],
+      '-w', guestCwd ?? (projectDir != null ? guestWorkspace : '/root'),
       '/usr/bin/env', '-i',
       for (final e in env.entries) '${e.key}=${e.value}',
       ...guestCommand,

@@ -26,6 +26,7 @@ class LinuxShellBackend implements TerminalBackend {
   LinuxShellBackend({
     required this.runtime,
     required this.projectDir,
+    this.guestCwd,
     PtyArgsSpawner? spawner,
     this.fallbackSpawner,
     this.quickExit = const Duration(seconds: 3),
@@ -34,6 +35,9 @@ class LinuxShellBackend implements TerminalBackend {
 
   final LinuxRuntime runtime;
   final String projectDir;
+
+  /// 工作区是 Ubuntu 里的目录时，它在环境里的路径。
+  final String? guestCwd;
   final PtyArgsSpawner _spawn;
   final PtySpawner? fallbackSpawner;
 
@@ -81,7 +85,7 @@ class LinuxShellBackend implements TerminalBackend {
     if (_fallback != null) return _fallback!.start(columns: columns, rows: rows);
     if (!runtime.shouldUseLinux) return _startFallback(runtime.lastLaunchError);
 
-    final command = runtime.prootCommand(guestCommand: guestLoginShell, projectDir: projectDir);
+    final command = runtime.prootCommand(guestCommand: guestLoginShell, projectDir: projectDir, guestCwd: guestCwd);
     final startedAt = DateTime.now();
     final head = StringBuffer();
     final PtyProcess pty;
