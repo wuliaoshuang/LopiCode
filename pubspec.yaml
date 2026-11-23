@@ -48,6 +48,7 @@ dependencies:
   re_editor: ^0.10.0
   re_highlight: ^0.0.3
   flutter_secure_storage: ^11.2.0
+  crypto: ^3.0.6
 
 dev_dependencies:
   flutter_test:

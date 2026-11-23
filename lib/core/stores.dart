@@ -87,6 +87,9 @@ class SettingKeys {
   static const sshKnownHosts = 'ssh.knownHosts'; // {"host:port": "SHA256:..."}
   static const apkBuildMode = 'apk.buildMode'; // github / ssh
   static const lastProject = 'ui.lastProject';
+  static const runtimeRootfsSource = 'runtime.rootfsSource'; // tuna / aliyun / official
+  static const runtimeAptMirror = 'runtime.aptMirror';
+  static const runtimeCompat = 'runtime.compat'; // PRoot 兼容模式（PROOT_NO_SECCOMP）
   static String autoApprove(String projectId) => 'project.$projectId.autoApprove';
 }
 
