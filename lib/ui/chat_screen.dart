@@ -30,6 +30,7 @@ import 'package:lopicode/ui/settings_ai.dart';
 import 'package:lopicode/ui/settings_quota.dart';
 import 'package:lopicode/ui/shell.dart';
 import 'package:lopicode/ui/team_screen.dart';
+import 'package:lopicode/ui/usage_sheet.dart';
 import 'package:lopicode/ui/usage_ui.dart';
 import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
@@ -89,9 +90,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   void _onSession() {
     if (!mounted) return;
     if (s.restoredDraft != null && _input.text.isEmpty) {
-      // 状态变化的通知里不能再改状态：等这一拍过去再把草稿拿走
       scheduleMicrotask(() {
-        if (mounted && _input.text.isEmpty) _input.text = s.takeRestoredDraft() ?? '';
+        if (mounted && _input.text.isEmpty) _input.text = s.takeRestoredDraft() ?? ''; // 通知里不能再改状态：等这一拍过去再拿走草稿
       });
     }
     setState(() {});

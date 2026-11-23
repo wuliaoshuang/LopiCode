@@ -45,7 +45,7 @@ class _HomeGateState extends State<HomeGate> {
   }
 
   void _open(Project? project) {
-    appOf(context).settings.set(SettingKeys.lastProject, project?.id);
+    appOf(context).settings.setLater(SettingKeys.lastProject, project?.id);
     setState(() => _project = project);
   }
 

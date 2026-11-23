@@ -433,7 +433,7 @@ class LinuxRuntime extends ChangeNotifier {
   void recordLaunchSuccess() {
     if ((launchFailures > 0 || forceCompat) && !settings.getBool(SettingKeys.runtimeCompat)) {
       // 是兼容模式救回来的：记住，以后直接用兼容模式。
-      unawaited(settings.set(SettingKeys.runtimeCompat, true));
+      settings.setLater(SettingKeys.runtimeCompat, true);
       _log('兼容模式启动成功，以后默认用兼容模式');
     }
     if (launchFailures != 0 || lastLaunchError != null) {

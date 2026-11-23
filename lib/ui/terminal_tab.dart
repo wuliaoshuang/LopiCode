@@ -241,7 +241,7 @@ class _TerminalTabState extends ConsumerState<TerminalTab> {
                 tooltip: '点亮后输入法可以打拼音选字；不点亮时每按一个键立刻进终端',
                 active: chinese,
                 onTap: () {
-                  settings.set(SettingKeys.terminalChineseIme, !chinese); // 内存里立刻生效，写盘在后台
+                  settings.setLater(SettingKeys.terminalChineseIme, !chinese); // 内存里立刻生效，写盘在后台
                   setState(() {});
                 },
               ),

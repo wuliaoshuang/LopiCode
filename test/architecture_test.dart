@@ -55,7 +55,7 @@ const _oversized = {
   'lib/project_session.dart': 1121,
   'lib/ui/chat_screen.dart': 860,
   'lib/ui/chat_panels.dart': 793,
-  'lib/ui/usage_ui.dart': 890,
+  'lib/ui/usage_ui.dart': 718,
   'lib/ui/settings_agent.dart': 725,
   'lib/ui/settings_ai.dart': 650,
 };

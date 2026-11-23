@@ -7,6 +7,7 @@
 import 'dart:io';
 
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lopicode/build/build_controller.dart';
 import 'package:lopicode/build/github_client.dart';
 import 'package:lopicode/build/remote_exec.dart';
@@ -19,6 +20,7 @@ import 'package:lopicode/project_session.dart';
 import 'package:lopicode/ssh/ssh_config.dart';
 import 'package:lopicode/ssh/ssh_connect_screen.dart';
 import 'package:lopicode/ssh/ssh_connector.dart';
+import 'package:lopicode/state/config_providers.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/app_ref.dart';
 import 'package:lopicode/ui/shell.dart';
@@ -27,7 +29,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
-class BuildScreen extends StatefulWidget {
+class BuildScreen extends ConsumerStatefulWidget {
   const BuildScreen({super.key, required this.session, this.debugController});
   final ProjectSession session;
 
@@ -35,10 +37,10 @@ class BuildScreen extends StatefulWidget {
   final BuildJob? debugController;
 
   @override
-  State<BuildScreen> createState() => _BuildScreenState();
+  ConsumerState<BuildScreen> createState() => _BuildScreenState();
 }
 
-class _BuildScreenState extends State<BuildScreen> {
+class _BuildScreenState extends ConsumerState<BuildScreen> {
   final _repo = TextEditingController();
   final _ref = TextEditingController();
   final _workflow = TextEditingController();
@@ -196,6 +198,7 @@ class _BuildScreenState extends State<BuildScreen> {
   List<Widget> _sshForm(BuildContext context, bool busy) {
     final c = context.colors;
     final t = Theme.of(context).textTheme;
+    ref.watch(sshConfigRevProvider); // 构建机和终端的 SSH 主机是同一台：在别的页面改了，这里跟着变
     final config = SshConfig.load(appOf(context).settings);
     final job = _job;
     return [

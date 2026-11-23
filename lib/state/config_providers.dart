@@ -47,6 +47,9 @@ final agentSettingsRevProvider = Provider<int>(
   ]),
 );
 
+/// SSH 主机（终端和打包共用的那一台）的地址、端口、用户名、登录方式变了。
+final sshConfigRevProvider = Provider<int>((ref) => _sum(ref, const [SettingKeys.sshHost, SettingKeys.sshPort, SettingKeys.sshUser, SettingKeys.sshAuth]));
+
 /// 技能文件增删了（开关在设置文件里，见 [skillsRevProvider]）。
 class SkillFilesRev extends Notifier<int> {
   @override

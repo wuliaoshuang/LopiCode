@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:lopicode/core/crash_log.dart';
 import 'package:lopicode/core/safe_file.dart';
 
 /// 密钥存储接口。API Key、GitHub Token、SSH 密码 / 私钥只走这里，
@@ -62,6 +63,14 @@ class SettingsStore {
       listener(key);
     }
     await writeJsonAtomic(file, _data);
+  }
+
+  /// 改一个设置但不等它写完盘（按钮回调、后台顺手记一笔这类没法等的地方用）。
+  /// 内存里的值立刻生效；写盘失败只记进错误日志，不会变成没人接的异常。
+  void setLater(String key, Object? value) {
+    set(key, value).catchError((Object e, StackTrace st) {
+      CrashLog.instance.record(e, st, source: '保存设置 $key');
+    });
   }
 
   final List<void Function(String key)> _keyListeners = [];
