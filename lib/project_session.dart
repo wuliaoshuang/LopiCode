@@ -11,6 +11,9 @@ import 'package:lopicode/core/path_guard.dart';
 import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/core/stores.dart';
 import 'package:lopicode/preview/preview_server.dart';
+import 'package:lopicode/ssh/ssh_config.dart';
+import 'package:lopicode/ssh/ssh_connector.dart';
+import 'package:lopicode/ssh/ssh_shell_backend.dart';
 import 'package:lopicode/terminal/terminal_session.dart';
 
 /// 对话里显示的一项。
@@ -84,16 +87,42 @@ class ProjectSession extends ChangeNotifier {
   int activeTerminal = 0;
   int _terminalCounter = 0;
 
+  /// 测试用：换掉伪终端的创建方式。
+  PtySpawner? ptySpawner;
+
   TerminalSession addTerminal() {
     final session = TerminalSession(
       title: '本机 ${++_terminalCounter}',
-      backend: PipeShellBackend(project.dir),
+      backend: LocalShellBackend(project.dir, spawner: ptySpawner),
     );
     session.append(
-      'LopiCode 基础终端 · 项目目录\n'
-      '这里跑的是手机自带的 sh：有 ls、cat、cp、mkdir 这类基础命令，没有 git、node、python 和编译器。\n'
-      '一次一条命令；不支持 vim、top 这类全屏程序。\n\n',
+      '\x1b[2mLopiCode 终端 · 项目目录\n'
+      '手机自带的 sh：有 ls、cat、cp、mkdir 这类基础命令，没有 git、node、python 和编译器。\n'
+      '要完整工具链，点右上角 ＋ 连一台 SSH 主机。\x1b[0m\n\n',
     );
+    return _addSession(session);
+  }
+
+  int _sshCounter = 0;
+
+  /// 新开一个 SSH 会话。[onUnknownHost] 在第一次连这台主机时弹指纹确认。
+  TerminalSession addSshTerminal(SshConfig config, {HostKeyPrompt? onUnknownHost}) {
+    final session = TerminalSession(
+      title: 'SSH ${++_sshCounter}',
+      backend: SshShellBackend(
+        hostLabel: config.display,
+        connect: () => connectSsh(
+          config: config,
+          secrets: app.secrets,
+          knownHosts: KnownHosts(app.settings),
+          onUnknownHost: onUnknownHost,
+        ),
+      ),
+    );
+    return _addSession(session);
+  }
+
+  TerminalSession _addSession(TerminalSession session) {
     terminals.add(session);
     activeTerminal = terminals.length - 1;
     notifyListeners();

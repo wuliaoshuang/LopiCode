@@ -83,6 +83,9 @@ class SettingKeys {
   static const sshAuth = 'ssh.auth'; // password / key
   static const sshBuildCommand = 'ssh.buildCommand';
   static const sshBuildOutput = 'ssh.buildOutput';
+  static const sshBuildDir = 'ssh.buildDir';
+  static const sshKnownHosts = 'ssh.knownHosts'; // {"host:port": "SHA256:..."}
+  static const apkBuildMode = 'apk.buildMode'; // github / ssh
   static const lastProject = 'ui.lastProject';
   static String autoApprove(String projectId) => 'project.$projectId.autoApprove';
 }
@@ -92,4 +95,5 @@ class SecretKeys {
   static const githubToken = 'github_token';
   static const sshPassword = 'ssh_password';
   static const sshPrivateKey = 'ssh_private_key';
+  static const sshKeyPassphrase = 'ssh_key_passphrase';
 }
