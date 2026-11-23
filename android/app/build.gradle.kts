@@ -29,6 +29,14 @@ android {
         versionName = flutter.versionName
     }
 
+    // PRoot 是以 lib*.so 的名字放在原生库目录里的可执行文件：必须真的解到磁盘上才能执行，
+    // 所以原生库不能压在安装包里直接映射（配合清单里的 extractNativeLibs="true"）。
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
+
     buildTypes {
         release {
             // TODO: Add your own signing config for the release build.
