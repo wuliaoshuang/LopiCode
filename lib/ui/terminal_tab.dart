@@ -1,13 +1,17 @@
 // 设计约束（终端 · 390×844）
-// - 屏幕大部分留给输出：等宽 13px、深浅色都用 codeBg，新输出自动滚到底。
-// - 顶上一行只管“会话”：会话标签 + 新建。
-// - 输入行上方一排手机键盘没有的键（Esc / Tab / Ctrl+C / Ctrl+D / ↑ / ↓ / 清屏），横向可滚。
-// - 如实说明：这是基础终端（管道 + 手机自带 sh），说明写在会话开头，不藏在设置里。
+// - 屏幕几乎全留给终端：xterm 仿真，等宽 13px，深浅色都用 codeBg。点一下屏幕弹键盘，直接打字。
+// - 顶上一行只管“会话”：会话标签 + 新建（本机 shell / SSH 远程主机）。
+// - 底下一排手机键盘没有的键（Esc / Tab / Ctrl / 方向键 / 常用符号 / 清屏），横向可滚。
+//   Ctrl 是粘滞键：点亮后下一个字母变成控制字符（Ctrl 再点 C = 中断）。
+// - 没有单独的输入行：真正的终端里输入就在光标处。
+import 'package:lopicode/app_services.dart';
 import 'package:lopicode/project_session.dart';
+import 'package:lopicode/ssh/ssh_config.dart';
+import 'package:lopicode/ssh/ssh_connect_screen.dart';
 import 'package:lopicode/terminal/terminal_session.dart';
 import 'package:lopicode/theme/tokens.dart';
-import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:xterm/xterm.dart';
 
 class TerminalTab extends StatefulWidget {
   const TerminalTab({super.key, required this.session});
@@ -18,11 +22,8 @@ class TerminalTab extends StatefulWidget {
 }
 
 class _TerminalTabState extends State<TerminalTab> {
-  final _input = TextEditingController();
   final _focus = FocusNode();
-  final _scroll = ScrollController();
   TerminalSession? _listening;
-  int _historyIndex = -1;
 
   ProjectSession get s => widget.session;
   TerminalSession get term => s.terminals[s.activeTerminal];
@@ -37,10 +38,8 @@ class _TerminalTabState extends State<TerminalTab> {
   @override
   void dispose() {
     s.removeListener(_onSession);
-    _listening?.removeListener(_onOutput);
-    _input.dispose();
+    _listening?.removeListener(_onTerm);
     _focus.dispose();
-    _scroll.dispose();
     super.dispose();
   }
 
@@ -50,59 +49,32 @@ class _TerminalTabState extends State<TerminalTab> {
     setState(() {});
   }
 
+  void _onTerm() {
+    if (mounted) setState(() {}); // 只为 Ctrl 的点亮状态
+  }
+
   void _attach() {
     if (identical(_listening, term)) return;
-    _listening?.removeListener(_onOutput);
-    _listening = term..addListener(_onOutput);
-    _historyIndex = -1;
-    term.ensureStarted();
-    _scrollToEnd();
+    _listening?.removeListener(_onTerm);
+    _listening = term..addListener(_onTerm);
+    // 等第一帧排完版、终端知道自己有几行几列，再启动 shell。
+    final target = term;
+    WidgetsBinding.instance.addPostFrameCallback((_) => target.ensureStarted());
   }
 
-  void _onOutput() {
-    if (!mounted) return;
-    setState(() {});
-    _scrollToEnd();
-  }
-
-  void _scrollToEnd() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scroll.hasClients) _scroll.jumpTo(_scroll.position.maxScrollExtent);
-    });
-  }
-
-  void _run() {
-    final line = _input.text;
-    _input.clear();
-    _historyIndex = -1;
-    term.run(line);
-    _focus.requestFocus();
-  }
-
-  void _setInput(String text) {
-    _input.value = TextEditingValue(text: text, selection: TextSelection.collapsed(offset: text.length));
-  }
-
-  void _history(int delta) {
-    final h = term.history;
-    if (h.isEmpty) return;
-    var i = _historyIndex == -1 ? h.length : _historyIndex;
-    i = (i + delta).clamp(0, h.length);
-    _historyIndex = i == h.length ? -1 : i;
-    _setInput(i == h.length ? '' : h[i]);
-  }
-
-  void _insert(String text) {
-    final v = _input.value;
-    final start = v.selection.isValid ? v.selection.start : v.text.length;
-    final end = v.selection.isValid ? v.selection.end : v.text.length;
-    _input.value = TextEditingValue(
-      text: v.text.replaceRange(start, end, text),
-      selection: TextSelection.collapsed(offset: start + text.length),
+  Future<void> _newSsh() async {
+    final navigator = Navigator.of(context);
+    final config = await navigator.push<SshConfig>(MaterialPageRoute(builder: (_) => const SshConnectScreen()));
+    if (config == null || !mounted) return;
+    s.addSshTerminal(
+      config,
+      onUnknownHost: (config, type, fingerprint) async =>
+          mounted ? confirmHostKey(navigator.context, config, type, fingerprint) : false,
     );
   }
 
   void _newSession() {
+    final saved = SshConfig.load(AppScope.of(context).settings);
     showModalBottomSheet<void>(
       context: context,
       builder: (context) => SafeArea(
@@ -119,10 +91,14 @@ class _TerminalTabState extends State<TerminalTab> {
               },
             ),
             ListTile(
-              enabled: false,
+              key: const Key('new-ssh-session'),
               leading: const Icon(Icons.dns_outlined),
               title: const Text('SSH 远程主机'),
-              subtitle: const Text('这一版还没接入（缺 SSH 依赖包），接入后可以连到有完整工具链的服务器'),
+              subtitle: Text(saved.isComplete ? '上次：${saved.display}（可以改）' : '连到一台有完整工具链的服务器'),
+              onTap: () {
+                Navigator.pop(context);
+                _newSsh();
+              },
             ),
             const SizedBox(height: Space.x2),
           ],
@@ -131,11 +107,37 @@ class _TerminalTabState extends State<TerminalTab> {
     );
   }
 
+  TerminalTheme _theme(AppColors c, bool dark) => TerminalTheme(
+    cursor: c.accent,
+    selection: c.accent.withValues(alpha: 0.3),
+    foreground: c.text,
+    background: c.codeBg,
+    black: dark ? const Color(0xFF35394C) : const Color(0xFF222435),
+    red: dark ? const Color(0xFFFE7FB6) : const Color(0xFFC6212F),
+    green: dark ? const Color(0xFF5DEEDB) : const Color(0xFF017B43),
+    yellow: dark ? const Color(0xFFFFE068) : const Color(0xFF893300),
+    blue: dark ? const Color(0xFF8AB4F8) : const Color(0xFF1F5FBF),
+    magenta: dark ? const Color(0xFFD7A6F5) : const Color(0xFF8A3FBF),
+    cyan: dark ? const Color(0xFF9BFFF8) : const Color(0xFF0A7C8C),
+    white: dark ? const Color(0xFFD3DEE4) : const Color(0xFF5C6479),
+    brightBlack: dark ? const Color(0xFF707A8F) : const Color(0xFF5C6479),
+    brightRed: dark ? const Color(0xFFFE7FB6) : const Color(0xFFAB131E),
+    brightGreen: dark ? const Color(0xFF9BFFF8) : const Color(0xFF058654),
+    brightYellow: dark ? const Color(0xFFFFE068) : const Color(0xFFA84C00),
+    brightBlue: dark ? const Color(0xFFAECBFA) : const Color(0xFF1F5FBF),
+    brightMagenta: dark ? const Color(0xFFE5C4FA) : const Color(0xFF8A3FBF),
+    brightCyan: dark ? const Color(0xFFEBFFFF) : const Color(0xFF0A7C8C),
+    brightWhite: dark ? const Color(0xFFF6FBFD) : const Color(0xFF222435),
+    searchHitBackground: c.warningSoft,
+    searchHitBackgroundCurrent: c.warning,
+    searchHitForeground: c.text,
+  );
+
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
     final t = Theme.of(context).textTheme;
-    final mono = TextStyle(fontFamily: kMonoFont, fontFamilyFallback: kMonoFallback, fontSize: 13, height: 1.45, color: c.text);
+    final dark = Theme.of(context).brightness == Brightness.dark;
     return Column(
       children: [
         SizedBox(
@@ -188,64 +190,35 @@ class _TerminalTabState extends State<TerminalTab> {
           ),
         ),
         Expanded(
-          child: GestureDetector(
-            onTap: _focus.requestFocus,
-            child: Container(
-              width: double.infinity,
-              color: c.codeBg,
-              child: SingleChildScrollView(
-                controller: _scroll,
-                padding: const EdgeInsets.all(Space.x3),
-                child: SelectableText(term.text.isEmpty ? ' ' : term.text, style: mono),
-              ),
+          child: ColoredBox(
+            color: c.codeBg,
+            child: TerminalView(
+              term.terminal,
+              key: ObjectKey(term),
+              focusNode: _focus,
+              theme: _theme(c, dark),
+              textStyle: const TerminalStyle(fontSize: 13, height: 1.3, fontFamily: kMonoFont, fontFamilyFallback: kMonoFallback),
+              padding: const EdgeInsets.symmetric(horizontal: Space.x2, vertical: Space.x1),
+              deleteDetection: true,
             ),
           ),
         ),
         Container(
-          height: 40,
+          height: 44,
           decoration: BoxDecoration(color: c.surface, border: Border(top: BorderSide(color: c.border))),
           child: ListView(
             scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: Space.x2, vertical: 5),
+            padding: const EdgeInsets.symmetric(horizontal: Space.x2, vertical: 6),
             children: [
-              _Key('Esc', tooltip: '清空当前输入', onTap: () => _setInput('')),
-              _Key('Tab', onTap: () => _insert('\t')),
-              _Key('Ctrl+C', tooltip: '中断并重开 shell', onTap: term.interrupt),
-              _Key('Ctrl+D', tooltip: '结束输入', onTap: term.sendEof),
-              _Key('↑', tooltip: '上一条命令', onTap: () => _history(-1)),
-              _Key('↓', tooltip: '下一条命令', onTap: () => _history(1)),
-              for (final ch in const ['/', '-', '|', '~', '>', '&', '*', '"']) _Key(ch, onTap: () => _insert(ch)),
+              _Key('Esc', onTap: () => term.sendKey(TerminalKey.escape)),
+              _Key('Tab', tooltip: '补全', onTap: () => term.sendKey(TerminalKey.tab)),
+              _Key('Ctrl', tooltip: '点亮后再按字母，例如 Ctrl 再按 C 是中断', active: term.ctrlArmed, onTap: term.toggleCtrl),
+              _Key('↑', onTap: () => term.sendKey(TerminalKey.arrowUp)),
+              _Key('↓', onTap: () => term.sendKey(TerminalKey.arrowDown)),
+              _Key('←', onTap: () => term.sendKey(TerminalKey.arrowLeft)),
+              _Key('→', onTap: () => term.sendKey(TerminalKey.arrowRight)),
+              for (final ch in const ['/', '-', '|', '~', '>', '&', '*', '"']) _Key(ch, onTap: () => term.sendText(ch)),
               _Key('清屏', onTap: term.clear),
-            ],
-          ),
-        ),
-        Container(
-          color: c.surface,
-          padding: const EdgeInsets.fromLTRB(Space.x3, 0, Space.x2, Space.x2),
-          child: Row(
-            children: [
-              Text('\$', style: mono.copyWith(color: c.accent, fontWeight: FontWeight.w600, fontSize: FontSize.base)),
-              const SizedBox(width: Space.x2),
-              Expanded(
-                child: TextField(
-                  controller: _input,
-                  focusNode: _focus,
-                  autocorrect: false,
-                  enableSuggestions: false,
-                  smartDashesType: SmartDashesType.disabled,
-                  smartQuotesType: SmartQuotesType.disabled,
-                  textInputAction: TextInputAction.send,
-                  onSubmitted: (_) => _run(),
-                  style: mono.copyWith(fontSize: FontSize.sm),
-                  decoration: InputDecoration(
-                    hintText: '输入命令，回车执行',
-                    fillColor: c.bg,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(Radii.md), borderSide: BorderSide.none),
-                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(Radii.md), borderSide: BorderSide.none),
-                  ),
-                ),
-              ),
-              IconButton(tooltip: '执行', icon: Icon(Icons.keyboard_return, color: c.accent), onPressed: _run),
             ],
           ),
         ),
@@ -255,10 +228,11 @@ class _TerminalTabState extends State<TerminalTab> {
 }
 
 class _Key extends StatelessWidget {
-  const _Key(this.label, {required this.onTap, this.tooltip});
+  const _Key(this.label, {required this.onTap, this.tooltip, this.active = false});
   final String label;
   final VoidCallback onTap;
   final String? tooltip;
+  final bool active;
 
   @override
   Widget build(BuildContext context) {
@@ -266,7 +240,7 @@ class _Key extends StatelessWidget {
     final key = Padding(
       padding: const EdgeInsets.only(right: 6),
       child: Material(
-        color: c.surfaceMuted,
+        color: active ? c.accentSoft : c.surfaceMuted,
         borderRadius: BorderRadius.circular(Radii.sm),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
@@ -275,19 +249,11 @@ class _Key extends StatelessWidget {
             constraints: const BoxConstraints(minWidth: 36),
             alignment: Alignment.center,
             padding: const EdgeInsets.symmetric(horizontal: Space.x2),
-            child: Text(label, style: TextStyle(fontFamily: kMonoFont, fontFamilyFallback: kMonoFallback, fontSize: 13, color: c.text)),
+            child: Text(label, style: TextStyle(fontFamily: kMonoFont, fontFamilyFallback: kMonoFallback, fontSize: 13, color: active ? c.accent : c.text)),
           ),
         ),
       ),
     );
     return tooltip == null ? key : Tooltip(message: tooltip!, child: key);
   }
-}
-
-/// 给别处复用：把提示写成一句话的小条。
-class TerminalLimitsNote extends StatelessWidget {
-  const TerminalLimitsNote({super.key});
-
-  @override
-  Widget build(BuildContext context) => const InfoBanner('这一版是基础终端：手机自带 sh、一次一条命令。完整终端模拟（xterm + PTY）和 SSH 还没接入。');
 }
