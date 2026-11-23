@@ -19,6 +19,7 @@ import 'package:lopicode/runtime/linux_runtime.dart';
 import 'package:lopicode/runtime/runtime_screen.dart';
 import 'package:lopicode/state/app_providers.dart';
 import 'package:lopicode/state/config_providers.dart';
+import 'package:lopicode/state/presets_state.dart';
 import 'package:lopicode/state/runtime_state.dart';
 import 'package:lopicode/state/ui_prefs.dart';
 import 'package:lopicode/state/workspace_conversations.dart';
@@ -93,7 +94,7 @@ class SettingsScreen extends ConsumerWidget {
                 key: const Key('settings-personalize'),
                 icon: Icons.face_outlined,
                 title: '个性化',
-                subtitle: '个人偏好 · Agent 预设（默认：${app.presets.byId(app.presets.defaultId).name}）',
+                subtitle: '个人偏好 · Agent 预设（默认：${ref.watch(presetsProvider).defaultPreset.name}）',
                 onTap: () => go(const PersonalizeScreen()),
               ),
               for (final ch in deepseek)

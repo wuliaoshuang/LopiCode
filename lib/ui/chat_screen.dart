@@ -17,6 +17,7 @@ import 'package:lopicode/agent/quota.dart';
 import 'package:lopicode/agent/usage.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/state/config_providers.dart';
+import 'package:lopicode/state/presets_state.dart';
 import 'package:lopicode/state/ui_prefs.dart';
 import 'package:lopicode/state/workspace_chat.dart';
 import 'package:lopicode/state/workspace_conversations.dart';
@@ -226,10 +227,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 
   Future<void> _pickPreset() async {
-    final app = appOf(context);
     final id = await showModalBottomSheet<String>(
       context: context,
-      builder: (_) => PresetPickerSheet(presets: app.presets.all, current: s.preset.id),
+      builder: (_) => PresetPickerSheet(presets: ref.read(presetsProvider).all, current: s.preset.id),
     );
     if (id != null) await s.setPreset(id);
   }
@@ -334,7 +334,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   Widget build(BuildContext context) {
     ref
       ..watch(modelsRevProvider)
-      ..watch(presetsRevProvider);
+      ..watch(presetsProvider);
     final prefs = ref.watch(chatPrefsProvider);
     final app = appOf(context);
     final c = context.colors;

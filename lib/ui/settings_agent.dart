@@ -12,6 +12,8 @@ import 'package:lopicode/agent/web_search.dart';
 import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/core/stores.dart';
 import 'package:lopicode/state/config_providers.dart';
+import 'package:lopicode/state/presets_state.dart';
+import 'package:lopicode/state/skills_state.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/app_ref.dart';
 import 'package:lopicode/ui/chrome.dart';
@@ -35,7 +37,7 @@ class _PersonalizeScreenState extends ConsumerState<PersonalizeScreen> {
     super.didChangeDependencies();
     if (!_loaded) {
       _loaded = true;
-      _prefs.text = appOf(context).presets.preferences;
+      _prefs.text = ref.read(presetsProvider).preferences;
     }
   }
 
@@ -46,8 +48,7 @@ class _PersonalizeScreenState extends ConsumerState<PersonalizeScreen> {
   }
 
   Future<void> _savePrefs() async {
-    final app = appOf(context);
-    await app.presets.setPreferences(_prefs.text);
+    await ref.read(presetsProvider.notifier).setPreferences(_prefs.text);
     if (mounted) {
       FocusScope.of(context).unfocus();
       showSnack(context, _prefs.text.trim().isEmpty ? '已清空：不再带个人偏好' : '已保存：之后的对话都会带上');
@@ -61,11 +62,11 @@ class _PersonalizeScreenState extends ConsumerState<PersonalizeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    ref.watch(presetsRevProvider);
-    final app = appOf(context);
+    final presets = ref.watch(presetsProvider);
+    final edit = ref.read(presetsProvider.notifier);
     final c = context.colors;
     final t = Theme.of(context).textTheme;
-    final defaultId = app.presets.defaultId;
+    final defaultId = presets.defaultId;
     return Scaffold(
       backgroundColor: context.colors.canvas,
       appBar: PageBar(background: context.colors.canvas, title: const Text('个性化')),
@@ -96,7 +97,7 @@ class _PersonalizeScreenState extends ConsumerState<PersonalizeScreen> {
             padding: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x2),
             child: Text('预设＝一套系统提示词加上允许用的工具。新对话用“默认”那个，对话里可以在右上角的菜单里换。', style: t.bodySmall),
           ),
-          for (final p in app.presets.all)
+          for (final p in presets.all)
             ListTile(
               title: Text(p.name, maxLines: 1, overflow: TextOverflow.ellipsis),
               subtitle: Text(
@@ -107,11 +108,11 @@ class _PersonalizeScreenState extends ConsumerState<PersonalizeScreen> {
                 tooltip: '更多',
                 icon: Icon(Icons.more_vert, color: c.textFaint),
                 onSelected: (v) async {
-                  if (v == 'default') await app.presets.setDefault(p.id);
-                  if (v == 'copy') await app.presets.copy(p);
+                  if (v == 'default') await edit.setDefault(p.id);
+                  if (v == 'copy') await edit.copy(p);
                   if (v == 'delete' && context.mounted) {
                     final ok = await confirmDialog(context, title: '删除预设“${p.name}”？', message: '用着它的对话会改回“标准模式”。', confirmLabel: '删除', danger: true);
-                    if (ok) await app.presets.delete(p.id);
+                    if (ok) await edit.delete(p.id);
                   }
                   if (mounted) setState(() {});
                 },
@@ -137,15 +138,15 @@ class _PersonalizeScreenState extends ConsumerState<PersonalizeScreen> {
   }
 }
 
-class PresetEditScreen extends StatefulWidget {
+class PresetEditScreen extends ConsumerStatefulWidget {
   const PresetEditScreen({super.key, this.preset});
   final AgentPreset? preset;
 
   @override
-  State<PresetEditScreen> createState() => _PresetEditScreenState();
+  ConsumerState<PresetEditScreen> createState() => _PresetEditScreenState();
 }
 
-class _PresetEditScreenState extends State<PresetEditScreen> {
+class _PresetEditScreenState extends ConsumerState<PresetEditScreen> {
   late final _name = TextEditingController(text: widget.preset?.name ?? '');
   late final _prompt = TextEditingController(text: widget.preset?.prompt ?? '');
   late final Set<String> _tools = {...(widget.preset?.tools ?? kToolLabels.keys)};
@@ -160,9 +161,8 @@ class _PresetEditScreenState extends State<PresetEditScreen> {
   }
 
   Future<void> _save() async {
-    final app = appOf(context);
     final all = _tools.length == kToolLabels.length;
-    await app.presets.upsert(id: widget.preset?.id, name: _name.text, prompt: _prompt.text, tools: all ? null : {..._tools});
+    await ref.read(presetsProvider.notifier).upsert(id: widget.preset?.id, name: _name.text, prompt: _prompt.text, tools: all ? null : {..._tools});
     if (mounted) Navigator.pop(context);
   }
 
@@ -487,47 +487,26 @@ class SkillsScreen extends ConsumerStatefulWidget {
 }
 
 class _SkillsScreenState extends ConsumerState<SkillsScreen> {
-  List<Skill>? _skills;
+  Future<void> _create() => Navigator.of(context).push<bool>(MaterialPageRoute(builder: (_) => SkillEditScreen(workspace: widget.workspace)));
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (_skills == null) _reload();
-  }
-
-  Future<void> _reload() async {
-    final list = await appOf(context).skills.list(workspaceDir: widget.workspace?.dir);
-    if (mounted) setState(() => _skills = list);
-  }
-
-  Future<void> _create() async {
-    final created = await Navigator.of(context).push<bool>(MaterialPageRoute(builder: (_) => SkillEditScreen(workspace: widget.workspace)));
-    if (created == true) await _reload();
-  }
-
-  Future<void> _open(Skill skill) async {
-    await Navigator.of(context).push<void>(MaterialPageRoute(builder: (_) => SkillViewScreen(skill: skill)));
-    await _reload();
-  }
+  Future<void> _open(Skill skill) => Navigator.of(context).push<void>(MaterialPageRoute(builder: (_) => SkillViewScreen(skill: skill)));
 
   @override
   Widget build(BuildContext context) {
-    ref.watch(skillsRevProvider);
-    final app = appOf(context);
+    // 技能清单：增删、开关之后它自己重新扫描，这里只管照着画
+    final state = ref.watch(skillsProvider(widget.workspace?.dir));
+    final edit = ref.read(skillsProvider(widget.workspace?.dir).notifier);
     final t = Theme.of(context).textTheme;
-    final skills = _skills;
-    final ws = skills?.where((s) => !s.global).toList() ?? const <Skill>[];
-    final global = skills?.where((s) => s.global).toList() ?? const <Skill>[];
+    final skills = state.skills;
+    final ws = state.ofWorkspace;
+    final global = state.global;
     Widget row(Skill s) => SwitchListTile(
       key: Key('skill-${s.key}'),
       title: Text(s.name, maxLines: 1, overflow: TextOverflow.ellipsis),
       subtitle: Text(s.description.isEmpty ? '（没有写描述）' : s.description, maxLines: 2, overflow: TextOverflow.ellipsis),
       value: s.enabled,
       secondary: IconButton(tooltip: '查看全文', icon: const Icon(Icons.article_outlined), onPressed: () => _open(s)),
-      onChanged: (v) async {
-        await app.skills.setEnabled(s, v);
-        await _reload();
-      },
+      onChanged: (v) => edit.setEnabled(s, v),
     );
     return Scaffold(
       backgroundColor: context.colors.canvas,
@@ -573,15 +552,15 @@ class _SkillsScreenState extends ConsumerState<SkillsScreen> {
   }
 }
 
-class SkillEditScreen extends StatefulWidget {
+class SkillEditScreen extends ConsumerStatefulWidget {
   const SkillEditScreen({super.key, this.workspace});
   final Project? workspace;
 
   @override
-  State<SkillEditScreen> createState() => _SkillEditScreenState();
+  ConsumerState<SkillEditScreen> createState() => _SkillEditScreenState();
 }
 
-class _SkillEditScreenState extends State<SkillEditScreen> {
+class _SkillEditScreenState extends ConsumerState<SkillEditScreen> {
   final _name = TextEditingController();
   final _desc = TextEditingController();
   final _body = TextEditingController();
@@ -596,9 +575,8 @@ class _SkillEditScreenState extends State<SkillEditScreen> {
   }
 
   Future<void> _save() async {
-    final app = appOf(context);
     try {
-      await app.skills.create(name: _name.text, description: _desc.text, body: _body.text, workspaceDir: _global ? null : widget.workspace!.dir);
+      await ref.read(skillsProvider(widget.workspace?.dir).notifier).create(name: _name.text, description: _desc.text, body: _body.text, global: _global);
       if (mounted) Navigator.pop(context, true);
     } on SkillException catch (e) {
       if (mounted) showSnack(context, e.message);

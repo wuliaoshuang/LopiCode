@@ -22,15 +22,15 @@ const Map<String, String> kToolLabels = {
 
 /// Agent 预设：一套系统提示词 + 可用工具。
 class AgentPreset {
-  AgentPreset({required this.id, required this.name, this.prompt = '', this.tools, this.builtIn = false});
+  AgentPreset({required this.id, required this.name, this.prompt = '', Set<String>? tools, this.builtIn = false}) : tools = tools == null ? null : Set.unmodifiable(tools);
   final String id;
-  String name;
+  final String name;
 
   /// 附加的系统提示词（接在内置的基础规则后面）。
-  String prompt;
+  final String prompt;
 
-  /// 勾选的工具；null 表示全部。
-  Set<String>? tools;
+  /// 勾选的工具；null 表示全部。改不了：要改就 [upsert] 一份新的。
+  final Set<String>? tools;
   final bool builtIn;
 
   Map<String, dynamic> toJson() => {'id': id, 'name': name, 'prompt': prompt, 'tools': tools?.toList()};
@@ -78,19 +78,16 @@ class PresetStore {
   Future<AgentPreset> upsert({String? id, required String name, required String prompt, Set<String>? tools}) async {
     final list = custom;
     final clean = name.trim().isEmpty ? '未命名预设' : name.trim();
-    var preset = list.where((p) => p.id == id).firstOrNull;
-    if (preset == null) {
-      var newId = DateTime.now().microsecondsSinceEpoch.toRadixString(36);
-      while (list.any((p) => p.id == newId)) {
-        newId = '${newId}x';
-      }
-      preset = AgentPreset(id: newId, name: clean, prompt: prompt.trim(), tools: tools);
-      list.add(preset);
+    final at = list.indexWhere((p) => p.id == id);
+    var newId = at >= 0 ? list[at].id : DateTime.now().microsecondsSinceEpoch.toRadixString(36);
+    while (at < 0 && list.any((p) => p.id == newId)) {
+      newId = '${newId}x';
+    }
+    final preset = AgentPreset(id: newId, name: clean, prompt: prompt.trim(), tools: tools);
+    if (at >= 0) {
+      list[at] = preset;
     } else {
-      preset
-        ..name = clean
-        ..prompt = prompt.trim()
-        ..tools = tools;
+      list.add(preset);
     }
     await _save(list);
     return preset;

@@ -5,7 +5,6 @@
 // 然后照常从存储对象读值；要改就调存储对象的方法——它写完会让对应的 Rev 加一。
 // 不要再写“改完手动通知全应用”的代码。
 import 'package:lopicode/agent/model_config.dart';
-import 'package:lopicode/agent/presets.dart';
 import 'package:lopicode/agent/skills.dart';
 import 'package:lopicode/core/stores.dart';
 import 'package:lopicode/state/app_providers.dart';
@@ -31,9 +30,6 @@ final channelKeyRevProvider = NotifierProvider<ChannelKeyRev, int>(ChannelKeyRev
 final modelsRevProvider = Provider<int>(
   (ref) => _sum(ref, const [ModelConfigStore.kChannels, ModelConfigStore.kLast, ModelConfigStore.kFixed, ModelConfigStore.kDefaultMode]) + ref.watch(channelKeyRevProvider),
 );
-
-/// Agent 预设和个人偏好变了。
-final presetsRevProvider = Provider<int>((ref) => _sum(ref, const [PresetStore.kPresets, PresetStore.kDefault, PresetStore.kPreferences]));
 
 /// 新对话默认权限、子代理、智能体团队这几项设置变了。
 final agentSettingsRevProvider = Provider<int>(
