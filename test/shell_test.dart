@@ -353,19 +353,35 @@ void main() {
     expect(File('${project.dir}/.lopicode/chat.json').existsSync(), isFalse);
   });
 
-  testWidgets('项目规则会拼进系统提示词并存盘', (tester) async {
+  testWidgets('项目规则在设置里编辑（聊天页和 ··· 菜单里没有了），会拼进系统提示词并存盘', (tester) async {
     final (env, project, session) = await openProject(tester, template: ProjectTemplate.web);
     await tester.pumpWidget(appFor(env, ProjectShell(project: project, session: session)));
     await settle(tester);
-    await tester.tap(find.text('项目规则'));
-    await settle(tester, rounds: 3);
-    await tester.enterText(find.byType(TextField).last, '页面一律用中文');
-    await tester.tap(find.widgetWithText(FilledButton, '保存'));
+    expect(find.text('项目规则'), findsNothing, reason: '聊天页中间不再有入口');
+    await tester.tap(find.byTooltip('更多').hitTestable());
+    await tester.pumpAndSettle();
+    expect(find.text('项目规则'), findsNothing, reason: '··· 菜单里也没有');
+    await tester.tapAt(const Offset(20, 400));
+    await tester.pumpAndSettle();
+
+    await openDrawer(tester);
+    await tester.tap(find.descendant(of: find.byType(Drawer), matching: find.text('设置')));
+    await settle(tester, rounds: 4);
+    final row = find.byKey(const Key('settings-rules'));
+    expect(find.descendant(of: row, matching: find.text('未设置')), findsOneWidget);
+    expect(find.descendant(of: row, matching: find.textContaining('只对工作区“我的小站”生效')), findsOneWidget);
+    await tester.tap(row);
+    await settle(tester, rounds: 4);
+    expect(find.textContaining('只对这个工作区生效'), findsOneWidget);
+    await tester.enterText(find.byKey(const Key('rules-field')), '页面一律用中文');
+    await tester.tap(find.byKey(const Key('rules-save')));
     await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 100)));
     await settle(tester, rounds: 3);
     expect(session.systemPrompt, contains('页面一律用中文'));
-    expect(find.text('项目规则 · 已设置'), findsOneWidget);
     expect(File('${project.dir}/.lopicode/rules.md').readAsStringSync(), '页面一律用中文');
+    await tester.tap(find.byTooltip('返回').last);
+    await settle(tester, rounds: 4);
+    expect(find.descendant(of: find.byKey(const Key('settings-rules')), matching: find.text('已设置')), findsOneWidget);
   });
 
   testWidgets('首页：没有项目是项目列表空状态；记住上次打开的项目', (tester) async {

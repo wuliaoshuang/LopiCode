@@ -79,3 +79,40 @@
 | 请求：`POST https://api.tavily.com/search`，`Authorization: Bearer <key>`，请求体 `query`（必填）、`max_results`（0–20，默认 5）、`search_depth`（默认 `basic`，`advanced` 更贵） | 官方页面只抓到返回示例；请求参数来自多份第三方整理，说法一致 | 间接 |
 
 我们只发 `query`、`max_results`（上限 10）、`search_depth: "basic"`，每次搜索按 Tavily 的说法消耗 1 个额度（间接，未核对价格）。
+
+# 2026-11-23 补充：DeepSeek 余额、各协议的用量（usage）
+
+核对时间 2026-11-23（北京时间 18:19–18:40）。没有 Key，一个真实接口都没调用过；下面写“已核对”只表示在官方文档页面上看到了，不表示在真接口上验证过。
+
+## DeepSeek 余额（`lib/agent/quota.dart`）
+
+| 内容 | 出处 | 状态 |
+| --- | --- | --- |
+| 返回字段：`is_available`（布尔，余额够不够调用接口）；`balance_infos[]`，每条 `currency`（`CNY` / `USD`）、`total_balance`（总余额＝赠送＋充值）、`granted_balance`（没过期的赠送余额）、`topped_up_balance`（充值余额），金额都是**字符串** | https://api-docs.deepseek.com/api/get-user-balance | 已核对 |
+| **没有任何“限额 / 额度上限”字段**。所以“额度上限”是我们自己的设计：用户填上限，已用＝设上限之后余额减少的累计 | 同上 | 已核对 |
+| 地址 `GET https://api.deepseek.com/user/balance`，鉴权 `Authorization: Bearer <key>` | 官方页面抓到的正文里没有地址和鉴权那两行；地址与鉴权来自官方页面的 GitHub 镜像（pocketllm 仓库）、deepseek.apidog.io，以及 dsh-Go 源码的做法，三处一致 | 间接 |
+| 401 / 403 当作“Key 无效，查不到余额” | 通行做法 | 未核对 |
+| 充值页 `https://platform.deepseek.com/top_up`（“去充值”复制的网址） | 只在 dsh-Go 源码里看到 | 未核对 |
+
+## 用量字段（`lib/agent/usage.dart`）
+
+统一口径：输入 = 未缓存输入 + 缓存读取 + 缓存写入；合计 = 输入 + 输出；缓存命中率 = 缓存读取 ÷ 输入。
+
+| 协议 | 字段与映射 | 出处 | 状态 |
+| --- | --- | --- | --- |
+| DeepSeek（Chat Completions） | `usage.prompt_cache_hit_tokens` → 缓存读取；`usage.prompt_cache_miss_tokens` → 未缓存输入 | https://api-docs.deepseek.com/guides/kv_cache（“Checking Cache Hit Status”一节） | 已核对 |
+| DeepSeek | `prompt_tokens` = hit + miss；`completion_tokens`；`total_tokens`；`completion_tokens_details.reasoning_tokens` → 推理 | 官方 Chat Completions 页面抓到的正文只有请求参数，没有返回字段；这几项来自 NVIDIA AIPerf 的厂商 usage 对照表（docs.nvidia.com/aiperf/v0.13.0/reference/vendor-usage-field-reference，注明对照 DeepSeek 官方文档）和 deepseek-sdk-go 的注释 | 间接 |
+| DeepSeek 流式 | `stream_options.include_usage`（布尔，必须和 `stream: true` 一起用）。**不管设不设，`data: [DONE]` 之前最后一块的 `usage` 都带整次请求的用量**；设为 true 时前面每一块也带 `usage: null`。**不会单独发一个只有 usage 的块**：用量附在最后一个内容块上，那一块 `choices` 只有一个元素、没有新内容、`finish_reason` 非空 | https://api-docs.deepseek.com/zh-cn/api/create-chat-completion | 已核对 |
+| OpenAI Chat Completions | `stream_options: {"include_usage": true}` 后，最后多一块 `choices: []`、带 `usage`：`prompt_tokens`、`completion_tokens`、`total_tokens`、`prompt_tokens_details.cached_tokens`（是 prompt_tokens 的一部分）→ 缓存读取、`completion_tokens_details.reasoning_tokens` → 推理 | 第三方整理 + openai-python 的类型定义（经 NVIDIA 对照表转述） | 间接 |
+| OpenAI Responses | `response.usage`：`input_tokens`（含缓存）、`input_tokens_details.cached_tokens` → 缓存读取、`output_tokens`、`output_tokens_details.reasoning_tokens` → 推理、`total_tokens` | developers.openai.com 的 Responses 参考页（返回示例） | 已核对 |
+| OpenAI Responses 流式 | 用量在 `response.completed`（和 `response.incomplete`）事件的 `response.usage` 里 | 第三方整理 | 间接 |
+| Anthropic Messages 流式 | `message_start.message.usage`：`input_tokens`（**不含缓存**）→ 未缓存输入、`cache_read_input_tokens` → 缓存读取、`cache_creation_input_tokens` → 缓存写入；`message_delta.usage`（和 `delta` 平级）：`output_tokens` 是累计值（覆盖，不相加），也可能重复给输入各项（非空以它为准） | SDK 类型定义的第三方转述、NVIDIA 对照表 | 间接 |
+
+我们的客户端两种流式形状都认：用量附在最后一个内容块上（DeepSeek），或者单独一块 `choices: []`（OpenAI）。
+
+**没核对的风险**
+
+- 有些 OpenAI 兼容的中转站可能不认 `stream_options`。我们的处理：接口回 400 / 422 且报错里提到 `stream_options` 时，去掉它重发一次，这个客户端之后不再带（那就拿不到用量，界面如实写“接口没返回用量”）。别的报错方式认不出来。
+- 接口不给缓存字段时，我们不显示命中率（显示“—”），不当成 0%。
+- DeepSeek 默认开思考模式；思考内容走 `delta.reasoning_content`，我们的客户端目前不读它，所以步骤详情里的“首字”是第一个**回答字或工具调用**到达的时间，思考时间算在首字之前。
+- **待核实的旧问题**（不是这次改的）：第三方整理的 DeepSeek 指南说，思考模式下带工具调用的助手消息回传时要保留 `reasoning_content`；我们现在不保存也不回传它。真接口上会不会因此报错，没有 Key 验证不了。

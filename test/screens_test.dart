@@ -188,7 +188,8 @@ void main() {
       await settle(tester);
       expect(find.text('新对话'), findsOneWidget);
       expect(find.textContaining('我的小站 / '), findsOneWidget);
-      expect(find.text('项目规则'), findsOneWidget);
+      expect(find.text('项目规则'), findsNothing, reason: '项目规则搬到设置里了');
+      expect(find.byKey(const Key('chat-ideas')), findsNothing, reason: '开场建议默认不显示');
       expect(find.byType(IconBottomNav), findsOneWidget, reason: '底部导航五项');
       await shot(tester, '04-chat-empty-$suffix');
 

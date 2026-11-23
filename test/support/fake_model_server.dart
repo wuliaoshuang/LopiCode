@@ -3,7 +3,10 @@ import 'dart:io';
 
 /// 一次模型回复的脚本：文字和 / 或若干工具调用。
 class ScriptedReply {
-  ScriptedReply({this.text, this.calls = const [], this.status = 200, this.errorBody});
+  ScriptedReply({this.text, this.calls = const [], this.status = 200, this.errorBody, this.usage});
+
+  /// 收尾块里的 usage；不给就发一个没有可用字段的 usage（当作“接口没返回用量”）。
+  final Map<String, dynamic>? usage;
   final String? text;
   final List<ScriptedCall> calls;
   final int status;
@@ -22,7 +25,10 @@ class ScriptedCall {
 /// 本地假模型服务器：按 OpenAI Chat Completions 的流式格式回 SSE。
 /// 回复按脚本顺序给；脚本用完后重复 [fallback]（用来模拟“模型停不下来”）。
 class FakeModelServer {
-  FakeModelServer(this.script, {this.fallback});
+  FakeModelServer(this.script, {this.fallback, this.rejectStreamOptions = false});
+
+  /// 模拟不认 stream_options 的兼容接口：带了就回 400。
+  final bool rejectStreamOptions;
   final List<ScriptedReply> script;
   final ScriptedReply? fallback;
 
@@ -48,6 +54,13 @@ class FakeModelServer {
     }
     requests.add(jsonDecode(await utf8.decoder.bind(req).join()) as Map<String, dynamic>);
     authHeaders.add(req.headers.value('authorization'));
+    if (rejectStreamOptions && requests.last.containsKey('stream_options')) {
+      req.response.statusCode = 400;
+      req.response.headers.contentType = ContentType.json;
+      req.response.write('{"error":{"message":"Unknown parameter: stream_options"}}');
+      await req.response.close();
+      return;
+    }
     final reply = _n < script.length ? script[_n] : fallback;
     _n++;
     if (reply == null) {
@@ -109,7 +122,11 @@ class FakeModelServer {
     }
     chunk({}, reply.calls.isEmpty ? 'stop' : 'tool_calls');
     // 带 usage 的收尾块：choices 为空数组，客户端必须能跳过。
-    req.response.write('data: ${jsonEncode({'choices': [], 'usage': {'total_tokens': 1}})}\n\n');
+    // 和真实接口一样：只有请求里带了 stream_options.include_usage 才发。
+    final opts = requests.last['stream_options'];
+    if (opts is Map && opts['include_usage'] == true) {
+      req.response.write('data: ${jsonEncode({'choices': [], 'usage': reply.usage ?? {'total_tokens': 1}})}\n\n');
+    }
     req.response.write('data: [DONE]\n\n');
     await req.response.close();
   }

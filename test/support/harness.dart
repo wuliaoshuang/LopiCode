@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
 import 'package:lopicode/agent/chat_client.dart';
 import 'package:lopicode/app.dart';
 import 'package:lopicode/app_services.dart';
@@ -19,7 +20,7 @@ class TestEnv {
   final Directory tmp;
   final AppServices services;
 
-  static Future<TestEnv> create({ChatClient Function()? chatClient}) async {
+  static Future<TestEnv> create({ChatClient Function()? chatClient, http.Client? quotaHttp}) async {
     final tmp = Directory.systemTemp.createTempSync('lopi_ui_');
     final settings = SettingsStore(File(p.join(tmp.path, 'settings.json')));
     await settings.load();
@@ -28,6 +29,7 @@ class TestEnv {
       secrets: MemorySecretStore(),
       projects: ProjectStore(p.join(tmp.path, 'projects')),
       chatClientFactory: chatClient,
+      quotaHttp: quotaHttp,
     );
     // 真实文件读写只能在 runAsync 里完成：先把渠道配置和自动化任务读好。
     await services.ready();

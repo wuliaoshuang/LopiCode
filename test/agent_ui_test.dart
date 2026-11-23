@@ -133,12 +133,16 @@ void main() {
       // 概况卡：新对话用的模型 + 运行环境，都是真实状态
       final overview = find.byKey(const Key('settings-overview'));
       expect(find.descendant(of: overview, matching: find.text('主力模型')), findsOneWidget);
-      expect(find.descendant(of: overview, matching: find.text('已配置')), findsOneWidget);
+      // 不是 DeepSeek 官方渠道：只有模型名和渠道名，没有进度条和百分比（运行环境那一块仍有自己的进度条）
+      expect(find.descendant(of: overview, matching: find.textContaining('新对话用的模型 · 我的中转站')), findsOneWidget);
+      expect(find.descendant(of: overview, matching: find.textContaining('%')), findsNothing);
+      expect(find.descendant(of: overview, matching: find.byKey(const Key('overview-bar'))), findsOneWidget, reason: '只剩运行环境那一根');
+      expect(find.byKey(const Key('overview-set-quota')), findsNothing);
       expect(find.descendant(of: overview, matching: find.text('运行环境')), findsWidgets);
       expect(find.descendant(of: overview, matching: find.text('未安装')), findsOneWidget);
       // 每一项都在：滚到它再看
       final list = find.byType(Scrollable).first;
-      for (final title in ['AI', '能力', '通用', '关于']) {
+      for (final title in ['AI', '能力', '对话', '通用', '关于']) {
         await tester.scrollUntilVisible(find.text(title), 120, scrollable: list);
         expect(find.text(title), findsOneWidget);
       }
