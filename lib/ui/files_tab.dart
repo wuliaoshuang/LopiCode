@@ -2,23 +2,40 @@
 // - 手机上文件树和编辑器不并排：先看文件列表，点文件进编辑器，编辑器顶上是已打开文件的标签条。
 // - 文件列表一行一个文件：图标 + 名字（目录按层级缩进）；改名 / 删除收进长按菜单。
 // - 编辑器顶栏一行只做“切文件”，保存按钮固定在行尾；未保存用标签上的小圆点表示。
-// - 等宽 14px、行高 1.5；语法高亮只上色，不改字重。
+// - 编辑器顶栏行尾：保存 + ⋮（查找、替换、自动换行、撤销、重做）。编辑区见 code_editor.dart。
 import 'dart:io';
+
+import 'package:flutter/scheduler.dart';
 
 import 'package:lopicode/core/path_guard.dart';
 import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/code_editor.dart';
 import 'package:lopicode/ui/code_highlight.dart';
 import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:re_editor/re_editor.dart';
 
 class _OpenFile {
-  _OpenFile(this.path, String content) : controller = CodeController(text: content, path: path), saved = content;
+  _OpenFile(this.path, String content) : controller = CodeLineEditingController.fromText(content) {
+    findController = CodeFindController(controller);
+    saved = controller.text; // 编辑器会把换行统一成 \n，以它读回来的为准
+  }
   final String path;
-  final CodeController controller;
-  String saved;
-  bool get dirty => controller.text != saved;
+  final CodeLineEditingController controller;
+  late final CodeFindController findController;
+  late String saved;
+
+  /// 有没有未保存的修改。每次内容变化时算一次并记下来，界面重画时不用再拼整篇文本。
+  bool dirty = false;
+  void refreshDirty() => dirty = controller.text != saved;
+
+  void dispose() {
+    findController.dispose();
+    controller.dispose();
+  }
+
   String get name => path.split('/').last;
 }
 
@@ -37,6 +54,7 @@ class _FilesTabState extends State<FilesTab> {
   List<String>? _files;
   final List<_OpenFile> _open = [];
   int _active = -1; // -1 = 显示文件列表
+  bool _wordWrap = true;
 
   PathGuard get _guard => widget.session.guard;
 
@@ -54,7 +72,7 @@ class _FilesTabState extends State<FilesTab> {
   void dispose() {
     widget.session.fileRevision.removeListener(_onFilesChanged);
     for (final f in _open) {
-      f.controller.dispose();
+      f.dispose();
     }
     super.dispose();
   }
@@ -81,8 +99,9 @@ class _FilesTabState extends State<FilesTab> {
       final text = await file.readAsString();
       if (text != f.saved && mounted) {
         setState(() {
-          f.saved = text;
           f.controller.text = text;
+          f.saved = f.controller.text;
+          f.refreshDirty();
         });
       }
     }
@@ -102,9 +121,7 @@ class _FilesTabState extends State<FilesTab> {
         return;
       }
       final opened = _OpenFile(path, await file.readAsString());
-      opened.controller.addListener(() {
-        if (mounted) setState(() {});
-      });
+      opened.controller.addListener(() => _onEdited(opened));
       if (!mounted) return;
       setState(() {
         _open.add(opened);
@@ -115,11 +132,31 @@ class _FilesTabState extends State<FilesTab> {
     }
   }
 
+  /// 编辑器内容变了。re_editor 有时在自己 build 的过程中通知（例如首次排版），
+  /// 那时不能直接 setState，挪到这一帧结束后。
+  void _onEdited(_OpenFile f) {
+    if (!mounted) return;
+    final before = f.dirty;
+    f.refreshDirty();
+    if (before == f.dirty) return;
+    if (SchedulerBinding.instance.schedulerPhase == SchedulerPhase.persistentCallbacks) {
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() {});
+      });
+    } else {
+      setState(() {});
+    }
+  }
+
   Future<void> _save() async {
     final f = _open[_active];
     try {
-      await File(_guard.resolve(f.path)).writeAsString(f.controller.text);
-      setState(() => f.saved = f.controller.text);
+      final text = f.controller.text;
+      await File(_guard.resolve(f.path)).writeAsString(text);
+      setState(() {
+        f.saved = text;
+        f.refreshDirty();
+      });
       widget.session.filesChanged();
     } on Exception {
       if (mounted) showSnack(context, '保存失败');
@@ -134,7 +171,7 @@ class _FilesTabState extends State<FilesTab> {
     }
     if (!mounted) return;
     setState(() {
-      _open.removeAt(index).controller.dispose();
+      _open.removeAt(index).dispose();
       _active = _open.isEmpty ? -1 : _active.clamp(0, _open.length - 1);
     });
   }
@@ -185,7 +222,7 @@ class _FilesTabState extends State<FilesTab> {
       setState(() {
         _open.removeWhere((f) {
           final hit = f.path == clean || f.path.startsWith('$clean/');
-          if (hit) f.controller.dispose();
+          if (hit) f.dispose();
           return hit;
         });
         _active = _open.isEmpty ? -1 : _active.clamp(-1, _open.length - 1);
@@ -395,35 +432,44 @@ class _FilesTabState extends State<FilesTab> {
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: Space.x2),
+                padding: const EdgeInsets.only(left: Space.x2),
                 child: TextButton(onPressed: file.dirty ? _save : null, child: Text(file.dirty ? '保存' : '已保存')),
+              ),
+              PopupMenuButton<String>(
+                tooltip: '编辑器菜单',
+                icon: const Icon(Icons.more_vert),
+                onSelected: (v) {
+                  switch (v) {
+                    case 'find':
+                      file.findController.findMode();
+                    case 'replace':
+                      file.findController.replaceMode();
+                    case 'wrap':
+                      setState(() => _wordWrap = !_wordWrap);
+                    case 'undo':
+                      file.controller.undo();
+                    case 'redo':
+                      file.controller.redo();
+                  }
+                },
+                itemBuilder: (context) => [
+                  const PopupMenuItem(value: 'find', child: Text('查找')),
+                  const PopupMenuItem(value: 'replace', child: Text('查找并替换')),
+                  PopupMenuItem(value: 'wrap', child: Text(_wordWrap ? '关闭自动换行' : '打开自动换行')),
+                  PopupMenuItem(value: 'undo', enabled: file.controller.canUndo, child: const Text('撤销')),
+                  PopupMenuItem(value: 'redo', enabled: file.controller.canRedo, child: const Text('重做')),
+                ],
               ),
             ],
           ),
         ),
         Expanded(
-          child: Container(
-            color: c.codeBg,
-            child: TextField(
-              key: ValueKey(file.path),
-              controller: file.controller,
-              maxLines: null,
-              expands: true,
-              textAlignVertical: TextAlignVertical.top,
-              keyboardType: TextInputType.multiline,
-              autocorrect: false,
-              enableSuggestions: false,
-              smartDashesType: SmartDashesType.disabled,
-              smartQuotesType: SmartQuotesType.disabled,
-              style: TextStyle(fontFamily: kMonoFont, fontFamilyFallback: kMonoFallback, fontSize: FontSize.sm, height: 1.5, color: c.text),
-              decoration: const InputDecoration(
-                filled: false,
-                border: InputBorder.none,
-                enabledBorder: InputBorder.none,
-                focusedBorder: InputBorder.none,
-                contentPadding: EdgeInsets.all(Space.x3),
-              ),
-            ),
+          child: LopiCodeEditor(
+            key: ValueKey(file.path),
+            path: file.path,
+            controller: file.controller,
+            findController: file.findController,
+            wordWrap: _wordWrap,
           ),
         ),
       ],
