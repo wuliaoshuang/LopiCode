@@ -1,7 +1,7 @@
 // 选模型的底部面板：渠道（横向一行标签）→ 模型（列表）→ 思考深度（一行分段）。
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lopicode/agent/model_config.dart';
-import 'package:lopicode/state/config_providers.dart';
+import 'package:lopicode/state/models_state.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/app_ref.dart';
 import 'package:lopicode/ui/provider_icon.dart';
@@ -38,7 +38,7 @@ class _ModelPickerSheetState extends ConsumerState<ModelPickerSheet> {
 
   @override
   Widget build(BuildContext context) {
-    ref.watch(modelsRevProvider);
+    ref.watch(modelsProvider);
     final app = appOf(context);
     final c = context.colors;
     final t = Theme.of(context).textTheme;

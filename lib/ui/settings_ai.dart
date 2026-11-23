@@ -11,7 +11,7 @@ import 'package:lopicode/agent/chat_client.dart';
 import 'package:lopicode/agent/model_config.dart';
 import 'package:lopicode/agent/protocols.dart';
 import 'package:lopicode/agent/provider_presets.dart';
-import 'package:lopicode/state/config_providers.dart';
+import 'package:lopicode/state/models_state.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/app_ref.dart';
 import 'package:lopicode/ui/chat_panels.dart';
@@ -43,15 +43,16 @@ class _ChannelsScreenState extends ConsumerState<ChannelsScreen> {
       builder: (_) => ModelPickerSheet(current: app.models.fixedSelection),
     );
     if (picked is ModelSelectionResult) {
-      await app.models.setFixedSelection(picked.selection);
-      await app.models.setNewChatUsesFixed(true);
+      final models = ref.read(modelsProvider.notifier);
+      await models.setFixedSelection(picked.selection);
+      await models.setNewChatUsesFixed(true);
       if (mounted) setState(() {});
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    ref.watch(modelsRevProvider);
+    ref.watch(modelsProvider);
     final app = appOf(context);
     final t = Theme.of(context).textTheme;
     final channels = app.models.channels;
@@ -86,7 +87,7 @@ class _ChannelsScreenState extends ConsumerState<ChannelsScreen> {
                       if (v.first && fixed == null) {
                         await _pickFixed();
                       } else {
-                        await app.models.setNewChatUsesFixed(v.first);
+                        await ref.read(modelsProvider.notifier).setNewChatUsesFixed(v.first);
                         if (mounted) setState(() {});
                       }
                     },
@@ -150,7 +151,7 @@ class _ChannelEditScreenState extends ConsumerState<ChannelEditScreen> {
       _name.text = ch.name;
       _baseUrl.text = ch.baseUrl;
       _protocol = ch.protocol;
-      _models.addAll([for (final m in ch.models) ModelSpec.fromJson(m.toJson())!]);
+      _models.addAll(ch.models); // 模型不可变，直接拿；改的时候是换一份新的
     } else if (widget.preset case final p?) {
       _name.text = p.name;
       _baseUrl.text = p.baseUrl;
@@ -267,9 +268,11 @@ class _ChannelEditScreenState extends ConsumerState<ChannelEditScreen> {
       builder: (_) => ModelSpecSheet(model: m),
     );
     if (!mounted) return;
-    setState(() {
-      if (result == 'remove') _models.remove(m);
-    });
+    final at = _models.indexWhere((x) => identical(x, m));
+    if (at < 0) return;
+    // 面板交回来一份改好的就换上；交回 'remove' 就去掉
+    if (result == 'remove') setState(() => _models.removeAt(at));
+    if (result is ModelSpec) setState(() => _models[at] = result);
   }
 
   Future<void> _save() async {
@@ -278,14 +281,16 @@ class _ChannelEditScreenState extends ConsumerState<ChannelEditScreen> {
       showSnack(context, '接口地址不能为空');
       return;
     }
-    final saved = await app.models.upsert(
-      id: widget.channel?.id,
-      name: _name.text.trim(),
-      protocol: _protocol,
-      baseUrl: _baseUrl.text.trim(),
-      apiKey: _key.text, // 留空＝保留原来的 Key
-      models: _models,
-    );
+    final saved = await ref
+        .read(modelsProvider.notifier)
+        .upsert(
+          id: widget.channel?.id,
+          name: _name.text.trim(),
+          protocol: _protocol,
+          baseUrl: _baseUrl.text.trim(),
+          apiKey: _key.text, // 留空＝保留原来的 Key
+          models: _models,
+        );
     // 换了 Key：马上重查余额（不是 DeepSeek 官方渠道什么都不做）。
     if (_key.text.trim().isNotEmpty) unawaited(app.quota.refresh(saved, force: true));
     if (mounted) Navigator.pop(context, true);
@@ -295,19 +300,19 @@ class _ChannelEditScreenState extends ConsumerState<ChannelEditScreen> {
     final app = appOf(context);
     final ok = await confirmDialog(context, title: '删除这个渠道？', message: '渠道和它保存的 API Key 会被删除。用着它的对话会改用别的可用模型。', confirmLabel: '删除', danger: true);
     if (!ok) return;
-    await app.models.remove(widget.channel!.id);
+    await ref.read(modelsProvider.notifier).remove(widget.channel!.id);
     await app.quota.clearLimit(widget.channel!.id);
     if (mounted) Navigator.pop(context);
   }
 
   Future<void> _clearKey() async {
-    await appOf(context).models.clearKey(widget.channel!.id);
+    await ref.read(modelsProvider.notifier).clearKey(widget.channel!.id);
     if (mounted) setState(() => _hasKey = false);
   }
 
   @override
   Widget build(BuildContext context) {
-    ref.watch(modelsRevProvider);
+    ref.watch(modelsProvider);
     final app = appOf(context);
     final c = context.colors;
     final t = Theme.of(context).textTheme;
@@ -492,7 +497,7 @@ class _RemoteModelsSheetState extends State<_RemoteModelsSheet> {
   }
 }
 
-/// 改一个模型的细节。直接改传进来的 [model]；返回 'remove' 表示把它从渠道里去掉。
+/// 改一个模型的细节。不动传进来的 [model]：点“确定”交回一份改好的 [ModelSpec]；交回 'remove' 表示把它从渠道里去掉。
 class ModelSpecSheet extends StatefulWidget {
   const ModelSpecSheet({super.key, required this.model});
   final ModelSpec model;
@@ -533,20 +538,19 @@ class _ModelSpecSheetState extends State<ModelSpecSheet> {
     final m = widget.model;
     final ctx = int.tryParse(_context.text.trim());
     final out = int.tryParse(_maxOut.text.trim());
-    m
-      ..name = _name.text.trim().isEmpty ? m.id : _name.text.trim()
-      ..contextLength = ModelSpec.clampContext((ctx ?? ModelSpec.defaultContext ~/ 1000) * 1000)
-      ..maxOutput = ((out ?? ModelSpec.defaultMaxOutput ~/ 1000) * 1000).clamp(1000, 400000)
-      ..vision = _vision
-      ..thinking = _thinking && _levels.isNotEmpty
-      ..levels = [
+    final edited = m.copyWith(
+      name: _name.text.trim().isEmpty ? m.id : _name.text.trim(),
+      contextLength: ModelSpec.clampContext((ctx ?? ModelSpec.defaultContext ~/ 1000) * 1000),
+      maxOutput: ((out ?? ModelSpec.defaultMaxOutput ~/ 1000) * 1000).clamp(1000, 400000),
+      vision: _vision,
+      thinking: _thinking && _levels.isNotEmpty,
+      levels: [
         for (final l in kThinkingLevels)
           if (_levels.contains(l)) l,
-      ]
-      ..priceHit = _price(_priceHit)
-      ..priceMiss = _price(_priceMiss)
-      ..priceOutput = _price(_priceOut);
-    Navigator.pop(context, 'saved');
+      ],
+      prices: (hit: _price(_priceHit), miss: _price(_priceMiss), output: _price(_priceOut)),
+    );
+    Navigator.pop(context, edited);
   }
 
   @override

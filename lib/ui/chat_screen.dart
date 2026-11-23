@@ -16,7 +16,7 @@ import 'package:lopicode/agent/agent_tools.dart';
 import 'package:lopicode/agent/quota.dart';
 import 'package:lopicode/agent/usage.dart';
 import 'package:lopicode/project_session.dart';
-import 'package:lopicode/state/config_providers.dart';
+import 'package:lopicode/state/models_state.dart';
 import 'package:lopicode/state/presets_state.dart';
 import 'package:lopicode/state/ui_prefs.dart';
 import 'package:lopicode/state/workspace_chat.dart';
@@ -333,7 +333,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   @override
   Widget build(BuildContext context) {
     ref
-      ..watch(modelsRevProvider)
+      ..watch(modelsProvider)
       ..watch(presetsProvider);
     final prefs = ref.watch(chatPrefsProvider);
     final app = appOf(context);

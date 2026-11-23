@@ -12,6 +12,7 @@ import 'package:lopicode/agent/web_search.dart';
 import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/core/stores.dart';
 import 'package:lopicode/state/config_providers.dart';
+import 'package:lopicode/state/models_state.dart';
 import 'package:lopicode/state/presets_state.dart';
 import 'package:lopicode/state/skills_state.dart';
 import 'package:lopicode/theme/tokens.dart';
@@ -233,7 +234,7 @@ class _SubagentSettingsScreenState extends ConsumerState<SubagentSettingsScreen>
   Widget build(BuildContext context) {
     ref
       ..watch(agentSettingsRevProvider)
-      ..watch(modelsRevProvider);
+      ..watch(modelsProvider);
     final app = appOf(context);
     final t = Theme.of(context).textTheme;
     final on = app.settings.getBool(SettingKeys.subagentEnabled, true);

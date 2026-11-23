@@ -29,7 +29,7 @@ String thinkingLabel(String level) => switch (level) {
 
 double? _price(Object? v) => v is num && v >= 0 && v.isFinite ? v.toDouble() : null;
 
-/// 渠道里的一个模型。
+/// 渠道里的一个模型。不可变：要改就 [copyWith] 出一份新的，再交给 [ModelConfigStore.upsert] 存。
 class ModelSpec {
   ModelSpec({
     required this.id,
@@ -43,7 +43,7 @@ class ModelSpec {
     this.priceMiss,
     this.priceOutput,
   }) : name = (name == null || name.trim().isEmpty) ? id : name.trim(),
-       levels = levels ?? List.of(kThinkingLevels);
+       levels = List.unmodifiable(levels ?? kThinkingLevels);
 
   static const int defaultContext = 256000;
   static const int defaultMaxOutput = 32000;
@@ -57,23 +57,37 @@ class ModelSpec {
   final String id;
 
   /// 显示名。
-  String name;
-  int contextLength;
-  int maxOutput;
+  final String name;
+  final int contextLength;
+  final int maxOutput;
 
   /// 输入类型：false＝只有文本，true＝文本和图片。
-  bool vision;
+  final bool vision;
 
   /// 这个模型能不能“思考”，以及可选的档位。
-  bool thinking;
-  List<String> levels;
+  final bool thinking;
+  final List<String> levels;
 
   /// 单价（元每百万 token）：输入命中缓存 / 输入未命中 / 输出。用户自己填，三个都填了才估算费用。
-  double? priceHit;
-  double? priceMiss;
-  double? priceOutput;
+  final double? priceHit;
+  final double? priceMiss;
+  final double? priceOutput;
 
   static int clampContext(int v) => v.clamp(minContext, maxContext);
+
+  /// 换掉几项，出一份新的。三个单价是“整组换”：传了 [prices] 就三个一起换（里面的 null 表示清空）。
+  ModelSpec copyWith({String? name, int? contextLength, int? maxOutput, bool? vision, bool? thinking, List<String>? levels, ({double? hit, double? miss, double? output})? prices}) => ModelSpec(
+    id: id,
+    name: name ?? this.name,
+    contextLength: contextLength ?? this.contextLength,
+    maxOutput: maxOutput ?? this.maxOutput,
+    vision: vision ?? this.vision,
+    thinking: thinking ?? this.thinking,
+    levels: levels ?? this.levels,
+    priceHit: prices == null ? priceHit : prices.hit,
+    priceMiss: prices == null ? priceMiss : prices.miss,
+    priceOutput: prices == null ? priceOutput : prices.output,
+  );
 
   Map<String, dynamic> toJson() => {
     'id': id,
@@ -89,19 +103,26 @@ class ModelSpec {
   };
 
   static ModelSpec? fromJson(Object? j) {
-    if (j is! Map || j['id'] is! String || (j['id'] as String).trim().isEmpty) return null;
-    final levels = [
-      for (final l in (j['levels'] as List?) ?? const [])
-        if (kThinkingLevels.contains(l)) l as String,
-    ];
+    if (j is! Map) return null;
+    final id = j['id'];
+    if (id is! String || id.trim().isEmpty) return null;
+    final rawLevels = j['levels'];
+    final name = j['name'];
+    final context = j['context'];
+    final maxOutput = j['maxOutput'];
     return ModelSpec(
-      id: (j['id'] as String).trim(),
-      name: j['name'] is String ? j['name'] as String : null,
-      contextLength: clampContext(j['context'] is int ? j['context'] as int : defaultContext),
-      maxOutput: j['maxOutput'] is int && (j['maxOutput'] as int) > 0 ? j['maxOutput'] as int : defaultMaxOutput,
+      id: id.trim(),
+      name: name is String ? name : null,
+      contextLength: clampContext(context is int ? context : defaultContext),
+      maxOutput: maxOutput is int && maxOutput > 0 ? maxOutput : defaultMaxOutput,
       vision: j['vision'] == true,
       thinking: j['thinking'] == true,
-      levels: j['levels'] is List ? levels : null,
+      levels: rawLevels is List
+          ? [
+              for (final l in rawLevels)
+                if (l is String && kThinkingLevels.contains(l)) l,
+            ]
+          : null,
       priceHit: _price(j['priceHit']),
       priceMiss: _price(j['priceMiss']),
       priceOutput: _price(j['priceOut']),
@@ -109,12 +130,13 @@ class ModelSpec {
   }
 }
 
+/// 一个渠道（一家服务的接口地址 + 它下面勾选的模型）。不可变：要改走 [ModelConfigStore.upsert]。
 class Channel {
-  Channel({required this.id, required this.name, required this.protocol, required this.baseUrl, List<ModelSpec>? models}) : models = models ?? [];
+  Channel({required this.id, required this.name, required this.protocol, required this.baseUrl, List<ModelSpec>? models}) : models = List.unmodifiable(models ?? const []);
   final String id;
-  String name;
-  ChatProtocol protocol;
-  String baseUrl;
+  final String name;
+  final ChatProtocol protocol;
+  final String baseUrl;
   final List<ModelSpec> models;
 
   ModelSpec? model(String? id) => models.where((m) => m.id == id).firstOrNull;
@@ -128,15 +150,16 @@ class Channel {
   };
 
   static Channel? fromJson(Object? j) {
-    if (j is! Map || j['id'] is! String) return null;
-    final id = j['id'] as String;
-    if (!RegExp(r'^[a-z0-9]{1,24}$').hasMatch(id)) return null;
+    if (j is! Map) return null;
+    final id = j['id'];
+    if (id is! String || !RegExp(r'^[a-z0-9]{1,24}$').hasMatch(id)) return null;
+    final models = j['models'];
     return Channel(
       id: id,
       name: '${j['name'] ?? '渠道'}',
       protocol: ChatProtocol.byId(j['protocol']),
       baseUrl: '${j['baseUrl'] ?? ''}',
-      models: [for (final m in (j['models'] as List?) ?? const []) ?ModelSpec.fromJson(m)],
+      models: [for (final m in models is List ? models : const []) ?ModelSpec.fromJson(m)],
     );
   }
 }
@@ -170,6 +193,24 @@ class ResolvedModel {
   /// 已经按模型能力收过口的档位：模型不支持思考或没开这个档位时是 `off`。
   final String level;
   ModelSelection get selection => ModelSelection(channel.id, model.id, level);
+}
+
+/// 把一个选择落到 [channels] 里真实存在的渠道和模型上；指向的东西被删了就返回 null。
+ResolvedModel? resolveSelection(List<Channel> channels, ModelSelection? s) {
+  if (s == null) return null;
+  final ch = channels.where((c) => c.id == s.channelId).firstOrNull;
+  final m = ch?.model(s.modelId);
+  if (ch == null || m == null) return null;
+  final level = m.thinking && m.levels.contains(s.level) ? s.level : 'off';
+  return ResolvedModel(ch, m, level);
+}
+
+/// [channels] 里第一个能用的模型（兜底）。
+ResolvedModel? firstAvailableModel(List<Channel> channels) {
+  for (final c in channels) {
+    if (c.models.isNotEmpty) return ResolvedModel(c, c.models.first, 'off');
+  }
+  return null;
 }
 
 /// 现在为什么还不能和模型对话。
@@ -208,12 +249,27 @@ class ModelConfigStore {
 
   static String keyName(String channelId) => 'channel_key_$channelId';
 
-  List<Channel> channels = [];
+  /// 现有的渠道（列表不可改；每次增删改都换一份新的）。
+  List<Channel> get channels => _channels;
+  List<Channel> _channels = const [];
+  void _setChannels(Iterable<Channel> next) {
+    _channels = List.unmodifiable(next);
+    for (final listener in List.of(channelListeners)) {
+      listener();
+    }
+  }
+
+  /// 渠道清单换了一份（状态层据此换快照）。
+  final List<void Function()> channelListeners = [];
 
   /// 某个渠道的 Key 换了、清了，或者渠道被删了（额度那边据此作废旧的余额请求）。
   final List<void Function(String channelId)> keyListeners = [];
 
+  /// Key 存了、换了、清了的次数。
+  int keyRev = 0;
+
   void _keyChanged(String channelId) {
+    keyRev++;
     for (final listener in List.of(keyListeners)) {
       listener(channelId);
     }
@@ -222,7 +278,7 @@ class ModelConfigStore {
   /// 读配置；第一次运行新版时把老的“单一接口”设置搬成一个渠道。
   Future<void> load() async {
     final raw = settings.get<List<dynamic>>(kChannels);
-    channels = [for (final c in raw ?? const []) ?Channel.fromJson(c)];
+    _setChannels([for (final c in raw ?? const []) ?Channel.fromJson(c)]);
     if (raw == null) await _migrateLegacy();
   }
 
@@ -241,7 +297,7 @@ class ModelConfigStore {
       baseUrl: base,
       models: [if (model.isNotEmpty) ModelSpec(id: model)],
     );
-    channels = [ch];
+    _setChannels([ch]);
     if (key != null && key.isNotEmpty) {
       // 先写新位置，写成功了再删旧的，中途失败不会丢 Key。
       await secrets.write(keyName(ch.id), key);
@@ -265,24 +321,11 @@ class ModelConfigStore {
     return id.length > 24 ? id.substring(id.length - 24) : id;
   }
 
-  /// 新建或更新渠道。[apiKey] 留空（null 或空串）表示不动已保存的 Key。
+  /// 新建或更新渠道，返回存好的那一份。[apiKey] 留空（null 或空串）表示不动已保存的 Key；[models] 不传表示不动模型。
   Future<Channel> upsert({String? id, required String name, required ChatProtocol protocol, required String baseUrl, String? apiKey, List<ModelSpec>? models}) async {
-    var ch = channel(id);
-    if (ch == null) {
-      ch = Channel(id: id ?? _freeId(), name: name, protocol: protocol, baseUrl: baseUrl.trim(), models: models);
-      channels.add(ch);
-    } else {
-      ch
-        ..name = name
-        ..protocol = protocol
-        ..baseUrl = baseUrl.trim();
-      if (models != null) {
-        ch.models
-          ..clear()
-          ..addAll(models);
-      }
-    }
-    if (ch.name.trim().isEmpty) ch.name = protocol.label;
+    final old = channel(id);
+    final ch = Channel(id: old?.id ?? id ?? _freeId(), name: name.trim().isEmpty ? protocol.label : name, protocol: protocol, baseUrl: baseUrl.trim(), models: models ?? old?.models);
+    _setChannels(old == null ? [...channels, ch] : [for (final c in channels) c.id == ch.id ? ch : c]);
     if (apiKey != null && apiKey.trim().isNotEmpty) {
       final changed = (await secrets.read(keyName(ch.id))) != apiKey.trim();
       await secrets.write(keyName(ch.id), apiKey.trim());
@@ -293,7 +336,7 @@ class ModelConfigStore {
   }
 
   Future<void> remove(String id) async {
-    channels.removeWhere((c) => c.id == id);
+    _setChannels(channels.where((c) => c.id != id));
     await secrets.delete(keyName(id));
     _keyChanged(id);
     await save();
@@ -316,22 +359,10 @@ class ModelConfigStore {
   Future<void> setFixedSelection(ModelSelection? s) => settings.set(kFixed, s?.toJson());
 
   /// 把一个选择落到真实存在的渠道和模型上；指向的东西被删了就返回 null。
-  ResolvedModel? resolve(ModelSelection? s) {
-    if (s == null) return null;
-    final ch = channel(s.channelId);
-    final m = ch?.model(s.modelId);
-    if (ch == null || m == null) return null;
-    final level = m.thinking && m.levels.contains(s.level) ? s.level : 'off';
-    return ResolvedModel(ch, m, level);
-  }
+  ResolvedModel? resolve(ModelSelection? s) => resolveSelection(channels, s);
 
   /// 第一个能用的模型（兜底）。
-  ResolvedModel? get firstAvailable {
-    for (final c in channels) {
-      if (c.models.isNotEmpty) return ResolvedModel(c, c.models.first, 'off');
-    }
-    return null;
-  }
+  ResolvedModel? get firstAvailable => firstAvailableModel(channels);
 
   /// 新对话用哪个模型：固定默认 → 上次用的 → 第一个能用的。
   ResolvedModel? defaultForNewChat() => (newChatUsesFixed ? resolve(fixedSelection) : null) ?? resolve(lastSelection) ?? resolve(fixedSelection) ?? firstAvailable;

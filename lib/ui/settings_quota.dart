@@ -8,7 +8,7 @@ import 'package:lopicode/agent/model_config.dart';
 import 'package:lopicode/agent/quota.dart';
 import 'package:lopicode/app_services.dart';
 import 'package:lopicode/project_session.dart';
-import 'package:lopicode/state/config_providers.dart';
+import 'package:lopicode/state/models_state.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/app_ref.dart';
 import 'package:lopicode/ui/chrome.dart';
@@ -102,7 +102,7 @@ class _QuotaScreenState extends ConsumerState<QuotaScreen> {
 
   @override
   Widget build(BuildContext context) {
-    ref.watch(modelsRevProvider);
+    ref.watch(modelsProvider);
     final app = appOf(context);
     final c = context.colors;
     final t = Theme.of(context).textTheme;

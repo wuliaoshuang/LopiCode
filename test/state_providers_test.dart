@@ -6,6 +6,7 @@ import 'package:lopicode/agent/presets.dart';
 import 'package:lopicode/core/stores.dart';
 import 'package:lopicode/state/app_providers.dart';
 import 'package:lopicode/state/config_providers.dart';
+import 'package:lopicode/state/models_state.dart';
 import 'package:lopicode/state/presets_state.dart';
 import 'package:lopicode/state/runtime_state.dart';
 import 'package:lopicode/state/ui_prefs.dart';
@@ -92,8 +93,8 @@ void main() {
   });
 
   test('渠道与模型：加渠道、换 Key、删渠道都通知；预设那边不受影响', () async {
-    final models = count(modelsRevProvider);
-    final keys = count(channelKeyRevProvider);
+    final models = count(modelsProvider);
+    int keys() => box.read(modelsProvider).keyRev;
     final presets = count(presetsProvider);
     final ch = await env.services.models.upsert(name: '甲', protocol: ChatProtocol.openaiChat, baseUrl: 'https://example.invalid/v1', apiKey: 'sk-1');
     expect(models(), greaterThan(0));
@@ -110,7 +111,7 @@ void main() {
 
   test('预设与个人偏好：改了通知；渠道那边不受影响', () async {
     final presets = count(presetsProvider);
-    final models = count(modelsRevProvider);
+    final models = count(modelsProvider);
     await env.services.presets.upsert(name: '审查', prompt: '只看不改');
     expect(presets(), 1);
     await env.services.settings.set(PresetStore.kPreferences, '说中文');

@@ -5,7 +5,7 @@ import 'package:lopicode/agent/model_config.dart';
 import 'package:lopicode/agent/quota.dart';
 import 'package:lopicode/agent/usage.dart';
 import 'package:lopicode/project_session.dart';
-import 'package:lopicode/state/config_providers.dart';
+import 'package:lopicode/state/models_state.dart';
 import 'package:lopicode/state/workspace_chat.dart';
 import 'package:lopicode/state/workspace_conversations.dart';
 import 'package:lopicode/theme/tokens.dart';
@@ -51,7 +51,7 @@ class _UsageSheetState extends ConsumerState<UsageSheet> {
     ref
       ..watch(activeChatProvider(s))
       ..watch(conversationsProvider(s))
-      ..watch(modelsRevProvider);
+      ..watch(modelsProvider);
     final ctx = s.contextUsage;
     final u = s.usageTotals;
     final rate = u.hitRate;

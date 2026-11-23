@@ -1,35 +1,16 @@
-// 配置类状态的订阅入口：渠道与模型、预设与个人偏好、技能、自动化任务、Agent 相关设置。
+// 配置类状态的订阅入口：技能、自动化任务、Agent 相关设置、SSH 主机、联网搜索。
+// （渠道与模型在 models_state.dart，预设在 presets_state.dart，都是完整版。）
 //
 // 这些数据的主人是各自的存储对象（都落在设置文件或自己的文件里，见 lib/agent/）。
 // 这里的 provider 负责“谁变了只通知关心它的界面”：界面在 build 里 `ref.watch(某个 Rev)`，
 // 然后照常从存储对象读值；要改就调存储对象的方法——它写完会让对应的 Rev 加一。
 // 不要再写“改完手动通知全应用”的代码。
-import 'package:lopicode/agent/model_config.dart';
 import 'package:lopicode/agent/skills.dart';
 import 'package:lopicode/core/stores.dart';
 import 'package:lopicode/state/app_providers.dart';
 import 'package:riverpod/riverpod.dart';
 
 int _sum(Ref ref, List<String> keys) => keys.fold(0, (n, k) => n + ref.watch(settingRevProvider(k)));
-
-/// 渠道的 Key 变了（Key 不在设置文件里，所以单独记）。
-class ChannelKeyRev extends Notifier<int> {
-  @override
-  int build() {
-    final models = ref.watch(appServicesProvider).models;
-    void onKey(String _) => state = state + 1;
-    models.keyListeners.add(onKey);
-    ref.onDispose(() => models.keyListeners.remove(onKey));
-    return 0;
-  }
-}
-
-final channelKeyRevProvider = NotifierProvider<ChannelKeyRev, int>(ChannelKeyRev.new);
-
-/// 渠道与模型（渠道列表、Key、上次 / 固定选中的模型、新对话默认用哪个）变了。
-final modelsRevProvider = Provider<int>(
-  (ref) => _sum(ref, const [ModelConfigStore.kChannels, ModelConfigStore.kLast, ModelConfigStore.kFixed, ModelConfigStore.kDefaultMode]) + ref.watch(channelKeyRevProvider),
-);
 
 /// 新对话默认权限、子代理、智能体团队这几项设置变了。
 final agentSettingsRevProvider = Provider<int>(

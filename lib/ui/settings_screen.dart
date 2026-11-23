@@ -19,6 +19,7 @@ import 'package:lopicode/runtime/linux_runtime.dart';
 import 'package:lopicode/runtime/runtime_screen.dart';
 import 'package:lopicode/state/app_providers.dart';
 import 'package:lopicode/state/config_providers.dart';
+import 'package:lopicode/state/models_state.dart';
 import 'package:lopicode/state/presets_state.dart';
 import 'package:lopicode/state/runtime_state.dart';
 import 'package:lopicode/state/ui_prefs.dart';
@@ -48,7 +49,7 @@ class SettingsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     ref
       ..watch(settingsAnyRevProvider)
-      ..watch(channelKeyRevProvider)
+      ..watch(modelsProvider)
       ..watch(automationsRevProvider)
       ..watch(skillFilesRevProvider)
       ..watch(webSearchRevProvider);
@@ -275,7 +276,7 @@ class _OverviewCardState extends ConsumerState<_OverviewCard> {
 
   @override
   Widget build(BuildContext context) {
-    ref.watch(modelsRevProvider);
+    ref.watch(modelsProvider);
     final app = appOf(context);
     final c = context.colors;
     final t = Theme.of(context).textTheme;

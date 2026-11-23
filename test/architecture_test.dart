@@ -55,7 +55,7 @@ const _oversized = {
   'lib/ui/chat_panels.dart': 793,
   'lib/ui/usage_ui.dart': 718,
   'lib/ui/settings_agent.dart': 725,
-  'lib/ui/settings_ai.dart': 650,
+  'lib/ui/settings_ai.dart': 649,
 };
 
 List<String> libFiles() => [
