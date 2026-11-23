@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lopicode/preview/preview_server.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/state/workspace_files.dart';
+import 'package:lopicode/state/workspace_preview.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
@@ -28,14 +29,14 @@ class PreviewTab extends ConsumerStatefulWidget {
 
 class _PreviewTabState extends ConsumerState<PreviewTab> {
   WebViewController? _web;
-  StreamSubscription<void>? _logSub;
   String? _error;
   bool _ready = false;
   bool _stale = false;
   bool _consoleOpen = false;
   int _width = 0; // 0 = 跟屏幕一样宽
 
-  PreviewServer get server => widget.session.preview;
+  PreviewNotifier get _preview => ref.read(previewProvider(widget.session).notifier);
+  PreviewServer get server => _preview.server;
 
   @override
   void initState() {
@@ -51,18 +52,11 @@ class _PreviewTabState extends ConsumerState<PreviewTab> {
     if (widget.active && !old.active && _stale) _reload();
   }
 
-  @override
-  void dispose() {
-    _logSub?.cancel();
-    super.dispose();
-  }
-
   Future<void> _start() async {
     try {
-      await server.start();
-      _logSub = server.onLog.listen((_) {
-        if (mounted) setState(() {});
-      });
+      await _preview.start();
+      // 服务器没起来：原因在状态里，下面 build 会显示
+      if (!mounted || ref.read(previewProvider(widget.session)).error != null) return;
       if (PreviewTab.debugViewBuilder == null) {
         final web = _web = WebViewController();
         await web.setJavaScriptMode(JavaScriptMode.unrestricted);
@@ -92,8 +86,10 @@ class _PreviewTabState extends ConsumerState<PreviewTab> {
   Widget build(BuildContext context) {
     final c = context.colors;
     final t = Theme.of(context).textTheme;
-    if (_error != null) {
-      return EmptyState(icon: Icons.error_outline, title: '预览服务器没启动成功', message: _error!);
+    // 服务器起没起来、控制台日志变没变：从这里订阅
+    final error = ref.watch(previewProvider(widget.session)).error ?? _error;
+    if (error != null) {
+      return EmptyState(icon: Icons.error_outline, title: '预览服务器没启动成功', message: error);
     }
     if (!_ready) return const Center(child: CircularProgressIndicator());
     final errors = server.logs.where((l) => l.level == 'error').length;

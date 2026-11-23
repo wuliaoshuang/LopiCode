@@ -25,6 +25,7 @@ import 'package:lopicode/runtime/linux_shell_backend.dart';
 import 'package:lopicode/ssh/ssh_config.dart';
 import 'package:lopicode/ssh/ssh_connector.dart';
 import 'package:lopicode/state/workspace_files.dart';
+import 'package:lopicode/state/workspace_preview.dart';
 import 'package:lopicode/state/workspace_terminals.dart';
 import 'package:lopicode/terminal/terminal_session.dart';
 import 'package:path/path.dart' as p;
@@ -227,8 +228,6 @@ class _Semaphore {
 /// 各个页面共用这一个对象，切页面不丢状态。
 class ProjectSession extends ChangeNotifier {
   ProjectSession(this.app, this.project, {this.headless = false}) : guard = project.guard {
-    preview = PreviewServer(project.dir);
-    // 带界面的工作区一打开就有一个终端会话（不带界面的不开）
     if (!headless && !app.disposed) app.container.read(terminalsProvider(this));
   }
 
@@ -238,7 +237,9 @@ class ProjectSession extends ChangeNotifier {
   final AppServices app;
   final Project project;
   final PathGuard guard;
-  late final PreviewServer preview;
+
+  /// 预览用的本机小服务器：归 [previewProvider] 管，这里只是转一手。
+  PreviewServer get preview => app.container.read(previewProvider(this).notifier).server;
 
   // ── 文件改动 ──────────────────────────────────────────
   /// 项目文件有变化：文件树、预览订阅 [filesRevProvider] 跟着刷新。
@@ -248,7 +249,6 @@ class ProjectSession extends ChangeNotifier {
   }
 
   // ── 终端 ─────────────────────────────────────────────
-  /// 开着的终端会话和当前是第几个：状态在 [terminalsProvider]，这里只是转一手。
   TerminalsState get _terminals => _disposed || app.disposed ? const TerminalsState() : app.container.read(terminalsProvider(this));
   TerminalsNotifier get _terminalsCtl => app.container.read(terminalsProvider(this).notifier);
   List<TerminalSession> get terminals => _terminals.sessions;
@@ -1379,10 +1379,10 @@ class ProjectSession extends ChangeNotifier {
       r.runner?.cancel();
     }
     _disposed = true;
-    unawaited(preview.stop());
     if (!app.disposed) {
       app.container.invalidate(filesRevProvider(this));
       app.container.invalidate(terminalsProvider(this)); // 会话的进程在这里收掉
+      app.container.invalidate(previewProvider(this)); // 预览服务器在这里停掉
     }
     super.dispose();
   }
