@@ -4,13 +4,18 @@
 // - 气泡：Agent 的回复是靠左的大圆角浅灰块（左上角小圆角），右边留出一截；我的消息是靠右的浅蓝块（右上角小圆角）。正文 16 号字。
 // - 输入框是一整条浅灰胶囊，悬浮在底部导航上方：左“＋”、中间输入、右边圆形发送 / 停止（参考图里麦克风的位置）。
 // - 一行只做一件事：模型、权限、计划模式、图片、引用文件都收进“＋”面板，每项一行并写着当前值；
-//   新对话、项目规则、Agent 预设、团队、压缩、导出、删除都在右上“···”菜单里。功能一个不少。
+//   新对话、Agent 预设、团队、压缩、导出、删除都在右上“···”菜单里。项目规则在“设置”里。
 // - 胶囊上方按需叠几条窄条：自动允许中、计划模式、排队的消息、附件缩略图、/ 指令提示；确认卡和提问卡也钉在这里。
-// - 空对话：正中一个小的文字入口“项目规则”，几条开场建议贴着胶囊上方，弱化显示。
+// - 空对话：默认是空的；在“设置”里打开“在新对话里显示开场建议”后，几条建议贴着胶囊上方，弱化显示。
 // - 主操作只有一个：发送。AI 生成时长按发送键选“排队 / 插话 / 中断并发送”。
 import 'dart:convert';
 
+import 'package:lopicode/agent/usage.dart';
+
 import 'package:lopicode/agent/agent_tools.dart';
+import 'package:lopicode/agent/quota.dart';
+import 'package:lopicode/core/stores.dart';
+import 'package:lopicode/ui/settings_quota.dart';
 import 'package:lopicode/app_services.dart';
 import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/project_session.dart';
@@ -20,6 +25,7 @@ import 'package:lopicode/ui/chrome.dart';
 import 'package:lopicode/ui/settings_ai.dart';
 import 'package:lopicode/ui/shell.dart';
 import 'package:lopicode/ui/team_screen.dart';
+import 'package:lopicode/ui/usage_ui.dart';
 import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -57,7 +63,11 @@ class _ChatScreenState extends State<ChatScreen> {
     super.initState();
     s.addListener(_onSession);
     _input.addListener(_onInput);
-    s.loadChat();
+    // 打开聊天时查一次余额（只对 DeepSeek 官方渠道有动作，最多每分钟一次）。
+    s.loadChat().then((_) {
+      final ch = s.currentModel?.channel;
+      if (mounted && ch != null) s.app.quota.refresh(ch);
+    });
   }
 
   @override
@@ -138,6 +148,34 @@ class _ChatScreenState extends State<ChatScreen> {
     await s.setPlanMode(!s.planMode);
   }
 
+  void _openQuota() {
+    final ch = s.currentModel?.channel;
+    if (ch == null) return;
+    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => QuotaScreen(channelId: ch.id)));
+  }
+
+  void _showUsage() {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheet) => UsageSheet(
+        session: s,
+        onOpenQuota: (ch) {
+          Navigator.pop(sheet);
+          Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => QuotaScreen(channelId: ch.id)));
+        },
+      ),
+    );
+  }
+
+  void _showTurn(TurnUsage turn) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => TrajectorySheet(turn: turn, findTool: s.findToolItem),
+    );
+  }
+
   Future<void> _compact() async {
     final msg = await s.compactConversation();
     if (mounted && msg != '已压缩') showSnack(context, msg);
@@ -152,15 +190,6 @@ class _ChatScreenState extends State<ChatScreen> {
     if (!_canSend) return;
     final mode = await showModalBottomSheet<SendMode>(context: context, builder: (_) => SendModeSheet(hasImages: _attachments.isNotEmpty));
     if (mode != null) _send(null, mode);
-  }
-
-  Future<void> _editRules() async {
-    final text = await showModalBottomSheet<String>(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) => _RulesSheet(initial: s.projectRules),
-    );
-    if (text != null) await s.setProjectRules(text);
   }
 
   Future<void> _pickModel() async {
@@ -307,20 +336,20 @@ class _ChatScreenState extends State<ChatScreen> {
             icon: const Icon(Icons.more_horiz),
             onSelected: (v) {
               if (v == 'new') s.newConversation();
-              if (v == 'rules') _editRules();
               if (v == 'preset') _pickPreset();
               if (v == 'team') {
                 Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => TeamScreen(session: s)));
               }
+              if (v == 'usage') _showUsage();
               if (v == 'compact') _compact();
               if (v == 'export') _export();
               if (v == 'delete') _deleteConversation();
             },
             itemBuilder: (_) => [
               PopupMenuItem(value: 'new', enabled: !s.agentBusy, child: const Text('新对话')),
-              const PopupMenuItem(value: 'rules', child: Text('项目规则')),
               PopupMenuItem(value: 'preset', child: Text('Agent 预设：${s.preset.name}')),
               if (s.teamEnabled) const PopupMenuItem(value: 'team', child: Text('智能体团队')),
+              const PopupMenuItem(value: 'usage', child: Text('用量')),
               PopupMenuItem(value: 'compact', enabled: !s.agentBusy && s.chat.isNotEmpty, child: const Text('压缩对话')),
               PopupMenuItem(value: 'export', enabled: s.chat.isNotEmpty, child: const Text('导出对话')),
               PopupMenuItem(
@@ -342,8 +371,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       padding: EdgeInsets.only(top: topInset),
                       child: _EmptyChat(
                         configured: app.agentConfigured,
-                        hasRules: s.projectRules.isNotEmpty,
-                        onRules: _editRules,
+                        showIdeas: app.settings.getBool(SettingKeys.chatSuggestions),
                         onPick: _send,
                       ),
                     )
@@ -353,7 +381,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       itemCount: s.chat.length + (s.agentBusy && pending == null && question == null ? 1 : 0),
                       itemBuilder: (context, i) {
                         if (i >= s.chat.length) return const _Working();
-                        return ChatItemView(item: s.chat[i], onOpenChild: _openChild);
+                        return ChatItemView(item: s.chat[i], onOpenChild: _openChild, onOpenQuota: _openQuota, onOpenTurn: _showTurn);
                       },
                     ),
             ),
@@ -391,7 +419,10 @@ class _ChatScreenState extends State<ChatScreen> {
                   _runSlash(cmd);
                 },
               ),
+            if (model != null) LowBalanceStrip(channel: model.channel),
             _InputCard(
+              context_: s.contextUsage,
+              onContext: _showUsage,
               controller: _input,
               focusNode: _focus,
               busy: s.agentBusy,
@@ -419,8 +450,13 @@ class _InputCard extends StatelessWidget {
     required this.onSend,
     required this.onLongSend,
     required this.onStop,
+    this.context_,
+    this.onContext,
   });
 
+  /// 上下文占用（输入框旁的小环）；没配模型是 null，不显示。
+  final ContextUsage? context_;
+  final VoidCallback? onContext;
   final TextEditingController controller;
   final FocusNode focusNode;
   final bool busy;
@@ -476,6 +512,7 @@ class _InputCard extends StatelessWidget {
               ),
             ),
           ),
+          if (context_ != null && onContext != null) ContextRing(usage: context_!, onTap: onContext!),
           Padding(
             padding: const EdgeInsets.all(Space.x1),
             child: busy && !canSend
@@ -528,12 +565,11 @@ class _RoundButton extends StatelessWidget {
   );
 }
 
-/// 空对话：顶部正中一个小入口，底部几条弱化的开场建议。
+/// 空对话：默认什么都不放；用户在设置里打开后，底部显示几条弱化的开场建议。
 class _EmptyChat extends StatelessWidget {
-  const _EmptyChat({required this.configured, required this.hasRules, required this.onRules, required this.onPick});
+  const _EmptyChat({required this.configured, required this.showIdeas, required this.onPick});
   final bool configured;
-  final bool hasRules;
-  final VoidCallback onRules;
+  final bool showIdeas;
   final void Function(String) onPick;
 
   static const _ideas = [
@@ -548,15 +584,10 @@ class _EmptyChat extends StatelessWidget {
     final t = Theme.of(context).textTheme;
     return Column(
       children: [
-        const SizedBox(height: Space.x6),
-        TextButton.icon(
-          onPressed: onRules,
-          icon: Icon(Icons.tune, size: 18, color: c.accent),
-          label: Text(hasRules ? '项目规则 · 已设置' : '项目规则', style: t.bodyMedium?.copyWith(color: c.accent)),
-        ),
         Expanded(child: configured ? const SizedBox.shrink() : const _NeedsSetup()),
-        if (configured)
+        if (configured && showIdeas)
           Padding(
+            key: const ValueKey('chat-ideas'),
             padding: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x3),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -580,53 +611,6 @@ class _EmptyChat extends StatelessWidget {
             ),
           ),
       ],
-    );
-  }
-}
-
-class _RulesSheet extends StatefulWidget {
-  const _RulesSheet({required this.initial});
-  final String initial;
-
-  @override
-  State<_RulesSheet> createState() => _RulesSheetState();
-}
-
-class _RulesSheetState extends State<_RulesSheet> {
-  late final _text = TextEditingController(text: widget.initial);
-
-  @override
-  void dispose() {
-    _text.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final t = Theme.of(context).textTheme;
-    return Padding(
-      padding: EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, MediaQuery.viewInsetsOf(context).bottom + Space.x4),
-      child: SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text('项目规则', style: t.titleLarge),
-            const SizedBox(height: Space.x1),
-            Text('写给 Agent 的长期要求，这个项目的每段对话都会带上。', style: t.bodySmall),
-            const SizedBox(height: Space.x4),
-            TextField(
-              controller: _text,
-              minLines: 5,
-              maxLines: 10,
-              decoration: const InputDecoration(hintText: '比如：页面用中文；颜色用浅色系；改完告诉我改了哪些文件。'),
-            ),
-            const SizedBox(height: Space.x4),
-            FilledButton(onPressed: () => Navigator.pop(context, _text.text), child: const Text('保存')),
-          ],
-        ),
-      ),
     );
   }
 }
@@ -716,7 +700,13 @@ class _Working extends StatelessWidget {
 }
 
 class ChatItemView extends StatelessWidget {
-  const ChatItemView({super.key, required this.item, this.onOpenChild});
+  const ChatItemView({super.key, required this.item, this.onOpenChild, this.onOpenQuota, this.onOpenTurn});
+
+  /// 点回合脚注时打开本轮轨迹。
+  final void Function(TurnUsage turn)? onOpenTurn;
+
+  /// 被额度上限拦住的提示下面“去调额度上限”的去处。
+  final VoidCallback? onOpenQuota;
   final ChatItem item;
 
   /// 点“派子代理”那张卡时进子对话。
@@ -781,11 +771,27 @@ class ChatItemView extends StatelessWidget {
         );
       case final ToolItem tool:
         return _ToolCard(tool: tool, onOpenChild: onOpenChild);
+      case UsageItem(:final turn):
+        if (!AppScope.of(context).settings.getBool(SettingKeys.chatUsage, true)) return const SizedBox.shrink();
+        return TurnFootnote(turn: turn, onTap: onOpenTurn == null ? null : () => onOpenTurn!(turn));
       case NoticeItem(:final text, :final isError):
-        return InfoBanner(
+        final banner = InfoBanner(
           text,
           tone: isError ? BannerTone.danger : BannerTone.info,
           margin: const EdgeInsets.symmetric(vertical: Space.x2),
+        );
+        // 被额度上限拦住：紧跟一个去调上限的入口。
+        if (!isError || !text.startsWith(kQuotaBlockedPrefix) || onOpenQuota == null) return banner;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            banner,
+            TextButton.icon(
+              onPressed: onOpenQuota,
+              icon: const Icon(Icons.speed_outlined, size: 18),
+              label: const Text('去调额度上限'),
+            ),
+          ],
         );
     }
   }

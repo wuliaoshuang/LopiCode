@@ -9,6 +9,8 @@ import 'package:lopicode/agent/automation.dart';
 import 'package:lopicode/agent/command_runner.dart';
 import 'package:lopicode/agent/model_config.dart';
 import 'package:lopicode/agent/presets.dart';
+import 'package:lopicode/agent/quota.dart';
+import 'package:lopicode/agent/usage.dart';
 import 'package:lopicode/agent/skills.dart';
 import 'package:lopicode/agent/team.dart';
 import 'package:lopicode/agent/web_search.dart';
@@ -56,6 +58,23 @@ class ToolItem extends ChatItem {
   String? childConversationId;
 }
 
+/// 上下文占用。
+class ContextUsage {
+  const ContextUsage(this.used, this.limit, {required this.estimated});
+  final int used;
+  final int limit;
+
+  /// true＝按字数估的“预计下次请求”；false＝接口返回的“上次请求”。
+  final bool estimated;
+  double get fraction => (used / limit).clamp(0.0, 1.0);
+}
+
+/// 一轮结束后，回复下方那行用量。
+class UsageItem extends ChatItem {
+  UsageItem(this.turn);
+  final TurnUsage turn;
+}
+
 class NoticeItem extends ChatItem {
   NoticeItem(this.text, {this.isError = false});
   final String text;
@@ -76,7 +95,9 @@ class Conversation {
     this.planMode = false,
     this.presetId,
     this.auto = false,
-  });
+    UsageTotals? usage,
+    this.lastInput,
+  }) : usage = usage ?? UsageTotals();
   final String id;
   String title;
   DateTime updatedAt;
@@ -101,6 +122,12 @@ class Conversation {
   /// 是不是自动化任务跑出来的。
   final bool auto;
 
+  /// 这段对话累计的用量（含它派出去的子代理）。压缩对话不会清掉它。
+  final UsageTotals usage;
+
+  /// 最近一次请求的输入 token 数（接口给的），用来算上下文占用；还没有是 null。
+  int? lastInput;
+
   Map<String, dynamic> toJson() => {
     'id': id,
     'title': title,
@@ -113,6 +140,8 @@ class Conversation {
     'plan': planMode,
     'preset': presetId,
     'auto': auto,
+    if (usage.requests > 0) 'usage': usage.toJson(),
+    'lastInput': ?lastInput,
   };
 }
 
@@ -162,6 +191,9 @@ class ConvRun {
 
   /// 没人在场（自动化任务）：需要确认的操作一律按拒绝处理，也不提问。
   bool unattended = false;
+
+  /// 正在跑的这一轮的用量；跑完后留着最近一轮的。
+  TurnUsage? turn;
 }
 
 class _Semaphore {
@@ -479,6 +511,8 @@ class ProjectSession extends ChangeNotifier {
                 planMode: m['plan'] == true,
                 presetId: m['preset'] is String ? m['preset'] as String : null,
                 auto: m['auto'] == true,
+                usage: UsageTotals.fromJson(m['usage']),
+                lastInput: m['lastInput'] is int ? m['lastInput'] as int : null,
               ),
             );
           }
@@ -656,6 +690,8 @@ class ProjectSession extends ChangeNotifier {
             item.denied = item.result!.startsWith('用户拒绝');
           }
       }
+      final turn = TurnUsage.fromJson(m['_usage']);
+      if (turn != null) run.items.add(UsageItem(turn));
     }
   }
 
@@ -905,6 +941,9 @@ class ProjectSession extends ChangeNotifier {
         final outcome = await _execute(run, task, root: root, skills: skills, writeScope: scope, taskNote: scope == null ? null : '你只能改这些位置的文件：${scope.join('、')}。');
         result = outcome.text;
         failed = outcome.failed;
+        // 子代理花的用量记在上级这一轮名下（可以分开看）。
+        final spent = run.turn;
+        if (spent != null && spent.totals.requests > 0) parent.turn?.children.add(ChildUsage(name, spent));
       }
     } finally {
       _subSlots.release();
@@ -1065,6 +1104,11 @@ class ProjectSession extends ChangeNotifier {
       maxParallel: subagentMaxConcurrent,
     );
     run.runner = runner;
+    final turn = TurnUsage();
+    run.turn = turn;
+    final price = resolved == null ? null : ModelPrice.of(resolved.model);
+    final clock = Stopwatch()..start();
+    final toolClocks = <String, Stopwatch>{};
     AssistantItem? streaming;
     var last = '';
     var failed = false;
@@ -1086,6 +1130,8 @@ class ProjectSession extends ChangeNotifier {
             if (identical(run, _active)) queue.removeWhere((q) => q.steer && q.text == text);
           case ToolStarted(:final callId, :final name, :final arguments):
             run.items.add(ToolItem(callId, name, arguments));
+            turn.steps.add(ToolStep(callId, name));
+            toolClocks[callId] = Stopwatch()..start();
           case ToolFinished(:final callId, :final outcome):
             final item = run.items.whereType<ToolItem>().lastWhere((t) => t.callId == callId);
             item
@@ -1093,6 +1139,12 @@ class ProjectSession extends ChangeNotifier {
               ..ok = outcome.ok
               ..denied = outcome.denied;
             if (outcome.changedFiles) filesChanged();
+            turn.steps.whereType<ToolStep>().where((t) => t.callId == callId).lastOrNull
+              ?..ms = toolClocks.remove(callId)?.elapsedMilliseconds
+              ..ok = outcome.ok;
+          case RequestFinished(:final usage, :final ms, :final firstMs, :final startedAt):
+            turn.steps.add(RequestStep(RequestUsage(usage: usage, ms: ms, firstMs: firstMs, startedAt: startedAt, cost: usage == null ? null : price?.cost(usage))));
+            if (usage != null) run.conv.lastInput = usage.input;
           case AgentNotice(:final text):
             run.items.add(NoticeItem(text));
             if (text.startsWith('已停止')) failed = true;
@@ -1118,8 +1170,18 @@ class ProjectSession extends ChangeNotifier {
       _dropPendingOf({run.conv.id});
       run.busy = false;
       run.runner = null;
+      turn.ms = clock.elapsedMilliseconds;
+      _recordTurn(run, turn);
       await _saveRun(run);
       notifyListeners();
+    }
+    // 额度：对话结束后查一次余额（有节流）；到提醒线或到顶时说一声。
+    if (resolved != null) {
+      final note = await app.quota.afterRun(resolved.channel);
+      if (note != null && run.conv.parentId == null && !run.unattended) {
+        run.items.add(NoticeItem(note, isError: note.startsWith(kQuotaBlockedPrefix)));
+        notifyListeners();
+      }
     }
     // 提醒：对话快把上下文占满了。
     final limit = resolved?.model.contextLength;
@@ -1128,6 +1190,57 @@ class ProjectSession extends ChangeNotifier {
       notifyListeners();
     }
     return (text: last, failed: failed);
+  }
+
+  /// 把这一轮的用量记到对话上：累计进对话合计，并挂在这一轮最后一条消息上（跟着对话存盘）。
+  void _recordTurn(ConvRun run, TurnUsage turn) {
+    final totals = turn.totals;
+    if (totals.requests == 0) return; // 一次请求都没发出去（没配模型、被额度拦下）：不显示
+    // 子代理的用量由上级那一轮统一算进主对话；这里只累计到它自己这段对话上。
+    run.conv.usage
+      ..add(totals)
+      ..turns += 1;
+    // 用户消息被撤回时（模型一个字没回），最后一条是上一轮的，别盖掉上一轮的记录。
+    if (run.messages.isNotEmpty && !run.messages.last.containsKey('_usage')) {
+      run.messages.last['_usage'] = turn.toJson();
+    }
+    run.items.add(UsageItem(turn));
+  }
+
+  /// 按调用 id 在已加载的对话里找那次工具调用（轨迹的步骤详情用）。
+  ToolItem? findToolItem(String callId) {
+    for (final run in _runs.values) {
+      for (final item in run.items) {
+        if (item is ToolItem && item.callId == callId) return item;
+      }
+    }
+    return null;
+  }
+
+  /// 当前对话的累计用量。
+  UsageTotals get usageTotals => activeConversation.usage;
+
+  /// 当前对话的上下文占用。接口返回过用量就用“上次请求的输入 token 数”；
+  /// 还没有就按字数估一个“预计下次请求”（[ContextUsage.estimated] 为 true）。没配模型是 null。
+  ContextUsage? get contextUsage {
+    final limit = modelOf(activeConversation)?.model.contextLength;
+    if (limit == null || limit <= 0) return null;
+    final last = activeConversation.lastInput;
+    if (last != null) return ContextUsage(last, limit, estimated: false);
+    return ContextUsage(estimateTextTokens(systemPrompt) + AgentRunner.estimateTokens(_messages), limit, estimated: true);
+  }
+
+  /// 上下文分项（系统提示词 / 工具定义 / 消息）。都是按字数估的，不是接口给的。
+  Future<({int system, int tools, int messages})> contextBreakdown() async {
+    final conv = activeConversation;
+    final root = rootOf(conv);
+    final skills = await app.skills.enabled(workspaceDir: project.dir);
+    final box = await _toolboxFor(_runOf(conv), root, skills);
+    return (
+      system: estimateTextTokens(_systemPromptFor(conv, root, skills)),
+      tools: estimateTextTokens(jsonEncode(box.specs)),
+      messages: AgentRunner.estimateTokens(_messages),
+    );
   }
 
   // ── 发送、插话、排队 ─────────────────────────────────

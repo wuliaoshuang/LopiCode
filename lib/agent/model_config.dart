@@ -26,6 +26,8 @@ String thinkingLabel(String level) => switch (level) {
   _ => '关闭',
 };
 
+double? _price(Object? v) => v is num && v >= 0 && v.isFinite ? v.toDouble() : null;
+
 /// 渠道里的一个模型。
 class ModelSpec {
   ModelSpec({
@@ -36,6 +38,9 @@ class ModelSpec {
     this.vision = false,
     this.thinking = false,
     List<String>? levels,
+    this.priceHit,
+    this.priceMiss,
+    this.priceOutput,
   }) : name = (name == null || name.trim().isEmpty) ? id : name.trim(),
        levels = levels ?? List.of(kThinkingLevels);
 
@@ -62,6 +67,11 @@ class ModelSpec {
   bool thinking;
   List<String> levels;
 
+  /// 单价（元每百万 token）：输入命中缓存 / 输入未命中 / 输出。用户自己填，三个都填了才估算费用。
+  double? priceHit;
+  double? priceMiss;
+  double? priceOutput;
+
   static int clampContext(int v) => v.clamp(minContext, maxContext);
 
   Map<String, dynamic> toJson() => {
@@ -72,6 +82,9 @@ class ModelSpec {
     'vision': vision,
     'thinking': thinking,
     'levels': levels,
+    'priceHit': ?priceHit,
+    'priceMiss': ?priceMiss,
+    'priceOut': ?priceOutput,
   };
 
   static ModelSpec? fromJson(Object? j) {
@@ -88,6 +101,9 @@ class ModelSpec {
       vision: j['vision'] == true,
       thinking: j['thinking'] == true,
       levels: j['levels'] is List ? levels : null,
+      priceHit: _price(j['priceHit']),
+      priceMiss: _price(j['priceMiss']),
+      priceOutput: _price(j['priceOut']),
     );
   }
 }

@@ -2,11 +2,15 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:lopicode/agent/usage.dart';
 
 /// 流式回复里的一小块。字段名与 OpenAI Chat Completions 的
 /// `chat.completion.chunk` 对应，见 docs/api-notes.md。
 class ChatDelta {
-  ChatDelta({this.content, this.toolCalls = const [], this.finishReason, this.raw});
+  ChatDelta({this.content, this.toolCalls = const [], this.finishReason, this.raw, this.usage});
+
+  /// 这次请求的用量（接口在流的最后给；没给就一直是 null）。
+  final TokenUsage? usage;
   final String? content;
   final List<ToolCallDelta> toolCalls;
   final String? finishReason;
@@ -64,6 +68,9 @@ class OpenAiChatClient implements ChatClient {
   final int? maxTokens;
   final http.Client _http;
 
+  /// 要不要带 `stream_options.include_usage`。接口明确不认这个参数时自动关掉。
+  bool _askUsage = true;
+
   /// 去掉结尾的 `/`；用户如果把完整的 `/chat/completions` 贴进来也接受。
   static String normalizeBaseUrl(String raw) {
     var url = raw.trim();
@@ -90,30 +97,44 @@ class OpenAiChatClient implements ChatClient {
     } on FormatException {
       throw ChatApiException('接口地址不是合法的网址：$baseUrl');
     }
-    final request = http.Request('POST', uri)
-      ..headers['Content-Type'] = 'application/json'
-      ..headers['Accept'] = 'text/event-stream'
-      ..body = jsonEncode({
-        'model': model.trim(),
-        'messages': stripInternal(messages),
-        'stream': true,
-        if (reasoningEffort != null) 'reasoning_effort': reasoningEffort,
-        if (maxTokens != null) 'max_tokens': maxTokens,
-        if (tools.isNotEmpty) 'tools': tools,
-        if (tools.isNotEmpty) 'tool_choice': 'auto',
-      });
-    if (apiKey.isNotEmpty) request.headers['Authorization'] = 'Bearer $apiKey';
-
-    final http.StreamedResponse response;
-    try {
-      response = await _http.send(request);
-    } on Exception catch (e) {
-      // 只报错误类型和主机，不带请求头，避免把 Key 带进界面或日志。
-      throw ChatApiException('连不上模型接口（${uri.host}）：${shortError(e)}');
+    http.Request build() {
+      final request = http.Request('POST', uri)
+        ..headers['Content-Type'] = 'application/json'
+        ..headers['Accept'] = 'text/event-stream'
+        ..body = jsonEncode({
+          'model': model.trim(),
+          'messages': stripInternal(messages),
+          'stream': true,
+          // 让接口在流的最后多发一块用量（choices 为空、带 usage）。
+          if (_askUsage) 'stream_options': {'include_usage': true},
+          if (reasoningEffort != null) 'reasoning_effort': reasoningEffort,
+          if (maxTokens != null) 'max_tokens': maxTokens,
+          if (tools.isNotEmpty) 'tools': tools,
+          if (tools.isNotEmpty) 'tool_choice': 'auto',
+        });
+      if (apiKey.isNotEmpty) request.headers['Authorization'] = 'Bearer $apiKey';
+      return request;
     }
+
+    Future<http.StreamedResponse> post() async {
+      try {
+        return await _http.send(build());
+      } on Exception catch (e) {
+        // 只报错误类型和主机，不带请求头，避免把 Key 带进界面或日志。
+        throw ChatApiException('连不上模型接口（${uri.host}）：${shortError(e)}');
+      }
+    }
+
+    var response = await post();
     if (response.statusCode != 200) {
-      final body = await response.stream.bytesToString();
-      throw ChatApiException(chatErrorMessage(response.statusCode, body), statusCode: response.statusCode);
+      var body = await response.stream.bytesToString();
+      // 有的兼容接口不认 stream_options：去掉它重发一次，这个客户端之后也不再带（那就拿不到用量）。
+      if (_askUsage && (response.statusCode == 400 || response.statusCode == 422) && body.contains('stream_options')) {
+        _askUsage = false;
+        response = await post();
+        if (response.statusCode != 200) body = await response.stream.bytesToString();
+      }
+      if (response.statusCode != 200) throw ChatApiException(chatErrorMessage(response.statusCode, body), statusCode: response.statusCode);
     }
 
     final lines = response.stream.transform(utf8.decoder).transform(const LineSplitter());
@@ -132,9 +153,13 @@ class OpenAiChatClient implements ChatClient {
       if (json['error'] is Map) {
         throw ChatApiException('模型接口报错：${(json['error'] as Map)['message'] ?? '未知错误'}');
       }
+      final usage = usageFromChatCompletions(json['usage']);
       final choices = json['choices'];
-      // 开了 include_usage 时最后一块 choices 是空数组。
-      if (choices is! List || choices.isEmpty || choices.first is! Map) continue;
+      // 开了 include_usage 时最后一块 choices 是空数组，只带 usage。
+      if (choices is! List || choices.isEmpty || choices.first is! Map) {
+        if (usage != null) yield ChatDelta(usage: usage);
+        continue;
+      }
       final choice = choices.first as Map;
       final delta = choice['delta'];
       final calls = <ToolCallDelta>[];
@@ -157,7 +182,7 @@ class OpenAiChatClient implements ChatClient {
         }
       }
       final finish = choice['finish_reason'];
-      yield ChatDelta(content: content, toolCalls: calls, finishReason: finish is String ? finish : null);
+      yield ChatDelta(content: content, toolCalls: calls, finishReason: finish is String ? finish : null, usage: usage);
     }
   }
 }

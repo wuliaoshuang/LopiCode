@@ -1,3 +1,4 @@
+import 'dart:async';
 // 设计约束（模型与渠道 · 390×844）
 // - 渠道列表：一行一个渠道（名字强，协议 + 模型数弱）。最上面一块是“新对话用哪个模型”。主操作只有“添加渠道”。
 // - 渠道编辑页从上到下：名称 → 协议 → 接口地址 → API Key → 两个次要按钮（测试连接、获取模型）→ 模型列表 → 保存。
@@ -267,7 +268,7 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
       showSnack(context, '接口地址不能为空');
       return;
     }
-    await app.models.upsert(
+    final saved = await app.models.upsert(
       id: widget.channel?.id,
       name: _name.text.trim(),
       protocol: _protocol,
@@ -275,6 +276,8 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
       apiKey: _key.text, // 留空＝保留原来的 Key
       models: _models,
     );
+    // 换了 Key：马上重查余额（不是 DeepSeek 官方渠道什么都不做）。
+    if (_key.text.trim().isNotEmpty) unawaited(app.quota.refresh(saved, force: true));
     app.touch();
     if (mounted) Navigator.pop(context);
   }
@@ -284,6 +287,7 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
     final ok = await confirmDialog(context, title: '删除这个渠道？', message: '渠道和它保存的 API Key 会被删除。用着它的对话会改用别的可用模型。', confirmLabel: '删除', danger: true);
     if (!ok) return;
     await app.models.remove(widget.channel!.id);
+    await app.quota.clearLimit(widget.channel!.id);
     app.touch();
     if (mounted) Navigator.pop(context);
   }
@@ -468,6 +472,10 @@ class _ModelSpecSheetState extends State<ModelSpecSheet> {
   late final _name = TextEditingController(text: widget.model.name);
   late final _context = TextEditingController(text: '${widget.model.contextLength ~/ 1000}');
   late final _maxOut = TextEditingController(text: '${widget.model.maxOutput ~/ 1000}');
+  static String _priceText(double? v) => v == null ? '' : (v == v.roundToDouble() ? v.toStringAsFixed(0) : '$v');
+  late final _priceHit = TextEditingController(text: _priceText(widget.model.priceHit));
+  late final _priceMiss = TextEditingController(text: _priceText(widget.model.priceMiss));
+  late final _priceOut = TextEditingController(text: _priceText(widget.model.priceOutput));
   late bool _vision = widget.model.vision;
   late bool _thinking = widget.model.thinking;
   late final Set<String> _levels = {...widget.model.levels};
@@ -477,7 +485,15 @@ class _ModelSpecSheetState extends State<ModelSpecSheet> {
     _name.dispose();
     _context.dispose();
     _maxOut.dispose();
+    _priceHit.dispose();
+    _priceMiss.dispose();
+    _priceOut.dispose();
     super.dispose();
+  }
+
+  static double? _price(TextEditingController c) {
+    final v = double.tryParse(c.text.trim());
+    return v == null || v < 0 || !v.isFinite ? null : v;
   }
 
   void _save() {
@@ -490,7 +506,10 @@ class _ModelSpecSheetState extends State<ModelSpecSheet> {
       ..maxOutput = ((out ?? ModelSpec.defaultMaxOutput ~/ 1000) * 1000).clamp(1000, 400000)
       ..vision = _vision
       ..thinking = _thinking && _levels.isNotEmpty
-      ..levels = [for (final l in kThinkingLevels) if (_levels.contains(l)) l];
+      ..levels = [for (final l in kThinkingLevels) if (_levels.contains(l)) l]
+      ..priceHit = _price(_priceHit)
+      ..priceMiss = _price(_priceMiss)
+      ..priceOutput = _price(_priceOut);
     Navigator.pop(context, 'saved');
   }
 
@@ -574,7 +593,21 @@ class _ModelSpecSheetState extends State<ModelSpecSheet> {
                 ],
               ),
             ],
-            const SizedBox(height: Space.x4),
+            const SizedBox(height: Space.x3),
+            Text('单价（可不填）', style: t.labelMedium),
+            const SizedBox(height: Space.x1),
+            Text('单位：元 / 百万 tokens。三项都填了，聊天里的用量才会带“估算”金额；价格请照服务商官网填，LopiCode 不内置价格表。', style: t.bodySmall),
+            const SizedBox(height: Space.x2),
+            for (final (key, label, ctrl) in [('price-hit', '输入（缓存命中）', _priceHit), ('price-miss', '输入（缓存未命中）', _priceMiss), ('price-out', '输出', _priceOut)]) ...[
+              TextField(
+                key: Key(key),
+                controller: ctrl,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: InputDecoration(labelText: label, suffixText: '元 / 百万'),
+              ),
+              const SizedBox(height: Space.x2),
+            ],
+            const SizedBox(height: Space.x2),
             FilledButton(onPressed: _save, child: const Text('确定')),
             TextButton(
               onPressed: () => Navigator.pop(context, 'remove'),

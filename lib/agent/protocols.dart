@@ -9,6 +9,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:lopicode/agent/chat_client.dart';
 import 'package:lopicode/agent/model_config.dart';
+import 'package:lopicode/agent/usage.dart';
 
 /// 一条 SSE 事件。
 class SseEvent {
@@ -247,6 +248,7 @@ class AnthropicChatClient implements ChatClient {
     final blocks = <int, Map<String, dynamic>>{};
     final partial = <int, StringBuffer>{};
     String? stop;
+    Object? usageStart, usageDelta;
     await for (final ev in sseEvents(response.stream)) {
       final Object? json;
       try {
@@ -291,7 +293,12 @@ class AnthropicChatClient implements ChatClient {
           final index = json['index'];
           final block = blocks[index];
           if (block != null && block['type'] == 'tool_use') block['input'] = _decodeArgs(partial[index]?.toString());
+        case 'message_start':
+          final message = json['message'];
+          if (message is Map) usageStart = message['usage'];
         case 'message_delta':
+          // usage 和 delta 平级，里面的数是累计值（覆盖，不相加）。
+          if (json['usage'] is Map) usageDelta = json['usage'];
           final delta = json['delta'];
           if (delta is Map && delta['stop_reason'] is String) stop = delta['stop_reason'] as String;
         case 'message_stop':
@@ -308,6 +315,7 @@ class AnthropicChatClient implements ChatClient {
         _ => 'stop',
       },
       raw: {'protocol': 'anthropic', 'content': ordered},
+      usage: usageFromAnthropic(usageStart, usageDelta),
     );
   }
 }
@@ -471,14 +479,20 @@ class OpenAiResponsesClient implements ChatClient {
           final err = json['error'] ?? (resp is Map ? resp['error'] : null);
           throw ChatApiException('模型接口报错：${err is Map ? err['message'] ?? '未知错误' : json['message'] ?? '未知错误'}');
         case 'response.incomplete':
-          yield ChatDelta(finishReason: 'length');
+          yield ChatDelta(finishReason: 'length', usage: _responseUsage(json));
           return;
         case 'response.completed':
-          yield ChatDelta(finishReason: sawCall ? 'tool_calls' : 'stop');
+          yield ChatDelta(finishReason: sawCall ? 'tool_calls' : 'stop', usage: _responseUsage(json));
           return;
       }
     }
   }
+}
+
+/// `response.completed` / `response.incomplete` 事件里的 `response.usage`。
+TokenUsage? _responseUsage(Map<String, dynamic> event) {
+  final resp = event['response'];
+  return resp is Map ? usageFromResponses(resp['usage']) : null;
 }
 
 // ═══════════════════════════ 模型列表 / 测试连接 ═══════════════════════════

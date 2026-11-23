@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:lopicode/agent/agent_tools.dart';
 import 'package:lopicode/agent/chat_client.dart';
+import 'package:lopicode/agent/usage.dart';
 
 sealed class AgentEvent {}
 
@@ -42,6 +43,17 @@ class UserInjected extends AgentEvent {
 class AgentNotice extends AgentEvent {
   AgentNotice(this.text);
   final String text;
+}
+
+/// 一次模型请求结束（成功、被打断、或者中途断了）。[usage] 是接口给的用量，没给是 null。
+class RequestFinished extends AgentEvent {
+  RequestFinished(this.usage, this.ms, {this.firstMs, this.startedAt});
+  final TokenUsage? usage;
+  final int ms;
+
+  /// 从发出到收到第一块内容（文字或工具调用）的用时；一块都没收到是 null。
+  final int? firstMs;
+  final DateTime? startedAt;
 }
 
 class AgentError extends AgentEvent {
@@ -203,10 +215,20 @@ class AgentRunner {
       final text = StringBuffer();
       final calls = <int, _PendingCall>{};
       Map<String, dynamic>? raw;
+      TokenUsage? usage;
+      var started = false;
+      int? firstMs;
+      DateTime? startedAt;
+      final clock = Stopwatch();
       try {
         final request = await buildRequest();
+        startedAt = DateTime.now();
+        clock.start();
         // 工具列表每一轮现取：权限、计划模式中途改了，下一轮就生效。
         await for (final delta in client.streamChat(messages: request, tools: toolbox.specs)) {
+          started = true;
+          if (delta.usage != null) usage = delta.usage;
+          if (firstMs == null && ((delta.content?.isNotEmpty ?? false) || delta.toolCalls.isNotEmpty)) firstMs = clock.elapsedMilliseconds;
           if (_cancelled) break;
           if (delta.content != null && delta.content!.isNotEmpty) {
             text.write(delta.content);
@@ -222,13 +244,17 @@ class AgentRunner {
         }
       } on ChatApiException catch (e) {
         _rollbackIfEmpty(text);
+        // 接口已经开始回话才算一次请求（被额度上限拦下、连不上的不算）。
+        if (started) yield RequestFinished(usage, clock.elapsedMilliseconds, firstMs: firstMs, startedAt: startedAt);
         yield AgentError(e.message);
         return;
       } on Exception catch (e) {
         _rollbackIfEmpty(text);
+        if (started) yield RequestFinished(usage, clock.elapsedMilliseconds, firstMs: firstMs, startedAt: startedAt);
         yield AgentError('和模型的连接中断了：${shortError(e)}');
         return;
       }
+      yield RequestFinished(usage, clock.elapsedMilliseconds, firstMs: firstMs, startedAt: startedAt);
 
       if (_cancelled) {
         // 被打断的这一轮不留工具调用（没执行，留下会让下一次请求对不上）。
