@@ -247,6 +247,7 @@ void main() {
       late ProjectSession session;
       await tester.runAsync(() async {
         session = ProjectSession(env!.services, project!);
+        await session.loadChat();
         // 构造时已经开了第一个会话：它应该是 Ubuntu
         expect(session.terminals.single.title, 'Ubuntu 1');
         session.linuxPtySpawner = (exe, args, {required workingDirectory, required environment, required rows, required columns}) {
@@ -292,6 +293,7 @@ void main() {
       late ProjectSession session;
       await tester.runAsync(() async {
         session = ProjectSession(env!.services, project!);
+        await session.loadChat();
         session.linuxPtySpawner = (exe, args, {required workingDirectory, required environment, required rows, required columns}) {
           final pty = FakePty();
           ptys.add(pty);
@@ -362,6 +364,7 @@ void main() {
       late ProjectSession session;
       await tester.runAsync(() async {
         session = ProjectSession(env!.services, project!);
+        await session.loadChat();
         session.linuxPtySpawner = (exe, args, {required workingDirectory, required environment, required rows, required columns}) => FakePty();
       });
       session.addTerminal();

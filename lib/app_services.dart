@@ -1,6 +1,12 @@
 import 'dart:io';
 
+import 'package:lopicode/agent/automation.dart';
 import 'package:lopicode/agent/chat_client.dart';
+import 'package:lopicode/automation_scheduler.dart';
+import 'package:lopicode/agent/model_config.dart';
+import 'package:lopicode/agent/presets.dart';
+import 'package:lopicode/agent/protocols.dart';
+import 'package:lopicode/agent/skills.dart';
 import 'package:lopicode/core/secure_secret_store.dart';
 import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/core/stores.dart';
@@ -17,7 +23,40 @@ class AppServices extends ChangeNotifier {
     required this.projects,
     this.chatClientFactory,
     LinuxRuntime? runtime,
-  }) : runtime = runtime ?? LinuxRuntime(settings: settings, baseDir: p.join(settings.file.parent.path, 'runtime'));
+  }) : runtime = runtime ?? LinuxRuntime(settings: settings, baseDir: p.join(settings.file.parent.path, 'runtime')),
+       models = ModelConfigStore(settings, secrets),
+       presets = PresetStore(settings),
+       skills = SkillStore(settings, p.join(settings.file.parent.path, 'skills')),
+       automations = AutomationStore(File(p.join(settings.file.parent.path, 'automations.json'))) {
+    projects.linuxRootfs ??= this.runtime.rootfsDir;
+    scheduler = AutomationScheduler(this);
+  }
+
+  /// 自动化任务的调度（App 开着时才会触发）。
+  late final AutomationScheduler scheduler;
+
+  /// 渠道与模型。
+  final ModelConfigStore models;
+
+  /// 个人偏好与 Agent 预设。
+  final PresetStore presets;
+
+  /// 技能（全局目录在应用文档目录的 skills/ 下）。
+  final SkillStore skills;
+
+  /// 自动化任务。
+  final AutomationStore automations;
+
+  /// 工作区列表里点了“在这里新建对话”：打开那个工作区后开一段新对话。
+  String? newConversationFor;
+
+  Future<void>? _ready;
+
+  /// 读渠道配置（含老设置迁移）和自动化任务。可以反复调用，只做一次。
+  Future<void> ready() => _ready ??= () async {
+    await models.load();
+    await automations.load();
+  }();
 
   final SettingsStore settings;
   final SecretStore secrets;
@@ -39,12 +78,15 @@ class AppServices extends ChangeNotifier {
     final support = await getApplicationSupportDirectory();
     final runtime = LinuxRuntime(settings: settings, baseDir: p.join(support.path, 'runtime'), host: ChannelRuntimeHost());
     await runtime.init();
-    return AppServices(
+    final app = AppServices(
       settings: settings,
       secrets: secrets,
       projects: ProjectStore(p.join(docs.path, 'projects')),
       runtime: runtime,
     );
+    await app.ready();
+    app.scheduler.start();
+    return app;
   }
 
   ThemeMode get themeMode => switch (settings.getString(SettingKeys.themeMode, 'system')) {
@@ -58,19 +100,16 @@ class AppServices extends ChangeNotifier {
     notifyListeners();
   }
 
-  bool get agentConfigured =>
-      chatClientFactory != null ||
-      (settings.getString(SettingKeys.agentBaseUrl).trim().isNotEmpty &&
-          settings.getString(SettingKeys.agentModel).trim().isNotEmpty);
+  bool get agentConfigured => chatClientFactory != null || models.configured;
 
-  Future<ChatClient> createChatClient() async {
+  /// 按选中的“渠道 + 模型 + 思考档位”造客户端。
+  Future<ChatClient> createChatClient([ResolvedModel? model]) async {
     final factory = chatClientFactory;
     if (factory != null) return factory();
-    return OpenAiChatClient(
-      baseUrl: settings.getString(SettingKeys.agentBaseUrl),
-      apiKey: await secrets.read(SecretKeys.agentApiKey) ?? '',
-      model: settings.getString(SettingKeys.agentModel),
-    );
+    await ready();
+    final r = model ?? models.defaultForNewChat();
+    if (r == null) return _UnconfiguredClient();
+    return buildChatClient(r, await models.apiKey(r.channel.id));
   }
 
   /// 设置改动后通知界面刷新。
@@ -82,4 +121,11 @@ class AppScope extends InheritedNotifier<AppServices> {
 
   static AppServices of(BuildContext context) =>
       context.dependOnInheritedWidgetOfExactType<AppScope>()!.notifier!;
+}
+
+class _UnconfiguredClient implements ChatClient {
+  @override
+  Stream<ChatDelta> streamChat({required List<Map<String, dynamic>> messages, List<Map<String, dynamic>> tools = const []}) async* {
+    throw ChatApiException('还没配置模型：请到“设置 → 模型与渠道”添加渠道和模型');
+  }
 }

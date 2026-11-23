@@ -23,6 +23,7 @@ Future<(TestEnv, Project, ProjectSession)> openProject(WidgetTester tester, {Tes
     e = env ?? await TestEnv.create();
     project = await e.services.projects.create('我的小站', template);
     session = ProjectSession(e.services, project);
+        await session.loadChat();
     await Future<void>.delayed(const Duration(milliseconds: 150));
   });
   addTearDown(() async {
@@ -79,7 +80,7 @@ void main() {
     await openDrawer(tester);
     // 项目切换在最上，设置在最下
     final drawer = find.byType(Drawer);
-    final top = tester.getTopLeft(find.descendant(of: drawer, matching: find.text('切换项目'))).dy;
+    final top = tester.getTopLeft(find.descendant(of: drawer, matching: find.textContaining('切换工作区'))).dy;
     final bottom = tester.getTopLeft(find.descendant(of: drawer, matching: find.text('设置'))).dy;
     for (final d in ShellDest.values.skip(1)) {
       final y = tester.getTopLeft(find.descendant(of: drawer, matching: find.text(d.label))).dy;
@@ -269,22 +270,24 @@ void main() {
     addTearDown(env.dispose);
     await tester.pumpWidget(appFor(env, const HomeGate()));
     await settle(tester);
-    expect(find.text('还没有项目'), findsOneWidget);
+    expect(find.text('还没有工作区'), findsOneWidget);
     await openDrawer(tester);
     expect(find.descendant(of: find.byType(Drawer), matching: find.text('设置')), findsOneWidget);
     await closeDrawer(tester);
 
-    await tester.tap(find.widgetWithText(FilledButton, '新建项目').first);
+    await tester.tap(find.widgetWithText(FilledButton, '添加工作区').first);
+    await settle(tester, rounds: 3);
+    await tester.tap(find.text('新建项目'));
     await settle(tester, rounds: 3);
     await tester.tap(find.widgetWithText(FilledButton, '创建'));
-    await settle(tester, rounds: 40, ms: 5);
+    await settle(tester, rounds: 150, ms: 5);
     expect(find.byTooltip('发送'), findsOneWidget, reason: '新建后直接进项目的对话页');
     final last = env.services.settings.getString('ui.lastProject');
     expect(last, isNotEmpty);
 
     // 重新启动：直接回到这个项目
     await tester.pumpWidget(appFor(env, HomeGate(key: UniqueKey())));
-    await settle(tester, rounds: 40, ms: 5);
+    await settle(tester, rounds: 150, ms: 5);
     expect(find.byTooltip('发送'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
     await settle(tester, rounds: 2);

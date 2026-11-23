@@ -23,15 +23,15 @@ class TestEnv {
     final tmp = Directory.systemTemp.createTempSync('lopi_ui_');
     final settings = SettingsStore(File(p.join(tmp.path, 'settings.json')));
     await settings.load();
-    return TestEnv._(
-      tmp,
-      AppServices(
-        settings: settings,
-        secrets: MemorySecretStore(),
-        projects: ProjectStore(p.join(tmp.path, 'projects')),
-        chatClientFactory: chatClient,
-      ),
+    final services = AppServices(
+      settings: settings,
+      secrets: MemorySecretStore(),
+      projects: ProjectStore(p.join(tmp.path, 'projects')),
+      chatClientFactory: chatClient,
     );
+    // 真实文件读写只能在 runAsync 里完成：先把渠道配置和自动化任务读好。
+    await services.ready();
+    return TestEnv._(tmp, services);
   }
 
   void dispose() {

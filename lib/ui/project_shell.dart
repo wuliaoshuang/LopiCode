@@ -47,7 +47,14 @@ class _ProjectShellState extends State<ProjectShell> {
     if (_session == null) {
       _session = widget.session ?? ProjectSession(AppScope.of(context), widget.project);
       _session!.addListener(_onSession);
-      _session!.loadChat();
+      final app = AppScope.of(context);
+      _session!.loadChat().then((_) {
+        if (app.newConversationFor == widget.project.id) {
+          app.newConversationFor = null;
+          _session?.newConversation();
+        }
+      });
+      AppScope.of(context).scheduler.liveSessions[widget.project.id] = _session!;
     }
     _visited.add(_dest);
   }
@@ -55,6 +62,8 @@ class _ProjectShellState extends State<ProjectShell> {
   @override
   void dispose() {
     _session?.removeListener(_onSession);
+    final live = _session?.app.scheduler.liveSessions;
+    if (live != null && identical(live[widget.project.id], _session)) live.remove(widget.project.id);
     if (widget.session == null) _session?.dispose();
     super.dispose();
   }
@@ -83,13 +92,26 @@ class _ProjectShellState extends State<ProjectShell> {
     } else if (!Directory(widget.project.dir).existsSync()) {
       widget.onSwitchProject?.call(null); // 当前项目在列表里被删了
     } else {
-      setState(() {}); // 可能改了名
+      final app = AppScope.of(context);
+      if (app.newConversationFor == widget.project.id) {
+        app.newConversationFor = null;
+        await _session?.newConversation();
+        _go(ShellDest.chat);
+      }
+      // 当前工作区被从列表移除了：回到工作区列表。
+      final still = (await app.projects.list()).any((p) => p.id == widget.project.id);
+      if (!mounted) return;
+      if (!still) {
+        widget.onSwitchProject?.call(null);
+      } else {
+        setState(() {}); // 可能改了名
+      }
     }
   }
 
   void _openSettings() {
     _closeDrawer();
-    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const SettingsScreen()));
+    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => SettingsScreen(workspace: widget.project)));
   }
 
   @override

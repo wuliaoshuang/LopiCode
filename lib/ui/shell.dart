@@ -125,7 +125,7 @@ class AppDrawer extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // 项目切换
+            // 工作区切换
             Padding(
               padding: const EdgeInsets.fromLTRB(Space.x3, Space.x3, Space.x3, Space.x2),
               child: Material(
@@ -144,7 +144,7 @@ class AppDrawer extends StatelessWidget {
                             children: [
                               Text(project?.name ?? 'LopiCode', style: t.titleMedium, maxLines: 1, overflow: TextOverflow.ellipsis),
                               const SizedBox(height: 2),
-                              Text(project == null ? '还没打开项目' : '切换项目', style: t.bodySmall),
+                              Text(project == null ? '还没打开工作区' : '切换工作区 · ${project!.displayDir}', style: t.bodySmall, maxLines: 1, overflow: TextOverflow.ellipsis),
                             ],
                           ),
                         ),
@@ -160,7 +160,7 @@ class AppDrawer extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(Space.x3, Space.x1, Space.x3, Space.x2),
                 children: [
                   if (s == null)
-                    _DrawerItem(icon: Icons.folder_copy_outlined, label: '项目', selected: true, onTap: () => Navigator.pop(context))
+                    _DrawerItem(icon: Icons.folder_copy_outlined, label: '工作区', selected: true, onTap: () => Navigator.pop(context))
                   else ...[
                     for (final d in ShellDest.values.skip(1))
                       _DrawerItem(icon: d.icon, label: d.label, selected: current == d, onTap: () => onDest?.call(d)),
@@ -176,10 +176,10 @@ class AppDrawer extends StatelessWidget {
                       enabled: !busy,
                       onTap: onNewConversation,
                     ),
-                    for (final conv in s.conversations)
+                    for (final conv in s.topConversations)
                       if (conv.title.isNotEmpty)
                         _DrawerItem(
-                          icon: Icons.chat_bubble_outline,
+                          icon: conv.auto ? Icons.event_repeat : Icons.chat_bubble_outline,
                           label: conv.title,
                           selected: current == ShellDest.chat && conv.id == s.activeConversationId,
                           enabled: !busy || conv.id == s.activeConversationId,

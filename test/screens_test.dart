@@ -83,6 +83,7 @@ void main() {
         e = env ?? await TestEnv.create();
         project = await e.services.projects.create('我的小站', template);
         session = ProjectSession(e.services, project);
+        await session.loadChat();
         await Future<void>.delayed(const Duration(milliseconds: 150));
       });
       addTearDown(() async {
@@ -99,10 +100,13 @@ void main() {
       addTearDown(env.dispose);
       await tester.pumpWidget(appFor(env, ProjectListScreen(onOpen: (_) {}), mode: mode, font: font));
       await settle(tester);
-      expect(find.text('还没有项目'), findsOneWidget);
+      expect(find.text('还没有工作区'), findsOneWidget);
       await shot(tester, '01-projects-empty-$suffix');
 
-      await tester.tap(find.widgetWithText(FilledButton, '新建项目').first);
+      await tester.tap(find.widgetWithText(FilledButton, '添加工作区').first);
+      await settle(tester, rounds: 3);
+      expect(find.text('Ubuntu 里的目录'), findsOneWidget);
+      await tester.tap(find.text('新建项目'));
       await settle(tester, rounds: 3);
       expect(find.text('前端网页'), findsOneWidget);
       expect(find.text('低代码页面'), findsOneWidget);

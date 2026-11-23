@@ -1,167 +1,160 @@
 // 设计约束（设置 · 390×844）
-// - 三组：Agent 模型、外观、关于。每组一个小标题，组内每行只做一件事。
-// - “关于”里有一行进“第三方声明”（随包带的开源组件、许可证全文、来源和校验值）。
-// - 密钥输入框默认遮住；已保存的 Key 不回显明文，只显示“已保存”。
-// - 密钥存不住（安全存储不可用）时，如实用警告条说明。
+// - 设置首页只是一张目录：三组（AI / 能力 / 通用），每行一个入口，下面一句小字说现在的状态。
+// - 具体的表单都在下一级页面里，这一页不放输入框。
+// - “通用”里有外观、关于，和一行进“第三方声明”（随包带的开源组件、许可证全文、来源和校验值）。
+import 'package:lopicode/agent/agent_tools.dart';
+import 'package:lopicode/agent/web_search.dart';
 import 'package:lopicode/app_services.dart';
+import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/core/stores.dart';
 import 'package:lopicode/theme/tokens.dart';
-import 'package:lopicode/ui/widgets.dart';
+import 'package:lopicode/ui/automation_screen.dart';
+import 'package:lopicode/ui/chat_panels.dart';
+import 'package:lopicode/ui/settings_agent.dart';
+import 'package:lopicode/ui/settings_ai.dart';
 import 'package:lopicode/ui/shell.dart';
 import 'package:lopicode/ui/third_party_screen.dart';
+import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
 
-class SettingsScreen extends StatefulWidget {
-  const SettingsScreen({super.key});
+class SettingsScreen extends StatelessWidget {
+  const SettingsScreen({super.key, this.workspace});
 
-  @override
-  State<SettingsScreen> createState() => _SettingsScreenState();
-}
-
-class _SettingsScreenState extends State<SettingsScreen> {
-  final _baseUrl = TextEditingController();
-  final _model = TextEditingController();
-  final _key = TextEditingController();
-  bool _hasKey = false;
-  bool _loaded = false;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (_loaded) return;
-    _loaded = true;
-    final app = AppScope.of(context);
-    _baseUrl.text = app.settings.getString(SettingKeys.agentBaseUrl);
-    _model.text = app.settings.getString(SettingKeys.agentModel);
-    app.secrets.read(SecretKeys.agentApiKey).then((v) {
-      if (mounted) setState(() => _hasKey = v != null && v.isNotEmpty);
-    });
-  }
-
-  @override
-  void dispose() {
-    _baseUrl.dispose();
-    _model.dispose();
-    _key.dispose();
-    super.dispose();
-  }
-
-  Future<void> _save() async {
-    final app = AppScope.of(context);
-    await app.settings.set(SettingKeys.agentBaseUrl, _baseUrl.text.trim());
-    await app.settings.set(SettingKeys.agentModel, _model.text.trim());
-    if (_key.text.isNotEmpty) {
-      await app.secrets.write(SecretKeys.agentApiKey, _key.text.trim());
-      _key.clear();
-      _hasKey = true;
-    }
-    app.touch();
-    if (mounted) {
-      setState(() {});
-      FocusScope.of(context).unfocus();
-      showSnack(context, '已保存');
-    }
-  }
-
-  Future<void> _clearKey() async {
-    final app = AppScope.of(context);
-    await app.secrets.delete(SecretKeys.agentApiKey);
-    if (mounted) setState(() => _hasKey = false);
-  }
+  /// 从哪个工作区进来的（技能页据此列出这个工作区自己的技能）。
+  final Project? workspace;
 
   @override
   Widget build(BuildContext context) {
     final app = AppScope.of(context);
     final c = context.colors;
     final t = Theme.of(context).textTheme;
+    void go(Widget page) => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => page));
+    final channels = app.models.channels;
+    final modelCount = channels.fold<int>(0, (n, ch) => n + ch.models.length);
+    final level = PermissionLevel.byId(app.settings.getString(SettingKeys.defaultPermission, 'workspace'));
+    final subOn = app.settings.getBool(SettingKeys.subagentEnabled, true);
+    final teamOn = app.settings.getBool(SettingKeys.teamEnabled);
     return Scaffold(
       appBar: const ShellAppBar(title: '设置', subtitle: 'LopiCode'),
       body: ListView(
         padding: const EdgeInsets.only(bottom: Space.x8),
         children: [
-          const SectionLabel('Agent 模型'),
+          const SectionLabel('AI'),
+          SettingsRow(
+            key: const Key('settings-channels'),
+            icon: Icons.hub_outlined,
+            title: '模型与渠道',
+            value: channels.isEmpty ? '还没添加' : '${channels.length} 个渠道 · $modelCount 个模型',
+            onTap: () => go(const ChannelsScreen()),
+          ),
+          SettingsRow(
+            key: const Key('settings-personalize'),
+            icon: Icons.face_outlined,
+            title: '个性化',
+            value: '个人偏好 · Agent 预设（默认：${app.presets.byId(app.presets.defaultId).name}）',
+            onTap: () => go(const PersonalizeScreen()),
+          ),
+          const SectionLabel('能力'),
+          SettingsRow(
+            key: const Key('settings-permission'),
+            icon: Icons.verified_user_outlined,
+            title: '新对话的权限',
+            value: level.label,
+            onTap: () async {
+              final picked = await showModalBottomSheet<PermissionLevel>(
+                context: context,
+                builder: (_) => PermissionSheet(current: level, title: '新对话默认用哪档权限'),
+              );
+              if (picked == null || picked == level || !context.mounted) return;
+              if (picked == PermissionLevel.full && !await confirmFullPermission(context)) return;
+              await app.settings.set(SettingKeys.defaultPermission, picked.id);
+              app.touch();
+            },
+          ),
+          SettingsRow(
+            key: const Key('settings-subagents'),
+            icon: Icons.account_tree_outlined,
+            title: '子代理与团队',
+            value: '子代理${subOn ? '开' : '关'} · 团队${teamOn ? '开' : '关'}',
+            onTap: () => go(const SubagentSettingsScreen()),
+          ),
+          SettingsRow(
+            key: const Key('settings-automations'),
+            icon: Icons.event_repeat,
+            title: '自动化任务',
+            value: app.automations.items.isEmpty ? '还没有任务' : '${app.automations.items.length} 个任务',
+            onTap: () => go(AutomationListScreen(workspace: workspace)),
+          ),
+          FutureBuilder<WebSearchConfig?>(
+            future: WebSearchConfig.load(app.settings, app.secrets),
+            builder: (context, snap) => SettingsRow(
+              key: const Key('settings-search'),
+              icon: Icons.travel_explore,
+              title: '联网搜索',
+              value: snap.data == null ? '未配置（Agent 没有搜索工具）' : '已配置',
+              onTap: () => go(const WebSearchSettingsScreen()),
+            ),
+          ),
+          SettingsRow(
+            key: const Key('settings-skills'),
+            icon: Icons.menu_book_outlined,
+            title: '技能',
+            value: '写给 Agent 的做事说明书',
+            onTap: () => go(SkillsScreen(workspace: workspace)),
+          ),
+          const SectionLabel('通用'),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: Space.x4),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text('支持任何 OpenAI 兼容的 Chat Completions 接口，模型需要支持工具调用。', style: t.bodySmall),
-                const SizedBox(height: Space.x3),
-                TextField(
-                  controller: _baseUrl,
-                  keyboardType: TextInputType.url,
-                  autocorrect: false,
-                  decoration: const InputDecoration(labelText: '接口地址', hintText: 'https://api.openai.com/v1'),
+                Text('外观', style: t.bodyMedium),
+                const SizedBox(height: Space.x2),
+                SegmentedButton<ThemeMode>(
+                  showSelectedIcon: false,
+                  segments: const [
+                    ButtonSegment(value: ThemeMode.system, label: Text('跟随系统')),
+                    ButtonSegment(value: ThemeMode.light, label: Text('浅色')),
+                    ButtonSegment(value: ThemeMode.dark, label: Text('深色')),
+                  ],
+                  selected: {app.themeMode},
+                  onSelectionChanged: (s) => app.setThemeMode(s.first),
                 ),
-                const SizedBox(height: Space.x3),
-                TextField(
-                  controller: _model,
-                  autocorrect: false,
-                  decoration: const InputDecoration(labelText: '模型名', hintText: '例如 gpt-4o-mini'),
+                const SizedBox(height: Space.x4),
+                Text(
+                  'LopiCode 1.0.0\n在手机上通过 Agent 完成代码项目：写代码、终端、网页预览、低代码搭建、远程打包 APK。',
+                  style: t.bodySmall?.copyWith(color: c.textMuted, height: 1.6),
                 ),
-                const SizedBox(height: Space.x3),
-                TextField(
-                  controller: _key,
-                  obscureText: true,
-                  autocorrect: false,
-                  enableSuggestions: false,
-                  decoration: InputDecoration(
-                    labelText: 'API Key',
-                    hintText: _hasKey ? '已保存，留空表示不改' : '粘贴你的 Key',
-                    helperText: _hasKey ? '已保存一个 Key（不显示明文）' : null,
-                    suffixIcon: _hasKey
-                        ? IconButton(tooltip: '清除已保存的 Key', icon: const Icon(Icons.delete_outline), onPressed: _clearKey)
-                        : null,
-                  ),
-                ),
-                const SizedBox(height: Space.x3),
-                if (!app.secrets.persistent)
-                  const InfoBanner(
-                    '这台设备上安全存储不可用，Key 只保存在内存里，关掉应用后要重新填写。',
-                    tone: BannerTone.warning,
-                    margin: EdgeInsets.only(bottom: Space.x3),
-                  )
-                else
-                  const InfoBanner(
-                    'Key 用系统密钥库（Android Keystore）加密保存，不会写进普通设置文件或日志。',
-                    margin: EdgeInsets.only(bottom: Space.x3),
-                  ),
-                FilledButton(onPressed: _save, child: const Text('保存')),
               ],
             ),
           ),
-          const SectionLabel('外观'),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: Space.x4),
-            child: SegmentedButton<ThemeMode>(
-              showSelectedIcon: false,
-              segments: const [
-                ButtonSegment(value: ThemeMode.system, label: Text('跟随系统')),
-                ButtonSegment(value: ThemeMode.light, label: Text('浅色')),
-                ButtonSegment(value: ThemeMode.dark, label: Text('深色')),
-              ],
-              selected: {app.themeMode},
-              onSelectionChanged: (s) => app.setThemeMode(s.first),
-            ),
-          ),
-          const SectionLabel('关于'),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: Space.x4),
-            child: Text(
-              'LopiCode 1.0.0\n在手机上通过 Agent 完成代码项目：写代码、终端、网页预览、低代码搭建、远程打包 APK。',
-              style: t.bodySmall?.copyWith(color: c.textMuted, height: 1.6),
-            ),
-          ),
-          ListTile(
+          SettingsRow(
             key: const Key('settings-third-party'),
-            leading: const Icon(Icons.gavel_outlined),
-            title: const Text('第三方声明'),
-            subtitle: const Text('随安装包带的开源组件和许可证'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const ThirdPartyScreen())),
+            icon: Icons.gavel_outlined,
+            title: '第三方声明',
+            value: '随安装包带的开源组件和许可证',
+            onTap: () => go(const ThirdPartyScreen()),
           ),
         ],
       ),
     );
   }
+}
+
+/// 设置目录里的一行：图标 + 标题 + 一句状态 + 箭头。
+class SettingsRow extends StatelessWidget {
+  const SettingsRow({super.key, required this.icon, required this.title, required this.value, required this.onTap});
+  final IconData icon;
+  final String title;
+  final String value;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => ListTile(
+    leading: Icon(icon),
+    title: Text(title),
+    subtitle: Text(value, maxLines: 1, overflow: TextOverflow.ellipsis),
+    trailing: const Icon(Icons.chevron_right),
+    onTap: onTap,
+  );
 }
