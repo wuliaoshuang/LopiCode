@@ -149,7 +149,7 @@ class _StatusCard extends StatelessWidget {
           ),
           if (!runtime.prootBundled) ...[
             const SizedBox(height: Space.x3),
-            const InfoBanner('这个安装包里没有带 PRoot 启动器，Ubuntu 环境装了也进不去，所以这里先不提供安装。', key: Key('runtime-no-proot'), tone: BannerTone.warning),
+            InfoBanner('这个安装包里缺少进入 Ubuntu 要用的文件（${runtime.missingLauncherFiles.join('、')}），环境装了也进不去，所以这里先不提供安装。请重新安装完整的 LopiCode 安装包。', key: const Key('runtime-no-proot'), tone: BannerTone.warning),
           ],
           if (runtime.installError != null) ...[
             const SizedBox(height: Space.x3),

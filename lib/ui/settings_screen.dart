@@ -1,5 +1,6 @@
 // 设计约束（设置 · 390×844）
 // - 三组：Agent 模型、外观、关于。每组一个小标题，组内每行只做一件事。
+// - “关于”里有一行进“第三方声明”（随包带的开源组件、许可证全文、来源和校验值）。
 // - 密钥输入框默认遮住；已保存的 Key 不回显明文，只显示“已保存”。
 // - 密钥存不住（安全存储不可用）时，如实用警告条说明。
 import 'package:lopicode/app_services.dart';
@@ -7,6 +8,7 @@ import 'package:lopicode/core/stores.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/widgets.dart';
 import 'package:lopicode/ui/shell.dart';
+import 'package:lopicode/ui/third_party_screen.dart';
 import 'package:material_ui/material_ui.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -149,6 +151,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
               'LopiCode 1.0.0\n在手机上通过 Agent 完成代码项目：写代码、终端、网页预览、低代码搭建、远程打包 APK。',
               style: t.bodySmall?.copyWith(color: c.textMuted, height: 1.6),
             ),
+          ),
+          ListTile(
+            key: const Key('settings-third-party'),
+            leading: const Icon(Icons.gavel_outlined),
+            title: const Text('第三方声明'),
+            subtitle: const Text('随安装包带的开源组件和许可证'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const ThirdPartyScreen())),
           ),
         ],
       ),

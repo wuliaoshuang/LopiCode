@@ -91,6 +91,9 @@ class LinuxRuntime extends ChangeNotifier {
 
   String get rootfsDir => p.join(baseDir, 'rootfs');
   String get tmpDir => p.join(baseDir, 'tmp');
+
+  /// 放 `libtalloc.so.2` 链接的目录（见 [ProotFiles.tallocSoname]）。
+  String get hostLibDir => p.join(baseDir, 'hostlib');
   File get _marker => File(p.join(baseDir, 'rootfs.version'));
   File get _archive => File(p.join(baseDir, 'download', image.fileName));
   File get logFile => File(p.join(baseDir, 'runtime.log'));
@@ -103,6 +106,9 @@ class LinuxRuntime extends ChangeNotifier {
   String? installError;
   String? nativeLibDir;
   bool prootBundled = false;
+
+  /// 安装包里缺了哪几个 PRoot 文件（齐全时是空的）。
+  List<String> missingLauncherFiles = ProotFiles.bundled;
   int? freeSpace;
   CancelToken? _cancel;
 
@@ -129,8 +135,13 @@ class LinuxRuntime extends ChangeNotifier {
   Future<void> init() async {
     nativeLibDir = await host.nativeLibraryDir();
     final dir = nativeLibDir;
-    prootBundled =
-        dir != null && File(p.join(dir, ProotFiles.proot)).existsSync() && File(p.join(dir, ProotFiles.loader)).existsSync();
+    missingLauncherFiles = dir == null
+        ? ProotFiles.bundled
+        : [
+            for (final name in ProotFiles.bundled)
+              if (!File(p.join(dir, name)).existsSync()) name,
+          ];
+    prootBundled = missingLauncherFiles.isEmpty;
     if (!busy) {
       phase = _marker.existsSync() && Directory(rootfsDir).existsSync()
           ? RuntimePhase.installed
@@ -339,9 +350,47 @@ class LinuxRuntime extends ChangeNotifier {
   /// 第一次失败后的下一次尝试改用兼容模式。
   bool get compatMode => launchFailures > 0 || settings.getBool(SettingKeys.runtimeCompat);
 
-  ProotCommand prootCommand({required List<String> guestCommand, String? projectDir, String term = 'xterm-256color'}) =>
-      buildProotCommand(
+  /// 让 [hostLibDir] 里的 `libtalloc.so.2` 指向安装包里现在的 talloc 库。
+  ///
+  /// 应用每次更新，原生库目录的路径都会变，所以每次启动前都核对一遍。建不了链接
+  /// （个别文件系统不支持）就改成复制一份。返回 null 表示就绪，否则是失败原因。
+  String? prepareLauncherLibs() {
+    final native = nativeLibDir;
+    if (native == null) return '拿不到安装包的原生库目录';
+    final target = p.join(native, ProotFiles.talloc);
+    final linkPath = p.join(hostLibDir, ProotFiles.tallocSoname);
+    try {
+      Directory(hostLibDir).createSync(recursive: true);
+      final type = FileSystemEntity.typeSync(linkPath, followLinks: false);
+      if (type == FileSystemEntityType.link) {
+        if (Link(linkPath).targetSync() == target) return null;
+        Link(linkPath).deleteSync();
+      } else if (type != FileSystemEntityType.notFound) {
+        // 上次是复制的：安装包里的库没变就不用再动。
+        final source = File(target);
+        if (type == FileSystemEntityType.file && source.existsSync() && File(linkPath).lengthSync() == source.lengthSync()) {
+          return null;
+        }
+        File(linkPath).deleteSync();
+      }
+      try {
+        Link(linkPath).createSync(target);
+      } on FileSystemException {
+        File(target).copySync(linkPath);
+      }
+      return null;
+    } on FileSystemException catch (e) {
+      final reason = '准备 PRoot 依赖的库失败：${e.osError?.message ?? e.message}';
+      _log(reason);
+      return reason;
+    }
+  }
+
+  ProotCommand prootCommand({required List<String> guestCommand, String? projectDir, String term = 'xterm-256color'}) {
+    prepareLauncherLibs();
+    return buildProotCommand(
         nativeLibDir: nativeLibDir ?? '',
+        libDir: hostLibDir,
         rootfs: rootfsDir,
         tmpDir: tmpDir,
         guestCommand: guestCommand,
@@ -349,6 +398,7 @@ class LinuxRuntime extends ChangeNotifier {
         term: term,
         noSeccomp: compatMode,
       );
+  }
 
   /// 一次启动成功（进去后稳定运行了几秒，或者命令正常结束）。
   void recordLaunchSuccess() {

@@ -118,7 +118,7 @@ class ProjectSession extends ChangeNotifier {
     if (runtime.usable) {
       hint = 'Ubuntu 环境连续启动失败，这里先用手机自带的 sh。到侧边栏“运行环境”看日志、重新尝试。';
     } else if (runtime.installed) {
-      hint = 'Ubuntu 环境已下载，但这个安装包没带 PRoot 启动器，进不去。';
+      hint = 'Ubuntu 环境已下载，但这个安装包缺少进入 Ubuntu 要用的文件，进不去。';
     } else {
       hint = '想跑 node、python：到侧边栏“运行环境”安装 Ubuntu 环境；或者点右上角 ＋ 连一台 SSH 主机。';
     }

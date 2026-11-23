@@ -6,11 +6,29 @@ class ProotCommand {
   final Map<String, String> environment;
 }
 
-/// 安装包里 PRoot 两个文件的名字。Android 只允许执行安装包自带的原生库目录里的文件，
+/// 安装包里 PRoot 相关文件的名字。Android 只允许执行安装包自带的原生库目录里的文件，
 /// 而且只会解出名字是 lib*.so 的文件，所以可执行文件也得起这种名字。
+///
+/// 四个文件都是 Termux 官方软件源里现成包的原样文件，只改了文件名（见 docs/linux-runtime.md）。
 abstract final class ProotFiles {
+  /// PRoot 本体（Termux 包里的 `bin/proot`）。
   static const proot = 'libproot.so';
+
+  /// 加载器（Termux 包里的 `libexec/proot/loader`）。
   static const loader = 'libproot-loader.so';
+
+  /// PRoot 依赖的 talloc 库（Termux 包里的 `lib/libtalloc.so.2.5.0`）。
+  static const talloc = 'libtalloc.so';
+
+  /// PRoot 依赖的共享内存库（Termux 包里的 `lib/libandroid-shmem.so`，名字没变）。
+  static const shmem = 'libandroid-shmem.so';
+
+  /// PRoot 本体里写死要找的 talloc 文件名。这个名字不是 lib*.so 结尾，进不了安装包，
+  /// 所以运行前在应用私有目录里建一个叫这个名字的链接，指向安装包里的 [talloc]。
+  static const tallocSoname = 'libtalloc.so.2';
+
+  /// 安装包里必须齐全的文件。
+  static const bundled = [proot, loader, talloc, shmem];
 }
 
 /// 环境里固定的 PATH。
@@ -27,13 +45,18 @@ const String guestPath = '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbi
 /// PRoot 自己的环境变量：
 /// - `PROOT_LOADER`：环境里每个程序其实都是由这个加载器“代为启动”的。它必须放在安装包的
 ///   原生库目录里——放在应用数据目录的文件，Android 10 以上不允许直接执行；
-/// - `PROOT_TMP_DIR`：PRoot 自己的临时目录；
+/// - `PROOT_TMP_DIR`：PRoot 自己的临时目录（Termux 的包默认用 Termux 自己的目录，我们没有，必须指定）；
+/// - `LD_LIBRARY_PATH`：告诉系统去哪找 PRoot 依赖的两个库。Termux 的包里写的查找路径是
+///   Termux 自己的目录，在我们这里不存在，所以要另外指：先找 [libDir]（里面有
+///   `libtalloc.so.2` 这个链接），再找安装包的原生库目录。这个变量只给 PRoot 自己用，
+///   进不到 Ubuntu 里面（下面的 `env -i` 会清掉）；
 /// - `PROOT_NO_SECCOMP=1`：兼容模式，个别手机的内核过滤规则会让默认模式起不来。
 ///
 /// 环境里的命令用 `env -i` 起头，把 Android 注入的变量（LD_PRELOAD 之类）全部清掉，
 /// 只留下这里列出的几个。
 ProotCommand buildProotCommand({
   required String nativeLibDir,
+  required String libDir,
   required String rootfs,
   required String tmpDir,
   required List<String> guestCommand,
@@ -74,6 +97,7 @@ ProotCommand buildProotCommand({
     environment: {
       'PROOT_LOADER': '$nativeLibDir/${ProotFiles.loader}',
       'PROOT_TMP_DIR': tmpDir,
+      'LD_LIBRARY_PATH': '$libDir:$nativeLibDir',
       'LD_PRELOAD': '',
       if (noSeccomp) 'PROOT_NO_SECCOMP': '1',
     },
