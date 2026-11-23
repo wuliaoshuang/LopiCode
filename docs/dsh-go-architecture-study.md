@@ -563,7 +563,39 @@ Riverpod 能解决的：谁关心谁更新（不再整页重画）、订阅自�
   **和原方案的差别**：没有给每个存储对象配一个持有不可变状态的 Notifier，而是“存储对象还是主人 + 一个‘变了’计数给界面订阅”。
   好处是改动小、行为不变；代价是界面拿到的仍是可变对象，靠规矩（不直接改字段）而不是靠类型拦着。
 - **运行环境**：界面改成订阅 `runtimeRevProvider` / `runtimeDiagnosticsRevProvider`；`LinuxRuntime` 本身没动。
-- **第 4 步（拆 `ProjectSession`）——没做**。它 1400 多行、34 处通知，对话 / 运行 / 终端 / 文件互相咬着，安全规则的测试都压在它上面；
-  这一步要单独排期，按上面第 4 步的表一块一块拆，每块一个提交。
+- **第 4 步（拆 `ProjectSession`）——状态已拆完，引擎还在原处**（2026-11-23 夜，第二轮）。一块一个提交，每个都单独过 `tool/check.sh`：
+  1. 文件变动信号 → `filesRevProvider`；
+  2. 终端会话列表 → `terminalsProvider`（`TerminalSession` 不再是 `ChangeNotifier`）；
+  3. 预览 → `previewProvider`；
+  4. 对话目录 → `conversationsProvider`（`Conversation` 改成不可变；目录没从盘上读出来之前不存盘）；
+  5. 当前对话与 Agent 运行 → `chatRunProvider` / `pendingCardsProvider` / `sendQueueProvider` / `teamRevProvider`
+     （聊天条目全部不可变；`ProjectSession` 不再是 `ChangeNotifier`，34 处通知全删）。
+  聊天页、子对话页、外壳、终端页、文件页、预览页、团队页、设置页都改成订阅 provider。
+  **没做完的**：`ProjectSession` 还剩约 1000 行——跑一轮（`_execute`）、组装工具、派子代理、导出、附件仍在里面，
+  它现在是“引擎 + 门面”而不是薄组装层。只把 Agent 侧的自动化工具拆到了 `lib/session/automation_tools.dart`。
+  团队任务板只是“变了”计数。
+- **第 3 步的过渡版升级**：预设与个人偏好（`presetsProvider`）、技能清单（`skillsProvider`）已是完整版。
+  **渠道与模型、自动化任务仍是过渡版**（存储对象是主人 + 计数；`Channel` / `ModelSpec` / `Automation` 仍可变，
+  设置页里有直接改字段的写法，要连表单一起改）。
+- **旧式通知对象**：`BuildJob`、`TerminalSession` 已不是 `ChangeNotifier`；`LinuxRuntime`、`RuntimeDiagnostics` 没迁。
+- **上一轮遗留的三件事**：
+  1. `runtime_diagnostics` 测试偶发失败**不是 Riverpod 那一轮引入的**：`recordLaunchSuccess` 里“记住兼容模式”那次写盘从更早的提交起就没人等，
+     目录先被删掉时会冒出没人接的 `FileSystemException`（在迁移前的 22bed1d 上用同样步骤复现过）。现在改走 `SettingsStore.setLater`，失败只记日志；
+     另外两处同样写法（终端“中文”键、记住上次打开的工作区）一并改了。
+  2. 联网搜索清 Key 后设置页“已配置”会刷新（代码上一轮已有），补了界面测试。
+  3. “以前靠整个应用重建顺带刷新”的页面逐页排查，见下表。查出两处真漏的，已补订阅和测试。
+
+  | 页面 | 显示的、能在别处被改的东西 | 订阅了吗 |
+  |---|---|---|
+  | 设置总览 | 所有设置、渠道 Key、自动化、技能文件、联网搜索、外观、额度、运行环境、项目规则、默认预设 | 已订阅 |
+  | 聊天页 | 对话目录、当前对话、确认卡、排队、模型、预设、开场建议 / 用量开关、额度 | 已订阅（“智能体团队”菜单项是点开菜单时现读） |
+  | 用量弹层 | 当前对话的用量、模型的上下文窗口 | **原先没订阅**（弹层开着时再跑一轮，数字不动）→ 已补 |
+  | 打包页（后台保活） | SSH 主机（和终端共用一台） | **原先没订阅**（在终端页连了主机，回来还写“还没设置”）→ 已补 |
+  | 终端页 | 终端列表；“中文”键自己改自己刷；SSH / 运行环境是点开面板时现读 | 已订阅 |
+  | 文件页、预览页 | 文件变动、预览状态 | 已订阅 |
+  | 外壳（顶栏、侧边栏） | 对话目录、当前对话忙不忙 | 已订阅 |
+  | 个性化、技能、渠道、额度、自动化、子代理设置、运行环境 | 各自的状态 | 已订阅 |
+  | 团队页、子对话页 | 任务板、子对话条目 | 已订阅 |
+  | 工作区列表、首页 | 工作区清单（页面自己读、自己刷） | 页面内状态，不涉及 |
 - **第 5 步（收尾）——做了一部分**：守门测试已加（flutter_riverpod 只许界面用、provider 只在 lib/state、旧写法不许回来、
-  旧式通知对象清单只许变短）；`BuildJob`、`TerminalSession` 等还在清单里。
+  旧式通知对象清单只许变短）；清单现在只剩 `LinuxRuntime`、`RuntimeDiagnostics`、`PushDrawerController`。

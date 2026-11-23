@@ -51,7 +51,7 @@ const int kMaxLines = 600;
 /// 已经超过 [kMaxLines] 的文件和它们的上限（＝收紧规则时的行数，留一点余量）。只许变短。
 const _oversized = {
   'lib/lowcode/builder_screen.dart': 1180,
-  'lib/project_session.dart': 1121,
+  'lib/project_session.dart': 1031,
   'lib/ui/chat_screen.dart': 860,
   'lib/ui/chat_panels.dart': 793,
   'lib/ui/usage_ui.dart': 718,

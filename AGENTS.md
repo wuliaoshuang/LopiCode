@@ -48,7 +48,7 @@ tool/check.sh --fix    # 先自动排版
 新文件不超过 600 行。已经超了的（`builder_screen.dart`、`project_session.dart`、`chat_screen.dart` 等）记在守门测试的清单里，**只许变短不许变长**：
 往这些文件里加新功能之前，先把新功能写到新文件里。
 
-## 状态怎么放（Riverpod；2026-11-23 霜霜批准迁移，分步进行中）
+## 状态怎么放（Riverpod；2026-11-23 霜霜批准迁移，主体已迁完，剩余见下）
 
 用的是 `flutter_riverpod` / `riverpod` 3.5。**已经迁完的**和**还没迁的**分开写，别搞混。
 
@@ -70,10 +70,27 @@ tool/check.sh --fix    # 先自动排版
     `SettingsStore.set` 写完会自己通知，**不用也不许再手动“通知全应用”**（`AppScope`、`app.touch()` 已删，守门测试不让回来）。
   - `ui_prefs.dart`：`themeModeProvider`（外观）、`chatPrefsProvider`（开场建议、显示用量）。
   - `quota_state.dart`：`quotaProvider`——额度上限和余额。这是**标准样板**：状态是不可变对象，只有 `QuotaNotifier` 能改。
-  - `config_providers.dart`：渠道与模型、预设、Agent 设置、技能、自动化、联网搜索的“变了”计数（`xxxRevProvider`）。
-    这几样的数据主人还是各自的存储对象（`ModelConfigStore` 等，带存盘）；界面 `ref.watch(xxxRevProvider)` 之后照常从存储对象读。
-    这是过渡写法，比 `quotaProvider` 那种弱；以后哪块要大改，就顺手改成不可变状态 + Notifier。
+  - `presets_state.dart`：`presetsProvider`——Agent 预设与个人偏好（完整版：不可变快照 + `PresetsNotifier`）。
+  - `skills_state.dart`：`skillsProvider(工作区目录)`——技能清单（完整版；异步扫描带代次，没人看就释放）。
+  - `config_providers.dart`：渠道与模型、Agent 设置、自动化、联网搜索、SSH 主机的“变了”计数（`xxxRevProvider`）。
+    这几样的数据主人还是各自的存储对象（`ModelConfigStore`、`AutomationStore` 等，带存盘）；界面 `ref.watch(xxxRevProvider)` 之后照常从存储对象读。
+    这是**过渡写法**，比上面两个弱（界面拿到的 `Channel` / `ModelSpec` / `Automation` 仍是可变对象）；以后哪块要大改，就顺手改成不可变状态 + Notifier。
   - `runtime_state.dart`：`runtimeRevProvider`、`runtimeDiagnosticsRevProvider`（运行环境对象本身还是旧式通知，界面已经只订阅 provider）。
+  - 一个工作区的状态（都按 `ProjectSession` 分身，工作区关掉并收完尾后释放）：
+    - `workspace_files.dart`：`filesRevProvider`——工作区文件变了。
+    - `workspace_terminals.dart`：`terminalsProvider`——开了哪些终端、当前哪个。
+    - `workspace_preview.dart`：`previewProvider`——预览服务器起没起来、日志。
+    - `workspace_conversations.dart`：`conversationsProvider`——对话目录（`Conversation` 不可变）、当前是哪段、项目规则。
+    - `workspace_chat.dart`：`chatRunProvider((工作区, 对话 id))`——一段对话的条目（`ChatItem` 全部不可变）、忙不忙、这一轮用量；
+      `activeChatProvider`——当前那段；`pendingCardsProvider`——确认卡 / 提问卡 / “本对话都允许”；`sendQueueProvider`——排队和插话的消息、交还输入框的草稿；
+      `teamRevProvider`——团队任务板变了（只是计数，过渡写法）。
+  - `ProjectSession`（`lib/project_session.dart`）现在**不是状态对象**了：它是“一个工作区的 Agent 引擎 + 对外方法的门面”，
+    自己不通知任何人，状态全在上面这些 provider 里。界面要跟着变就订阅 provider，别想着监听它。
+    它还有 1000 行左右（跑一轮、组装工具、派子代理都在里面），登记在超长清单里，只许变短。
+- **不等写完盘的设置**：按钮回调、后台顺手记一笔这类没法 `await` 的地方用 `SettingsStore.setLater`（内存立刻生效，写盘失败只记错误日志）。
+  不要写 `unawaited(settings.set(...))`——写盘失败会变成没人接的异常。
+- **留在后台的页面**（底部导航的五个页面用 `IndexedStack` 保活）不会因为“从别的页面回来”而重建：
+  它显示的东西只要能在别处被改，就必须订阅对应的 provider。排查清单和测试见 `test/settings_refresh_test.dart`。
 - **防旧数据盖新数据**（照 `QuotaNotifier` 写）：
   - **代次**：每个渠道一个代次号；发请求时记下，回来时号变了（比如换了 Key）就整个丢掉，不写状态。
   - **销毁后不写**：`await` 之后先查 `ref.mounted`；逻辑层查 `app.disposed`。销毁后还可能被读的，留一份本地快照（`QuotaNotifier._snap`）。
@@ -84,9 +101,9 @@ tool/check.sh --fix    # 先自动排版
 
 ### 还没迁的（旧写法，只许减少，不许照着新增）
 
-- 一个工作区的：`ProjectSession`（`ChangeNotifier`，对话、Agent 运行、终端、文件、子代理都在里面），页面用 `addListener` 订阅，
-  `dispose` 里必须 `removeListener`。它是迁移的最后一步，方案在 `docs/dsh-go-architecture-study.md` 第 6 节第 4 步。
-- `TerminalSession`、`BuildJob`、`LinuxRuntime`、`RuntimeDiagnostics` 还是 `ChangeNotifier`。
+- `LinuxRuntime`、`RuntimeDiagnostics` 还是 `ChangeNotifier`（界面已经只订阅 provider，对象本身没重写）。
+- `PushDrawerController`：侧边栏开合动画的控制器，纯界面，留着。
+- `TerminalSession`、`BuildJob` 是页面 / 列表自己建自己丢的“干活对象”，只留一个 `onChanged` 回调位，不是全局状态。
 - 清单在 `test/architecture_test.dart` 的 `_legacyNotifiers`：迁走一个删一个；**不许再新增 `ChangeNotifier` / 全局 `ValueNotifier` 状态**。
 
 ### 一直有效的规矩

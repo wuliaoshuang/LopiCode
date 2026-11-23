@@ -8,7 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lopicode/agent/agent_tools.dart';
 import 'package:lopicode/agent/automation.dart';
 import 'package:lopicode/core/project_store.dart';
-import 'package:lopicode/project_session.dart';
+import 'package:lopicode/session/automation_tools.dart';
 import 'package:lopicode/state/config_providers.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/app_ref.dart';
@@ -83,7 +83,7 @@ class _AutomationListScreenState extends ConsumerState<AutomationListScreen> {
                   else if (!a.enabled)
                     '已停用'
                   else if (a.nextRun(now) case final next?)
-                    '下一次 ${ProjectSession.formatLocal(next, a.rule.tzOffsetMinutes)}'
+                    '下一次 ${formatLocalTime(next, a.rule.tzOffsetMinutes)}'
                   else
                     '不会再触发',
                 ].join('\n'),
@@ -182,7 +182,7 @@ class _AutomationDetailScreenState extends ConsumerState<AutomationDetailScreen>
                 ? '已停用'
                 : next == null
                 ? '不会再触发'
-                : '下一次：${ProjectSession.formatLocal(next, a.rule.tzOffsetMinutes)}'}',
+                : '下一次：${formatLocalTime(next, a.rule.tzOffsetMinutes)}'}',
             style: t.bodySmall?.copyWith(height: 1.6),
           ),
           const SizedBox(height: Space.x3),
@@ -221,7 +221,7 @@ class _AutomationDetailScreenState extends ConsumerState<AutomationDetailScreen>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '${ProjectSession.formatLocal(r.at, a.rule.tzOffsetMinutes)} · ${r.statusLabel}',
+                    '${formatLocalTime(r.at, a.rule.tzOffsetMinutes)} · ${r.statusLabel}',
                     style: t.bodySmall?.copyWith(
                       color: switch (r.status) {
                         'ok' => c.accent,
@@ -262,7 +262,7 @@ class _AutomationEditScreenState extends State<AutomationEditScreen> {
   final _every = TextEditingController(text: '60');
   RuleKind _kind = RuleKind.daily;
   Set<int> _weekdays = {1, 2, 3, 4, 5};
-  int _tz = ProjectSession.deviceTzOffset;
+  int _tz = deviceTzOffset;
   PermissionLevel _permission = PermissionLevel.workspace;
   String? _workspaceId;
   List<Project> _workspaces = const [];
@@ -317,7 +317,7 @@ class _AutomationEditScreenState extends State<AutomationEditScreen> {
   }
 
   List<int> get _tzChoices => {
-    ProjectSession.deviceTzOffset,
+    deviceTzOffset,
     _tz,
     for (var h = -12; h <= 14; h++) h * 60,
     330, // 印度
@@ -373,7 +373,7 @@ class _AutomationEditScreenState extends State<AutomationEditScreen> {
           title: Text(widget.existing == null ? '确认新建自动化任务' : '确认修改自动化任务'),
           content: SingleChildScrollView(
             child: SelectableText(
-              ProjectSession.automationCardText(title: _title.text.trim(), instruction: _instruction.text.trim(), rule: rule, next: next, workspace: ws.name, permission: _permission),
+              automationCardText(title: _title.text.trim(), instruction: _instruction.text.trim(), rule: rule, next: next, workspace: ws.name, permission: _permission),
               key: const Key('automation-confirm-text'),
             ),
           ),
@@ -477,7 +477,7 @@ class _AutomationEditScreenState extends State<AutomationEditScreen> {
           DropdownButtonFormField<int>(
             initialValue: _tz,
             decoration: const InputDecoration(labelText: '时区', helperText: '固定的时差，不会自动调夏令时'),
-            items: [for (final o in _tzChoices) DropdownMenuItem(value: o, child: Text('${TimeRule.tzLabel(o)}${o == ProjectSession.deviceTzOffset ? '（手机当前时区）' : ''}'))],
+            items: [for (final o in _tzChoices) DropdownMenuItem(value: o, child: Text('${TimeRule.tzLabel(o)}${o == deviceTzOffset ? '（手机当前时区）' : ''}'))],
             onChanged: (v) => setState(() => _tz = v ?? _tz),
           ),
           const SizedBox(height: Space.x3),
