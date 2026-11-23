@@ -116,14 +116,8 @@ class OpenAiChatClient implements ChatClient {
       return request;
     }
 
-    Future<http.StreamedResponse> post() async {
-      try {
-        return await _http.send(build());
-      } on Exception catch (e) {
-        // 只报错误类型和主机，不带请求头，避免把 Key 带进界面或日志。
-        throw ChatApiException('连不上模型接口（${uri.host}）：${shortError(e)}');
-      }
-    }
+    // 只报错误类型和主机，不带请求头，避免把 Key 带进界面或日志。
+    Future<http.StreamedResponse> post() => sendChatRequest(_http, build());
 
     var response = await post();
     if (response.statusCode != 200) {
@@ -137,7 +131,7 @@ class OpenAiChatClient implements ChatClient {
       if (response.statusCode != 200) throw ChatApiException(chatErrorMessage(response.statusCode, body), statusCode: response.statusCode);
     }
 
-    final lines = response.stream.transform(utf8.decoder).transform(const LineSplitter());
+    final lines = guardChatStream(response.stream, uri.host).transform(utf8.decoder).transform(const LineSplitter());
     await for (final line in lines) {
       if (!line.startsWith('data:')) continue; // 空行、注释行、event: 行都跳过
       final data = line.substring(5).trim();
@@ -195,6 +189,41 @@ List<Map<String, dynamic>> stripInternal(List<Map<String, dynamic>> messages) =>
         if (!e.key.startsWith('_')) e.key: e.value,
     },
 ];
+
+/// 发出请求后，这么久还没收到接口的响应头就算连不上。
+const Duration kChatConnectTimeout = Duration(seconds: 60);
+
+/// 流式回复中途，这么久一个字节都没来就算断了（思考型模型会停顿很久，所以放得宽）。
+const Duration kChatStallTimeout = Duration(minutes: 5);
+
+/// 发请求并等响应头，带超时；连不上统一报成 [ChatApiException]（只带主机名，不带请求头）。
+Future<http.StreamedResponse> sendChatRequest(http.Client client, http.BaseRequest request, {Duration timeout = kChatConnectTimeout}) async {
+  final host = request.url.host;
+  try {
+    return await client.send(request).timeout(timeout);
+  } on TimeoutException {
+    throw ChatApiException('模型接口（$host）${timeout.inSeconds} 秒没有响应。检查网络和接口地址后再试。');
+  } on Exception catch (e) {
+    throw ChatApiException('连不上模型接口（$host）：${shortError(e)}');
+  }
+}
+
+/// 给流式响应的字节流加“卡住超时”，并把中途断线报成 [ChatApiException]。
+Stream<List<int>> guardChatStream(Stream<List<int>> bytes, String host, {Duration stall = kChatStallTimeout}) {
+  return bytes
+      .cast<List<int>>()
+      .timeout(
+        stall,
+        onTimeout: (sink) {
+          sink.addError(ChatApiException('模型接口（$host）已经 ${stall.inMinutes} 分钟没有新内容，连接可能断了。可以重新发送。'));
+          sink.close();
+        },
+      )
+      .handleError(
+        (Object e) => throw ChatApiException('和模型接口（$host）的连接中断了：${shortError(e)}'),
+        test: (e) => e is! ChatApiException,
+      );
+}
 
 String shortError(Object e) {
   final s = e.toString();

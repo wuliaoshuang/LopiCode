@@ -12,8 +12,8 @@ import 'package:lopicode/app_services.dart';
 import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/core/stores.dart';
 import 'package:lopicode/theme/tokens.dart';
-import 'package:lopicode/ui/widgets.dart';
 import 'package:lopicode/ui/chrome.dart';
+import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
 
 // ── 个性化 ───────────────────────────────────────────

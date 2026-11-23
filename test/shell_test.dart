@@ -4,8 +4,8 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/core/templates.dart';
-import 'package:lopicode/project_session.dart';
 import 'package:lopicode/lowcode/builder_screen.dart';
+import 'package:lopicode/project_session.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/chrome.dart';
 import 'package:lopicode/ui/home_gate.dart';
@@ -147,7 +147,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
-    final keyboardTop = 844 - keyboard;
+    const keyboardTop = 844 - keyboard;
     expect(tester.getRect(nav), navBefore, reason: '导航不能被键盘顶起来');
     expect(tester.getRect(nav).top, greaterThanOrEqualTo(keyboardTop), reason: '导航整个在键盘后面');
     final inputRect = tester.getRect(input);
@@ -423,7 +423,7 @@ void main() {
     addTearDown(again.dispose);
     expect(again.conversations.map((c) => c.title), containsAll(['第一段对话', '第二段对话']));
 
-    await tester.runAsync(() => session.deleteConversation());
+    await tester.runAsync(session.deleteConversation);
     await settle(tester, rounds: 2);
     expect(session.conversations.map((c) => c.title), ['第二段对话']);
     expect(File('${project.dir}/.lopicode/chat.json').existsSync(), isFalse);

@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:lopicode/build/github_client.dart';
 import 'package:lopicode/core/path_guard.dart';
 import 'package:lopicode/core/project_store.dart';
-import 'package:material_ui/material_ui.dart';
 import 'package:path/path.dart' as p;
 
 enum BuildPhase { idle, connecting, pushing, dispatching, waiting, building, downloading, done, failed, cancelled }

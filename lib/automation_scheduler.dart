@@ -36,10 +36,12 @@ class AutomationScheduler {
     if (_ticking) return 0;
     _ticking = true;
     var ran = 0;
+    var changed = false;
     try {
       await app.ready();
       final p = app.automations.pending(now);
       for (final a in p.missed) {
+        changed = true;
         await app.automations.record(a, AutomationRun(now.toUtc(), 'missed', '到点时 App 没在运行，这一次没有执行'));
       }
       for (final a in p.due) {
@@ -49,12 +51,14 @@ class AutomationScheduler {
         if (a.rule.kind == RuleKind.once) a.enabled = false;
         await app.automations.save();
         ran++;
+        changed = true;
         unawaited(_run(a, startedAt));
       }
     } finally {
       _ticking = false;
     }
-    app.touch();
+    // 只有真的记了“错过”或启动了任务才通知界面；以前每 30 秒无条件通知一次，等于整个界面定时白白重建。
+    if (changed) app.touch();
     return ran;
   }
 

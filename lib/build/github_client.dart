@@ -1,8 +1,15 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
 import 'package:http/http.dart' as http;
+
+/// 普通接口请求的超时。
+const Duration kGitHubTimeout = Duration(seconds: 30);
+
+/// 下载构建产物（几十 MB）的超时。
+const Duration kGitHubDownloadTimeout = Duration(minutes: 5);
 
 class GitHubException implements Exception {
   GitHubException(this.message, {this.statusCode});
@@ -94,7 +101,9 @@ class GitHubClient {
       request.body = jsonEncode(body);
     }
     try {
-      return await http.Response.fromStream(await _http.send(request));
+      return await http.Response.fromStream(await _http.send(request)).timeout(kGitHubTimeout);
+    } on TimeoutException {
+      throw GitHubException('GitHub（${uri.host}）${kGitHubTimeout.inSeconds} 秒没有响应，检查网络后再试');
     } on Exception catch (e) {
       throw GitHubException('连不上 GitHub（${uri.host}）：${e.runtimeType}');
     }
@@ -186,7 +195,9 @@ class GitHubClient {
       ..followRedirects = false;
     final http.Response r;
     try {
-      r = await http.Response.fromStream(await _http.send(request));
+      r = await http.Response.fromStream(await _http.send(request)).timeout(kGitHubTimeout);
+    } on TimeoutException {
+      throw GitHubException('GitHub ${kGitHubTimeout.inSeconds} 秒没有响应，检查网络后再试');
     } on Exception catch (e) {
       throw GitHubException('连不上 GitHub：${e.runtimeType}');
     }
@@ -197,7 +208,9 @@ class GitHubClient {
     if (location == null) throw GitHubException('下载构建产物失败：GitHub 没有返回下载地址');
     final http.Response file;
     try {
-      file = await _http.get(Uri.parse(location));
+      file = await _http.get(Uri.parse(location)).timeout(kGitHubDownloadTimeout);
+    } on TimeoutException {
+      throw GitHubException('下载构建产物超时（${kGitHubDownloadTimeout.inMinutes} 分钟），检查网络后再试');
     } on Exception catch (e) {
       throw GitHubException('下载构建产物失败：${e.runtimeType}');
     }

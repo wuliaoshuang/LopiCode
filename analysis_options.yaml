@@ -1,35 +1,84 @@
-# This file configures the analyzer, which statically analyzes Dart code to
-# check for errors, warnings, and lints.
+# 静态检查规则。`flutter analyze` 必须零问题（tool/check.sh 会跑）。
 #
-# The issues identified by the analyzer are surfaced in the UI of Dart-enabled
-# IDEs (https://dart.dev/tools#ides-and-editors). The analyzer can also be
-# invoked from the command line by running `flutter analyze`.
-
-# The following line activates a set of recommended lints for Flutter apps,
-# packages, and plugins designed to encourage good coding practices.
+# 2026-11-23 收紧：在 flutter_lints 之上打开更严格的语言检查和一批“防坑”规则。
+# 新加规则的原则：能防真 bug 的才加（漏 await、漏 cancel、动态调用、空 catch…），纯风格之争的不加。
+# 要临时放过某一行，用 `// ignore: 规则名` 并在同一行写原因；不要在这里整条关掉。
 include: package:flutter_lints/flutter.yaml
 
 analyzer:
   exclude:
     - build/**
     - android/**
+    - .tmp/**
     # 低代码导出器的真实输出（编译检查样本），按导出原样保留
     - test/generated/**
+  language:
+    # 不许悄悄把 dynamic 当成具体类型用；不许省略类型后推断成 dynamic。
+    strict-casts: true
+    strict-inference: true
+    strict-raw-types: true
+  errors:
+    # 这几条直接算错误（不只是提示）：漏掉它们出的都是难查的 bug。
+    unawaited_futures: error
+    cancel_subscriptions: error
+    close_sinks: error
+    avoid_dynamic_calls: error
+    use_build_context_synchronously: error
+    empty_catches: error
+    unrelated_type_equality_checks: error
+    missing_return: error
+    dead_code: warning
+    todo: ignore
 
 linter:
-  # The lint rules applied to this project can be customized in the
-  # section below to disable rules from the `package:flutter_lints/flutter.yaml`
-  # included above or to enable additional rules. A list of all available lints
-  # and their documentation is published at https://dart.dev/lints.
-  #
-  # Instead of disabling a lint rule for the entire project in the
-  # section below, it can also be suppressed for a single line of code
-  # or a specific dart file by using the `// ignore: name_of_lint` and
-  # `// ignore_for_file: name_of_lint` syntax on the line or in the file
-  # producing the lint.
   rules:
-    # avoid_print: false  # Uncomment to disable the `avoid_print` rule
-    # prefer_single_quotes: true  # Uncomment to enable the `prefer_single_quotes` rule
+    # —— 异步与资源 ——
+    unawaited_futures: true # Future 要么 await，要么明确写 unawaited(...)
+    # discarded_futures 暂不开：2026-11-23 试开有 57 处（大多是按钮回调里直接调异步方法），要逐个判断，留到下一轮。
+    # 这些 Future 里的异常现在由全局兜底（lib/main.dart）接住并记日志，不会悄悄丢。
+    cancel_subscriptions: true # StreamSubscription 要 cancel
+    close_sinks: true # Sink / StreamController 要 close
+    avoid_void_async: true # async 函数返回 Future<void>，不要 void（否则异常没人接）
+    # —— 类型安全 ——
+    avoid_dynamic_calls: true # 不在 dynamic 上直接调方法 / 取属性
+    avoid_type_to_string: true # 不靠 runtimeType.toString() 做判断（混淆后会变）
+    unrelated_type_equality_checks: true
+    collection_methods_unrelated_type: true
+    no_adjacent_strings_in_list: true
+    test_types_in_equals: true
+    hash_and_equals: true
+    # —— 界面 ——
+    use_build_context_synchronously: true # await 之后用 context 前先查 mounted
+    use_key_in_widget_constructors: true
+    no_logic_in_create_state: true
+    avoid_unnecessary_containers: true
+    sized_box_for_whitespace: true
+    use_colored_box: true
+    use_decorated_box: true
+    # —— 可读性与防坑 ——
+    always_declare_return_types: true
+    annotate_overrides: true
+    avoid_print: true
+    avoid_relative_lib_imports: true
+    always_use_package_imports: true # 架构守门测试靠 package: 路径判断依赖方向
+    avoid_returning_null_for_void: true
+    avoid_empty_else: true
+    empty_catches: true # catch 里至少写一句为什么可以不管
+    only_throw_errors: true
+    prefer_final_locals: true
+    prefer_final_in_for_each: true
+    prefer_const_constructors: true
+    prefer_const_declarations: true
+    prefer_single_quotes: true
+    unnecessary_statements: true
+    unnecessary_lambdas: true
+    throw_in_finally: true
+    control_flow_in_finally: true
+    no_duplicate_case_values: true
+    no_self_assignments: true
+    literal_only_boolean_expressions: true
+    directives_ordering: true
 
-# Additional information about this file can be found at
-# https://dart.dev/guides/language/analysis-options
+# 排版：`dart format` 的行宽。工程里一直是长行写法（一行一个控件 / 一条断言），所以放宽到 200。
+formatter:
+  page_width: 200

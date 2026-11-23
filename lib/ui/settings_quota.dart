@@ -92,7 +92,7 @@ class _QuotaScreenState extends State<QuotaScreen> {
     if (!ok) return;
     await app.quota.clearLimit(widget.channelId);
     if (mounted) {
-      setState(() => _limit.clear());
+      setState(_limit.clear);
       showSnack(context, '已取消上限');
     }
   }

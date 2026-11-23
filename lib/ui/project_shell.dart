@@ -5,7 +5,6 @@
 // - 侧边栏是“把主界面向右推开”的形式（push_drawer.dart），从左边缘右滑也能拉出来；终端和低代码画布上自己有横向手势，那两页只能点汉堡按钮。
 // - 切页面不丢状态：各页共用一个 ProjectSession，用 IndexedStack 保活；没去过的页面先不建。
 // - 系统返回键：侧边栏开着先关它；不在聊天页时先回聊天页，在聊天页才退出。
-import 'package:lopicode/runtime/runtime_screen.dart';
 import 'dart:io';
 
 import 'package:lopicode/app_services.dart';
@@ -13,6 +12,7 @@ import 'package:lopicode/build/build_screen.dart';
 import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/lowcode/builder_screen.dart';
 import 'package:lopicode/project_session.dart';
+import 'package:lopicode/runtime/runtime_screen.dart';
 import 'package:lopicode/ui/chat_screen.dart';
 import 'package:lopicode/ui/chrome.dart';
 import 'package:lopicode/ui/files_tab.dart';

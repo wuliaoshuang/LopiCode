@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:lopicode/core/path_guard.dart';
+import 'package:lopicode/core/safe_file.dart';
 import 'package:lopicode/core/templates.dart';
 import 'package:path/path.dart' as p;
 
@@ -70,20 +71,13 @@ class ProjectStore {
   File get _registryFile => File(p.join(rootDir, '.workspaces.json'));
 
   Future<Map<String, dynamic>> _registry() async {
-    try {
-      if (await _registryFile.exists()) {
-        final j = jsonDecode(await _registryFile.readAsString());
-        if (j is Map<String, dynamic>) return j;
-      }
-    } on Exception {
-      // 登记文件坏了：当空的，应用目录里的项目照样能列出来
-    }
-    return {};
+    // 登记文件坏了：备份后当空的，应用目录里的项目照样能列出来
+    final j = await readJsonFile(_registryFile, accept: (j) => j is Map<String, dynamic>, label: '工作区登记文件');
+    return j is Map<String, dynamic> ? j : {};
   }
 
   Future<void> _saveRegistry(Map<String, dynamic> reg) async {
-    await Directory(rootDir).create(recursive: true);
-    await _registryFile.writeAsString(jsonEncode(reg));
+    await writeJsonAtomic(_registryFile, reg);
   }
 
   Future<void> _patch(String id, Map<String, dynamic> patch) async {
@@ -229,13 +223,16 @@ class ProjectStore {
   Future<Project?> _read(String dir) async {
     final meta = File(p.join(dir, PathGuard.reservedDir, _metaFile));
     try {
-      final json = jsonDecode(await meta.readAsString()) as Map<String, dynamic>;
+      if (!await meta.exists()) return null; // 不是项目目录
+      // project.json 坏了：备份后用目录名顶上，项目不能因此从列表里消失
+      final decoded = await readJsonFile(meta, accept: (j) => j is Map<String, dynamic>, label: '项目信息');
+      final json = decoded is Map<String, dynamic> ? decoded : const <String, dynamic>{};
       return Project(
         id: p.basename(dir),
-        name: (json['name'] as String?) ?? p.basename(dir),
-        template: ProjectTemplate.byId(json['template'] as String?),
+        name: json['name'] is String && (json['name'] as String).trim().isNotEmpty ? json['name'] as String : p.basename(dir),
+        template: ProjectTemplate.byId(json['template'] is String ? json['template'] as String : null),
         createdAt:
-            DateTime.tryParse(json['createdAt'] as String? ?? '') ??
+            DateTime.tryParse(json['createdAt'] is String ? json['createdAt'] as String : '') ??
             DateTime.fromMillisecondsSinceEpoch(0),
         dir: dir,
       );
@@ -298,8 +295,7 @@ class ProjectStore {
 
   Future<void> _writeMeta(Project project) async {
     final meta = File(p.join(project.dir, PathGuard.reservedDir, _metaFile));
-    await meta.parent.create(recursive: true);
-    await meta.writeAsString(jsonEncode(project.toJson()));
+    await writeJsonAtomic(meta, project.toJson());
   }
 
   Future<String> _freeId(String name) async {

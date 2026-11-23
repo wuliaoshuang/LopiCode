@@ -11,8 +11,8 @@ import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/chat_panels.dart';
-import 'package:lopicode/ui/widgets.dart';
 import 'package:lopicode/ui/chrome.dart';
+import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
 
 const String kAutomationHonesty = '只有 LopiCode 正在运行（开着或刚切到后台、没被系统清掉）时才会触发。到点时 App 没在运行，那一次只记为“错过”，不会补跑。';

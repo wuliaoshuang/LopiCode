@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
+import 'package:lopicode/core/safe_file.dart';
 import 'package:lopicode/core/stores.dart';
 import 'package:lopicode/runtime/proot_command.dart';
 import 'package:lopicode/runtime/resumable_download.dart';
@@ -225,7 +226,7 @@ class LinuxRuntime extends ChangeNotifier {
       if (await old.exists()) await old.delete(recursive: true);
       await staging.rename(rootfsDir);
       await _configureGuest();
-      await _marker.writeAsString(jsonEncode({'version': image.version, 'sha256': image.sha256}));
+      await writeJsonAtomic(_marker, {'version': image.version, 'sha256': image.sha256});
       await _archive.delete();
       _log('解压完成：${result.files} 个文件，${formatBytes(result.bytes)}（跳过 ${result.skipped} 个设备文件）');
       launchFailures = 0;
@@ -328,10 +329,12 @@ class LinuxRuntime extends ChangeNotifier {
       }
 
       const decoder = Utf8Decoder(allowMalformed: true);
-      final out = process.stdout.transform(decoder).transform(const LineSplitter()).listen(collect);
-      final err = process.stderr.transform(decoder).transform(const LineSplitter()).listen(collect);
+      final out = process.stdout.transform(decoder).transform(const LineSplitter()).listen(collect, onError: (_) {});
+      final err = process.stderr.transform(decoder).transform(const LineSplitter()).listen(collect, onError: (_) {});
       final code = await process.exitCode;
       await Future.wait([out.asFuture<void>(), err.asFuture<void>()]).timeout(const Duration(seconds: 2), onTimeout: () => const []);
+      await out.cancel();
+      await err.cancel();
       ok = code == 0;
       collect(ok ? '${pack.title} 安装完成。' : '${pack.title} 安装失败（退出码 $code）。上面是完整输出。');
       _log('安装 ${pack.title}：${ok ? '成功' : '失败，退出码 $code'}');

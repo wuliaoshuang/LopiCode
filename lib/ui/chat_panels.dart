@@ -15,8 +15,8 @@ import 'package:lopicode/project_session.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/chat_screen.dart';
 import 'package:lopicode/ui/chrome.dart';
-import 'package:lopicode/ui/widgets.dart';
 import 'package:lopicode/ui/provider_icon.dart';
+import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
 
 // ── 模型选择 ─────────────────────────────────────────
@@ -411,7 +411,7 @@ class AttachmentStrip extends StatelessWidget {
                     right: 0,
                     child: InkWell(
                       onTap: () => onRemove(i),
-                      child: Container(
+                      child: DecoratedBox(
                         decoration: BoxDecoration(color: c.text.withValues(alpha: 0.6), borderRadius: BorderRadius.circular(Radii.sm)),
                         child: Icon(Icons.close, size: 16, color: c.surface, semanticLabel: '移除这张图片'),
                       ),

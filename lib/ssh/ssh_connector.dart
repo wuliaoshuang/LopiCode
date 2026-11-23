@@ -104,7 +104,7 @@ Future<SSHClient> connectSsh({
     await client.authenticated.timeout(timeout + const Duration(seconds: 60));
     return client;
   } catch (e) {
-    client?.close();
+    unawaited(client?.close()); // 关连接不等它：对端没响应时不能卡住
     throw SshConnectException(verifier.rejection ?? describeSshError(e, config));
   }
 }

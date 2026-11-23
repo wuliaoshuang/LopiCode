@@ -92,7 +92,9 @@ class _FilesTabState extends State<FilesTab> {
     for (final f in List.of(_open)) {
       final file = File(_guard.resolve(f.path));
       if (!await file.exists()) {
-        if (!f.dirty) _close(_open.indexOf(f), force: true);
+        // 等文件系统的这会儿，标签可能已经被用户关掉了（indexOf 得 -1）：那就不用再关
+        final index = _open.indexOf(f);
+        if (!f.dirty && index >= 0) await _close(index, force: true);
         continue;
       }
       if (f.dirty) continue;

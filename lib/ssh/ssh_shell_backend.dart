@@ -43,7 +43,7 @@ class SshShellBackend implements TerminalBackend {
     try {
       final client = await connect();
       if (_closed) {
-        client.close();
+        unawaited(client.close()); // 关连接不等它：对端没响应时不能卡住
         return;
       }
       final shell = await client.shell(pty: SSHPtyConfig(type: 'xterm-256color', width: _columns, height: _rows));
@@ -96,7 +96,7 @@ class SshShellBackend implements TerminalBackend {
     _closed = true;
     _shell?.close();
     _shell = null;
-    _client?.close();
+    unawaited(_client?.close()); // 关连接不等它：对端没响应时不能卡住
     _client = null;
     await _out.close();
   }

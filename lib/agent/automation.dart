@@ -1,5 +1,6 @@
-import 'dart:convert';
 import 'dart:io';
+
+import 'package:lopicode/core/safe_file.dart';
 
 /// 时间规则。
 enum RuleKind {
@@ -252,26 +253,24 @@ class AutomationStore {
 
   Future<void> load() async {
     items.clear();
-    try {
-      if (await file.exists()) {
-        final j = jsonDecode(await file.readAsString());
-        if (j is List) {
-          items.addAll([
-            for (final a in j)
-              ?Automation.fromJson(a),
-          ]);
+    // 文件坏了：备份后当没有任务
+    final j = await readJsonFile(file, accept: (j) => j is List, label: '自动化任务');
+    if (j is List) {
+      for (final a in j) {
+        try {
+          final item = Automation.fromJson(a);
+          if (item != null) items.add(item);
+        } catch (_) {
+          // 单条读不懂（老版本字段不对）：跳过这一条，不连累别的
         }
       }
-    } on Exception {
-      // 文件坏了：当没有任务
     }
   }
 
   Future<void> save() async {
     onChanged?.call();
     try {
-      await file.parent.create(recursive: true);
-      await file.writeAsString(jsonEncode([for (final a in items) a.toJson()]));
+      await writeJsonAtomic(file, [for (final a in items) a.toJson()]);
     } on FileSystemException {
       // 存不了：这次打开期间仍然有效
     }

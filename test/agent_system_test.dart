@@ -180,13 +180,13 @@ void main() {
     test('Anthropic Messages：请求格式、流式文字、工具调用、工具结果回传', () async {
       api = FakeApi()
         ..sse['/v1/messages'] = sseOf([
-          {'type': 'message_start', 'message': {'id': 'm', 'role': 'assistant', 'content': []}},
+          {'type': 'message_start', 'message': {'id': 'm', 'role': 'assistant', 'content': <Object>[]}},
           {'type': 'content_block_start', 'index': 0, 'content_block': {'type': 'text', 'text': ''}},
           {'type': 'ping'},
           {'type': 'content_block_delta', 'index': 0, 'delta': {'type': 'text_delta', 'text': '我先'}},
           {'type': 'content_block_delta', 'index': 0, 'delta': {'type': 'text_delta', 'text': '看看'}},
           {'type': 'content_block_stop', 'index': 0},
-          {'type': 'content_block_start', 'index': 1, 'content_block': {'type': 'tool_use', 'id': 'toolu_1', 'name': 'read_file', 'input': {}}},
+          {'type': 'content_block_start', 'index': 1, 'content_block': {'type': 'tool_use', 'id': 'toolu_1', 'name': 'read_file', 'input': <String, dynamic>{}}},
           {'type': 'content_block_delta', 'index': 1, 'delta': {'type': 'input_json_delta', 'partial_json': '{"path":'}},
           {'type': 'content_block_delta', 'index': 1, 'delta': {'type': 'input_json_delta', 'partial_json': '"a.txt"}'}},
           {'type': 'content_block_stop', 'index': 1},
@@ -227,7 +227,7 @@ void main() {
       expect(body['max_tokens'], 32000);
       expect(body['stream'], isTrue);
       expect(body['thinking'], {'type': 'enabled', 'budget_tokens': 4096});
-      expect((body['tools'] as List).single, containsPair('input_schema', isA<Map>()));
+      expect((body['tools'] as List).single, containsPair('input_schema', isA<Map<dynamic, dynamic>>()));
       final msgs = body['messages'] as List;
       expect(msgs.map((m) => (m as Map)['role']), ['user', 'assistant', 'user']);
       final assistantBlocks = (msgs[1] as Map)['content'] as List;
@@ -244,7 +244,7 @@ void main() {
           {'type': 'response.output_item.added', 'output_index': 1, 'item': {'type': 'function_call', 'id': 'fc_1', 'call_id': 'call_9', 'name': 'read_file', 'arguments': ''}},
           {'type': 'response.function_call_arguments.delta', 'output_index': 1, 'delta': '{"path":"a.txt"}'},
           {'type': 'response.output_item.done', 'output_index': 1, 'item': {'type': 'function_call', 'call_id': 'call_9', 'name': 'read_file', 'arguments': '{"path":"a.txt"}'}},
-          {'type': 'response.completed', 'response': {}},
+          {'type': 'response.completed', 'response': <String, dynamic>{}},
         ]);
       await api!.start();
       final client = OpenAiResponsesClient(baseUrl: api!.base, apiKey: 'sk-r', model: 'gpt-x', maxOutputTokens: 8000, reasoningEffort: 'high');

@@ -25,7 +25,7 @@ class PathGuard {
 
   /// 把相对路径解析成项目内的绝对路径；任何逃逸都会抛 [PathGuardException]。
   String resolve(String relative, {bool allowReserved = false}) {
-    var rel = relative.trim().replaceAll('\\', '/');
+    final rel = relative.trim().replaceAll('\\', '/');
     if (rel.contains('\u0000')) {
       throw PathGuardException('路径里有非法字符');
     }

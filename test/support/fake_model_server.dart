@@ -125,7 +125,7 @@ class FakeModelServer {
     // 和真实接口一样：只有请求里带了 stream_options.include_usage 才发。
     final opts = requests.last['stream_options'];
     if (opts is Map && opts['include_usage'] == true) {
-      req.response.write('data: ${jsonEncode({'choices': [], 'usage': reply.usage ?? {'total_tokens': 1}})}\n\n');
+      req.response.write('data: ${jsonEncode({'choices': <Object>[], 'usage': reply.usage ?? {'total_tokens': 1}})}\n\n');
     }
     req.response.write('data: [DONE]\n\n');
     await req.response.close();

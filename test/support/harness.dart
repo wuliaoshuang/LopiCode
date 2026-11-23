@@ -82,8 +82,15 @@ Widget appFor(TestEnv env, Widget home, {ThemeMode mode = ThemeMode.light, Strin
 
 /// 界面里有真实的文件 / 进程 IO：让真实异步跑一会儿，再推几帧。
 Future<void> settle(WidgetTester tester, {int rounds = 4, int ms = 60}) async {
+  // 真实文件读写的每一步（建目录、写临时文件、改名…）都要“真等一下 + 让测试时钟走一下”才能接着往下走。
+  // 存盘改成原子写以后步数变多了，所以每一轮里再细分成几小步，免得靠调轮数去凑。
+  const hops = 6;
+  final each = Duration(milliseconds: (ms / hops).ceil());
   for (var i = 0; i < rounds; i++) {
-    await tester.runAsync(() => Future<void>.delayed(Duration(milliseconds: ms)));
+    for (var k = 0; k < hops; k++) {
+      await tester.runAsync(() => Future<void>.delayed(each));
+      await tester.pump();
+    }
     await tester.pump(const Duration(milliseconds: 120));
   }
 }

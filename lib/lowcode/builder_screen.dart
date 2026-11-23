@@ -14,8 +14,8 @@ import 'package:lopicode/lowcode/export_dart.dart';
 import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/theme/tokens.dart';
-import 'package:lopicode/ui/widgets.dart';
 import 'package:lopicode/ui/shell.dart';
+import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// 拖动中携带的东西：新组件的类型，或画布上已有组件的 id。
@@ -425,7 +425,7 @@ class _Palette extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.colors;
     final t = Theme.of(context).textTheme;
-    return Container(
+    return DecoratedBox(
       decoration: BoxDecoration(
         color: c.surface,
         border: Border(top: BorderSide(color: c.border)),
@@ -1485,7 +1485,7 @@ class CodeSheetBody extends StatelessWidget {
             ),
           ),
           Expanded(
-            child: Container(
+            child: ColoredBox(
               color: c.codeBg,
               child: SingleChildScrollView(
                 controller: scroll,

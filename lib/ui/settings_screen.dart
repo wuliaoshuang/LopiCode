@@ -14,12 +14,13 @@ import 'package:lopicode/app_services.dart';
 import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/core/stores.dart';
 import 'package:lopicode/project_session.dart';
-import 'package:lopicode/theme/tokens.dart';
-import 'package:lopicode/ui/automation_screen.dart';
 import 'package:lopicode/runtime/linux_runtime.dart';
 import 'package:lopicode/runtime/runtime_screen.dart';
+import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/automation_screen.dart';
 import 'package:lopicode/ui/chat_panels.dart';
 import 'package:lopicode/ui/chrome.dart';
+import 'package:lopicode/ui/error_guard.dart';
 import 'package:lopicode/ui/settings_agent.dart';
 import 'package:lopicode/ui/settings_ai.dart';
 import 'package:lopicode/ui/settings_quota.dart';
@@ -233,6 +234,13 @@ class SettingsScreen extends StatelessWidget {
                 title: '第三方声明',
                 subtitle: '随安装包带的开源组件和许可证',
                 onTap: () => go(const ThirdPartyScreen()),
+              ),
+              GroupRow(
+                key: const Key('settings-error-log'),
+                icon: Icons.bug_report_outlined,
+                title: '错误日志',
+                subtitle: '应用出错时记在这台手机上，可以复制',
+                onTap: () => go(const ErrorLogScreen()),
               ),
             ],
           ),

@@ -7,15 +7,15 @@
 // - Ubuntu 进去后一直没输出：终端下方出一条提示，三个出路各占一个按钮，不让人对着空屏。
 // - 没有单独的输入行：真正的终端里输入就在光标处。
 import 'package:lopicode/app_services.dart';
+import 'package:lopicode/core/stores.dart';
 import 'package:lopicode/project_session.dart';
+import 'package:lopicode/runtime/linux_shell_backend.dart';
 import 'package:lopicode/ssh/ssh_config.dart';
 import 'package:lopicode/ssh/ssh_connect_screen.dart';
-import 'package:lopicode/core/stores.dart';
-import 'package:lopicode/runtime/linux_shell_backend.dart';
 import 'package:lopicode/terminal/terminal_input.dart';
 import 'package:lopicode/terminal/terminal_session.dart';
-import 'package:lopicode/ui/shell.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/shell.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:xterm/xterm.dart';
 

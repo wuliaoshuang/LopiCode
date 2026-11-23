@@ -48,10 +48,15 @@ class DartSshRemoteExec implements RemoteExec {
     const decoder = Utf8Decoder(allowMalformed: true);
     final out = session.stdout.cast<List<int>>().transform(decoder).listen(onOutput);
     final err = session.stderr.cast<List<int>>().transform(decoder).listen(onOutput);
-    await session.done;
-    await out.asFuture<void>().catchError((_) {});
-    await err.asFuture<void>().catchError((_) {});
-    return session.exitCode;
+    try {
+      await session.done;
+      await out.asFuture<void>().catchError((_) {});
+      await err.asFuture<void>().catchError((_) {});
+      return session.exitCode;
+    } finally {
+      await out.cancel();
+      await err.cancel();
+    }
   }
 
   Future<SftpClient> _sftpClient() async => _sftp ??= await _c.sftp();
@@ -92,9 +97,9 @@ class DartSshRemoteExec implements RemoteExec {
 
   @override
   Future<void> close() async {
-    _sftp?.close();
+    unawaited(_sftp?.close()); // 关连接不等它：对端没响应时不能卡住
     _sftp = null;
-    _client?.close();
+    unawaited(_client?.close()); // 关连接不等它：对端没响应时不能卡住
     _client = null;
   }
 }

@@ -8,22 +8,22 @@
 // - 胶囊上方按需叠几条窄条：自动允许中、计划模式、排队的消息、附件缩略图、/ 指令提示；确认卡和提问卡也钉在这里。
 // - 空对话：默认是空的；在“设置”里打开“在新对话里显示开场建议”后，几条建议贴着胶囊上方，弱化显示。
 // - 主操作只有一个：发送。AI 生成时长按发送键选“排队 / 插话 / 中断并发送”。
+import 'dart:async';
 import 'dart:convert';
-
-import 'package:lopicode/agent/usage.dart';
 
 import 'package:lopicode/agent/agent_tools.dart';
 import 'package:lopicode/agent/quota.dart';
-import 'package:lopicode/core/stores.dart';
-import 'package:lopicode/ui/settings_quota.dart';
+import 'package:lopicode/agent/usage.dart';
 import 'package:lopicode/app_services.dart';
 import 'package:lopicode/core/project_store.dart';
+import 'package:lopicode/core/stores.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/chat_panels.dart';
 import 'package:lopicode/ui/chrome.dart';
 import 'package:lopicode/ui/model_setup.dart';
 import 'package:lopicode/ui/settings_ai.dart';
+import 'package:lopicode/ui/settings_quota.dart';
 import 'package:lopicode/ui/shell.dart';
 import 'package:lopicode/ui/team_screen.dart';
 import 'package:lopicode/ui/usage_ui.dart';
@@ -118,7 +118,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final images = [..._attachments];
     _input.clear();
     setState(_attachments.clear);
-    s.sendToAgent(text, images: images, mode: mode);
+    unawaited(s.sendToAgent(text, images: images, mode: mode));
   }
 
   /// 是 `/` 指令就执行并返回 true。
@@ -194,7 +194,7 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _pickSendMode() async {
     if (!_canSend) return;
     final mode = await showModalBottomSheet<SendMode>(context: context, builder: (_) => SendModeSheet(hasImages: _attachments.isNotEmpty));
-    if (mode != null) _send(null, mode);
+    if (mode != null) await _send(null, mode);
   }
 
   Future<void> _pickModel() async {

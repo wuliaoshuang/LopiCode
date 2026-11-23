@@ -4,9 +4,9 @@
 // - 许可证全文单独一页，原文不翻译、不删改。
 import 'package:lopicode/core/third_party.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/chrome.dart';
 import 'package:lopicode/ui/shell.dart';
 import 'package:lopicode/ui/widgets.dart';
-import 'package:lopicode/ui/chrome.dart';
 import 'package:material_ui/material_ui.dart';
 
 class ThirdPartyScreen extends StatelessWidget {

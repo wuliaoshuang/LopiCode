@@ -1,4 +1,6 @@
 import 'dart:async';
+
+import 'package:lopicode/agent/chat_client.dart';
 // 设计约束（模型与渠道 · 390×844）
 // - 渠道列表：一行一个渠道（名字强，协议 + 模型数弱）。最上面一块是“新对话用哪个模型”。主操作只有“添加渠道”。
 // - 渠道编辑页从上到下：名称 → 协议 → 接口地址 → API Key → 两个次要按钮（测试连接、获取模型）→ 模型列表 → 保存。
@@ -8,14 +10,13 @@ import 'dart:async';
 import 'package:lopicode/agent/model_config.dart';
 import 'package:lopicode/agent/protocols.dart';
 import 'package:lopicode/agent/provider_presets.dart';
-import 'package:lopicode/agent/chat_client.dart';
 import 'package:lopicode/app_services.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/chat_panels.dart';
+import 'package:lopicode/ui/chrome.dart';
 import 'package:lopicode/ui/model_setup.dart';
 import 'package:lopicode/ui/provider_icon.dart';
 import 'package:lopicode/ui/widgets.dart';
-import 'package:lopicode/ui/chrome.dart';
 import 'package:material_ui/material_ui.dart';
 
 class ChannelsScreen extends StatefulWidget {

@@ -62,12 +62,7 @@ Future<http.StreamedResponse> _post(http.Client client, Uri uri, Map<String, Str
   final request = http.Request('POST', uri)
     ..headers.addAll({'Content-Type': 'application/json', 'Accept': 'text/event-stream', ...headers})
     ..body = jsonEncode(body);
-  final http.StreamedResponse response;
-  try {
-    response = await client.send(request);
-  } on Exception catch (e) {
-    throw ChatApiException('连不上模型接口（${uri.host}）：${shortError(e)}');
-  }
+  final response = await sendChatRequest(client, request);
   if (response.statusCode != 200) {
     final text = await response.stream.bytesToString();
     throw ChatApiException(chatErrorMessage(response.statusCode, text), statusCode: response.statusCode);
@@ -107,8 +102,8 @@ int anthropicBudget(String level) => switch (level) {
 /// OpenAI 格式的工具定义 → Anthropic 的 `tools`。
 List<Map<String, dynamic>> anthropicTools(List<Map<String, dynamic>> tools) => [
   for (final t in tools)
-    if (t['function'] case final Map fn)
-      {'name': fn['name'], 'description': fn['description'] ?? '', 'input_schema': fn['parameters'] ?? {'type': 'object', 'properties': {}}},
+    if (t['function'] case final Map<dynamic, dynamic> fn)
+      {'name': fn['name'], 'description': fn['description'] ?? '', 'input_schema': fn['parameters'] ?? {'type': 'object', 'properties': <String, dynamic>{}}},
 ];
 
 /// OpenAI 格式的消息 → Anthropic 的 (`system`, `messages`)。
@@ -249,7 +244,7 @@ class AnthropicChatClient implements ChatClient {
     final partial = <int, StringBuffer>{};
     String? stop;
     Object? usageStart, usageDelta;
-    await for (final ev in sseEvents(response.stream)) {
+    await for (final ev in sseEvents(guardChatStream(response.stream, response.request?.url.host ?? ''))) {
       final Object? json;
       try {
         json = jsonDecode(ev.data);
@@ -325,12 +320,12 @@ class AnthropicChatClient implements ChatClient {
 /// OpenAI Chat 格式的工具定义 → Responses 的扁平格式。
 List<Map<String, dynamic>> responsesTools(List<Map<String, dynamic>> tools) => [
   for (final t in tools)
-    if (t['function'] case final Map fn)
+    if (t['function'] case final Map<dynamic, dynamic> fn)
       {
         'type': 'function',
         'name': fn['name'],
         'description': fn['description'] ?? '',
-        'parameters': fn['parameters'] ?? {'type': 'object', 'properties': {}},
+        'parameters': fn['parameters'] ?? {'type': 'object', 'properties': <String, dynamic>{}},
         'strict': false, // 我们的参数表有可选项，不满足严格模式的要求
       },
 ];
@@ -429,7 +424,7 @@ class OpenAiResponsesClient implements ChatClient {
 
     final gotArgs = <int>{}; // 收到过参数增量的输出项
     var sawCall = false;
-    await for (final ev in sseEvents(response.stream)) {
+    await for (final ev in sseEvents(guardChatStream(response.stream, response.request?.url.host ?? ''))) {
       if (ev.data == '[DONE]') break; // 官方不发，有些兼容接口会发
       final Object? json;
       try {

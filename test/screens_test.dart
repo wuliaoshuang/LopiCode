@@ -11,17 +11,17 @@ import 'package:lopicode/build/build_screen.dart';
 import 'package:lopicode/build/github_client.dart';
 import 'package:lopicode/build/remote_exec.dart';
 import 'package:lopicode/build/ssh_build_controller.dart';
-import 'package:lopicode/core/stores.dart';
-import 'package:lopicode/ssh/ssh_config.dart';
-import 'package:lopicode/ssh/ssh_connect_screen.dart';
 import 'package:lopicode/core/project_store.dart';
+import 'package:lopicode/core/stores.dart';
 import 'package:lopicode/core/templates.dart';
 import 'package:lopicode/project_session.dart';
+import 'package:lopicode/ssh/ssh_config.dart';
+import 'package:lopicode/ssh/ssh_connect_screen.dart';
+import 'package:lopicode/ui/chrome.dart';
 import 'package:lopicode/ui/preview_tab.dart';
 import 'package:lopicode/ui/project_list_screen.dart';
 import 'package:lopicode/ui/project_shell.dart';
 import 'package:lopicode/ui/settings_screen.dart';
-import 'package:lopicode/ui/chrome.dart';
 import 'package:lopicode/ui/shell.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:re_editor/re_editor.dart';
@@ -73,7 +73,7 @@ void main() {
 
   for (final mode in [ThemeMode.light, ThemeMode.dark]) {
     final suffix = mode == ThemeMode.light ? 'light' : 'dark';
-    final font = kTestFont;
+    const font = kTestFont;
 
     Future<(TestEnv, Project, ProjectSession)> open(WidgetTester tester, ProjectTemplate template, {TestEnv? env}) async {
       usePhoneViewport(tester);

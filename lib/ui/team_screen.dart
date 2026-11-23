@@ -6,8 +6,8 @@
 import 'package:lopicode/agent/team.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/theme/tokens.dart';
-import 'package:lopicode/ui/widgets.dart';
 import 'package:lopicode/ui/chrome.dart';
+import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
 
 class TeamScreen extends StatefulWidget {

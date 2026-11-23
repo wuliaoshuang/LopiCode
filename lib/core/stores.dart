@@ -1,5 +1,6 @@
-import 'dart:convert';
 import 'dart:io';
+
+import 'package:lopicode/core/safe_file.dart';
 
 /// 密钥存储接口。API Key、GitHub Token、SSH 密码 / 私钥只走这里，
 /// 永远不进普通设置文件，也不进日志。
@@ -36,14 +37,9 @@ class SettingsStore {
   Map<String, dynamic> _data = {};
 
   Future<void> load() async {
-    try {
-      if (await file.exists()) {
-        final decoded = jsonDecode(await file.readAsString());
-        if (decoded is Map<String, dynamic>) _data = decoded;
-      }
-    } catch (_) {
-      _data = {};
-    }
+    // 文件坏了：readJsonFile 会把坏文件另存一份再返回 null，这里回退成空设置。
+    final decoded = await readJsonFile(file, accept: (j) => j is Map<String, dynamic>, label: '设置文件');
+    _data = decoded is Map<String, dynamic> ? decoded : {};
   }
 
   T? get<T>(String key) {
@@ -63,8 +59,7 @@ class SettingsStore {
     } else {
       _data[key] = value;
     }
-    await file.parent.create(recursive: true);
-    await file.writeAsString(jsonEncode(_data));
+    await writeJsonAtomic(file, _data);
   }
 }
 

@@ -260,7 +260,7 @@ class TerminalSession extends ChangeNotifier {
   Future<void> ensureStarted() async {
     if (_started) return;
     _started = true;
-    _sub = backend.output.listen(terminal.write);
+    _sub = backend.output.listen(terminal.write, onError: (_) {});
     await backend.start(columns: terminal.viewWidth, rows: terminal.viewHeight);
   }
 

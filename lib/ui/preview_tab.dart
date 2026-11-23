@@ -62,9 +62,9 @@ class _PreviewTabState extends State<PreviewTab> {
         if (mounted) setState(() {});
       });
       if (PreviewTab.debugViewBuilder == null) {
-        _web = WebViewController()
-          ..setJavaScriptMode(JavaScriptMode.unrestricted)
-          ..loadRequest(server.baseUri);
+        final web = _web = WebViewController();
+        await web.setJavaScriptMode(JavaScriptMode.unrestricted);
+        await web.loadRequest(server.baseUri);
       }
       if (mounted) setState(() => _ready = true);
     } on Exception catch (e) {
@@ -119,7 +119,7 @@ class _PreviewTabState extends State<PreviewTab> {
           ),
         ),
         Expanded(
-          child: Container(
+          child: DecoratedBox(
             decoration: BoxDecoration(color: Colors.white, border: Border.symmetric(horizontal: BorderSide(color: c.border))),
             child: LayoutBuilder(
               builder: (context, box) {

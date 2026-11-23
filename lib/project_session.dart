@@ -10,13 +10,14 @@ import 'package:lopicode/agent/command_runner.dart';
 import 'package:lopicode/agent/model_config.dart';
 import 'package:lopicode/agent/presets.dart';
 import 'package:lopicode/agent/quota.dart';
-import 'package:lopicode/agent/usage.dart';
 import 'package:lopicode/agent/skills.dart';
 import 'package:lopicode/agent/team.dart';
+import 'package:lopicode/agent/usage.dart';
 import 'package:lopicode/agent/web_search.dart';
 import 'package:lopicode/app_services.dart';
 import 'package:lopicode/core/path_guard.dart';
 import 'package:lopicode/core/project_store.dart';
+import 'package:lopicode/core/safe_file.dart';
 import 'package:lopicode/core/stores.dart';
 import 'package:lopicode/preview/preview_server.dart';
 import 'package:lopicode/runtime/linux_command_runner.dart';
@@ -453,21 +454,13 @@ class ProjectSession extends ChangeNotifier {
 
   // ── 读写对话记录 ─────────────────────────────────────
   Future<List<Map<String, dynamic>>> _readMessages(String id) async {
-    try {
-      final file = _chatFileOf(id);
-      if (await file.exists()) {
-        final decoded = jsonDecode(await file.readAsString());
-        if (decoded is List) {
-          return [
-            for (final m in decoded)
-              if (m is Map<String, dynamic>) m,
-          ];
-        }
-      }
-    } on Exception {
-      // 文件坏了就当空对话
-    }
-    return [];
+    // 文件坏了：备份后当空对话
+    final decoded = await readJsonFile(_chatFileOf(id), accept: (j) => j is List, label: '对话记录');
+    if (decoded is! List) return [];
+    return [
+      for (final m in decoded)
+        if (m is Map<String, dynamic>) m,
+    ];
   }
 
   Future<void> _ensureLoaded(ConvRun run) async {
@@ -491,8 +484,9 @@ class ProjectSession extends ChangeNotifier {
     }
     conversations.clear();
     try {
-      if (await _indexFile.exists()) {
-        final decoded = jsonDecode(await _indexFile.readAsString());
+      {
+        // 目录文件坏了：备份后当只有一段“主对话”（各段对话的记录文件还在盘上）
+        final decoded = await readJsonFile(_indexFile, accept: (j) => j is List, label: '对话目录');
         if (decoded is List) {
           for (final m in decoded) {
             if (m is! Map) continue;
@@ -518,8 +512,8 @@ class ProjectSession extends ChangeNotifier {
           }
         }
       }
-    } on Exception {
-      conversations.clear();
+    } catch (_) {
+      // 某一条的形状不对（老版本）：读到哪算哪
     }
     if (topConversations.isEmpty) conversations.add(Conversation('main', '', DateTime.now()));
     conversations.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
@@ -544,8 +538,7 @@ class ProjectSession extends ChangeNotifier {
 
   Future<void> _saveIndex() async {
     try {
-      await _indexFile.parent.create(recursive: true);
-      await _indexFile.writeAsString(jsonEncode([for (final c in conversations) c.toJson()]));
+      await writeJsonAtomic(_indexFile, [for (final c in conversations) c.toJson()]);
     } on FileSystemException {
       // 存不了就算了
     }
@@ -554,8 +547,7 @@ class ProjectSession extends ChangeNotifier {
   Future<void> _saveRun(ConvRun run) async {
     try {
       final file = _chatFileOf(run.conv.id);
-      await file.parent.create(recursive: true);
-      await file.writeAsString(jsonEncode(run.messages));
+      await writeJsonAtomic(file, run.messages);
     } on FileSystemException {
       // 存不了就算了：不影响当前对话
     }

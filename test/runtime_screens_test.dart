@@ -18,8 +18,8 @@ import 'package:lopicode/runtime/runtime_diagnostics.dart';
 import 'package:lopicode/runtime/runtime_screen.dart';
 import 'package:lopicode/ui/project_shell.dart';
 import 'package:lopicode/ui/settings_screen.dart';
-import 'package:lopicode/ui/third_party_screen.dart';
 import 'package:lopicode/ui/shell.dart';
+import 'package:lopicode/ui/third_party_screen.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:path/path.dart' as p;
 

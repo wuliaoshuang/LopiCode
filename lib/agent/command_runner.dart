@@ -71,8 +71,8 @@ Future<CommandResult> runAndCollect(
     onOutput?.call(chunk.replaceAll('\n', '\r\n'));
   }
 
-  final out = process.stdout.transform(const Utf8Decoder(allowMalformed: true)).listen(collect);
-  final err = process.stderr.transform(const Utf8Decoder(allowMalformed: true)).listen(collect);
+  final out = process.stdout.transform(const Utf8Decoder(allowMalformed: true)).listen(collect, onError: (_) {});
+  final err = process.stderr.transform(const Utf8Decoder(allowMalformed: true)).listen(collect, onError: (_) {});
   var timedOut = false;
   final code = await process.exitCode.timeout(
     timeout,

@@ -1,7 +1,7 @@
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:lopicode/agent/agent_tools.dart';
+import 'package:lopicode/core/safe_file.dart';
 
 enum TaskStatus {
   todo('todo', '待办'),
@@ -99,33 +99,34 @@ class TeamBoard {
 
   Future<void> load() async {
     final f = file;
-    if (f == null || !await f.exists()) return;
+    if (f == null) return;
+    // 文件坏了：备份后当空任务板
+    final j = await readJsonFile(f, accept: (j) => j is Map, label: '团队任务板');
+    if (j is! Map) return;
     try {
-      final j = jsonDecode(await f.readAsString());
-      if (j is! Map) return;
       members
         ..clear()
         ..addAll([
-          for (final m in (j['members'] as List?) ?? const [])
+          for (final m in j['members'] is List ? j['members'] as List : const [])
             if (m is Map && m['name'] is String) TeamMember(m['name'] as String, '${m['role'] ?? ''}'),
         ]);
       if (!members.any((m) => m.name == lead)) members.insert(0, TeamMember(lead, '负责拆任务、分工、汇总'));
       tasks
         ..clear()
         ..addAll([
-          for (final t in (j['tasks'] as List?) ?? const [])
+          for (final t in j['tasks'] is List ? j['tasks'] as List : const [])
             ?TeamTask.fromJson(t),
         ]);
       messages
         ..clear()
         ..addAll([
-          for (final m in (j['messages'] as List?) ?? const [])
+          for (final m in j['messages'] is List ? j['messages'] as List : const [])
             if (m is Map)
               TeamMessage('${m['from']}', '${m['to']}', '${m['text']}', DateTime.tryParse('${m['at']}') ?? DateTime.fromMillisecondsSinceEpoch(0)),
         ]);
       _seq = j['seq'] is int ? j['seq'] as int : tasks.length;
-    } on Exception {
-      // 文件坏了：当空任务板
+    } catch (_) {
+      // 里面某一项的形状不对（老版本）：读到哪算哪，不让任务板打不开
     }
   }
 
@@ -134,13 +135,12 @@ class TeamBoard {
     final f = file;
     if (f == null) return;
     try {
-      await f.parent.create(recursive: true);
-      await f.writeAsString(jsonEncode({
+      await writeJsonAtomic(f, {
         'seq': _seq,
         'members': [for (final m in members) m.toJson()],
         'tasks': [for (final t in tasks) t.toJson()],
         'messages': [for (final m in messages) m.toJson()],
-      }));
+      });
     } on FileSystemException {
       // 存不了：这次打开期间仍然有效
     }
