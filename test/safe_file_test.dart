@@ -46,10 +46,20 @@ void main() {
       final writes = [
         for (var i = 0; i < 40; i++) writeJsonAtomic(file, {'n': i, 'pad': 'x' * 2000}),
       ];
-      // 写的同时不停地读：读到的必须总是完整的 JSON
+      // 写的同时不停地读：读到的必须总是完整的 JSON。Windows 替换文件时允许短暂重开，JSON 不完整仍直接失败。
+      Future<Map<String, dynamic>> readComplete() async {
+        for (var attempt = 0; ; attempt++) {
+          try {
+            return jsonDecode(await file.readAsString()) as Map<String, dynamic>;
+          } on FileSystemException {
+            if (!Platform.isWindows || attempt >= 5) rethrow;
+            await Future<void>.delayed(Duration(milliseconds: 5 << attempt));
+          }
+        }
+      }
+
       for (var i = 0; i < 40; i++) {
-        final decoded = jsonDecode(await file.readAsString());
-        expect(decoded, isA<Map<String, dynamic>>());
+        expect(await readComplete(), isA<Map<String, dynamic>>());
       }
       await Future.wait(writes);
       expect((jsonDecode(file.readAsStringSync()) as Map)['n'], 39);

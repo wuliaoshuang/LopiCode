@@ -49,8 +49,7 @@ void main() {
     addTearDown(() async {
       await tester.runAsync(() async {
         session.dispose();
-        await pendingWrites();
-        env.dispose();
+        await env.dispose();
       });
     });
   }

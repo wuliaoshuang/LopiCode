@@ -27,7 +27,7 @@ final themeModeProvider = NotifierProvider<ThemeModeNotifier, AppThemeMode>(Them
 class ChatPrefs {
   const ChatPrefs({required this.suggestions, required this.usage});
 
-  /// 新对话里显示开场建议（默认关）。
+  /// 新对话里显示开场建议（默认开）。
   final bool suggestions;
 
   /// 在回复下方显示用量（默认开）。
@@ -47,7 +47,7 @@ class ChatPrefsNotifier extends Notifier<ChatPrefs> {
       ..watch(settingRevProvider(SettingKeys.chatSuggestions))
       ..watch(settingRevProvider(SettingKeys.chatUsage));
     final s = ref.watch(settingsStoreProvider);
-    return ChatPrefs(suggestions: s.getBool(SettingKeys.chatSuggestions), usage: s.getBool(SettingKeys.chatUsage, true));
+    return ChatPrefs(suggestions: s.getBool(SettingKeys.chatSuggestions, true), usage: s.getBool(SettingKeys.chatUsage, true));
   }
 
   Future<void> setSuggestions(bool on) => ref.read(settingsStoreProvider).set(SettingKeys.chatSuggestions, on);

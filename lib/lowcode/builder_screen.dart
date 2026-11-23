@@ -624,6 +624,7 @@ class _Canvas extends StatelessWidget {
     final isSelected = selected == n.id;
     // 选中框画在最外层；组件本身不响应点击（按钮、输入框都只是样子）。
     Widget wrapped = GestureDetector(
+      key: ValueKey('lowcode-node-${n.id}'),
       behavior: HitTestBehavior.opaque,
       onTap: () => onSelect(n.id),
       child: Container(

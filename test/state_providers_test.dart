@@ -82,15 +82,15 @@ void main() {
     expect(n(), before, reason: '别的设置变了，外观不通知（应用外壳不重建）');
   });
 
-  test('聊天开关：开场建议默认关、显示用量默认开；各改各的', () async {
+  test('聊天开关：开场建议和显示用量默认开；各改各的', () async {
     final n = count(chatPrefsProvider);
-    expect(box.read(chatPrefsProvider), const ChatPrefs(suggestions: false, usage: true));
-    await box.read(chatPrefsProvider.notifier).setSuggestions(true);
     expect(box.read(chatPrefsProvider), const ChatPrefs(suggestions: true, usage: true));
+    await box.read(chatPrefsProvider.notifier).setSuggestions(false);
+    expect(box.read(chatPrefsProvider), const ChatPrefs(suggestions: false, usage: true));
     await box.read(chatPrefsProvider.notifier).setUsage(false);
-    expect(box.read(chatPrefsProvider), const ChatPrefs(suggestions: true, usage: false));
+    expect(box.read(chatPrefsProvider), const ChatPrefs(suggestions: false, usage: false));
     expect(n(), 2);
-    expect(env.services.settings.getBool(SettingKeys.chatSuggestions), isTrue);
+    expect(env.services.settings.getBool(SettingKeys.chatSuggestions, true), isFalse);
     expect(env.services.settings.getBool(SettingKeys.chatUsage, true), isFalse);
   });
 
@@ -198,7 +198,7 @@ void main() {
 
   test('应用服务销毁后：调度器不再往状态里写（跑到一半的自动化任务收尾时不报错）', () async {
     final other = await TestEnv.create();
-    other.dispose();
+    await other.dispose();
     expect(other.services.disposed, isTrue);
     await other.services.scheduler.tick(DateTime.utc(2026, 11, 23, 8)); // 不抛异常就是过
     other.services.dispose(); // 重复销毁也没事

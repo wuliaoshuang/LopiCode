@@ -75,9 +75,9 @@ void main() {
     turn = (_, _) => reply('好的。');
     await boot();
   });
-  tearDown(() {
+  tearDown(() async {
     session.dispose();
-    env.dispose();
+    await env.dispose();
   });
 
   File f(String rel) => File('${project.dir}/$rel');

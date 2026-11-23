@@ -112,7 +112,7 @@ class SettingKeys {
   static const subagentMaxConcurrent = 'subagent.maxConcurrent'; // 同时跑几个，1–4，默认 2
   static const subagentAllowedModels = 'subagent.allowedModels'; // ["渠道ID/模型ID"]；空＝只能跟随上级
   static const teamEnabled = 'team.enabled';
-  static const chatSuggestions = 'chat.suggestions'; // 新对话里显示开场建议，默认关
+  static const chatSuggestions = 'chat.suggestions'; // 新对话里显示开场建议，默认开
   static const chatUsage = 'chat.usage'; // 在回复下方显示用量，默认开
 }
 

@@ -139,20 +139,23 @@ class _PreviewTabState extends ConsumerState<PreviewTab> {
         ),
         InkWell(
           onTap: () => setState(() => _consoleOpen = !_consoleOpen),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: Space.x4, vertical: Space.x2),
-            child: Row(
-              children: [
-                Icon(Icons.terminal, size: 16, color: errors > 0 ? c.danger : c.textFaint),
-                const SizedBox(width: Space.x2),
-                Expanded(
-                  child: Text(
-                    server.logs.isEmpty ? '控制台 · 没有输出' : '控制台 · ${server.logs.length} 条${errors > 0 ? '，其中 $errors 条报错' : ''}',
-                    style: t.bodySmall?.copyWith(color: errors > 0 ? c.danger : c.textMuted),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 44),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: Space.x4, vertical: Space.x2),
+              child: Row(
+                children: [
+                  Icon(Icons.terminal, size: 16, color: errors > 0 ? c.danger : c.textFaint),
+                  const SizedBox(width: Space.x2),
+                  Expanded(
+                    child: Text(
+                      server.logs.isEmpty ? '控制台 · 没有输出' : '控制台 · ${server.logs.length} 条${errors > 0 ? '，其中 $errors 条报错' : ''}',
+                      style: t.bodySmall?.copyWith(color: errors > 0 ? c.danger : c.textMuted),
+                    ),
                   ),
-                ),
-                Icon(_consoleOpen ? Icons.expand_more : Icons.expand_less, size: 18, color: c.textFaint),
-              ],
+                  Icon(_consoleOpen ? Icons.expand_more : Icons.expand_less, size: 18, color: c.textFaint),
+                ],
+              ),
             ),
           ),
         ),

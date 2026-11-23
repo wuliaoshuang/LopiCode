@@ -6,7 +6,7 @@
 // - 一行只做一件事：模型、权限、计划模式、图片、引用文件都收进“＋”面板，每项一行并写着当前值；
 //   新对话、Agent 预设、团队、压缩、导出、删除都在右上“···”菜单里。项目规则在“设置”里。
 // - 胶囊上方按需叠几条窄条：自动允许中、计划模式、排队的消息、附件缩略图、/ 指令提示；确认卡和提问卡也钉在这里。
-// - 空对话：默认是空的；在“设置”里打开“在新对话里显示开场建议”后，几条建议贴着胶囊上方，弱化显示。
+// - 空对话：没有可用模型时给明确的上手入口；模型可用时默认显示几条弱化的开场建议，可在“设置”里关闭。
 // - 主操作只有一个：发送。AI 生成时长按发送键选“排队 / 插话 / 中断并发送”。
 import 'dart:async';
 import 'dart:convert';
@@ -22,7 +22,6 @@ import 'package:lopicode/state/ui_prefs.dart';
 import 'package:lopicode/state/workspace_chat.dart';
 import 'package:lopicode/state/workspace_conversations.dart';
 import 'package:lopicode/theme/tokens.dart';
-import 'package:lopicode/ui/app_ref.dart';
 import 'package:lopicode/ui/chat_panels.dart';
 import 'package:lopicode/ui/chrome.dart';
 import 'package:lopicode/ui/file_picker_sheet.dart';
@@ -336,7 +335,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       ..watch(modelsProvider)
       ..watch(presetsProvider);
     final prefs = ref.watch(chatPrefsProvider);
-    final app = appOf(context);
     final c = context.colors;
     final pending = s.pendingApproval;
     final question = s.pendingQuestion;
@@ -393,7 +391,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               child: s.chat.isEmpty
                   ? Padding(
                       padding: EdgeInsets.only(top: topInset),
-                      child: _EmptyChat(configured: app.agentConfigured, showIdeas: prefs.suggestions, onPick: _send),
+                      child: _EmptyChat(configured: model != null, showIdeas: prefs.suggestions, onPick: _send),
                     )
                   : ListView.builder(
                       controller: _scroll,
@@ -566,7 +564,7 @@ class _RoundButton extends StatelessWidget {
   );
 }
 
-/// 空对话：默认什么都不放；用户在设置里打开后，底部显示几条弱化的开场建议。
+/// 空对话：模型不可用时显示设置入口；可用时按偏好显示开场建议。
 class _EmptyChat extends StatelessWidget {
   const _EmptyChat({required this.configured, required this.showIdeas, required this.onPick});
   final bool configured;
@@ -624,7 +622,7 @@ class _NeedsSetup extends StatelessWidget {
     message: '添加一个渠道（接口地址和 API Key），\n再勾上要用的模型，Agent 才能开始干活。',
     action: FilledButton(
       onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const ChannelsScreen())),
-      child: const Text('去设置'),
+      child: const Text('添加模型'),
     ),
   );
 }

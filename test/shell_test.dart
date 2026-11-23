@@ -32,7 +32,7 @@ Future<(TestEnv, Project, ProjectSession)> openProject(WidgetTester tester, {Tes
   });
   addTearDown(() async {
     session.dispose();
-    e.dispose();
+    await e.dispose();
   });
   return (e, project, session);
 }
@@ -100,7 +100,7 @@ void main() {
     ShellDest.runtime: find.byKey(const Key('runtime-status')),
   };
 
-  testWidgets('底部导航五项只有图标：点哪个去哪个页，选中的那个是实心', (tester) async {
+  testWidgets('底部导航图标配短标签：点哪个去哪个页，选中的那个高亮', (tester) async {
     usePhoneViewport(tester);
     final (env, project, session) = await openProject(tester);
     await tester.pumpWidget(appFor(env, ProjectShell(project: project, session: session)));
@@ -108,12 +108,15 @@ void main() {
 
     final nav = find.byType(IconBottomNav);
     expect(nav, findsOneWidget);
-    expect(ShellDest.bottom.map((d) => d.label).toList(), ['Agent 聊天', '文件', '终端', '低代码', '打包']);
-    expect(
-      find.descendant(of: nav, matching: find.byType(Text)),
-      findsNothing,
-      reason: '底部导航只有图标，没有文字',
-    );
+    expect(shellNavItems().map((item) => item.label), ['聊天', '文件', '终端', '搭建', '打包']);
+    for (final item in shellNavItems()) {
+      expect(
+        find.descendant(of: nav, matching: find.text(item.label)),
+        findsOneWidget,
+        reason: '底部导航每个目的地都要有短标签',
+      );
+    }
+    expect(tester.getRect(nav).height, IconBottomNav.kHeight);
     // 贴着屏幕底边
     expect(tester.getRect(nav).bottom, 844);
     // 进项目先看到聊天页
@@ -130,6 +133,22 @@ void main() {
       // 页面内容不能伸到导航下面去
       expect(tester.takeException(), isNull);
     }
+  });
+
+  testWidgets('宽屏里应用保持 readable 最大宽度并居中，不把手机布局拉成长条', (tester) async {
+    final (env, project, session) = await openProject(tester);
+    tester.view.physicalSize = const Size(1200, 900);
+    tester.view.devicePixelRatio = 1;
+    await tester.pumpWidget(appFor(env, ProjectShell(project: project, session: session)));
+    await settle(tester);
+
+    final shell = find.byType(ProjectShell);
+    final rect = tester.getRect(shell);
+    expect(rect.width, 720);
+    expect(rect.center.dx, 600);
+    expect(rect.height, 900);
+    expect(tester.getRect(find.byType(IconBottomNav)).bottom, 900);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('键盘弹出时底部导航不被顶起来：导航原地不动，只有输入框贴着键盘', (tester) async {

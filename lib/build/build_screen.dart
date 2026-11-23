@@ -453,11 +453,24 @@ class _JobCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: Space.x3),
-          for (final line in job.log)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 2),
-              child: Text(line, style: t.bodySmall?.copyWith(color: c.textMuted, height: 1.6)),
+          if (job.log.isNotEmpty) ...[
+            Container(
+              constraints: const BoxConstraints(maxHeight: 160),
+              child: SingleChildScrollView(
+                reverse: true,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (final line in job.log)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 2),
+                        child: Text(line, style: t.bodySmall?.copyWith(color: c.textMuted, height: 1.6)),
+                      ),
+                  ],
+                ),
+              ),
             ),
+          ],
           if (job.output.trim().isNotEmpty) ...[
             const SizedBox(height: Space.x2),
             Container(

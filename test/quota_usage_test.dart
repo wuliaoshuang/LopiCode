@@ -161,9 +161,9 @@ void main() {
       box = quotaBox(env, client: fake.client, now: () => clock);
       quota = box.read(quotaProvider.notifier);
     });
-    tearDown(() {
+    tearDown(() async {
       box.dispose();
-      env.dispose();
+      await env.dispose();
     });
 
     test('非 DeepSeek 渠道：不查余额、不拦', () async {
@@ -415,9 +415,9 @@ void main() {
       await session.loadChat();
       await session.setModel(ModelSelection(ds.id, 'deepseek-chat'));
     });
-    tearDown(() {
+    tearDown(() async {
       session.dispose();
-      env.dispose();
+      await env.dispose();
     });
 
     Future<void> reach() async {
@@ -704,9 +704,9 @@ void main() {
       session.commandRunnerFactory = RecordingRunner.new;
       await session.loadChat();
     });
-    tearDown(() {
+    tearDown(() async {
       session.dispose();
-      env.dispose();
+      await env.dispose();
     });
 
     test('一轮里多次请求（工具循环）累加；工具调用也记进轨迹；对话累计、轮数、上下文', () async {

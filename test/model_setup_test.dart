@@ -65,7 +65,7 @@ void main() {
     });
     addTearDown(() async {
       session.dispose();
-      env.dispose();
+      await env.dispose();
     });
     return (env, project, session);
   }

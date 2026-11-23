@@ -186,7 +186,7 @@ class SettingsScreen extends ConsumerWidget {
               GroupRow(
                 icon: Icons.lightbulb_outline,
                 title: '在新对话里显示开场建议',
-                trailing: Switch(key: const Key('settings-suggestions'), value: app.settings.getBool(SettingKeys.chatSuggestions), onChanged: (v) => toggle(SettingKeys.chatSuggestions, v)),
+                trailing: Switch(key: const Key('settings-suggestions'), value: app.settings.getBool(SettingKeys.chatSuggestions, true), onChanged: (v) => toggle(SettingKeys.chatSuggestions, v)),
               ),
               GroupRow(
                 icon: Icons.data_usage,

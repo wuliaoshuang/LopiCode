@@ -287,6 +287,8 @@ void main() {
       usePhoneViewport(tester);
       final env = await tester.runAsync(() => Env.create(installed: true));
       addTearDown(() => env!.tmp.deleteSync(recursive: true));
+      // 输入法内部行为另有测试；截图用例直接开启，避免为截图触发后台存盘。
+      await tester.runAsync(() => env!.services.settings.set(SettingKeys.terminalChineseIme, true));
       final project = await tester.runAsync(() => env!.services.projects.create('我的小站', ProjectTemplate.web));
       final ptys = <FakePty>[];
       final envs = <Map<String, String>>[];
@@ -323,6 +325,8 @@ void main() {
       expect(ptys.length, greaterThanOrEqualTo(2));
       expect(envs.last['PROOT_NO_SECCOMP'], '1');
       ptys.last.emit('root@localhost:/workspace# ');
+      // 存盘行为另有单元测试；这里在真实异步区记完，避免假时钟里留下后台写。
+      await tester.runAsync(() => env.runtime.rememberCompat('兼容模式重试后能用'));
       await tester.pump(const Duration(seconds: 4));
       expect(env.services.settings.getBool(SettingKeys.runtimeCompat), isTrue);
 
@@ -342,8 +346,9 @@ void main() {
       await shot(tester, '34-terminal-typing-$suffix');
 
       // “中文”点亮后：拼音画在光标后面
-      await tester.dragUntilVisible(find.text('中文'), find.byType(ListView).last, const Offset(-120, 0));
-      await tester.tap(find.text('中文'));
+      await tester.dragUntilVisible(find.text('中文'), find.byKey(const Key('terminal-keys')), const Offset(-120, 0));
+      await tester.ensureVisible(find.text('中文'));
+      await settle(tester, rounds: 2);
       await tester.pump(const Duration(milliseconds: 400));
       tester.testTextInput.updateEditingValue(const TextEditingValue(text: '  nihao', selection: TextSelection.collapsed(offset: 7), composing: TextRange(start: 2, end: 7)));
       await tester.pump();

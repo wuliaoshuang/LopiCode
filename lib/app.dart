@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lopicode/app_services.dart';
 import 'package:lopicode/state/ui_prefs.dart';
 import 'package:lopicode/theme/app_theme.dart';
+import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/error_guard.dart';
 import 'package:lopicode/ui/home_gate.dart';
 import 'package:material_ui/material_ui.dart';
@@ -34,7 +35,15 @@ class _LopiCodeAppState extends State<LopiCodeApp> {
           title: 'LopiCode',
           navigatorKey: _navigatorKey,
           // 有没被接住的错误时，在所有页面上面出一条可点开的提示（见 ui/error_guard.dart）。
-          builder: (context, child) => ErrorNotice(navigatorKey: _navigatorKey, child: child ?? const SizedBox.shrink()),
+          builder: (context, child) => ErrorNotice(
+            navigatorKey: _navigatorKey,
+            child: ColoredBox(
+              color: context.colors.canvas,
+              child: Center(
+                child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 720), child: child ?? const SizedBox.shrink()),
+              ),
+            ),
+          ),
           debugShowCheckedModeBanner: false,
           theme: buildAppTheme(Brightness.light, fontFamily: widget.fontFamily),
           darkTheme: buildAppTheme(Brightness.dark, fontFamily: widget.fontFamily),

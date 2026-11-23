@@ -77,7 +77,7 @@ void main() {
       });
       addTearDown(() async {
         session.dispose();
-        env.dispose();
+        await env.dispose();
       });
     }
 
@@ -433,12 +433,12 @@ void main() {
       await tester.scrollUntilVisible(find.byKey(const Key('settings-usage')), 120, scrollable: list);
       expect(find.text('在新对话里显示开场建议'), findsOneWidget);
       expect(find.text('在回复下方显示用量'), findsOneWidget);
-      expect(tester.widget<Switch>(find.byKey(const Key('settings-suggestions'))).value, isFalse, reason: '默认关');
+      expect(tester.widget<Switch>(find.byKey(const Key('settings-suggestions'))).value, isTrue, reason: '默认开');
       expect(tester.widget<Switch>(find.byKey(const Key('settings-usage'))).value, isTrue, reason: '默认开');
       await shot(tester, '87-settings-chat-group-$suffix');
       await tester.tap(find.byKey(const Key('settings-suggestions')));
       await settle(tester, rounds: 3);
-      expect(env.services.settings.get<bool>(SettingKeys.chatSuggestions), isTrue);
+      expect(env.services.settings.get<bool>(SettingKeys.chatSuggestions), isFalse);
 
       await tester.scrollUntilVisible(find.byKey(const Key('settings-rules')), -120, scrollable: list);
       await tester.tap(find.byKey(const Key('settings-rules')));
@@ -453,6 +453,10 @@ void main() {
       await tester.tap(find.byTooltip('返回').last);
       await settle(tester, rounds: 8);
       // 开关打开后，新对话里出现开场建议
+      await tester.scrollUntilVisible(find.byKey(const Key('settings-suggestions')), 120, scrollable: list);
+      await tester.tap(find.byKey(const Key('settings-suggestions')));
+      await settle(tester, rounds: 3);
+      expect(env.services.settings.get<bool>(SettingKeys.chatSuggestions), isTrue);
       await showChat(tester);
       expect(find.byKey(const Key('chat-ideas')), findsOneWidget);
       await shot(tester, '89-chat-ideas-on-$suffix');

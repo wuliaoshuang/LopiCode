@@ -1,4 +1,4 @@
-// 选模型的底部面板：渠道（横向一行标签）→ 模型（列表）→ 思考深度（一行分段）。
+// 选模型的底部面板：渠道（自动换行标签）→ 模型（列表）→ 思考深度（一行分段）；内容多了可滚动。
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lopicode/agent/model_config.dart';
 import 'package:lopicode/state/models_state.dart';
@@ -49,80 +49,76 @@ class _ModelPickerSheetState extends ConsumerState<ModelPickerSheet> {
     final level = levels.contains(_level) ? _level : 'off';
     return SafeArea(
       top: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x4),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text('选择模型', style: t.titleLarge),
-            const SizedBox(height: Space.x3),
-            if (channels.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: Space.x6),
-                child: Text('还没有渠道。先去添加一个渠道，填好接口地址和 API Key。', style: t.bodyMedium?.copyWith(color: c.textMuted)),
-              )
-            else ...[
-              const SectionLabel('渠道'),
-              SizedBox(
-                height: 40,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: channels.length,
-                  separatorBuilder: (_, _) => const SizedBox(width: Space.x2),
-                  itemBuilder: (context, i) => ChoiceChip(
-                    avatar: ProviderIcon.forBaseUrl(channels[i].baseUrl, size: 24),
-                    label: Text(channels[i].name),
-                    selected: channels[i].id == channel?.id,
-                    onSelected: (_) => setState(() {
-                      _channelId = channels[i].id;
-                      _modelId = null;
-                    }),
-                  ),
-                ),
-              ),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.85),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x4),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('选择模型', style: t.titleLarge),
               const SizedBox(height: Space.x3),
-              const SectionLabel('模型'),
-              if (channel!.models.isEmpty)
+              if (channels.isEmpty)
                 Padding(
-                  padding: const EdgeInsets.symmetric(vertical: Space.x3),
-                  child: Text('这个渠道还没勾选模型。', style: t.bodyMedium?.copyWith(color: c.textMuted)),
+                  padding: const EdgeInsets.symmetric(vertical: Space.x6),
+                  child: Text('还没有渠道。先去添加一个渠道，填好接口地址和 API Key。', style: t.bodyMedium?.copyWith(color: c.textMuted)),
                 )
-              else
-                Flexible(
-                  child: ListView(
-                    shrinkWrap: true,
-                    children: [
-                      for (final m in channel.models)
-                        ListTile(
-                          dense: true,
-                          contentPadding: EdgeInsets.zero,
-                          leading: Icon(m.id == model?.id ? Icons.radio_button_checked : Icons.radio_button_off, color: m.id == model?.id ? c.accent : c.textFaint),
-                          title: Text(m.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-                          subtitle: Text('${m.contextLength ~/ 1000}K 上下文 · ${m.vision ? '能看图' : '只看文字'}${m.thinking ? ' · 可思考' : ''}', style: t.bodySmall),
-                          onTap: () => setState(() => _modelId = m.id),
-                        ),
-                    ],
-                  ),
-                ),
-              if (levels.isNotEmpty) ...[
-                const SizedBox(height: Space.x2),
-                const SectionLabel('思考深度'),
-                SegmentedButton<String>(
-                  showSelectedIcon: false,
-                  segments: [
-                    const ButtonSegment(value: 'off', label: Text('关')),
-                    for (final l in levels) ButtonSegment(value: l, label: Text(thinkingLabel(l))),
+              else ...[
+                const SectionLabel('渠道'),
+                Wrap(
+                  spacing: Space.x2,
+                  runSpacing: Space.x2,
+                  children: [
+                    for (final item in channels)
+                      ChoiceChip(
+                        avatar: ProviderIcon.forBaseUrl(item.baseUrl, size: 24),
+                        label: Text(item.name),
+                        selected: item.id == channel?.id,
+                        onSelected: (_) => setState(() {
+                          _channelId = item.id;
+                          _modelId = null;
+                        }),
+                      ),
                   ],
-                  selected: {level},
-                  onSelectionChanged: (v) => setState(() => _level = v.first),
                 ),
+                const SizedBox(height: Space.x3),
+                const SectionLabel('模型'),
+                if (channel!.models.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: Space.x3),
+                    child: Text('这个渠道还没勾选模型。', style: t.bodyMedium?.copyWith(color: c.textMuted)),
+                  )
+                else ...[
+                  for (final m in channel.models)
+                    ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(m.id == model?.id ? Icons.radio_button_checked : Icons.radio_button_off, color: m.id == model?.id ? c.accent : c.textFaint),
+                      title: Text(m.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+                      subtitle: Text('${m.contextLength ~/ 1000}K 上下文 · ${m.vision ? '能看图' : '只看文字'}${m.thinking ? ' · 可思考' : ''}', style: t.bodySmall),
+                      onTap: () => setState(() => _modelId = m.id),
+                    ),
+                ],
+                if (levels.isNotEmpty) ...[
+                  const SizedBox(height: Space.x2),
+                  const SectionLabel('思考深度'),
+                  SegmentedButton<String>(
+                    showSelectedIcon: false,
+                    segments: [
+                      const ButtonSegment(value: 'off', label: Text('关')),
+                      for (final l in levels) ButtonSegment(value: l, label: Text(thinkingLabel(l))),
+                    ],
+                    selected: {level},
+                    onSelectionChanged: (v) => setState(() => _level = v.first),
+                  ),
+                ],
+                const SizedBox(height: Space.x4),
+                FilledButton(onPressed: model == null ? null : () => Navigator.pop(context, ModelSelectionResult(ModelSelection(channel.id, model.id, level))), child: const Text('用这个模型')),
               ],
-              const SizedBox(height: Space.x4),
-              FilledButton(onPressed: model == null ? null : () => Navigator.pop(context, ModelSelectionResult(ModelSelection(channel.id, model.id, level))), child: const Text('用这个模型')),
+              TextButton(onPressed: () => Navigator.pop(context, 'manage'), child: const Text('管理渠道和模型')),
             ],
-            TextButton(onPressed: () => Navigator.pop(context, 'manage'), child: const Text('管理渠道和模型')),
-          ],
+          ),
         ),
       ),
     );

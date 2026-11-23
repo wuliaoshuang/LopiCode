@@ -52,7 +52,15 @@ class LocalShellBackend implements TerminalBackend {
   Process? _pipe;
   final StringBuffer _line = StringBuffer();
 
-  static String get shellPath => Platform.isAndroid ? '/system/bin/sh' : '/bin/sh';
+  static String get shellPath {
+    if (Platform.isAndroid) return '/system/bin/sh';
+    if (Platform.isWindows) {
+      final root = Platform.environment['ProgramFiles'] ?? r'C:\Program Files';
+      final gitShell = File('$root\\Git\\bin\\sh.exe');
+      if (gitShell.existsSync()) return gitShell.path;
+    }
+    return '/bin/sh';
+  }
 
   @override
   String get label => '本机';
@@ -102,7 +110,7 @@ class LocalShellBackend implements TerminalBackend {
   Future<void> _startPipe({bool announce = false}) async {
     mode = LocalShellMode.pipe;
     if (announce) {
-      _emit('\x1b[33m伪终端不可用，已退回基础模式：一次一条命令，不支持 vi、top 这类全屏程序。\x1b[0m\r\n');
+      _emit('\x1b[33m已退回基础模式：一次一条命令。\nvi、top 等全屏程序不可用。\x1b[0m\r\n');
     }
     try {
       final process = await Process.start(shellPath, const [], workingDirectory: workingDirectory, environment: {'TERM': 'dumb', 'HOME': workingDirectory});
@@ -208,7 +216,9 @@ class LocalShellBackend implements TerminalBackend {
     } catch (_) {}
     final pipe = _pipe;
     _pipe = null;
+    final pipeExit = pipe?.exitCode;
     pipe?.kill(ProcessSignal.sigkill);
+    if (pipeExit != null) await pipeExit.timeout(const Duration(seconds: 2), onTimeout: () => -1);
     await _out.close();
   }
 }

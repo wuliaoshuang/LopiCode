@@ -151,7 +151,7 @@ class _TerminalTabState extends ConsumerState<TerminalTab> {
     return Column(
       children: [
         SizedBox(
-          height: 44,
+          height: 52,
           child: Row(
             children: [
               Expanded(
@@ -162,7 +162,7 @@ class _TerminalTabState extends ConsumerState<TerminalTab> {
                   itemBuilder: (context, i) {
                     final active = i == s.activeTerminal;
                     return Padding(
-                      padding: const EdgeInsets.only(right: Space.x2, top: 6, bottom: 6),
+                      padding: const EdgeInsets.only(right: Space.x2, top: 4, bottom: 4),
                       child: Material(
                         color: active ? c.accentSoft : c.surface,
                         shape: RoundedRectangleBorder(
@@ -178,12 +178,17 @@ class _TerminalTabState extends ConsumerState<TerminalTab> {
                               children: [
                                 Text(s.terminals[i].title, style: t.labelLarge?.copyWith(color: active ? c.accent : c.textMuted)),
                                 if (s.terminals.length > 1)
-                                  InkWell(
-                                    onTap: () => s.closeTerminal(i),
-                                    child: Padding(
-                                      padding: const EdgeInsets.all(6),
-                                      child: Icon(Icons.close, size: 14, color: c.textFaint),
+                                  IconButton(
+                                    tooltip: '关闭会话',
+                                    onPressed: () => s.closeTerminal(i),
+                                    style: IconButton.styleFrom(
+                                      minimumSize: const Size(34, 34),
+                                      fixedSize: const Size(34, 34),
+                                      padding: EdgeInsets.zero,
+                                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                      foregroundColor: c.textFaint,
                                     ),
+                                    icon: const Icon(Icons.close, size: 14),
                                   ),
                               ],
                             ),
@@ -219,14 +224,15 @@ class _TerminalTabState extends ConsumerState<TerminalTab> {
         ),
         if (stalledBackend != null) _StalledBar(backend: stalledBackend),
         Container(
-          height: 44,
+          height: 52,
           decoration: BoxDecoration(
             color: c.surface,
             border: Border(top: BorderSide(color: c.border)),
           ),
           child: ListView(
+            key: const Key('terminal-keys'),
             scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: Space.x2, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: Space.x2, vertical: 4),
             children: [
               _Key('Esc', onTap: () => term.sendKey(TerminalKey.escape)),
               _Key('Tab', tooltip: '补全', onTap: () => term.sendKey(TerminalKey.tab)),
@@ -273,7 +279,7 @@ class _Key extends StatelessWidget {
         child: InkWell(
           onTap: onTap,
           child: Container(
-            constraints: const BoxConstraints(minWidth: 36),
+            constraints: const BoxConstraints(minWidth: 40, minHeight: 44),
             alignment: Alignment.center,
             padding: const EdgeInsets.symmetric(horizontal: Space.x2),
             child: Text(

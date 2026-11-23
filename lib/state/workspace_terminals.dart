@@ -88,15 +88,15 @@ class TerminalsNotifier extends Notifier<TerminalsState> {
     } else if (runtime.installed) {
       hint = 'Ubuntu 环境已下载，但这个安装包缺少进入 Ubuntu 要用的文件，进不去。';
     } else {
-      hint = '想跑 node、python：到侧边栏“运行环境”安装 Ubuntu 环境；或者点右上角 ＋ 连一台 SSH 主机。';
+      hint = '需要 node、python：安装 Ubuntu 环境，或点右上角 ＋ 连接 SSH。';
     }
     final t = TerminalSession(
       title: '本机 ${++_localCounter}',
       backend: LocalShellBackend(project.dir, spawner: session.ptySpawner),
     );
     t.append(
-      '\x1b[2mLopiCode 终端 · 项目目录\n'
-      '手机自带的 sh：有 ls、cat、cp、mkdir 这类基础命令，没有 git、node、python 和编译器。\n'
+      '\x1b[2mLopiCode 终端 · 本机 shell\n'
+      '可用 ls、cat、cp、mkdir；没有 git、node、python。\n'
       '$hint\x1b[0m\n\n',
     );
     return t;

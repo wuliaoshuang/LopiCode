@@ -293,9 +293,19 @@ class _FilesTabState extends ConsumerState<FilesTab> {
               if (_open.isNotEmpty) TextButton(onPressed: () => setState(() => _active = 0), child: Text('回到编辑器（${_open.length}）')),
               PopupMenuButton<String>(
                 tooltip: '新建',
-                icon: Icon(Icons.add, color: c.accent),
                 onSelected: (v) => _create(folder: v == 'folder'),
                 itemBuilder: (_) => const [PopupMenuItem(value: 'file', child: Text('新建文件')), PopupMenuItem(value: 'folder', child: Text('新建文件夹'))],
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: Space.x2),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.add, color: c.accent),
+                      const SizedBox(width: Space.x1),
+                      Text('新建', style: t.labelLarge?.copyWith(color: c.accent)),
+                    ],
+                  ),
+                ),
               ),
             ],
           ),
@@ -393,13 +403,17 @@ class _FilesTabState extends ConsumerState<FilesTab> {
                                 decoration: BoxDecoration(color: c.warning, shape: BoxShape.circle),
                               ),
                             Text(f.name, style: active ? t.titleSmall : t.bodyMedium?.copyWith(color: c.textMuted)),
-                            InkWell(
-                              borderRadius: BorderRadius.circular(Radii.sm),
-                              onTap: () => _close(i),
-                              child: Padding(
-                                padding: const EdgeInsets.all(6),
-                                child: Icon(Icons.close, size: 14, color: c.textFaint),
+                            IconButton(
+                              tooltip: '关闭 ${f.name}',
+                              onPressed: () => _close(i),
+                              style: IconButton.styleFrom(
+                                minimumSize: const Size(34, 34),
+                                fixedSize: const Size(34, 34),
+                                padding: EdgeInsets.zero,
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                foregroundColor: c.textFaint,
                               ),
+                              icon: const Icon(Icons.close, size: 14),
                             ),
                           ],
                         ),

@@ -92,7 +92,7 @@ void main() {
       });
       addTearDown(() async {
         session.dispose();
-        e.dispose();
+        await e.dispose();
       });
       return (e, project, session);
     }
@@ -216,7 +216,9 @@ void main() {
       expect(find.text('新对话'), findsOneWidget);
       expect(find.textContaining('我的小站 / '), findsOneWidget);
       expect(find.text('项目规则'), findsNothing, reason: '项目规则搬到设置里了');
-      expect(find.byKey(const Key('chat-ideas')), findsNothing, reason: '开场建议默认不显示');
+      expect(find.text('先连上一个模型'), findsOneWidget);
+      expect(find.text('添加模型'), findsOneWidget, reason: '当前会话没有可用模型时给出明确入口');
+      expect(find.byKey(const Key('chat-ideas')), findsNothing, reason: '没有模型时先引导配置，不显示开场建议');
       expect(find.byType(IconBottomNav), findsOneWidget, reason: '底部导航五项');
       await shot(tester, '04-chat-empty-$suffix');
 
@@ -267,6 +269,27 @@ void main() {
       expect(session.agentBusy, isFalse);
       expect(find.textContaining('已经加好 dark.css'), findsOneWidget);
       await shot(tester, '07-chat-done-$suffix');
+    });
+
+    testWidgets('宽屏：应用居中且最大 720px，底部导航仍有短标签 ($suffix)', (tester) async {
+      final (env, project, session) = await open(tester, ProjectTemplate.web);
+      tester.view.physicalSize = const Size(1200, 900);
+      tester.view.devicePixelRatio = 1;
+      await tester.pumpWidget(
+        appFor(
+          env,
+          ProjectShell(project: project, session: session, initial: ShellDest.chat),
+          mode: mode,
+          font: font,
+        ),
+      );
+      await settle(tester);
+      final shell = find.byType(ProjectShell);
+      expect(tester.getRect(shell).width, 720);
+      expect(tester.getRect(shell).center.dx, 600);
+      expect(find.descendant(of: find.byType(IconBottomNav), matching: find.text('聊天')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await shot(tester, '04b-chat-wide-$suffix');
     });
 
     testWidgets('终端：真的跑一条命令 ($suffix)', (tester) async {
@@ -401,14 +424,15 @@ void main() {
       expect(find.byTooltip('打开侧边栏'), findsOneWidget);
       await shot(tester, '12-builder-$suffix');
 
-      // 点画布上的按钮选中它 → 打开属性面板
-      await tester.ensureVisible(find.text('提交').first);
+      // 点画布上的按钮选中它 → 打开属性面板。文字在 IgnorePointer 里，要点它外层的选择手势。
+      final submit = find.text('提交').first;
+      await tester.ensureVisible(submit);
       await tester.pump(const Duration(milliseconds: 300));
-      await tester.tap(find.text('提交').first);
+      await tester.tap(find.byKey(const ValueKey('lowcode-node-n5')));
       await settle(tester, rounds: 2);
       expect(find.text('属性'), findsOneWidget);
       await shot(tester, '13-builder-selected-$suffix');
-      await tester.tap(find.text('属性'));
+      await tester.tap(find.widgetWithText(FilledButton, '属性'));
       await settle(tester, rounds: 3);
       expect(find.text('按钮属性'), findsOneWidget);
       await shot(tester, '14-builder-props-$suffix');

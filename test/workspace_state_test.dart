@@ -25,9 +25,9 @@ void main() {
     project = await env.services.projects.create('测试工作区', ProjectTemplate.web);
     session = ProjectSession(env.services, project, headless: true);
   });
-  tearDown(() {
+  tearDown(() async {
     session.dispose();
-    env.dispose();
+    await env.dispose();
   });
 
   group('文件变动信号', () {

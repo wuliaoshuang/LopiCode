@@ -3,7 +3,7 @@
 //   右边这一页自己的操作装进同样高度的白色胶囊里；只有一个操作时它就是一个圆。
 // - 页面底色两种：对话等主页面用 bg（近白）；设置这类页面用 canvas（浅灰），上面叠白色大圆角卡片（28）。
 // - 卡片里一行只做一件事：左线性图标 + 名称（可带一行弱化的说明或右侧的当前值）+ 右箭头；行间是缩进的细分隔线。
-// - 底部导航只有图标、没有文字：选中 = 实心深色，未选中 = 描边、同样的深色。没有底色分界线。
+// - 底部导航图标配短标签：选中 = 强调色实心图标，未选中 = 弱化描边。没有底色分界线。
 import 'package:flutter/services.dart' show SystemUiOverlayStyle;
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/widgets.dart';
@@ -301,10 +301,10 @@ class BottomNavItem {
   final Widget selectedIcon;
 }
 
-/// 只有图标的底部导航。键盘弹出时它留在键盘下面（由外层 Scaffold 保证），不会被顶起来。
+/// 图标配短标签的底部导航。键盘弹出时它留在键盘下面（由外层 Scaffold 保证），不会被顶起来。
 class IconBottomNav extends StatelessWidget {
   const IconBottomNav({super.key, required this.items, required this.current, required this.onTap});
-  static const double kHeight = 56;
+  static const double kHeight = 64;
   final List<BottomNavItem> items;
 
   /// 当前选中项；不在五项里的页面（预览、运行环境）传 -1。
@@ -328,6 +328,7 @@ class IconBottomNav extends StatelessWidget {
                   Expanded(
                     child: Semantics(
                       key: ValueKey('nav-$i'),
+                      label: items[i].label,
                       selected: i == current,
                       button: true,
                       child: Tooltip(
@@ -337,9 +338,21 @@ class IconBottomNav extends StatelessWidget {
                           onTap: () => onTap(i),
                           child: SizedBox(
                             height: kHeight,
-                            child: IconTheme(
-                              data: IconThemeData(size: 26, color: c.text),
-                              child: Center(child: i == current ? items[i].selectedIcon : items[i].icon),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                IconTheme(
+                                  data: IconThemeData(size: 24, color: i == current ? c.accent : c.textMuted),
+                                  child: Center(child: i == current ? items[i].selectedIcon : items[i].icon),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  items[i].label,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(fontSize: FontSize.xs, height: 1.1, color: i == current ? c.accent : c.textMuted, fontWeight: i == current ? FontWeight.w600 : FontWeight.w400),
+                                ),
+                              ],
                             ),
                           ),
                         ),

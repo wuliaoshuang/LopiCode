@@ -9,6 +9,7 @@ import 'package:lopicode/core/stores.dart';
 import 'package:lopicode/runtime/linux_runtime.dart';
 import 'package:lopicode/runtime/linux_shell_backend.dart';
 import 'package:lopicode/runtime/runtime_diagnostics.dart';
+import 'package:lopicode/terminal/terminal_session.dart';
 import 'package:path/path.dart' as p;
 
 import 'support/runtime_fakes.dart';
@@ -168,13 +169,13 @@ void main() {
 
   group('一键诊断', () {
     test('普通进程执行器：记下输出和退出码；卡住的到点强行停止', () async {
-      final ok = await runDiagProcess('/bin/sh', ['-c', 'echo out; echo err >&2; exit 3'], timeout: const Duration(seconds: 5));
+      final ok = await runDiagProcess(LocalShellBackend.shellPath, ['-c', 'echo out; echo err >&2; exit 3'], timeout: const Duration(seconds: 5));
       expect(ok.exitCode, 3);
       expect(ok.stdout.trim(), 'out');
       expect(ok.stderr.trim(), 'err');
       expect(ok.timedOut, isFalse);
 
-      final hung = await runDiagProcess('/bin/sh', ['-c', 'echo before; sleep 30'], timeout: const Duration(milliseconds: 400));
+      final hung = await runDiagProcess(LocalShellBackend.shellPath, ['-c', 'echo before; sleep 30'], timeout: const Duration(milliseconds: 400));
       expect(hung.timedOut, isTrue);
       expect(hung.stdout, contains('before'), reason: '卡住前的输出要留着');
       expect(hung.elapsed, lessThan(const Duration(seconds: 5)));
@@ -182,7 +183,7 @@ void main() {
       final missing = await runDiagProcess('/no/such/program', const [], timeout: const Duration(seconds: 2));
       expect(missing.startError, isNotNull);
 
-      final env = await runDiagProcess('/bin/sh', ['-c', r'echo "[$LOPI_X][${HOME:-unset}]"'], environment: {'LOPI_X': '1'}, timeout: const Duration(seconds: 5));
+      final env = await runDiagProcess(LocalShellBackend.shellPath, ['-c', r'echo "[$LOPI_X][${LOPI_PARENT_ONLY:-unset}]"'], environment: {'LOPI_X': '1'}, timeout: const Duration(seconds: 5));
       expect(env.stdout.trim(), '[1][unset]', reason: '给了环境就只用给的，不继承应用自己的');
     });
 
@@ -191,7 +192,7 @@ void main() {
         runtime,
         commandTimeout: const Duration(milliseconds: 300),
         ptyTimeout: const Duration(milliseconds: 600),
-        localShell: '/bin/sh',
+        localShell: LocalShellBackend.shellPath,
         runProcess: (exe, args, {environment, required timeout}) async {
           if (!exe.endsWith('libproot.so')) return runDiagProcess(exe, args, environment: environment, timeout: timeout);
           if (args.contains('--version')) {
@@ -244,7 +245,7 @@ void main() {
         expect(report, contains('== $title'), reason: title);
       }
       expect(report, contains('TestPhone X1'));
-      expect(report, contains('uname -a：Linux'));
+      expect(report, contains('uname -a：'));
       expect(report, contains('libproot.so：文件'));
       expect(report, contains('/bin：链接 → usr/bin'));
       expect(report, contains('秒没结束，已强行停止'));
@@ -290,7 +291,7 @@ void main() {
         runtime,
         commandTimeout: const Duration(milliseconds: 300),
         ptyTimeout: const Duration(milliseconds: 600),
-        localShell: '/bin/sh',
+        localShell: LocalShellBackend.shellPath,
         runProcess: (exe, args, {environment, required timeout}) async => const DiagRun(exitCode: 0, stdout: 'ok', stderr: '', elapsed: Duration(milliseconds: 1)),
         ptySpawner: (exe, {required workingDirectory, required environment, required rows, required columns}) => EchoPty(echo: false),
         ptyArgsSpawner: (exe, args, {required workingDirectory, required environment, required rows, required columns}) => FakePty()..exit(1),

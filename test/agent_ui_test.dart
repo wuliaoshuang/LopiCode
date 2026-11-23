@@ -87,9 +87,9 @@ void main() {
           await session.loadChat();
         }
       });
-      addTearDown(() {
+      addTearDown(() async {
         if (withSession) session.dispose();
-        env.dispose();
+        await env.dispose();
       });
     }
 

@@ -29,10 +29,22 @@ class LocalShellRunner implements CommandRunner {
   /// 命令和输出的回显（写进项目终端）。
   final void Function(String text)? onOutput;
 
-  static String get shellPath => Platform.isAndroid ? '/system/bin/sh' : '/bin/sh';
+  static String get shellPath {
+    if (Platform.isAndroid) return '/system/bin/sh';
+    if (Platform.isWindows) {
+      final root = Platform.environment['ProgramFiles'] ?? r'C:\Program Files';
+      final gitShell = File('$root\\Git\\bin\\sh.exe');
+      if (gitShell.existsSync()) return gitShell.path;
+    }
+    return '/bin/sh';
+  }
 
   @override
-  String get description => Platform.isAndroid ? '手机自带的 sh（toybox 基础命令；没有 git、node、python、编译器）' : '本机 /bin/sh';
+  String get description => Platform.isAndroid
+      ? '手机自带的 sh（toybox 基础命令；没有 git、node、python、编译器）'
+      : Platform.isWindows
+      ? '本机 Git Bash'
+      : '本机 /bin/sh';
 
   @override
   Future<CommandResult> run(String command, {required String workingDirectory, Duration timeout = const Duration(seconds: 60)}) async {

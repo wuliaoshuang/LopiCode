@@ -25,9 +25,9 @@ void main() {
     session = ProjectSession(env.services, project, headless: true);
     box = env.services.container;
   });
-  tearDown(() {
+  tearDown(() async {
     session.dispose();
-    env.dispose();
+    await env.dispose();
   });
 
   ApprovalRequest request({bool allowAlways = true}) => ApprovalRequest(tool: 'run_command', title: '执行命令', detail: 'ls', allowAlways: allowAlways);

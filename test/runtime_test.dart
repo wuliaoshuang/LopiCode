@@ -156,14 +156,16 @@ void main() {
       final out = Directory(p.join(tmp.path, 'out'));
       final result = await extractTarGz(archive, out);
       expect(File(p.join(out.path, 'etc/os-release')).readAsStringSync(), contains('Ubuntu'));
-      expect(File(p.join(out.path, 'usr/bin/hello')).statSync().mode & 0x49, isNot(0), reason: '可执行位要保留');
-      expect(File(p.join(out.path, 'etc/os-release')).statSync().mode & 0x49, 0);
+      if (!Platform.isWindows) {
+        expect(File(p.join(out.path, 'usr/bin/hello')).statSync().mode & 0x49, isNot(0), reason: 'Android / Linux 要保留可执行位');
+        expect(File(p.join(out.path, 'etc/os-release')).statSync().mode & 0x49, 0);
+      }
       expect(Link(p.join(out.path, 'bin')).targetSync(), 'usr/bin');
       expect(Link(p.join(out.path, 'etc/resolv.conf')).targetSync(), '../run/resolv.conf');
       // 硬链接按复制处理：内容一样，也带可执行位
       final copy = File(p.join(out.path, 'usr/bin/hello2'));
       expect(copy.readAsStringSync(), File(p.join(out.path, 'usr/bin/hello')).readAsStringSync());
-      expect(copy.statSync().mode & 0x49, isNot(0));
+      if (!Platform.isWindows) expect(copy.statSync().mode & 0x49, isNot(0));
       expect(FileSystemEntity.isLinkSync(copy.path), isFalse);
       final long = Directory(p.join(out.path, 'usr/share')).listSync(recursive: true).whereType<File>().singleWhere((f) => f.path.endsWith('.txt'));
       expect(p.basename(long.path).length, greaterThan(100));
@@ -640,7 +642,16 @@ void main() {
       final runner = LinuxCommandRunner(runtime, onOutput: echoed.write);
       expect(runner.commandTimeout, const Duration(minutes: 5));
       final project = Directory(p.join(tmp.path, 'proj'))..createSync();
-      // 假的 libproot.so 是个脚本：把收到的参数和环境变量打印出来
+      // 假的 libproot.so 是个 POSIX 脚本；Windows 直接核对命令拼接，Android / Linux 再真实执行它。
+      if (Platform.isWindows) {
+        final proot = runtime.prootCommand(guestCommand: guestRun('node -v'), projectDir: project.path, term: 'dumb');
+        expect(proot.arguments.join(' '), contains('-b ${project.path}:/workspace'));
+        expect(proot.arguments, containsAll(['-w', '/workspace', '/bin/bash', '-lc', 'node -v']));
+        expect(proot.environment['PROOT_LOADER'], '${host.nativeDir!}/libproot-loader.so');
+        expect(proot.environment['LD_LIBRARY_PATH'], '${runtime.hostLibDir}:${host.nativeDir!}');
+        expect(proot.environment.containsKey('HOME'), isFalse, reason: '不能把应用自己的环境变量带进去');
+        return;
+      }
       final result = await runner.run('node -v', workingDirectory: project.path);
       expect(result.exitCode, 0);
       expect(result.output, contains('-b ${project.path}:/workspace'));

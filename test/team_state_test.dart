@@ -34,9 +34,9 @@ void main() {
     box = env.services.container;
     key = (session, session.activeConversationId);
   });
-  tearDown(() {
+  tearDown(() async {
     session.dispose();
-    env.dispose();
+    await env.dispose();
   });
 
   test('一开始还没读出来是 null；读出来后只有主智能体、没有任务', () async {

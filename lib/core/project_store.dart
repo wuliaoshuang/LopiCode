@@ -123,7 +123,7 @@ class ProjectStore {
     return result;
   }
 
-  static String hostPathOf(String rootfs, String linuxPath) => p.join(rootfs, linuxPath.substring(1));
+  static String hostPathOf(String rootfs, String linuxPath) => p.joinAll([rootfs, ...linuxPath.substring(1).split('/')]);
 
   /// 检查并整理 Ubuntu 里的路径：必须是绝对路径，不能有 `..`，不能是系统目录。
   static String validateLinuxPath(String raw) {

@@ -7,6 +7,7 @@ import 'package:lopicode/agent/chat_client.dart';
 import 'package:lopicode/app.dart';
 import 'package:lopicode/app_services.dart';
 import 'package:lopicode/core/project_store.dart';
+import 'package:lopicode/core/safe_file.dart';
 import 'package:lopicode/core/stores.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:path/path.dart' as p;
@@ -33,8 +34,9 @@ class TestEnv {
     return TestEnv._(tmp, services);
   }
 
-  void dispose() {
+  Future<void> dispose() async {
     services.dispose();
+    await pendingWrites();
     if (tmp.existsSync()) tmp.deleteSync(recursive: true);
   }
 }
@@ -43,19 +45,16 @@ class TestEnv {
 /// 找不到字体文件就返回 false（截图测试据此跳过）。
 Future<bool> loadRealFonts() async {
   final flutterRoot = Platform.environment['FLUTTER_ROOT'];
-  final fonts = <String, String>{
-    kTestFont: '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
-    'monospace': '/usr/share/fonts/truetype/noto/NotoSansMono-Regular.ttf',
-    if (flutterRoot != null) 'MaterialIcons': '$flutterRoot/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf',
-  };
+  final regular = Platform.isWindows ? 'C:/Windows/Fonts/msyh.ttc' : '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc';
+  final bold = File(Platform.isWindows ? 'C:/Windows/Fonts/msyhbd.ttc' : '/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc');
+  final mono = Platform.isWindows ? 'C:/Windows/Fonts/consola.ttf' : '/usr/share/fonts/truetype/noto/NotoSansMono-Regular.ttf';
+  final fonts = <String, String>{kTestFont: regular, 'monospace': mono, if (flutterRoot != null) 'MaterialIcons': '$flutterRoot/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf'};
   for (final entry in fonts.entries) {
     final file = File(entry.value);
     if (!file.existsSync()) return false;
     final loader = FontLoader(entry.key)..addFont(Future.value(ByteData.sublistView(file.readAsBytesSync())));
     await loader.load();
   }
-  // 粗体：同一个字体族再加一份 Bold
-  final bold = File('/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc');
   if (bold.existsSync()) {
     await (FontLoader(kTestFont)..addFont(Future.value(ByteData.sublistView(bold.readAsBytesSync())))).load();
   }

@@ -1,5 +1,5 @@
 // 设计约束（外壳 · 390×844）— 2026-11-23 按霜霜的参考图改版
-// - 底部导航五项、只有图标：Agent 聊天、文件、终端、低代码、打包。选中 = 实心深色，未选中 = 描边。
+// - 底部导航五项、图标配短标签：聊天、文件、终端、搭建、打包。选中 = 强调色实心，未选中 = 弱化描边。
 //   键盘弹出时导航留在键盘下面，不会被顶起来（外层 Scaffold 负责，见 project_shell.dart）。
 // - 侧边栏（左上汉堡按钮打开；形式是把主界面向右推开，见 push_drawer.dart）只放底部导航里没有的东西：工作区切换在最上，然后是预览、运行环境、对话列表，设置钉在最下。
 // - 每个页面的顶部是同一个样子：左边悬浮的白色圆按钮（汉堡 / 返回），标题居中，右边是这一页自己的操作（白色胶囊）。
@@ -39,7 +39,11 @@ enum ShellDest {
 List<BottomNavItem> shellNavItems() => [
   for (final d in ShellDest.bottom)
     BottomNavItem(
-      label: d.label,
+      label: switch (d) {
+        ShellDest.chat => '聊天',
+        ShellDest.builder => '搭建',
+        _ => d.label,
+      },
       icon: d == ShellDest.terminal ? const TerminalGlyph(filled: false) : Icon(d.icon),
       selectedIcon: d == ShellDest.terminal ? const TerminalGlyph(filled: true) : Icon(d.selectedIcon),
     ),

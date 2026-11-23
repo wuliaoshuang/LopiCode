@@ -29,12 +29,24 @@ Future<void> writeFileAtomic(File file, List<int> bytes) {
   return mine;
 }
 
+// Windows 上替换或读取文件的瞬间可能撞上共享锁；原文件仍是完整的，稍后重试即可。
+Future<T> _retryFileSharing<T>(Future<T> Function() action) async {
+  for (var attempt = 0; ; attempt++) {
+    try {
+      return await action();
+    } on FileSystemException {
+      if (!Platform.isWindows || attempt >= 5) rethrow;
+      await Future<void>.delayed(Duration(milliseconds: 5 << attempt));
+    }
+  }
+}
+
 Future<void> _writeNow(File file, List<int> bytes) async {
   await file.parent.create(recursive: true);
   final tmp = File('${file.path}.tmp');
   try {
     await tmp.writeAsBytes(bytes, flush: true);
-    await tmp.rename(file.path);
+    await _retryFileSharing(() => tmp.rename(file.path));
   } on FileSystemException {
     // 改名失败（个别文件系统不让盖）：清掉临时文件，把错误交给调用方
     try {
@@ -64,7 +76,7 @@ Future<Object?> readJsonFile(File file, {bool Function(Object? decoded)? accept,
   final String text;
   try {
     if (!await file.exists()) return null;
-    text = await file.readAsString();
+    text = await _retryFileSharing(() => file.readAsString());
   } on Exception catch (e, st) {
     // 读都读不了（权限、不是合法 UTF-8…）
     CrashLog.instance.record(e, st, source: '读取 ${label ?? file.uri.pathSegments.last}');
