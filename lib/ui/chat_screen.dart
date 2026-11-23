@@ -1,11 +1,12 @@
-// 设计约束（Agent 对话 · 390×844）— 布局照霜霜给的参考图
-// - 顶栏：左汉堡按钮；两行标题（对话名 + “工作区 / 模型名”）；右边子代理胶囊（有才出现）、“新对话”和 ⋮ 菜单。没有底部导航。
-// - 空对话：顶部正中一个小的文字入口“项目规则”，下面留白；几条开场建议贴着输入卡片上方，弱化显示。
-// - 底部是一张大圆角输入卡片：上面是输入区，下面一行控件都在卡片里——左：模型、权限、计划模式；右：＋（附件 / 引用文件）、圆形发送 / 停止。
-// - 输入卡片上方按需叠几条“一行只做一件事”的窄条：自动允许中、计划模式、排队的消息、附件缩略图、/ 指令提示。
-// - 对话是主角：用户消息靠右的浅强调色气泡，Agent 回复是不带气泡的正文。
-// - 工具调用是次要信息：一行小卡，点开才看参数和输出。
-// - 需要她点头的操作（确认卡）和 AI 的提问（选择卡）钉在输入卡片上方。
+// 设计约束（Agent 聊天 · 390×844）— 2026-11-23 按霜霜的参考图（workspace/user/files/88187_0_7hlw.jpg）改版
+// - 近白底。顶部不是一条栏：左上悬浮白色圆按钮（汉堡），右上悬浮白色圆按钮（···），正中一个白色小胶囊写对话名和“工作区 / 模型名”。
+//   聊天内容从它们下面滚过去，顶部渐隐。有子代理时，右上的圆变成胶囊，多一个子代理计数。
+// - 气泡：Agent 的回复是靠左的大圆角浅灰块（左上角小圆角），右边留出一截；我的消息是靠右的浅蓝块（右上角小圆角）。正文 16 号字。
+// - 输入框是一整条浅灰胶囊，悬浮在底部导航上方：左“＋”、中间输入、右边圆形发送 / 停止（参考图里麦克风的位置）。
+// - 一行只做一件事：模型、权限、计划模式、图片、引用文件都收进“＋”面板，每项一行并写着当前值；
+//   新对话、项目规则、Agent 预设、团队、压缩、导出、删除都在右上“···”菜单里。功能一个不少。
+// - 胶囊上方按需叠几条窄条：自动允许中、计划模式、排队的消息、附件缩略图、/ 指令提示；确认卡和提问卡也钉在这里。
+// - 空对话：正中一个小的文字入口“项目规则”，几条开场建议贴着胶囊上方，弱化显示。
 // - 主操作只有一个：发送。AI 生成时长按发送键选“排队 / 插话 / 中断并发送”。
 import 'dart:convert';
 
@@ -15,6 +16,7 @@ import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/chat_panels.dart';
+import 'package:lopicode/ui/chrome.dart';
 import 'package:lopicode/ui/settings_ai.dart';
 import 'package:lopicode/ui/shell.dart';
 import 'package:lopicode/ui/team_screen.dart';
@@ -203,9 +205,28 @@ class _ChatScreenState extends State<ChatScreen> {
     _focus.requestFocus();
   }
 
-  Future<void> _attach() async {
-    final choice = await showModalBottomSheet<String>(context: context, builder: (_) => const AttachSheet());
+  /// 胶囊左边的“＋”：模型、权限、计划模式、图片、引用文件。
+  Future<void> _openPlus() async {
+    final model = s.currentModel;
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => PlusSheet(modelName: model == null ? '未设置' : model.model.name, permission: s.permission, planMode: s.planMode),
+    );
     if (choice == null || !mounted) return;
+    switch (choice) {
+      case 'model':
+        return _pickModel();
+      case 'permission':
+        return _pickPermission();
+      case 'plan':
+        return _togglePlan();
+      default:
+        return _attach(choice);
+    }
+  }
+
+  Future<void> _attach(String choice) async {
     if (choice == 'ref') {
       final path = await showModalBottomSheet<String>(context: context, builder: (_) => _FilePickerSheet(session: s));
       if (path != null) _insertReference(path);
@@ -271,21 +292,21 @@ class _ChatScreenState extends State<ChatScreen> {
     final slash = text.startsWith('/') && !text.contains(RegExp(r'\s'))
         ? kSlashCommands.where((k) => k.$1.startsWith(text.toLowerCase())).toList()
         : const <(String, String)>[];
+    final topInset = MediaQuery.paddingOf(context).top + PageBar.kHeight;
     return Scaffold(
+      extendBodyBehindAppBar: true,
       appBar: ShellAppBar(
+        fade: true,
+        pill: true,
         title: s.conversationTitle,
         subtitle: '${s.project.name} / ${model == null ? '未设置模型' : model.model.name}',
         actions: [
           if (subs.isNotEmpty) SubAgentCapsule(total: subs.length, running: running, onTap: _openSubAgents),
-          IconButton(
-            tooltip: '新对话',
-            icon: Icon(Icons.add_comment_outlined, color: c.text),
-            onPressed: s.agentBusy ? null : s.newConversation,
-          ),
           PopupMenuButton<String>(
             tooltip: '更多',
-            icon: Icon(Icons.more_vert, color: c.text),
+            icon: const Icon(Icons.more_horiz),
             onSelected: (v) {
+              if (v == 'new') s.newConversation();
               if (v == 'rules') _editRules();
               if (v == 'preset') _pickPreset();
               if (v == 'team') {
@@ -296,6 +317,7 @@ class _ChatScreenState extends State<ChatScreen> {
               if (v == 'delete') _deleteConversation();
             },
             itemBuilder: (_) => [
+              PopupMenuItem(value: 'new', enabled: !s.agentBusy, child: const Text('新对话')),
               const PopupMenuItem(value: 'rules', child: Text('项目规则')),
               PopupMenuItem(value: 'preset', child: Text('Agent 预设：${s.preset.name}')),
               if (s.teamEnabled) const PopupMenuItem(value: 'team', child: Text('智能体团队')),
@@ -316,15 +338,18 @@ class _ChatScreenState extends State<ChatScreen> {
           children: [
             Expanded(
               child: s.chat.isEmpty
-                  ? _EmptyChat(
-                      configured: app.agentConfigured,
-                      hasRules: s.projectRules.isNotEmpty,
-                      onRules: _editRules,
-                      onPick: _send,
+                  ? Padding(
+                      padding: EdgeInsets.only(top: topInset),
+                      child: _EmptyChat(
+                        configured: app.agentConfigured,
+                        hasRules: s.projectRules.isNotEmpty,
+                        onRules: _editRules,
+                        onPick: _send,
+                      ),
                     )
                   : ListView.builder(
                       controller: _scroll,
-                      padding: const EdgeInsets.fromLTRB(Space.x4, Space.x2, Space.x4, Space.x4),
+                      padding: EdgeInsets.fromLTRB(Space.x4, topInset + Space.x2, Space.x4, Space.x4),
                       itemCount: s.chat.length + (s.agentBusy && pending == null && question == null ? 1 : 0),
                       itemBuilder: (context, i) {
                         if (i >= s.chat.length) return const _Working();
@@ -371,12 +396,7 @@ class _ChatScreenState extends State<ChatScreen> {
               focusNode: _focus,
               busy: s.agentBusy,
               canSend: _canSend,
-              permission: s.permission,
-              planMode: s.planMode,
-              onModel: _pickModel,
-              onPermission: _pickPermission,
-              onPlan: _togglePlan,
-              onAttach: _attach,
+              onPlus: _openPlus,
               onSend: _send,
               onLongSend: _pickSendMode,
               onStop: s.stopAgent,
@@ -388,19 +408,14 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 }
 
-/// 底部的大圆角输入卡片：上面输入，下面一行控件。
+/// 底部的胶囊输入框：左“＋”、中间输入、右边发送 / 停止。
 class _InputCard extends StatelessWidget {
   const _InputCard({
     required this.controller,
     required this.focusNode,
     required this.busy,
     required this.canSend,
-    required this.permission,
-    required this.planMode,
-    required this.onModel,
-    required this.onPermission,
-    required this.onPlan,
-    required this.onAttach,
+    required this.onPlus,
     required this.onSend,
     required this.onLongSend,
     required this.onStop,
@@ -410,12 +425,7 @@ class _InputCard extends StatelessWidget {
   final FocusNode focusNode;
   final bool busy;
   final bool canSend;
-  final PermissionLevel permission;
-  final bool planMode;
-  final VoidCallback onModel;
-  final VoidCallback onPermission;
-  final VoidCallback onPlan;
-  final VoidCallback onAttach;
+  final VoidCallback onPlus;
   final VoidCallback onSend;
   final VoidCallback onLongSend;
   final VoidCallback onStop;
@@ -425,77 +435,61 @@ class _InputCard extends StatelessWidget {
     final c = context.colors;
     final t = Theme.of(context).textTheme;
     const none = OutlineInputBorder(borderSide: BorderSide.none);
-    final (IconData permIcon, Color permColor) = switch (permission) {
-      PermissionLevel.view => (Icons.visibility_outlined, c.textMuted),
-      PermissionLevel.workspace => (Icons.verified_user_outlined, c.accent),
-      PermissionLevel.full => (Icons.bolt, c.warning),
-    };
     return Container(
-      margin: const EdgeInsets.fromLTRB(Space.x2, 0, Space.x2, Space.x2),
-      decoration: BoxDecoration(
-        color: c.bg,
-        borderRadius: BorderRadius.circular(Radii.xl),
-        border: Border.all(color: c.border),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
+      key: const ValueKey('chat-input'),
+      margin: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x2),
+      padding: const EdgeInsets.symmetric(horizontal: Space.x1, vertical: Space.x1),
+      constraints: const BoxConstraints(minHeight: 52),
+      decoration: BoxDecoration(color: c.surfaceMuted, borderRadius: BorderRadius.circular(26)),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          TextField(
-            controller: controller,
-            focusNode: focusNode,
-            minLines: 1,
-            maxLines: 6,
-            style: t.bodyLarge,
-            textInputAction: TextInputAction.newline,
-            decoration: InputDecoration(
-              hintText: busy ? '可以接着说：点发送排队，长按选插话或中断' : '告诉 Agent 你想做什么，输入 / 看指令',
-              hintStyle: t.bodyLarge?.copyWith(color: c.textFaint),
-              filled: false,
-              isDense: false,
-              contentPadding: const EdgeInsets.fromLTRB(Space.x6, Space.x4, Space.x6, Space.x2),
-              border: none,
-              enabledBorder: none,
-              focusedBorder: none,
+          SizedBox(
+            width: 44,
+            height: 44,
+            child: IconButton(
+              key: const ValueKey('plus-button'),
+              tooltip: '模型、权限、图片等',
+              padding: EdgeInsets.zero,
+              onPressed: onPlus,
+              icon: Icon(Icons.add, size: 26, color: c.text),
+            ),
+          ),
+          Expanded(
+            child: TextField(
+              controller: controller,
+              focusNode: focusNode,
+              minLines: 1,
+              maxLines: 6,
+              style: t.bodyLarge,
+              textInputAction: TextInputAction.newline,
+              decoration: InputDecoration(
+                hintText: busy ? '接着说：点发送排队，长按选方式' : '告诉 Agent 你想做什么',
+                hintStyle: t.bodyLarge?.copyWith(color: c.textFaint),
+                hintMaxLines: 1,
+                filled: false,
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(horizontal: Space.x1, vertical: 10),
+                border: none,
+                enabledBorder: none,
+                focusedBorder: none,
+              ),
             ),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(Space.x3, 0, Space.x3, Space.x2),
-            child: Row(
-              children: [
-                IconButton(
-                  tooltip: '模型',
-                  onPressed: onModel,
-                  icon: Container(
-                    width: 28,
-                    height: 28,
-                    decoration: BoxDecoration(color: c.accentSoft, shape: BoxShape.circle),
-                    child: Icon(Icons.auto_awesome, size: 16, color: c.accent),
-                  ),
-                ),
-                IconButton(tooltip: '权限：${permission.label}', onPressed: onPermission, icon: Icon(permIcon, color: permColor)),
-                IconButton(
-                  tooltip: planMode ? '计划模式已开' : '计划模式',
-                  onPressed: onPlan,
-                  icon: Icon(planMode ? Icons.map : Icons.map_outlined, color: planMode ? c.accent : c.textMuted),
-                ),
-                const Spacer(),
-                IconButton(tooltip: '添加图片或引用文件', onPressed: onAttach, icon: Icon(Icons.add, color: c.text)),
-                const SizedBox(width: Space.x1),
-                if (busy && !canSend)
-                  _RoundButton(tooltip: '停止', icon: Icons.stop_rounded, bg: c.danger, fg: c.surface, onPressed: onStop)
-                else
-                  // 生成中：长按选发送方式。这时不能挂 Tooltip——它自己也认长按，会把长按抢走只弹出提示文字。
-                  _RoundButton(
+            padding: const EdgeInsets.all(Space.x1),
+            child: busy && !canSend
+                ? _RoundButton(tooltip: '停止', icon: Icons.stop_rounded, bg: c.danger, fg: c.surface, onPressed: onStop)
+                // 生成中：长按选发送方式。这时不能挂 Tooltip——它自己也认长按，会把长按抢走只弹出提示文字。
+                : _RoundButton(
                     key: const ValueKey('send-button'),
                     tooltip: busy ? '排队发送（长按选方式）' : '发送',
                     icon: Icons.arrow_upward_rounded,
-                    bg: canSend ? c.accentFill : c.surfaceMuted,
+                    bg: canSend ? c.accentFill : c.surface,
                     fg: canSend ? c.onAccent : c.textFaint,
                     onPressed: canSend ? onSend : null,
                     onLongPress: busy && canSend ? onLongSend : null,
                   ),
-              ],
-            ),
           ),
         ],
       ),
@@ -527,6 +521,7 @@ class _RoundButton extends StatelessWidget {
       minimumSize: const Size(36, 36),
       fixedSize: const Size(36, 36),
       padding: EdgeInsets.zero,
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       shape: const CircleBorder(),
     ),
     icon: Icon(icon, size: 20),
@@ -736,9 +731,17 @@ class ChatItemView extends StatelessWidget {
         return Align(
           alignment: Alignment.centerRight,
           child: Container(
-            margin: const EdgeInsets.only(top: Space.x4, bottom: Space.x2, left: Space.x12),
-            padding: const EdgeInsets.symmetric(horizontal: Space.x3, vertical: Space.x2),
-            decoration: BoxDecoration(color: c.accentSoft, borderRadius: BorderRadius.circular(Radii.md)),
+            margin: const EdgeInsets.only(top: Space.x2, bottom: Space.x1, left: Space.x8),
+            padding: const EdgeInsets.symmetric(horizontal: Space.x4, vertical: Space.x3),
+            decoration: BoxDecoration(
+              color: c.accentSoft,
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(Radii.bubble),
+                topRight: Radius.circular(Radii.sm),
+                bottomLeft: Radius.circular(Radii.bubble),
+                bottomRight: Radius.circular(Radii.bubble),
+              ),
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               mainAxisSize: MainAxisSize.min,
@@ -759,9 +762,22 @@ class ChatItemView extends StatelessWidget {
           ),
         );
       case AssistantItem(:final text, :final streaming):
-        return Padding(
-          padding: const EdgeInsets.symmetric(vertical: Space.x2),
-          child: SelectableText(streaming ? '$text▍' : text, style: t.bodyLarge),
+        return Align(
+          alignment: Alignment.centerLeft,
+          child: Container(
+            margin: const EdgeInsets.only(top: Space.x1, bottom: Space.x1, right: Space.x6),
+            padding: const EdgeInsets.symmetric(horizontal: Space.x4, vertical: Space.x3),
+            decoration: BoxDecoration(
+              color: c.surfaceMuted,
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(Radii.sm),
+                topRight: Radius.circular(Radii.bubble),
+                bottomLeft: Radius.circular(Radii.bubble),
+                bottomRight: Radius.circular(Radii.bubble),
+              ),
+            ),
+            child: SelectableText(streaming ? '$text▍' : text, style: t.bodyLarge),
+          ),
         );
       case final ToolItem tool:
         return _ToolCard(tool: tool, onOpenChild: onOpenChild);
@@ -835,14 +851,14 @@ class _ToolCardState extends State<_ToolCard> {
       margin: const EdgeInsets.symmetric(vertical: Space.x1),
       decoration: BoxDecoration(
         color: c.surface,
-        borderRadius: BorderRadius.circular(Radii.md),
+        borderRadius: BorderRadius.circular(Radii.lg),
         border: Border.all(color: c.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           InkWell(
-            borderRadius: BorderRadius.circular(Radii.md),
+            borderRadius: BorderRadius.circular(Radii.lg),
             onTap: () => setState(() => _expanded = !_expanded),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: Space.x3, vertical: Space.x2),
@@ -879,7 +895,7 @@ class _ToolCardState extends State<_ToolCard> {
               decoration: BoxDecoration(
                 color: c.codeBg,
                 border: Border(top: BorderSide(color: c.border)),
-                borderRadius: const BorderRadius.vertical(bottom: Radius.circular(Radii.md)),
+                borderRadius: const BorderRadius.vertical(bottom: Radius.circular(Radii.lg)),
               ),
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(Space.x3),

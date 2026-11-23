@@ -8,6 +8,7 @@ import 'package:lopicode/core/stores.dart';
 import 'package:lopicode/ssh/ssh_config.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/widgets.dart';
+import 'package:lopicode/ui/chrome.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// 填写并保存 SSH 主机。保存成功后 pop 出 [SshConfig]。
@@ -117,9 +118,10 @@ class _SshConnectScreenState extends State<SshConnectScreen> {
     final c = context.colors;
     final t = Theme.of(context).textTheme;
     return Scaffold(
-      appBar: AppBar(title: const Text('SSH 主机')),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(Space.x4, Space.x3, Space.x4, Space.x8),
+      backgroundColor: context.colors.canvas,
+      appBar: PageBar(background: context.colors.canvas, title: const Text('SSH 主机')),
+      body: SectionedList(
+        inner: const EdgeInsets.all(Space.x4),
         children: [
           Text('终端的 SSH 会话和 SSH 构建机共用这一台主机。', style: t.bodySmall?.copyWith(color: c.textMuted)),
           const SizedBox(height: Space.x4),

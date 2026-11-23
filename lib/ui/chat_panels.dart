@@ -14,6 +14,7 @@ import 'package:lopicode/app_services.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/chat_screen.dart';
+import 'package:lopicode/ui/chrome.dart';
 import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -275,23 +276,63 @@ class SendModeSheet extends StatelessWidget {
   );
 }
 
-class AttachSheet extends StatelessWidget {
-  const AttachSheet({super.key});
+/// 输入胶囊左边“＋”打开的面板：一行只做一件事。
+/// 上半是这段对话的设置（模型、权限、计划模式），下半是往消息里加东西（图片、引用文件）。
+/// 选中后返回：`model` / `permission` / `plan` / `gallery` / `camera` / `file` / `ref`。
+class PlusSheet extends StatelessWidget {
+  const PlusSheet({super.key, required this.modelName, required this.permission, required this.planMode});
+  final String modelName;
+  final PermissionLevel permission;
+  final bool planMode;
 
   @override
-  Widget build(BuildContext context) => const SafeArea(
-    top: false,
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _SheetOption(icon: Icons.photo_library_outlined, title: '相册', subtitle: '从手机相册选图片', value: 'gallery'),
-        _SheetOption(icon: Icons.photo_camera_outlined, title: '拍照', subtitle: '现在拍一张', value: 'camera'),
-        _SheetOption(icon: Icons.image_outlined, title: '工作区里的图片', subtitle: '选工作区已有的图片文件', value: 'file'),
-        _SheetOption(icon: Icons.alternate_email, title: '引用项目文件', subtitle: '在消息里插入 @文件路径', value: 'ref'),
-        SizedBox(height: Space.x2),
-      ],
-    ),
-  );
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final t = Theme.of(context).textTheme;
+    Widget row(String value, IconData icon, String title, {String? state, String? subtitle, Color? stateColor}) => ListTile(
+      key: ValueKey('plus-$value'),
+      leading: Icon(icon, color: c.text),
+      title: Text(title),
+      subtitle: subtitle == null ? null : Text(subtitle, style: t.bodySmall),
+      trailing: state == null
+          ? null
+          : ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 150),
+              child: Text(state, style: t.bodyMedium?.copyWith(color: stateColor ?? c.textFaint), maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.end),
+            ),
+      onTap: () => Navigator.pop(context, value),
+    );
+    return SafeArea(
+      top: false,
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            row('model', Icons.auto_awesome_outlined, '模型', state: modelName),
+            row(
+              'permission',
+              switch (permission) {
+                PermissionLevel.view => Icons.visibility_outlined,
+                PermissionLevel.workspace => Icons.verified_user_outlined,
+                PermissionLevel.full => Icons.bolt,
+              },
+              '权限',
+              state: permission.label,
+              stateColor: permission == PermissionLevel.full ? c.warning : null,
+            ),
+            row('plan', planMode ? Icons.map : Icons.map_outlined, '计划模式', state: planMode ? '已开' : '未开', stateColor: planMode ? c.accent : null),
+            Divider(height: Space.x4, indent: Space.x4, endIndent: Space.x4, color: c.border),
+            row('gallery', Icons.photo_library_outlined, '相册', subtitle: '从手机相册选图片'),
+            row('camera', Icons.photo_camera_outlined, '拍照', subtitle: '现在拍一张'),
+            row('file', Icons.image_outlined, '工作区里的图片', subtitle: '选工作区已有的图片文件'),
+            row('ref', Icons.alternate_email, '引用项目文件', subtitle: '在消息里插入 @文件路径'),
+            const SizedBox(height: Space.x2),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class PickedImage {
@@ -404,9 +445,9 @@ class StatusChipRow extends StatelessWidget {
     final t = Theme.of(context).textTheme;
     final (bg, fg) = tone == BannerTone.warning ? (c.warningSoft, c.warning) : (c.accentSoft, c.accent);
     return Container(
-      margin: const EdgeInsets.fromLTRB(Space.x2, 0, Space.x2, Space.x2),
+      margin: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x2),
       padding: const EdgeInsets.only(left: Space.x3),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(Radii.md)),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(Radii.lg)),
       child: Row(
         children: [
           Icon(icon, size: 16, color: fg),
@@ -429,10 +470,10 @@ class SlashSuggestions extends StatelessWidget {
     final c = context.colors;
     final t = Theme.of(context).textTheme;
     return Container(
-      margin: const EdgeInsets.fromLTRB(Space.x2, 0, Space.x2, Space.x2),
+      margin: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x2),
       decoration: BoxDecoration(
         color: c.surface,
-        borderRadius: BorderRadius.circular(Radii.md),
+        borderRadius: BorderRadius.circular(Radii.lg),
         border: Border.all(color: c.border),
       ),
       child: Column(
@@ -470,11 +511,11 @@ class QueueStrip extends StatelessWidget {
     final c = context.colors;
     final t = Theme.of(context).textTheme;
     return Container(
-      margin: const EdgeInsets.fromLTRB(Space.x2, 0, Space.x2, Space.x2),
+      margin: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x2),
       constraints: const BoxConstraints(maxHeight: 132),
       decoration: BoxDecoration(
         color: c.surface,
-        borderRadius: BorderRadius.circular(Radii.md),
+        borderRadius: BorderRadius.circular(Radii.lg),
         border: Border.all(color: c.border),
       ),
       child: ListView(
@@ -552,7 +593,7 @@ class ApprovalCard extends StatelessWidget {
       _ => Icons.terminal,
     };
     return Container(
-      margin: const EdgeInsets.fromLTRB(Space.x2, 0, Space.x2, Space.x2),
+      margin: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x2),
       padding: const EdgeInsets.all(Space.x4),
       decoration: BoxDecoration(
         color: c.warningSoft,
@@ -633,7 +674,7 @@ class _QuestionCardState extends State<QuestionCard> {
     final t = Theme.of(context).textTheme;
     final q = widget.question;
     return Container(
-      margin: const EdgeInsets.fromLTRB(Space.x2, 0, Space.x2, Space.x2),
+      margin: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x2),
       padding: const EdgeInsets.all(Space.x4),
       constraints: const BoxConstraints(maxHeight: 380),
       decoration: BoxDecoration(
@@ -815,16 +856,10 @@ class _SubConversationScreenState extends State<SubConversationScreen> {
     final parent = s.conversationById(conv?.parentId);
     final parentName = parent == null ? '上级' : (parent.agentName.isEmpty ? '主智能体' : parent.agentName);
     return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(tooltip: '返回上级', icon: const Icon(Icons.arrow_back), onPressed: () => Navigator.pop(context)),
-        titleSpacing: 0,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(conv?.agentName ?? '子代理', style: t.titleMedium, maxLines: 1, overflow: TextOverflow.ellipsis),
-            Text('子代理 · 上级：$parentName · ${s.modelOf(conv ?? s.activeConversation)?.model.name ?? '未设置模型'}', style: t.bodySmall, maxLines: 1, overflow: TextOverflow.ellipsis),
-          ],
-        ),
+      appBar: PageBar(
+        backTooltip: '返回上级',
+        titleText: conv?.agentName ?? '子代理',
+        subtitle: '子代理 · 上级：$parentName · ${s.modelOf(conv ?? s.activeConversation)?.model.name ?? '未设置模型'}',
       ),
       body: SafeArea(
         top: false,

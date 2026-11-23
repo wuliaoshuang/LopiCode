@@ -21,6 +21,7 @@ import 'package:lopicode/ui/preview_tab.dart';
 import 'package:lopicode/ui/project_list_screen.dart';
 import 'package:lopicode/ui/project_shell.dart';
 import 'package:lopicode/ui/settings_screen.dart';
+import 'package:lopicode/ui/chrome.dart';
 import 'package:lopicode/ui/shell.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:re_editor/re_editor.dart';
@@ -188,12 +189,30 @@ void main() {
       expect(find.text('新对话'), findsOneWidget);
       expect(find.textContaining('我的小站 / '), findsOneWidget);
       expect(find.text('项目规则'), findsOneWidget);
-      expect(find.byType(NavigationBar), findsNothing, reason: '不应该再有底部导航');
+      expect(find.byType(IconBottomNav), findsOneWidget, reason: '底部导航五项');
       await shot(tester, '04-chat-empty-$suffix');
+
+      // “＋”面板：模型、权限、计划模式、图片、引用文件，一行一件事
+      await tester.tap(find.byKey(const ValueKey('plus-button')));
+      await settle(tester, rounds: 3);
+      for (final k in ['model', 'permission', 'plan', 'gallery', 'camera', 'file', 'ref']) {
+        expect(find.byKey(ValueKey('plus-$k')), findsOneWidget, reason: '＋面板里应该有 $k');
+      }
+      await shot(tester, '66-plus-sheet-$suffix');
+      await tester.tap(find.byKey(const ValueKey('plus-plan')));
+      await settle(tester, rounds: 6);
+      expect(session.planMode, isTrue);
+      expect(find.byKey(const ValueKey('plan-chip')), findsOneWidget);
+      await tester.tap(find.text('退出'));
+      await settle(tester, rounds: 3);
+      expect(session.planMode, isFalse);
+      tester.state<ScaffoldMessengerState>(find.byType(ScaffoldMessenger).first).removeCurrentSnackBar();
+      await settle(tester, rounds: 3);
 
       await tester.tap(find.byTooltip('打开侧边栏'));
       await settle(tester, rounds: 3);
-      expect(find.text('低代码搭建'), findsOneWidget);
+      expect(find.text('运行环境'), findsOneWidget);
+      expect(find.text('低代码'), findsNothing, reason: '底部导航里有的，侧边栏不重复');
       await shot(tester, '05-drawer-$suffix');
       await tester.tapAt(const Offset(370, 400));
       for (var i = 0; i < 12; i++) {
@@ -336,6 +355,8 @@ void main() {
       await shot(tester, '12-builder-$suffix');
 
       // 点画布上的按钮选中它 → 打开属性面板
+      await tester.ensureVisible(find.text('提交').first);
+      await tester.pump(const Duration(milliseconds: 300));
       await tester.tap(find.text('提交').first);
       await settle(tester, rounds: 2);
       expect(find.text('属性'), findsOneWidget);

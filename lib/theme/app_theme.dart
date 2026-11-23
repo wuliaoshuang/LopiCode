@@ -43,9 +43,9 @@ ThemeData buildAppTheme(Brightness brightness, {String? fontFamily}) {
     labelSmall: t(FontSize.xs, regular, c.textMuted, 1.2),
   );
 
-  final shape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(Radii.md));
+  final shape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(Radii.lg));
   final inputBorder = OutlineInputBorder(
-    borderRadius: BorderRadius.circular(Radii.md),
+    borderRadius: BorderRadius.circular(Radii.lg),
     borderSide: BorderSide(color: c.border),
   );
 
@@ -64,7 +64,7 @@ ThemeData buildAppTheme(Brightness brightness, {String? fontFamily}) {
       foregroundColor: c.text,
       elevation: 0,
       scrolledUnderElevation: 0,
-      centerTitle: false,
+      centerTitle: true,
       titleSpacing: Space.x4,
       titleTextStyle: textTheme.titleLarge?.copyWith(fontFamily: fontFamily),
     ),
@@ -73,7 +73,7 @@ ThemeData buildAppTheme(Brightness brightness, {String? fontFamily}) {
       elevation: 0,
       margin: EdgeInsets.zero,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(Radii.md),
+        borderRadius: BorderRadius.circular(Radii.bubble),
         side: BorderSide(color: c.border),
       ),
     ),
@@ -108,7 +108,7 @@ ThemeData buildAppTheme(Brightness brightness, {String? fontFamily}) {
       filled: true,
       fillColor: c.surface,
       isDense: true,
-      contentPadding: const EdgeInsets.symmetric(horizontal: Space.x3, vertical: Space.x3),
+      contentPadding: const EdgeInsets.symmetric(horizontal: Space.x4, vertical: Space.x3),
       hintStyle: textTheme.bodyMedium?.copyWith(color: c.textFaint),
       labelStyle: textTheme.bodyMedium?.copyWith(color: c.textMuted),
       helperStyle: textTheme.bodySmall,
@@ -136,12 +136,12 @@ ThemeData buildAppTheme(Brightness brightness, {String? fontFamily}) {
       surfaceTintColor: Colors.transparent,
       showDragHandle: true,
       dragHandleColor: c.border,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(Radii.lg))),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(Radii.card))),
     ),
     dialogTheme: DialogThemeData(
       backgroundColor: c.surface,
       surfaceTintColor: Colors.transparent,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Radii.lg)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Radii.card)),
       titleTextStyle: textTheme.titleLarge?.copyWith(fontFamily: fontFamily),
       contentTextStyle: textTheme.bodyMedium?.copyWith(color: c.textMuted, fontFamily: fontFamily),
     ),
@@ -156,7 +156,7 @@ ThemeData buildAppTheme(Brightness brightness, {String? fontFamily}) {
       color: c.surface,
       surfaceTintColor: Colors.transparent,
       elevation: 3,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Radii.md), side: BorderSide(color: c.border)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Radii.bubble), side: BorderSide(color: c.border)),
       textStyle: textTheme.bodyMedium?.copyWith(fontFamily: fontFamily),
     ),
     listTileTheme: ListTileThemeData(

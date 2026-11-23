@@ -7,6 +7,7 @@ import 'package:lopicode/agent/team.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/widgets.dart';
+import 'package:lopicode/ui/chrome.dart';
 import 'package:material_ui/material_ui.dart';
 
 class TeamScreen extends StatefulWidget {
@@ -68,7 +69,8 @@ class _TeamScreenState extends State<TeamScreen> {
     return DefaultTabController(
       length: 3,
       child: Scaffold(
-        appBar: AppBar(
+        backgroundColor: context.colors.canvas,
+      appBar: PageBar(background: context.colors.canvas, 
           title: const Text('智能体团队'),
           bottom: const TabBar(tabs: [Tab(text: '成员'), Tab(text: '任务'), Tab(text: '消息')]),
         ),

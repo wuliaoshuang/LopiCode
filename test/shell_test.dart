@@ -1,15 +1,18 @@
-// 侧边栏导航和对话输入卡片的行为测试（390×844）。
+// 底部导航、侧边栏和对话输入框的行为测试（390×844）。
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/core/templates.dart';
 import 'package:lopicode/project_session.dart';
+import 'package:lopicode/lowcode/builder_screen.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/chrome.dart';
 import 'package:lopicode/ui/home_gate.dart';
 import 'package:lopicode/ui/preview_tab.dart';
 import 'package:lopicode/ui/project_shell.dart';
 import 'package:lopicode/ui/shell.dart';
+import 'package:lopicode/ui/terminal_tab.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'support/harness.dart';
@@ -31,6 +34,14 @@ Future<(TestEnv, Project, ProjectSession)> openProject(WidgetTester tester, {Tes
     e.dispose();
   });
   return (e, project, session);
+}
+
+/// 右上“···”菜单里的“新对话”。
+Future<void> newChat(WidgetTester tester) async {
+  await tester.tap(find.byTooltip('更多').hitTestable());
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('新对话').last);
+  await tester.pumpAndSettle();
 }
 
 Future<void> openDrawer(WidgetTester tester) async {
@@ -67,38 +78,128 @@ void main() {
   setUpAll(() => PreviewTab.debugViewBuilder = (uri) => const ColoredBox(color: Colors.white));
   tearDownAll(() => PreviewTab.debugViewBuilder = null);
 
-  testWidgets('没有底部导航；侧边栏能去每个页面，当前项高亮，再回到对话', (tester) async {
+  /// 底部导航第 i 项是不是选中（实心）的。
+  bool navSelected(WidgetTester tester, int i) {
+    final sem = tester.widget<Semantics>(find.byKey(ValueKey('nav-$i')));
+    return sem.properties.selected ?? false;
+  }
+
+  Future<void> tapNav(WidgetTester tester, ShellDest d) async {
+    await tester.tap(find.byKey(ValueKey('nav-${ShellDest.bottom.indexOf(d)}')));
+    await settle(tester, rounds: 8);
+  }
+
+  final marks = <ShellDest, Finder>{
+    ShellDest.chat: find.byTooltip('发送'),
+    ShellDest.files: find.text('index.html'),
+    ShellDest.terminal: find.byTooltip('新建会话'),
+    ShellDest.preview: find.text('手机'),
+    ShellDest.builder: find.byTooltip('图层'),
+    ShellDest.apk: find.textContaining('手机上跑不了 Android SDK 和 Gradle'),
+    ShellDest.runtime: find.byKey(const Key('runtime-status')),
+  };
+
+  testWidgets('底部导航五项只有图标：点哪个去哪个页，选中的那个是实心', (tester) async {
+    usePhoneViewport(tester);
     final (env, project, session) = await openProject(tester);
     await tester.pumpWidget(appFor(env, ProjectShell(project: project, session: session)));
     await settle(tester);
 
-    expect(find.byType(NavigationBar), findsNothing);
-    expect(find.byType(BottomNavigationBar), findsNothing);
-    // 进项目先看到对话页
-    expect(find.byTooltip('发送'), findsOneWidget);
+    final nav = find.byType(IconBottomNav);
+    expect(nav, findsOneWidget);
+    expect(ShellDest.bottom.map((d) => d.label).toList(), ['Agent 聊天', '文件', '终端', '低代码', '打包']);
+    expect(find.descendant(of: nav, matching: find.byType(Text)), findsNothing, reason: '底部导航只有图标，没有文字');
+    // 贴着屏幕底边
+    expect(tester.getRect(nav).bottom, 844);
+    // 进项目先看到聊天页
+    expect(marks[ShellDest.chat]!.hitTestable(), findsOneWidget);
+    expect(navSelected(tester, 0), isTrue);
+
+    for (final d in [...ShellDest.bottom.skip(1), ShellDest.chat]) {
+      await tapNav(tester, d);
+      expect(marks[d]!.hitTestable(), findsWidgets, reason: '应该到了“${d.label}”页');
+      expect(find.byTooltip('打开侧边栏').hitTestable(), findsOneWidget, reason: '“${d.label}”页也要有汉堡按钮');
+      for (var i = 0; i < 5; i++) {
+        expect(navSelected(tester, i), i == ShellDest.bottom.indexOf(d), reason: '在“${d.label}”页时第 $i 项的选中状态');
+      }
+      // 页面内容不能伸到导航下面去
+      expect(tester.takeException(), isNull);
+    }
+  });
+
+  testWidgets('键盘弹出时底部导航不被顶起来：导航原地不动，只有输入框贴着键盘', (tester) async {
+    usePhoneViewport(tester);
+    final (env, project, session) = await openProject(tester);
+    await tester.pumpWidget(appFor(env, ProjectShell(project: project, session: session)));
+    await settle(tester);
+
+    final nav = find.byType(IconBottomNav);
+    final input = find.byKey(const ValueKey('chat-input'));
+    final navBefore = tester.getRect(nav);
+    expect(navBefore.bottom, 844);
+    expect(tester.getRect(input).bottom, lessThanOrEqualTo(navBefore.top), reason: '没有键盘时输入框在导航上方');
+
+    // 软键盘弹出：占掉屏幕下面 320
+    const keyboard = 320.0;
+    tester.view.viewInsets = const FakeViewPadding(bottom: keyboard);
+    addTearDown(tester.view.resetViewInsets);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    final keyboardTop = 844 - keyboard;
+    expect(tester.getRect(nav), navBefore, reason: '导航不能被键盘顶起来');
+    expect(tester.getRect(nav).top, greaterThanOrEqualTo(keyboardTop), reason: '导航整个在键盘后面');
+    final inputRect = tester.getRect(input);
+    expect(inputRect.bottom, lessThanOrEqualTo(keyboardTop), reason: '输入框在键盘上方');
+    expect(inputRect.bottom, greaterThan(keyboardTop - 16), reason: '输入框贴着键盘，中间没有夹着导航');
+    expect(tester.takeException(), isNull);
+
+    // 终端页：按键行贴着键盘，导航同样不动
+    tester.view.resetViewInsets();
+    await tester.pump();
+    await tapNav(tester, ShellDest.terminal);
+    final keysBefore = tester.getRect(find.byType(TerminalTab)).bottom;
+    expect(keysBefore, lessThanOrEqualTo(navBefore.top), reason: '终端页没有被导航挡住');
+    tester.view.viewInsets = const FakeViewPadding(bottom: keyboard);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(tester.getRect(nav), navBefore);
+    expect(tester.getRect(find.byType(TerminalTab)).bottom, keyboardTop, reason: '终端页缩到键盘上方');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('低代码页：画布和组件栏都在底部导航上方', (tester) async {
+    usePhoneViewport(tester);
+    final (env, project, session) = await openProject(tester);
+    await tester.pumpWidget(appFor(env, ProjectShell(project: project, session: session, initial: ShellDest.builder)));
+    await settle(tester, rounds: 8);
+    final navTop = tester.getRect(find.byType(IconBottomNav)).top;
+    expect(tester.getRect(find.byType(BuilderScreen)).bottom, navTop);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('侧边栏只放底部导航里没有的：工作区切换、预览、运行环境、对话、设置', (tester) async {
+    final (env, project, session) = await openProject(tester);
+    await tester.pumpWidget(appFor(env, ProjectShell(project: project, session: session)));
+    await settle(tester);
 
     await openDrawer(tester);
     // 项目切换在最上，设置在最下
     final drawer = find.byType(Drawer);
     final top = tester.getTopLeft(find.descendant(of: drawer, matching: find.textContaining('切换工作区'))).dy;
     final bottom = tester.getTopLeft(find.descendant(of: drawer, matching: find.text('设置'))).dy;
-    for (final d in ShellDest.values.skip(1)) {
+    for (final d in ShellDest.drawerOnly) {
       final y = tester.getTopLeft(find.descendant(of: drawer, matching: find.text(d.label))).dy;
       expect(y, greaterThan(top));
       expect(y, lessThan(bottom));
     }
+    for (final d in ShellDest.bottom) {
+      expect(find.descendant(of: drawer, matching: find.text(d.label)), findsNothing, reason: '“${d.label}”在底部导航里，侧边栏不重复放');
+    }
     expect(highlighted(tester, '新对话'), isTrue, reason: '一进来在对话页');
     await closeDrawer(tester);
 
-    final marks = <ShellDest, Finder>{
-      ShellDest.files: find.text('index.html'),
-      ShellDest.terminal: find.byTooltip('新建会话'),
-      ShellDest.preview: find.text('手机'),
-      ShellDest.builder: find.byTooltip('图层'),
-      ShellDest.apk: find.textContaining('手机上跑不了 Android SDK 和 Gradle'),
-      ShellDest.runtime: find.byKey(const Key('runtime-status')),
-    };
-    for (final d in ShellDest.values.skip(1)) {
+    for (final d in ShellDest.drawerOnly) {
       await openDrawer(tester);
       await tester.tap(find.descendant(of: find.byType(Drawer), matching: find.text(d.label)));
       await drawerSettle(tester);
@@ -106,11 +207,14 @@ void main() {
       expect(find.byType(Drawer), findsNothing, reason: '选了“${d.label}”后侧边栏应该收起');
       expect(marks[d]!.hitTestable(), findsWidgets, reason: '应该到了“${d.label}”页');
       expect(find.byTooltip('打开侧边栏').hitTestable(), findsOneWidget, reason: '“${d.label}”页也要有汉堡按钮');
+      for (var i = 0; i < 5; i++) {
+        expect(navSelected(tester, i), isFalse, reason: '在“${d.label}”页时底部导航没有选中项');
+      }
       expect(tester.takeException(), isNull);
 
       await openDrawer(tester);
       expect(highlighted(tester, d.label), isTrue, reason: '“${d.label}”应该高亮');
-      for (final other in ShellDest.values.skip(1).where((o) => o != d)) {
+      for (final other in ShellDest.drawerOnly.where((o) => o != d)) {
         expect(highlighted(tester, other.label), isFalse, reason: '“${other.label}”不该高亮');
       }
       await closeDrawer(tester);
@@ -121,6 +225,7 @@ void main() {
     await tester.tap(find.descendant(of: find.byType(Drawer), matching: find.text('新对话')));
     await drawerSettle(tester);
     expect(find.byTooltip('发送').hitTestable(), findsOneWidget);
+    expect(navSelected(tester, 0), isTrue);
   });
 
   testWidgets('终端和低代码页不让边缘右滑拉出侧边栏，其他页可以', (tester) async {
@@ -135,13 +240,13 @@ void main() {
 
     await swipe();
     expect(find.byType(Drawer), findsOneWidget, reason: '对话页右滑应该拉出侧边栏');
+    await closeDrawer(tester);
     for (final d in [ShellDest.terminal, ShellDest.builder]) {
-      await tester.tap(find.descendant(of: find.byType(Drawer), matching: find.text(d.label)));
-      await drawerSettle(tester);
-      await settle(tester, rounds: 8);
+      await tapNav(tester, d);
       await swipe();
       expect(find.byType(Drawer), findsNothing, reason: '“${d.label}”页右滑不该拉出侧边栏');
       await openDrawer(tester);
+      await closeDrawer(tester);
     }
   });
 
@@ -210,12 +315,12 @@ void main() {
     await tester.runAsync(() => session.sendToAgent('第一段对话'));
     await settle(tester, rounds: 2);
     // 空对话时“新对话”不堆空的；有内容后才开新的
-    await tester.tap(find.byTooltip('新对话'));
+    await newChat(tester);
     await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 100)));
     await settle(tester, rounds: 2);
     expect(session.conversations.length, 2);
     expect(session.chat, isEmpty);
-    await tester.tap(find.byTooltip('新对话'));
+    await newChat(tester);
     await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 100)));
     await settle(tester, rounds: 2);
     expect(session.conversations.length, 2, reason: '当前对话还是空的，不再新建');

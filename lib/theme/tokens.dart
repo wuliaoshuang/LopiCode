@@ -1,35 +1,38 @@
-// 设计约束（Refactoring UI · Workflow A）
+// 设计约束（Refactoring UI · Workflow A）— 2026-11-23 按霜霜给的两张参考图改版
 // - 只有手机一个目标：390×844，浅色 + 深色。
-// - 色板：品牌绿（primary）、冷灰（neutral）、危险红、警告橙，各 9 阶，
-//   由 refactoring-ui 的 generate_palette.py 生成，界面里不出现表外的颜色。
+// - 色板：品牌蓝（primary，基色取自参考图二进度条的 #2962CB）、中性灰（neutral）、危险红、警告橙，
+//   由 refactoring-ui 的 generate_palette.py 生成，界面里不出现表外的颜色；
+//   正文 / 次要文字 / 强调色在各自底色上都用 check_contrast.py 验过 ≥ 4.5:1。
+// - 底色两种：bg（对话等主页面，近白 #FCFCFC，参考图一）和 canvas（设置这类“卡片分组”页面，浅灰 #F3F4F6，参考图二）。
+//   白卡片（surface）只放在 canvas 上；浅灰块（surfaceMuted，#E9EAEC）用于气泡和胶囊输入框。
 // - 字号阶：12 / 14 / 16 / 18 / 20 / 24 / 30；字重只用 400 和 600。
 // - 间距阶：4 / 8 / 12 / 16 / 24 / 32 / 48。
-// - 圆角：6（小控件）/ 10（卡片、输入框）/ 16（底部面板）/ 24（对话输入卡片）。
+// - 圆角：6（小控件）/ 10（按钮、输入框）/ 16（底部面板）/ 20（气泡）/ 24（旧卡片）/ 28（分组大卡片）；胶囊和圆按钮是全圆。
 // - 层级靠字重和颜色深浅拉开，不靠加大字号；次要信息用 muted 色。
 import 'package:material_ui/material_ui.dart';
 
 abstract final class Palette {
-  static const primary100 = Color(0xFFEBFFFF);
-  static const primary200 = Color(0xFF9BFFF8);
-  static const primary300 = Color(0xFF5DEEDB);
-  static const primary400 = Color(0xFF29D2B2);
-  static const primary500 = Color(0xFF0F9D7A);
-  static const primary600 = Color(0xFF0A9267);
-  static const primary700 = Color(0xFF058654);
-  static const primary800 = Color(0xFF017B43);
-  static const primary900 = Color(0xFF006B32);
+  static const primary100 = Color(0xFFEBF9FF);
+  static const primary200 = Color(0xFFADE5FF);
+  static const primary300 = Color(0xFF78CBF7);
+  static const primary400 = Color(0xFF4E99E4);
+  static const primary500 = Color(0xFF2962CB);
+  static const primary600 = Color(0xFF1D4BB5);
+  static const primary700 = Color(0xFF12359E);
+  static const primary800 = Color(0xFF072186);
+  static const primary900 = Color(0xFF00116B);
 
-  static const neutral50 = Color(0xFFFAFDFF);
-  static const neutral100 = Color(0xFFF6FBFD);
-  static const neutral200 = Color(0xFFD3DEE4);
-  static const neutral300 = Color(0xFFB1C0C8);
-  static const neutral400 = Color(0xFF919EAC);
-  static const neutral500 = Color(0xFF707A8F);
-  static const neutral600 = Color(0xFF5C6479);
-  static const neutral700 = Color(0xFF494E62);
-  static const neutral800 = Color(0xFF35394C);
-  static const neutral900 = Color(0xFF222435);
-  static const neutral950 = Color(0xFF11121F);
+  static const neutral50 = Color(0xFFFCFDFE);
+  static const neutral100 = Color(0xFFF8FAFB);
+  static const neutral200 = Color(0xFFD8DCDF);
+  static const neutral300 = Color(0xFFB8BEC1);
+  static const neutral400 = Color(0xFF989EA4);
+  static const neutral500 = Color(0xFF797D86);
+  static const neutral600 = Color(0xFF656870);
+  static const neutral700 = Color(0xFF50525B);
+  static const neutral800 = Color(0xFF3C3D45);
+  static const neutral900 = Color(0xFF27282F);
+  static const neutral950 = Color(0xFF15151B);
 
   static const danger100 = Color(0xFFFFEBF3);
   static const danger300 = Color(0xFFFE7FB6);
@@ -60,7 +63,11 @@ abstract final class Radii {
   static const double sm = 6;
   static const double md = 10;
   static const double lg = 16;
+  static const double bubble = 20;
   static const double xl = 24;
+
+  /// 分组大卡片（设置页那种）。
+  static const double card = 28;
 }
 
 abstract final class FontSize {
@@ -78,6 +85,7 @@ abstract final class FontSize {
 class AppColors extends ThemeExtension<AppColors> {
   const AppColors({
     required this.bg,
+    required this.canvas,
     required this.surface,
     required this.surfaceMuted,
     required this.text,
@@ -95,7 +103,11 @@ class AppColors extends ThemeExtension<AppColors> {
     required this.codeBg,
   });
 
+  /// 主页面底色（对话、文件、终端……）。
   final Color bg;
+
+  /// “卡片分组”页面（设置和它的子页）的底色，上面放白卡片。
+  final Color canvas;
   final Color surface;
   final Color surfaceMuted;
   final Color text;
@@ -121,41 +133,43 @@ class AppColors extends ThemeExtension<AppColors> {
   final Color codeBg;
 
   static const light = AppColors(
-    bg: Palette.neutral100,
+    bg: Color(0xFFFCFCFC),
+    canvas: Color(0xFFF3F4F6),
     surface: Color(0xFFFFFFFF),
-    surfaceMuted: Color(0xFFEAF1F5),
-    text: Palette.neutral900,
-    textMuted: Palette.neutral600,
+    surfaceMuted: Color(0xFFE9EAEC),
+    text: Palette.neutral950,
+    textMuted: Palette.neutral700,
     textFaint: Palette.neutral600,
-    border: Palette.neutral200,
-    accent: Palette.primary800,
-    accentSoft: Color(0xFFDDF5EC),
-    accentFill: Palette.primary700,
+    border: Color(0xFFE4E5E7),
+    accent: Palette.primary500,
+    accentSoft: Color(0xFFE6EEFB),
+    accentFill: Palette.primary500,
     onAccent: Color(0xFFFFFFFF),
     danger: Palette.danger600,
     dangerSoft: Palette.danger100,
     warning: Palette.warning800,
     warningSoft: Palette.warning100,
-    codeBg: Palette.neutral50,
+    codeBg: Color(0xFFF3F4F6),
   );
 
   static const dark = AppColors(
     bg: Palette.neutral950,
-    surface: Palette.neutral900,
-    surfaceMuted: Palette.neutral800,
+    canvas: Color(0xFF0F0F14),
+    surface: Color(0xFF1E1F25),
+    surfaceMuted: Color(0xFF2C2D35),
     text: Palette.neutral100,
     textMuted: Palette.neutral300,
     textFaint: Palette.neutral400,
-    border: Palette.neutral700,
-    accent: Palette.primary300,
-    accentSoft: Color(0xFF12382F),
-    accentFill: Palette.primary400,
-    onAccent: Palette.neutral950,
+    border: Palette.neutral800,
+    accent: Color(0xFF8FB4F5),
+    accentSoft: Color(0xFF1B2A4A),
+    accentFill: Color(0xFF3A72DC),
+    onAccent: Color(0xFFFFFFFF),
     danger: Palette.danger300,
     dangerSoft: Color(0xFF3A1420),
     warning: Palette.warning300,
     warningSoft: Color(0xFF3A2A0C),
-    codeBg: Color(0xFF191A2A),
+    codeBg: Color(0xFF1A1A21),
   );
 
   @override

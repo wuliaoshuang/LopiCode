@@ -6,6 +6,7 @@ import 'package:lopicode/core/third_party.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/shell.dart';
 import 'package:lopicode/ui/widgets.dart';
+import 'package:lopicode/ui/chrome.dart';
 import 'package:material_ui/material_ui.dart';
 
 class ThirdPartyScreen extends StatelessWidget {
@@ -16,10 +17,10 @@ class ThirdPartyScreen extends StatelessWidget {
     final t = Theme.of(context).textTheme;
     final c = context.colors;
     return Scaffold(
-      appBar: const ShellAppBar(title: '第三方声明', subtitle: '随安装包带的开源组件'),
-      body: ListView(
-        key: const Key('third-party-list'),
-        padding: const EdgeInsets.only(bottom: Space.x8),
+      backgroundColor: context.colors.canvas,
+      appBar: ShellAppBar(background: context.colors.canvas, title: '第三方声明', subtitle: '随安装包带的开源组件'),
+      body: SectionedList(
+        listKey: const Key('third-party-list'),
         children: [
           const Padding(
             padding: EdgeInsets.fromLTRB(Space.x4, Space.x4, Space.x4, 0),
@@ -117,7 +118,8 @@ class LicenseTextScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
     return Scaffold(
-      appBar: ShellAppBar(title: licenseTitle(asset), subtitle: '英文原文'),
+      backgroundColor: context.colors.canvas,
+      appBar: ShellAppBar(background: context.colors.canvas, title: licenseTitle(asset), subtitle: '英文原文'),
       body: FutureBuilder<String>(
         future: (bundle ?? DefaultAssetBundle.of(context)).loadString(asset),
         builder: (context, snapshot) {

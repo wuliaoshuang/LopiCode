@@ -12,6 +12,7 @@ import 'package:lopicode/project_session.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/chat_panels.dart';
 import 'package:lopicode/ui/widgets.dart';
+import 'package:lopicode/ui/chrome.dart';
 import 'package:material_ui/material_ui.dart';
 
 const String kAutomationHonesty = '只有 LopiCode 正在运行（开着或刚切到后台、没被系统清掉）时才会触发。到点时 App 没在运行，那一次只记为“错过”，不会补跑。';
@@ -49,12 +50,13 @@ class _AutomationListScreenState extends State<AutomationListScreen> {
     final items = app.automations.items;
     final now = DateTime.now();
     return Scaffold(
-      appBar: AppBar(title: const Text('自动化任务')),
+      backgroundColor: context.colors.canvas,
+      appBar: PageBar(background: context.colors.canvas, title: const Text('自动化任务')),
       floatingActionButton: items.isEmpty
           ? null
           : FloatingActionButton.extended(onPressed: _new, elevation: 2, shape: const StadiumBorder(), icon: const Icon(Icons.add), label: const Text('新建任务')),
-      body: ListView(
-        padding: const EdgeInsets.only(bottom: 96),
+      body: SectionedList(
+        bottom: 96,
         children: [
           const InfoBanner(kAutomationHonesty, tone: BannerTone.warning, margin: EdgeInsets.fromLTRB(Space.x4, Space.x3, Space.x4, Space.x2)),
           if (items.isEmpty)
@@ -133,12 +135,14 @@ class _AutomationDetailScreenState extends State<AutomationDetailScreen> {
     final t = Theme.of(context).textTheme;
     final a = app.automations.byId(widget.id);
     if (a == null) {
-      return Scaffold(appBar: AppBar(title: const Text('自动化任务')), body: const EmptyState(icon: Icons.event_busy, title: '这个任务已经删除', message: ''));
+      return Scaffold(backgroundColor: context.colors.canvas,
+      appBar: PageBar(background: context.colors.canvas, title: const Text('自动化任务')), body: const EmptyState(icon: Icons.event_busy, title: '这个任务已经删除', message: ''));
     }
     final next = a.nextRun(DateTime.now());
     final running = app.scheduler.running.contains(a.id);
     return Scaffold(
-      appBar: AppBar(
+      backgroundColor: context.colors.canvas,
+      appBar: PageBar(background: context.colors.canvas, 
         title: Text(a.title, maxLines: 1, overflow: TextOverflow.ellipsis),
         actions: [
           PopupMenuButton<String>(
@@ -154,8 +158,8 @@ class _AutomationDetailScreenState extends State<AutomationDetailScreen> {
           ),
         ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(Space.x4, Space.x2, Space.x4, Space.x8),
+      body: SectionedList(
+        inner: const EdgeInsets.all(Space.x4),
         children: [
           Text(a.rule.describe(), style: t.titleMedium),
           const SizedBox(height: Space.x1),
@@ -361,9 +365,10 @@ class _AutomationEditScreenState extends State<AutomationEditScreen> {
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
     return Scaffold(
-      appBar: AppBar(title: Text(widget.existing == null ? '新建自动化任务' : '修改自动化任务')),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(Space.x4, Space.x2, Space.x4, Space.x8),
+      backgroundColor: context.colors.canvas,
+      appBar: PageBar(background: context.colors.canvas, title: Text(widget.existing == null ? '新建自动化任务' : '修改自动化任务')),
+      body: SectionedList(
+        inner: const EdgeInsets.all(Space.x4),
         children: [
           TextField(key: const Key('automation-title'), controller: _title, decoration: const InputDecoration(labelText: '任务名', hintText: '如：每天早上检查依赖更新')),
           const SizedBox(height: Space.x3),

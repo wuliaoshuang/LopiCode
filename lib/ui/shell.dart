@@ -1,26 +1,48 @@
-// 设计约束（外壳 · 390×844）
-// - 没有底部导航。所有去处都在侧边栏里：项目切换在最上，然后是对话和各个工具，设置钉在最下。
-// - 每个页面的顶栏是同一个样子：左边汉堡按钮，两行标题（大标题 + 一行弱化的副标题），右边是这一页自己的操作。
+// 设计约束（外壳 · 390×844）— 2026-11-23 按霜霜的参考图改版
+// - 底部导航五项、只有图标：Agent 聊天、文件、终端、低代码、打包。选中 = 实心深色，未选中 = 描边。
+//   键盘弹出时导航留在键盘下面，不会被顶起来（外层 Scaffold 负责，见 project_shell.dart）。
+// - 侧边栏（左上汉堡按钮打开）只放底部导航里没有的东西：工作区切换在最上，然后是预览、运行环境、对话列表，设置钉在最下。
+// - 每个页面的顶部是同一个样子：左边悬浮的白色圆按钮（汉堡 / 返回），标题居中，右边是这一页自己的操作（白色胶囊）。
 // - 侧边栏里当前所在的那一项高亮（强调色浅底 + 强调色文字），其余是普通文字。
 import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/chrome.dart';
 import 'package:material_ui/material_ui.dart';
 
-/// 项目里能去的页面。
+/// 项目里能去的页面。前五个在底部导航里，其余在侧边栏里。
 enum ShellDest {
-  chat('Agent 对话', Icons.auto_awesome_outlined),
-  files('文件', Icons.folder_outlined),
-  terminal('终端', Icons.terminal),
-  preview('预览', Icons.play_circle_outline),
-  builder('低代码搭建', Icons.dashboard_customize_outlined),
-  apk('APK 打包', Icons.android),
-  runtime('运行环境', Icons.memory_outlined);
+  chat('Agent 聊天', Icons.chat_bubble_outline, Icons.chat_bubble),
+  files('文件', Icons.folder_outlined, Icons.folder),
+  terminal('终端', Icons.terminal, Icons.terminal),
+  builder('低代码', Icons.dashboard_customize_outlined, Icons.dashboard_customize),
+  apk('打包', Icons.inventory_2_outlined, Icons.inventory_2),
+  preview('预览', Icons.play_circle_outline, Icons.play_circle),
+  runtime('运行环境', Icons.memory_outlined, Icons.memory);
 
-  const ShellDest(this.label, this.icon);
+  const ShellDest(this.label, this.icon, this.selectedIcon);
   final String label;
   final IconData icon;
+  final IconData selectedIcon;
+
+  /// 底部导航里的五项。
+  static const List<ShellDest> bottom = [chat, files, terminal, builder, apk];
+
+  /// 只在侧边栏里的页面。
+  static const List<ShellDest> drawerOnly = [preview, runtime];
+
+  bool get inBottomNav => index < 5;
 }
+
+/// 底部导航的五个图标（终端的那个是自己画的，才有成对的描边 / 实心）。
+List<BottomNavItem> shellNavItems() => [
+  for (final d in ShellDest.bottom)
+    BottomNavItem(
+      label: d.label,
+      icon: d == ShellDest.terminal ? const TerminalGlyph(filled: false) : Icon(d.icon),
+      selectedIcon: d == ShellDest.terminal ? const TerminalGlyph(filled: true) : Icon(d.selectedIcon),
+    ),
+];
 
 /// 外壳把“打开侧边栏”“去某一页”交给里面的页面用。
 class ShellScope extends InheritedWidget {
@@ -39,7 +61,9 @@ class ShellScope extends InheritedWidget {
 Widget? shellLeading(BuildContext context) {
   final shell = ShellScope.maybeOf(context);
   if (shell != null) return _MenuButton(onPressed: shell.openDrawer);
-  if (Navigator.canPop(context)) return null; // 用默认的返回按钮
+  if (Navigator.canPop(context)) {
+    return RoundIconButton(icon: Icons.arrow_back_ios_new_rounded, tooltip: '返回', onPressed: () => Navigator.maybePop(context));
+  }
   final scaffold = Scaffold.maybeOf(context);
   if (scaffold != null && scaffold.hasDrawer) return _MenuButton(onPressed: scaffold.openDrawer);
   return null;
@@ -50,40 +74,52 @@ class _MenuButton extends StatelessWidget {
   final VoidCallback onPressed;
 
   @override
-  Widget build(BuildContext context) =>
-      IconButton(tooltip: '打开侧边栏', icon: Icon(Icons.notes_rounded, color: context.colors.text), onPressed: onPressed);
+  Widget build(BuildContext context) => RoundIconButton(tooltip: '打开侧边栏', icon: Icons.drag_handle_rounded, onPressed: onPressed);
 }
 
-/// 统一的顶栏：汉堡按钮 + 两行标题 + 这一页的操作。
+/// 统一的顶部：左圆按钮（汉堡 / 返回）+ 居中的两行标题 + 这一页的操作。
 class ShellAppBar extends StatelessWidget implements PreferredSizeWidget {
-  const ShellAppBar({super.key, required this.title, this.subtitle, this.actions});
+  const ShellAppBar({super.key, required this.title, this.subtitle, this.actions, this.fade = false, this.background, this.pill = false});
   final String title;
   final String? subtitle;
   final List<Widget>? actions;
 
+  /// 内容从顶栏下面滚过去并渐隐（对话页）。
+  final bool fade;
+  final Color? background;
+
+  /// 标题装进一个白色小胶囊（对话页，对应参考图顶部正中的名字胶囊）。
+  final bool pill;
+
   @override
-  Size get preferredSize => const Size.fromHeight(60);
+  Size get preferredSize => const Size.fromHeight(PageBar.kHeight);
 
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
     final c = context.colors;
     final sub = subtitle ?? ShellScope.maybeOf(context)?.projectName;
-    return AppBar(
-      toolbarHeight: 60,
-      leading: Builder(builder: (context) => shellLeading(context) ?? const BackButton()),
-      automaticallyImplyLeading: false,
-      titleSpacing: 0,
-      title: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(title, style: t.titleMedium?.copyWith(fontSize: FontSize.lg, fontWeight: FontWeight.w400), maxLines: 1, overflow: TextOverflow.ellipsis),
-          if (sub != null && sub.isNotEmpty)
-            Text(sub, style: t.bodySmall?.copyWith(color: c.textFaint), maxLines: 1, overflow: TextOverflow.ellipsis),
-        ],
-      ),
-      actions: [...?actions, const SizedBox(width: Space.x1)],
+    Widget middle = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(title, style: (pill ? t.titleSmall : t.titleLarge)?.copyWith(fontWeight: pill ? FontWeight.w600 : FontWeight.w400), maxLines: 1, overflow: TextOverflow.ellipsis),
+        if (sub != null && sub.isNotEmpty) Text(sub, style: t.bodySmall?.copyWith(color: c.textFaint, height: 1.25), maxLines: 1, overflow: TextOverflow.ellipsis),
+      ],
+    );
+    if (pill) {
+      middle = Container(
+        height: RoundIconButton.kSize,
+        padding: const EdgeInsets.symmetric(horizontal: Space.x4),
+        decoration: floatingDecoration(c, radius: BorderRadius.circular(RoundIconButton.kSize / 2)),
+        child: Center(widthFactor: 1, child: middle),
+      );
+    }
+    return PageBar(
+      leading: Builder(builder: (context) => shellLeading(context) ?? const SizedBox.shrink()),
+      title: middle,
+      actions: actions,
+      fade: fade,
+      background: background,
     );
   }
 }
@@ -119,8 +155,8 @@ class AppDrawer extends StatelessWidget {
     final busy = s?.agentBusy ?? false;
     return Drawer(
       width: 304,
-      backgroundColor: c.surface,
-      shape: const RoundedRectangleBorder(),
+      backgroundColor: c.bg,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.horizontal(right: Radius.circular(Radii.card))),
       child: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -130,12 +166,12 @@ class AppDrawer extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(Space.x3, Space.x3, Space.x3, Space.x2),
               child: Material(
                 color: c.surfaceMuted,
-                borderRadius: BorderRadius.circular(Radii.md),
+                borderRadius: BorderRadius.circular(Radii.bubble),
                 clipBehavior: Clip.antiAlias,
                 child: InkWell(
                   onTap: onProjects,
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(Space.x3, Space.x3, Space.x2, Space.x3),
+                    padding: const EdgeInsets.fromLTRB(Space.x4, Space.x3, Space.x3, Space.x3),
                     child: Row(
                       children: [
                         Expanded(
@@ -162,7 +198,7 @@ class AppDrawer extends StatelessWidget {
                   if (s == null)
                     _DrawerItem(icon: Icons.folder_copy_outlined, label: '工作区', selected: true, onTap: () => Navigator.pop(context))
                   else ...[
-                    for (final d in ShellDest.values.skip(1))
+                    for (final d in ShellDest.drawerOnly)
                       _DrawerItem(icon: d.icon, label: d.label, selected: current == d, onTap: () => onDest?.call(d)),
                     Padding(
                       padding: const EdgeInsets.fromLTRB(Space.x3, Space.x6, Space.x3, Space.x2),
@@ -219,7 +255,7 @@ class _DrawerItem extends StatelessWidget {
       button: true,
       child: Material(
         color: selected ? c.accentSoft : Colors.transparent,
-        borderRadius: BorderRadius.circular(Radii.md),
+        borderRadius: BorderRadius.circular(Radii.lg),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: enabled ? onTap : null,

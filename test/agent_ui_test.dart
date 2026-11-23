@@ -123,16 +123,33 @@ void main() {
       await settle(tester, rounds: rounds);
     }
 
-    testWidgets('设置目录页：AI / 能力 / 通用三组，一行一件事 ($suffix)', (tester) async {
+    testWidgets('设置目录页：概况卡 + AI / 能力 / 通用 / 关于四组卡片，一行一件事 ($suffix)', (tester) async {
       await boot(tester);
       await addChannels(tester);
-      await show(tester, SettingsScreen(workspace: project));
-      for (final title in ['AI', '能力', '通用']) {
+      await show(tester, SettingsScreen(workspace: project), push: true);
+      // 顶部：圆形返回按钮 + 居中标题
+      expect(find.byTooltip('返回'), findsOneWidget);
+      expect(tester.getCenter(find.text('设置')).dx, closeTo(195, 1), reason: '标题居中');
+      // 概况卡：新对话用的模型 + 运行环境，都是真实状态
+      final overview = find.byKey(const Key('settings-overview'));
+      expect(find.descendant(of: overview, matching: find.text('主力模型')), findsOneWidget);
+      expect(find.descendant(of: overview, matching: find.text('已配置')), findsOneWidget);
+      expect(find.descendant(of: overview, matching: find.text('运行环境')), findsWidgets);
+      expect(find.descendant(of: overview, matching: find.text('未安装')), findsOneWidget);
+      // 每一项都在：滚到它再看
+      final list = find.byType(Scrollable).first;
+      for (final title in ['AI', '能力', '通用', '关于']) {
+        await tester.scrollUntilVisible(find.text(title), 120, scrollable: list);
         expect(find.text(title), findsOneWidget);
       }
-      for (final key in ['settings-channels', 'settings-personalize', 'settings-permission', 'settings-subagents', 'settings-automations', 'settings-search', 'settings-skills']) {
+      for (final key in ['settings-channels', 'settings-personalize', 'settings-permission', 'settings-subagents', 'settings-automations', 'settings-search', 'settings-skills', 'settings-third-party']) {
+        await tester.scrollUntilVisible(find.byKey(Key(key)), -120, scrollable: list);
         expect(find.byKey(Key(key)), findsOneWidget, reason: key);
+        expect(find.descendant(of: find.byKey(Key(key)), matching: find.byIcon(Icons.chevron_right)), findsOneWidget, reason: '$key 右边有箭头');
       }
+      await tester.scrollUntilVisible(find.byKey(const Key('settings-permission')), -120, scrollable: list);
+      await tester.drag(list, const Offset(0, 2000));
+      await settle(tester, rounds: 2);
       final yChannels = tester.getTopLeft(find.byKey(const Key('settings-channels'))).dy;
       final yPerm = tester.getTopLeft(find.byKey(const Key('settings-permission'))).dy;
       expect(yChannels, lessThan(yPerm));

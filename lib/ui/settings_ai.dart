@@ -11,6 +11,7 @@ import 'package:lopicode/app_services.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/chat_panels.dart';
 import 'package:lopicode/ui/widgets.dart';
+import 'package:lopicode/ui/chrome.dart';
 import 'package:material_ui/material_ui.dart';
 
 class ChannelsScreen extends StatefulWidget {
@@ -49,7 +50,8 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
     final channels = app.models.channels;
     final fixed = app.models.resolve(app.models.fixedSelection);
     return Scaffold(
-      appBar: AppBar(title: const Text('模型与渠道')),
+      backgroundColor: context.colors.canvas,
+      appBar: PageBar(background: context.colors.canvas, title: const Text('模型与渠道')),
       floatingActionButton: channels.isEmpty
           ? null
           : FloatingActionButton.extended(
@@ -66,8 +68,8 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
               message: '渠道就是一个模型服务：接口地址加 API Key。\n添加后勾选要用的模型。',
               action: FilledButton.icon(onPressed: _edit, icon: const Icon(Icons.add), label: const Text('添加渠道')),
             )
-          : ListView(
-              padding: const EdgeInsets.only(bottom: 96),
+          : SectionedList(
+              bottom: 96,
               children: [
                 const SectionLabel('新对话用哪个模型'),
                 Padding(
@@ -297,7 +299,8 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
     final c = context.colors;
     final t = Theme.of(context).textTheme;
     return Scaffold(
-      appBar: AppBar(
+      backgroundColor: context.colors.canvas,
+      appBar: PageBar(background: context.colors.canvas, 
         title: Text(widget.channel == null ? '添加渠道' : '编辑渠道'),
         actions: [
           if (widget.channel != null)
@@ -308,8 +311,8 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
             ),
         ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(Space.x4, Space.x2, Space.x4, Space.x8),
+      body: SectionedList(
+        inner: const EdgeInsets.all(Space.x4),
         children: [
           TextField(controller: _name, decoration: const InputDecoration(labelText: '渠道名称', hintText: '给自己看的名字，不填就用协议名')),
           const SizedBox(height: Space.x3),

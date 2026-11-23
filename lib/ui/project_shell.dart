@@ -1,7 +1,10 @@
-// 设计约束（项目外壳 · 390×844）
-// - 进项目先看到的是 Agent 对话；其余页面（文件、终端、预览、低代码、APK 打包）从侧边栏去。
-// - 没有底部导航。侧边栏从左边缘右滑也能拉出来；终端和低代码画布上自己有横向手势，那两页只能点汉堡按钮。
+// 设计约束（项目外壳 · 390×844）— 2026-11-23 按霜霜的参考图改版
+// - 进项目先看到的是 Agent 聊天；底部导航五项（聊天、文件、终端、低代码、打包），预览和运行环境从侧边栏去。
+// - 底部导航挂在最外层 Scaffold 上：键盘弹出时，页面内容缩到键盘上方，导航原地不动（被键盘盖住），
+//   所以贴着键盘的只有输入框 / 终端按键行，导航不会被顶起来。
+// - 侧边栏从左边缘右滑也能拉出来；终端和低代码画布上自己有横向手势，那两页只能点汉堡按钮。
 // - 切页面不丢状态：各页共用一个 ProjectSession，用 IndexedStack 保活；没去过的页面先不建。
+// - 系统返回键：不在聊天页时先回聊天页，在聊天页才退出。
 import 'package:lopicode/runtime/runtime_screen.dart';
 import 'dart:io';
 
@@ -11,6 +14,7 @@ import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/lowcode/builder_screen.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/ui/chat_screen.dart';
+import 'package:lopicode/ui/chrome.dart';
 import 'package:lopicode/ui/files_tab.dart';
 import 'package:lopicode/ui/preview_tab.dart';
 import 'package:lopicode/ui/project_list_screen.dart';
@@ -119,6 +123,15 @@ class _ProjectShellState extends State<ProjectShell> {
     final session = _session!;
     Widget lazy(ShellDest d, Widget Function() build) => _visited.contains(d) ? build() : const SizedBox.shrink();
     Widget page(ShellDest d, Widget body) => Scaffold(appBar: ShellAppBar(title: d.label), body: body);
+    Widget build1(ShellDest d) => switch (d) {
+      ShellDest.chat => ChatScreen(session: session),
+      ShellDest.files => page(d, FilesTab(session: session)),
+      ShellDest.terminal => page(d, TerminalTab(session: session)),
+      ShellDest.builder => BuilderScreen(key: ValueKey(_builderEpoch), session: session),
+      ShellDest.apk => BuildScreen(session: session),
+      ShellDest.preview => page(d, PreviewTab(session: session, active: _dest == ShellDest.preview)),
+      ShellDest.runtime => RuntimeScreen(projectDir: session.project.dir),
+    };
     return ShellScope(
       openDrawer: () => _scaffoldKey.currentState?.openDrawer(),
       go: _go,
@@ -149,17 +162,20 @@ class _ProjectShellState extends State<ProjectShell> {
           onProjects: _openProjects,
           onSettings: _openSettings,
         ),
-        body: IndexedStack(
-          index: _dest.index,
-          children: [
-            lazy(ShellDest.chat, () => ChatScreen(session: session)),
-            lazy(ShellDest.files, () => page(ShellDest.files, FilesTab(session: session))),
-            lazy(ShellDest.terminal, () => page(ShellDest.terminal, TerminalTab(session: session))),
-            lazy(ShellDest.preview, () => page(ShellDest.preview, PreviewTab(session: session, active: _dest == ShellDest.preview))),
-            lazy(ShellDest.builder, () => BuilderScreen(key: ValueKey(_builderEpoch), session: session)),
-            lazy(ShellDest.apk, () => BuildScreen(session: session)),
-            lazy(ShellDest.runtime, () => RuntimeScreen(projectDir: session.project.dir)),
-          ],
+        bottomNavigationBar: IconBottomNav(
+          items: shellNavItems(),
+          current: _dest.inBottomNav ? _dest.index : -1,
+          onTap: (i) => _go(ShellDest.bottom[i]),
+        ),
+        body: PopScope(
+          canPop: _dest == ShellDest.chat,
+          onPopInvokedWithResult: (didPop, _) {
+            if (!didPop) _go(ShellDest.chat);
+          },
+          child: IndexedStack(
+            index: _dest.index,
+            children: [for (final d in ShellDest.values) lazy(d, () => build1(d))],
+          ),
         ),
       ),
     );

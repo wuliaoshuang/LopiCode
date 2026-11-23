@@ -13,6 +13,7 @@ import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/core/stores.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/widgets.dart';
+import 'package:lopicode/ui/chrome.dart';
 import 'package:material_ui/material_ui.dart';
 
 // ── 个性化 ───────────────────────────────────────────
@@ -64,9 +65,9 @@ class _PersonalizeScreenState extends State<PersonalizeScreen> {
     final t = Theme.of(context).textTheme;
     final defaultId = app.presets.defaultId;
     return Scaffold(
-      appBar: AppBar(title: const Text('个性化')),
-      body: ListView(
-        padding: const EdgeInsets.only(bottom: Space.x8),
+      backgroundColor: context.colors.canvas,
+      appBar: PageBar(background: context.colors.canvas, title: const Text('个性化')),
+      body: SectionedList(
         children: [
           const SectionLabel('个人偏好'),
           Padding(
@@ -170,9 +171,10 @@ class _PresetEditScreenState extends State<PresetEditScreen> {
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
     return Scaffold(
-      appBar: AppBar(title: Text(widget.preset == null ? '新建预设' : (_readOnly ? '标准模式' : '编辑预设'))),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(Space.x4, Space.x2, Space.x4, Space.x8),
+      backgroundColor: context.colors.canvas,
+      appBar: PageBar(background: context.colors.canvas, title: Text(widget.preset == null ? '新建预设' : (_readOnly ? '标准模式' : '编辑预设'))),
+      body: SectionedList(
+        inner: const EdgeInsets.all(Space.x4),
         children: [
           if (_readOnly)
             const InfoBanner('内置的“标准模式”带全部工具，不能改。想改就回上一页“复制一份”再改。', margin: EdgeInsets.only(bottom: Space.x3)),
@@ -237,9 +239,9 @@ class _SubagentSettingsScreenState extends State<SubagentSettingsScreen> {
         if (m is String) m,
     };
     return Scaffold(
-      appBar: AppBar(title: const Text('子代理与团队')),
-      body: ListView(
-        padding: const EdgeInsets.only(bottom: Space.x8),
+      backgroundColor: context.colors.canvas,
+      appBar: PageBar(background: context.colors.canvas, title: const Text('子代理与团队')),
+      body: SectionedList(
         children: [
           const SectionLabel('子代理'),
           SwitchListTile(
@@ -416,9 +418,10 @@ class _WebSearchSettingsScreenState extends State<WebSearchSettingsScreen> {
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
     return Scaffold(
-      appBar: AppBar(title: const Text('联网搜索')),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(Space.x4, Space.x2, Space.x4, Space.x8),
+      backgroundColor: context.colors.canvas,
+      appBar: PageBar(background: context.colors.canvas, title: const Text('联网搜索')),
+      body: SectionedList(
+        inner: const EdgeInsets.all(Space.x4),
         children: [
           Text('填好之后，Agent 多一个“联网搜索”工具，需要查资料时会自己用。没填的时候 Agent 没有这个工具。', style: t.bodySmall),
           const SizedBox(height: Space.x3),
@@ -512,7 +515,8 @@ class _SkillsScreenState extends State<SkillsScreen> {
       },
     );
     return Scaffold(
-      appBar: AppBar(title: const Text('技能')),
+      backgroundColor: context.colors.canvas,
+      appBar: PageBar(background: context.colors.canvas, title: const Text('技能')),
       floatingActionButton: skills == null || skills.isEmpty
           ? null
           : FloatingActionButton.extended(onPressed: _create, elevation: 2, shape: const StadiumBorder(), icon: const Icon(Icons.add), label: const Text('新建技能')),
@@ -525,8 +529,8 @@ class _SkillsScreenState extends State<SkillsScreen> {
               message: '技能是一份写给 Agent 的做事说明书（SKILL.md）。\nAgent 平时只看到名字和描述，用得上时再读全文。',
               action: FilledButton.icon(onPressed: _create, icon: const Icon(Icons.add), label: const Text('新建技能')),
             )
-          : ListView(
-              padding: const EdgeInsets.only(bottom: 96),
+          : SectionedList(
+              bottom: 96,
               children: [
                 Padding(
                   padding: const EdgeInsets.fromLTRB(Space.x4, Space.x3, Space.x4, 0),
@@ -590,9 +594,10 @@ class _SkillEditScreenState extends State<SkillEditScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('新建技能')),
-    body: ListView(
-      padding: const EdgeInsets.fromLTRB(Space.x4, Space.x2, Space.x4, Space.x8),
+    backgroundColor: context.colors.canvas,
+      appBar: PageBar(background: context.colors.canvas, title: const Text('新建技能')),
+    body: SectionedList(
+      inner: const EdgeInsets.all(Space.x4),
       children: [
         TextField(key: const Key('skill-name'), controller: _name, decoration: const InputDecoration(labelText: '技能名', hintText: '短一点，不带空格，如 写周报')),
         const SizedBox(height: Space.x3),
@@ -639,7 +644,8 @@ class SkillViewScreen extends StatelessWidget {
     final c = context.colors;
     final t = Theme.of(context).textTheme;
     return Scaffold(
-      appBar: AppBar(
+      backgroundColor: context.colors.canvas,
+      appBar: PageBar(background: context.colors.canvas, 
         title: Text(skill.name),
         actions: [
           PopupMenuButton<String>(
