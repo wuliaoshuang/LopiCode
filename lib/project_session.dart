@@ -22,13 +22,17 @@ import 'package:lopicode/core/stores.dart';
 import 'package:lopicode/preview/preview_server.dart';
 import 'package:lopicode/runtime/linux_command_runner.dart';
 import 'package:lopicode/runtime/linux_shell_backend.dart';
+import 'package:lopicode/session/conversation.dart';
 import 'package:lopicode/ssh/ssh_config.dart';
 import 'package:lopicode/ssh/ssh_connector.dart';
+import 'package:lopicode/state/workspace_conversations.dart';
 import 'package:lopicode/state/workspace_files.dart';
 import 'package:lopicode/state/workspace_preview.dart';
 import 'package:lopicode/state/workspace_terminals.dart';
 import 'package:lopicode/terminal/terminal_session.dart';
 import 'package:path/path.dart' as p;
+
+export 'package:lopicode/session/conversation.dart';
 
 /// 对话里显示的一项。
 sealed class ChatItem {}
@@ -84,70 +88,6 @@ class NoticeItem extends ChatItem {
   final bool isError;
 }
 
-/// 工作区里的一段对话。子代理的对话也是一段对话，只是有上级（[parentId]）。
-class Conversation {
-  Conversation(
-    this.id,
-    this.title,
-    this.updatedAt, {
-    this.parentId,
-    this.depth = 0,
-    this.agentName = '',
-    this.selection,
-    this.permission,
-    this.planMode = false,
-    this.presetId,
-    this.auto = false,
-    UsageTotals? usage,
-    this.lastInput,
-  }) : usage = usage ?? UsageTotals();
-  final String id;
-  String title;
-  DateTime updatedAt;
-
-  /// 上级对话；主对话为 null。
-  final String? parentId;
-
-  /// 委派层数：主对话 0，它派出的子代理 1……
-  final int depth;
-
-  /// 子代理的名字。
-  final String agentName;
-
-  /// 这段对话选的模型；null 表示用新对话默认。
-  ModelSelection? selection;
-
-  /// 权限档位；null 表示用新对话默认。
-  String? permission;
-  bool planMode;
-  String? presetId;
-
-  /// 是不是自动化任务跑出来的。
-  final bool auto;
-
-  /// 这段对话累计的用量（含它派出去的子代理）。压缩对话不会清掉它。
-  final UsageTotals usage;
-
-  /// 最近一次请求的输入 token 数（接口给的），用来算上下文占用；还没有是 null。
-  int? lastInput;
-
-  Map<String, dynamic> toJson() => {
-    'id': id,
-    'title': title,
-    'updatedAt': updatedAt.toIso8601String(),
-    'parent': parentId,
-    'depth': depth,
-    'agent': agentName,
-    'model': selection?.toJson(),
-    'permission': permission,
-    'plan': planMode,
-    'preset': presetId,
-    'auto': auto,
-    if (usage.requests > 0) 'usage': usage.toJson(),
-    'lastInput': ?lastInput,
-  };
-}
-
 /// 等用户点“允许 / 拒绝”的确认卡。
 class PendingApproval {
   PendingApproval(this.request, {this.conversationId = '', this.agentName = ''});
@@ -184,8 +124,13 @@ enum SendMode { queue, steer, interrupt }
 
 /// 一段对话的运行状态。主对话、子代理、自动化任务各有一份，互不干扰。
 class ConvRun {
-  ConvRun(this.conv);
-  final Conversation conv;
+  ConvRun(Conversation conv, this._find) : convId = conv.id, _last = conv;
+  final String convId;
+  final Conversation? Function(String id) _find;
+  Conversation _last;
+
+  /// 这段对话在目录里的最新一份（被删掉以后是删之前的那份）。
+  Conversation get conv => _last = _find(convId) ?? _last;
   final List<ChatItem> items = [];
   List<Map<String, dynamic>> messages = [];
   bool busy = false;
@@ -284,7 +229,7 @@ class ProjectSession extends ChangeNotifier {
   /// 每段对话的运行状态（用到才建）。
   final Map<String, ConvRun> _runs = {};
 
-  ConvRun _runOf(Conversation conv) => _runs.putIfAbsent(conv.id, () => ConvRun(conv));
+  ConvRun _runOf(Conversation conv) => _runs.putIfAbsent(conv.id, () => ConvRun(conv, conversationById));
   ConvRun get _active => _runOf(activeConversation);
 
   /// 当前对话显示的条目。
@@ -298,58 +243,46 @@ class ProjectSession extends ChangeNotifier {
   /// 请求失败、用户消息被撤回时，把文字交还给输入框。
   String? restoredDraft;
 
-  // 对话：一个工作区可以有多段对话。索引在 chats.json，每段对话的消息各存一个文件
-  // （第一段沿用 chat.json，其余是 chat-<id>.json）。子代理的对话也在里面，带着上级的 id。
-  final List<Conversation> conversations = [];
-  String activeConversationId = 'main';
-  final Conversation _fallbackConv = Conversation('main', '', DateTime.now());
-
-  Conversation get activeConversation => conversations.firstWhere((c) => c.id == activeConversationId, orElse: () => _fallbackConv);
-
-  Conversation? conversationById(String? id) => conversations.where((c) => c.id == id).firstOrNull;
+  // 对话：一个工作区可以有多段对话。目录（有哪些、当前哪段、项目规则）在 [conversationsProvider]；
+  // 每段对话的消息各存一个文件（第一段沿用 chat.json，其余是 chat-<id>.json）。子代理的对话也在目录里，带着上级的 id。
+  // 应用已经退出时拿不到（null）：这时候什么都不读、不写
+  late final ConversationsNotifier? _convs = app.disposed ? null : app.container.read(conversationsProvider(this).notifier);
+  final ConversationsState _noDir = ConversationsState();
+  ConversationsState get _dir => _convs?.current ?? _noDir;
+  List<Conversation> get conversations => _dir.all;
+  String get activeConversationId => _dir.activeId;
+  Conversation get activeConversation => _dir.active;
+  Conversation? conversationById(String? id) => _dir.byId(id);
 
   /// 侧边栏里列的对话：不含子代理的。
-  List<Conversation> get topConversations => conversations.where((c) => c.parentId == null).toList();
+  List<Conversation> get topConversations => _dir.top;
 
   /// 顶栏标题：还没说话的对话叫“新对话”。
   String get conversationTitle => activeConversation.title.isEmpty ? '新对话' : activeConversation.title;
 
   File _reserved(String name) => File(guard.resolve('${PathGuard.reservedDir}/$name', allowReserved: true));
-  File get _indexFile => _reserved('chats.json');
   File _chatFileOf(String id) => _reserved(id == 'main' ? 'chat.json' : 'chat-$id.json');
-  File get _rulesFile => _reserved('rules.md');
 
   /// 项目规则：她写给 Agent 的长期要求，拼在系统提示词后面。
-  String projectRules = '';
+  String get projectRules => _dir.projectRules;
 
   Future<void> setProjectRules(String text) async {
-    projectRules = text.trim();
-    try {
-      await _rulesFile.parent.create(recursive: true);
-      await _rulesFile.writeAsString(projectRules);
-    } on FileSystemException {
-      // 存不了：这次打开期间仍然生效
-    }
+    await _convs?.setProjectRules(text);
     notifyListeners();
   }
 
+  /// 目录里这段对话的最新一份（闭包里拿着的可能是旧的）。
+  Conversation _live(Conversation c) => conversationById(c.id) ?? c;
+
   // ── 模型 / 权限 / 计划模式 / 预设（每段对话各自一份）──────────
   /// 这段对话的“根”：子代理的权限、计划模式、预设都跟着最上面那段主对话走。
-  Conversation rootOf(Conversation conv) {
-    var c = conv;
-    for (var i = 0; i < 8 && c.parentId != null; i++) {
-      final parent = conversationById(c.parentId);
-      if (parent == null) break;
-      c = parent;
-    }
-    return c;
-  }
+  Conversation rootOf(Conversation conv) => _dir.rootOf(conv);
 
   ResolvedModel? modelOf(Conversation conv) => app.models.resolve(conv.selection) ?? app.models.defaultForNewChat();
   ResolvedModel? get currentModel => modelOf(activeConversation);
 
   Future<void> setModel(ModelSelection selection) async {
-    activeConversation.selection = selection;
+    _convs?.update(activeConversationId, (c) => c.copyWith(selection: selection));
     await app.models.setLastSelection(selection);
     await _saveIndex();
     notifyListeners();
@@ -360,7 +293,7 @@ class ProjectSession extends ChangeNotifier {
   PermissionLevel get permission => permissionOf(activeConversation);
 
   Future<void> setPermission(PermissionLevel level) async {
-    activeConversation.permission = level.id;
+    _convs?.update(activeConversationId, (c) => c.copyWith(permission: level.id));
     await _saveIndex();
     notifyListeners();
   }
@@ -368,7 +301,7 @@ class ProjectSession extends ChangeNotifier {
   bool get planMode => activeConversation.planMode;
 
   Future<void> setPlanMode(bool on) async {
-    activeConversation.planMode = on;
+    _convs?.update(activeConversationId, (c) => c.copyWith(planMode: on));
     await _saveIndex();
     notifyListeners();
   }
@@ -377,7 +310,7 @@ class ProjectSession extends ChangeNotifier {
   AgentPreset get preset => presetOf(activeConversation);
 
   Future<void> setPreset(String id) async {
-    activeConversation.presetId = id;
+    _convs?.update(activeConversationId, (c) => c.copyWith(presetId: id));
     await _saveIndex();
     notifyListeners();
   }
@@ -416,47 +349,7 @@ class ProjectSession extends ChangeNotifier {
   Future<void> _loadChat() async {
     if (_chatLoaded) return;
     await app.ready();
-    try {
-      if (await _rulesFile.exists()) projectRules = (await _rulesFile.readAsString()).trim();
-    } on FileSystemException {
-      projectRules = '';
-    }
-    conversations.clear();
-    try {
-      {
-        // 目录文件坏了：备份后当只有一段“主对话”（各段对话的记录文件还在盘上）
-        final decoded = await readJsonFile(_indexFile, accept: (j) => j is List, label: '对话目录');
-        if (decoded is List) {
-          for (final m in decoded) {
-            if (m is! Map) continue;
-            final id = '${m['id'] ?? ''}';
-            if (!RegExp(r'^[a-z0-9]{1,24}$').hasMatch(id)) continue;
-            conversations.add(
-              Conversation(
-                id,
-                '${m['title'] ?? ''}',
-                DateTime.tryParse('${m['updatedAt']}') ?? DateTime.fromMillisecondsSinceEpoch(0),
-                parentId: m['parent'] is String ? m['parent'] as String : null,
-                depth: m['depth'] is int ? m['depth'] as int : 0,
-                agentName: '${m['agent'] ?? ''}',
-                selection: ModelSelection.fromJson(m['model']),
-                permission: m['permission'] is String ? m['permission'] as String : null,
-                planMode: m['plan'] == true,
-                presetId: m['preset'] is String ? m['preset'] as String : null,
-                auto: m['auto'] == true,
-                usage: UsageTotals.fromJson(m['usage']),
-                lastInput: m['lastInput'] is int ? m['lastInput'] as int : null,
-              ),
-            );
-          }
-        }
-      }
-    } catch (_) {
-      // 某一条的形状不对（老版本）：读到哪算哪
-    }
-    if (topConversations.isEmpty) conversations.add(Conversation('main', '', DateTime.now()));
-    conversations.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
-    activeConversationId = topConversations.first.id;
+    await _convs?.load();
     await _ensureLoaded(_active);
     // 老版本只有一个 chat.json、没有标题：从第一句话补一个。
     if (activeConversation.title.isEmpty) _retitle();
@@ -467,7 +360,7 @@ class ProjectSession extends ChangeNotifier {
   void _retitle() {
     final first = _messages.where((m) => m['role'] == 'user').firstOrNull;
     if (first == null) return;
-    activeConversation.title = _titleFrom('${first['content'] ?? ''}');
+    _convs?.update(activeConversationId, (c) => c.copyWith(title: _titleFrom('${first['content'] ?? ''}')));
   }
 
   static String _titleFrom(String text) {
@@ -475,13 +368,9 @@ class ProjectSession extends ChangeNotifier {
     return line.length > 18 ? '${line.substring(0, 18)}…' : line;
   }
 
-  Future<void> _saveIndex() async {
-    try {
-      await writeJsonAtomic(_indexFile, [for (final c in conversations) c.toJson()]);
-    } on FileSystemException {
-      // 存不了就算了
-    }
-  }
+  Future<void> _saveIndex() async => _convs?.save();
+
+  String _newConvId() => _convs?.newId() ?? DateTime.now().microsecondsSinceEpoch.toRadixString(36);
 
   Future<void> _saveRun(ConvRun run) async {
     try {
@@ -493,22 +382,13 @@ class ProjectSession extends ChangeNotifier {
     await _saveIndex();
   }
 
-  String _newConvId() {
-    var id = DateTime.now().microsecondsSinceEpoch.toRadixString(36);
-    while (conversations.any((c) => c.id == id)) {
-      id = '${id}x';
-    }
-    return id;
-  }
-
   /// 开一段新对话。当前这段还是空的就直接留在这里，不堆空对话。
   Future<void> newConversation() async {
     if (agentBusy) return;
     await loadChat();
     if (_messages.isEmpty && chat.isEmpty) return;
     final conv = Conversation(_newConvId(), '', DateTime.now(), selection: app.models.defaultForNewChat()?.selection, presetId: app.presets.defaultId);
-    conversations.insert(0, conv);
-    activeConversationId = conv.id;
+    _convs?.add(conv, front: true, activate: true);
     _runOf(conv).loaded = true;
     queue.clear();
     await _saveIndex();
@@ -518,26 +398,14 @@ class ProjectSession extends ChangeNotifier {
   Future<void> selectConversation(String id) async {
     if (agentBusy || id == activeConversationId || !conversations.any((c) => c.id == id)) return;
     await loadChat();
-    activeConversationId = id;
+    _convs?.activate(id);
     queue.clear();
     await _ensureLoaded(_active);
     notifyListeners();
   }
 
   /// 子代理谱系：[rootId] 这段对话派出的全部子代理（含子代理再派出的），按派出顺序。
-  List<Conversation> descendantsOf(String rootId) {
-    final out = <Conversation>[];
-    void walk(String id) {
-      final kids = conversations.where((c) => c.parentId == id).toList()..sort((a, b) => a.updatedAt.compareTo(b.updatedAt));
-      for (final k in kids) {
-        out.add(k);
-        walk(k.id);
-      }
-    }
-
-    walk(rootId);
-    return out;
-  }
+  List<Conversation> descendantsOf(String rootId) => _dir.descendantsOf(rootId);
 
   /// 当前对话派出的子代理。
   List<Conversation> get subAgents => descendantsOf(activeConversationId);
@@ -569,9 +437,7 @@ class ProjectSession extends ChangeNotifier {
       _boards.remove(d);
       _autoAllow.remove(d);
     }
-    conversations.removeWhere((c) => doomed.contains(c.id));
-    if (topConversations.isEmpty) conversations.add(Conversation('main', '', DateTime.now()));
-    activeConversationId = topConversations.first.id;
+    _convs?.removeAll(doomed.toSet());
     queue.clear();
     await _ensureLoaded(_active);
     await _saveIndex();
@@ -711,6 +577,7 @@ class ProjectSession extends ChangeNotifier {
 
   // ── 系统提示词 ───────────────────────────────────────
   String _systemPromptFor(Conversation conv, Conversation root, List<Skill> skills, {String? taskNote}) {
+    root = _live(root);
     final parts = <String>[AgentRunner.defaultSystemPrompt];
     final presetPrompt = presetOf(root).prompt.trim();
     if (presetPrompt.isNotEmpty) parts.add('当前 Agent 预设的要求：\n$presetPrompt');
@@ -779,9 +646,10 @@ class ProjectSession extends ChangeNotifier {
       runner: commandRunnerFactory?.call() ?? LinuxCommandRunner(app.runtime, guestCwd: project.linuxPath, onOutput: (t) => terminals.firstOrNull?.append(t)),
       requestApproval: (r) => _requestApproval(run, r),
       autoApprove: () => _autoAllow.contains(root.id),
-      permission: () => permissionOf(root),
-      planMode: () => root.planMode,
-      allowedTools: presetOf(root).tools,
+      // 权限和计划模式每次都现查目录里的最新值：跑到一半改了档位、开了计划模式，下一步就生效
+      permission: () => permissionOf(_live(root)),
+      planMode: () => _live(root).planMode,
+      allowedTools: presetOf(_live(root)).tools,
       writeScope: writeScope,
       extras: extras,
     );
@@ -855,7 +723,7 @@ class ProjectSession extends ChangeNotifier {
     }
 
     final child = Conversation(_newConvId(), _titleFrom(task), DateTime.now(), parentId: parent.conv.id, depth: parent.conv.depth + 1, agentName: name, selection: selection);
-    conversations.add(child);
+    _convs?.add(child);
     final run = _runOf(child)
       ..loaded = true
       ..unattended = parent.unattended;
@@ -1002,7 +870,7 @@ class ProjectSession extends ChangeNotifier {
       presetId: app.presets.defaultId,
       auto: true,
     );
-    conversations.insert(0, conv);
+    _convs?.add(conv, front: true);
     final run = _runOf(conv)
       ..loaded = true
       ..unattended = true;
@@ -1025,7 +893,7 @@ class ProjectSession extends ChangeNotifier {
   }) async {
     run.busy = true;
     run.items.add(UserItem(text, images: [for (final i in images) _hostPathOfAttachment('${i['path']}')]));
-    run.conv.updatedAt = DateTime.now();
+    _convs?.update(run.convId, (c) => c.copyWith(updatedAt: DateTime.now()));
     notifyListeners();
 
     final resolved = modelOf(run.conv);
@@ -1086,7 +954,7 @@ class ProjectSession extends ChangeNotifier {
               ..ok = outcome.ok;
           case RequestFinished(:final usage, :final ms, :final firstMs, :final startedAt):
             turn.steps.add(RequestStep(RequestUsage(usage: usage, ms: ms, firstMs: firstMs, startedAt: startedAt, cost: usage == null ? null : price?.cost(usage))));
-            if (usage != null) run.conv.lastInput = usage.input;
+            if (usage != null) _convs?.update(run.convId, (c) => c.copyWith(lastInput: usage.input));
           case AgentNotice(:final text):
             run.items.add(NoticeItem(text));
             if (text.startsWith('已停止')) failed = true;
@@ -1116,6 +984,7 @@ class ProjectSession extends ChangeNotifier {
       _recordTurn(run, turn);
       await _saveRun(run);
       notifyListeners();
+      _releaseWhenIdle();
     }
     // 额度：对话结束后查一次余额（有节流）；到提醒线或到顶时说一声。
     if (resolved != null) {
@@ -1139,9 +1008,7 @@ class ProjectSession extends ChangeNotifier {
     final totals = turn.totals;
     if (totals.requests == 0) return; // 一次请求都没发出去（没配模型、被额度拦下）：不显示
     // 子代理的用量由上级那一轮统一算进主对话；这里只累计到它自己这段对话上。
-    run.conv.usage
-      ..add(totals)
-      ..turns += 1;
+    _convs?.update(run.convId, (c) => c.withTurn(totals));
     // 用户消息被撤回时（模型一个字没回），最后一条是上一轮的，别盖掉上一轮的记录。
     if (run.messages.isNotEmpty && !run.messages.last.containsKey('_usage')) {
       run.messages.last['_usage'] = turn.toJson();
@@ -1210,13 +1077,9 @@ class ProjectSession extends ChangeNotifier {
     }
     _stoppedByUser = false;
     restoredDraft = null;
+    // 第一句话当标题；没选过模型就用新对话默认；最近说过话的排最前
+    _convs?.update(run.convId, (c) => c.copyWith(title: c.title.isEmpty ? _titleFrom(text) : null, selection: c.selection ?? app.models.defaultForNewChat()?.selection), toFront: true);
     final conv = run.conv;
-    if (conv.title.isEmpty) conv.title = _titleFrom(text);
-    conv.selection ??= app.models.defaultForNewChat()?.selection;
-    // 最近说过话的排最前
-    conversations
-      ..remove(conv)
-      ..insert(0, conv);
     final skills = await app.skills.enabled(workspaceDir: project.dir);
     try {
       await _execute(run, text, root: conv, skills: skills, images: images);
@@ -1372,6 +1235,17 @@ class ProjectSession extends ChangeNotifier {
     return rel;
   }
 
+  /// 工作区关掉以后，等跑到一半的那几轮都收完尾（存好记录和目录）再把对话目录的状态放掉。
+  void _releaseWhenIdle() {
+    if (!_disposed || _released || _runs.values.any((r) => r.busy)) return;
+    _released = true;
+    if (!app.disposed) app.container.invalidate(conversationsProvider(this));
+  }
+
+  /// 关掉并且收完尾了：对话目录的状态已经放掉。
+  bool get released => _released;
+  bool _released = false;
+
   @override
   void dispose() {
     stopAgent();
@@ -1379,6 +1253,7 @@ class ProjectSession extends ChangeNotifier {
       r.runner?.cancel();
     }
     _disposed = true;
+    _releaseWhenIdle();
     if (!app.disposed) {
       app.container.invalidate(filesRevProvider(this));
       app.container.invalidate(terminalsProvider(this)); // 会话的进程在这里收掉

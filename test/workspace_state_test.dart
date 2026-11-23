@@ -1,10 +1,13 @@
-// 工作区一级的状态（lib/state/workspace_*.dart）：文件变动信号、终端列表、预览。
+// 工作区一级的状态（lib/state/workspace_*.dart）：文件变动信号、终端列表、预览、对话目录。
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lopicode/agent/model_config.dart';
+import 'package:lopicode/agent/usage.dart';
 import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/core/templates.dart';
 import 'package:lopicode/project_session.dart';
+import 'package:lopicode/state/workspace_conversations.dart';
 import 'package:lopicode/state/workspace_files.dart';
 import 'package:lopicode/state/workspace_preview.dart';
 import 'package:lopicode/state/workspace_terminals.dart';
@@ -180,6 +183,118 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 20));
       expect(halfServer.isRunning, isFalse);
       expect(box.read(previewProvider(half)).ready, isFalse);
+    });
+  });
+
+  group('对话目录', () {
+    ConversationsNotifier ctl() => env.services.container.read(conversationsProvider(session).notifier);
+    ConversationsState now() => env.services.container.read(conversationsProvider(session));
+
+    test('第一次读：盘上没有目录就补一段主对话；只读一次', () async {
+      expect(now().loaded, isFalse);
+      expect(now().active.id, 'main', reason: '没读出来之前有个顶替的空对话');
+      await Future.wait<void>([ctl().load(), ctl().load()]);
+      expect(now().loaded, isTrue);
+      expect(now().all.single.id, 'main');
+      expect(now().activeId, 'main');
+    });
+
+    test('没读出来之前不存盘：不会拿空目录盖掉盘上的', () async {
+      final c = ctl();
+      await c.load();
+      c.add(Conversation('abc', '第二段', DateTime(2026, 11, 23)), front: true, activate: true);
+      await c.save();
+      // 另开一个工作区对象（相当于重新打开）：还没读就存，盘上的两段都还在
+      final again = ProjectSession(env.services, project, headless: true);
+      addTearDown(again.dispose);
+      final c2 = env.services.container.read(conversationsProvider(again).notifier);
+      await c2.save();
+      await c2.load();
+      expect(c2.current.all.map((x) => x.id), containsAll(['main', 'abc']));
+    });
+
+    test('加、改、切、删：每次都换新列表，旧的那份不变；列表不能被外面直接改', () async {
+      final c = ctl();
+      await c.load();
+      final before = now();
+      c.add(Conversation('kid', '子代理', DateTime(2026, 11, 23), parentId: 'main', depth: 1, agentName: '前端'));
+      c.add(Conversation('two', '', DateTime(2026, 11, 23)), front: true, activate: true);
+      expect(before.all.length, 1, reason: '旧状态没被改');
+      expect(now().all.map((x) => x.id), ['two', 'main', 'kid']);
+      expect(now().activeId, 'two');
+      expect(now().top.map((x) => x.id), ['two', 'main']);
+      expect(now().rootOf(now().byId('kid')!).id, 'main');
+      expect(now().descendantsOf('main').single.id, 'kid');
+      expect(() => now().all.add(Conversation('x', '', DateTime.now())), throwsUnsupportedError);
+
+      final old = now().byId('main')!;
+      c.update('main', (x) => x.copyWith(title: '改了', planMode: true, permission: 'view'), toFront: true);
+      expect((old.title, old.planMode, old.permission), ('', false, null), reason: '旧对象没被改');
+      expect(now().all.first.id, 'main');
+      expect((now().byId('main')!.title, now().byId('main')!.planMode, now().byId('main')!.permission), ('改了', true, 'view'));
+      expect(c.update('nope', (x) => x.copyWith(title: '没有这段')), isNull);
+
+      c.activate('nope');
+      expect(now().activeId, 'two', reason: '没有的对话切不过去');
+      c.activate('main');
+      expect(now().activeId, 'main');
+
+      c.removeAll({'main', 'kid', 'two'});
+      expect(now().all.single.id, 'main', reason: '删光了补一段空的');
+      expect(now().all.single.title, '');
+      expect(now().activeId, 'main');
+    });
+
+    test('用量累计：换一份新的合计，轮数加一，旧的那份不变', () async {
+      final c = ctl();
+      await c.load();
+      final old = now().byId('main')!;
+      final turn = UsageTotals()
+        ..uncached = 10
+        ..output = 5
+        ..requests = 2;
+      c.update('main', (x) => x.withTurn(turn));
+      c.update('main', (x) => x.withTurn(turn));
+      final u = now().byId('main')!.usage;
+      expect((u.uncached, u.output, u.requests, u.turns), (20, 10, 4, 2));
+      expect(old.usage.requests, 0);
+    });
+
+    test('存盘再读：标题、模型、权限、计划模式、预设、用量都在', () async {
+      final c = ctl();
+      await c.load();
+      c.update(
+        'main',
+        (x) => x.copyWith(title: '标题', selection: const ModelSelection('ch', 'm'), permission: 'full', planMode: true, presetId: 'p1', lastInput: 123).withTurn(UsageTotals()..requests = 1),
+      );
+      await c.save();
+      await c.setProjectRules('  只用中文  ');
+      expect(now().projectRules, '只用中文');
+      final again = ProjectSession(env.services, project, headless: true);
+      addTearDown(again.dispose);
+      final c2 = env.services.container.read(conversationsProvider(again).notifier);
+      await c2.load();
+      final m = c2.current.byId('main')!;
+      expect((m.title, m.selection?.channelId, m.permission, m.planMode, m.presetId, m.lastInput, m.usage.turns), ('标题', 'ch', 'full', true, 'p1', 123, 1));
+      expect(c2.current.projectRules, '只用中文');
+    });
+
+    test('工作区关掉：读到一半不往状态里写；关掉后的改动不通知订阅的人', () async {
+      final closing = ProjectSession(env.services, project, headless: true);
+      final box = env.services.container;
+      final c = box.read(conversationsProvider(closing).notifier);
+      var n = 0;
+      box.listen(conversationsProvider(closing), (_, _) => n++);
+      final loading = c.load();
+      closing.dispose();
+      await loading;
+      expect(c.current.loaded, isFalse);
+      expect(closing.released, isTrue);
+      box.read(conversationsProvider(closing)); // 放掉时状态归零，订阅的人收到的是空目录
+      final n0 = n;
+      c.add(Conversation('late', '', DateTime.now()));
+      expect(box.read(conversationsProvider(closing)).all, isEmpty);
+      expect(n, n0);
     });
   });
 }
