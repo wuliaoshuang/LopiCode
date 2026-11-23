@@ -17,6 +17,11 @@ abstract class CommandRunner {
   String get description;
 }
 
+/// 需要比默认 60 秒更长时限的执行环境（例如 Ubuntu 里装依赖）实现它。
+abstract class HasCommandTimeout {
+  Duration get commandTimeout;
+}
+
 /// 本机 shell（Android 上是系统自带的 /system/bin/sh，没有编译器）。
 class LocalShellRunner implements CommandRunner {
   LocalShellRunner({this.onOutput});
@@ -38,32 +43,47 @@ class LocalShellRunner implements CommandRunner {
     Duration timeout = const Duration(seconds: 60),
   }) async {
     onOutput?.call('\r\n\x1b[2m[Agent] \$ $command\x1b[0m\r\n');
-    final Process process;
-    try {
-      process = await Process.start(shellPath, ['-c', command], workingDirectory: workingDirectory);
-    } on ProcessException catch (e) {
-      return CommandResult(exitCode: 127, output: '无法启动 shell：${e.message}');
-    }
-    final buffer = StringBuffer();
-    void collect(String chunk) {
-      if (buffer.length < 200000) buffer.write(chunk);
-      onOutput?.call(chunk.replaceAll('\n', '\r\n'));
-    }
+    return runAndCollect(
+      () => Process.start(shellPath, ['-c', command], workingDirectory: workingDirectory),
+      timeout: timeout,
+      onOutput: onOutput,
+      startError: '无法启动 shell',
+    );
+  }
+}
 
-    final out = process.stdout.transform(const Utf8Decoder(allowMalformed: true)).listen(collect);
-    final err = process.stderr.transform(const Utf8Decoder(allowMalformed: true)).listen(collect);
-    var timedOut = false;
-    final code = await process.exitCode.timeout(timeout, onTimeout: () {
+/// 启动一个进程，收集并回显它的输出，超时就结束它。
+Future<CommandResult> runAndCollect(
+  Future<Process> Function() start, {
+  required Duration timeout,
+  void Function(String text)? onOutput,
+  String startError = '无法启动',
+}) async {
+  final Process process;
+  try {
+    process = await start();
+  } on ProcessException catch (e) {
+    return CommandResult(exitCode: 127, output: '$startError：${e.message}');
+  }
+  final buffer = StringBuffer();
+  void collect(String chunk) {
+    if (buffer.length < 200000) buffer.write(chunk);
+    onOutput?.call(chunk.replaceAll('\n', '\r\n'));
+  }
+
+  final out = process.stdout.transform(const Utf8Decoder(allowMalformed: true)).listen(collect);
+  final err = process.stderr.transform(const Utf8Decoder(allowMalformed: true)).listen(collect);
+  var timedOut = false;
+  final code = await process.exitCode.timeout(
+    timeout,
+    onTimeout: () {
       timedOut = true;
       process.kill(ProcessSignal.sigkill);
       return -1;
-    });
-    await Future.wait([out.asFuture<void>(), err.asFuture<void>()]).timeout(
-      const Duration(seconds: 2),
-      onTimeout: () => const [],
-    );
-    await out.cancel();
-    await err.cancel();
-    return CommandResult(exitCode: code, output: buffer.toString(), timedOut: timedOut);
-  }
+    },
+  );
+  await Future.wait([out.asFuture<void>(), err.asFuture<void>()]).timeout(const Duration(seconds: 2), onTimeout: () => const []);
+  await out.cancel();
+  await err.cancel();
+  return CommandResult(exitCode: code, output: buffer.toString(), timedOut: timedOut);
 }

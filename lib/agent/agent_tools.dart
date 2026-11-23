@@ -174,12 +174,14 @@ class AgentToolbox {
     if (!await _approved(ApprovalRequest(tool: 'run_command', title: '执行命令', detail: command))) {
       return ToolOutcome('用户拒绝执行这条命令，命令没有运行。', ok: false, denied: true);
     }
-    final result = await runner.run(command, workingDirectory: guard.root, timeout: commandTimeout);
+    final Object r = runner;
+    final timeout = r is HasCommandTimeout ? r.commandTimeout : commandTimeout;
+    final result = await runner.run(command, workingDirectory: guard.root, timeout: timeout);
     var output = result.output;
     if (output.length > maxOutputChars) {
       output = '…（前面省略 ${output.length - maxOutputChars} 字符）\n${output.substring(output.length - maxOutputChars)}';
     }
-    final status = result.timedOut ? '超过 ${commandTimeout.inSeconds} 秒，已强制结束' : '退出码 ${result.exitCode}';
+    final status = result.timedOut ? '超过 ${timeout.inSeconds} 秒，已强制结束' : '退出码 ${result.exitCode}';
     return ToolOutcome(
       '$status\n${output.isEmpty ? '（没有输出）' : output}',
       ok: !result.timedOut && result.exitCode == 0,

@@ -4,6 +4,7 @@ import 'package:lopicode/agent/chat_client.dart';
 import 'package:lopicode/core/secure_secret_store.dart';
 import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/core/stores.dart';
+import 'package:lopicode/runtime/linux_runtime.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -15,11 +16,15 @@ class AppServices extends ChangeNotifier {
     required this.secrets,
     required this.projects,
     this.chatClientFactory,
-  });
+    LinuxRuntime? runtime,
+  }) : runtime = runtime ?? LinuxRuntime(settings: settings, baseDir: p.join(settings.file.parent.path, 'runtime'));
 
   final SettingsStore settings;
   final SecretStore secrets;
   final ProjectStore projects;
+
+  /// 本机 Linux 运行环境（PRoot + Ubuntu）。
+  final LinuxRuntime runtime;
 
   /// 测试钩子：替换真实的模型客户端。
   final ChatClient Function()? chatClientFactory;
@@ -30,10 +35,15 @@ class AppServices extends ChangeNotifier {
     await settings.load();
     final secrets = SecureSecretStore();
     await secrets.probe();
+    // 运行环境放在应用私有的 files 目录下（不进文档目录，免得被当成用户文件）。
+    final support = await getApplicationSupportDirectory();
+    final runtime = LinuxRuntime(settings: settings, baseDir: p.join(support.path, 'runtime'), host: ChannelRuntimeHost());
+    await runtime.init();
     return AppServices(
       settings: settings,
       secrets: secrets,
       projects: ProjectStore(p.join(docs.path, 'projects')),
+      runtime: runtime,
     );
   }
 

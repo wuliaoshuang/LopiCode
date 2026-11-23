@@ -5,12 +5,13 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:lopicode/agent/agent_runner.dart';
 import 'package:lopicode/agent/agent_tools.dart';
-import 'package:lopicode/agent/command_runner.dart';
 import 'package:lopicode/app_services.dart';
 import 'package:lopicode/core/path_guard.dart';
 import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/core/stores.dart';
 import 'package:lopicode/preview/preview_server.dart';
+import 'package:lopicode/runtime/linux_command_runner.dart';
+import 'package:lopicode/runtime/linux_shell_backend.dart';
 import 'package:lopicode/ssh/ssh_config.dart';
 import 'package:lopicode/ssh/ssh_connector.dart';
 import 'package:lopicode/ssh/ssh_shell_backend.dart';
@@ -90,7 +91,37 @@ class ProjectSession extends ChangeNotifier {
   /// 测试用：换掉伪终端的创建方式。
   PtySpawner? ptySpawner;
 
-  TerminalSession addTerminal() {
+  /// 测试用：换掉“带参数的伪终端”（进 Ubuntu 用的那种）。
+  PtyArgsSpawner? linuxPtySpawner;
+
+  /// 新开一个本机会话。Ubuntu 环境能用就进 Ubuntu，否则是手机自带的 sh。
+  /// [forceLocal] 为 true 时不管环境装没装，都开手机自带的 sh。
+  TerminalSession addTerminal({bool forceLocal = false}) {
+    final runtime = app.runtime;
+    if (!forceLocal && runtime.shouldUseLinux) {
+      final session = TerminalSession(
+        title: 'Ubuntu ${++_linuxCounter}',
+        backend: LinuxShellBackend(
+          runtime: runtime,
+          projectDir: project.dir,
+          spawner: linuxPtySpawner,
+          fallbackSpawner: ptySpawner,
+        ),
+      );
+      session.append(
+        '\x1b[2mLopiCode 终端 · Ubuntu 24.04\n'
+        '项目目录挂在 /workspace。装软件用 apt，常用运行时可以在侧边栏“运行环境”里一键安装。\x1b[0m\n\n',
+      );
+      return _addSession(session);
+    }
+    final String hint;
+    if (runtime.usable) {
+      hint = 'Ubuntu 环境连续启动失败，这里先用手机自带的 sh。到侧边栏“运行环境”看日志、重新尝试。';
+    } else if (runtime.installed) {
+      hint = 'Ubuntu 环境已下载，但这个安装包没带 PRoot 启动器，进不去。';
+    } else {
+      hint = '想跑 node、python：到侧边栏“运行环境”安装 Ubuntu 环境；或者点右上角 ＋ 连一台 SSH 主机。';
+    }
     final session = TerminalSession(
       title: '本机 ${++_terminalCounter}',
       backend: LocalShellBackend(project.dir, spawner: ptySpawner),
@@ -98,12 +129,13 @@ class ProjectSession extends ChangeNotifier {
     session.append(
       '\x1b[2mLopiCode 终端 · 项目目录\n'
       '手机自带的 sh：有 ls、cat、cp、mkdir 这类基础命令，没有 git、node、python 和编译器。\n'
-      '要完整工具链，点右上角 ＋ 连一台 SSH 主机。\x1b[0m\n\n',
+      '$hint\x1b[0m\n\n',
     );
     return _addSession(session);
   }
 
   int _sshCounter = 0;
+  int _linuxCounter = 0;
 
   /// 新开一个 SSH 会话。[onUnknownHost] 在第一次连这台主机时弹指纹确认。
   TerminalSession addSshTerminal(SshConfig config, {HostKeyPrompt? onUnknownHost}) {
@@ -389,7 +421,7 @@ class ProjectSession extends ChangeNotifier {
       systemPrompt: systemPrompt,
       toolbox: AgentToolbox(
         guard: guard,
-        runner: LocalShellRunner(onOutput: (t) => terminals.first.append(t)),
+        runner: LinuxCommandRunner(app.runtime, onOutput: (t) => terminals.first.append(t)),
         requestApproval: _requestApproval,
         autoApprove: () => autoApprove,
       ),

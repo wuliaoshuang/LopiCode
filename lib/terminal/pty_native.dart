@@ -20,6 +20,25 @@ class FlutterPtyProcess implements PtyProcess {
     Pty.start(executable, workingDirectory: workingDirectory, environment: environment, rows: rows, columns: columns),
   );
 
+  /// 带参数的版本（进 Ubuntu 环境时要给 PRoot 传一长串参数）。
+  static PtyProcess spawnWithArgs(
+    String executable,
+    List<String> arguments, {
+    required String workingDirectory,
+    required Map<String, String> environment,
+    required int rows,
+    required int columns,
+  }) => FlutterPtyProcess(
+    Pty.start(
+      executable,
+      arguments: arguments,
+      workingDirectory: workingDirectory,
+      environment: environment,
+      rows: rows,
+      columns: columns,
+    ),
+  );
+
   @override
   Stream<List<int>> get output => _pty.output;
 
