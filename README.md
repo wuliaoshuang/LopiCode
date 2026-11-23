@@ -20,7 +20,7 @@
 
 - 路径只能在项目目录内：`..`、绝对路径、符号链接逃逸一律拒绝（`lib/core/path_guard.dart`）。
 - 一次请求最多 12 轮工具调用，到了就停。
-- 执行命令、删除文件前弹确认卡，你点“允许这一次”才执行；可以在“工具 → 项目设置”里对单个项目开启自动批准。
+- 执行命令、删除文件前弹确认卡，你点“允许这一次”才执行；可以在对话页右上角 ⋮ 菜单（或输入卡片里的盾牌按钮）里对单个项目开启自动批准。
 - API Key 不写进普通设置、不进日志、不出现在报错里。
 
 ## 现状（2026-11-23）
@@ -64,7 +64,12 @@ lib/
   lowcode/                     页面模型、HTML 导出、Dart 导出、搭建器界面
   build/                       GitHub 客户端、打包流程、打包界面、工作流模板
   theme/                       设计 tokens（颜色、间距、圆角、字号）和主题
-  ui/                          项目列表、项目主界面的五个标签页、设置、通用组件
+  ui/                          界面。没有底部导航，所有去处都在侧边栏里：
+    home_gate.dart             打开应用先到哪：上次的项目，或项目列表
+    shell.dart                 统一顶栏（汉堡按钮 + 两行标题）和侧边栏
+    project_shell.dart         项目外壳：对话页为主屏，侧边栏去文件 / 终端 / 预览 / 低代码搭建 / APK 打包
+    chat_screen.dart           Agent 对话：大圆角输入卡片、确认卡、工具调用、项目规则、多段对话
+    files_tab / terminal_tab / preview_tab / project_list_screen / settings_screen / widgets
 test/                          单元测试、界面测试；support/ 里是假模型服务器等
 tool/gen_sample_export.dart    重新生成 Dart 导出的编译检查样本
 docs/api-notes.md              OpenAI / GitHub 接口核对笔记
