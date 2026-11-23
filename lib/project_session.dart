@@ -25,6 +25,7 @@ import 'package:lopicode/runtime/linux_shell_backend.dart';
 import 'package:lopicode/ssh/ssh_config.dart';
 import 'package:lopicode/ssh/ssh_connector.dart';
 import 'package:lopicode/ssh/ssh_shell_backend.dart';
+import 'package:lopicode/state/workspace_files.dart';
 import 'package:lopicode/terminal/terminal_session.dart';
 import 'package:path/path.dart' as p;
 
@@ -239,9 +240,11 @@ class ProjectSession extends ChangeNotifier {
   late final PreviewServer preview;
 
   // ── 文件改动 ──────────────────────────────────────────
-  /// 每次项目文件有变化就 +1；文件树、预览监听它来刷新。
-  final ValueNotifier<int> fileRevision = ValueNotifier(0);
-  void filesChanged() => fileRevision.value++;
+  /// 项目文件有变化：文件树、预览订阅 [filesRevProvider] 跟着刷新。
+  void filesChanged() {
+    if (_disposed || app.disposed) return;
+    app.container.read(filesRevProvider(this).notifier).bump();
+  }
 
   // ── 终端 ─────────────────────────────────────────────
   final List<TerminalSession> terminals = [];
@@ -324,6 +327,8 @@ class ProjectSession extends ChangeNotifier {
   }
 
   // ── Agent ────────────────────────────────────────────
+  /// 这个工作区已经关掉了：之后不许再往状态里写。
+  bool get disposed => _disposed;
   bool _disposed = false;
 
   @override
@@ -1433,7 +1438,7 @@ class ProjectSession extends ChangeNotifier {
       t.dispose();
     }
     unawaited(preview.stop());
-    fileRevision.dispose();
+    if (!app.disposed) app.container.invalidate(filesRevProvider(this));
     super.dispose();
   }
 }

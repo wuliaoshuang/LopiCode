@@ -6,10 +6,11 @@
 import 'dart:io';
 
 import 'package:flutter/scheduler.dart';
-
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lopicode/core/path_guard.dart';
 import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/project_session.dart';
+import 'package:lopicode/state/workspace_files.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/code_editor.dart';
 import 'package:lopicode/ui/code_highlight.dart';
@@ -39,7 +40,7 @@ class _OpenFile {
   String get name => path.split('/').last;
 }
 
-class FilesTab extends StatefulWidget {
+class FilesTab extends ConsumerStatefulWidget {
   const FilesTab({super.key, required this.session, this.initialOpen});
   final ProjectSession session;
 
@@ -47,10 +48,10 @@ class FilesTab extends StatefulWidget {
   final String? initialOpen;
 
   @override
-  State<FilesTab> createState() => _FilesTabState();
+  ConsumerState<FilesTab> createState() => _FilesTabState();
 }
 
-class _FilesTabState extends State<FilesTab> {
+class _FilesTabState extends ConsumerState<FilesTab> {
   List<String>? _files;
   final List<_OpenFile> _open = [];
   int _active = -1; // -1 = 显示文件列表
@@ -61,7 +62,8 @@ class _FilesTabState extends State<FilesTab> {
   @override
   void initState() {
     super.initState();
-    widget.session.fileRevision.addListener(_onFilesChanged);
+    // 别处改了项目文件就跟着刷新（页面销毁时自动取消订阅）
+    ref.listenManual(filesRevProvider(widget.session), (_, _) => _onFilesChanged());
     _reload().then((_) {
       final first = widget.initialOpen;
       if (first != null) _openFile(first);
@@ -70,7 +72,6 @@ class _FilesTabState extends State<FilesTab> {
 
   @override
   void dispose() {
-    widget.session.fileRevision.removeListener(_onFilesChanged);
     for (final f in _open) {
       f.dispose();
     }

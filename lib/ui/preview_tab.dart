@@ -5,14 +5,16 @@
 // - 保存文件、Agent 改文件、低代码改动后自动刷新。
 import 'dart:async';
 
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lopicode/preview/preview_server.dart';
 import 'package:lopicode/project_session.dart';
+import 'package:lopicode/state/workspace_files.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
-class PreviewTab extends StatefulWidget {
+class PreviewTab extends ConsumerStatefulWidget {
   const PreviewTab({super.key, required this.session, required this.active});
   final ProjectSession session;
   final bool active;
@@ -21,10 +23,10 @@ class PreviewTab extends StatefulWidget {
   static Widget Function(Uri uri)? debugViewBuilder;
 
   @override
-  State<PreviewTab> createState() => _PreviewTabState();
+  ConsumerState<PreviewTab> createState() => _PreviewTabState();
 }
 
-class _PreviewTabState extends State<PreviewTab> {
+class _PreviewTabState extends ConsumerState<PreviewTab> {
   WebViewController? _web;
   StreamSubscription<void>? _logSub;
   String? _error;
@@ -38,7 +40,8 @@ class _PreviewTabState extends State<PreviewTab> {
   @override
   void initState() {
     super.initState();
-    widget.session.fileRevision.addListener(_onFilesChanged);
+    // 别处改了项目文件就跟着刷新（页面销毁时自动取消订阅）
+    ref.listenManual(filesRevProvider(widget.session), (_, _) => _onFilesChanged());
     _start();
   }
 
@@ -50,7 +53,6 @@ class _PreviewTabState extends State<PreviewTab> {
 
   @override
   void dispose() {
-    widget.session.fileRevision.removeListener(_onFilesChanged);
     _logSub?.cancel();
     super.dispose();
   }
