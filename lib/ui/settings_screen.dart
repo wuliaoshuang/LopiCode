@@ -368,10 +368,9 @@ class _OverviewCardState extends ConsumerState<_OverviewCard> {
       children: [
         modelBlock(),
         const SizedBox(height: Space.x4),
-        RevBuilder(
-          rev: runtimeRevProvider,
-          builder: (context, _) {
-            final r = app.runtime;
+        Consumer(
+          builder: (context, ref, _) {
+            final r = ref.watch(runtimeProvider);
             final (String state, double? value) = switch (r.phase) {
               RuntimePhase.installed when !r.usable => ('已下载，进不去', 1.0),
               RuntimePhase.installed => ('已安装', 1.0),

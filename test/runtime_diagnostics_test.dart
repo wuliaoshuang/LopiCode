@@ -219,7 +219,7 @@ void main() {
     test('默认模式卡住、兼容模式能跑：自动记住兼容模式，报告里项目齐全', () async {
       final diag = make(hangs: (env, args) => !env.containsKey('PROOT_NO_SECCOMP'));
       var notified = 0;
-      diag.addListener(() => notified++);
+      diag.changeListeners.add(() => notified++);
       await diag.run(projectDir: tmp.path);
       expect(notified, greaterThan(5));
       expect(diag.running, isFalse);

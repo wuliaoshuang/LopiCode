@@ -179,16 +179,19 @@ void main() {
   });
 
   test('运行环境：它一通知，订阅的人就收到；容器销毁后不再监听', () {
-    final n = count(runtimeRevProvider);
-    final d = count(runtimeDiagnosticsRevProvider);
+    final n = count(runtimeProvider);
+    final d = count(runtimeDiagnosticsProvider);
     env.services.runtime.lastLaunchError = '上次没起来';
     env.services.runtime.recordLaunchSuccess(); // 清掉失败记录，会通知
     expect(n(), greaterThan(0));
     expect(d(), 0, reason: '诊断没动');
 
     final bare = ProviderContainer(overrides: [appServicesProvider.overrideWithValue(env.services)]);
-    bare.listen(runtimeRevProvider, (_, _) {});
+    final listeners = env.services.runtime.changeListeners.length;
+    bare.listen(runtimeProvider, (_, _) {});
+    expect(env.services.runtime.changeListeners.length, listeners + 1);
     bare.dispose();
+    expect(env.services.runtime.changeListeners.length, listeners);
     env.services.runtime.lastLaunchError = '又没起来';
     env.services.runtime.recordLaunchSuccess(); // 销毁后再通知：不报错
   });

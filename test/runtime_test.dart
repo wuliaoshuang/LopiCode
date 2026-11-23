@@ -309,7 +309,7 @@ void main() {
       await runtime.init();
       expect(runtime.phase, RuntimePhase.notInstalled);
       final phases = <RuntimePhase>{};
-      runtime.addListener(() => phases.add(runtime.phase));
+      runtime.changeListeners.add(() => phases.add(runtime.phase));
       await runtime.install();
       expect(runtime.installError, isNull);
       expect(runtime.phase, RuntimePhase.installed);

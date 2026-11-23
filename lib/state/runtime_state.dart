@@ -1,41 +1,65 @@
-// 运行环境（Ubuntu）的订阅入口。
+// 运行环境（Ubuntu）和一键诊断的状态（完整版：不可变快照 + Notifier）。
 //
-// 运行环境本身（下载、解压、启动、诊断）的主人还是 `LinuxRuntime` / `RuntimeDiagnostics`：它们管着
-// 进程和文件，不适合做成不可变状态。这里把它们的“变了”接进状态容器，界面统一用 `ref.watch` 订阅，
-// 不再自己 `addListener` / `ListenableBuilder`。
-import 'package:flutter/foundation.dart';
+// 下载、解压、起进程这些活由 `LinuxRuntime` / `RuntimeDiagnostics` 干（它们管着进程和文件，放在应用服务里，
+// 终端和 Agent 的命令也直接用它们）。它们每次有变化就说一声，这里拍一张不可变的快照给界面订阅；
+// 界面要做什么（安装、取消、卸载、装运行时、换下载源、开始诊断）就调 Notifier 的方法。
+import 'package:lopicode/runtime/linux_runtime.dart';
+import 'package:lopicode/runtime/runtime_diagnostics.dart';
+import 'package:lopicode/runtime/runtime_snapshot.dart';
+import 'package:lopicode/runtime/runtime_sources.dart';
 import 'package:lopicode/state/app_providers.dart';
 import 'package:riverpod/riverpod.dart';
 
-/// 把一个“会通知的对象”接成计数：它每通知一次加一；容器销毁时自动取消监听。
-abstract class ListenableRev extends Notifier<int> {
-  Listenable source();
+class RuntimeNotifier extends Notifier<RuntimeView> {
+  LinuxRuntime get _runtime => ref.read(appServicesProvider).runtime;
 
   @override
-  int build() {
-    final target = source();
+  RuntimeView build() {
+    final runtime = ref.watch(appServicesProvider).runtime;
     void onChange() {
-      if (ref.mounted) state = state + 1;
+      if (ref.mounted) state = runtime.view;
     }
 
-    target.addListener(onChange);
-    ref.onDispose(() => target.removeListener(onChange));
-    return 0;
+    runtime.changeListeners.add(onChange);
+    ref.onDispose(() => runtime.changeListeners.remove(onChange));
+    return runtime.view;
   }
+
+  /// 下载（能续传）、校验、解压、配置。失败原因进快照的 installError。
+  Future<void> install() => _runtime.install();
+  void cancelInstall() => _runtime.cancelInstall();
+  Future<void> uninstall() => _runtime.uninstall();
+
+  /// 一键装一个常用运行时；返回装没装成。
+  Future<bool> installPack(RuntimePack pack) => _runtime.installPack(pack);
+  void cancelPack() => _runtime.cancelPack();
+
+  Future<void> setRootfsSource(String id) => _runtime.setRootfsSource(id);
+  Future<void> setAptMirror(String id) => _runtime.setAptMirror(id);
+
+  /// 用户点“重新尝试进入 Ubuntu”：清掉失败计数。
+  void resetLaunchFailures() => _runtime.resetLaunchFailures();
 }
 
-/// 运行环境的状态变了（安装进度、装没装好、能不能用、连续失败次数…）。
-class RuntimeRev extends ListenableRev {
+final runtimeProvider = NotifierProvider<RuntimeNotifier, RuntimeView>(RuntimeNotifier.new);
+
+class RuntimeDiagnosticsNotifier extends Notifier<DiagnosticsView> {
+  RuntimeDiagnostics get _diagnostics => ref.read(appServicesProvider).runtime.diagnostics;
+
   @override
-  Listenable source() => ref.watch(appServicesProvider).runtime;
+  DiagnosticsView build() {
+    final diagnostics = ref.watch(appServicesProvider).runtime.diagnostics;
+    void onChange() {
+      if (ref.mounted) state = diagnostics.view;
+    }
+
+    diagnostics.changeListeners.add(onChange);
+    ref.onDispose(() => diagnostics.changeListeners.remove(onChange));
+    return diagnostics.view;
+  }
+
+  /// 跑一遍诊断（已经在跑就不重复跑）。
+  Future<void> run({String? projectDir}) => _diagnostics.run(projectDir: projectDir);
 }
 
-final runtimeRevProvider = NotifierProvider<RuntimeRev, int>(RuntimeRev.new);
-
-/// 一键诊断的状态变了（在跑 / 跑完 / 报告内容）。
-class RuntimeDiagnosticsRev extends ListenableRev {
-  @override
-  Listenable source() => ref.watch(appServicesProvider).runtime.diagnostics;
-}
-
-final runtimeDiagnosticsRevProvider = NotifierProvider<RuntimeDiagnosticsRev, int>(RuntimeDiagnosticsRev.new);
+final runtimeDiagnosticsProvider = NotifierProvider<RuntimeDiagnosticsNotifier, DiagnosticsView>(RuntimeDiagnosticsNotifier.new);

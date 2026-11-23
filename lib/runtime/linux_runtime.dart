@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:lopicode/core/safe_file.dart';
@@ -10,9 +9,12 @@ import 'package:lopicode/core/stores.dart';
 import 'package:lopicode/runtime/proot_command.dart';
 import 'package:lopicode/runtime/resumable_download.dart';
 import 'package:lopicode/runtime/runtime_diagnostics.dart';
+import 'package:lopicode/runtime/runtime_snapshot.dart';
 import 'package:lopicode/runtime/runtime_sources.dart';
 import 'package:lopicode/runtime/tar_extract.dart';
 import 'package:path/path.dart' as p;
+
+export 'package:lopicode/runtime/runtime_snapshot.dart' show RuntimePhase;
 
 /// 运行环境需要问系统的几件事。真机走平台通道，测试里换成假的。
 abstract class RuntimeHost {
@@ -77,10 +79,8 @@ class NoRuntimeHost implements RuntimeHost {
   Future<Map<String, String>> deviceInfo() async => const {};
 }
 
-enum RuntimePhase { notInstalled, downloading, verifying, extracting, installed }
-
 /// 本机 Linux 运行环境（PRoot + Ubuntu 24.04）的安装、状态和启动方式。
-class LinuxRuntime extends ChangeNotifier {
+class LinuxRuntime {
   LinuxRuntime({
     required this.settings,
     required this.baseDir,
@@ -98,6 +98,42 @@ class LinuxRuntime extends ChangeNotifier {
   final RootfsImage image;
   final MakeExecutable makeExecutable;
   final http.Client Function() _httpClient;
+
+  /// 状态变了（状态层据此换快照，见 lib/state/runtime_state.dart）。
+  final List<void Function()> changeListeners = [];
+
+  void _changed() {
+    for (final listener in List.of(changeListeners)) {
+      listener();
+    }
+  }
+
+  /// 现在的样子（不可变的快照）。
+  RuntimeView get view => RuntimeView(
+    phase: phase,
+    progressDone: progressDone,
+    progressTotal: progressTotal,
+    installError: installError,
+    prootBundled: prootBundled,
+    missingLauncherFiles: missingLauncherFiles,
+    freeSpace: freeSpace,
+    partialBytes: partialBytes,
+    imageSize: image.size,
+    rootfsSourceId: rootfsSource.id,
+    aptMirrorId: aptMirror.id,
+    packs: packs,
+    installedPacks: {
+      for (final pack in packs)
+        if (packInstalled(pack)) pack.id,
+    },
+    runningPack: runningPack,
+    packOutput: packOutput,
+    launchFailures: launchFailures,
+    lastLaunchError: lastLaunchError,
+    shouldUseLinux: shouldUseLinux,
+    compatMode: compatMode,
+    logLines: logLines,
+  );
 
   /// 连续启动失败到这个次数，就不再自动进 Ubuntu，退回本机 shell。
   static const int maxLaunchFailures = 2;
@@ -134,13 +170,13 @@ class LinuxRuntime extends ChangeNotifier {
 
   Future<void> setRootfsSource(String id) async {
     await settings.set(SettingKeys.runtimeRootfsSource, id);
-    notifyListeners();
+    _changed();
   }
 
   Future<void> setAptMirror(String id) async {
     await settings.set(SettingKeys.runtimeAptMirror, id);
     if (installed) await _writeAptSources();
-    notifyListeners();
+    _changed();
   }
 
   // ── 状态 ─────────────────────────────────────────────
@@ -158,7 +194,7 @@ class LinuxRuntime extends ChangeNotifier {
       phase = _marker.existsSync() && Directory(rootfsDir).existsSync() ? RuntimePhase.installed : RuntimePhase.notInstalled;
     }
     freeSpace = await host.freeBytes(Directory(baseDir).parent.path);
-    notifyListeners();
+    _changed();
   }
 
   /// 没下完的压缩包已经有多少字节（界面上显示“可以接着下”）。
@@ -197,7 +233,7 @@ class LinuxRuntime extends ChangeNotifier {
           // 进度回调很密，隔 64 KB 才刷新一次界面。
           if (received - lastNotified >= 65536 || received == total) {
             lastNotified = received;
-            notifyListeners();
+            _changed();
           }
         },
       );
@@ -215,7 +251,7 @@ class LinuxRuntime extends ChangeNotifier {
         onProgress: (consumed, total) {
           if (consumed - progressDone >= 262144 || consumed == total) {
             progressDone = consumed;
-            notifyListeners();
+            _changed();
           }
         },
       );
@@ -253,7 +289,7 @@ class LinuxRuntime extends ChangeNotifier {
     phase = next;
     progressDone = done;
     progressTotal = total;
-    notifyListeners();
+    _changed();
   }
 
   /// 删掉整个环境（包括里面装的 Node、Python 和下到一半的压缩包）。项目文件不在这里面，不受影响。
@@ -306,7 +342,7 @@ class LinuxRuntime extends ChangeNotifier {
     packOutput
       ..clear()
       ..add('开始安装 ${pack.title}…');
-    notifyListeners();
+    _changed();
     await acquireKeepAlive();
     var ok = false;
     try {
@@ -315,7 +351,7 @@ class LinuxRuntime extends ChangeNotifier {
       void collect(String line) {
         packOutput.add(line);
         if (packOutput.length > 400) packOutput.removeRange(0, packOutput.length - 400);
-        notifyListeners();
+        _changed();
       }
 
       const decoder = Utf8Decoder(allowMalformed: true);
@@ -335,7 +371,7 @@ class LinuxRuntime extends ChangeNotifier {
       _packProcess = null;
       runningPack = null;
       await releaseKeepAlive();
-      notifyListeners();
+      _changed();
     }
     return ok;
   }
@@ -363,19 +399,19 @@ class LinuxRuntime extends ChangeNotifier {
     if (settings.getBool(SettingKeys.runtimeCompat)) return;
     await settings.set(SettingKeys.runtimeCompat, true);
     _log('$why，以后默认用兼容模式');
-    notifyListeners();
+    _changed();
   }
 
   /// 进了 Ubuntu 但一直没有任何输出（卡住了）。不算进“连续失败”，只记日志。
   void recordStall(Duration waited) {
     _log('进入 Ubuntu 后 ${waited.inSeconds} 秒没有任何输出（${compatMode ? '兼容模式' : '默认模式'}）。可以到“运行环境”页点“一键诊断”');
-    notifyListeners();
+    _changed();
   }
 
   /// 给别处往运行环境日志里记一行。
   void log(String message) {
     _log(message);
-    notifyListeners();
+    _changed();
   }
 
   /// 让 [hostLibDir] 里的 `libtalloc.so.2` 指向安装包里现在的 talloc 库。
@@ -439,7 +475,7 @@ class LinuxRuntime extends ChangeNotifier {
     if (launchFailures != 0 || lastLaunchError != null) {
       launchFailures = 0;
       lastLaunchError = null;
-      notifyListeners();
+      _changed();
     }
   }
 
@@ -451,7 +487,7 @@ class LinuxRuntime extends ChangeNotifier {
     final trimmed = output.trim();
     if (trimmed.isNotEmpty) _log('PRoot 输出：\n$trimmed');
     if (launchFailures >= maxLaunchFailures) _log('连续 $launchFailures 次启动失败，新开的终端先退回本机 shell');
-    notifyListeners();
+    _changed();
   }
 
   /// 用户点“再试一次 Ubuntu”：清掉失败计数。
@@ -459,7 +495,7 @@ class LinuxRuntime extends ChangeNotifier {
     launchFailures = 0;
     lastLaunchError = null;
     _log('已重置启动失败计数');
-    notifyListeners();
+    _changed();
   }
 
   // ── 一键诊断 ─────────────────────────────────────────

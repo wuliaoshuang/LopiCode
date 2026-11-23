@@ -2,11 +2,11 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:lopicode/core/stores.dart';
 import 'package:lopicode/runtime/linux_runtime.dart';
 import 'package:lopicode/runtime/linux_shell_backend.dart';
 import 'package:lopicode/runtime/proot_command.dart';
+import 'package:lopicode/runtime/runtime_snapshot.dart';
 import 'package:lopicode/terminal/pty_native.dart';
 import 'package:lopicode/terminal/terminal_session.dart';
 import 'package:path/path.dart' as p;
@@ -69,7 +69,7 @@ Future<DiagRun> runDiagProcess(String executable, List<String> arguments, {Map<S
 /// “一键诊断”：把“进不去 Ubuntu / 终端没反应”的可能原因挨个实测一遍，结果可以整段复制。
 ///
 /// 报告里只有路径、命令输出、手机型号和系统版本，不读取也不输出任何密钥。
-class RuntimeDiagnostics extends ChangeNotifier {
+class RuntimeDiagnostics {
   RuntimeDiagnostics(
     this.runtime, {
     this.runProcess = runDiagProcess,
@@ -90,6 +90,19 @@ class RuntimeDiagnostics extends ChangeNotifier {
 
   /// 伪终端自检用的 shell；默认是手机自带的 sh。
   final String? localShell;
+
+  /// 状态变了（状态层据此换快照）。
+  final List<void Function()> changeListeners = [];
+
+  void _changed() {
+    for (final listener in List.of(changeListeners)) {
+      listener();
+    }
+  }
+
+  /// 现在的样子（不可变的快照）。
+  DiagnosticsView get view =>
+      DiagnosticsView(running: running, progress: progress, stepCount: steps.length, conclusions: conclusions, hasReport: hasReport, report: hasReport ? report : '', finishedAt: finishedAt);
 
   bool running = false;
   String progress = '';
@@ -130,7 +143,7 @@ class RuntimeDiagnostics extends ChangeNotifier {
     final step = DiagStep(title);
     steps.add(step);
     progress = title;
-    notifyListeners();
+    _changed();
     return step;
   }
 
@@ -198,7 +211,7 @@ class RuntimeDiagnostics extends ChangeNotifier {
     steps.clear();
     conclusions.clear();
     finishedAt = null;
-    notifyListeners();
+    _changed();
     try {
       await _run(projectDir);
     } catch (e) {
@@ -208,7 +221,7 @@ class RuntimeDiagnostics extends ChangeNotifier {
       progress = '';
       finishedAt = DateTime.now();
       runtime.log('一键诊断完成：${conclusions.isEmpty ? '没有结论' : conclusions.join('；')}');
-      notifyListeners();
+      _changed();
     }
   }
 

@@ -1,37 +1,38 @@
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lopicode/runtime/linux_runtime.dart';
+import 'package:lopicode/runtime/runtime_snapshot.dart';
 import 'package:lopicode/runtime/runtime_sources.dart';
 import 'package:lopicode/state/runtime_state.dart';
 import 'package:lopicode/theme/tokens.dart';
-import 'package:lopicode/ui/app_ref.dart';
 import 'package:lopicode/ui/shell.dart';
 import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// “运行环境”页：安装 / 卸载 Ubuntu 环境、选下载源、一键装常用运行时、看启动日志。
-class RuntimeScreen extends StatelessWidget {
+class RuntimeScreen extends ConsumerWidget {
   const RuntimeScreen({super.key, this.projectDir});
 
   /// 当前打开的项目目录；诊断时顺便检查它在 Ubuntu 里看不看得见。
   final String? projectDir;
 
   @override
-  Widget build(BuildContext context) {
-    final runtime = appOf(context).runtime;
+  Widget build(BuildContext context, WidgetRef ref) {
+    final runtime = ref.watch(runtimeProvider);
+    final ctl = ref.read(runtimeProvider.notifier);
     return Scaffold(
       appBar: const ShellAppBar(title: '运行环境'),
-      body: RevBuilder(
-        rev: runtimeRevProvider,
-        builder: (context, _) => ListView(
+      body: Builder(
+        builder: (context) => ListView(
           padding: const EdgeInsets.only(bottom: Space.x12),
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(Space.x4, Space.x4, Space.x4, 0),
-              child: _StatusCard(runtime: runtime),
+              child: _StatusCard(runtime: runtime, ctl: ctl),
             ),
             const SectionLabel('下载源'),
-            _MirrorRow(keyName: 'rootfs-source', label: '系统包', options: rootfsSources, value: runtime.rootfsSource.id, enabled: !runtime.busy, onChanged: runtime.setRootfsSource),
-            _MirrorRow(keyName: 'apt-mirror', label: '装软件（apt）', options: aptMirrors, value: runtime.aptMirror.id, enabled: !runtime.busy, onChanged: runtime.setAptMirror),
+            _MirrorRow(keyName: 'rootfs-source', label: '系统包', options: rootfsSources, value: runtime.rootfsSourceId, enabled: !runtime.busy, onChanged: ctl.setRootfsSource),
+            _MirrorRow(keyName: 'apt-mirror', label: '装软件（apt）', options: aptMirrors, value: runtime.aptMirrorId, enabled: !runtime.busy, onChanged: ctl.setAptMirror),
             if (runtime.installed) ...[
               const SectionLabel('常用运行时'),
               if (!runtime.usable)
@@ -40,7 +41,7 @@ class RuntimeScreen extends StatelessWidget {
                   child: InfoBanner('环境进不去的时候装不了运行时。', tone: BannerTone.warning),
                 )
               else ...[
-                for (final pack in runtime.packs) _PackRow(runtime: runtime, pack: pack),
+                for (final pack in runtime.packs) _PackRow(runtime: runtime, ctl: ctl, pack: pack),
                 if (runtime.packOutput.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(Space.x4, Space.x3, Space.x4, 0),
@@ -52,7 +53,7 @@ class RuntimeScreen extends StatelessWidget {
               const SectionLabel('一键诊断'),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: Space.x4),
-                child: _DiagnosticsPanel(runtime: runtime, projectDir: projectDir),
+                child: _DiagnosticsPanel(runtimeBusy: runtime.busy, projectDir: projectDir),
               ),
             ],
             const SectionLabel('日志'),
@@ -74,7 +75,7 @@ class RuntimeScreen extends StatelessWidget {
                     OutlinedButton(
                       key: const Key('runtime-uninstall'),
                       style: OutlinedButton.styleFrom(foregroundColor: context.colors.danger),
-                      onPressed: runtime.busy || runtime.runningPack != null ? null : () => _confirmUninstall(context, runtime),
+                      onPressed: runtime.busy || runtime.runningPack != null ? null : () => _confirmUninstall(context, ctl),
                       child: Text(runtime.installed ? '卸载运行环境' : '删除没下完的文件'),
                     ),
                   ],
@@ -87,7 +88,7 @@ class RuntimeScreen extends StatelessWidget {
     );
   }
 
-  Future<void> _confirmUninstall(BuildContext context, LinuxRuntime runtime) async {
+  Future<void> _confirmUninstall(BuildContext context, RuntimeNotifier ctl) async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -103,13 +104,14 @@ class RuntimeScreen extends StatelessWidget {
         ],
       ),
     );
-    if (ok == true) await runtime.uninstall();
+    if (ok == true) await ctl.uninstall();
   }
 }
 
 class _StatusCard extends StatelessWidget {
-  const _StatusCard({required this.runtime});
-  final LinuxRuntime runtime;
+  const _StatusCard({required this.runtime, required this.ctl});
+  final RuntimeView runtime;
+  final RuntimeNotifier ctl;
 
   @override
   Widget build(BuildContext context) {
@@ -152,7 +154,7 @@ class _StatusCard extends StatelessWidget {
             const SizedBox(height: Space.x3),
             InfoBanner(runtime.lastLaunchError ?? '连续启动失败', tone: BannerTone.danger),
             const SizedBox(height: Space.x3),
-            FilledButton(key: const Key('runtime-retry-launch'), onPressed: runtime.resetLaunchFailures, child: const Text('重新尝试进入 Ubuntu')),
+            FilledButton(key: const Key('runtime-retry-launch'), onPressed: ctl.resetLaunchFailures, child: const Text('重新尝试进入 Ubuntu')),
           ],
           if (runtime.busy) ...[
             const SizedBox(height: Space.x4),
@@ -171,23 +173,23 @@ class _StatusCard extends StatelessWidget {
               style: t.bodySmall,
             ),
             const SizedBox(height: Space.x3),
-            OutlinedButton(key: const Key('runtime-cancel'), onPressed: runtime.cancelInstall, child: const Text('取消（下到一半的会留着）')),
+            OutlinedButton(key: const Key('runtime-cancel'), onPressed: ctl.cancelInstall, child: const Text('取消（下到一半的会留着）')),
           ],
           if (runtime.phase == RuntimePhase.notInstalled && runtime.prootBundled) ...[
             const SizedBox(height: Space.x3),
             Text(_spaceNote(runtime), key: const Key('runtime-space'), style: t.bodySmall?.copyWith(height: 1.5)),
             const SizedBox(height: Space.x4),
-            FilledButton(key: const Key('runtime-install'), onPressed: runtime.install, child: Text(runtime.partialBytes > 0 ? '继续下载（已有 ${formatBytes(runtime.partialBytes)}）' : '安装运行环境')),
+            FilledButton(key: const Key('runtime-install'), onPressed: ctl.install, child: Text(runtime.partialBytes > 0 ? '继续下载（已有 ${formatBytes(runtime.partialBytes)}）' : '安装运行环境')),
           ],
         ],
       ),
     );
   }
 
-  static String _spaceNote(LinuxRuntime runtime) {
+  static String _spaceNote(RuntimeView runtime) {
     final free = runtime.freeSpace;
     final need =
-        '需要下载 ${formatBytes(runtime.image.size)}，解压后占约 ${formatBytes(RootfsImage.extractedBytes)}，'
+        '需要下载 ${formatBytes(runtime.imageSize)}，解压后占约 ${formatBytes(RootfsImage.extractedBytes)}，'
         '建议留出 ${formatBytes(RootfsImage.requiredBytes)}。Node.js、Python 另算。';
     return free == null ? need : '$need\n手机现在剩余 ${formatBytes(free)}。';
   }
@@ -227,8 +229,9 @@ class _MirrorRow extends StatelessWidget {
 }
 
 class _PackRow extends StatelessWidget {
-  const _PackRow({required this.runtime, required this.pack});
-  final LinuxRuntime runtime;
+  const _PackRow({required this.runtime, required this.ctl, required this.pack});
+  final RuntimeView runtime;
+  final RuntimeNotifier ctl;
   final RuntimePack pack;
 
   @override
@@ -253,7 +256,7 @@ class _PackRow extends StatelessWidget {
           ),
           const SizedBox(width: Space.x3),
           if (running)
-            OutlinedButton(onPressed: runtime.cancelPack, child: const Text('停止'))
+            OutlinedButton(onPressed: ctl.cancelPack, child: const Text('停止'))
           else if (installed)
             Text(
               '已安装',
@@ -261,7 +264,7 @@ class _PackRow extends StatelessWidget {
               style: t.bodySmall?.copyWith(color: c.accent),
             )
           else
-            OutlinedButton(key: Key('pack-${pack.id}-install'), onPressed: runtime.runningPack == null && runtime.shouldUseLinux ? () => runtime.installPack(pack) : null, child: const Text('安装')),
+            OutlinedButton(key: Key('pack-${pack.id}-install'), onPressed: runtime.runningPack == null && runtime.shouldUseLinux ? () => ctl.installPack(pack) : null, child: const Text('安装')),
         ],
       ),
     );
@@ -269,32 +272,33 @@ class _PackRow extends StatelessWidget {
 }
 
 /// 一键诊断：一句说明、一个按钮；跑完显示结论和完整报告，可整段复制。
-class _DiagnosticsPanel extends StatelessWidget {
-  const _DiagnosticsPanel({required this.runtime, required this.projectDir});
-  final LinuxRuntime runtime;
+class _DiagnosticsPanel extends ConsumerWidget {
+  const _DiagnosticsPanel({required this.runtimeBusy, required this.projectDir});
+
+  /// 运行环境正在下载 / 解压：这时不让开始诊断。
+  final bool runtimeBusy;
   final String? projectDir;
 
   @override
-  Widget build(BuildContext context) {
-    final diag = runtime.diagnostics;
+  Widget build(BuildContext context, WidgetRef ref) {
+    final diag = ref.watch(runtimeDiagnosticsProvider);
     final t = Theme.of(context).textTheme;
-    return RevBuilder(
-      rev: runtimeDiagnosticsRevProvider,
-      builder: (context, _) => Column(
+    return Builder(
+      builder: (context) => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text('终端进不去或没反应时点这里。会自动跑一遍检查（大约一两分钟），不会改动你的项目。', style: t.bodySmall),
           const SizedBox(height: Space.x3),
           FilledButton.tonal(
             key: const Key('runtime-diagnose'),
-            onPressed: diag.running || runtime.busy ? null : () => diag.run(projectDir: projectDir),
+            onPressed: diag.running || runtimeBusy ? null : () => ref.read(runtimeDiagnosticsProvider.notifier).run(projectDir: projectDir),
             child: Text(diag.running ? '正在检查…' : (diag.hasReport ? '重新诊断' : '开始诊断')),
           ),
           if (diag.running) ...[
             const SizedBox(height: Space.x3),
             const LinearProgressIndicator(),
             const SizedBox(height: Space.x2),
-            Text('第 ${diag.steps.length} 项：${diag.progress}', key: const Key('diag-progress'), style: t.bodySmall),
+            Text('第 ${diag.stepCount} 项：${diag.progress}', key: const Key('diag-progress'), style: t.bodySmall),
           ],
           if (diag.hasReport) ...[
             const SizedBox(height: Space.x3),
