@@ -34,6 +34,14 @@ android {
     packaging {
         jniLibs {
             useLegacyPackaging = true
+            // 这四个文件是 Termux 官方包里的原样文件：不让打包工具再“瘦身”改动它们，
+            // 这样安装包里的文件和 third_party/termux/SHA256SUMS 里的校验值逐字节一致。
+            keepDebugSymbols += setOf(
+                "**/libproot.so",
+                "**/libproot-loader.so",
+                "**/libtalloc.so",
+                "**/libandroid-shmem.so",
+            )
         }
     }
 
