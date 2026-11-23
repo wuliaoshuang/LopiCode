@@ -219,7 +219,7 @@ void main() {
       for (var i = 0; i < 12; i++) {
         await tester.pump(const Duration(milliseconds: 50));
       }
-      expect(find.byType(Drawer), findsNothing);
+      expect(find.byType(AppDrawer), findsNothing);
 
       late Future<void> sending;
       await tester.runAsync(() async {

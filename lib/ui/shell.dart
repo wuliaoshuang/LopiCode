@@ -1,13 +1,14 @@
 // 设计约束（外壳 · 390×844）— 2026-11-23 按霜霜的参考图改版
 // - 底部导航五项、只有图标：Agent 聊天、文件、终端、低代码、打包。选中 = 实心深色，未选中 = 描边。
 //   键盘弹出时导航留在键盘下面，不会被顶起来（外层 Scaffold 负责，见 project_shell.dart）。
-// - 侧边栏（左上汉堡按钮打开）只放底部导航里没有的东西：工作区切换在最上，然后是预览、运行环境、对话列表，设置钉在最下。
+// - 侧边栏（左上汉堡按钮打开；形式是把主界面向右推开，见 push_drawer.dart）只放底部导航里没有的东西：工作区切换在最上，然后是预览、运行环境、对话列表，设置钉在最下。
 // - 每个页面的顶部是同一个样子：左边悬浮的白色圆按钮（汉堡 / 返回），标题居中，右边是这一页自己的操作（白色胶囊）。
 // - 侧边栏里当前所在的那一项高亮（强调色浅底 + 强调色文字），其余是普通文字。
 import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/chrome.dart';
+import 'package:lopicode/ui/push_drawer.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// 项目里能去的页面。前五个在底部导航里，其余在侧边栏里。
@@ -64,8 +65,8 @@ Widget? shellLeading(BuildContext context) {
   if (Navigator.canPop(context)) {
     return RoundIconButton(icon: Icons.arrow_back_ios_new_rounded, tooltip: '返回', onPressed: () => Navigator.maybePop(context));
   }
-  final scaffold = Scaffold.maybeOf(context);
-  if (scaffold != null && scaffold.hasDrawer) return _MenuButton(onPressed: scaffold.openDrawer);
+  final drawer = PushDrawerScope.maybeOf(context);
+  if (drawer != null) return _MenuButton(onPressed: drawer.open);
   return null;
 }
 
@@ -134,6 +135,7 @@ class AppDrawer extends StatelessWidget {
     this.onDest,
     this.onNewConversation,
     this.onConversation,
+    this.onClose,
     required this.onProjects,
     required this.onSettings,
   });
@@ -147,16 +149,18 @@ class AppDrawer extends StatelessWidget {
   final VoidCallback onProjects;
   final VoidCallback onSettings;
 
+  /// 只收起侧边栏（没打开工作区时点“工作区”那一项）。
+  final VoidCallback? onClose;
+
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
     final t = Theme.of(context).textTheme;
     final s = session;
     final busy = s?.agentBusy ?? false;
-    return Drawer(
-      width: 304,
-      backgroundColor: c.bg,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.horizontal(right: Radius.circular(Radii.card))),
+    // 平铺在主界面底下的一整块（见 push_drawer.dart），没有阴影、没有圆角。
+    return Material(
+      color: c.bg,
       child: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -196,7 +200,7 @@ class AppDrawer extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(Space.x3, Space.x1, Space.x3, Space.x2),
                 children: [
                   if (s == null)
-                    _DrawerItem(icon: Icons.folder_copy_outlined, label: '工作区', selected: true, onTap: () => Navigator.pop(context))
+                    _DrawerItem(icon: Icons.folder_copy_outlined, label: '工作区', selected: true, onTap: onClose)
                   else ...[
                     for (final d in ShellDest.drawerOnly)
                       _DrawerItem(icon: d.icon, label: d.label, selected: current == d, onTap: () => onDest?.call(d)),

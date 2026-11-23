@@ -11,6 +11,7 @@ import 'package:lopicode/ui/chrome.dart';
 import 'package:lopicode/ui/home_gate.dart';
 import 'package:lopicode/ui/preview_tab.dart';
 import 'package:lopicode/ui/project_shell.dart';
+import 'package:lopicode/ui/push_drawer.dart';
 import 'package:lopicode/ui/shell.dart';
 import 'package:lopicode/ui/terminal_tab.dart';
 import 'package:material_ui/material_ui.dart';
@@ -48,7 +49,7 @@ Future<void> openDrawer(WidgetTester tester) async {
   // 每个页面都有自己的汉堡按钮；IndexedStack 里只有当前页的那个能点到。
   await tester.tap(find.byTooltip('打开侧边栏').hitTestable());
   await drawerSettle(tester);
-  expect(find.byType(Drawer), findsOneWidget);
+  expect(find.byType(AppDrawer), findsOneWidget);
 }
 
 /// 等侧边栏的开 / 关动画走完。
@@ -62,12 +63,12 @@ Future<void> drawerSettle(WidgetTester tester) async {
 Future<void> closeDrawer(WidgetTester tester) async {
   await tester.tapAt(const Offset(370, 400)); // 点遮罩
   await drawerSettle(tester);
-  expect(find.byType(Drawer), findsNothing);
+  expect(find.byType(AppDrawer), findsNothing);
 }
 
 /// 侧边栏里这一项是不是高亮的（强调色浅底）。
 bool highlighted(WidgetTester tester, String label) {
-  final item = find.descendant(of: find.byType(Drawer), matching: find.text(label));
+  final item = find.descendant(of: find.byType(AppDrawer), matching: find.text(label));
   expect(item, findsOneWidget, reason: '侧边栏里应该有“$label”');
   final material = tester.widget<Material>(find.ancestor(of: item, matching: find.byType(Material)).first);
   final colors = tester.element(item).colors;
@@ -185,7 +186,7 @@ void main() {
 
     await openDrawer(tester);
     // 项目切换在最上，设置在最下
-    final drawer = find.byType(Drawer);
+    final drawer = find.byType(AppDrawer);
     final top = tester.getTopLeft(find.descendant(of: drawer, matching: find.textContaining('切换工作区'))).dy;
     final bottom = tester.getTopLeft(find.descendant(of: drawer, matching: find.text('设置'))).dy;
     for (final d in ShellDest.drawerOnly) {
@@ -201,10 +202,10 @@ void main() {
 
     for (final d in ShellDest.drawerOnly) {
       await openDrawer(tester);
-      await tester.tap(find.descendant(of: find.byType(Drawer), matching: find.text(d.label)));
+      await tester.tap(find.descendant(of: find.byType(AppDrawer), matching: find.text(d.label)));
       await drawerSettle(tester);
       await settle(tester, rounds: 8);
-      expect(find.byType(Drawer), findsNothing, reason: '选了“${d.label}”后侧边栏应该收起');
+      expect(find.byType(AppDrawer), findsNothing, reason: '选了“${d.label}”后侧边栏应该收起');
       expect(marks[d]!.hitTestable(), findsWidgets, reason: '应该到了“${d.label}”页');
       expect(find.byTooltip('打开侧边栏').hitTestable(), findsOneWidget, reason: '“${d.label}”页也要有汉堡按钮');
       for (var i = 0; i < 5; i++) {
@@ -222,10 +223,85 @@ void main() {
 
     // 回到对话
     await openDrawer(tester);
-    await tester.tap(find.descendant(of: find.byType(Drawer), matching: find.text('新对话')));
+    await tester.tap(find.descendant(of: find.byType(AppDrawer), matching: find.text('新对话')));
     await drawerSettle(tester);
     expect(find.byTooltip('发送').hitTestable(), findsOneWidget);
     expect(navSelected(tester, 0), isTrue);
+  });
+
+  testWidgets('侧边栏是把主界面向右推开：位移、左侧大圆角、遮罩、底部导航一起走；点右侧 / 返回键 / 左滑都能关', (tester) async {
+    final (env, project, session) = await openProject(tester);
+    await tester.pumpWidget(appFor(env, ProjectShell(project: project, session: session)));
+    await settle(tester);
+
+    final nav = find.byType(IconBottomNav);
+    final clip = find.byKey(const ValueKey('push-drawer-clip'));
+    expect(tester.getTopLeft(nav).dx, 0);
+    expect(tester.widget<ClipRRect>(clip).borderRadius, BorderRadius.zero, reason: '关着的时候主界面是直角、铺满');
+    expect(find.byKey(const ValueKey('push-drawer-scrim')), findsNothing);
+
+    await openDrawer(tester);
+    final slide = PushDrawer.slideFor(390);
+    expect(slide, 390 - PushDrawer.kPeek);
+    expect(tester.getTopLeft(nav).dx, slide, reason: '底部导航跟着主界面一起被推到右边');
+    expect(tester.getTopLeft(find.byTooltip('发送')).dx, greaterThan(slide), reason: '聊天页整体右移');
+    final r = tester.widget<ClipRRect>(clip).borderRadius as BorderRadius;
+    expect(r.topLeft.x, PushDrawer.kRadius);
+    expect(r.bottomLeft.x, PushDrawer.kRadius);
+    expect(r.topRight, Radius.zero);
+    expect(r.bottomRight, Radius.zero);
+    expect(find.byKey(const ValueKey('push-drawer-scrim')), findsOneWidget, reason: '被推走的主界面上盖一层遮罩');
+    // 侧边栏平铺在左边那一块，没有阴影抽屉
+    expect(tester.getRect(find.byType(AppDrawer)), const Rect.fromLTWH(0, 0, 308, 844));
+    expect(find.byType(Drawer), findsNothing);
+
+    // 打开期间主界面点不到：点露出来的底部导航只会关侧边栏，不会切页
+    await tester.tapAt(Offset(slide + 60, 820));
+    await drawerSettle(tester);
+    expect(find.byType(AppDrawer), findsNothing);
+    expect(tester.getTopLeft(nav).dx, 0);
+    expect(navSelected(tester, 0), isTrue, reason: '点右侧只是关侧边栏');
+
+    // 系统返回键先关侧边栏，页面不退出、也不切页
+    await tapNav(tester, ShellDest.files);
+    await openDrawer(tester);
+    await tester.binding.handlePopRoute();
+    await drawerSettle(tester);
+    expect(find.byType(AppDrawer), findsNothing);
+    expect(navSelected(tester, 1), isTrue, reason: '第一次返回只关侧边栏，还在文件页');
+    await tester.binding.handlePopRoute();
+    await settle(tester, rounds: 6);
+    expect(navSelected(tester, 0), isTrue, reason: '第二次返回才回聊天页');
+
+    // 跟手：拖到一半主界面停在一半；松手后过半就打开
+    final g = await tester.startGesture(const Offset(4, 420));
+    await g.moveBy(const Offset(30, 0)); // 过拖动判定距离
+    await g.moveBy(const Offset(100, 0));
+    await tester.pump();
+    final half = tester.getTopLeft(nav).dx;
+    expect(half, greaterThan(60));
+    expect(half, lessThan(slide));
+    await g.moveBy(const Offset(120, 0));
+    await g.up();
+    await drawerSettle(tester);
+    expect(tester.getTopLeft(nav).dx, slide);
+
+    // 开着时在侧边栏上左滑关闭
+    await tester.dragFrom(const Offset(250, 600), const Offset(-220, 0));
+    await drawerSettle(tester);
+    expect(find.byType(AppDrawer), findsNothing);
+  });
+
+  testWidgets('键盘开着时打开侧边栏会先收键盘', (tester) async {
+    final (env, project, session) = await openProject(tester);
+    await tester.pumpWidget(appFor(env, ProjectShell(project: project, session: session)));
+    await settle(tester);
+    await tester.tap(find.byType(TextField).hitTestable().first);
+    await settle(tester, rounds: 3);
+    expect(tester.testTextInput.isVisible, isTrue);
+    await openDrawer(tester);
+    expect(tester.testTextInput.isVisible, isFalse, reason: '打开侧边栏要先把键盘收起来');
+    expect(FocusManager.instance.primaryFocus?.context?.widget is EditableText, isFalse);
   });
 
   testWidgets('终端和低代码页不让边缘右滑拉出侧边栏，其他页可以', (tester) async {
@@ -239,12 +315,12 @@ void main() {
     }
 
     await swipe();
-    expect(find.byType(Drawer), findsOneWidget, reason: '对话页右滑应该拉出侧边栏');
+    expect(find.byType(AppDrawer), findsOneWidget, reason: '对话页右滑应该拉出侧边栏');
     await closeDrawer(tester);
     for (final d in [ShellDest.terminal, ShellDest.builder]) {
       await tapNav(tester, d);
       await swipe();
-      expect(find.byType(Drawer), findsNothing, reason: '“${d.label}”页右滑不该拉出侧边栏');
+      expect(find.byType(AppDrawer), findsNothing, reason: '“${d.label}”页右滑不该拉出侧边栏');
       await openDrawer(tester);
       await closeDrawer(tester);
     }
@@ -331,7 +407,7 @@ void main() {
     await openDrawer(tester);
     expect(highlighted(tester, '第二段对话'), isTrue);
     expect(highlighted(tester, '第一段对话'), isFalse);
-    await tester.tap(find.descendant(of: find.byType(Drawer), matching: find.text('第一段对话')));
+    await tester.tap(find.descendant(of: find.byType(AppDrawer), matching: find.text('第一段对话')));
     await drawerSettle(tester);
     await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 150)));
     await settle(tester, rounds: 3);
@@ -365,7 +441,7 @@ void main() {
     await tester.pumpAndSettle();
 
     await openDrawer(tester);
-    await tester.tap(find.descendant(of: find.byType(Drawer), matching: find.text('设置')));
+    await tester.tap(find.descendant(of: find.byType(AppDrawer), matching: find.text('设置')));
     await settle(tester, rounds: 4);
     final row = find.byKey(const Key('settings-rules'));
     expect(find.descendant(of: row, matching: find.text('未设置')), findsOneWidget);
@@ -393,7 +469,7 @@ void main() {
     await settle(tester);
     expect(find.text('还没有工作区'), findsOneWidget);
     await openDrawer(tester);
-    expect(find.descendant(of: find.byType(Drawer), matching: find.text('设置')), findsOneWidget);
+    expect(find.descendant(of: find.byType(AppDrawer), matching: find.text('设置')), findsOneWidget);
     await closeDrawer(tester);
 
     await tester.tap(find.widgetWithText(FilledButton, '添加工作区').first);

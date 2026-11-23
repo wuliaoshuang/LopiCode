@@ -11,6 +11,7 @@ import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/core/templates.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/settings_screen.dart';
+import 'package:lopicode/ui/push_drawer.dart';
 import 'package:lopicode/ui/shell.dart';
 import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
@@ -39,6 +40,13 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
   List<Project> _hidden = const [];
   Map<String, int> _counts = {};
   String? _error;
+  final _drawer = PushDrawerController();
+
+  @override
+  void dispose() {
+    _drawer.dispose();
+    super.dispose();
+  }
 
   @override
   void didChangeDependencies() {
@@ -187,17 +195,8 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
           if (p.group.isNotEmpty) p.group,
       }.toList()..sort(),
     ];
-    return Scaffold(
+    final page = Scaffold(
       appBar: ShellAppBar(title: '工作区', subtitle: projects == null || projects.isEmpty ? 'LopiCode' : '${projects.length} 个工作区'),
-      drawer: widget.onOpen == null
-          ? null
-          : AppDrawer(
-              onProjects: () => Navigator.pop(context),
-              onSettings: () {
-                Navigator.pop(context);
-                Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const SettingsScreen()));
-              },
-            ),
       floatingActionButton: projects != null && projects.isNotEmpty
           ? FloatingActionButton.extended(
               onPressed: _add,
@@ -256,6 +255,20 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
                 ],
               ],
             ),
+    );
+    // 从别的页面点进来挑工作区时（能返回）不带侧边栏。
+    if (widget.onOpen == null) return page;
+    return PushDrawer(
+      controller: _drawer,
+      drawer: AppDrawer(
+        onClose: _drawer.close,
+        onProjects: _drawer.close,
+        onSettings: () {
+          _drawer.close();
+          Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const SettingsScreen()));
+        },
+      ),
+      child: page,
     );
   }
 }

@@ -2,9 +2,9 @@
 // - 进项目先看到的是 Agent 聊天；底部导航五项（聊天、文件、终端、低代码、打包），预览和运行环境从侧边栏去。
 // - 底部导航挂在最外层 Scaffold 上：键盘弹出时，页面内容缩到键盘上方，导航原地不动（被键盘盖住），
 //   所以贴着键盘的只有输入框 / 终端按键行，导航不会被顶起来。
-// - 侧边栏从左边缘右滑也能拉出来；终端和低代码画布上自己有横向手势，那两页只能点汉堡按钮。
+// - 侧边栏是“把主界面向右推开”的形式（push_drawer.dart），从左边缘右滑也能拉出来；终端和低代码画布上自己有横向手势，那两页只能点汉堡按钮。
 // - 切页面不丢状态：各页共用一个 ProjectSession，用 IndexedStack 保活；没去过的页面先不建。
-// - 系统返回键：不在聊天页时先回聊天页，在聊天页才退出。
+// - 系统返回键：侧边栏开着先关它；不在聊天页时先回聊天页，在聊天页才退出。
 import 'package:lopicode/runtime/runtime_screen.dart';
 import 'dart:io';
 
@@ -18,6 +18,7 @@ import 'package:lopicode/ui/chrome.dart';
 import 'package:lopicode/ui/files_tab.dart';
 import 'package:lopicode/ui/preview_tab.dart';
 import 'package:lopicode/ui/project_list_screen.dart';
+import 'package:lopicode/ui/push_drawer.dart';
 import 'package:lopicode/ui/settings_screen.dart';
 import 'package:lopicode/ui/shell.dart';
 import 'package:lopicode/ui/terminal_tab.dart';
@@ -39,7 +40,7 @@ class ProjectShell extends StatefulWidget {
 }
 
 class _ProjectShellState extends State<ProjectShell> {
-  final _scaffoldKey = GlobalKey<ScaffoldState>();
+  final _drawer = PushDrawerController();
   ProjectSession? _session;
   late ShellDest _dest = widget.initial;
   final Set<ShellDest> _visited = {};
@@ -69,11 +70,18 @@ class _ProjectShellState extends State<ProjectShell> {
     final live = _session?.app.scheduler.liveSessions;
     if (live != null && identical(live[widget.project.id], _session)) live.remove(widget.project.id);
     if (widget.session == null) _session?.dispose();
+    _drawer.dispose();
     super.dispose();
   }
 
   void _onSession() {
     if (mounted) setState(() {});
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _drawer.addListener(_onSession); // 开合变了要重算“返回键先做什么”
   }
 
   void _go(ShellDest dest) => setState(() {
@@ -83,7 +91,7 @@ class _ProjectShellState extends State<ProjectShell> {
     _visited.add(dest);
   });
 
-  void _closeDrawer() => _scaffoldKey.currentState?.closeDrawer();
+  void _closeDrawer() => _drawer.close();
 
   Future<void> _openProjects() async {
     _closeDrawer();
@@ -133,48 +141,58 @@ class _ProjectShellState extends State<ProjectShell> {
       ShellDest.runtime => RuntimeScreen(projectDir: session.project.dir),
     };
     return ShellScope(
-      openDrawer: () => _scaffoldKey.currentState?.openDrawer(),
+      openDrawer: _drawer.open,
       go: _go,
       projectName: widget.project.name,
-      child: Scaffold(
-        key: _scaffoldKey,
-        // 终端里要左右滑光标、画布上要拖组件：这两页不让边缘右滑抢手势。
-        drawerEnableOpenDragGesture: _dest != ShellDest.terminal && _dest != ShellDest.builder,
-        drawerEdgeDragWidth: 24,
-        drawer: AppDrawer(
-          project: widget.project,
-          session: session,
-          current: _dest,
-          onDest: (d) {
+      child: PopScope(
+        // 返回键：侧边栏开着先关它；不在聊天页先回聊天页；都不是才退出。
+        canPop: _dest == ShellDest.chat && !_drawer.isOpen,
+        onPopInvokedWithResult: (didPop, _) {
+          if (didPop) return;
+          if (_drawer.isOpen) {
             _closeDrawer();
-            _go(d);
-          },
-          onNewConversation: () async {
-            _closeDrawer();
-            await session.newConversation();
+          } else {
             _go(ShellDest.chat);
-          },
-          onConversation: (id) async {
-            _closeDrawer();
-            await session.selectConversation(id);
-            _go(ShellDest.chat);
-          },
-          onProjects: _openProjects,
-          onSettings: _openSettings,
-        ),
-        bottomNavigationBar: IconBottomNav(
-          items: shellNavItems(),
-          current: _dest.inBottomNav ? _dest.index : -1,
-          onTap: (i) => _go(ShellDest.bottom[i]),
-        ),
-        body: PopScope(
-          canPop: _dest == ShellDest.chat,
-          onPopInvokedWithResult: (didPop, _) {
-            if (!didPop) _go(ShellDest.chat);
-          },
-          child: IndexedStack(
-            index: _dest.index,
-            children: [for (final d in ShellDest.values) lazy(d, () => build1(d))],
+          }
+        },
+        child: PushDrawer(
+          controller: _drawer,
+          handleBack: false,
+          // 终端里要左右滑光标、画布上要拖组件：这两页不让边缘右滑抢手势。
+          edgeDragEnabled: _dest != ShellDest.terminal && _dest != ShellDest.builder,
+          drawer: AppDrawer(
+            project: widget.project,
+            session: session,
+            current: _dest,
+            onClose: _closeDrawer,
+            onDest: (d) {
+              _closeDrawer();
+              _go(d);
+            },
+            onNewConversation: () async {
+              _closeDrawer();
+              await session.newConversation();
+              _go(ShellDest.chat);
+            },
+            onConversation: (id) async {
+              _closeDrawer();
+              await session.selectConversation(id);
+              _go(ShellDest.chat);
+            },
+            onProjects: _openProjects,
+            onSettings: _openSettings,
+          ),
+          // 底部导航和页面在同一个 Scaffold 里，所以会跟着主界面一起被推走。
+          child: Scaffold(
+            bottomNavigationBar: IconBottomNav(
+              items: shellNavItems(),
+              current: _dest.inBottomNav ? _dest.index : -1,
+              onTap: (i) => _go(ShellDest.bottom[i]),
+            ),
+            body: IndexedStack(
+              index: _dest.index,
+              children: [for (final d in ShellDest.values) lazy(d, () => build1(d))],
+            ),
           ),
         ),
       ),
