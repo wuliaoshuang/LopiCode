@@ -6,6 +6,8 @@ import 'package:lopicode/automation_scheduler.dart';
 import 'package:lopicode/agent/model_config.dart';
 import 'package:lopicode/agent/presets.dart';
 import 'package:lopicode/agent/protocols.dart';
+import 'package:lopicode/agent/quota.dart';
+import 'package:http/http.dart' as http;
 import 'package:lopicode/agent/skills.dart';
 import 'package:lopicode/core/secure_secret_store.dart';
 import 'package:lopicode/core/project_store.dart';
@@ -22,6 +24,7 @@ class AppServices extends ChangeNotifier {
     required this.secrets,
     required this.projects,
     this.chatClientFactory,
+    this.quotaHttp,
     LinuxRuntime? runtime,
   }) : runtime = runtime ?? LinuxRuntime(settings: settings, baseDir: p.join(settings.file.parent.path, 'runtime')),
        models = ModelConfigStore(settings, secrets),
@@ -30,7 +33,14 @@ class AppServices extends ChangeNotifier {
        automations = AutomationStore(File(p.join(settings.file.parent.path, 'automations.json'))) {
     projects.linuxRootfs ??= this.runtime.rootfsDir;
     scheduler = AutomationScheduler(this);
+    quota = QuotaStore(settings, models, httpClient: quotaHttp);
   }
+
+  /// 测试钩子：查余额用的网络。
+  final http.Client? quotaHttp;
+
+  /// DeepSeek 官方渠道的余额和额度上限。
+  late final QuotaStore quota;
 
   /// 自动化任务的调度（App 开着时才会触发）。
   late final AutomationScheduler scheduler;
@@ -105,11 +115,12 @@ class AppServices extends ChangeNotifier {
   /// 按选中的“渠道 + 模型 + 思考档位”造客户端。
   Future<ChatClient> createChatClient([ResolvedModel? model]) async {
     final factory = chatClientFactory;
-    if (factory != null) return factory();
     await ready();
     final r = model ?? models.defaultForNewChat();
+    if (factory != null) return r == null ? factory() : quota.guard(r.channel, factory());
     if (r == null) return _UnconfiguredClient();
-    return buildChatClient(r, await models.apiKey(r.channel.id));
+    // 额度上限在这里统一把关：主对话、子代理、自动化任务、压缩对话都从这里拿客户端。
+    return quota.guard(r.channel, buildChatClient(r, await models.apiKey(r.channel.id)));
   }
 
   /// 设置改动后通知界面刷新。

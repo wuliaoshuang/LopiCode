@@ -115,7 +115,7 @@ class _ProjectShellState extends State<ProjectShell> {
 
   void _openSettings() {
     _closeDrawer();
-    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => SettingsScreen(workspace: widget.project)));
+    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => SettingsScreen(workspace: widget.project, session: _session)));
   }
 
   @override
