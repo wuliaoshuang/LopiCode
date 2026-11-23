@@ -24,8 +24,8 @@ import 'package:lopicode/runtime/linux_command_runner.dart';
 import 'package:lopicode/runtime/linux_shell_backend.dart';
 import 'package:lopicode/ssh/ssh_config.dart';
 import 'package:lopicode/ssh/ssh_connector.dart';
-import 'package:lopicode/ssh/ssh_shell_backend.dart';
 import 'package:lopicode/state/workspace_files.dart';
+import 'package:lopicode/state/workspace_terminals.dart';
 import 'package:lopicode/terminal/terminal_session.dart';
 import 'package:path/path.dart' as p;
 
@@ -228,7 +228,8 @@ class _Semaphore {
 class ProjectSession extends ChangeNotifier {
   ProjectSession(this.app, this.project, {this.headless = false}) : guard = project.guard {
     preview = PreviewServer(project.dir);
-    if (!headless) addTerminal();
+    // 带界面的工作区一打开就有一个终端会话（不带界面的不开）
+    if (!headless && !app.disposed) app.container.read(terminalsProvider(this));
   }
 
   /// 不带界面（自动化任务在别的工作区里跑时用）：不开终端。
@@ -247,9 +248,11 @@ class ProjectSession extends ChangeNotifier {
   }
 
   // ── 终端 ─────────────────────────────────────────────
-  final List<TerminalSession> terminals = [];
-  int activeTerminal = 0;
-  int _terminalCounter = 0;
+  /// 开着的终端会话和当前是第几个：状态在 [terminalsProvider]，这里只是转一手。
+  TerminalsState get _terminals => _disposed || app.disposed ? const TerminalsState() : app.container.read(terminalsProvider(this));
+  TerminalsNotifier get _terminalsCtl => app.container.read(terminalsProvider(this).notifier);
+  List<TerminalSession> get terminals => _terminals.sessions;
+  int get activeTerminal => _terminals.active;
 
   /// 测试用：换掉伪终端的创建方式。
   PtySpawner? ptySpawner;
@@ -259,72 +262,14 @@ class ProjectSession extends ChangeNotifier {
 
   /// 新开一个本机会话。Ubuntu 环境能用就进 Ubuntu，否则是手机自带的 sh。
   /// [forceLocal] 为 true 时不管环境装没装，都开手机自带的 sh。
-  TerminalSession addTerminal({bool forceLocal = false}) {
-    final runtime = app.runtime;
-    if (!forceLocal && runtime.shouldUseLinux) {
-      final session = TerminalSession(
-        title: 'Ubuntu ${++_linuxCounter}',
-        backend: LinuxShellBackend(runtime: runtime, projectDir: project.dir, guestCwd: project.linuxPath, spawner: linuxPtySpawner, fallbackSpawner: ptySpawner),
-      );
-      session.append(
-        '\x1b[2mLopiCode 终端 · Ubuntu 24.04\n'
-        '${project.isLinux ? '工作区目录是 ${project.linuxPath}' : '项目目录挂在 /workspace'}。装软件用 apt，常用运行时可以在侧边栏“运行环境”里一键安装。\x1b[0m\n\n',
-      );
-      return _addSession(session);
-    }
-    final String hint;
-    if (runtime.usable) {
-      hint = 'Ubuntu 环境连续启动失败，这里先用手机自带的 sh。到侧边栏“运行环境”看日志、重新尝试。';
-    } else if (runtime.installed) {
-      hint = 'Ubuntu 环境已下载，但这个安装包缺少进入 Ubuntu 要用的文件，进不去。';
-    } else {
-      hint = '想跑 node、python：到侧边栏“运行环境”安装 Ubuntu 环境；或者点右上角 ＋ 连一台 SSH 主机。';
-    }
-    final session = TerminalSession(
-      title: '本机 ${++_terminalCounter}',
-      backend: LocalShellBackend(project.dir, spawner: ptySpawner),
-    );
-    session.append(
-      '\x1b[2mLopiCode 终端 · 项目目录\n'
-      '手机自带的 sh：有 ls、cat、cp、mkdir 这类基础命令，没有 git、node、python 和编译器。\n'
-      '$hint\x1b[0m\n\n',
-    );
-    return _addSession(session);
-  }
-
-  int _sshCounter = 0;
-  int _linuxCounter = 0;
+  TerminalSession addTerminal({bool forceLocal = false}) => _terminalsCtl.addLocal(forceLocal: forceLocal);
 
   /// 新开一个 SSH 会话。[onUnknownHost] 在第一次连这台主机时弹指纹确认。
-  TerminalSession addSshTerminal(SshConfig config, {HostKeyPrompt? onUnknownHost}) {
-    final session = TerminalSession(
-      title: 'SSH ${++_sshCounter}',
-      backend: SshShellBackend(
-        hostLabel: config.display,
-        connect: () => connectSsh(config: config, secrets: app.secrets, knownHosts: KnownHosts(app.settings), onUnknownHost: onUnknownHost),
-      ),
-    );
-    return _addSession(session);
-  }
+  TerminalSession addSshTerminal(SshConfig config, {HostKeyPrompt? onUnknownHost}) => _terminalsCtl.addSsh(config, onUnknownHost: onUnknownHost);
 
-  TerminalSession _addSession(TerminalSession session) {
-    terminals.add(session);
-    activeTerminal = terminals.length - 1;
-    notifyListeners();
-    return session;
-  }
+  void closeTerminal(int index) => _terminalsCtl.close(index);
 
-  void closeTerminal(int index) {
-    if (terminals.length <= 1) return;
-    terminals.removeAt(index).dispose();
-    activeTerminal = activeTerminal.clamp(0, terminals.length - 1);
-    notifyListeners();
-  }
-
-  void selectTerminal(int index) {
-    activeTerminal = index;
-    notifyListeners();
-  }
+  void selectTerminal(int index) => _terminalsCtl.select(index);
 
   // ── Agent ────────────────────────────────────────────
   /// 这个工作区已经关掉了：之后不许再往状态里写。
@@ -1434,11 +1379,11 @@ class ProjectSession extends ChangeNotifier {
       r.runner?.cancel();
     }
     _disposed = true;
-    for (final t in terminals) {
-      t.dispose();
-    }
     unawaited(preview.stop());
-    if (!app.disposed) app.container.invalidate(filesRevProvider(this));
+    if (!app.disposed) {
+      app.container.invalidate(filesRevProvider(this));
+      app.container.invalidate(terminalsProvider(this)); // 会话的进程在这里收掉
+    }
     super.dispose();
   }
 }

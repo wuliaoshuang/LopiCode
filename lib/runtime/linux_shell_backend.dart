@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart';
 import 'package:lopicode/runtime/linux_runtime.dart';
 import 'package:lopicode/runtime/proot_command.dart';
 import 'package:lopicode/terminal/pty_native.dart';
@@ -47,7 +46,18 @@ class LinuxShellBackend implements TerminalBackend {
   final Duration stallTimeout;
 
   /// 现在是不是处于“没有响应”状态。界面据此显示三个出路：兼容模式重试、退回本机、去诊断。
-  final ValueNotifier<bool> stalled = ValueNotifier(false);
+  bool get stalled => _stalled;
+  bool _stalled = false;
+
+  /// “没有响应”状态变了：终端列表接这个回调，通知终端页重画。
+  void Function()? onStalledChanged;
+
+  void _setStalled(bool value) {
+    if (_stalled == value) return;
+    _stalled = value;
+    onStalledChanged?.call();
+  }
+
   Timer? _stallTimer;
 
   final StreamController<String> _out = StreamController.broadcast();
@@ -114,7 +124,7 @@ class LinuxShellBackend implements TerminalBackend {
     _stallTimer?.cancel();
     _stallTimer = Timer(stallTimeout, () {
       if (!identical(_pty, pty) || sawOutput || _closed) return;
-      stalled.value = true;
+      _setStalled(true);
       runtime.recordStall(stallTimeout);
       _emit(
         '\r\n\x1b[33mUbuntu 环境 ${stallTimeout.inSeconds} 秒了还没有任何响应，多半是卡在启动这一步。\r\n'
@@ -125,7 +135,7 @@ class LinuxShellBackend implements TerminalBackend {
       if (text.isNotEmpty && !sawOutput) {
         sawOutput = true;
         _stallTimer?.cancel();
-        if (identical(_pty, pty)) stalled.value = false;
+        if (identical(_pty, pty)) _setStalled(false);
         maybeSuccess();
       }
       if (head.length < 4000) head.write(text);
@@ -137,7 +147,7 @@ class LinuxShellBackend implements TerminalBackend {
         _pty = null;
         _stableTimer?.cancel();
         _stallTimer?.cancel();
-        stalled.value = false;
+        _setStalled(false);
         _releaseKeepAlive();
         final quick = DateTime.now().difference(startedAt) < quickExit;
         // 退出码可能比最后一段输出先到：等一下，让 PRoot 的报错进到日志里。
@@ -181,7 +191,7 @@ class LinuxShellBackend implements TerminalBackend {
     _pty = null;
     _stableTimer?.cancel();
     _stallTimer?.cancel();
-    stalled.value = false;
+    _setStalled(false);
     try {
       pty?.kill();
     } catch (_) {}

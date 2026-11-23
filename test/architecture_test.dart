@@ -42,8 +42,6 @@ const _allowedLayers = {
 /// 还没迁到 Riverpod 的旧式状态对象（`文件 类名或字段名` ⇒ 为什么还在）。只许变短，不许加新的。
 const _legacyNotifiers = {
   'lib/project_session.dart ProjectSession': '一个工作区的全部状态（对话、Agent 运行、终端、文件）；Riverpod 迁移的最后一步，还没拆',
-  'lib/terminal/terminal_session.dart TerminalSession': '一个终端会话（持有进程和 xterm 缓冲区）；跟 ProjectSession 的终端列表一起迁',
-  'lib/runtime/linux_shell_backend.dart stalled': '终端“没有响应”的标记；跟终端会话一起迁',
   'lib/runtime/linux_runtime.dart LinuxRuntime': '运行环境（管进程和文件）；界面已改成订阅 runtimeRevProvider，对象本身还是旧式通知',
   'lib/runtime/runtime_diagnostics.dart RuntimeDiagnostics': '一键诊断；界面已改成订阅 runtimeDiagnosticsRevProvider',
   'lib/build/build_controller.dart BuildJob': '一次打包任务（页面自己建、自己销毁，不是全局状态）',
@@ -55,7 +53,7 @@ const int kMaxLines = 600;
 /// 已经超过 [kMaxLines] 的文件和它们的上限（＝收紧规则时的行数，留一点余量）。只许变短。
 const _oversized = {
   'lib/lowcode/builder_screen.dart': 1180,
-  'lib/project_session.dart': 1445,
+  'lib/project_session.dart': 1389,
   'lib/ui/chat_screen.dart': 860,
   'lib/ui/chat_panels.dart': 800,
   'lib/ui/usage_ui.dart': 890,

@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:lopicode/terminal/pty_native.dart';
 import 'package:xterm/xterm.dart';
 
@@ -215,7 +214,7 @@ class LocalShellBackend implements TerminalBackend {
 }
 
 /// 一个终端会话：后端 + xterm 的屏幕状态。
-class TerminalSession extends ChangeNotifier {
+class TerminalSession {
   TerminalSession({required this.title, required this.backend, int maxLines = 5000}) : terminal = Terminal(maxLines: maxLines) {
     terminal.onOutput = _fromKeyboard;
     terminal.onResize = (width, height, _, _) => backend.resize(width, height);
@@ -231,9 +230,12 @@ class TerminalSession extends ChangeNotifier {
   bool get ctrlArmed => _ctrlArmed;
   bool _ctrlArmed = false;
 
+  /// Ctrl 的点亮状态变了：终端列表（[TerminalsNotifier]）接这个回调，通知终端页重画。
+  void Function()? onChanged;
+
   void toggleCtrl() {
     _ctrlArmed = !_ctrlArmed;
-    notifyListeners();
+    onChanged?.call();
   }
 
   /// 屏幕上（含回滚区）的纯文字，测试和“复制全部”用。
@@ -255,7 +257,7 @@ class TerminalSession extends ChangeNotifier {
   void _fromKeyboard(String data) {
     if (_ctrlArmed) {
       _ctrlArmed = false;
-      notifyListeners();
+      onChanged?.call();
       if (data.length == 1) {
         final control = controlCharFor(data);
         if (control != null) {
@@ -282,7 +284,7 @@ class TerminalSession extends ChangeNotifier {
     final armed = _ctrlArmed;
     if (armed) {
       _ctrlArmed = false;
-      notifyListeners();
+      onChanged?.call();
     }
     terminal.keyInput(key, ctrl: ctrl || armed);
   }
@@ -297,10 +299,9 @@ class TerminalSession extends ChangeNotifier {
     if (backend.isRunning) backend.write('\r');
   }
 
-  @override
   void dispose() {
+    onChanged = null;
     unawaited(_sub?.cancel());
     unawaited(backend.close());
-    super.dispose();
   }
 }

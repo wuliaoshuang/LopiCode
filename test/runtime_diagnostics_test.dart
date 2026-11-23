@@ -76,9 +76,9 @@ void main() {
       backend.output.listen(seen.write);
       await backend.start(columns: 80, rows: 24);
       await Future<void>.delayed(const Duration(milliseconds: 80));
-      expect(backend.stalled.value, isFalse, reason: '还没到时间');
+      expect(backend.stalled, isFalse, reason: '还没到时间');
       await Future<void>.delayed(const Duration(milliseconds: 150));
-      expect(backend.stalled.value, isTrue);
+      expect(backend.stalled, isTrue);
       expect(seen.toString(), contains('还没有任何响应'));
       expect(runtime.logLines.join('\n'), contains('没有任何输出'));
       expect(settings.getBool(SettingKeys.runtimeCompat), isFalse);
@@ -92,7 +92,7 @@ void main() {
       await backend.start(columns: 80, rows: 24);
       spawned.single.emit('root@localhost:~# ');
       await Future<void>.delayed(const Duration(milliseconds: 250));
-      expect(backend.stalled.value, isFalse);
+      expect(backend.stalled, isFalse);
       await backend.close();
 
       final spawned2 = <FakePty>[];
@@ -100,10 +100,10 @@ void main() {
       late.output.listen((_) {});
       await late.start(columns: 80, rows: 24);
       await Future<void>.delayed(const Duration(milliseconds: 250));
-      expect(late.stalled.value, isTrue);
+      expect(late.stalled, isTrue);
       spawned2.single.emit('root@localhost:~# ');
       await Future<void>.delayed(const Duration(milliseconds: 20));
-      expect(late.stalled.value, isFalse);
+      expect(late.stalled, isFalse);
       await late.close();
     });
 
@@ -115,14 +115,14 @@ void main() {
       backend.output.listen(seen.write);
       await backend.start(columns: 80, rows: 24);
       await Future<void>.delayed(const Duration(milliseconds: 250));
-      expect(backend.stalled.value, isTrue);
+      expect(backend.stalled, isTrue);
       expect(envs.single.containsKey('PROOT_NO_SECCOMP'), isFalse);
 
       await backend.retryCompat();
       expect(spawned.first.killed, isTrue);
       expect(spawned, hasLength(2));
       expect(envs.last['PROOT_NO_SECCOMP'], '1');
-      expect(backend.stalled.value, isFalse);
+      expect(backend.stalled, isFalse);
       await Future<void>.delayed(const Duration(milliseconds: 20));
       expect(seen.toString(), isNot(contains('会话已结束')), reason: '主动重试不该提示会话结束');
       expect(runtime.launchFailures, 0, reason: '卡住不算进连续失败，不会把以后的会话都赶去本机 shell');
@@ -141,7 +141,7 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 250));
       await backend.retryCompat();
       await Future<void>.delayed(const Duration(milliseconds: 250));
-      expect(backend.stalled.value, isTrue);
+      expect(backend.stalled, isTrue);
       expect(settings.getBool(SettingKeys.runtimeCompat), isFalse);
       await backend.close();
     });
@@ -157,7 +157,7 @@ void main() {
       await backend.switchToLocal();
       expect(spawned.single.killed, isTrue);
       expect(local, hasLength(1));
-      expect(backend.stalled.value, isFalse);
+      expect(backend.stalled, isFalse);
       backend.write('ls\r');
       expect(utf8.decode(local.single.written), 'ls\r');
       expect(utf8.decode(spawned.single.written), isEmpty);

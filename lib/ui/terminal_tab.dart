@@ -6,11 +6,13 @@
 //   “中文”也在这排：默认每按一个键立刻进终端；点亮后才让输入法攒拼音选字。
 // - Ubuntu 进去后一直没输出：终端下方出一条提示，三个出路各占一个按钮，不让人对着空屏。
 // - 没有单独的输入行：真正的终端里输入就在光标处。
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lopicode/core/stores.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/runtime/linux_shell_backend.dart';
 import 'package:lopicode/ssh/ssh_config.dart';
 import 'package:lopicode/ssh/ssh_connect_screen.dart';
+import 'package:lopicode/state/workspace_terminals.dart';
 import 'package:lopicode/terminal/terminal_input.dart';
 import 'package:lopicode/terminal/terminal_session.dart';
 import 'package:lopicode/theme/tokens.dart';
@@ -19,57 +21,40 @@ import 'package:lopicode/ui/shell.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:xterm/xterm.dart';
 
-class TerminalTab extends StatefulWidget {
+class TerminalTab extends ConsumerStatefulWidget {
   const TerminalTab({super.key, required this.session});
   final ProjectSession session;
 
   @override
-  State<TerminalTab> createState() => _TerminalTabState();
+  ConsumerState<TerminalTab> createState() => _TerminalTabState();
 }
 
-class _TerminalTabState extends State<TerminalTab> {
+class _TerminalTabState extends ConsumerState<TerminalTab> {
   final _focus = FocusNode();
-  TerminalSession? _listening;
-  ValueNotifier<bool>? _stalled;
+  TerminalSession? _startedFor;
 
   ProjectSession get s => widget.session;
-  TerminalSession get term => s.terminals[s.activeTerminal];
+  // 工作区刚关掉的那一帧列表已经空了：先用着上一个，免得越界
+  TerminalSession get term => ref.read(terminalsProvider(s)).current ?? _startedFor!;
 
   @override
   void initState() {
     super.initState();
-    s.addListener(_onSession);
-    _attach();
+    _startCurrent();
+    // 换了当前会话（新开、切换、关掉）：等它排完版再启动 shell
+    ref.listenManual(terminalsProvider(s).select((v) => v.current), (_, _) => _startCurrent());
   }
 
   @override
   void dispose() {
-    s.removeListener(_onSession);
-    _listening?.removeListener(_onTerm);
-    _stalled?.removeListener(_onTerm);
     _focus.dispose();
     super.dispose();
   }
 
-  void _onSession() {
-    if (!mounted) return;
-    _attach();
-    setState(() {});
-  }
-
-  void _onTerm() {
-    if (mounted) setState(() {}); // Ctrl 的点亮状态、Ubuntu“没有响应”的提示
-  }
-
-  void _attach() {
-    if (identical(_listening, term)) return;
-    _listening?.removeListener(_onTerm);
-    _listening = term..addListener(_onTerm);
-    _stalled?.removeListener(_onTerm);
-    final backend = term.backend;
-    _stalled = backend is LinuxShellBackend ? (backend.stalled..addListener(_onTerm)) : null;
+  void _startCurrent() {
+    if (identical(_startedFor, term)) return;
     // 等第一帧排完版、终端知道自己有几行几列，再启动 shell。
-    final target = term;
+    final target = _startedFor = term;
     WidgetsBinding.instance.addPostFrameCallback((_) => target.ensureStarted());
   }
 
@@ -154,13 +139,15 @@ class _TerminalTabState extends State<TerminalTab> {
 
   @override
   Widget build(BuildContext context) {
+    // 会话列表、当前是哪个、Ctrl 的点亮状态、Ubuntu“没有响应”的提示：都从这里订阅
+    ref.watch(terminalsProvider(s));
     final c = context.colors;
     final t = Theme.of(context).textTheme;
     final dark = Theme.of(context).brightness == Brightness.dark;
     final settings = appOf(context).settings;
     final chinese = settings.getBool(SettingKeys.terminalChineseIme);
     final backend = term.backend;
-    final stalledBackend = backend is LinuxShellBackend && backend.stalled.value ? backend : null;
+    final stalledBackend = backend is LinuxShellBackend && backend.stalled ? backend : null;
     return Column(
       children: [
         SizedBox(
