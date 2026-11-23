@@ -3,37 +3,36 @@
 // - 任务栏按“待办 → 进行中 → 完成”分三段；一行一个任务：标题（强）＋ 负责人、依赖、写入范围（弱）。
 //   改状态、删除收进行尾菜单。写入范围重叠时在最上面用警告条说清是哪两个任务。
 // - 主操作只有一个：“新建任务”（在任务栏）。
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lopicode/agent/team.dart';
 import 'package:lopicode/project_session.dart';
+import 'package:lopicode/state/workspace_chat.dart';
+import 'package:lopicode/state/workspace_conversations.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/chrome.dart';
 import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
 
-class TeamScreen extends StatefulWidget {
+class TeamScreen extends ConsumerStatefulWidget {
   const TeamScreen({super.key, required this.session});
   final ProjectSession session;
 
   @override
-  State<TeamScreen> createState() => _TeamScreenState();
+  ConsumerState<TeamScreen> createState() => _TeamScreenState();
 }
 
-class _TeamScreenState extends State<TeamScreen> {
+class _TeamScreenState extends ConsumerState<TeamScreen> {
   TeamBoard? _board;
 
   @override
   void initState() {
     super.initState();
-    widget.session.addListener(_changed);
+    // 任务板变了、对话目录变了（子代理来去）：重画
+    ref.listenManual(teamRevProvider(widget.session), (_, _) => _changed());
+    ref.listenManual(conversationsProvider(widget.session), (_, _) => _changed());
     widget.session.teamBoard.then((b) {
       if (mounted) setState(() => _board = b);
     });
-  }
-
-  @override
-  void dispose() {
-    widget.session.removeListener(_changed);
-    super.dispose();
   }
 
   void _changed() {

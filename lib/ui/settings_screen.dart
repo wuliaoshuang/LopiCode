@@ -21,6 +21,7 @@ import 'package:lopicode/state/app_providers.dart';
 import 'package:lopicode/state/config_providers.dart';
 import 'package:lopicode/state/runtime_state.dart';
 import 'package:lopicode/state/ui_prefs.dart';
+import 'package:lopicode/state/workspace_conversations.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/app_ref.dart';
 import 'package:lopicode/ui/automation_screen.dart';
@@ -112,14 +113,13 @@ class SettingsScreen extends ConsumerWidget {
               if (session == null)
                 const GroupRow(key: Key('settings-rules'), icon: Icons.rule, title: '项目规则', subtitle: '打开一个工作区后，才能写它的规则')
               else
-                AnimatedBuilder(
-                  animation: session!,
-                  builder: (context, _) => GroupRow(
+                Consumer(
+                  builder: (context, ref, _) => GroupRow(
                     key: const Key('settings-rules'),
                     icon: Icons.rule,
                     title: '项目规则',
                     subtitle: '只对工作区“${session!.project.name}”生效',
-                    value: session!.projectRules.isEmpty ? '未设置' : '已设置',
+                    value: ref.watch(conversationsProvider(session!).select((v) => v.projectRules)).isEmpty ? '未设置' : '已设置',
                     onTap: () => go(ProjectRulesScreen(session: session!)),
                   ),
                 ),

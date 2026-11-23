@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:lopicode/agent/agent_runner.dart';
 import 'package:lopicode/agent/agent_tools.dart';
 import 'package:lopicode/agent/automation.dart';
@@ -22,9 +21,11 @@ import 'package:lopicode/core/stores.dart';
 import 'package:lopicode/preview/preview_server.dart';
 import 'package:lopicode/runtime/linux_command_runner.dart';
 import 'package:lopicode/runtime/linux_shell_backend.dart';
+import 'package:lopicode/session/chat_models.dart';
 import 'package:lopicode/session/conversation.dart';
 import 'package:lopicode/ssh/ssh_config.dart';
 import 'package:lopicode/ssh/ssh_connector.dart';
+import 'package:lopicode/state/workspace_chat.dart';
 import 'package:lopicode/state/workspace_conversations.dart';
 import 'package:lopicode/state/workspace_files.dart';
 import 'package:lopicode/state/workspace_preview.dart';
@@ -32,117 +33,11 @@ import 'package:lopicode/state/workspace_terminals.dart';
 import 'package:lopicode/terminal/terminal_session.dart';
 import 'package:path/path.dart' as p;
 
+export 'package:lopicode/session/chat_models.dart';
 export 'package:lopicode/session/conversation.dart';
 
-/// 对话里显示的一项。
-sealed class ChatItem {}
-
-class UserItem extends ChatItem {
-  UserItem(this.text, {this.images = const []});
-  final String text;
-
-  /// 图片附件在手机上的完整路径。
-  final List<String> images;
-}
-
-class AssistantItem extends ChatItem {
-  AssistantItem(this.text, {this.streaming = false});
-  String text;
-  bool streaming;
-}
-
-class ToolItem extends ChatItem {
-  ToolItem(this.callId, this.name, this.arguments);
-  final String callId;
-  final String name;
-  final String arguments;
-  String? result;
-  bool ok = true;
-  bool denied = false;
-  bool get running => result == null;
-
-  /// 派子代理的调用：对应的子对话。
-  String? childConversationId;
-}
-
-/// 上下文占用。
-class ContextUsage {
-  const ContextUsage(this.used, this.limit, {required this.estimated});
-  final int used;
-  final int limit;
-
-  /// true＝按字数估的“预计下次请求”；false＝接口返回的“上次请求”。
-  final bool estimated;
-  double get fraction => (used / limit).clamp(0.0, 1.0);
-}
-
-/// 一轮结束后，回复下方那行用量。
-class UsageItem extends ChatItem {
-  UsageItem(this.turn);
-  final TurnUsage turn;
-}
-
-class NoticeItem extends ChatItem {
-  NoticeItem(this.text, {this.isError = false});
-  final String text;
-  final bool isError;
-}
-
-/// 等用户点“允许 / 拒绝”的确认卡。
-class PendingApproval {
-  PendingApproval(this.request, {this.conversationId = '', this.agentName = ''});
-  final ApprovalRequest request;
-  final String conversationId;
-
-  /// 是哪个子代理要的；主智能体为空。
-  final String agentName;
-  final Completer<bool> completer = Completer<bool>();
-}
-
-/// AI 向用户提的问题（选择卡）。
-class PendingQuestion {
-  PendingQuestion(this.question, this.options, {this.conversationId = '', this.agentName = ''});
-  final String question;
-  final List<String> options;
-  final String conversationId;
-  final String agentName;
-  final Completer<String> completer = Completer<String>();
-}
-
-/// AI 生成过程中用户又发的消息：排队的，或者插话（还没交给模型的）。
-class QueuedMessage {
-  QueuedMessage(this.text, {this.images = const [], this.steer = false});
-  final String text;
-  final List<Map<String, dynamic>> images;
-
-  /// true＝插话（下一步交给模型）；false＝排队（这一轮结束后再发）。
-  bool steer;
-}
-
-/// 发送方式（AI 正在生成时）。
-enum SendMode { queue, steer, interrupt }
-
-/// 一段对话的运行状态。主对话、子代理、自动化任务各有一份，互不干扰。
-class ConvRun {
-  ConvRun(Conversation conv, this._find) : convId = conv.id, _last = conv;
-  final String convId;
-  final Conversation? Function(String id) _find;
-  Conversation _last;
-
-  /// 这段对话在目录里的最新一份（被删掉以后是删之前的那份）。
-  Conversation get conv => _last = _find(convId) ?? _last;
-  final List<ChatItem> items = [];
-  List<Map<String, dynamic>> messages = [];
-  bool busy = false;
-  bool loaded = false;
-  AgentRunner? runner;
-
-  /// 没人在场（自动化任务）：需要确认的操作一律按拒绝处理，也不提问。
-  bool unattended = false;
-
-  /// 正在跑的这一轮的用量；跑完后留着最近一轮的。
-  TurnUsage? turn;
-}
+/// 一段对话的运行状态（条目、忙不忙、这一轮的用量）：就是 [ChatRunNotifier]，沿用老名字。
+typedef ConvRun = ChatRunNotifier;
 
 class _Semaphore {
   _Semaphore(this.max);
@@ -171,7 +66,7 @@ class _Semaphore {
 
 /// 打开一个项目期间的全部运行状态：终端会话、预览服务器、Agent 对话。
 /// 各个页面共用这一个对象，切页面不丢状态。
-class ProjectSession extends ChangeNotifier {
+class ProjectSession {
   ProjectSession(this.app, this.project, {this.headless = false}) : guard = project.guard {
     if (!headless && !app.disposed) app.container.read(terminalsProvider(this));
   }
@@ -221,15 +116,16 @@ class ProjectSession extends ChangeNotifier {
   bool get disposed => _disposed;
   bool _disposed = false;
 
-  @override
-  void notifyListeners() {
-    if (!_disposed) super.notifyListeners();
-  }
-
   /// 每段对话的运行状态（用到才建）。
   final Map<String, ConvRun> _runs = {};
 
-  ConvRun _runOf(Conversation conv) => _runs.putIfAbsent(conv.id, () => ConvRun(conv, conversationById));
+  ConvRun _runOf(Conversation conv) => _runs.putIfAbsent(
+    conv.id,
+    // 应用已经退出时拿不到状态容器：临时建一个不接容器的，只记不通知
+    () => (app.disposed ? ChatRunNotifier((this, conv.id)) : app.container.read(chatRunProvider((this, conv.id)).notifier))..seed(conv),
+  );
+  late final PendingCardsNotifier _cards = app.disposed ? PendingCardsNotifier(this) : app.container.read(pendingCardsProvider(this).notifier);
+  late final SendQueueNotifier _queue = app.disposed ? SendQueueNotifier(this) : app.container.read(sendQueueProvider(this).notifier);
   ConvRun get _active => _runOf(activeConversation);
 
   /// 当前对话显示的条目。
@@ -240,8 +136,11 @@ class ProjectSession extends ChangeNotifier {
   bool get agentBusy => _active.busy;
   bool _chatLoaded = false;
 
-  /// 请求失败、用户消息被撤回时，把文字交还给输入框。
-  String? restoredDraft;
+  /// 请求失败、用户消息被撤回时，要交还给输入框的文字。
+  String? get restoredDraft => _queue.current.restoredDraft;
+
+  /// 输入框把草稿拿走（拿走就清掉）。
+  String? takeRestoredDraft() => _queue.takeDraft();
 
   // 对话：一个工作区可以有多段对话。目录（有哪些、当前哪段、项目规则）在 [conversationsProvider]；
   // 每段对话的消息各存一个文件（第一段沿用 chat.json，其余是 chat-<id>.json）。子代理的对话也在目录里，带着上级的 id。
@@ -268,7 +167,6 @@ class ProjectSession extends ChangeNotifier {
 
   Future<void> setProjectRules(String text) async {
     await _convs?.setProjectRules(text);
-    notifyListeners();
   }
 
   /// 目录里这段对话的最新一份（闭包里拿着的可能是旧的）。
@@ -285,7 +183,6 @@ class ProjectSession extends ChangeNotifier {
     _convs?.update(activeConversationId, (c) => c.copyWith(selection: selection));
     await app.models.setLastSelection(selection);
     await _saveIndex();
-    notifyListeners();
   }
 
   PermissionLevel get defaultPermission => PermissionLevel.byId(app.settings.getString(SettingKeys.defaultPermission, 'workspace'));
@@ -295,7 +192,6 @@ class ProjectSession extends ChangeNotifier {
   Future<void> setPermission(PermissionLevel level) async {
     _convs?.update(activeConversationId, (c) => c.copyWith(permission: level.id));
     await _saveIndex();
-    notifyListeners();
   }
 
   bool get planMode => activeConversation.planMode;
@@ -303,7 +199,6 @@ class ProjectSession extends ChangeNotifier {
   Future<void> setPlanMode(bool on) async {
     _convs?.update(activeConversationId, (c) => c.copyWith(planMode: on));
     await _saveIndex();
-    notifyListeners();
   }
 
   AgentPreset presetOf(Conversation conv) => app.presets.byId(conv.presetId ?? app.presets.defaultId);
@@ -312,17 +207,12 @@ class ProjectSession extends ChangeNotifier {
   Future<void> setPreset(String id) async {
     _convs?.update(activeConversationId, (c) => c.copyWith(presetId: id));
     await _saveIndex();
-    notifyListeners();
   }
 
-  /// 点过“本对话都允许”的对话。只在内存里：重启 App 后恢复逐次询问。
-  final Set<String> _autoAllow = {};
-  bool get autoAllowActive => _autoAllow.contains(activeConversationId);
+  /// 当前对话是不是点过“本对话都允许”。只在内存里：重启 App 后恢复逐次询问。
+  bool get autoAllowActive => _cards.autoAllowed(activeConversationId);
 
-  void clearAutoAllow() {
-    _autoAllow.remove(activeConversationId);
-    notifyListeners();
-  }
+  void clearAutoAllow() => _cards.clearAutoAllow(activeConversationId);
 
   // ── 读写对话记录 ─────────────────────────────────────
   Future<List<Map<String, dynamic>>> _readMessages(String id) async {
@@ -337,8 +227,8 @@ class ProjectSession extends ChangeNotifier {
 
   Future<void> _ensureLoaded(ConvRun run) async {
     if (run.loaded) return;
-    run.loaded = true;
-    run.messages = await _readMessages(run.conv.id);
+    run.markLoaded();
+    run.messages = await _readMessages(run.convId);
     _rebuildItems(run);
   }
 
@@ -354,7 +244,6 @@ class ProjectSession extends ChangeNotifier {
     // 老版本只有一个 chat.json、没有标题：从第一句话补一个。
     if (activeConversation.title.isEmpty) _retitle();
     _chatLoaded = true;
-    notifyListeners();
   }
 
   void _retitle() {
@@ -389,19 +278,17 @@ class ProjectSession extends ChangeNotifier {
     if (_messages.isEmpty && chat.isEmpty) return;
     final conv = Conversation(_newConvId(), '', DateTime.now(), selection: app.models.defaultForNewChat()?.selection, presetId: app.presets.defaultId);
     _convs?.add(conv, front: true, activate: true);
-    _runOf(conv).loaded = true;
-    queue.clear();
+    _runOf(conv).markLoaded();
+    _queue.clear();
     await _saveIndex();
-    notifyListeners();
   }
 
   Future<void> selectConversation(String id) async {
     if (agentBusy || id == activeConversationId || !conversations.any((c) => c.id == id)) return;
     await loadChat();
     _convs?.activate(id);
-    queue.clear();
+    _queue.clear();
     await _ensureLoaded(_active);
-    notifyListeners();
   }
 
   /// 子代理谱系：[rootId] 这段对话派出的全部子代理（含子代理再派出的），按派出顺序。
@@ -435,27 +322,27 @@ class ProjectSession extends ChangeNotifier {
         }
       }
       _boards.remove(d);
-      _autoAllow.remove(d);
+      _cards.clearAutoAllow(d);
+      if (!app.disposed) app.container.invalidate(chatRunProvider((this, d)));
     }
     _convs?.removeAll(doomed.toSet());
-    queue.clear();
+    _queue.clear();
     await _ensureLoaded(_active);
     await _saveIndex();
-    notifyListeners();
   }
 
   String _hostPathOfAttachment(String rel) => p.join(project.dir, rel);
 
   /// 从接口格式的消息记录重建界面条目（记录是唯一的事实来源）。
   void _rebuildItems(ConvRun run) {
-    run.items.clear();
-    final tools = <String, ToolItem>{};
-    final kids = conversations.where((c) => c.parentId == run.conv.id).toList()..sort((a, b) => a.updatedAt.compareTo(b.updatedAt));
+    final items = <ChatItem>[];
+    final toolAt = <String, int>{};
+    final kids = conversations.where((c) => c.parentId == run.convId).toList()..sort((a, b) => a.updatedAt.compareTo(b.updatedAt));
     var kid = 0;
     for (final m in run.messages) {
       switch (m['role']) {
         case 'user':
-          run.items.add(
+          items.add(
             UserItem(
               '${m['content'] ?? ''}',
               images: [
@@ -466,88 +353,62 @@ class ProjectSession extends ChangeNotifier {
           );
         case 'assistant':
           final text = m['content'];
-          if (text is String && text.isNotEmpty) run.items.add(AssistantItem(text));
+          if (text is String && text.isNotEmpty) items.add(AssistantItem(text));
           for (final c in (m['tool_calls'] as List?) ?? const []) {
             if (c is! Map) continue;
             final fn = c['function'];
-            final item = ToolItem('${c['id']}', fn is Map ? '${fn['name']}' : '', fn is Map ? '${fn['arguments']}' : '');
-            item.result = '（没有记录到结果）';
-            if (item.name == 'spawn_agent' && kid < kids.length) item.childConversationId = kids[kid++].id;
-            tools[item.callId] = item;
-            run.items.add(item);
+            final name = fn is Map ? '${fn['name']}' : '';
+            final item = ToolItem(
+              '${c['id']}',
+              name,
+              fn is Map ? '${fn['arguments']}' : '',
+              result: '（没有记录到结果）',
+              childConversationId: name == 'spawn_agent' && kid < kids.length ? kids[kid++].id : null,
+            );
+            toolAt[item.callId] = items.length;
+            items.add(item);
           }
         case 'tool':
-          final item = tools['${m['tool_call_id']}'];
-          if (item != null) {
-            item.result = '${m['content'] ?? ''}';
-            item.ok = !item.result!.startsWith('错误') && !item.result!.startsWith('用户拒绝');
-            item.denied = item.result!.startsWith('用户拒绝');
+          final at = toolAt['${m['tool_call_id']}'];
+          if (at != null) {
+            final result = '${m['content'] ?? ''}';
+            items[at] = (items[at] as ToolItem).copyWith(result: result, ok: !result.startsWith('错误') && !result.startsWith('用户拒绝'), denied: result.startsWith('用户拒绝'));
           }
       }
       final turn = TurnUsage.fromJson(m['_usage']);
-      if (turn != null) run.items.add(UsageItem(turn));
+      if (turn != null) items.add(UsageItem(turn));
     }
+    run.setItems(items);
   }
 
   // ── 确认卡 / 提问卡（可能同时来自主智能体和几个子代理，排队一张一张出）────
-  final List<PendingApproval> _approvals = [];
-  final List<PendingQuestion> _questions = [];
-
-  PendingApproval? get pendingApproval => _approvals.firstOrNull;
-  PendingQuestion? get pendingQuestion => _questions.firstOrNull;
+  PendingApproval? get pendingApproval => _cards.current.approval;
+  PendingQuestion? get pendingQuestion => _cards.current.question;
 
   Future<bool> _requestApproval(ConvRun run, ApprovalRequest request) {
     if (run.unattended) return Future.value(false); // 没人在场：一律按拒绝
-    final pending = PendingApproval(request, conversationId: run.conv.id, agentName: run.conv.agentName);
-    _approvals.add(pending);
-    notifyListeners();
-    return pending.completer.future;
+    return _cards.requestApproval(PendingApproval(request, conversationId: run.convId, agentName: run.conv.agentName));
   }
 
   /// 回答最前面那张确认卡。[always]＝“本对话都允许”（这类卡允许的话）。
-  void resolveApproval(bool allow, {bool always = false}) {
-    if (_approvals.isEmpty) return;
-    final pending = _approvals.removeAt(0);
-    if (allow && always && pending.request.allowAlways) {
-      final conv = conversationById(pending.conversationId);
-      _autoAllow.add(conv == null ? activeConversationId : rootOf(conv).id);
-      // 同一段对话里已经在排队的同类确认卡一并放行。
-      for (final other in _approvals.where((a) => a.request.allowAlways).toList()) {
-        final oc = conversationById(other.conversationId);
-        if (oc != null && _autoAllow.contains(rootOf(oc).id)) {
-          _approvals.remove(other);
-          other.completer.complete(true);
-        }
-      }
-    }
-    pending.completer.complete(allow);
-    notifyListeners();
-  }
+  void resolveApproval(bool allow, {bool always = false}) => _cards.resolveApproval(
+    allow,
+    always: always,
+    rootOf: (id) {
+      final conv = conversationById(id);
+      return conv == null ? null : rootOf(conv).id;
+    },
+    fallbackRoot: activeConversationId,
+  );
 
   Future<String> _askUser(ConvRun run, String question, List<String> options) {
     if (run.unattended) return Future.value('（这是无人值守的自动化任务，没有人能回答。请按最稳妥的做法继续，或者说明卡在哪里。）');
-    final q = PendingQuestion(question, options, conversationId: run.conv.id, agentName: run.conv.agentName);
-    _questions.add(q);
-    notifyListeners();
-    return q.completer.future;
+    return _cards.ask(PendingQuestion(question, options, conversationId: run.convId, agentName: run.conv.agentName));
   }
 
-  void answerQuestion(String answer) {
-    if (_questions.isEmpty) return;
-    _questions.removeAt(0).completer.complete(answer.trim().isEmpty ? '（用户没有回答）' : answer.trim());
-    notifyListeners();
-  }
+  void answerQuestion(String answer) => _cards.answerQuestion(answer);
 
-  void _dropPendingOf(Set<String> convIds) {
-    for (final a in _approvals.where((a) => convIds.contains(a.conversationId)).toList()) {
-      _approvals.remove(a);
-      a.completer.complete(false);
-    }
-    for (final q in _questions.where((q) => convIds.contains(q.conversationId)).toList()) {
-      _questions.remove(q);
-      q.completer.complete('（用户没有回答，已停止）');
-    }
-  }
+  void _dropPendingOf(Set<String> convIds) => _cards.dropOf(convIds);
 
   // ── 团队任务板 ───────────────────────────────────────
   bool get teamEnabled => app.settings.getBool(SettingKeys.teamEnabled);
@@ -556,7 +417,7 @@ class ProjectSession extends ChangeNotifier {
   Future<TeamBoard> boardOf(Conversation root) async {
     final existing = _boards[root.id];
     if (existing != null) return existing;
-    final board = TeamBoard(file: _reserved('team-${root.id}.json'))..onChanged = notifyListeners;
+    final board = TeamBoard(file: _reserved('team-${root.id}.json'))..onChanged = _teamChanged;
     _boards[root.id] = board;
     await board.load();
     return board;
@@ -564,6 +425,10 @@ class ProjectSession extends ChangeNotifier {
 
   /// 当前对话的任务板（团队没开时也能看，只是 Agent 没有任务板工具）。
   Future<TeamBoard> get teamBoard => boardOf(rootOf(activeConversation));
+
+  void _teamChanged() {
+    if (!_disposed && !app.disposed) app.container.read(teamRevProvider(this).notifier).bump();
+  }
 
   // ── 子代理设置 ───────────────────────────────────────
   bool get subagentsEnabled => app.settings.getBool(SettingKeys.subagentEnabled, true);
@@ -645,7 +510,7 @@ class ProjectSession extends ChangeNotifier {
       guard: guard,
       runner: commandRunnerFactory?.call() ?? LinuxCommandRunner(app.runtime, guestCwd: project.linuxPath, onOutput: (t) => terminals.firstOrNull?.append(t)),
       requestApproval: (r) => _requestApproval(run, r),
-      autoApprove: () => _autoAllow.contains(root.id),
+      autoApprove: () => _cards.autoAllowed(root.id),
       // 权限和计划模式每次都现查目录里的最新值：跑到一半改了档位、开了计划模式，下一步就生效
       permission: () => permissionOf(_live(root)),
       planMode: () => _live(root).planMode,
@@ -725,13 +590,12 @@ class ProjectSession extends ChangeNotifier {
     final child = Conversation(_newConvId(), _titleFrom(task), DateTime.now(), parentId: parent.conv.id, depth: parent.conv.depth + 1, agentName: name, selection: selection);
     _convs?.add(child);
     final run = _runOf(child)
-      ..loaded = true
+      ..markLoaded()
       ..unattended = parent.unattended;
     // 让界面上那张工具卡能点进这段子对话。
     final card = parent.items.whereType<ToolItem>().where((t) => t.name == 'spawn_agent' && t.running && t.childConversationId == null).firstOrNull;
-    card?.childConversationId = child.id;
+    if (card != null) parent.replace(card, card.copyWith(childConversationId: child.id));
     await _saveIndex();
-    notifyListeners();
 
     _subSlots.max = subagentMaxConcurrent;
     await _subSlots.acquire();
@@ -872,10 +736,9 @@ class ProjectSession extends ChangeNotifier {
     );
     _convs?.add(conv, front: true);
     final run = _runOf(conv)
-      ..loaded = true
+      ..markLoaded()
       ..unattended = true;
     await _saveIndex();
-    notifyListeners();
     final skills = await app.skills.enabled(workspaceDir: project.dir);
     final outcome = await _execute(run, a.instruction, root: conv, skills: skills);
     return AutomationRun(startedAt, outcome.failed ? 'failed' : 'ok', _clip(outcome.text.trim().isEmpty ? '（没有输出）' : outcome.text.trim(), 300));
@@ -891,10 +754,9 @@ class ProjectSession extends ChangeNotifier {
     List<String>? writeScope,
     String? taskNote,
   }) async {
-    run.busy = true;
-    run.items.add(UserItem(text, images: [for (final i in images) _hostPathOfAttachment('${i['path']}')]));
+    run.setBusy(true);
+    run.add(UserItem(text, images: [for (final i in images) _hostPathOfAttachment('${i['path']}')]));
     _convs?.update(run.convId, (c) => c.copyWith(updatedAt: DateTime.now()));
-    notifyListeners();
 
     final resolved = modelOf(run.conv);
     final client = await app.createChatClient(resolved);
@@ -915,7 +777,7 @@ class ProjectSession extends ChangeNotifier {
     );
     run.runner = runner;
     final turn = TurnUsage();
-    run.turn = turn;
+    run.setTurn(turn);
     final price = resolved == null ? null : ModelPrice.of(resolved.model);
     final clock = Stopwatch()..start();
     final toolClocks = <String, Stopwatch>{};
@@ -926,28 +788,27 @@ class ProjectSession extends ChangeNotifier {
       await for (final event in runner.send(text, images: images)) {
         switch (event) {
           case AssistantDelta(:final text):
-            if (streaming == null) {
-              streaming = AssistantItem('', streaming: true);
-              run.items.add(streaming);
+            final soFar = streaming;
+            if (soFar == null) {
+              run.add(streaming = AssistantItem(text, streaming: true));
+            } else {
+              streaming = run.replace(soFar, soFar.copyWith(text: soFar.text + text));
             }
-            streaming.text += text;
           case AssistantMessage(:final text):
-            streaming?.streaming = false;
+            final done = streaming;
+            if (done != null) run.replace(done, done.copyWith(streaming: false));
             streaming = null;
             if (text.trim().isNotEmpty) last = text;
           case UserInjected(:final text):
-            run.items.add(UserItem(text));
-            if (identical(run, _active)) queue.removeWhere((q) => q.steer && q.text == text);
+            run.add(UserItem(text));
+            if (identical(run, _active)) _queue.dropSteered(text);
           case ToolStarted(:final callId, :final name, :final arguments):
-            run.items.add(ToolItem(callId, name, arguments));
+            run.add(ToolItem(callId, name, arguments));
             turn.steps.add(ToolStep(callId, name));
             toolClocks[callId] = Stopwatch()..start();
           case ToolFinished(:final callId, :final outcome):
             final item = run.items.whereType<ToolItem>().lastWhere((t) => t.callId == callId);
-            item
-              ..result = outcome.text
-              ..ok = outcome.ok
-              ..denied = outcome.denied;
+            run.replace(item, item.copyWith(result: outcome.text, ok: outcome.ok, denied: outcome.denied));
             if (outcome.changedFiles) filesChanged();
             turn.steps.whereType<ToolStep>().where((t) => t.callId == callId).lastOrNull
               ?..ms = toolClocks.remove(callId)?.elapsedMilliseconds
@@ -956,49 +817,48 @@ class ProjectSession extends ChangeNotifier {
             turn.steps.add(RequestStep(RequestUsage(usage: usage, ms: ms, firstMs: firstMs, startedAt: startedAt, cost: usage == null ? null : price?.cost(usage))));
             if (usage != null) _convs?.update(run.convId, (c) => c.copyWith(lastInput: usage.input));
           case AgentNotice(:final text):
-            run.items.add(NoticeItem(text));
+            run.add(NoticeItem(text));
             if (text.startsWith('已停止')) failed = true;
           case AgentError(:final text):
             failed = true;
             last = text;
-            streaming?.streaming = false;
-            run.items.add(NoticeItem(text, isError: true));
+            final cut = streaming;
+            if (cut != null) streaming = run.replace(cut, cut.copyWith(streaming: false));
+            run.add(NoticeItem(text, isError: true));
             // 模型一个字没回时，runner 已把用户消息撤回；界面同步撤回并还原草稿。
             if (run.messages.isEmpty || run.messages.last['role'] != 'user') {
               final lastUser = run.items.lastIndexWhere((c) => c is UserItem);
               if (lastUser >= 0 && run.items.skip(lastUser + 1).every((c) => c is NoticeItem)) {
-                if (identical(run, _active)) restoredDraft = (run.items[lastUser] as UserItem).text;
-                run.items.removeAt(lastUser);
+                if (identical(run, _active)) _queue.setDraft((run.items[lastUser] as UserItem).text);
+                run.removeAt(lastUser);
               }
             }
         }
-        notifyListeners();
+        run.bumpRev(); // 这一轮的用量本子里可能记了新步骤
       }
     } finally {
-      streaming?.streaming = false;
+      final open = streaming;
+      if (open != null) run.replace(open, open.copyWith(streaming: false));
       // 兜底：流意外结束时不能留着没人能点的确认卡、提问卡。
       _dropPendingOf({run.conv.id});
-      run.busy = false;
+      run.setBusy(false);
       run.runner = null;
       turn.ms = clock.elapsedMilliseconds;
       _recordTurn(run, turn);
       await _saveRun(run);
-      notifyListeners();
       _releaseWhenIdle();
     }
     // 额度：对话结束后查一次余额（有节流）；到提醒线或到顶时说一声。
     if (resolved != null) {
       final note = await app.quota.afterRun(resolved.channel);
       if (note != null && run.conv.parentId == null && !run.unattended) {
-        run.items.add(NoticeItem(note, isError: note.startsWith(kQuotaBlockedPrefix)));
-        notifyListeners();
+        run.add(NoticeItem(note, isError: note.startsWith(kQuotaBlockedPrefix)));
       }
     }
     // 提醒：对话快把上下文占满了。
     final limit = resolved?.model.contextLength;
     if (limit != null && run.conv.parentId == null && !run.unattended && AgentRunner.estimateTokens(run.messages) > limit * 0.8) {
-      run.items.add(NoticeItem('这段对话快把模型的上下文（${limit ~/ 1000}K）占满了。发 /compact 可以把前面的内容压缩成摘要再继续。'));
-      notifyListeners();
+      run.add(NoticeItem('这段对话快把模型的上下文（${limit ~/ 1000}K）占满了。发 /compact 可以把前面的内容压缩成摘要再继续。'));
     }
     return (text: last, failed: failed);
   }
@@ -1013,7 +873,7 @@ class ProjectSession extends ChangeNotifier {
     if (run.messages.isNotEmpty && !run.messages.last.containsKey('_usage')) {
       run.messages.last['_usage'] = turn.toJson();
     }
-    run.items.add(UsageItem(turn));
+    run.add(UsageItem(turn));
   }
 
   /// 按调用 id 在已加载的对话里找那次工具调用（轨迹的步骤详情用）。
@@ -1050,7 +910,7 @@ class ProjectSession extends ChangeNotifier {
 
   // ── 发送、插话、排队 ─────────────────────────────────
   /// AI 生成时又发的消息（显示在输入框上方）。
-  final List<QueuedMessage> queue = [];
+  List<QueuedMessage> get queue => _queue.current.queue;
   bool _stoppedByUser = false;
   QueuedMessage? _sendAfterStop;
 
@@ -1064,19 +924,18 @@ class ProjectSession extends ChangeNotifier {
       final msg = QueuedMessage(text, images: images, steer: mode == SendMode.steer && images.isEmpty);
       switch (mode) {
         case SendMode.steer when images.isEmpty:
-          queue.add(msg);
+          _queue.add(msg);
           run.runner?.steer(text);
         case SendMode.interrupt:
           _sendAfterStop = msg;
           stopAgent();
         default:
-          queue.add(msg);
+          _queue.add(msg);
       }
-      notifyListeners();
       return;
     }
     _stoppedByUser = false;
-    restoredDraft = null;
+    _queue.setDraft(null);
     // 第一句话当标题；没选过模型就用新对话默认；最近说过话的排最前
     _convs?.update(run.convId, (c) => c.copyWith(title: c.title.isEmpty ? _titleFrom(text) : null, selection: c.selection ?? app.models.defaultForNewChat()?.selection), toFront: true);
     final conv = run.conv;
@@ -1090,18 +949,15 @@ class ProjectSession extends ChangeNotifier {
 
   Future<void> _afterRun() async {
     // 没来得及交给模型的插话：改成排队，不丢。
-    for (final q in queue) {
-      q.steer = false;
-    }
+    _queue.unsteerAll();
     final interrupt = _sendAfterStop;
     _sendAfterStop = null;
     QueuedMessage? next;
     if (interrupt != null) {
       next = interrupt;
     } else if (!_stoppedByUser && queue.isNotEmpty && restoredDraft == null) {
-      next = queue.removeAt(0);
+      next = _queue.takeFirst();
     }
-    notifyListeners();
     if (next != null && !_disposed) {
       // 用 unawaited：上一轮的 Future 先结束，界面状态不会卡在“生成中”。
       unawaited(sendToAgent(next.text, images: next.images));
@@ -1110,7 +966,7 @@ class ProjectSession extends ChangeNotifier {
 
   /// 排队里的一条：立即发送（中断当前这一轮，马上发它）。
   void sendQueuedNow(QueuedMessage msg) {
-    if (!queue.remove(msg)) return;
+    if (!_queue.remove(msg)) return;
     _active.runner?.withdrawSteer(msg.text);
     if (agentBusy) {
       _sendAfterStop = msg;
@@ -1118,23 +974,20 @@ class ProjectSession extends ChangeNotifier {
     } else {
       unawaited(sendToAgent(msg.text, images: msg.images));
     }
-    notifyListeners();
   }
 
   /// 排队里的一条：改为插话（下一步就让模型看到）。带图片的不能插话。
   void steerQueued(QueuedMessage msg) {
     if (!queue.contains(msg) || msg.steer || msg.images.isNotEmpty || !agentBusy) return;
-    msg.steer = true;
+    _queue.setSteer(msg, true);
     _active.runner?.steer(msg.text);
-    notifyListeners();
   }
 
   /// 排队里的一条：撤回（文字交还输入框）。
   void withdrawQueued(QueuedMessage msg) {
-    if (!queue.remove(msg)) return;
+    if (!_queue.remove(msg)) return;
     _active.runner?.withdrawSteer(msg.text);
-    restoredDraft = msg.text;
-    notifyListeners();
+    _queue.setDraft(msg.text);
   }
 
   void stopAgent() {
@@ -1186,20 +1039,18 @@ class ProjectSession extends ChangeNotifier {
     await loadChat();
     final run = _active;
     if (run.messages.length < 2) return '对话还很短，不需要压缩';
-    run.busy = true;
-    notifyListeners();
+    run.setBusy(true);
     String? error;
     try {
       final before = AgentRunner.estimateTokens(run.messages);
       error = await compactHistory(await app.createChatClient(modelOf(run.conv)), run.messages);
       if (error == null) {
         _rebuildItems(run);
-        run.items.add(NoticeItem('已把之前的对话压缩成摘要（估算从 ${before ~/ 1000}K 降到 ${AgentRunner.estimateTokens(run.messages) ~/ 1000}K）。原来的逐条记录不再保留。'));
+        run.add(NoticeItem('已把之前的对话压缩成摘要（估算从 ${before ~/ 1000}K 降到 ${AgentRunner.estimateTokens(run.messages) ~/ 1000}K）。原来的逐条记录不再保留。'));
       }
     } finally {
-      run.busy = false;
+      run.setBusy(false);
       await _saveRun(run);
-      notifyListeners();
     }
     return error ?? '已压缩';
   }
@@ -1239,14 +1090,21 @@ class ProjectSession extends ChangeNotifier {
   void _releaseWhenIdle() {
     if (!_disposed || _released || _runs.values.any((r) => r.busy)) return;
     _released = true;
-    if (!app.disposed) app.container.invalidate(conversationsProvider(this));
+    if (app.disposed) return;
+    final box = app.container;
+    box.invalidate(conversationsProvider(this));
+    for (final id in _runs.keys) {
+      box.invalidate(chatRunProvider((this, id)));
+    }
+    box.invalidate(pendingCardsProvider(this));
+    box.invalidate(sendQueueProvider(this));
+    box.invalidate(teamRevProvider(this));
   }
 
   /// 关掉并且收完尾了：对话目录的状态已经放掉。
   bool get released => _released;
   bool _released = false;
 
-  @override
   void dispose() {
     stopAgent();
     for (final r in _runs.values) {
@@ -1259,6 +1117,5 @@ class ProjectSession extends ChangeNotifier {
       app.container.invalidate(terminalsProvider(this)); // 会话的进程在这里收掉
       app.container.invalidate(previewProvider(this)); // 预览服务器在这里停掉
     }
-    super.dispose();
   }
 }

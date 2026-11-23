@@ -18,6 +18,8 @@ import 'package:lopicode/agent/usage.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/state/config_providers.dart';
 import 'package:lopicode/state/ui_prefs.dart';
+import 'package:lopicode/state/workspace_chat.dart';
+import 'package:lopicode/state/workspace_conversations.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/app_ref.dart';
 import 'package:lopicode/ui/chat_panels.dart';
@@ -57,7 +59,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   @override
   void initState() {
     super.initState();
-    s.addListener(_onSession);
+    // 对话目录、当前对话的条目和忙不忙、确认卡 / 提问卡、排队的消息：哪个变了都重画（页面销毁时自动取消订阅）
+    ref.listenManual(conversationsProvider(s), (_, _) => _onSession());
+    ref.listenManual(activeChatProvider(s), (_, _) => _onSession());
+    ref.listenManual(pendingCardsProvider(s), (_, _) => _onSession());
+    ref.listenManual(sendQueueProvider(s), (_, _) => _onSession());
     _input.addListener(_onInput);
     // 打开聊天时查一次余额（只对 DeepSeek 官方渠道有动作，最多每分钟一次）。
     s.loadChat().then((_) {
@@ -70,7 +76,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   @override
   void dispose() {
-    s.removeListener(_onSession);
     _input.dispose();
     _focus.dispose();
     _scroll.dispose();
@@ -83,10 +88,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   void _onSession() {
     if (!mounted) return;
-    final draft = s.restoredDraft;
-    if (draft != null && _input.text.isEmpty) {
-      _input.text = draft;
-      s.restoredDraft = null;
+    if (s.restoredDraft != null && _input.text.isEmpty) {
+      // 状态变化的通知里不能再改状态：等这一拍过去再把草稿拿走
+      scheduleMicrotask(() {
+        if (mounted && _input.text.isEmpty) _input.text = s.takeRestoredDraft() ?? '';
+      });
     }
     setState(() {});
     // 有新内容时滚到底（用户自己往上翻时不打扰）。

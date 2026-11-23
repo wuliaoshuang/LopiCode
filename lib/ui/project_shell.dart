@@ -7,11 +7,14 @@
 // - 系统返回键：侧边栏开着先关它；不在聊天页时先回聊天页，在聊天页才退出。
 import 'dart:io';
 
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lopicode/build/build_screen.dart';
 import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/lowcode/builder_screen.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/runtime/runtime_screen.dart';
+import 'package:lopicode/state/workspace_chat.dart';
+import 'package:lopicode/state/workspace_conversations.dart';
 import 'package:lopicode/ui/app_ref.dart';
 import 'package:lopicode/ui/chat_screen.dart';
 import 'package:lopicode/ui/chrome.dart';
@@ -24,7 +27,7 @@ import 'package:lopicode/ui/shell.dart';
 import 'package:lopicode/ui/terminal_tab.dart';
 import 'package:material_ui/material_ui.dart';
 
-class ProjectShell extends StatefulWidget {
+class ProjectShell extends ConsumerStatefulWidget {
   const ProjectShell({super.key, required this.project, this.initial = ShellDest.chat, this.session, this.onSwitchProject});
   final Project project;
   final ShellDest initial;
@@ -36,10 +39,10 @@ class ProjectShell extends StatefulWidget {
   final void Function(Project? project)? onSwitchProject;
 
   @override
-  State<ProjectShell> createState() => _ProjectShellState();
+  ConsumerState<ProjectShell> createState() => _ProjectShellState();
 }
 
-class _ProjectShellState extends State<ProjectShell> {
+class _ProjectShellState extends ConsumerState<ProjectShell> {
   final _drawer = PushDrawerController();
   ProjectSession? _session;
   late ShellDest _dest = widget.initial;
@@ -51,7 +54,6 @@ class _ProjectShellState extends State<ProjectShell> {
     super.didChangeDependencies();
     if (_session == null) {
       _session = widget.session ?? ProjectSession(appOf(context), widget.project);
-      _session!.addListener(_onSession);
       final app = appOf(context);
       _session!.loadChat().then((_) {
         if (app.newConversationFor == widget.project.id) {
@@ -66,7 +68,6 @@ class _ProjectShellState extends State<ProjectShell> {
 
   @override
   void dispose() {
-    _session?.removeListener(_onSession);
     final live = _session?.app.scheduler.liveSessions;
     if (live != null && identical(live[widget.project.id], _session)) live.remove(widget.project.id);
     if (widget.session == null) _session?.dispose();
@@ -131,6 +132,9 @@ class _ProjectShellState extends State<ProjectShell> {
   @override
   Widget build(BuildContext context) {
     final session = _session!;
+    // 顶栏标题、侧边栏的对话列表、当前对话忙不忙：变了就重画
+    ref.watch(conversationsProvider(session));
+    ref.watch(activeChatProvider(session).select((v) => v.busy));
     Widget lazy(ShellDest d, Widget Function() build) => _visited.contains(d) ? build() : const SizedBox.shrink();
     Widget page(ShellDest d, Widget body) => Scaffold(
       appBar: ShellAppBar(title: d.label),

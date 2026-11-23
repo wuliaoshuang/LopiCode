@@ -6,10 +6,13 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:lopicode/agent/agent_tools.dart';
 import 'package:lopicode/agent/presets.dart';
 import 'package:lopicode/project_session.dart';
+import 'package:lopicode/state/workspace_chat.dart';
+import 'package:lopicode/state/workspace_conversations.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/chat_screen.dart';
 import 'package:lopicode/ui/chrome.dart';
@@ -710,35 +713,24 @@ class SubAgentSheet extends StatelessWidget {
 }
 
 /// 子代理的对话：只读，左上角返回上级。
-class SubConversationScreen extends StatefulWidget {
+class SubConversationScreen extends ConsumerStatefulWidget {
   const SubConversationScreen({super.key, required this.session, required this.conversationId});
   final ProjectSession session;
   final String conversationId;
 
   @override
-  State<SubConversationScreen> createState() => _SubConversationScreenState();
+  ConsumerState<SubConversationScreen> createState() => _SubConversationScreenState();
 }
 
-class _SubConversationScreenState extends State<SubConversationScreen> {
+class _SubConversationScreenState extends ConsumerState<SubConversationScreen> {
   ConvRun? _run;
 
   @override
   void initState() {
     super.initState();
-    widget.session.addListener(_changed);
     widget.session.openRun(widget.conversationId).then((r) {
       if (mounted) setState(() => _run = r);
     });
-  }
-
-  @override
-  void dispose() {
-    widget.session.removeListener(_changed);
-    super.dispose();
-  }
-
-  void _changed() {
-    if (mounted) setState(() {});
   }
 
   @override
@@ -746,6 +738,9 @@ class _SubConversationScreenState extends State<SubConversationScreen> {
     final c = context.colors;
     final t = Theme.of(context).textTheme;
     final s = widget.session;
+    // 这段子对话的条目、它在目录里的那一条：变了就重画
+    ref.watch(chatRunProvider((s, widget.conversationId)));
+    ref.watch(conversationsProvider(s));
     final conv = s.conversationById(widget.conversationId);
     final run = _run;
     final parent = s.conversationById(conv?.parentId);
