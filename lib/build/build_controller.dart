@@ -7,11 +7,48 @@ import 'package:lopicode/core/project_store.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:path/path.dart' as p;
 
-enum BuildPhase { idle, pushing, dispatching, waiting, downloading, done, failed, cancelled }
+enum BuildPhase { idle, connecting, pushing, dispatching, waiting, building, downloading, done, failed, cancelled }
+
+/// 一次打包任务对界面暴露的东西（GitHub 和 SSH 两种方式共用一张进度卡）。
+abstract class BuildJob extends ChangeNotifier {
+  BuildPhase phase = BuildPhase.idle;
+
+  /// 一步一句的进度。
+  final List<String> log = [];
+
+  /// 构建命令的原始输出（只有 SSH 方式有），只保留末尾一段。
+  String get output => '';
+  String? runUrl;
+  String? apkPath;
+  int? apkBytes;
+
+  bool get busy => const {
+    BuildPhase.connecting,
+    BuildPhase.pushing,
+    BuildPhase.dispatching,
+    BuildPhase.waiting,
+    BuildPhase.building,
+    BuildPhase.downloading,
+  }.contains(phase);
+
+  void cancel();
+
+  @protected
+  void say(String line) {
+    log.add(line);
+    notifyListeners();
+  }
+
+  @protected
+  void setPhase(BuildPhase next) {
+    phase = next;
+    notifyListeners();
+  }
+}
 
 /// 通过 GitHub Actions 打包的完整流程：
 /// （可选）推送项目文件 → 触发 workflow_dispatch → 轮询运行状态 → 下载产物 → 解出 APK。
-class ApkBuildController extends ChangeNotifier {
+class ApkBuildController extends BuildJob {
   ApkBuildController({
     required this.client,
     required this.workflowFile,
@@ -30,25 +67,9 @@ class ApkBuildController extends ChangeNotifier {
   final Duration pollInterval;
   final Duration timeout;
 
-  BuildPhase phase = BuildPhase.idle;
-  final List<String> log = [];
-  String? runUrl;
-  String? apkPath;
-  int? apkBytes;
   bool _cancelled = false;
 
-  bool get busy => const {BuildPhase.pushing, BuildPhase.dispatching, BuildPhase.waiting, BuildPhase.downloading}.contains(phase);
-
-  void _say(String line) {
-    log.add(line);
-    notifyListeners();
-  }
-
-  void _phase(BuildPhase next) {
-    phase = next;
-    notifyListeners();
-  }
-
+  @override
   void cancel() {
     if (busy) _cancelled = true;
   }
@@ -78,20 +99,20 @@ class ApkBuildController extends ChangeNotifier {
     apkBytes = null;
     try {
       if (pushFiles != null) {
-        _phase(BuildPhase.pushing);
-        _say('推送 ${pushFiles.length} 个文件到 ${client.owner}/${client.repo} 的 $ref 分支…');
+        setPhase(BuildPhase.pushing);
+        say('推送 ${pushFiles.length} 个文件到 ${client.owner}/${client.repo} 的 $ref 分支…');
         final sha = await client.pushFiles(branch: ref, files: pushFiles, message: 'LopiCode：同步项目文件');
-        _say('已提交 ${sha.length > 7 ? sha.substring(0, 7) : sha}');
+        say('已提交 ${sha.length > 7 ? sha.substring(0, 7) : sha}');
         _checkCancelled();
       }
 
-      _phase(BuildPhase.dispatching);
-      _say('触发工作流 $workflowFile…');
+      setPhase(BuildPhase.dispatching);
+      say('触发工作流 $workflowFile…');
       final startedAt = DateTime.now();
       var runId = await client.dispatchWorkflow(workflowFile, ref);
       final deadline = startedAt.add(timeout);
 
-      _phase(BuildPhase.waiting);
+      setPhase(BuildPhase.waiting);
       // 老接口不返回运行 ID：等它出现在运行列表里。
       for (var i = 0; runId == null && i < 10; i++) {
         _checkCancelled();
@@ -99,7 +120,7 @@ class ApkBuildController extends ChangeNotifier {
         runId = (await client.findLatestDispatchRun(workflowFile, ref, startedAt))?.id;
       }
       if (runId == null) throw GitHubException('工作流已触发，但在运行列表里没找到它。请到 GitHub 的 Actions 页面看看。');
-      _say('运行 #$runId 已开始');
+      say('运行 #$runId 已开始');
 
       WorkflowRun run;
       String? lastStatus;
@@ -112,7 +133,7 @@ class ApkBuildController extends ChangeNotifier {
         }
         if (run.status != lastStatus) {
           lastStatus = run.status;
-          _say(switch (run.status) {
+          say(switch (run.status) {
             'queued' || 'pending' || 'requested' || 'waiting' => '排队中…',
             'in_progress' => '构建中…（一般要几分钟）',
             'completed' => '构建结束：${_conclusion(run.conclusion)}',
@@ -129,12 +150,12 @@ class ApkBuildController extends ChangeNotifier {
         throw GitHubException('构建没有成功（${_conclusion(run.conclusion)}）。打开运行页面可以看到完整日志。');
       }
 
-      _phase(BuildPhase.downloading);
+      setPhase(BuildPhase.downloading);
       final artifacts = (await client.listArtifacts(runId)).where((a) => !a.expired).toList();
       if (artifacts.isEmpty) throw GitHubException('构建成功了，但没有上传任何产物。请检查工作流里的 upload-artifact 步骤。');
       _checkCancelled();
       final artifact = artifacts.first;
-      _say('下载产物 ${artifact.name}（${formatBytes(artifact.sizeInBytes)}）…');
+      say('下载产物 ${artifact.name}（${formatBytes(artifact.sizeInBytes)}）…');
       final apks = GitHubClient.extractApks(await client.downloadArtifactZip(artifact.id));
       if (apks.isEmpty) throw GitHubException('产物 ${artifact.name} 里没有 .apk 文件');
       await Directory(outputDir).create(recursive: true);
@@ -142,17 +163,17 @@ class ApkBuildController extends ChangeNotifier {
       await file.writeAsBytes(apks.first.bytes);
       apkPath = file.path;
       apkBytes = apks.first.bytes.length;
-      _say('APK 已保存（${formatBytes(apkBytes!)}）');
-      _phase(BuildPhase.done);
+      say('APK 已保存（${formatBytes(apkBytes!)}）');
+      setPhase(BuildPhase.done);
     } on _Cancelled {
-      _say('已停止等待。已经触发的构建不会被取消，可以到运行页面查看。');
-      _phase(BuildPhase.cancelled);
+      say('已停止等待。已经触发的构建不会被取消，可以到运行页面查看。');
+      setPhase(BuildPhase.cancelled);
     } on GitHubException catch (e) {
-      _say(e.message);
-      _phase(BuildPhase.failed);
+      say(e.message);
+      setPhase(BuildPhase.failed);
     } on FileSystemException catch (e) {
-      _say('保存 APK 失败：${e.osError?.message ?? e.message}');
-      _phase(BuildPhase.failed);
+      say('保存 APK 失败：${e.osError?.message ?? e.message}');
+      setPhase(BuildPhase.failed);
     }
   }
 

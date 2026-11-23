@@ -1,25 +1,100 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:dartssh2/dartssh2.dart';
+
 /// SSH 构建机的抽象：在远程主机上跑一条构建命令、流式看日志、再把产物拉回来。
-///
-/// 这一版只有接口，没有实现：实现需要 dartssh2（SSH + SFTP），
-/// 开发环境当时拿不到这个依赖包。接入时实现这个接口，
-/// APK 打包页的“SSH 构建机”和终端页的“SSH 远程主机”都用它。
+/// 真实实现是 [DartSshRemoteExec]；测试里换成假的。
 abstract class RemoteExec {
-  /// 连接。密码 / 私钥从安全存储里取，不经过普通设置。
-  Future<void> connect({
-    required String host,
-    required int port,
-    required String user,
-    String? password,
-    String? privateKey,
-  });
+  /// 连接并登录。失败时抛出带中文说明的异常。
+  Future<void> connect();
 
-  /// 执行命令，逐块吐出 stdout / stderr，结束时返回退出码。
-  Stream<String> run(String command, {void Function(int exitCode)? onExit});
+  /// 执行命令，stdout / stderr 一块一块交给 [onOutput]，结束后返回退出码
+  /// （远端没给退出码，例如连接中途断开，返回 null）。
+  Future<int?> run(String command, {required void Function(String chunk) onOutput});
 
-  /// 通过 SFTP 下载一个文件。
-  Future<Uint8List> download(String remotePath);
+  /// 通过 SFTP 上传一个文件（父目录要已存在）。
+  Future<void> upload(String remotePath, List<int> bytes);
+
+  /// 通过 SFTP 把远程文件下载到本机 [target]，返回字节数。
+  Future<int> download(String remotePath, File target, {void Function(int received, int? total)? onProgress});
 
   Future<void> close();
+}
+
+/// 把一个参数安全地放进远程 sh 命令行。
+String shellQuote(String value) => "'${value.replaceAll("'", "'\\''")}'";
+
+class DartSshRemoteExec implements RemoteExec {
+  DartSshRemoteExec(this._connect);
+
+  /// 建立已登录的连接（含主机指纹核对）。
+  final Future<SSHClient> Function() _connect;
+  SSHClient? _client;
+  SftpClient? _sftp;
+
+  SSHClient get _c => _client ?? (throw StateError('还没连接'));
+
+  @override
+  Future<void> connect() async {
+    _client ??= await _connect();
+  }
+
+  @override
+  Future<int?> run(String command, {required void Function(String chunk) onOutput}) async {
+    final session = await _c.execute(command);
+    const decoder = Utf8Decoder(allowMalformed: true);
+    final out = session.stdout.cast<List<int>>().transform(decoder).listen(onOutput);
+    final err = session.stderr.cast<List<int>>().transform(decoder).listen(onOutput);
+    await session.done;
+    await out.asFuture<void>().catchError((_) {});
+    await err.asFuture<void>().catchError((_) {});
+    return session.exitCode;
+  }
+
+  Future<SftpClient> _sftpClient() async => _sftp ??= await _c.sftp();
+
+  @override
+  Future<void> upload(String remotePath, List<int> bytes) async {
+    final sftp = await _sftpClient();
+    final file = await sftp.open(
+      remotePath,
+      mode: SftpFileOpenMode.create | SftpFileOpenMode.truncate | SftpFileOpenMode.write,
+    );
+    try {
+      await file.writeBytes(bytes is Uint8List ? bytes : Uint8List.fromList(bytes));
+    } finally {
+      await file.close();
+    }
+  }
+
+  @override
+  Future<int> download(String remotePath, File target, {void Function(int received, int? total)? onProgress}) async {
+    final sftp = await _sftpClient();
+    final file = await sftp.open(remotePath);
+    final sink = target.openWrite();
+    var received = 0;
+    try {
+      final total = (await file.stat()).size;
+      await for (final chunk in file.read()) {
+        sink.add(chunk);
+        received += chunk.length;
+        onProgress?.call(received, total);
+      }
+    } finally {
+      await sink.close();
+      await file.close();
+    }
+    return received;
+  }
+
+  @override
+  Future<void> close() async {
+    _sftp?.close();
+    _sftp = null;
+    _client?.close();
+    _client = null;
+  }
 }
