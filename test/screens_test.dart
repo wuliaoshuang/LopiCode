@@ -206,7 +206,7 @@ void main() {
       await tester.tap(find.text('退出'));
       await settle(tester, rounds: 3);
       expect(session.planMode, isFalse);
-      tester.state<ScaffoldMessengerState>(find.byType(ScaffoldMessenger).first).removeCurrentSnackBar();
+      tester.state<ScaffoldMessengerState>(find.byType(ScaffoldMessenger).first).clearSnackBars();
       await settle(tester, rounds: 3);
 
       await tester.tap(find.byTooltip('打开侧边栏'));
