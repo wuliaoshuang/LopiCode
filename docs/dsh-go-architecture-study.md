@@ -599,3 +599,26 @@ Riverpod 能解决的：谁关心谁更新（不再整页重画）、订阅自�
   | 工作区列表、首页 | 工作区清单（页面自己读、自己刷） | 页面内状态，不涉及 |
 - **第 5 步（收尾）——做了一部分**：守门测试已加（flutter_riverpod 只许界面用、provider 只在 lib/state、旧写法不许回来、
   旧式通知对象清单只许变短）；清单现在只剩 `LinuxRuntime`、`RuntimeDiagnostics`、`PushDrawerController`。
+
+### 第三轮（2026-11-24，收尾）
+
+基于 decf7f3，一块一个提交，每个提交单独过 `tool/check.sh`。
+
+- **`ProjectSession` 拆开了**（4d9d439）：1031 行 → 约 430 行的薄组装层，已从超长清单拿掉。跑一轮、组装工具、派子代理、
+  发送与排队、导出、附件各自一个文件，都在 `lib/session/`。对外方法名没变。
+- **渠道与模型完整版**（108cb0d）：`ModelSpec` / `Channel` 不可变；`modelsProvider`（`ModelsState` + `ModelsNotifier`）；
+  模型编辑面板不再改拿到的对象，而是交回一份改好的。
+- **自动化任务完整版**（982352b）：`Automation` 不可变；`automationsProvider`（清单 + 正在跑的）；
+  调度器推进时间、记结果都按 id 走 `AutomationStore` 的方法。
+- **团队任务板完整版**（8060d88）：`TeamTask` / `TeamMember` 不可变，`TeamBoard` 每次变化换一份 `TeamView`；
+  `teamProvider((工作区, 主对话 id))`。
+- **运行环境、一键诊断**（6b3c702）：`LinuxRuntime` / `RuntimeDiagnostics` 不再是 `ChangeNotifier`，每次变化拍不可变快照；
+  `runtimeProvider`、`runtimeDiagnosticsProvider`。旧式通知对象清单只剩 `PushDrawerController`（纯界面动画）。
+  **如实说明**：下载、解压、起进程的代码仍在这两个引擎对象里（终端和 Agent 的命令也直接用它们），没有搬进 Notifier；
+  Notifier 是界面这一侧的入口（快照 + 操作方法）。
+- **过程中查出的毛病**（都已修、有测试）：
+  1. 聊天记录里 `_images` / `tool_calls` 字段类型不对时，重建条目和导出会抛类型错误 → 改成先查类型。
+  2. `TeamBoard.update` 一次调用里既改依赖又开工、开工被依赖挡住时，会抛错但依赖已经被改掉（没存盘、没通知）→ 现在校验不过什么都不改。
+- **还留着的**：`config_providers.dart` 里 Agent 设置、技能文件、联网搜索、SSH 主机仍是“变了”计数（它们只是设置键或开关）；
+  超长清单里还有 builder_screen、chat_screen、chat_panels、usage_ui、settings_agent、settings_ai 六个界面文件。
+

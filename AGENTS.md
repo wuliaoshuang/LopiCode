@@ -48,7 +48,7 @@ tool/check.sh --fix    # 先自动排版
 新文件不超过 600 行。已经超了的（`builder_screen.dart`、`project_session.dart`、`chat_screen.dart` 等）记在守门测试的清单里，**只许变短不许变长**：
 往这些文件里加新功能之前，先把新功能写到新文件里。
 
-## 状态怎么放（Riverpod；2026-11-23 霜霜批准迁移，主体已迁完，剩余见下）
+## 状态怎么放（Riverpod；2026-11-23 霜霜批准迁移，2026-11-24 三轮迁完）
 
 用的是 `flutter_riverpod` / `riverpod` 3.5。**已经迁完的**和**还没迁的**分开写，别搞混。
 
@@ -60,7 +60,7 @@ tool/check.sh --fix    # 先自动排版
   `flutter_riverpod`（`ConsumerWidget`、`ref.watch` 这些界面部分）只许界面文件用。守门测试会拦。
 - **界面怎么用**：
   - 要“跟着变”的：`ConsumerWidget` / `ConsumerStatefulWidget` / `Consumer` 里 `ref.watch(某个 provider)`；
-    小块重画可以用 `lib/ui/app_ref.dart` 里的 `QuotaBuilder`、`RevBuilder`。只订阅自己关心的那一个，别订阅一大片。
+    小块重画可以用 `Consumer`，或 `lib/ui/app_ref.dart` 里的 `QuotaBuilder`。只订阅自己关心的那一个，别订阅一大片。
   - 只是取个“干活的对象”（存设置、调接口）：`appOf(context)`，它不订阅任何东西。
   - 界面不直接改底层对象的字段；要改就调 Notifier 或存储对象的方法。
   - **不许在搭界面的过程中改状态**（`build`、`initState`、`didChangeDependencies` 里直接改会报错）：放到按钮回调里，
@@ -72,21 +72,28 @@ tool/check.sh --fix    # 先自动排版
   - `quota_state.dart`：`quotaProvider`——额度上限和余额。这是**标准样板**：状态是不可变对象，只有 `QuotaNotifier` 能改。
   - `presets_state.dart`：`presetsProvider`——Agent 预设与个人偏好（完整版：不可变快照 + `PresetsNotifier`）。
   - `skills_state.dart`：`skillsProvider(工作区目录)`——技能清单（完整版；异步扫描带代次，没人看就释放）。
-  - `config_providers.dart`：渠道与模型、Agent 设置、自动化、联网搜索、SSH 主机的“变了”计数（`xxxRevProvider`）。
-    这几样的数据主人还是各自的存储对象（`ModelConfigStore`、`AutomationStore` 等，带存盘）；界面 `ref.watch(xxxRevProvider)` 之后照常从存储对象读。
-    这是**过渡写法**，比上面两个弱（界面拿到的 `Channel` / `ModelSpec` / `Automation` 仍是可变对象）；以后哪块要大改，就顺手改成不可变状态 + Notifier。
-  - `runtime_state.dart`：`runtimeRevProvider`、`runtimeDiagnosticsRevProvider`（运行环境对象本身还是旧式通知，界面已经只订阅 provider）。
+  - `models_state.dart`：`modelsProvider`——渠道与模型、新对话默认用哪个（完整版）。`Channel` / `ModelSpec` 不可变，
+    改就用 `copyWith` 造一份新的交给 `ModelsNotifier.upsert`；设置页的表单只改自己手里的草稿，不改拿到的对象。
+  - `automations_state.dart`：`automationsProvider`——自动化任务清单、运行历史、哪些正在跑（完整版）。`Automation` 不可变；
+    调度器要推进时间、记结果都走 `AutomationStore` 的方法（按 id），不许直接改字段。
+  - `config_providers.dart`：Agent 设置、技能文件、联网搜索、SSH 主机的“变了”计数（这几样本来就只是设置键或一个开关，计数就够）。
+  - `runtime_state.dart`：`runtimeProvider`、`runtimeDiagnosticsProvider`——运行环境和一键诊断（完整版）。
+    干活的还是 `LinuxRuntime` / `RuntimeDiagnostics`（管进程和文件，终端和 Agent 的命令直接用它们），但它们不再是 `ChangeNotifier`：
+    每次有变化拍一张不可变快照（`lib/runtime/runtime_snapshot.dart` 的 `RuntimeView` / `DiagnosticsView`）；界面只读快照，要做什么调 Notifier 的方法。
+  - `team_state.dart`：`teamProvider((工作区, 主对话 id))`——团队任务板（完整版）。`TeamTask` / `TeamMember` 不可变，
+    `TeamBoard` 每次变化换一份 `TeamView`；校验不过就抛错、什么都不改。
   - 一个工作区的状态（都按 `ProjectSession` 分身，工作区关掉并收完尾后释放）：
     - `workspace_files.dart`：`filesRevProvider`——工作区文件变了。
     - `workspace_terminals.dart`：`terminalsProvider`——开了哪些终端、当前哪个。
     - `workspace_preview.dart`：`previewProvider`——预览服务器起没起来、日志。
     - `workspace_conversations.dart`：`conversationsProvider`——对话目录（`Conversation` 不可变）、当前是哪段、项目规则。
     - `workspace_chat.dart`：`chatRunProvider((工作区, 对话 id))`——一段对话的条目（`ChatItem` 全部不可变）、忙不忙、这一轮用量；
-      `activeChatProvider`——当前那段；`pendingCardsProvider`——确认卡 / 提问卡 / “本对话都允许”；`sendQueueProvider`——排队和插话的消息、交还输入框的草稿；
-      `teamRevProvider`——团队任务板变了（只是计数，过渡写法）。
+      `activeChatProvider`——当前那段；`pendingCardsProvider`——确认卡 / 提问卡 / “本对话都允许”；`sendQueueProvider`——排队和插话的消息、交还输入框的草稿。
   - `ProjectSession`（`lib/project_session.dart`）现在**不是状态对象**了：它是“一个工作区的 Agent 引擎 + 对外方法的门面”，
     自己不通知任何人，状态全在上面这些 provider 里。界面要跟着变就订阅 provider，别想着监听它。
-    它还有 1000 行左右（跑一轮、组装工具、派子代理都在里面），登记在超长清单里，只许变短。
+    它现在只是薄组装层（约 430 行，已从超长清单拿掉）；活都在 `lib/session/` 里：`session_core.dart`（共用的底子）、`turn_runner.dart`（跑一轮）、
+    `toolbox_builder.dart`（组装工具）、`subagents.dart`（派子代理）、`send_flow.dart`（发送 / 排队 / 插话 / 停止）、`chat_export.dart`（导出）、`attachments.dart`（附件）。
+    新功能加到对应的小文件里，别往门面里塞。
 - **不等写完盘的设置**：按钮回调、后台顺手记一笔这类没法 `await` 的地方用 `SettingsStore.setLater`（内存立刻生效，写盘失败只记错误日志）。
   不要写 `unawaited(settings.set(...))`——写盘失败会变成没人接的异常。
 - **留在后台的页面**（底部导航的五个页面用 `IndexedStack` 保活）不会因为“从别的页面回来”而重建：
@@ -99,9 +106,8 @@ tool/check.sh --fix    # 先自动排版
 - 每个新 Notifier 都要在 `test/` 里有单元测试（参考 `test/state_providers_test.dart`、`test/quota_usage_test.dart`）：
   用 `ProviderContainer(overrides: [appServicesProvider.overrideWithValue(env.services), …])` 建一个独立容器。
 
-### 还没迁的（旧写法，只许减少，不许照着新增）
+### 留着的旧写法（只许减少，不许照着新增）
 
-- `LinuxRuntime`、`RuntimeDiagnostics` 还是 `ChangeNotifier`（界面已经只订阅 provider，对象本身没重写）。
 - `PushDrawerController`：侧边栏开合动画的控制器，纯界面，留着。
 - `TerminalSession`、`BuildJob` 是页面 / 列表自己建自己丢的“干活对象”，只留一个 `onChanged` 回调位，不是全局状态。
 - 清单在 `test/architecture_test.dart` 的 `_legacyNotifiers`：迁走一个删一个；**不许再新增 `ChangeNotifier` / 全局 `ValueNotifier` 状态**。
