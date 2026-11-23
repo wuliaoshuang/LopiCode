@@ -3,12 +3,18 @@
 // - 顶上一行只管“会话”：会话标签 + 新建（本机 shell / SSH 远程主机）。
 // - 底下一排手机键盘没有的键（Esc / Tab / Ctrl / 方向键 / 常用符号 / 清屏），横向可滚。
 //   Ctrl 是粘滞键：点亮后下一个字母变成控制字符（Ctrl 再点 C = 中断）。
+//   “中文”也在这排：默认每按一个键立刻进终端；点亮后才让输入法攒拼音选字。
+// - Ubuntu 进去后一直没输出：终端下方出一条提示，三个出路各占一个按钮，不让人对着空屏。
 // - 没有单独的输入行：真正的终端里输入就在光标处。
 import 'package:lopicode/app_services.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/ssh/ssh_config.dart';
 import 'package:lopicode/ssh/ssh_connect_screen.dart';
+import 'package:lopicode/core/stores.dart';
+import 'package:lopicode/runtime/linux_shell_backend.dart';
+import 'package:lopicode/terminal/terminal_input.dart';
 import 'package:lopicode/terminal/terminal_session.dart';
+import 'package:lopicode/ui/shell.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:xterm/xterm.dart';
@@ -24,6 +30,7 @@ class TerminalTab extends StatefulWidget {
 class _TerminalTabState extends State<TerminalTab> {
   final _focus = FocusNode();
   TerminalSession? _listening;
+  ValueNotifier<bool>? _stalled;
 
   ProjectSession get s => widget.session;
   TerminalSession get term => s.terminals[s.activeTerminal];
@@ -39,6 +46,7 @@ class _TerminalTabState extends State<TerminalTab> {
   void dispose() {
     s.removeListener(_onSession);
     _listening?.removeListener(_onTerm);
+    _stalled?.removeListener(_onTerm);
     _focus.dispose();
     super.dispose();
   }
@@ -50,13 +58,16 @@ class _TerminalTabState extends State<TerminalTab> {
   }
 
   void _onTerm() {
-    if (mounted) setState(() {}); // 只为 Ctrl 的点亮状态
+    if (mounted) setState(() {}); // Ctrl 的点亮状态、Ubuntu“没有响应”的提示
   }
 
   void _attach() {
     if (identical(_listening, term)) return;
     _listening?.removeListener(_onTerm);
     _listening = term..addListener(_onTerm);
+    _stalled?.removeListener(_onTerm);
+    final backend = term.backend;
+    _stalled = backend is LinuxShellBackend ? (backend.stalled..addListener(_onTerm)) : null;
     // 等第一帧排完版、终端知道自己有几行几列，再启动 shell。
     final target = term;
     WidgetsBinding.instance.addPostFrameCallback((_) => target.ensureStarted());
@@ -150,6 +161,10 @@ class _TerminalTabState extends State<TerminalTab> {
     final c = context.colors;
     final t = Theme.of(context).textTheme;
     final dark = Theme.of(context).brightness == Brightness.dark;
+    final settings = AppScope.of(context).settings;
+    final chinese = settings.getBool(SettingKeys.terminalChineseIme);
+    final backend = term.backend;
+    final stalledBackend = backend is LinuxShellBackend && backend.stalled.value ? backend : null;
     return Column(
       children: [
         SizedBox(
@@ -204,17 +219,18 @@ class _TerminalTabState extends State<TerminalTab> {
         Expanded(
           child: ColoredBox(
             color: c.codeBg,
-            child: TerminalView(
-              term.terminal,
+            child: TerminalInputView(
               key: ObjectKey(term),
+              session: term,
               focusNode: _focus,
               theme: _theme(c, dark),
               textStyle: const TerminalStyle(fontSize: 13, height: 1.3, fontFamily: kMonoFont, fontFamilyFallback: kMonoFallback),
               padding: const EdgeInsets.symmetric(horizontal: Space.x2, vertical: Space.x1),
-              deleteDetection: true,
+              mode: chinese ? TerminalImeMode.chinese : TerminalImeMode.direct,
             ),
           ),
         ),
+        if (stalledBackend != null) _StalledBar(backend: stalledBackend),
         Container(
           height: 44,
           decoration: BoxDecoration(color: c.surface, border: Border(top: BorderSide(color: c.border))),
@@ -230,6 +246,15 @@ class _TerminalTabState extends State<TerminalTab> {
               _Key('←', onTap: () => term.sendKey(TerminalKey.arrowLeft)),
               _Key('→', onTap: () => term.sendKey(TerminalKey.arrowRight)),
               for (final ch in const ['/', '-', '|', '~', '>', '&', '*', '"']) _Key(ch, onTap: () => term.sendText(ch)),
+              _Key(
+                '中文',
+                tooltip: '点亮后输入法可以打拼音选字；不点亮时每按一个键立刻进终端',
+                active: chinese,
+                onTap: () {
+                  settings.set(SettingKeys.terminalChineseIme, !chinese); // 内存里立刻生效，写盘在后台
+                  setState(() {});
+                },
+              ),
               _Key('清屏', onTap: term.clear),
             ],
           ),
@@ -267,5 +292,55 @@ class _Key extends StatelessWidget {
       ),
     );
     return tooltip == null ? key : Tooltip(message: tooltip!, child: key);
+  }
+}
+
+/// Ubuntu 进去后一直没有输出时的提示条：一行说明，下面三个出路各占一行按钮位。
+class _StalledBar extends StatelessWidget {
+  const _StalledBar({required this.backend});
+  final LinuxShellBackend backend;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final t = Theme.of(context).textTheme;
+    return Container(
+      key: const Key('terminal-stalled'),
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(Space.x4, Space.x3, Space.x4, Space.x3),
+      decoration: BoxDecoration(color: c.warningSoft, border: Border(top: BorderSide(color: c.border))),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('Ubuntu 没有响应', style: t.titleSmall?.copyWith(color: c.warning)),
+          const SizedBox(height: 2),
+          Text('进去 ${backend.stallTimeout.inSeconds} 秒了一个字都没输出，多半卡在启动这一步。', style: t.bodySmall),
+          const SizedBox(height: Space.x2),
+          FilledButton(
+            key: const Key('stalled-retry-compat'),
+            onPressed: backend.retryCompat,
+            child: const Text('改用兼容模式重试'),
+          ),
+          Row(
+            children: [
+              Expanded(
+                child: TextButton(
+                  key: const Key('stalled-use-local'),
+                  onPressed: backend.switchToLocal,
+                  child: const Text('先用本机 shell'),
+                ),
+              ),
+              Expanded(
+                child: TextButton(
+                  key: const Key('stalled-diagnose'),
+                  onPressed: () => ShellScope.maybeOf(context)?.go(ShellDest.runtime),
+                  child: const Text('去做一键诊断'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 }

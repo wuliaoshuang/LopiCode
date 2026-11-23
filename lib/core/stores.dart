@@ -89,6 +89,7 @@ class SettingKeys {
   static const lastProject = 'ui.lastProject';
   static const runtimeRootfsSource = 'runtime.rootfsSource'; // tuna / aliyun / official
   static const runtimeAptMirror = 'runtime.aptMirror';
+  static const terminalChineseIme = 'terminal.chinese_ime'; // 终端软键盘：中文输入（默认是直接输入）
   static const runtimeCompat = 'runtime.compat'; // PRoot 兼容模式（PROOT_NO_SECCOMP）
   static String autoApprove(String projectId) => 'project.$projectId.autoApprove';
 }
