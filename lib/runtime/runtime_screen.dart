@@ -9,7 +9,10 @@ import 'package:material_ui/material_ui.dart';
 
 /// “运行环境”页：安装 / 卸载 Ubuntu 环境、选下载源、一键装常用运行时、看启动日志。
 class RuntimeScreen extends StatelessWidget {
-  const RuntimeScreen({super.key});
+  const RuntimeScreen({super.key, this.projectDir});
+
+  /// 当前打开的项目目录；诊断时顺便检查它在 Ubuntu 里看不看得见。
+  final String? projectDir;
 
   @override
   Widget build(BuildContext context) {
@@ -57,6 +60,13 @@ class RuntimeScreen extends StatelessWidget {
                     child: _LogBox(lines: runtime.packOutput, keyName: 'pack-output'),
                   ),
               ],
+            ],
+            if (runtime.installed) ...[
+              const SectionLabel('一键诊断'),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: Space.x4),
+                child: _DiagnosticsPanel(runtime: runtime, projectDir: projectDir),
+              ),
             ],
             const SectionLabel('日志'),
             Padding(
@@ -297,26 +307,86 @@ class _PackRow extends StatelessWidget {
   }
 }
 
+/// 一键诊断：一句说明、一个按钮；跑完显示结论和完整报告，可整段复制。
+class _DiagnosticsPanel extends StatelessWidget {
+  const _DiagnosticsPanel({required this.runtime, required this.projectDir});
+  final LinuxRuntime runtime;
+  final String? projectDir;
+
+  @override
+  Widget build(BuildContext context) {
+    final diag = runtime.diagnostics;
+    final t = Theme.of(context).textTheme;
+    return ListenableBuilder(
+      listenable: diag,
+      builder: (context, _) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('终端进不去或没反应时点这里。会自动跑一遍检查（大约一两分钟），不会改动你的项目。', style: t.bodySmall),
+          const SizedBox(height: Space.x3),
+          FilledButton.tonal(
+            key: const Key('runtime-diagnose'),
+            onPressed: diag.running || runtime.busy ? null : () => diag.run(projectDir: projectDir),
+            child: Text(diag.running ? '正在检查…' : (diag.hasReport ? '重新诊断' : '开始诊断')),
+          ),
+          if (diag.running) ...[
+            const SizedBox(height: Space.x3),
+            const LinearProgressIndicator(),
+            const SizedBox(height: Space.x2),
+            Text('第 ${diag.steps.length} 项：${diag.progress}', key: const Key('diag-progress'), style: t.bodySmall),
+          ],
+          if (diag.hasReport) ...[
+            const SizedBox(height: Space.x3),
+            for (final line in diag.conclusions)
+              Padding(
+                padding: const EdgeInsets.only(bottom: Space.x1),
+                child: Text('· $line', style: t.bodyMedium),
+              ),
+            const SizedBox(height: Space.x2),
+            _LogBox(lines: diag.report.split('\n'), keyName: 'diag-report', fromTop: true, maxLines: 400, maxHeight: 360),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                key: const Key('diag-copy'),
+                onPressed: () async {
+                  await Clipboard.setData(ClipboardData(text: diag.report));
+                  if (context.mounted) showSnack(context, '诊断结果已复制，可以直接粘贴发出去');
+                },
+                child: const Text('复制诊断结果'),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 class _LogBox extends StatelessWidget {
-  const _LogBox({required this.lines, required this.keyName, this.copyable = false});
+  const _LogBox({required this.lines, required this.keyName, this.copyable = false, this.fromTop = false, this.maxLines = 60, this.maxHeight = 220});
   final List<String> lines;
   final String keyName;
   final bool copyable;
 
+  /// 日志从最新（底部）看起；诊断报告从头看起。
+  final bool fromTop;
+  final int maxLines;
+  final double maxHeight;
+
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    final shown = lines.length > 60 ? lines.sublist(lines.length - 60) : lines;
+    final shown = lines.length > maxLines ? lines.sublist(lines.length - maxLines) : lines;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Container(
           key: Key(keyName),
-          constraints: const BoxConstraints(maxHeight: 220),
+          constraints: BoxConstraints(maxHeight: maxHeight),
           padding: const EdgeInsets.all(Space.x3),
           decoration: BoxDecoration(color: c.codeBg, borderRadius: BorderRadius.circular(Radii.md)),
           child: SingleChildScrollView(
-            reverse: true,
+            reverse: !fromTop,
             child: SelectableText(
               shown.join('\n'),
               // 等宽字体里没有中文时，退回界面的默认字体。

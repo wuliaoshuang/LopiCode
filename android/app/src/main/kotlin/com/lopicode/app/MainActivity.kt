@@ -40,6 +40,17 @@ class MainActivity : FlutterActivity() {
                     stopService(Intent(this, RuntimeKeepAliveService::class.java))
                     result.success(null)
                 }
+                // 诊断用：手机型号和系统版本。不含任何账号、密钥。
+                "deviceInfo" -> result.success(
+                    mapOf(
+                        "手机" to "${Build.MANUFACTURER} ${Build.MODEL}",
+                        "Android" to "${Build.VERSION.RELEASE}（API ${Build.VERSION.SDK_INT}）",
+                        "系统版本号" to Build.DISPLAY,
+                        "处理器架构" to Build.SUPPORTED_ABIS.joinToString(","),
+                        "应用目标版本" to "API ${applicationInfo.targetSdkVersion}",
+                        "原生库目录" to applicationInfo.nativeLibraryDir,
+                    ),
+                )
                 else -> result.notImplemented()
             }
         }

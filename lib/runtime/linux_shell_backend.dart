@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:lopicode/runtime/linux_runtime.dart';
 import 'package:lopicode/runtime/proot_command.dart';
 import 'package:lopicode/terminal/pty_native.dart';
@@ -28,6 +29,7 @@ class LinuxShellBackend implements TerminalBackend {
     PtyArgsSpawner? spawner,
     this.fallbackSpawner,
     this.quickExit = const Duration(seconds: 3),
+    this.stallTimeout = const Duration(seconds: 8),
   }) : _spawn = spawner ?? FlutterPtyProcess.spawnWithArgs;
 
   final LinuxRuntime runtime;
@@ -37,6 +39,13 @@ class LinuxShellBackend implements TerminalBackend {
 
   /// 启动后这么短时间内就非正常退出，算启动失败。
   final Duration quickExit;
+
+  /// 进去后这么久一个字都没输出，算“没有响应”（PRoot 活着但卡住了）。
+  final Duration stallTimeout;
+
+  /// 现在是不是处于“没有响应”状态。界面据此显示三个出路：兼容模式重试、退回本机、去诊断。
+  final ValueNotifier<bool> stalled = ValueNotifier(false);
+  Timer? _stallTimer;
 
   final StreamController<String> _out = StreamController.broadcast();
   bool _closed = false;
@@ -92,10 +101,37 @@ class LinuxShellBackend implements TerminalBackend {
     _pty = pty;
     _keepAlive = true;
     unawaited(runtime.acquireKeepAlive());
+    // 只有“活过了头几秒”而且“真的有输出”才算启动成功：
+    // 光是没退出不算——PRoot 卡住的时候进程也一直活着。
+    var sawOutput = false;
+    var stable = false;
+    void maybeSuccess() {
+      if (!sawOutput || !stable || !identical(_pty, pty)) return;
+      runtime.recordLaunchSuccess();
+      if (runtime.forceCompat) unawaited(runtime.rememberCompat('兼容模式下终端有了响应'));
+    }
+
     _stableTimer = Timer(quickExit, () {
-      if (identical(_pty, pty)) runtime.recordLaunchSuccess();
+      stable = true;
+      maybeSuccess();
+    });
+    _stallTimer?.cancel();
+    _stallTimer = Timer(stallTimeout, () {
+      if (!identical(_pty, pty) || sawOutput || _closed) return;
+      stalled.value = true;
+      runtime.recordStall(stallTimeout);
+      _emit(
+        '\r\n\x1b[33mUbuntu 环境 ${stallTimeout.inSeconds} 秒了还没有任何响应，多半是卡在启动这一步。\r\n'
+        '下面有三个办法：改用兼容模式重试、先退回本机 shell、去“运行环境”页做一键诊断。\x1b[0m\r\n',
+      );
     });
     pty.output.transform(const Utf8Decoder(allowMalformed: true)).listen((text) {
+      if (text.isNotEmpty && !sawOutput) {
+        sawOutput = true;
+        _stallTimer?.cancel();
+        if (identical(_pty, pty)) stalled.value = false;
+        maybeSuccess();
+      }
       if (head.length < 4000) head.write(text);
       _emit(text);
     }, onError: (_) {});
@@ -104,6 +140,8 @@ class LinuxShellBackend implements TerminalBackend {
         if (!identical(_pty, pty)) return;
         _pty = null;
         _stableTimer?.cancel();
+        _stallTimer?.cancel();
+        stalled.value = false;
         _releaseKeepAlive();
         final quick = DateTime.now().difference(startedAt) < quickExit;
         // 退出码可能比最后一段输出先到：等一下，让 PRoot 的报错进到日志里。
@@ -141,6 +179,38 @@ class LinuxShellBackend implements TerminalBackend {
     await fallback.start(columns: _columns, rows: _rows);
   }
 
+  /// 把卡住的那个 PRoot 结束掉（不触发“会话已结束”的提示）。
+  void _dropStalled() {
+    final pty = _pty;
+    _pty = null;
+    _stableTimer?.cancel();
+    _stallTimer?.cancel();
+    stalled.value = false;
+    try {
+      pty?.kill();
+    } catch (_) {}
+    _releaseKeepAlive();
+  }
+
+  /// “没有响应”时的出路一：结束卡住的进程，改用兼容模式再进一次。
+  Future<void> retryCompat() async {
+    if (_closed) return;
+    _dropStalled();
+    runtime.forceCompat = true;
+    runtime.log('用户选择：改用兼容模式重试');
+    _emit('\r\n\x1b[2m正在用兼容模式重新进入 Ubuntu…\x1b[0m\r\n');
+    await start(columns: _columns, rows: _rows);
+  }
+
+  /// “没有响应”时的出路二：结束卡住的进程，这个会话改用手机自带的 sh。
+  Future<void> switchToLocal() async {
+    if (_closed || _fallback != null) return;
+    _dropStalled();
+    runtime.log('用户选择：这个会话退回本机 shell');
+    _emit('\r\n\x1b[33m已退回手机自带的 sh。Ubuntu 的问题可以到侧边栏“运行环境”页做一键诊断。\x1b[0m\r\n\r\n');
+    await _startFallback(null);
+  }
+
   void _releaseKeepAlive() {
     if (_keepAlive) {
       _keepAlive = false;
@@ -174,6 +244,7 @@ class LinuxShellBackend implements TerminalBackend {
   Future<void> close() async {
     _closed = true;
     _stableTimer?.cancel();
+    _stallTimer?.cancel();
     final pty = _pty;
     _pty = null;
     try {

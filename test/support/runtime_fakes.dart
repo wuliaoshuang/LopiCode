@@ -132,6 +132,9 @@ class FakeRuntimeHost implements RuntimeHost {
 
   @override
   Future<void> stopKeepAlive() async => keepAlive = false;
+
+  @override
+  Future<Map<String, String>> deviceInfo() async => const {'手机': 'TestPhone X1', 'Android': '16（API 36）'};
 }
 
 /// 假的伪终端进程。

@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:lopicode/core/stores.dart';
 import 'package:lopicode/runtime/proot_command.dart';
 import 'package:lopicode/runtime/resumable_download.dart';
+import 'package:lopicode/runtime/runtime_diagnostics.dart';
 import 'package:lopicode/runtime/runtime_sources.dart';
 import 'package:lopicode/runtime/tar_extract.dart';
 import 'package:path/path.dart' as p;
@@ -23,6 +24,9 @@ abstract class RuntimeHost {
   /// 开 / 关“保持后台运行”的前台服务（常驻通知）。
   Future<void> startKeepAlive(String text);
   Future<void> stopKeepAlive();
+
+  /// 手机型号、系统版本这类信息（诊断用）；拿不到返回空表。
+  Future<Map<String, String>> deviceInfo();
 }
 
 class ChannelRuntimeHost implements RuntimeHost {
@@ -49,6 +53,12 @@ class ChannelRuntimeHost implements RuntimeHost {
 
   @override
   Future<void> stopKeepAlive() => _call<void>('stopKeepAlive');
+
+  @override
+  Future<Map<String, String>> deviceInfo() async {
+    final raw = await _call<Map<Object?, Object?>>('deviceInfo');
+    return {for (final e in (raw ?? const {}).entries) '${e.key}': '${e.value}'};
+  }
 }
 
 /// 什么都没有的宿主（测试、非 Android 平台）。
@@ -62,6 +72,8 @@ class NoRuntimeHost implements RuntimeHost {
   Future<void> startKeepAlive(String text) async {}
   @override
   Future<void> stopKeepAlive() async {}
+  @override
+  Future<Map<String, String>> deviceInfo() async => const {};
 }
 
 enum RuntimePhase { notInstalled, downloading, verifying, extracting, installed }
@@ -348,7 +360,30 @@ class LinuxRuntime extends ChangeNotifier {
   bool get shouldUseLinux => usable && launchFailures < maxLaunchFailures;
 
   /// 第一次失败后的下一次尝试改用兼容模式。
-  bool get compatMode => launchFailures > 0 || settings.getBool(SettingKeys.runtimeCompat);
+  bool get compatMode => forceCompat || launchFailures > 0 || settings.getBool(SettingKeys.runtimeCompat);
+
+  /// 用户在“没有响应”的提示里点了“改用兼容模式重试”：这次运行期间都用兼容模式。
+  bool forceCompat = false;
+
+  /// 兼容模式确实能用（终端里有了输出，或诊断跑通）：记住，以后默认用它。
+  Future<void> rememberCompat(String why) async {
+    if (settings.getBool(SettingKeys.runtimeCompat)) return;
+    await settings.set(SettingKeys.runtimeCompat, true);
+    _log('$why，以后默认用兼容模式');
+    notifyListeners();
+  }
+
+  /// 进了 Ubuntu 但一直没有任何输出（卡住了）。不算进“连续失败”，只记日志。
+  void recordStall(Duration waited) {
+    _log('进入 Ubuntu 后 ${waited.inSeconds} 秒没有任何输出（${compatMode ? '兼容模式' : '默认模式'}）。可以到“运行环境”页点“一键诊断”');
+    notifyListeners();
+  }
+
+  /// 给别处往运行环境日志里记一行。
+  void log(String message) {
+    _log(message);
+    notifyListeners();
+  }
 
   /// 让 [hostLibDir] 里的 `libtalloc.so.2` 指向安装包里现在的 talloc 库。
   ///
@@ -402,7 +437,7 @@ class LinuxRuntime extends ChangeNotifier {
 
   /// 一次启动成功（进去后稳定运行了几秒，或者命令正常结束）。
   void recordLaunchSuccess() {
-    if (launchFailures > 0 && !settings.getBool(SettingKeys.runtimeCompat)) {
+    if ((launchFailures > 0 || forceCompat) && !settings.getBool(SettingKeys.runtimeCompat)) {
       // 是兼容模式救回来的：记住，以后直接用兼容模式。
       unawaited(settings.set(SettingKeys.runtimeCompat, true));
       _log('兼容模式启动成功，以后默认用兼容模式');
@@ -432,6 +467,13 @@ class LinuxRuntime extends ChangeNotifier {
     _log('已重置启动失败计数');
     notifyListeners();
   }
+
+  // ── 一键诊断 ─────────────────────────────────────────
+  RuntimeDiagnostics? _diagnostics;
+
+  /// 诊断的状态挂在这里，离开“运行环境”页再回来结果还在。
+  RuntimeDiagnostics get diagnostics => _diagnostics ??= RuntimeDiagnostics(this);
+  set diagnostics(RuntimeDiagnostics value) => _diagnostics = value;
 
   // ── 后台保活 ─────────────────────────────────────────
   int _keepAlive = 0;

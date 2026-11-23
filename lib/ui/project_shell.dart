@@ -136,7 +136,7 @@ class _ProjectShellState extends State<ProjectShell> {
             lazy(ShellDest.preview, () => page(ShellDest.preview, PreviewTab(session: session, active: _dest == ShellDest.preview))),
             lazy(ShellDest.builder, () => BuilderScreen(key: ValueKey(_builderEpoch), session: session)),
             lazy(ShellDest.apk, () => BuildScreen(session: session)),
-            lazy(ShellDest.runtime, () => const RuntimeScreen()),
+            lazy(ShellDest.runtime, () => RuntimeScreen(projectDir: session.project.dir)),
           ],
         ),
       ),
