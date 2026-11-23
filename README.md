@@ -25,7 +25,7 @@
 
 ## 现状（2026-11-23）
 
-**测试里跑通的**（`flutter test`，151 个，全在开发机上，没有调用任何真实接口）：路径限制；Agent 工具循环（对本地假模型服务器，包括模型想逃出项目目录、超过轮数上限、没批准就想执行命令 / 删除、参数乱写、中途停止、Key 不对）；低代码模型 ↔ JSON、撤销重做、HTML 和 Dart 导出（导出的 Dart 代码真的编译并渲染过）；预览服务器；GitHub 客户端和整个打包流程（对本地假 GitHub 服务器）；各主要界面在 390×844 浅色 / 深色下渲染无异常。第二阶段新增：
+**测试里跑通的**（`flutter test`，166 个，全在开发机上，没有调用任何真实接口）：路径限制；Agent 工具循环（对本地假模型服务器，包括模型想逃出项目目录、超过轮数上限、没批准就想执行命令 / 删除、参数乱写、中途停止、Key 不对）；低代码模型 ↔ JSON、撤销重做、HTML 和 Dart 导出（导出的 Dart 代码真的编译并渲染过）；预览服务器；GitHub 客户端和整个打包流程（对本地假 GitHub 服务器）；各主要界面在 390×844 浅色 / 深色下渲染无异常。第二阶段新增：
 
 - 密钥存储包装（对假的安全后端）：读写删；插件缺失或系统密钥库报错时退回内存并如实标成“不持久”。
 - 终端：伪终端能开时按键原样送进去、窗口大小跟着变、shell 退出后回车重开；伪终端开不出来时退回管道模式并在屏幕上说明；粘滞 Ctrl、方向键 / Tab / Esc 的转义序列。
@@ -53,7 +53,7 @@
 
 **其他已知限制**
 
-- 本机 Linux 运行环境的应用侧逻辑（下载续传、校验、解压、PRoot 命令拼装、启动失败回退、Agent 命令走向）有测试，但 PRoot 没有带进包，真机上一次都没跑过。
+- 本机 Linux 运行环境的应用侧逻辑（下载续传、校验、解压、PRoot 命令拼装、启动失败回退、Agent 命令走向）有测试；PRoot 已带进包，但真机上一次都没跑过，能不能启动未知。
 - 手机自带的 `sh` 只有 `ls`、`cat`、`cp`、`mkdir` 这类基础命令，没有 git、node、python 和编译器。终端里也写了这句话；要完整工具链就连 SSH 主机。
 - SSH 只存一台主机（终端和构建机共用）；Agent 自己跑的命令仍然在本机 shell 里，不走 SSH。
 - SSH 构建时点“停止并断开”是断开连接，远程命令一般会随会话结束，但不保证。
@@ -67,12 +67,20 @@
 
 侧边栏“运行环境”：在手机上用 PRoot 跑一个不需要 root 的 Ubuntu 24.04，让终端和 Agent 能用 apt、node、python。系统包不在安装包里，点“安装运行环境”才下载（约 28.5 MB，解压后约 103 MB），支持断点续传和校验，下载源可在清华、阿里云、官方之间切换。
 
-**现在安装包里还没有带 PRoot**（许可证和来源两件事要先定，见 [docs/linux-runtime.md](docs/linux-runtime.md)），所以这一版里“运行环境”页只会说明情况，终端仍是本机 shell。这部分没有在任何手机上跑过。
+PRoot 启动器已随安装包带上（Termux 官方软件源的现成包，文件没有改动），“运行环境”页有安装按钮。**这部分没有在任何手机上跑过**，PRoot 能不能启动要真机验证；启动不了时终端会自动退回本机 shell 并在“运行环境”页的日志里写明原因。细节见 [docs/linux-runtime.md](docs/linux-runtime.md)。
 
 ## 第三方声明
 
 - 安装包内的 Dart / Flutter 依赖见 `pubspec.yaml`，各自的许可证由 Flutter 的许可证页面汇总。
-- PRoot（GPL-2.0-or-later）和 talloc（LGPL）：**目前没有随安装包分发**。带上之后的义务和要补记的来源、版本、校验值见 [docs/linux-runtime.md](docs/linux-runtime.md) 的“许可证”一节。
+- 随安装包分发的三个原生组件（应用内“设置 › 第三方声明”有同样的内容和许可证全文）：
+
+| 组件 | 版本 | 许可证 | 安装包里的文件 | 对应源码 |
+| --- | --- | --- | --- | --- |
+| PRoot（Termux 版） | 5.1.107.102 | GPL-2.0-or-later | `libproot.so`、`libproot-loader.so` | https://github.com/termux/proot/archive/v5.1.107.102.zip |
+| talloc | 2.5.0 | LGPL-3.0-or-later | `libtalloc.so` | https://www.samba.org/ftp/talloc/talloc-2.5.0.tar.gz |
+| libandroid-shmem | 0.7 | BSD-3-Clause | `libandroid-shmem.so` | https://github.com/termux/libandroid-shmem |
+
+  二进制取自 Termux 官方软件源 `https://packages.termux.dev/apt/termux-main`，内容没有改动，只改了文件名。每个文件的来源地址、sha256、版权声明见 [third_party/termux/README.md](third_party/termux/README.md)；许可证全文在 [third_party/termux/licenses/](third_party/termux/licenses/)；还没做到的地方（仓库里没有存源码副本等）见 [docs/linux-runtime.md](docs/linux-runtime.md) 的“许可证”一节。
 - Ubuntu 基础系统、Node.js、Python、Git：由用户在应用内点击后从上游或镜像下载，不随安装包分发。
 - dsh-Go（AGPL-3.0）只作为做法参考，没有使用它的代码。
 
@@ -102,6 +110,8 @@ test/                          单元测试、界面测试；support/ 里是假�
 tool/gen_sample_export.dart    重新生成 Dart 导出的编译检查样本
 docs/api-notes.md              OpenAI / GitHub 接口核对笔记
 docs/screenshots/              390×844 截图（浅色、深色）
+assets/licenses/               随包组件的许可证全文（应用内“第三方声明”读这里）
+third_party/termux/            PRoot 等随包二进制的来源记录、原始包、校验值、许可证
 ```
 
 ## 怎么构建

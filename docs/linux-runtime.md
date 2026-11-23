@@ -2,20 +2,26 @@
 
 写于 2026-11-23。下面每一条都标了“核实过”还是“没核实”。**整套东西没有在任何手机上跑过。**
 
-## 现在的状态：安装包里还没有 PRoot
+## 现在的状态：PRoot 已随安装包带上，但从没在手机上跑过
 
-应用这一侧的代码、界面、测试都做完了，但 **PRoot 可执行文件没有放进安装包**，原因有两个，都需要霜霜决定：
+2026-11-23 霜霜决定：接受 GPL 义务，带上 PRoot，来源用 Termux 官方现成包。现在安装包的 `lib/arm64-v8a/` 里有四个文件：
 
-1. **许可证**：PRoot 是 GPL-2.0-or-later，它依赖的 talloc 是 LGPL（见下面“许可证”一节）。带上它，LopiCode 发安装包时就多了开源义务。
-2. **来源**：从 `github.com/termux/proot` 克隆下来的源码被这台机器的安全检查拦下（判定为有执行风险），不允许在这里编译或运行它。
+| 安装包里的名字 | Termux 包里的原名 | 作用 |
+| --- | --- | --- |
+| `libproot.so` | `usr/bin/proot` | PRoot 本体 |
+| `libproot-loader.so` | `usr/libexec/proot/loader` | PRoot 启动 Ubuntu 里每个程序时用的加载器 |
+| `libtalloc.so` | `usr/lib/libtalloc.so.2.5.0` | PRoot 依赖的库 |
+| `libandroid-shmem.so` | `usr/lib/libandroid-shmem.so` | PRoot 依赖的库 |
 
-所以这一版安装包里，“运行环境”页会如实写“安装包里没有带 PRoot 启动器”，不提供安装按钮；终端仍是原来的本机 shell。等 `libproot.so`、`libproot-loader.so` 放进 `android/app/src/main/jniLibs/arm64-v8a/` 重新打包，其余功能自动生效，不用再改代码。
+文件内容和 Termux 包里的逐字节一致，只改了文件名（Android 只会把 `lib*.so` 这种名字的文件装进原生库目录）。来源、版本、校验值、许可证见 [`third_party/termux/README.md`](../third_party/termux/README.md)。
+
+“运行环境”页现在有“安装运行环境”按钮。**但 PRoot 在手机上能不能跑起来完全没有验证过**：这些文件在开发机上只用 `readelf`、`strings` 这类只读工具看过，没有执行过，也没有编译过任何 PRoot 源码。
 
 ## 做法
 
 | 环节 | 做法 | 核实情况 |
 | --- | --- | --- |
-| PRoot 放哪 | 命名成 `libproot.so`、`libproot-loader.so` 放 jniLibs，装好后在应用的原生库目录里，从那里执行 | 见“Android 的执行限制” |
+| PRoot 放哪 | 四个文件按 `lib*.so` 命名放 jniLibs，装好后在应用的原生库目录里，从那里执行 | 文件已在安装包里（验过包）；真机没验证 |
 | 安装包设置 | `useLegacyPackaging = true` ＋ `extractNativeLibs="true"`，让系统把 .so 解到磁盘上（不解出来就没有可执行的文件） | 设置已写入并能打包；真机没验证 |
 | Ubuntu 系统包 | 进应用后点“安装运行环境”才下载，解到应用私有目录 `files/…/runtime/rootfs` | 下载、校验、解压在开发机上用真实文件跑过 |
 | 启动 | 在伪终端里跑 `libproot.so … /usr/bin/env -i … /bin/bash -l` | 只验证了参数拼装；没有真的启动过 |
@@ -26,6 +32,7 @@
 ```
 环境变量：PROOT_LOADER=<原生库目录>/libproot-loader.so
           PROOT_TMP_DIR=<runtime>/tmp
+          LD_LIBRARY_PATH=<runtime>/hostlib:<原生库目录>
           LD_PRELOAD=（清空）
           PROOT_NO_SECCOMP=1（只在兼容模式下）
 <原生库目录>/libproot.so --kill-on-exit --link2symlink -0
@@ -35,10 +42,27 @@
      TMPDIR=/tmp TERM=xterm-256color LANG=C.UTF-8 … /bin/bash -l
 ```
 
-- 这些参数和环境变量名是从 termux/proot 源码（提交 `7cbed09235d18cdb4be8eed456038608c10a29a0`，VERSION 5.1.0）的 `src/cli/proot.h` 和 `src/execve/enter.c` 里**读**出来的，只读了文字，没有编译运行。
-- `env -i` 把 Android 塞进来的变量全部清掉，只留上面列的几个。
+- 这些参数和环境变量名最早是从 termux/proot 源码（提交 `7cbed09235d18cdb4be8eed456038608c10a29a0`，VERSION 5.1.0）的 `src/cli/proot.h` 和 `src/execve/enter.c` 里**读**出来的；2026-11-23 又对着实际带进包的 5.1.107.102 二进制用 `strings` 核对过：`PROOT_LOADER`、`PROOT_TMP_DIR`、`PROOT_NO_SECCOMP`、`--kill-on-exit`、`--link2symlink`、`--rootfs`、`--bind`、`--cwd`、`--root-id` 这些字样都在。只读了文字，没有运行。
+- `env -i` 把 Android 塞进来的变量全部清掉，只留上面列的几个（`LD_LIBRARY_PATH` 也不会带进 Ubuntu）。
 - DNS：安装时写 `/etc/resolv.conf`（223.5.5.5、119.29.29.29、8.8.8.8）和 `/etc/hosts`。
 - apt：写 `/etc/apt/sources.list.d/ubuntu.sources`（arm64 走 ubuntu-ports），并关掉 apt 的降权沙箱（PRoot 里的 root 是假的，切不了用户）。
+
+### Termux 的包是给 Termux 自己的目录编的，这里怎么对上
+
+用 `readelf` 和 `strings` 看到的事实（2026-11-23）：
+
+| Termux 包里写死的 | 在 LopiCode 里的问题 | 怎么处理 |
+| --- | --- | --- |
+| 加载器默认在 `/data/data/com.termux/files/usr/libexec/proot/loader` | 这个路径在 LopiCode 里不存在 | 设 `PROOT_LOADER` 指到原生库目录的 `libproot-loader.so` |
+| 临时目录默认 `/data/data/com.termux/files/usr/tmp/` | 同上 | 设 `PROOT_TMP_DIR` 指到 `<runtime>/tmp` |
+| 找依赖库的路径（RUNPATH）是 `/data/data/com.termux/files/usr/lib` | 同上，系统在那里找不到库 | 设 `LD_LIBRARY_PATH` |
+| 依赖 `libtalloc.so.2`、`libandroid-shmem.so`、`libc.so` | `libtalloc.so.2` 这个名字不是 `lib*.so`，放不进安装包的原生库目录 | 包里叫 `libtalloc.so`；每次启动前在 `<runtime>/hostlib/` 建一个叫 `libtalloc.so.2` 的链接指过去（建不了链接就复制一份），再把这个目录放进 `LD_LIBRARY_PATH` |
+| 32 位加载器 `loader32` | 只有在 Ubuntu 里跑 32 位程序才用得到 | 没带，`PROOT_LOADER_32` 不设；Ubuntu 里跑不了 32 位 ARM 程序 |
+
+- 四个文件都是 64 位 ARM（AArch64）ELF。`libproot.so` 是动态链接的可执行文件（解释器 `/system/bin/linker64`），`libproot-loader.so` 是静态链接的。
+- **16KB 页对齐**：四个文件的 LOAD 段对齐值都是 `0x4000`（16KB），在 16KB 页的手机上不会因为对齐被拒。没带的 `loader32` 是 4KB 对齐。
+- 二进制没有做任何修改（没有改 RUNPATH、没有改依赖名）。`build.gradle.kts` 里给这四个文件设了 `keepDebugSymbols`，打包时不会被裁剪；测试会核对它们的 sha256。
+- **没核实**：手机的动态链接器是否按 `LD_LIBRARY_PATH` 找到 `hostlib/libtalloc.so.2` 这个链接并加载成功；不同 Android 版本是否允许从数据目录里的链接加载原生库目录的库。这是这套做法里最没把握的一环，失败的话日志里会是 `library "libtalloc.so.2" not found` 之类的字样。
 
 ### Android 的执行限制
 
@@ -88,25 +112,33 @@ sha256 `a91d5a93010193712d346d761372b7c9db6dfcf093893161c64ca107f05914f2`
 | Python 3.12 | `apt install python3 python3-pip python3-venv` | noble 源里有 python3 3.12.3 |
 | Git | `apt install git` | noble 源里有 git 2.43.0 |
 
-**这三项的安装脚本一次都没有真的执行过**（要先有能跑的 PRoot）。
+**这三项的安装脚本一次都没有真的执行过**（要在真机上先确认 PRoot 能跑）。
 
 ## 许可证
 
 | 东西 | 许可证 | 现在带没带 |
 | --- | --- | --- |
-| PRoot（termux/proot） | GPL-2.0-or-later（源码 `COPYING` 和文档里写明） | 没带 |
-| talloc（PRoot 链接的库） | LGPL-3.0-or-later（凭已知信息，这次没有再核对原文） | 没带 |
+| PRoot 5.1.107.102（Termux 版） | GPL-2.0-or-later。依据：二进制和手册里的声明“Copyright (C) 2015 STMicroelectronics, licensed under GPL v2 or later”；Termux 构建脚本写 `TERMUX_PKG_LICENSE="GPL-2.0"` | 随包分发（`libproot.so`、`libproot-loader.so`） |
+| talloc 2.5.0 | LGPL-3.0-or-later。依据：包里 `talloc.h` 开头的声明原文（“version 3 of the License, or (at your option) any later version”，GNU Lesser General Public License）。注意 Termux 的包把版权文件指到了 GPL-3.0，和源码声明不一致，这里按源码，并把 LGPL-3.0 和 GPL-3.0 两份全文都附上（LGPL-3.0 是在 GPL-3.0 上加条款，本来也要两份一起看） | 随包分发（`libtalloc.so`，动态库，没有静态链接进 PRoot） |
+| libandroid-shmem 0.7 | BSD 3 条款。依据：包里自带的版权文件 | 随包分发（`libandroid-shmem.so`） |
 | Ubuntu 基础包、Node.js、Python | 用户自己点了才从上游下载，不在安装包里 | 不随包分发 |
 | dsh-Go | AGPL-3.0 | 只参考了它的做法，没有复制任何代码 |
 
-如果以后把 PRoot 带进安装包：
+已经做到的：
 
+- 许可证全文（GPL-2.0、GPL-3.0、LGPL-3.0、libandroid-shmem 的许可证）在安装包里（`assets/licenses/`），应用内“设置 › 第三方声明”可以看；仓库里 `third_party/termux/licenses/` 也有一份。GPL / LGPL 文本取自开发机 `/usr/share/common-licenses/`（Debian 随系统带的官方文本）。
+- 版权声明、每个文件的来源地址、版本、sha256、对应源码地址：应用内同一页、`third_party/termux/README.md`、`lib/core/third_party.dart`。
+- 没有改动这些二进制，只改了文件名，并在声明里写明。
 - LopiCode 只是把 PRoot 当成一个独立程序来启动，不和它链接。通常的理解是这属于“放在一起分发”，LopiCode 自己的代码不会因此变成 GPL。**这是通常的理解，不是法律意见。**
-- 但分发 PRoot 这个二进制本身有义务：附上 GPL 许可证全文和版权声明；向拿到安装包的人提供与这个二进制**完全对应**的源码（PRoot ＋ 静态链接进去的 talloc ＋ 构建脚本），或者附一份至少三年有效的书面提供承诺；改过的地方要标明。
-- 到时这里要补记：二进制的来源、版本、提交号、sha256、构建方式。
+
+还没做到 / 要霜霜知道的：
+
+- **对应源码目前只给了上游地址，仓库里没有存一份源码。** GPL-2.0 第 3 条要求分发二进制时“随附源码”或“附一份至少三年有效的书面承诺，谁来要都给”。只指向别人的下载地址，严格说不算满足。应用里现在写了一句“地址打不开时可以向 LopiCode 的发布者索取对应源码”，这句话等于霜霜做了这个承诺——要兑现它，她手里得留一份这三个组件的源码包。PRoot 的源码在这台开发机上被安全检查拦过，所以这里没有下载、也没有存它；需要霜霜自己从“对应源码”的地址下载留存，或者决定换一种写法。
+- 没有核对 Termux 软件源 Release 文件的 GPG 签名，完整性只靠 HTTPS ＋ sha256 一环套一环（Release → Packages → 包）。
+- Termux 构建时打的补丁和编译参数在 termux-packages 仓库（`packages/proot/`、`packages/libtalloc/`、`packages/libandroid-shmem/`），没有记下取包当天那个仓库的提交号。
 
 ## 只在开发机上验证过的 / 必须真机验证的
 
-开发机上跑过（`flutter test`）：断点续传（中断、卡死、服务器不支持续传、半截文件损坏、取消）、大小与 sha256 校验、tar.gz 解压（含真实的 Ubuntu 基础包）、PRoot 命令拼装、源切换、安装流程、空间不足、启动失败回退、Agent 命令走向、各状态界面在 390×844 浅色/深色下的渲染。
+开发机上跑过（`flutter test`）：断点续传（中断、卡死、服务器不支持续传、半截文件损坏、取消）、大小与 sha256 校验、tar.gz 解压（含真实的 Ubuntu 基础包）、PRoot 命令拼装（含依赖库路径和 `libtalloc.so.2` 链接的准备）、随包文件的校验值、源切换、安装流程、空间不足、启动失败回退、Agent 命令走向、各状态界面在 390×844 浅色/深色下的渲染。
 
-必须真机才能验证：PRoot 能不能启动；Ubuntu 的 bash、apt、node、python 能不能跑；用应用自带的解压代码在手机文件系统上解出来的系统是否完整可用（符号链接、权限）；`/workspace` 绑定后项目文件是否可见可写；前台服务在切后台后是否真的保住进程；Android 13 以上的通知权限弹窗；磁盘剩余空间读数。
+必须真机才能验证：PRoot 能不能启动（系统能不能找到并加载 `libtalloc.so.2`、`libandroid-shmem.so`；加载器能不能从原生库目录执行）；Ubuntu 的 bash、apt、node、python 能不能跑；用应用自带的解压代码在手机文件系统上解出来的系统是否完整可用（符号链接、权限）；`/workspace` 绑定后项目文件是否可见可写；前台服务在切后台后是否真的保住进程；Android 13 以上的通知权限弹窗；磁盘剩余空间读数。
