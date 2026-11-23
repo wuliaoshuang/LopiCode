@@ -84,7 +84,14 @@ void main() {
 
     testWidgets('没有渠道：进聊天页弹一次引导；点“稍后”后不再自动弹，点发送才再提示；“去配置”进选择服务商 ($suffix)', (tester) async {
       final (env, project, session) = await open(tester);
-      await tester.pumpWidget(appFor(env, ProjectShell(project: project, session: session), mode: mode, font: kTestFont));
+      await tester.pumpWidget(
+        appFor(
+          env,
+          ProjectShell(project: project, session: session),
+          mode: mode,
+          font: kTestFont,
+        ),
+      );
       await waitDialog(tester);
 
       final dialog = find.byKey(const Key('model-setup-dialog'));
@@ -142,16 +149,28 @@ void main() {
       expect(list, findsOneWidget);
       // 每个预设都有一行，最后是“自定义”
       for (final preset in kProviderPresets) {
-        await tester.scrollUntilVisible(find.byKey(ValueKey('preset-${preset.id}')), 200, scrollable: find.descendant(of: list, matching: find.byType(Scrollable)).first);
+        await tester.scrollUntilVisible(
+          find.byKey(ValueKey('preset-${preset.id}')),
+          200,
+          scrollable: find.descendant(of: list, matching: find.byType(Scrollable)).first,
+        );
         expect(find.descendant(of: find.byKey(ValueKey('preset-${preset.id}')), matching: find.text(preset.name)), findsOneWidget);
         expect(find.byKey(ValueKey('provider-icon-${preset.id}')), findsOneWidget, reason: '${preset.name} 要有图标');
       }
-      await tester.scrollUntilVisible(find.byKey(const ValueKey('preset-custom')), 200, scrollable: find.descendant(of: list, matching: find.byType(Scrollable)).first);
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('preset-custom')),
+        200,
+        scrollable: find.descendant(of: list, matching: find.byType(Scrollable)).first,
+      );
       expect(find.text('自定义'), findsOneWidget);
       await loadIcons(tester);
       await shot(tester, '92-provider-picker-bottom-$suffix');
 
-      await tester.scrollUntilVisible(find.byKey(const ValueKey('preset-deepseek')), -200, scrollable: find.descendant(of: list, matching: find.byType(Scrollable)).first);
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('preset-deepseek')),
+        -200,
+        scrollable: find.descendant(of: list, matching: find.byType(Scrollable)).first,
+      );
       await tester.ensureVisible(find.byKey(const ValueKey('preset-deepseek')));
       await settle(tester, rounds: 2);
       await tester.tap(find.byKey(const ValueKey('preset-deepseek')));
@@ -231,10 +250,22 @@ void main() {
       final (env, project, session) = await open(tester);
       late Channel ch;
       await tester.runAsync(() async {
-        ch = await env.services.models.upsert(name: 'DeepSeek', protocol: ChatProtocol.openaiChat, baseUrl: 'https://api.deepseek.com', models: [ModelSpec(id: 'deepseek-chat')]);
+        ch = await env.services.models.upsert(
+          name: 'DeepSeek',
+          protocol: ChatProtocol.openaiChat,
+          baseUrl: 'https://api.deepseek.com',
+          models: [ModelSpec(id: 'deepseek-chat')],
+        );
       });
       env.services.modelSetupPrompted = true; // 只测“点发送”这条路
-      await tester.pumpWidget(appFor(env, ProjectShell(project: project, session: session), mode: mode, font: kTestFont));
+      await tester.pumpWidget(
+        appFor(
+          env,
+          ProjectShell(project: project, session: session),
+          mode: mode,
+          font: kTestFont,
+        ),
+      );
       await waitDialog(tester);
       expect(find.byKey(const Key('model-setup-dialog')), findsNothing);
 
@@ -253,7 +284,14 @@ void main() {
     testWidgets('截图：推开式侧边栏 ($suffix)', (tester) async {
       final (env, project, session) = await open(tester);
       env.services.modelSetupPrompted = true;
-      await tester.pumpWidget(appFor(env, ProjectShell(project: project, session: session), mode: mode, font: kTestFont));
+      await tester.pumpWidget(
+        appFor(
+          env,
+          ProjectShell(project: project, session: session),
+          mode: mode,
+          font: kTestFont,
+        ),
+      );
       await settle(tester);
       await tester.tap(find.byTooltip('打开侧边栏').hitTestable());
       for (var i = 0; i < 12; i++) {

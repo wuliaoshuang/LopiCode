@@ -22,10 +22,7 @@ class ThirdPartyScreen extends StatelessWidget {
       body: SectionedList(
         listKey: const Key('third-party-list'),
         children: [
-          const Padding(
-            padding: EdgeInsets.fromLTRB(Space.x4, Space.x4, Space.x4, 0),
-            child: InfoBanner('前三个组件用来进入 Ubuntu 环境。它们是 Termux 官方软件源里的原样文件，内容没有改动，只改了文件名。每个组件有自己的许可证，全文在各自那一组里。最后一组是服务商图标。'),
-          ),
+          const Padding(padding: EdgeInsets.fromLTRB(Space.x4, Space.x4, Space.x4, 0), child: InfoBanner('前三个组件用来进入 Ubuntu 环境。它们是 Termux 官方软件源里的原样文件，内容没有改动，只改了文件名。每个组件有自己的许可证，全文在各自那一组里。最后一组是服务商图标。')),
           for (final component in bundledComponents) ...[
             SectionLabel('${component.name} ${component.version}'),
             Padding(
@@ -47,9 +44,7 @@ class ThirdPartyScreen extends StatelessWidget {
                 leading: const Icon(Icons.description_outlined),
                 title: Text(licenseTitle(asset)),
                 trailing: const Icon(Icons.chevron_right),
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(builder: (_) => LicenseTextScreen(asset: asset)),
-                ),
+                onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => LicenseTextScreen(asset: asset))),
               ),
             ExpansionTile(
               key: Key('source-${component.name}'),
@@ -60,10 +55,7 @@ class ThirdPartyScreen extends StatelessWidget {
               children: [
                 _Fact('二进制来自（Termux 官方软件源）', component.packageUrl),
                 _Fact('这个包的 sha256', component.packageSha256),
-                for (final binary in component.binaries) ...[
-                  _Fact('安装包里的文件', '${binary.fileName}（原名 ${binary.originalPath}，${binary.size} 字节）'),
-                  _Fact('${binary.fileName} 的 sha256', binary.sha256),
-                ],
+                for (final binary in component.binaries) ...[_Fact('安装包里的文件', '${binary.fileName}（原名 ${binary.originalPath}，${binary.size} 字节）'), _Fact('${binary.fileName} 的 sha256', binary.sha256)],
                 _Fact('对应源码', component.sourceUrl),
                 Text(component.sourceNote, style: t.bodySmall?.copyWith(color: c.textMuted, height: 1.5)),
               ],
@@ -81,7 +73,11 @@ class ThirdPartyScreen extends StatelessWidget {
                 const SizedBox(height: Space.x1),
                 Text(providerIconPack.copyright, style: t.bodySmall?.copyWith(color: c.textMuted, height: 1.5)),
                 const SizedBox(height: Space.x2),
-                Text(providerIconPack.trademarkNote, key: const Key('third-party-trademark'), style: t.bodySmall?.copyWith(color: c.textMuted, height: 1.5)),
+                Text(
+                  providerIconPack.trademarkNote,
+                  key: const Key('third-party-trademark'),
+                  style: t.bodySmall?.copyWith(color: c.textMuted, height: 1.5),
+                ),
               ],
             ),
           ),
@@ -90,9 +86,7 @@ class ThirdPartyScreen extends StatelessWidget {
             leading: const Icon(Icons.description_outlined),
             title: Text(licenseTitle(providerIconPack.licenseAsset)),
             trailing: const Icon(Icons.chevron_right),
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(builder: (_) => LicenseTextScreen(asset: providerIconPack.licenseAsset)),
-            ),
+            onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => LicenseTextScreen(asset: providerIconPack.licenseAsset))),
           ),
           ExpansionTile(
             key: const Key('source-lobe-icons'),
@@ -100,20 +94,12 @@ class ThirdPartyScreen extends StatelessWidget {
             title: const Text('来源和校验值'),
             childrenPadding: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x3),
             expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _Fact('图标包（npm 镜像）', providerIconPack.packageUrl),
-              _Fact('这个包的完整性校验值', providerIconPack.packageIntegrity),
-              _Fact('项目仓库', providerIconPack.sourceUrl),
-            ],
+            children: [_Fact('图标包（npm 镜像）', providerIconPack.packageUrl), _Fact('这个包的完整性校验值', providerIconPack.packageIntegrity), _Fact('项目仓库', providerIconPack.sourceUrl)],
           ),
           const SectionLabel('怎么拿到源码'),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: Space.x4),
-            child: Text(
-              '每个组件的源码都可以从它那一组“对应源码”的地址下载。地址打不开时，可以向 LopiCode 的发布者索取这些组件的对应源码。',
-              key: const Key('third-party-source-offer'),
-              style: t.bodySmall?.copyWith(height: 1.6),
-            ),
+            child: Text('每个组件的源码都可以从它那一组“对应源码”的地址下载。地址打不开时，可以向 LopiCode 的发布者索取这些组件的对应源码。', key: const Key('third-party-source-offer'), style: t.bodySmall?.copyWith(height: 1.6)),
           ),
         ],
       ),
@@ -138,7 +124,10 @@ class _Fact extends StatelessWidget {
         children: [
           Text(label, style: t.labelSmall?.copyWith(color: c.textFaint)),
           const SizedBox(height: 2),
-          SelectableText(value, style: t.bodySmall?.copyWith(fontFamily: 'monospace', fontFamilyFallback: const ['sans-serif'], height: 1.4)),
+          SelectableText(
+            value,
+            style: t.bodySmall?.copyWith(fontFamily: 'monospace', fontFamilyFallback: const ['sans-serif'], height: 1.4),
+          ),
         ],
       ),
     );

@@ -7,15 +7,14 @@ import 'package:lopicode/runtime/proot_command.dart';
 import 'package:lopicode/terminal/pty_native.dart';
 import 'package:lopicode/terminal/terminal_session.dart';
 
-typedef PtyArgsSpawner =
-    PtyProcess Function(
-      String executable,
-      List<String> arguments, {
-      required String workingDirectory,
-      required Map<String, String> environment,
-      required int rows,
-      required int columns,
-    });
+typedef PtyArgsSpawner = PtyProcess Function(
+  String executable,
+  List<String> arguments, {
+  required String workingDirectory,
+  required Map<String, String> environment,
+  required int rows,
+  required int columns,
+});
 
 /// 终端后端：在伪终端里跑 PRoot，进到 Ubuntu 的 bash。
 ///
@@ -90,14 +89,7 @@ class LinuxShellBackend implements TerminalBackend {
     final head = StringBuffer();
     final PtyProcess pty;
     try {
-      pty = _spawn(
-        command.executable,
-        command.arguments,
-        workingDirectory: projectDir,
-        environment: command.environment,
-        rows: rows,
-        columns: columns,
-      );
+      pty = _spawn(command.executable, command.arguments, workingDirectory: projectDir, environment: command.environment, rows: rows, columns: columns);
     } catch (e) {
       runtime.recordLaunchFailure('伪终端里启动不了 PRoot：$e');
       return _afterFailure();

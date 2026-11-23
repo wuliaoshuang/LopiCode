@@ -95,9 +95,7 @@ class _ProjectShellState extends State<ProjectShell> {
 
   Future<void> _openProjects() async {
     _closeDrawer();
-    final picked = await Navigator.of(context).push<Project>(
-      MaterialPageRoute(builder: (_) => ProjectListScreen(currentProjectId: widget.project.id)),
-    );
+    final picked = await Navigator.of(context).push<Project>(MaterialPageRoute(builder: (_) => ProjectListScreen(currentProjectId: widget.project.id)));
     if (!mounted) return;
     if (picked != null && picked.id != widget.project.id) {
       widget.onSwitchProject?.call(picked);
@@ -123,14 +121,21 @@ class _ProjectShellState extends State<ProjectShell> {
 
   void _openSettings() {
     _closeDrawer();
-    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => SettingsScreen(workspace: widget.project, session: _session)));
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => SettingsScreen(workspace: widget.project, session: _session),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final session = _session!;
     Widget lazy(ShellDest d, Widget Function() build) => _visited.contains(d) ? build() : const SizedBox.shrink();
-    Widget page(ShellDest d, Widget body) => Scaffold(appBar: ShellAppBar(title: d.label), body: body);
+    Widget page(ShellDest d, Widget body) => Scaffold(
+      appBar: ShellAppBar(title: d.label),
+      body: body,
+    );
     Widget build1(ShellDest d) => switch (d) {
       ShellDest.chat => ChatScreen(session: session),
       ShellDest.files => page(d, FilesTab(session: session)),
@@ -184,15 +189,8 @@ class _ProjectShellState extends State<ProjectShell> {
           ),
           // 底部导航和页面在同一个 Scaffold 里，所以会跟着主界面一起被推走。
           child: Scaffold(
-            bottomNavigationBar: IconBottomNav(
-              items: shellNavItems(),
-              current: _dest.inBottomNav ? _dest.index : -1,
-              onTap: (i) => _go(ShellDest.bottom[i]),
-            ),
-            body: IndexedStack(
-              index: _dest.index,
-              children: [for (final d in ShellDest.values) lazy(d, () => build1(d))],
-            ),
+            bottomNavigationBar: IconBottomNav(items: shellNavItems(), current: _dest.inBottomNav ? _dest.index : -1, onTap: (i) => _go(ShellDest.bottom[i])),
+            body: IndexedStack(index: _dest.index, children: [for (final d in ShellDest.values) lazy(d, () => build1(d))]),
           ),
         ),
       ),

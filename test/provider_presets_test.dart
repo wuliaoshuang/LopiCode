@@ -53,10 +53,7 @@ void main() {
     final used = {for (final preset in kProviderPresets) '${preset.icon}.svg'};
     final present = {for (final f in Directory('assets/provider_icons').listSync().whereType<File>()) p.basename(f.path)};
     expect(present, used, reason: '只带用得到的图标');
-    final sums = {
-      for (final line in File('third_party/lobe-icons/SHA256SUMS').readAsLinesSync().where((l) => l.trim().isNotEmpty))
-        line.split(RegExp(r'\s+')).last: line.split(RegExp(r'\s+')).first,
-    };
+    final sums = {for (final line in File('third_party/lobe-icons/SHA256SUMS').readAsLinesSync().where((l) => l.trim().isNotEmpty)) line.split(RegExp(r'\s+')).last: line.split(RegExp(r'\s+')).first};
     expect(sums.keys.toSet(), present);
     for (final entry in sums.entries) {
       final bytes = File(p.join('assets/provider_icons', entry.key)).readAsBytesSync();
@@ -94,7 +91,15 @@ void main() {
   });
 
   test('本机 / 局域网地址的判断', () {
-    for (final url in ['http://localhost:11434/v1', 'http://127.0.0.1:8080', 'http://10.0.0.5/v1', 'http://192.168.31.2:1234/v1', 'http://172.16.0.1', 'http://172.31.255.1', 'http://my-pc.local:11434']) {
+    for (final url in [
+      'http://localhost:11434/v1',
+      'http://127.0.0.1:8080',
+      'http://10.0.0.5/v1',
+      'http://192.168.31.2:1234/v1',
+      'http://172.16.0.1',
+      'http://172.31.255.1',
+      'http://my-pc.local:11434',
+    ]) {
       expect(isLocalBaseUrl(url), isTrue, reason: url);
     }
     for (final url in ['https://api.deepseek.com', 'http://172.32.0.1', 'http://11.0.0.1', 'http://192.169.1.1', '', 'http://999.1.1.1', 'https://localhost.example.com']) {
@@ -130,7 +135,12 @@ void main() {
     });
 
     test('有模型没 Key → 缺 Key；填了 Key → 可以发', () async {
-      final ch = await store.upsert(name: 'DeepSeek', protocol: ChatProtocol.openaiChat, baseUrl: 'https://api.deepseek.com', models: [ModelSpec(id: 'm1')]);
+      final ch = await store.upsert(
+        name: 'DeepSeek',
+        protocol: ChatProtocol.openaiChat,
+        baseUrl: 'https://api.deepseek.com',
+        models: [ModelSpec(id: 'm1')],
+      );
       var gap = await store.readiness();
       expect(gap?.kind, ModelGapKind.noKey);
       expect(gap?.channel?.id, ch.id);
@@ -140,13 +150,29 @@ void main() {
     });
 
     test('本机服务不要求 Key', () async {
-      await store.upsert(name: 'Ollama', protocol: ChatProtocol.openaiChat, baseUrl: 'http://192.168.1.9:11434/v1', models: [ModelSpec(id: 'qwen')]);
+      await store.upsert(
+        name: 'Ollama',
+        protocol: ChatProtocol.openaiChat,
+        baseUrl: 'http://192.168.1.9:11434/v1',
+        models: [ModelSpec(id: 'qwen')],
+      );
       expect(await store.readiness(), isNull);
     });
 
     test('对话选的模型缺 Key：即使别的渠道是好的也要提示', () async {
-      await store.upsert(name: '好的', protocol: ChatProtocol.openaiChat, baseUrl: 'https://a.example.com/v1', apiKey: 'k', models: [ModelSpec(id: 'a')]);
-      final bad = await store.upsert(name: '缺 Key', protocol: ChatProtocol.openaiChat, baseUrl: 'https://b.example.com/v1', models: [ModelSpec(id: 'b')]);
+      await store.upsert(
+        name: '好的',
+        protocol: ChatProtocol.openaiChat,
+        baseUrl: 'https://a.example.com/v1',
+        apiKey: 'k',
+        models: [ModelSpec(id: 'a')],
+      );
+      final bad = await store.upsert(
+        name: '缺 Key',
+        protocol: ChatProtocol.openaiChat,
+        baseUrl: 'https://b.example.com/v1',
+        models: [ModelSpec(id: 'b')],
+      );
       expect(await store.readiness(), isNull);
       final gap = await store.readiness(store.resolve(ModelSelection(bad.id, 'b')));
       expect(gap?.kind, ModelGapKind.noKey);

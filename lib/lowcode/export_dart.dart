@@ -26,8 +26,7 @@ String dartClassName(String title) {
   return name.endsWith('Page') ? name : '${name}Page';
 }
 
-String _s(String v) =>
-    "'${v.replaceAll('\\', r'\\').replaceAll("'", r"\'").replaceAll(r'$', r'\$').replaceAll('\r', '').replaceAll('\n', r'\n')}'";
+String _s(String v) => "'${v.replaceAll('\\', r'\\').replaceAll("'", r"\'").replaceAll(r'$', r'\$').replaceAll('\r', '').replaceAll('\n', r'\n')}'";
 
 String _d(num v) => v == v.roundToDouble() ? '${v.round()}' : '$v';
 
@@ -65,7 +64,8 @@ String _node(LcNode n, LcNode? parent, int i) {
         'height: 1.5',
       ];
       final ta = n.strProp('textAlign');
-      final text = 'Text(\n${_ind(i + 1)}${_s(n.strProp('text') ?? '')},\n'
+      final text =
+          'Text(\n${_ind(i + 1)}${_s(n.strProp('text') ?? '')},\n'
           '${ta != null ? '${_ind(i + 1)}textAlign: TextAlign.$ta,\n' : ''}'
           '${_ind(i + 1)}style: const TextStyle(${style.join(', ')}),\n${_ind(i)})';
       final boxed = _needsBox(n) ? _box(n, i, _reindent(text, 1), inRow: inRow) : text;
@@ -78,11 +78,11 @@ String _node(LcNode n, LcNode? parent, int i) {
         if (n.strProp('bg') != null) 'backgroundColor: ${_color(n.strProp('bg')!)}',
         if (n.strProp('color') != null) 'foregroundColor: ${_color(n.strProp('color')!)}',
         if (n.numProp('padding') != null) 'padding: const EdgeInsets.all(${_d(n.numProp('padding')!)})',
-        if (n.numProp('radius') != null)
-          'shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(${_d(n.numProp('radius')!)}))',
+        if (n.numProp('radius') != null) 'shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(${_d(n.numProp('radius')!)}))',
         if (n.numProp('fontSize') != null) 'textStyle: const TextStyle(fontSize: ${_d(n.numProp('fontSize')!)})',
       ];
-      final button = 'FilledButton(\n${_ind(i + 1)}onPressed: () {},\n'
+      final button =
+          'FilledButton(\n${_ind(i + 1)}onPressed: () {},\n'
           '${_ind(i + 1)}style: FilledButton.styleFrom(${styles.join(', ')}),\n'
           '${_ind(i + 1)}child: Text(${_s(n.strProp('text') ?? '')}),\n${_ind(i)})';
       return wrapFill(_sized(n, i, button, inRow: inRow));
@@ -90,7 +90,8 @@ String _node(LcNode n, LcNode? parent, int i) {
       final radius = _d(n.numProp('radius') ?? 0);
       final h = n.numProp('height');
       final src = n.strProp('src');
-      final size = '${h != null ? 'height: ${_d(h)}, ' : ''}'
+      final size =
+          '${h != null ? 'height: ${_d(h)}, ' : ''}'
           '${n.props['width'] is num ? 'width: ${_d(n.props['width'] as num)}, ' : (n.fillWidth && !inRow ? 'width: double.infinity, ' : '')}';
       final img = src == null
           ? 'Container(${size}color: const Color(0xFFD3DEE4), alignment: Alignment.center, child: const Icon(Icons.image_outlined))'
@@ -99,7 +100,8 @@ String _node(LcNode n, LcNode? parent, int i) {
       final clipped = 'ClipRRect(\n${_ind(i + 1)}borderRadius: BorderRadius.circular($radius),\n${_ind(i + 1)}child: $img,\n${_ind(i)})';
       return wrapFill(_margin(n, i, clipped));
     case 'input':
-      final field = 'TextField(\n${_ind(i + 1)}decoration: InputDecoration(\n'
+      final field =
+          'TextField(\n${_ind(i + 1)}decoration: InputDecoration(\n'
           '${_ind(i + 2)}hintText: ${_s(n.strProp('placeholder') ?? '')},\n'
           '${_ind(i + 2)}border: OutlineInputBorder(borderRadius: BorderRadius.circular(${_d(n.numProp('radius') ?? 4)})),\n'
           '${_ind(i + 1)}),\n${_ind(i)})';
@@ -110,16 +112,10 @@ String _node(LcNode n, LcNode? parent, int i) {
       }
       return wrapFill(_sized(n, i, field, inRow: inRow));
     case 'list':
-      final style = <String>[
-        if (n.numProp('fontSize') != null) 'fontSize: ${_d(n.numProp('fontSize')!)}',
-        if (n.strProp('color') != null) 'color: ${_color(n.strProp('color')!)}',
-        'height: 1.75',
-      ];
-      final items = [
-        for (final item in (n.props['items'] as List?) ?? const [])
-          '${_ind(i + 2)}Text(${_s('• $item')}, style: const TextStyle(${style.join(', ')})),\n',
-      ].join();
-      final col = 'Column(\n${_ind(i + 1)}crossAxisAlignment: CrossAxisAlignment.start,\n'
+      final style = <String>[if (n.numProp('fontSize') != null) 'fontSize: ${_d(n.numProp('fontSize')!)}', if (n.strProp('color') != null) 'color: ${_color(n.strProp('color')!)}', 'height: 1.75'];
+      final items = [for (final item in (n.props['items'] as List?) ?? const []) '${_ind(i + 2)}Text(${_s('• $item')}, style: const TextStyle(${style.join(', ')})),\n'].join();
+      final col =
+          'Column(\n${_ind(i + 1)}crossAxisAlignment: CrossAxisAlignment.start,\n'
           '${_ind(i + 1)}mainAxisSize: MainAxisSize.min,\n${_ind(i + 1)}children: [\n$items${_ind(i + 1)}],\n${_ind(i)})';
       return wrapFill(_needsBox(n) ? _box(n, i, _reindent(col, 1), inRow: inRow) : col);
     case 'divider':
@@ -131,8 +127,7 @@ String _node(LcNode n, LcNode? parent, int i) {
   return 'const SizedBox.shrink()';
 }
 
-bool _needsBox(LcNode n) =>
-    n.props['width'] != null || n.numProp('padding') != null || n.numProp('margin') != null || n.strProp('bg') != null;
+bool _needsBox(LcNode n) => n.props['width'] != null || n.numProp('padding') != null || n.numProp('margin') != null || n.strProp('bg') != null;
 
 String _reindent(String code, int by) => code.replaceAll('\n', '\n${_ind(by)}');
 
@@ -142,7 +137,8 @@ String _flex(LcNode n, int i, {required bool column, bool forceStretchWidth = fa
   final a = n.strProp('align') ?? (column ? 'start' : 'center');
   final j = n.strProp('justify');
   final children = [for (final c in n.children) '${_ind(i + 2)}${_node(c, n, i + 2)},\n'].join();
-  final flex = '${column ? 'Column' : 'Row'}(\n'
+  final flex =
+      '${column ? 'Column' : 'Row'}(\n'
       '${_ind(i + 1)}mainAxisSize: ${column ? 'MainAxisSize.min' : 'MainAxisSize.max'},\n'
       '${_ind(i + 1)}crossAxisAlignment: CrossAxisAlignment.${cross[a]},\n'
       '${j != null ? '${_ind(i + 1)}mainAxisAlignment: MainAxisAlignment.${main[j]},\n' : ''}'

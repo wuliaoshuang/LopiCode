@@ -78,13 +78,15 @@ class FakeModelServer {
     }
     req.response.headers.contentType = ContentType('text', 'event-stream', charset: 'utf-8');
     void chunk(Map<String, dynamic> delta, [String? finish]) {
-      req.response.write('data: ${jsonEncode({
-        'id': 'chatcmpl-test',
-        'object': 'chat.completion.chunk',
-        'choices': [
-          {'index': 0, 'delta': delta, 'finish_reason': finish},
-        ],
-      })}\n\n');
+      req.response.write(
+        'data: ${jsonEncode({
+          'id': 'chatcmpl-test',
+          'object': 'chat.completion.chunk',
+          'choices': [
+            {'index': 0, 'delta': delta, 'finish_reason': finish},
+          ],
+        })}\n\n',
+      );
     }
 
     chunk({'role': 'assistant', 'content': ''});
@@ -125,7 +127,12 @@ class FakeModelServer {
     // 和真实接口一样：只有请求里带了 stream_options.include_usage 才发。
     final opts = requests.last['stream_options'];
     if (opts is Map && opts['include_usage'] == true) {
-      req.response.write('data: ${jsonEncode({'choices': <Object>[], 'usage': reply.usage ?? {'total_tokens': 1}})}\n\n');
+      req.response.write(
+        'data: ${jsonEncode({
+          'choices': <Object>[],
+          'usage': reply.usage ?? {'total_tokens': 1},
+        })}\n\n',
+      );
     }
     req.response.write('data: [DONE]\n\n');
     await req.response.close();

@@ -117,19 +117,18 @@ class _PersonalizeScreenState extends State<PersonalizeScreen> {
                 itemBuilder: (_) => [
                   if (p.id != defaultId) const PopupMenuItem(value: 'default', child: Text('设为新对话默认')),
                   const PopupMenuItem(value: 'copy', child: Text('复制一份')),
-                  if (!p.builtIn) PopupMenuItem(value: 'delete', child: Text('删除', style: TextStyle(color: c.danger))),
+                  if (!p.builtIn)
+                    PopupMenuItem(
+                      value: 'delete',
+                      child: Text('删除', style: TextStyle(color: c.danger)),
+                    ),
                 ],
               ),
               onTap: () => _edit(p),
             ),
           Padding(
             padding: const EdgeInsets.fromLTRB(Space.x4, Space.x2, Space.x4, 0),
-            child: OutlinedButton.icon(
-              key: const Key('preset-new'),
-              onPressed: _edit,
-              icon: const Icon(Icons.add, size: 18),
-              label: const Text('新建预设'),
-            ),
+            child: OutlinedButton.icon(key: const Key('preset-new'), onPressed: _edit, icon: const Icon(Icons.add, size: 18), label: const Text('新建预设')),
           ),
         ],
       ),
@@ -176,9 +175,13 @@ class _PresetEditScreenState extends State<PresetEditScreen> {
       body: SectionedList(
         inner: const EdgeInsets.all(Space.x4),
         children: [
-          if (_readOnly)
-            const InfoBanner('内置的“标准模式”带全部工具，不能改。想改就回上一页“复制一份”再改。', margin: EdgeInsets.only(bottom: Space.x3)),
-          TextField(key: const Key('preset-name'), controller: _name, enabled: !_readOnly, decoration: const InputDecoration(labelText: '名称')),
+          if (_readOnly) const InfoBanner('内置的“标准模式”带全部工具，不能改。想改就回上一页“复制一份”再改。', margin: EdgeInsets.only(bottom: Space.x3)),
+          TextField(
+            key: const Key('preset-name'),
+            controller: _name,
+            enabled: !_readOnly,
+            decoration: const InputDecoration(labelText: '名称'),
+          ),
           const SizedBox(height: Space.x3),
           TextField(
             key: const Key('preset-prompt'),
@@ -455,8 +458,17 @@ class _WebSearchSettingsScreenState extends State<WebSearchSettingsScreen> {
           FilledButton(key: const Key('search-save'), onPressed: _save, child: const Text('保存')),
           const SizedBox(height: Space.x2),
           OutlinedButton(onPressed: _busy || _url.text.trim().isEmpty ? null : _test, child: const Text('搜一次试试')),
-          if (_busy) const Padding(padding: EdgeInsets.only(top: Space.x2), child: LinearProgressIndicator()),
-          if (_status != null) InfoBanner(_status!, tone: _statusOk ? BannerTone.info : BannerTone.danger, margin: const EdgeInsets.only(top: Space.x2)),
+          if (_busy)
+            const Padding(
+              padding: EdgeInsets.only(top: Space.x2),
+              child: LinearProgressIndicator(),
+            ),
+          if (_status != null)
+            InfoBanner(
+              _status!,
+              tone: _statusOk ? BannerTone.info : BannerTone.danger,
+              margin: const EdgeInsets.only(top: Space.x2),
+            ),
         ],
       ),
     );
@@ -595,11 +607,15 @@ class _SkillEditScreenState extends State<SkillEditScreen> {
   @override
   Widget build(BuildContext context) => Scaffold(
     backgroundColor: context.colors.canvas,
-      appBar: PageBar(background: context.colors.canvas, title: const Text('新建技能')),
+    appBar: PageBar(background: context.colors.canvas, title: const Text('新建技能')),
     body: SectionedList(
       inner: const EdgeInsets.all(Space.x4),
       children: [
-        TextField(key: const Key('skill-name'), controller: _name, decoration: const InputDecoration(labelText: '技能名', hintText: '短一点，不带空格，如 写周报')),
+        TextField(
+          key: const Key('skill-name'),
+          controller: _name,
+          decoration: const InputDecoration(labelText: '技能名', hintText: '短一点，不带空格，如 写周报'),
+        ),
         const SizedBox(height: Space.x3),
         TextField(
           key: const Key('skill-desc'),
@@ -645,7 +661,8 @@ class SkillViewScreen extends StatelessWidget {
     final t = Theme.of(context).textTheme;
     return Scaffold(
       backgroundColor: context.colors.canvas,
-      appBar: PageBar(background: context.colors.canvas, 
+      appBar: PageBar(
+        background: context.colors.canvas,
         title: Text(skill.name),
         actions: [
           PopupMenuButton<String>(
@@ -660,7 +677,12 @@ class SkillViewScreen extends StatelessWidget {
                 if (context.mounted) showSnack(context, '$e');
               }
             },
-            itemBuilder: (_) => [PopupMenuItem(value: 'delete', child: Text('删除技能', style: TextStyle(color: c.danger)))],
+            itemBuilder: (_) => [
+              PopupMenuItem(
+                value: 'delete',
+                child: Text('删除技能', style: TextStyle(color: c.danger)),
+              ),
+            ],
           ),
         ],
       ),
@@ -675,7 +697,11 @@ class SkillViewScreen extends StatelessWidget {
             const SizedBox(height: Space.x3),
             Container(
               padding: const EdgeInsets.all(Space.x3),
-              decoration: BoxDecoration(color: c.codeBg, borderRadius: BorderRadius.circular(Radii.md), border: Border.all(color: c.border)),
+              decoration: BoxDecoration(
+                color: c.codeBg,
+                borderRadius: BorderRadius.circular(Radii.md),
+                border: Border.all(color: c.border),
+              ),
               child: SelectableText(
                 snap.hasError ? '读不出来：${snap.error}' : (snap.data ?? '读取中…'),
                 style: TextStyle(fontFamily: kMonoFont, fontFamilyFallback: kMonoFallback, fontSize: FontSize.sm, height: 1.6, color: c.text),

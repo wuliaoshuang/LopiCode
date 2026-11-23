@@ -24,8 +24,7 @@ ThemeData buildAppTheme(Brightness brightness, {String? fontFamily}) {
     surfaceTint: Colors.transparent,
   );
 
-  TextStyle t(double size, FontWeight weight, Color color, [double height = 1.4]) =>
-      TextStyle(fontSize: size, fontWeight: weight, color: color, height: height, letterSpacing: 0);
+  TextStyle t(double size, FontWeight weight, Color color, [double height = 1.4]) => TextStyle(fontSize: size, fontWeight: weight, color: color, height: height, letterSpacing: 0);
   const regular = FontWeight.w400;
   const strong = FontWeight.w600;
 
@@ -123,13 +122,9 @@ ThemeData buildAppTheme(Brightness brightness, {String? fontFamily}) {
       height: 64,
       indicatorColor: c.accentSoft,
       labelTextStyle: WidgetStateProperty.resolveWith(
-        (s) => t(FontSize.xs, s.contains(WidgetState.selected) ? strong : regular,
-                s.contains(WidgetState.selected) ? c.accent : c.textMuted, 1.2)
-            .copyWith(fontFamily: fontFamily),
+        (s) => t(FontSize.xs, s.contains(WidgetState.selected) ? strong : regular, s.contains(WidgetState.selected) ? c.accent : c.textMuted, 1.2).copyWith(fontFamily: fontFamily),
       ),
-      iconTheme: WidgetStateProperty.resolveWith(
-        (s) => IconThemeData(size: 22, color: s.contains(WidgetState.selected) ? c.accent : c.textMuted),
-      ),
+      iconTheme: WidgetStateProperty.resolveWith((s) => IconThemeData(size: 22, color: s.contains(WidgetState.selected) ? c.accent : c.textMuted)),
     ),
     bottomSheetTheme: BottomSheetThemeData(
       backgroundColor: c.surface,
@@ -148,15 +143,17 @@ ThemeData buildAppTheme(Brightness brightness, {String? fontFamily}) {
     snackBarTheme: SnackBarThemeData(
       behavior: SnackBarBehavior.floating,
       backgroundColor: brightness == Brightness.light ? Palette.neutral900 : Palette.neutral200,
-      contentTextStyle: t(FontSize.sm, regular, brightness == Brightness.light ? Palette.neutral100 : Palette.neutral950)
-          .copyWith(fontFamily: fontFamily),
+      contentTextStyle: t(FontSize.sm, regular, brightness == Brightness.light ? Palette.neutral100 : Palette.neutral950).copyWith(fontFamily: fontFamily),
       shape: shape,
     ),
     popupMenuTheme: PopupMenuThemeData(
       color: c.surface,
       surfaceTintColor: Colors.transparent,
       elevation: 3,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Radii.bubble), side: BorderSide(color: c.border)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(Radii.bubble),
+        side: BorderSide(color: c.border),
+      ),
       textStyle: textTheme.bodyMedium?.copyWith(fontFamily: fontFamily),
     ),
     listTileTheme: ListTileThemeData(

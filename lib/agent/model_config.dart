@@ -110,8 +110,7 @@ class ModelSpec {
 }
 
 class Channel {
-  Channel({required this.id, required this.name, required this.protocol, required this.baseUrl, List<ModelSpec>? models})
-    : models = models ?? [];
+  Channel({required this.id, required this.name, required this.protocol, required this.baseUrl, List<ModelSpec>? models}) : models = models ?? [];
   final String id;
   String name;
   ChatProtocol protocol;
@@ -137,10 +136,7 @@ class Channel {
       name: '${j['name'] ?? '渠道'}',
       protocol: ChatProtocol.byId(j['protocol']),
       baseUrl: '${j['baseUrl'] ?? ''}',
-      models: [
-        for (final m in (j['models'] as List?) ?? const [])
-          ?ModelSpec.fromJson(m),
-      ],
+      models: [for (final m in (j['models'] as List?) ?? const []) ?ModelSpec.fromJson(m)],
     );
   }
 }
@@ -160,8 +156,7 @@ class ModelSelection {
   }
 
   @override
-  bool operator ==(Object other) =>
-      other is ModelSelection && other.channelId == channelId && other.modelId == modelId && other.level == level;
+  bool operator ==(Object other) => other is ModelSelection && other.channelId == channelId && other.modelId == modelId && other.level == level;
   @override
   int get hashCode => Object.hash(channelId, modelId, level);
 }
@@ -218,10 +213,7 @@ class ModelConfigStore {
   /// 读配置；第一次运行新版时把老的“单一接口”设置搬成一个渠道。
   Future<void> load() async {
     final raw = settings.get<List<dynamic>>(kChannels);
-    channels = [
-      for (final c in raw ?? const [])
-        ?Channel.fromJson(c),
-    ];
+    channels = [for (final c in raw ?? const []) ?Channel.fromJson(c)];
     if (raw == null) await _migrateLegacy();
   }
 
@@ -265,14 +257,7 @@ class ModelConfigStore {
   }
 
   /// 新建或更新渠道。[apiKey] 留空（null 或空串）表示不动已保存的 Key。
-  Future<Channel> upsert({
-    String? id,
-    required String name,
-    required ChatProtocol protocol,
-    required String baseUrl,
-    String? apiKey,
-    List<ModelSpec>? models,
-  }) async {
+  Future<Channel> upsert({String? id, required String name, required ChatProtocol protocol, required String baseUrl, String? apiKey, List<ModelSpec>? models}) async {
     var ch = channel(id);
     if (ch == null) {
       ch = Channel(id: id ?? _freeId(), name: name, protocol: protocol, baseUrl: baseUrl.trim(), models: models);
@@ -332,8 +317,7 @@ class ModelConfigStore {
   }
 
   /// 新对话用哪个模型：固定默认 → 上次用的 → 第一个能用的。
-  ResolvedModel? defaultForNewChat() =>
-      (newChatUsesFixed ? resolve(fixedSelection) : null) ?? resolve(lastSelection) ?? resolve(fixedSelection) ?? firstAvailable;
+  ResolvedModel? defaultForNewChat() => (newChatUsesFixed ? resolve(fixedSelection) : null) ?? resolve(lastSelection) ?? resolve(fixedSelection) ?? firstAvailable;
 
   bool get configured => firstAvailable != null;
 

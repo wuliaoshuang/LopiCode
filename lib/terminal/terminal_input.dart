@@ -128,15 +128,7 @@ class ImeTranslator {
 /// xterm 的 [TerminalView] 只负责画和处理实体键盘；软键盘 / 输入法这条路由这里接管
 /// （原因见 [ImeTranslator]）。
 class TerminalInputView extends StatefulWidget {
-  const TerminalInputView({
-    super.key,
-    required this.session,
-    required this.focusNode,
-    required this.theme,
-    required this.textStyle,
-    required this.padding,
-    this.mode = TerminalImeMode.direct,
-  });
+  const TerminalInputView({super.key, required this.session, required this.focusNode, required this.theme, required this.textStyle, required this.padding, this.mode = TerminalImeMode.direct});
 
   final TerminalSession session;
   final FocusNode focusNode;
@@ -388,15 +380,7 @@ class TerminalInputViewState extends State<TerminalInputView> with TextInputClie
 /// 攒着的字：从光标格子开始画，带下划线；实心光标画在这段字的后面。
 /// 一行放不下时整段往左挪，保证光标始终看得见。
 class _ComposingLine extends StatelessWidget {
-  const _ComposingLine({
-    required this.text,
-    required this.start,
-    required this.cell,
-    required this.maxWidth,
-    required this.style,
-    required this.background,
-    required this.cursor,
-  });
+  const _ComposingLine({required this.text, required this.start, required this.cell, required this.maxWidth, required this.style, required this.background, required this.cursor});
   final String text;
   final double start;
   final Size cell;

@@ -12,13 +12,7 @@ import 'dart:convert';
 /// - `textAlign`：left / center / right
 /// - `text` / `src` / `placeholder`：字符串；`bold`：布尔；`items`：字符串数组
 class LcNode {
-  LcNode({
-    required this.id,
-    required this.type,
-    Map<String, dynamic>? props,
-    List<LcNode>? children,
-  }) : props = props ?? {},
-       children = children ?? [];
+  LcNode({required this.id, required this.type, Map<String, dynamic>? props, List<LcNode>? children}) : props = props ?? {}, children = children ?? [];
 
   String id;
   final String type;
@@ -47,10 +41,7 @@ class LcNode {
     if (children.isNotEmpty) 'children': [for (final c in children) c.toJson()],
   };
 
-  LcNode clone() => LcNode.fromJson(
-    jsonDecode(jsonEncode(toJson())) as Map<String, dynamic>,
-    0,
-  );
+  LcNode clone() => LcNode.fromJson(jsonDecode(jsonEncode(toJson())) as Map<String, dynamic>, 0);
 
   static const int maxDepth = 24;
 
@@ -83,12 +74,7 @@ class LcNode {
     if (children.any((c) => c.type == 'page')) {
       throw const FormatException('page 只能作为根组件');
     }
-    return LcNode(
-      id: json['id'] is String ? json['id'] as String : '',
-      type: type,
-      props: _cleanProps(type, (rawProps as Map?)?.cast<String, dynamic>() ?? {}),
-      children: children,
-    );
+    return LcNode(id: json['id'] is String ? json['id'] as String : '', type: type, props: _cleanProps(type, (rawProps as Map?)?.cast<String, dynamic>() ?? {}), children: children);
   }
 
   static Map<String, dynamic> _cleanProps(String type, Map<String, dynamic> raw) {
@@ -137,44 +123,41 @@ const _boxFields = ['width', 'height', 'padding', 'margin', 'bg', 'radius'];
 const _layoutFields = ['gap', 'align', 'justify'];
 
 const Map<String, LcSpec> lcSpecs = {
-  'page': LcSpec('page', '页面', isContainer: true,
-      defaults: {'padding': 16, 'gap': 12, 'bg': '#F6FBFD'},
-      fields: ['padding', 'bg', ..._layoutFields]),
-  'container': LcSpec('container', '容器', isContainer: true,
-      defaults: {'padding': 12, 'gap': 8, 'width': 'fill'},
-      fields: [..._boxFields, ..._layoutFields]),
-  'row': LcSpec('row', '行', isContainer: true,
-      defaults: {'gap': 8, 'align': 'center', 'width': 'fill'},
-      fields: [..._boxFields, ..._layoutFields]),
-  'column': LcSpec('column', '列', isContainer: true,
-      defaults: {'gap': 8},
-      fields: [..._boxFields, ..._layoutFields]),
-  'card': LcSpec('card', '卡片', isContainer: true,
-      defaults: {'padding': 16, 'gap': 8, 'bg': '#FFFFFF', 'radius': 12, 'width': 'fill'},
-      fields: [..._boxFields, ..._layoutFields]),
-  'text': LcSpec('text', '文本',
-      defaults: {'text': '一段文本', 'fontSize': 16, 'color': '#222435'},
-      fields: ['text', 'fontSize', 'bold', 'color', 'textAlign', 'width', 'padding', 'margin', 'bg', 'radius']),
-  'button': LcSpec('button', '按钮',
-      defaults: {'text': '按钮', 'bg': '#058654', 'color': '#FFFFFF', 'radius': 8, 'padding': 12, 'fontSize': 16},
-      fields: ['text', 'fontSize', 'bg', 'color', 'radius', 'padding', 'width', 'margin']),
-  'image': LcSpec('image', '图片',
-      defaults: {'src': '', 'height': 160, 'radius': 8, 'width': 'fill'},
-      fields: ['src', 'width', 'height', 'radius', 'margin']),
-  'input': LcSpec('input', '输入框',
-      defaults: {'placeholder': '请输入', 'radius': 8, 'width': 'fill'},
-      fields: ['placeholder', 'width', 'radius', 'margin']),
-  'list': LcSpec('list', '列表',
-      defaults: {'items': ['第一项', '第二项', '第三项'], 'fontSize': 16, 'color': '#222435'},
-      fields: ['items', 'fontSize', 'color', 'width', 'padding', 'margin', 'bg', 'radius']),
+  'page': LcSpec('page', '页面', isContainer: true, defaults: {'padding': 16, 'gap': 12, 'bg': '#F6FBFD'}, fields: ['padding', 'bg', ..._layoutFields]),
+  'container': LcSpec('container', '容器', isContainer: true, defaults: {'padding': 12, 'gap': 8, 'width': 'fill'}, fields: [..._boxFields, ..._layoutFields]),
+  'row': LcSpec('row', '行', isContainer: true, defaults: {'gap': 8, 'align': 'center', 'width': 'fill'}, fields: [..._boxFields, ..._layoutFields]),
+  'column': LcSpec('column', '列', isContainer: true, defaults: {'gap': 8}, fields: [..._boxFields, ..._layoutFields]),
+  'card': LcSpec('card', '卡片', isContainer: true, defaults: {'padding': 16, 'gap': 8, 'bg': '#FFFFFF', 'radius': 12, 'width': 'fill'}, fields: [..._boxFields, ..._layoutFields]),
+  'text': LcSpec(
+    'text',
+    '文本',
+    defaults: {'text': '一段文本', 'fontSize': 16, 'color': '#222435'},
+    fields: ['text', 'fontSize', 'bold', 'color', 'textAlign', 'width', 'padding', 'margin', 'bg', 'radius'],
+  ),
+  'button': LcSpec(
+    'button',
+    '按钮',
+    defaults: {'text': '按钮', 'bg': '#058654', 'color': '#FFFFFF', 'radius': 8, 'padding': 12, 'fontSize': 16},
+    fields: ['text', 'fontSize', 'bg', 'color', 'radius', 'padding', 'width', 'margin'],
+  ),
+  'image': LcSpec('image', '图片', defaults: {'src': '', 'height': 160, 'radius': 8, 'width': 'fill'}, fields: ['src', 'width', 'height', 'radius', 'margin']),
+  'input': LcSpec('input', '输入框', defaults: {'placeholder': '请输入', 'radius': 8, 'width': 'fill'}, fields: ['placeholder', 'width', 'radius', 'margin']),
+  'list': LcSpec(
+    'list',
+    '列表',
+    defaults: {
+      'items': ['第一项', '第二项', '第三项'],
+      'fontSize': 16,
+      'color': '#222435',
+    },
+    fields: ['items', 'fontSize', 'color', 'width', 'padding', 'margin', 'bg', 'radius'],
+  ),
   'divider': LcSpec('divider', '分割线', defaults: {}, fields: ['margin']),
   'spacer': LcSpec('spacer', '间隔', defaults: {'size': 16}, fields: ['size']),
 };
 
 /// 组件面板里可拖出来的类型（page 只能是根）。
-const List<String> lcPaletteTypes = [
-  'container', 'row', 'column', 'card', 'text', 'button', 'image', 'input', 'list', 'divider', 'spacer',
-];
+const List<String> lcPaletteTypes = ['container', 'row', 'column', 'card', 'text', 'button', 'image', 'input', 'list', 'divider', 'spacer'];
 
 class LcDocument {
   LcDocument({required this.title, required this.root}) {
@@ -189,14 +172,24 @@ class LcDocument {
 
   factory LcDocument.starter(String title) => LcDocument(
     title: title,
-    root: LcNode(id: 'root', type: 'page', props: Map.of(lcSpecs['page']!.defaults), children: [
-      LcNode(id: '', type: 'text', props: {'text': title, 'fontSize': 24, 'bold': true, 'color': '#222435'}),
-      LcNode(id: '', type: 'text', props: {'text': '从下方组件栏拖一个组件上来，或点一下直接添加。', 'fontSize': 16, 'color': '#5C6479'}),
-      LcNode(id: '', type: 'card', props: Map.of(lcSpecs['card']!.defaults), children: [
-        LcNode(id: '', type: 'input', props: Map.of(lcSpecs['input']!.defaults)),
-        LcNode(id: '', type: 'button', props: {...lcSpecs['button']!.defaults, 'text': '提交'}),
-      ]),
-    ]),
+    root: LcNode(
+      id: 'root',
+      type: 'page',
+      props: Map.of(lcSpecs['page']!.defaults),
+      children: [
+        LcNode(id: '', type: 'text', props: {'text': title, 'fontSize': 24, 'bold': true, 'color': '#222435'}),
+        LcNode(id: '', type: 'text', props: {'text': '从下方组件栏拖一个组件上来，或点一下直接添加。', 'fontSize': 16, 'color': '#5C6479'}),
+        LcNode(
+          id: '',
+          type: 'card',
+          props: Map.of(lcSpecs['card']!.defaults),
+          children: [
+            LcNode(id: '', type: 'input', props: Map.of(lcSpecs['input']!.defaults)),
+            LcNode(id: '', type: 'button', props: {...lcSpecs['button']!.defaults, 'text': '提交'}),
+          ],
+        ),
+      ],
+    ),
   );
 
   factory LcDocument.fromJson(Map<String, dynamic> json) {
@@ -208,10 +201,7 @@ class LcDocument {
     if (root.type != 'page') {
       throw const FormatException('根组件必须是 page');
     }
-    return LcDocument(
-      title: json['title'] is String ? json['title'] as String : '未命名页面',
-      root: root,
-    );
+    return LcDocument(title: json['title'] is String ? json['title'] as String : '未命名页面', root: root);
   }
 
   static LcDocument parse(String source) {
@@ -227,11 +217,7 @@ class LcDocument {
     return LcDocument.fromJson(decoded);
   }
 
-  Map<String, dynamic> toJson() => {
-    'version': currentVersion,
-    'title': title,
-    'root': root.toJson(),
-  };
+  Map<String, dynamic> toJson() => {'version': currentVersion, 'title': title, 'root': root.toJson()};
 
   String encode() => const JsonEncoder.withIndent('  ').convert(toJson());
 
@@ -258,11 +244,7 @@ class LcDocument {
     fix(root);
   }
 
-  LcNode newNode(String type) => LcNode(
-    id: 'n${_nextId++}',
-    type: type,
-    props: jsonDecode(jsonEncode(lcSpecs[type]!.defaults)) as Map<String, dynamic>,
-  );
+  LcNode newNode(String type) => LcNode(id: 'n${_nextId++}', type: type, props: jsonDecode(jsonEncode(lcSpecs[type]!.defaults)) as Map<String, dynamic>);
 
   LcNode? find(String id) {
     LcNode? walk(LcNode n) {
@@ -290,8 +272,7 @@ class LcDocument {
     return walk(root);
   }
 
-  bool _contains(LcNode ancestor, String id) =>
-      ancestor.id == id || ancestor.children.any((c) => _contains(c, id));
+  bool _contains(LcNode ancestor, String id) => ancestor.id == id || ancestor.children.any((c) => _contains(c, id));
 
   /// 把节点插到某个容器的指定位置；返回是否成功。
   bool insert(String parentId, LcNode node, [int? index]) {

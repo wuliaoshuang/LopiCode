@@ -45,14 +45,7 @@ void main() {
     });
 
     Future<void> fetch(File target, {CancelToken? cancel, String? sha, void Function(int, int)? onProgress}) =>
-        ResumableDownload(client).fetch(
-          server.uri('/file.bin'),
-          target,
-          expectedSize: payload.length,
-          expectedSha256: sha ?? digest,
-          cancel: cancel,
-          onProgress: onProgress,
-        );
+        ResumableDownload(client).fetch(server.uri('/file.bin'), target, expectedSize: payload.length, expectedSha256: sha ?? digest, cancel: cancel, onProgress: onProgress);
 
     test('一次下完：内容一致，没有残留的 .part', () async {
       final target = File(p.join(tmp.path, 'a.bin'));
@@ -108,8 +101,7 @@ void main() {
       final target = File(p.join(tmp.path, 'a.bin'));
       server.stallAfter = 40000;
       await expectLater(
-        ResumableDownload(client, stallTimeout: const Duration(milliseconds: 400))
-            .fetch(server.uri('/file.bin'), target, expectedSize: payload.length, expectedSha256: digest),
+        ResumableDownload(client, stallTimeout: const Duration(milliseconds: 400)).fetch(server.uri('/file.bin'), target, expectedSize: payload.length, expectedSha256: digest),
         throwsA(isA<DownloadException>().having((e) => e.message, 'message', contains('没有收到数据'))),
       );
       expect(ResumableDownload.partFile(target).lengthSync(), greaterThan(0));
@@ -141,9 +133,13 @@ void main() {
       final cancel = CancelToken();
       server.chunkDelay = const Duration(milliseconds: 5);
       await expectLater(
-        fetch(target, cancel: cancel, onProgress: (r, t) {
-          if (r > 50000) cancel.cancel();
-        }),
+        fetch(
+          target,
+          cancel: cancel,
+          onProgress: (r, t) {
+            if (r > 50000) cancel.cancel();
+          },
+        ),
         throwsA(isA<DownloadException>().having((e) => e.cancelled, 'cancelled', isTrue)),
       );
       expect(ResumableDownload.partFile(target).lengthSync(), greaterThan(0));
@@ -184,12 +180,8 @@ void main() {
     });
 
     test('想写到目标目录外面的条目被拒绝', () async {
-      final evil = File(p.join(tmp.path, 'evil.tar.gz'))
-        ..writeAsBytesSync(gzip.encode([...tarHeader('../escape.txt', 5), ...utf8.encode('hello'), ...Uint8List(507), ...Uint8List(1024)]));
-      await expectLater(
-        extractTarGz(evil, Directory(p.join(tmp.path, 'o3'))),
-        throwsA(isA<TarException>().having((e) => e.message, 'message', contains('越界'))),
-      );
+      final evil = File(p.join(tmp.path, 'evil.tar.gz'))..writeAsBytesSync(gzip.encode([...tarHeader('../escape.txt', 5), ...utf8.encode('hello'), ...Uint8List(507), ...Uint8List(1024)]));
+      await expectLater(extractTarGz(evil, Directory(p.join(tmp.path, 'o3'))), throwsA(isA<TarException>().having((e) => e.message, 'message', contains('越界'))));
       expect(File(p.join(tmp.path, 'escape.txt')).existsSync(), isFalse);
     });
 
@@ -209,8 +201,10 @@ void main() {
       expect(File(p.join(out.path, 'usr/bin/uncompress')).existsSync(), isTrue, reason: '包里的硬链接');
       expect(File(p.join(out.path, 'usr/share/keyrings/ubuntu-archive-keyring.gpg')).existsSync(), isTrue);
       // ignore: avoid_print
-      print('真实基础包：${result.files} 个文件，${result.directories} 个目录，${result.symlinks} 个符号链接，'
-          '${result.hardlinks} 个硬链接，跳过 ${result.skipped}，文件内容共 ${result.bytes} 字节');
+      print(
+        '真实基础包：${result.files} 个文件，${result.directories} 个目录，${result.symlinks} 个符号链接，'
+        '${result.hardlinks} 个硬链接，跳过 ${result.skipped}，文件内容共 ${result.bytes} 字节',
+      );
     }, timeout: const Timeout(Duration(minutes: 5)));
   });
 
@@ -229,8 +223,7 @@ void main() {
       expect(command.environment['PROOT_LOADER'], '/data/app/x/lib/arm64/libproot-loader.so');
       expect(command.environment['PROOT_TMP_DIR'], endsWith('/runtime/tmp'));
       // PRoot 依赖的两个库：先找放了 libtalloc.so.2 链接的目录，再找安装包的原生库目录
-      expect(command.environment['LD_LIBRARY_PATH'],
-          '/data/user/0/com.lopicode.app/files/runtime/hostlib:/data/app/x/lib/arm64');
+      expect(command.environment['LD_LIBRARY_PATH'], '/data/user/0/com.lopicode.app/files/runtime/hostlib:/data/app/x/lib/arm64');
       expect(command.environment['LD_PRELOAD'], '');
       expect(command.environment.containsKey('PROOT_NO_SECCOMP'), isFalse);
     });
@@ -239,7 +232,10 @@ void main() {
       final a = command.arguments;
       expect(a.sublist(0, 3), ['--kill-on-exit', '--link2symlink', '-0']);
       expect(a[a.indexOf('-r') + 1], endsWith('/runtime/rootfs'));
-      final binds = [for (var i = 0; i < a.length; i++) if (a[i] == '-b') a[i + 1]];
+      final binds = [
+        for (var i = 0; i < a.length; i++)
+          if (a[i] == '-b') a[i + 1],
+      ];
       expect(binds, containsAll(['/dev', '/proc', '/sys']));
       expect(binds, contains('/data/user/0/com.lopicode.app/app_flutter/projects/demo:/workspace'));
       expect(binds, contains(endsWith('/runtime/rootfs/tmp:/dev/shm')));
@@ -305,13 +301,8 @@ void main() {
     });
     tearDown(() => server.close());
 
-    LinuxRuntime make({FakeRuntimeHost? host}) => LinuxRuntime(
-      settings: settings,
-      baseDir: p.join(tmp.path, 'runtime'),
-      host: host ?? FakeRuntimeHost(),
-      image: image,
-      httpClient: () => RedirectingClient(server.uri('/rootfs.tar.gz')),
-    );
+    LinuxRuntime make({FakeRuntimeHost? host}) =>
+        LinuxRuntime(settings: settings, baseDir: p.join(tmp.path, 'runtime'), host: host ?? FakeRuntimeHost(), image: image, httpClient: () => RedirectingClient(server.uri('/rootfs.tar.gz')));
 
     test('下载、校验、解压、配置，最后是“已安装”', () async {
       final runtime = make();
@@ -408,10 +399,10 @@ void main() {
     tearDown(() => tmp.deleteSync(recursive: true));
 
     LinuxRuntime make(String? nativeDir) => LinuxRuntime(
-          settings: SettingsStore(File(p.join(tmp.path, 's.json'))),
-          baseDir: p.join(tmp.path, 'runtime'),
-          host: FakeRuntimeHost(nativeDir: nativeDir),
-        );
+      settings: SettingsStore(File(p.join(tmp.path, 's.json'))),
+      baseDir: p.join(tmp.path, 'runtime'),
+      host: FakeRuntimeHost(nativeDir: nativeDir),
+    );
 
     test('四个文件齐全才算带了 PRoot；缺哪个说哪个', () async {
       final native = makeFakeNativeDir(tmp);
@@ -587,8 +578,7 @@ void main() {
       final backend = LinuxShellBackend(
         runtime: runtime,
         projectDir: tmp.path,
-        spawner: (exe, args, {required workingDirectory, required environment, required rows, required columns}) =>
-            throw StateError('libflutter_pty.so not found'),
+        spawner: (exe, args, {required workingDirectory, required environment, required rows, required columns}) => throw StateError('libflutter_pty.so not found'),
         fallbackSpawner: (exe, {required workingDirectory, required environment, required rows, required columns}) => FakePty(),
       );
       await backend.start(columns: 80, rows: 24);
@@ -681,7 +671,10 @@ void main() {
 
   test('终端会话标题跟着后端走', () {
     final runtime = LinuxRuntime(settings: SettingsStore(File(p.join(tmp.path, 's.json'))), baseDir: p.join(tmp.path, 'runtime'));
-    final session = TerminalSession(title: 'Ubuntu 1', backend: LinuxShellBackend(runtime: runtime, projectDir: tmp.path));
+    final session = TerminalSession(
+      title: 'Ubuntu 1',
+      backend: LinuxShellBackend(runtime: runtime, projectDir: tmp.path),
+    );
     expect(session.backend.label, 'Ubuntu');
     session.dispose();
   });

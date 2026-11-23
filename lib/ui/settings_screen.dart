@@ -47,11 +47,15 @@ class SettingsScreen extends StatelessWidget {
     final level = PermissionLevel.byId(app.settings.getString(SettingKeys.defaultPermission, 'workspace'));
     final subOn = app.settings.getBool(SettingKeys.subagentEnabled, true);
     final teamOn = app.settings.getBool(SettingKeys.teamEnabled);
-    final deepseek = [for (final ch in channels) if (isDeepSeekOfficial(ch.baseUrl)) ch];
+    final deepseek = [
+      for (final ch in channels)
+        if (isDeepSeekOfficial(ch.baseUrl)) ch,
+    ];
     Future<void> toggle(String key, bool value) async {
       await app.settings.set(key, value);
       app.touch();
     }
+
     return Scaffold(
       backgroundColor: c.canvas,
       appBar: PageBar(titleText: '设置', background: c.canvas),
@@ -170,21 +174,13 @@ class SettingsScreen extends StatelessWidget {
               GroupRow(
                 icon: Icons.lightbulb_outline,
                 title: '在新对话里显示开场建议',
-                trailing: Switch(
-                  key: const Key('settings-suggestions'),
-                  value: app.settings.getBool(SettingKeys.chatSuggestions),
-                  onChanged: (v) => toggle(SettingKeys.chatSuggestions, v),
-                ),
+                trailing: Switch(key: const Key('settings-suggestions'), value: app.settings.getBool(SettingKeys.chatSuggestions), onChanged: (v) => toggle(SettingKeys.chatSuggestions, v)),
               ),
               GroupRow(
                 icon: Icons.data_usage,
                 title: '在回复下方显示用量',
                 subtitle: '每轮用了多少 tokens、缓存命中率、用时',
-                trailing: Switch(
-                  key: const Key('settings-usage'),
-                  value: app.settings.getBool(SettingKeys.chatUsage, true),
-                  onChanged: (v) => toggle(SettingKeys.chatUsage, v),
-                ),
+                trailing: Switch(key: const Key('settings-usage'), value: app.settings.getBool(SettingKeys.chatUsage, true), onChanged: (v) => toggle(SettingKeys.chatUsage, v)),
               ),
             ],
           ),
@@ -223,25 +219,10 @@ class SettingsScreen extends StatelessWidget {
             children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(Space.x4, Space.x4, Space.x4, Space.x4),
-                child: Text(
-                  'LopiCode 1.0.0\n在手机上通过 Agent 完成代码项目：写代码、终端、网页预览、低代码搭建、远程打包 APK。',
-                  style: t.bodySmall?.copyWith(color: c.textMuted, height: 1.6),
-                ),
+                child: Text('LopiCode 1.0.0\n在手机上通过 Agent 完成代码项目：写代码、终端、网页预览、低代码搭建、远程打包 APK。', style: t.bodySmall?.copyWith(color: c.textMuted, height: 1.6)),
               ),
-              GroupRow(
-                key: const Key('settings-third-party'),
-                icon: Icons.gavel_outlined,
-                title: '第三方声明',
-                subtitle: '随安装包带的开源组件和许可证',
-                onTap: () => go(const ThirdPartyScreen()),
-              ),
-              GroupRow(
-                key: const Key('settings-error-log'),
-                icon: Icons.bug_report_outlined,
-                title: '错误日志',
-                subtitle: '应用出错时记在这台手机上，可以复制',
-                onTap: () => go(const ErrorLogScreen()),
-              ),
+              GroupRow(key: const Key('settings-third-party'), icon: Icons.gavel_outlined, title: '第三方声明', subtitle: '随安装包带的开源组件和许可证', onTap: () => go(const ThirdPartyScreen())),
+              GroupRow(key: const Key('settings-error-log'), icon: Icons.bug_report_outlined, title: '错误日志', subtitle: '应用出错时记在这台手机上，可以复制', onTap: () => go(const ErrorLogScreen())),
             ],
           ),
         ],
@@ -286,7 +267,11 @@ class _OverviewCardState extends State<_OverviewCard> {
     final c = context.colors;
     final t = Theme.of(context).textTheme;
     final model = _model(app);
-    final link = TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(0, 48), textStyle: t.bodyLarge?.copyWith(fontSize: FontSize.lg));
+    final link = TextButton.styleFrom(
+      padding: EdgeInsets.zero,
+      minimumSize: const Size(0, 48),
+      textStyle: t.bodyLarge?.copyWith(fontSize: FontSize.lg),
+    );
 
     /// [value] 为 null 时不画进度条（[bar] 为 true 且 value 为 null 是“进行中”的滚动条）。
     Widget block({required String title, required String sub, String? state, double? value, bool bar = true, Color? color, Key? stateKey}) => Column(
@@ -295,15 +280,31 @@ class _OverviewCardState extends State<_OverviewCard> {
         Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Expanded(child: Text(title, style: t.titleLarge?.copyWith(fontWeight: FontWeight.w400, fontSize: FontSize.xl), maxLines: 1, overflow: TextOverflow.ellipsis)),
+            Expanded(
+              child: Text(
+                title,
+                style: t.titleLarge?.copyWith(fontWeight: FontWeight.w400, fontSize: FontSize.xl),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
             if (state != null) ...[
               const SizedBox(width: Space.x3),
-              Text(state, key: stateKey, style: t.bodyMedium?.copyWith(color: color ?? c.textMuted)),
+              Text(
+                state,
+                key: stateKey,
+                style: t.bodyMedium?.copyWith(color: color ?? c.textMuted),
+              ),
             ],
           ],
         ),
         const SizedBox(height: 2),
-        Text(sub, style: t.bodyMedium?.copyWith(color: c.textFaint), maxLines: 1, overflow: TextOverflow.ellipsis),
+        Text(
+          sub,
+          style: t.bodyMedium?.copyWith(color: c.textFaint),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
         if (bar) ...[
           const SizedBox(height: Space.x3),
           ClipRRect(

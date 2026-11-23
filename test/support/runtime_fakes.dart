@@ -59,10 +59,12 @@ class FileServer {
       // 模拟断线：自己写响应头，声明完整长度，只发一部分就掐掉连接。
       final status = response.statusCode == 206 ? '206 Partial Content' : '200 OK';
       final socket = await response.detachSocket(writeHeaders: false);
-      socket.add(ascii.encode(
-        'HTTP/1.1 $status\r\ncontent-length: ${data.length - start}\r\n'
-        '${response.statusCode == 206 ? 'content-range: bytes $start-${data.length - 1}/${data.length}\r\n' : ''}\r\n',
-      ));
+      socket.add(
+        ascii.encode(
+          'HTTP/1.1 $status\r\ncontent-length: ${data.length - start}\r\n'
+          '${response.statusCode == 206 ? 'content-range: bytes $start-${data.length - 1}/${data.length}\r\n' : ''}\r\n',
+        ),
+      );
       final end = start + limit > data.length ? data.length : start + limit;
       socket.add(data.sublist(start, end));
       await socket.flush();

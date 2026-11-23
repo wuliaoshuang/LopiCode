@@ -34,8 +34,10 @@ TextEditingValue composing(String text) => TextEditingValue(
   selection: TextSelection.collapsed(offset: 2 + text.length),
   composing: TextRange(start: 2, end: 2 + text.length),
 );
-TextEditingValue committed(String text) =>
-    TextEditingValue(text: '  $text', selection: TextSelection.collapsed(offset: 2 + text.length));
+TextEditingValue committed(String text) => TextEditingValue(
+  text: '  $text',
+  selection: TextSelection.collapsed(offset: 2 + text.length),
+);
 
 void main() {
   group('ImeTranslator（输入法内容 → 终端按键）', () {

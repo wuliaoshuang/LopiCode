@@ -64,10 +64,7 @@ class DartSshRemoteExec implements RemoteExec {
   @override
   Future<void> upload(String remotePath, List<int> bytes) async {
     final sftp = await _sftpClient();
-    final file = await sftp.open(
-      remotePath,
-      mode: SftpFileOpenMode.create | SftpFileOpenMode.truncate | SftpFileOpenMode.write,
-    );
+    final file = await sftp.open(remotePath, mode: SftpFileOpenMode.create | SftpFileOpenMode.truncate | SftpFileOpenMode.write);
     try {
       await file.writeBytes(bytes is Uint8List ? bytes : Uint8List.fromList(bytes));
     } finally {

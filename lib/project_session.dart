@@ -261,13 +261,7 @@ class ProjectSession extends ChangeNotifier {
     if (!forceLocal && runtime.shouldUseLinux) {
       final session = TerminalSession(
         title: 'Ubuntu ${++_linuxCounter}',
-        backend: LinuxShellBackend(
-          runtime: runtime,
-          projectDir: project.dir,
-          guestCwd: project.linuxPath,
-          spawner: linuxPtySpawner,
-          fallbackSpawner: ptySpawner,
-        ),
+        backend: LinuxShellBackend(runtime: runtime, projectDir: project.dir, guestCwd: project.linuxPath, spawner: linuxPtySpawner, fallbackSpawner: ptySpawner),
       );
       session.append(
         '\x1b[2mLopiCode 终端 · Ubuntu 24.04\n'
@@ -304,12 +298,7 @@ class ProjectSession extends ChangeNotifier {
       title: 'SSH ${++_sshCounter}',
       backend: SshShellBackend(
         hostLabel: config.display,
-        connect: () => connectSsh(
-          config: config,
-          secrets: app.secrets,
-          knownHosts: KnownHosts(app.settings),
-          onUnknownHost: onUnknownHost,
-        ),
+        connect: () => connectSsh(config: config, secrets: app.secrets, knownHosts: KnownHosts(app.settings), onUnknownHost: onUnknownHost),
       ),
     );
     return _addSession(session);
@@ -567,13 +556,7 @@ class ProjectSession extends ChangeNotifier {
     if (agentBusy) return;
     await loadChat();
     if (_messages.isEmpty && chat.isEmpty) return;
-    final conv = Conversation(
-      _newConvId(),
-      '',
-      DateTime.now(),
-      selection: app.models.defaultForNewChat()?.selection,
-      presetId: app.presets.defaultId,
-    );
+    final conv = Conversation(_newConvId(), '', DateTime.now(), selection: app.models.defaultForNewChat()?.selection, presetId: app.presets.defaultId);
     conversations.insert(0, conv);
     activeConversationId = conv.id;
     _runOf(conv).loaded = true;
@@ -657,10 +640,13 @@ class ProjectSession extends ChangeNotifier {
       switch (m['role']) {
         case 'user':
           run.items.add(
-            UserItem('${m['content'] ?? ''}', images: [
-              for (final i in (m['_images'] as List?) ?? const [])
-                if (i is Map) _hostPathOfAttachment('${i['path']}'),
-            ]),
+            UserItem(
+              '${m['content'] ?? ''}',
+              images: [
+                for (final i in (m['_images'] as List?) ?? const [])
+                  if (i is Map) _hostPathOfAttachment('${i['path']}'),
+              ],
+            ),
           );
         case 'assistant':
           final text = m['content'];
@@ -806,10 +792,19 @@ class ProjectSession extends ChangeNotifier {
     if (!run.unattended) {
       extras.add(
         ExtraTool(
-          spec: toolSpec('ask_user', '需要用户拿主意时，向用户提一个问题并等他回答。给出 2 到 4 个选项，用户也可以自己写别的回答。', {
-            'question': {'type': 'string', 'description': '要问的问题'},
-            'options': {'type': 'array', 'items': {'type': 'string'}, 'description': '可选的回答'},
-          }, ['question']),
+          spec: toolSpec(
+            'ask_user',
+            '需要用户拿主意时，向用户提一个问题并等他回答。给出 2 到 4 个选项，用户也可以自己写别的回答。',
+            {
+              'question': {'type': 'string', 'description': '要问的问题'},
+              'options': {
+                'type': 'array',
+                'items': {'type': 'string'},
+                'description': '可选的回答',
+              },
+            },
+            ['question'],
+          ),
           kind: ToolKind.other,
           run: (args) async {
             final options = [
@@ -831,8 +826,7 @@ class ProjectSession extends ChangeNotifier {
     if (!run.unattended) extras.addAll(_automationTools(run));
     return AgentToolbox(
       guard: guard,
-      runner: commandRunnerFactory?.call() ??
-          LinuxCommandRunner(app.runtime, guestCwd: project.linuxPath, onOutput: (t) => terminals.firstOrNull?.append(t)),
+      runner: commandRunnerFactory?.call() ?? LinuxCommandRunner(app.runtime, guestCwd: project.linuxPath, onOutput: (t) => terminals.firstOrNull?.append(t)),
       requestApproval: (r) => _requestApproval(run, r),
       autoApprove: () => _autoAllow.contains(root.id),
       permission: () => permissionOf(root),
@@ -963,9 +957,7 @@ class ProjectSession extends ChangeNotifier {
       run: (_) async {
         final items = app.automations.items;
         if (items.isEmpty) return ToolOutcome('还没有自动化任务。');
-        return ToolOutcome([
-          for (final a in items) '- ${a.id}｜${a.title}｜${a.rule.describe()}｜${a.enabled ? '开着' : '已停用'}｜指令：${_clip(a.instruction, 120)}',
-        ].join('\n'));
+        return ToolOutcome([for (final a in items) '- ${a.id}｜${a.title}｜${a.rule.describe()}｜${a.enabled ? '开着' : '已停用'}｜指令：${_clip(a.instruction, 120)}'].join('\n'));
       },
     ),
     ExtraTool(
@@ -978,10 +970,18 @@ class ProjectSession extends ChangeNotifier {
           'id': {'type': 'string', 'description': '要修改的任务 id；新建时省略'},
           'title': {'type': 'string', 'description': '任务名'},
           'instruction': {'type': 'string', 'description': '到时间后要执行的完整指令（那时没有这段对话的上下文，要写全）'},
-          'kind': {'type': 'string', 'enum': ['once', 'daily', 'weekly', 'interval'], 'description': '只运行一次 / 每天 / 每周 / 每隔一段时间'},
+          'kind': {
+            'type': 'string',
+            'enum': ['once', 'daily', 'weekly', 'interval'],
+            'description': '只运行一次 / 每天 / 每周 / 每隔一段时间',
+          },
           'time': {'type': 'string', 'description': '几点几分，24 小时制，如 08:30（interval 不需要）'},
           'date': {'type': 'string', 'description': 'once 用：日期，如 2026-12-31'},
-          'weekdays': {'type': 'array', 'items': {'type': 'integer'}, 'description': 'weekly 用：1＝周一 … 7＝周日'},
+          'weekdays': {
+            'type': 'array',
+            'items': {'type': 'integer'},
+            'description': 'weekly 用：1＝周一 … 7＝周日',
+          },
           'every_minutes': {'type': 'integer', 'description': 'interval 用：间隔分钟数，最短 ${TimeRule.minInterval}'},
           'tz_offset_minutes': {'type': 'integer', 'description': '时区相对 UTC 的分钟数，省略用手机当前时区（北京时间是 480）'},
         },
@@ -1228,11 +1228,7 @@ class ProjectSession extends ChangeNotifier {
     final root = rootOf(conv);
     final skills = await app.skills.enabled(workspaceDir: project.dir);
     final box = await _toolboxFor(_runOf(conv), root, skills);
-    return (
-      system: estimateTextTokens(_systemPromptFor(conv, root, skills)),
-      tools: estimateTextTokens(jsonEncode(box.specs)),
-      messages: AgentRunner.estimateTokens(_messages),
-    );
+    return (system: estimateTextTokens(_systemPromptFor(conv, root, skills)), tools: estimateTextTokens(jsonEncode(box.specs)), messages: AgentRunner.estimateTokens(_messages));
   }
 
   // ── 发送、插话、排队 ─────────────────────────────────

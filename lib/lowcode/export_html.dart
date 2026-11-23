@@ -49,9 +49,7 @@ LcHtmlExport exportHtml(LcDocument doc) {
         body.writeln('$pad<button type="button" class="$cls">${_esc.convert(n.strProp('text') ?? '')}</button>');
       case 'image':
         final src = n.strProp('src');
-        body.writeln(src == null
-            ? '$pad<div class="$cls" role="img" aria-label="图片占位"></div>'
-            : '$pad<img class="$cls" src="${_escAttr.convert(src)}" alt="">');
+        body.writeln(src == null ? '$pad<div class="$cls" role="img" aria-label="图片占位"></div>' : '$pad<img class="$cls" src="${_escAttr.convert(src)}" alt="">');
       case 'input':
         body.writeln('$pad<input class="$cls" placeholder="${_escAttr.convert(n.strProp('placeholder') ?? '')}">');
       case 'list':
@@ -76,7 +74,8 @@ LcHtmlExport exportHtml(LcDocument doc) {
 
   walk(doc.root, null, 0);
 
-  final html = '''<!DOCTYPE html>
+  final html =
+      '''<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">

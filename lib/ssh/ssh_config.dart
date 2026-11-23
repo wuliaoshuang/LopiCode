@@ -61,8 +61,7 @@ class KnownHosts {
     return known == fingerprint ? HostKeyStatus.trusted : HostKeyStatus.changed;
   }
 
-  Future<void> trust(String hostPort, String fingerprint) =>
-      _settings.set(SettingKeys.sshKnownHosts, _all()..[hostPort] = fingerprint);
+  Future<void> trust(String hostPort, String fingerprint) => _settings.set(SettingKeys.sshKnownHosts, _all()..[hostPort] = fingerprint);
 
   Future<void> forget(String hostPort) => _settings.set(SettingKeys.sshKnownHosts, _all()..remove(hostPort));
 }

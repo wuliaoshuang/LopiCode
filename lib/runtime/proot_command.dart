@@ -66,17 +66,7 @@ ProotCommand buildProotCommand({
   bool noSeccomp = false,
   Map<String, String> guestEnv = const {},
 }) {
-  final env = <String, String>{
-    'HOME': '/root',
-    'USER': 'root',
-    'LOGNAME': 'root',
-    'SHELL': '/bin/bash',
-    'TERM': term,
-    'LANG': 'C.UTF-8',
-    'PATH': guestPath,
-    'TMPDIR': '/tmp',
-    ...guestEnv,
-  };
+  final env = <String, String>{'HOME': '/root', 'USER': 'root', 'LOGNAME': 'root', 'SHELL': '/bin/bash', 'TERM': term, 'LANG': 'C.UTF-8', 'PATH': guestPath, 'TMPDIR': '/tmp', ...guestEnv};
   return ProotCommand(
     executable: '$nativeLibDir/${ProotFiles.proot}',
     arguments: [
@@ -96,13 +86,7 @@ ProotCommand buildProotCommand({
       for (final e in env.entries) '${e.key}=${e.value}',
       ...guestCommand,
     ],
-    environment: {
-      'PROOT_LOADER': '$nativeLibDir/${ProotFiles.loader}',
-      'PROOT_TMP_DIR': tmpDir,
-      'LD_LIBRARY_PATH': '$libDir:$nativeLibDir',
-      'LD_PRELOAD': '',
-      if (noSeccomp) 'PROOT_NO_SECCOMP': '1',
-    },
+    environment: {'PROOT_LOADER': '$nativeLibDir/${ProotFiles.loader}', 'PROOT_TMP_DIR': tmpDir, 'LD_LIBRARY_PATH': '$libDir:$nativeLibDir', 'LD_PRELOAD': '', if (noSeccomp) 'PROOT_NO_SECCOMP': '1'},
   );
 }
 

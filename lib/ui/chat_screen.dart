@@ -31,14 +31,7 @@ import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// `/` 指令。
-const List<(String, String)> kSlashCommands = [
-  ('/new', '开一段新对话'),
-  ('/model', '换模型和思考深度'),
-  ('/plan', '开 / 关计划模式'),
-  ('/compact', '把前面的对话压缩成摘要'),
-  ('/export', '把对话导出成文件'),
-  ('/permission', '改这段对话的权限'),
-];
+const List<(String, String)> kSlashCommands = [('/new', '开一段新对话'), ('/model', '换模型和思考深度'), ('/plan', '开 / 关计划模式'), ('/compact', '把前面的对话压缩成摘要'), ('/export', '把对话导出成文件'), ('/permission', '改这段对话的权限')];
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key, required this.session});
@@ -193,7 +186,10 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _pickSendMode() async {
     if (!_canSend) return;
-    final mode = await showModalBottomSheet<SendMode>(context: context, builder: (_) => SendModeSheet(hasImages: _attachments.isNotEmpty));
+    final mode = await showModalBottomSheet<SendMode>(
+      context: context,
+      builder: (_) => SendModeSheet(hasImages: _attachments.isNotEmpty),
+    );
     if (mode != null) await _send(null, mode);
   }
 
@@ -212,7 +208,10 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _pickPermission() async {
-    final level = await showModalBottomSheet<PermissionLevel>(context: context, builder: (_) => PermissionSheet(current: s.permission));
+    final level = await showModalBottomSheet<PermissionLevel>(
+      context: context,
+      builder: (_) => PermissionSheet(current: s.permission),
+    );
     if (level == null || !mounted || level == s.permission) return;
     if (level == PermissionLevel.full && !await confirmFullPermission(context)) return;
     await s.setPermission(level);
@@ -262,7 +261,10 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _attach(String choice) async {
     if (choice == 'ref') {
-      final path = await showModalBottomSheet<String>(context: context, builder: (_) => _FilePickerSheet(session: s));
+      final path = await showModalBottomSheet<String>(
+        context: context,
+        builder: (_) => _FilePickerSheet(session: s),
+      );
       if (path != null) _insertReference(path);
       return;
     }
@@ -274,7 +276,10 @@ class _ChatScreenState extends State<ChatScreen> {
     try {
       final added = <Map<String, dynamic>>[];
       if (choice == 'file') {
-        final path = await showModalBottomSheet<String>(context: context, builder: (_) => _FilePickerSheet(session: s, imagesOnly: true));
+        final path = await showModalBottomSheet<String>(
+          context: context,
+          builder: (_) => _FilePickerSheet(session: s, imagesOnly: true),
+        );
         if (path != null) added.add(s.attachWorkspaceFile(path));
       } else {
         final picked = await pickImages(camera: choice == 'camera');
@@ -293,25 +298,29 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _deleteConversation() async {
     final kids = s.subAgents.length;
-    final ok = await confirmDialog(
-      context,
-      title: '删除这段对话？',
-      message: '对话记录会被删除${kids > 0 ? '，它派出的 $kids 个子代理对话也一起删' : ''}。工作区里的文件不受影响。',
-      confirmLabel: '删除',
-      danger: true,
-    );
+    final ok = await confirmDialog(context, title: '删除这段对话？', message: '对话记录会被删除${kids > 0 ? '，它派出的 $kids 个子代理对话也一起删' : ''}。工作区里的文件不受影响。', confirmLabel: '删除', danger: true);
     if (ok) await s.deleteConversation();
   }
 
   Future<void> _openSubAgents() async {
-    final id = await showModalBottomSheet<String>(context: context, builder: (_) => SubAgentSheet(session: s));
+    final id = await showModalBottomSheet<String>(
+      context: context,
+      builder: (_) => SubAgentSheet(session: s),
+    );
     if (id != null && mounted) {
-      await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => SubConversationScreen(session: s, conversationId: id)));
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => SubConversationScreen(session: s, conversationId: id),
+        ),
+      );
     }
   }
 
-  void _openChild(String id) =>
-      Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => SubConversationScreen(session: s, conversationId: id)));
+  void _openChild(String id) => Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (_) => SubConversationScreen(session: s, conversationId: id),
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -323,9 +332,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final subs = s.subAgents;
     final running = subs.where((a) => s.isRunning(a.id)).length;
     final text = _input.text;
-    final slash = text.startsWith('/') && !text.contains(RegExp(r'\s'))
-        ? kSlashCommands.where((k) => k.$1.startsWith(text.toLowerCase())).toList()
-        : const <(String, String)>[];
+    final slash = text.startsWith('/') && !text.contains(RegExp(r'\s')) ? kSlashCommands.where((k) => k.$1.startsWith(text.toLowerCase())).toList() : const <(String, String)>[];
     final topInset = MediaQuery.paddingOf(context).top + PageBar.kHeight;
     return Scaffold(
       extendBodyBehindAppBar: true,
@@ -374,11 +381,7 @@ class _ChatScreenState extends State<ChatScreen> {
               child: s.chat.isEmpty
                   ? Padding(
                       padding: EdgeInsets.only(top: topInset),
-                      child: _EmptyChat(
-                        configured: app.agentConfigured,
-                        showIdeas: app.settings.getBool(SettingKeys.chatSuggestions),
-                        onPick: _send,
-                      ),
+                      child: _EmptyChat(configured: app.agentConfigured, showIdeas: app.settings.getBool(SettingKeys.chatSuggestions), onPick: _send),
                     )
                   : ListView.builder(
                       controller: _scroll,
@@ -393,29 +396,10 @@ class _ChatScreenState extends State<ChatScreen> {
             PendingArea(session: s),
             if (s.queue.isNotEmpty) QueueStrip(session: s),
             if (s.autoAllowActive && s.permission != PermissionLevel.full)
-              StatusChipRow(
-                key: const ValueKey('auto-allow-chip'),
-                icon: Icons.bolt,
-                text: '自动允许中：本对话的命令和删除不再逐次问你',
-                action: '关闭',
-                tone: BannerTone.warning,
-                onTap: s.clearAutoAllow,
-              ),
-            if (s.planMode)
-              StatusChipRow(
-                key: const ValueKey('plan-chip'),
-                icon: Icons.map_outlined,
-                text: '计划模式：只出计划，不改文件、不跑命令',
-                action: '退出',
-                tone: BannerTone.info,
-                onTap: _togglePlan,
-              ),
+              StatusChipRow(key: const ValueKey('auto-allow-chip'), icon: Icons.bolt, text: '自动允许中：本对话的命令和删除不再逐次问你', action: '关闭', tone: BannerTone.warning, onTap: s.clearAutoAllow),
+            if (s.planMode) StatusChipRow(key: const ValueKey('plan-chip'), icon: Icons.map_outlined, text: '计划模式：只出计划，不改文件、不跑命令', action: '退出', tone: BannerTone.info, onTap: _togglePlan),
             if (_attachments.isNotEmpty)
-              AttachmentStrip(
-                paths: [for (final a in _attachments) '${s.project.dir}/${a['path']}'],
-                canSee: model?.model.vision ?? false,
-                onRemove: (i) => setState(() => _attachments.removeAt(i)),
-              ),
+              AttachmentStrip(paths: [for (final a in _attachments) '${s.project.dir}/${a['path']}'], canSee: model?.model.vision ?? false, onRemove: (i) => setState(() => _attachments.removeAt(i))),
             if (slash.isNotEmpty)
               SlashSuggestions(
                 commands: slash,
@@ -577,11 +561,7 @@ class _EmptyChat extends StatelessWidget {
   final bool showIdeas;
   final void Function(String) onPick;
 
-  static const _ideas = [
-    '看一下项目里有哪些文件，告诉我它是做什么的',
-    '做一个个人主页：头像、简介、三个作品卡片',
-    '给页面加一个深色模式切换按钮',
-  ];
+  static const _ideas = ['看一下项目里有哪些文件，告诉我它是做什么的', '做一个个人主页：头像、简介、三个作品卡片', '给页面加一个深色模式切换按钮'];
 
   @override
   Widget build(BuildContext context) {
@@ -607,7 +587,9 @@ class _EmptyChat extends StatelessWidget {
                         children: [
                           Icon(Icons.north_east, size: 14, color: c.textFaint),
                           const SizedBox(width: Space.x2),
-                          Expanded(child: Text(idea, style: t.bodyMedium?.copyWith(color: c.textMuted))),
+                          Expanded(
+                            child: Text(idea, style: t.bodyMedium?.copyWith(color: c.textMuted)),
+                          ),
                         ],
                       ),
                     ),
@@ -646,11 +628,18 @@ class _FilePickerSheet extends StatelessWidget {
                 child: Text(imagesOnly ? '选工作区里的图片' : '引用项目文件', style: t.titleLarge),
               ),
               if (snap.connectionState != ConnectionState.done)
-                const Padding(padding: EdgeInsets.all(Space.x6), child: Center(child: CircularProgressIndicator()))
+                const Padding(
+                  padding: EdgeInsets.all(Space.x6),
+                  child: Center(child: CircularProgressIndicator()),
+                )
               else if (files.isEmpty)
                 Padding(
                   padding: const EdgeInsets.all(Space.x6),
-                  child: Text(imagesOnly ? '工作区里还没有图片。' : '项目里还没有文件。', style: t.bodyMedium?.copyWith(color: c.textMuted), textAlign: TextAlign.center),
+                  child: Text(
+                    imagesOnly ? '工作区里还没有图片。' : '项目里还没有文件。',
+                    style: t.bodyMedium?.copyWith(color: c.textMuted),
+                    textAlign: TextAlign.center,
+                  ),
                 )
               else
                 Flexible(
@@ -791,11 +780,7 @@ class ChatItemView extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             banner,
-            TextButton.icon(
-              onPressed: onOpenQuota,
-              icon: const Icon(Icons.speed_outlined, size: 18),
-              label: const Text('去调额度上限'),
-            ),
+            TextButton.icon(onPressed: onOpenQuota, icon: const Icon(Icons.speed_outlined, size: 18), label: const Text('去调额度上限')),
           ],
         );
     }
@@ -910,10 +895,7 @@ class _ToolCardState extends State<_ToolCard> {
               ),
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(Space.x3),
-                child: SelectableText(
-                  '${tool.name} ${_clip(tool.arguments, 600)}\n\n${tool.result == null ? '执行中…' : _clip(tool.result!, 4000)}',
-                  style: mono,
-                ),
+                child: SelectableText('${tool.name} ${_clip(tool.arguments, 600)}\n\n${tool.result == null ? '执行中…' : _clip(tool.result!, 4000)}', style: mono),
               ),
             ),
         ],
@@ -923,4 +905,3 @@ class _ToolCardState extends State<_ToolCard> {
 
   static String _clip(String s, int max) => s.length > max ? '${s.substring(0, max)}…' : s;
 }
-

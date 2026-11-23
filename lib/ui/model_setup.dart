@@ -45,9 +45,7 @@ Future<bool> ensureModelReady(BuildContext context, {ResolvedModel? current, boo
   );
   if (go != true || !context.mounted) return false;
   final ch = gap.channel;
-  await Navigator.of(context).push(
-    MaterialPageRoute<void>(builder: (_) => ch == null ? const ProviderPickerScreen() : ChannelEditScreen(channel: ch)),
-  );
+  await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => ch == null ? const ProviderPickerScreen() : ChannelEditScreen(channel: ch)));
   app.touch();
   return false; // 配完回来让她自己再点一次发送，不替她发
 }
@@ -91,13 +89,7 @@ class ProviderPickerScreen extends StatelessWidget {
           ),
           GroupCard(
             children: [
-              _ProviderRow(
-                key: const ValueKey('preset-custom'),
-                icon: const ProviderIcon(preset: null),
-                title: '自定义',
-                subtitle: '中转站、自建服务或列表里没有的：自己填协议和接口地址',
-                onTap: () => _pick(context, null),
-              ),
+              _ProviderRow(key: const ValueKey('preset-custom'), icon: const ProviderIcon(preset: null), title: '自定义', subtitle: '中转站、自建服务或列表里没有的：自己填协议和接口地址', onTap: () => _pick(context, null)),
             ],
           ),
         ],
@@ -133,7 +125,12 @@ class _ProviderRow extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(title, style: t.bodyLarge?.copyWith(height: 1.3), maxLines: 1, overflow: TextOverflow.ellipsis),
-                    Text(subtitle, style: t.bodySmall?.copyWith(color: c.textFaint), maxLines: 2, overflow: TextOverflow.ellipsis),
+                    Text(
+                      subtitle,
+                      style: t.bodySmall?.copyWith(color: c.textFaint),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ],
                 ),
               ),

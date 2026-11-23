@@ -64,10 +64,7 @@ class PresetStore {
 
   static AgentPreset get standard => AgentPreset(id: standardId, name: '标准模式', builtIn: true);
 
-  List<AgentPreset> get custom => [
-    for (final p in settings.get<List<dynamic>>(kPresets) ?? const [])
-      ?AgentPreset.fromJson(p),
-  ];
+  List<AgentPreset> get custom => [for (final p in settings.get<List<dynamic>>(kPresets) ?? const []) ?AgentPreset.fromJson(p)];
 
   List<AgentPreset> get all => [standard, ...custom];
 
@@ -99,8 +96,7 @@ class PresetStore {
     return preset;
   }
 
-  Future<AgentPreset> copy(AgentPreset source) =>
-      upsert(name: '${source.name} 副本', prompt: source.prompt, tools: source.tools == null ? null : {...source.tools!});
+  Future<AgentPreset> copy(AgentPreset source) => upsert(name: '${source.name} 副本', prompt: source.prompt, tools: source.tools == null ? null : {...source.tools!});
 
   Future<void> delete(String id) async {
     await _save(custom.where((p) => p.id != id).toList());

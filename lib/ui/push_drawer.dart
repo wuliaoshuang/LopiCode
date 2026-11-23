@@ -33,22 +33,14 @@ class PushDrawerScope extends InheritedWidget {
   const PushDrawerScope({super.key, required this.controller, required super.child});
   final PushDrawerController controller;
 
-  static PushDrawerController? maybeOf(BuildContext context) =>
-      context.getInheritedWidgetOfExactType<PushDrawerScope>()?.controller;
+  static PushDrawerController? maybeOf(BuildContext context) => context.getInheritedWidgetOfExactType<PushDrawerScope>()?.controller;
 
   @override
   bool updateShouldNotify(PushDrawerScope old) => controller != old.controller;
 }
 
 class PushDrawer extends StatefulWidget {
-  const PushDrawer({
-    super.key,
-    required this.drawer,
-    required this.child,
-    this.controller,
-    this.edgeDragEnabled = true,
-    this.handleBack = true,
-  });
+  const PushDrawer({super.key, required this.drawer, required this.child, this.controller, this.edgeDragEnabled = true, this.handleBack = true});
 
   /// 右边露出的那一条主界面的宽度。
   static const double kPeek = 82;
@@ -175,7 +167,10 @@ class _PushDrawerState extends State<PushDrawer> with SingleTickerProviderStateM
                   fit: StackFit.expand,
                   children: [
                     // 打开期间主界面不接手势、不进无障碍树。
-                    ExcludeSemantics(excluding: open, child: IgnorePointer(ignoring: open, child: main)),
+                    ExcludeSemantics(
+                      excluding: open,
+                      child: IgnorePointer(ignoring: open, child: main),
+                    ),
                     if (open)
                       Semantics(
                         button: true,

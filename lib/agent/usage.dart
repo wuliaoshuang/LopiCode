@@ -30,13 +30,7 @@ class TokenUsage {
   int get input => uncached + cacheRead + cacheWrite;
   int get total => input + output;
 
-  Map<String, dynamic> toJson() => {
-    'in': uncached,
-    'out': output,
-    if (hasCache) 'hit': cacheRead,
-    if (cacheWrite > 0) 'write': cacheWrite,
-    'think': ?reasoning,
-  };
+  Map<String, dynamic> toJson() => {'in': uncached, 'out': output, if (hasCache) 'hit': cacheRead, if (cacheWrite > 0) 'write': cacheWrite, 'think': ?reasoning};
 
   static TokenUsage? fromJson(Object? j) {
     if (j is! Map) return null;
@@ -111,8 +105,7 @@ class ModelPrice {
   final double miss;
   final double output;
 
-  static ModelPrice? of(ModelSpec m) =>
-      m.priceHit == null || m.priceMiss == null || m.priceOutput == null ? null : ModelPrice(hit: m.priceHit!, miss: m.priceMiss!, output: m.priceOutput!);
+  static ModelPrice? of(ModelSpec m) => m.priceHit == null || m.priceMiss == null || m.priceOutput == null ? null : ModelPrice(hit: m.priceHit!, miss: m.priceMiss!, output: m.priceOutput!);
 
   /// 一次请求的估算费用：缓存写入按输入（未命中）价，命中按命中价。
   double cost(TokenUsage u) => ((u.uncached + u.cacheWrite) * miss + u.cacheRead * hit + u.output * output) / 1e6;
@@ -306,7 +299,10 @@ class TurnUsage {
   int ms;
   final List<ChildUsage> children;
 
-  List<RequestUsage> get requests => [for (final s in steps) if (s is RequestStep) s.request];
+  List<RequestUsage> get requests => [
+    for (final s in steps)
+      if (s is RequestStep) s.request,
+  ];
 
   /// 只算自己发的请求。
   UsageTotals get own {
@@ -338,15 +334,9 @@ class TurnUsage {
   static TurnUsage? fromJson(Object? j) {
     if (j is! Map) return null;
     return TurnUsage(
-      steps: [
-        for (final s in (j['steps'] as List?) ?? const [])
-          ?TraceStep.fromJson(s),
-      ],
+      steps: [for (final s in (j['steps'] as List?) ?? const []) ?TraceStep.fromJson(s)],
       ms: _int(j['ms']) ?? 0,
-      children: [
-        for (final c in (j['kids'] as List?) ?? const [])
-          ?ChildUsage.fromJson(c),
-      ],
+      children: [for (final c in (j['kids'] as List?) ?? const []) ?ChildUsage.fromJson(c)],
     );
   }
 }

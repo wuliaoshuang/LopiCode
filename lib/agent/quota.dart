@@ -88,14 +88,7 @@ BalanceResult parseBalance(Object? json) {
     if (item is! Map || item['currency'] is! String) continue;
     final total = _money(item['total_balance']);
     if (total == null) continue;
-    infos.add(
-      BalanceInfo(
-        currency: (item['currency'] as String).toUpperCase(),
-        total: total,
-        granted: _money(item['granted_balance']),
-        toppedUp: _money(item['topped_up_balance']),
-      ),
-    );
+    infos.add(BalanceInfo(currency: (item['currency'] as String).toUpperCase(), total: total, granted: _money(item['granted_balance']), toppedUp: _money(item['topped_up_balance'])));
   }
   if (infos.isEmpty) throw BalanceException('余额接口没有返回任何余额');
   return BalanceResult(isAvailable: json['is_available'] == true, infos: infos);
@@ -140,16 +133,8 @@ double _round4(double v) => (v * 10000).round() / 10000;
 
 /// 一个渠道的额度上限（存进普通设置，不含任何密钥）。
 class ChannelQuota {
-  ChannelQuota({
-    required this.limit,
-    required this.currency,
-    this.used = 0,
-    this.lastBalance,
-    this.warnPct = defaultWarnPct,
-    this.warned = false,
-    this.recharge = false,
-    DateTime? since,
-  }) : since = since ?? DateTime.now();
+  ChannelQuota({required this.limit, required this.currency, this.used = 0, this.lastBalance, this.warnPct = defaultWarnPct, this.warned = false, this.recharge = false, DateTime? since})
+    : since = since ?? DateTime.now();
 
   static const int defaultWarnPct = 80;
 

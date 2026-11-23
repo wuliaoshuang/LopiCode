@@ -179,12 +179,7 @@ class _FilesTabState extends State<FilesTab> {
   }
 
   Future<void> _create({required bool folder}) async {
-    final name = await promptDialog(
-      context,
-      title: folder ? '新建文件夹' : '新建文件',
-      hint: folder ? '例如 assets' : '例如 about.html 或 js/app.js',
-      confirmLabel: '创建',
-    );
+    final name = await promptDialog(context, title: folder ? '新建文件夹' : '新建文件', hint: folder ? '例如 assets' : '例如 about.html 或 js/app.js', confirmLabel: '创建');
     if (name == null || name.trim().isEmpty || !mounted) return;
     try {
       final full = _guard.resolve(name.trim());
@@ -239,13 +234,7 @@ class _FilesTabState extends State<FilesTab> {
 
   Future<void> _delete(String path) async {
     final isDir = path.endsWith('/');
-    final ok = await confirmDialog(
-      context,
-      title: '删除 $path？',
-      message: isDir ? '文件夹里的所有内容都会被删除，无法恢复。' : '删除后无法恢复。',
-      confirmLabel: '删除',
-      danger: true,
-    );
+    final ok = await confirmDialog(context, title: '删除 $path？', message: isDir ? '文件夹里的所有内容都会被删除，无法恢复。' : '删除后无法恢复。', confirmLabel: '删除', danger: true);
     if (!ok) return;
     try {
       final full = _guard.resolve(path);
@@ -300,16 +289,12 @@ class _FilesTabState extends State<FilesTab> {
           child: Row(
             children: [
               Expanded(child: Text(files == null ? '文件' : '${files.where((f) => !f.endsWith('/')).length} 个文件', style: t.labelMedium)),
-              if (_open.isNotEmpty)
-                TextButton(onPressed: () => setState(() => _active = 0), child: Text('回到编辑器（${_open.length}）')),
+              if (_open.isNotEmpty) TextButton(onPressed: () => setState(() => _active = 0), child: Text('回到编辑器（${_open.length}）')),
               PopupMenuButton<String>(
                 tooltip: '新建',
                 icon: Icon(Icons.add, color: c.accent),
                 onSelected: (v) => _create(folder: v == 'folder'),
-                itemBuilder: (_) => const [
-                  PopupMenuItem(value: 'file', child: Text('新建文件')),
-                  PopupMenuItem(value: 'folder', child: Text('新建文件夹')),
-                ],
+                itemBuilder: (_) => const [PopupMenuItem(value: 'file', child: Text('新建文件')), PopupMenuItem(value: 'folder', child: Text('新建文件夹'))],
               ),
             ],
           ),
@@ -322,11 +307,7 @@ class _FilesTabState extends State<FilesTab> {
                   icon: Icons.note_add_outlined,
                   title: '项目里还没有文件',
                   message: '新建一个文件，或者到 Agent 页签让它帮你写。',
-                  action: FilledButton.icon(
-                    onPressed: () => _create(folder: false),
-                    icon: const Icon(Icons.add),
-                    label: const Text('新建文件'),
-                  ),
+                  action: FilledButton.icon(onPressed: () => _create(folder: false), icon: const Icon(Icons.add), label: const Text('新建文件')),
                 )
               : ListView.builder(
                   padding: const EdgeInsets.only(bottom: Space.x6),
@@ -345,12 +326,7 @@ class _FilesTabState extends State<FilesTab> {
                             Icon(isDir ? Icons.folder_outlined : _fileIcon(path), size: 20, color: isDir ? c.accent : c.textFaint),
                             const SizedBox(width: Space.x3),
                             Expanded(
-                              child: Text(
-                                parts.last,
-                                style: isDir ? t.titleSmall : t.bodyMedium,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
+                              child: Text(parts.last, style: isDir ? t.titleSmall : t.bodyMedium, maxLines: 1, overflow: TextOverflow.ellipsis),
                             ),
                             IconButton(
                               tooltip: '更多',
@@ -386,14 +362,12 @@ class _FilesTabState extends State<FilesTab> {
       children: [
         Container(
           height: 44,
-          decoration: BoxDecoration(border: Border(bottom: BorderSide(color: c.border))),
+          decoration: BoxDecoration(
+            border: Border(bottom: BorderSide(color: c.border)),
+          ),
           child: Row(
             children: [
-              IconButton(
-                tooltip: '文件列表',
-                icon: const Icon(Icons.menu_open),
-                onPressed: () => setState(() => _active = -1),
-              ),
+              IconButton(tooltip: '文件列表', icon: const Icon(Icons.menu_open), onPressed: () => setState(() => _active = -1)),
               Expanded(
                 child: ListView.builder(
                   scrollDirection: Axis.horizontal,
@@ -466,13 +440,7 @@ class _FilesTabState extends State<FilesTab> {
           ),
         ),
         Expanded(
-          child: LopiCodeEditor(
-            key: ValueKey(file.path),
-            path: file.path,
-            controller: file.controller,
-            findController: file.findController,
-            wordWrap: _wordWrap,
-          ),
+          child: LopiCodeEditor(key: ValueKey(file.path), path: file.path, controller: file.controller, findController: file.findController, wordWrap: _wordWrap),
         ),
       ],
     );

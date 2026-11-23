@@ -176,7 +176,12 @@ class _NoticeBar extends StatelessWidget {
             Icon(Icons.error_outline, size: 20, color: c.danger),
             const SizedBox(width: Space.x2),
             Expanded(
-              child: Text('出了点问题，刚才的操作可能没完成', style: t.bodySmall?.copyWith(color: c.danger), maxLines: 1, overflow: TextOverflow.ellipsis),
+              child: Text(
+                '出了点问题，刚才的操作可能没完成',
+                style: t.bodySmall?.copyWith(color: c.danger),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
             TextButton(
               key: const Key('error-notice-open'),
@@ -263,13 +268,7 @@ class _ErrorLogScreenState extends State<ErrorLogScreen> {
                 const SizedBox(height: Space.x3),
                 GroupCard(
                   padding: const EdgeInsets.all(Space.x4),
-                  children: [
-                    SelectableText(
-                      text,
-                      key: const Key('error-log-text'),
-                      style: t.bodySmall?.copyWith(height: 1.5),
-                    ),
-                  ],
+                  children: [SelectableText(text, key: const Key('error-log-text'), style: t.bodySmall?.copyWith(height: 1.5))],
                 ),
                 TextButton(
                   key: const Key('error-log-clear'),
@@ -312,7 +311,11 @@ class BootFailureApp extends StatelessWidget {
                   const SizedBox(height: Space.x4),
                   Text('LopiCode 没能启动', style: t.titleLarge, textAlign: TextAlign.center),
                   const SizedBox(height: Space.x2),
-                  Text('你的项目文件没有被动过。可以先点“重试”；还不行的话，把下面的内容复制出来发给开发者。', style: t.bodyMedium?.copyWith(color: c.textMuted, height: 1.6), textAlign: TextAlign.center),
+                  Text(
+                    '你的项目文件没有被动过。可以先点“重试”；还不行的话，把下面的内容复制出来发给开发者。',
+                    style: t.bodyMedium?.copyWith(color: c.textMuted, height: 1.6),
+                    textAlign: TextAlign.center,
+                  ),
                   const SizedBox(height: Space.x6),
                   FilledButton(key: const Key('boot-retry'), onPressed: onRetry, child: const Text('重试')),
                   const SizedBox(height: Space.x3),
@@ -328,9 +331,7 @@ class BootFailureApp extends StatelessWidget {
                   const SizedBox(height: Space.x4),
                   GroupCard(
                     padding: const EdgeInsets.all(Space.x4),
-                    children: [
-                      SelectableText(error, style: t.bodySmall?.copyWith(height: 1.5)),
-                    ],
+                    children: [SelectableText(error, style: t.bodySmall?.copyWith(height: 1.5))],
                   ),
                 ],
               ),

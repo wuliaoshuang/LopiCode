@@ -103,7 +103,11 @@ int anthropicBudget(String level) => switch (level) {
 List<Map<String, dynamic>> anthropicTools(List<Map<String, dynamic>> tools) => [
   for (final t in tools)
     if (t['function'] case final Map<dynamic, dynamic> fn)
-      {'name': fn['name'], 'description': fn['description'] ?? '', 'input_schema': fn['parameters'] ?? {'type': 'object', 'properties': <String, dynamic>{}}},
+      {
+        'name': fn['name'],
+        'description': fn['description'] ?? '',
+        'input_schema': fn['parameters'] ?? {'type': 'object', 'properties': <String, dynamic>{}},
+      },
 ];
 
 /// OpenAI 格式的消息 → Anthropic 的 (`system`, `messages`)。
@@ -112,10 +116,7 @@ List<Map<String, dynamic>> anthropicTools(List<Map<String, dynamic>> tools) => [
 /// - `role: tool` 变成 user 消息里的 `tool_result` 块；
 /// - 连续的同角色消息合并成一条（工具结果后面紧跟的插话也并进同一条 user，`tool_result` 在前）；
 /// - assistant 消息带着 `_raw`（上一轮 Anthropic 回复的原始内容块）时原样用它。
-({String system, List<Map<String, dynamic>> messages}) anthropicMessages(
-  List<Map<String, dynamic>> messages, {
-  bool keepThinking = true,
-}) {
+({String system, List<Map<String, dynamic>> messages}) anthropicMessages(List<Map<String, dynamic>> messages, {bool keepThinking = true}) {
   final system = <String>[];
   final out = <Map<String, dynamic>>[];
   void push(String role, List<Map<String, dynamic>> blocks) {
@@ -128,7 +129,12 @@ List<Map<String, dynamic>> anthropicTools(List<Map<String, dynamic>> tools) => [
   }
 
   List<Map<String, dynamic>> userBlocks(Object? content) {
-    if (content is String) return content.isEmpty ? [] : [{'type': 'text', 'text': content}];
+    if (content is String) {
+      if (content.isEmpty) return [];
+      return [
+        {'type': 'text', 'text': content},
+      ];
+    }
     final blocks = <Map<String, dynamic>>[];
     for (final part in content is List ? content : const []) {
       if (part is! Map) continue;
@@ -169,23 +175,13 @@ List<Map<String, dynamic>> anthropicTools(List<Map<String, dynamic>> tools) => [
         for (final c in (m['tool_calls'] as List?) ?? const []) {
           if (c is! Map) continue;
           final fn = c['function'];
-          blocks.add({
-            'type': 'tool_use',
-            'id': '${c['id']}',
-            'name': fn is Map ? '${fn['name']}' : '',
-            'input': _decodeArgs(fn is Map ? fn['arguments'] : null),
-          });
+          blocks.add({'type': 'tool_use', 'id': '${c['id']}', 'name': fn is Map ? '${fn['name']}' : '', 'input': _decodeArgs(fn is Map ? fn['arguments'] : null)});
         }
         push('assistant', blocks);
       case 'tool':
         final text = '${m['content'] ?? ''}';
         push('user', [
-          {
-            'type': 'tool_result',
-            'tool_use_id': '${m['tool_call_id']}',
-            'content': text,
-            if (text.startsWith('错误') || text.startsWith('用户拒绝')) 'is_error': true,
-          },
+          {'type': 'tool_result', 'tool_use_id': '${m['tool_call_id']}', 'content': text, if (text.startsWith('错误') || text.startsWith('用户拒绝')) 'is_error': true},
         ]);
     }
   }
@@ -193,15 +189,9 @@ List<Map<String, dynamic>> anthropicTools(List<Map<String, dynamic>> tools) => [
 }
 
 class AnthropicChatClient implements ChatClient {
-  AnthropicChatClient({
-    required String baseUrl,
-    required this.apiKey,
-    required this.model,
-    required this.maxTokens,
-    this.thinkingLevel,
-    http.Client? httpClient,
-  }) : baseUrl = _trimBase(baseUrl, const ['/messages']),
-       _http = httpClient ?? http.Client();
+  AnthropicChatClient({required String baseUrl, required this.apiKey, required this.model, required this.maxTokens, this.thinkingLevel, http.Client? httpClient})
+    : baseUrl = _trimBase(baseUrl, const ['/messages']),
+      _http = httpClient ?? http.Client();
 
   static const String apiVersion = '2023-06-01';
 
@@ -215,10 +205,7 @@ class AnthropicChatClient implements ChatClient {
   final http.Client _http;
 
   @override
-  Stream<ChatDelta> streamChat({
-    required List<Map<String, dynamic>> messages,
-    List<Map<String, dynamic>> tools = const [],
-  }) async* {
+  Stream<ChatDelta> streamChat({required List<Map<String, dynamic>> messages, List<Map<String, dynamic>> tools = const []}) async* {
     if (model.trim().isEmpty) throw ChatApiException('还没选模型');
     final uri = _endpoint(baseUrl, '/messages');
     final thinking = thinkingLevel != null;
@@ -263,7 +250,9 @@ class AnthropicChatClient implements ChatClient {
           blocks[index] = Map<String, dynamic>.from(block);
           if (block['type'] == 'tool_use') {
             partial[index] = StringBuffer();
-            yield ChatDelta(toolCalls: [ToolCallDelta(index: index, id: '${block['id']}', name: '${block['name']}')]);
+            yield ChatDelta(
+              toolCalls: [ToolCallDelta(index: index, id: '${block['id']}', name: '${block['name']}')],
+            );
           }
         case 'content_block_delta':
           final index = json['index'];
@@ -278,7 +267,9 @@ class AnthropicChatClient implements ChatClient {
             case 'input_json_delta':
               final part = '${delta['partial_json'] ?? ''}';
               partial[index]?.write(part);
-              yield ChatDelta(toolCalls: [ToolCallDelta(index: index, arguments: part)]);
+              yield ChatDelta(
+                toolCalls: [ToolCallDelta(index: index, arguments: part)],
+              );
             case 'thinking_delta':
               block['thinking'] = '${block['thinking'] ?? ''}${delta['thinking'] ?? ''}';
             case 'signature_delta':
@@ -366,12 +357,7 @@ List<Map<String, dynamic>> responsesTools(List<Map<String, dynamic>> tools) => [
         for (final c in (m['tool_calls'] as List?) ?? const []) {
           if (c is! Map) continue;
           final fn = c['function'];
-          input.add({
-            'type': 'function_call',
-            'call_id': '${c['id']}',
-            'name': fn is Map ? '${fn['name']}' : '',
-            'arguments': fn is Map ? '${fn['arguments'] ?? ''}' : '',
-          });
+          input.add({'type': 'function_call', 'call_id': '${c['id']}', 'name': fn is Map ? '${fn['name']}' : '', 'arguments': fn is Map ? '${fn['arguments'] ?? ''}' : ''});
         }
       case 'tool':
         input.add({'type': 'function_call_output', 'call_id': '${m['tool_call_id']}', 'output': '${m['content'] ?? ''}'});
@@ -381,15 +367,9 @@ List<Map<String, dynamic>> responsesTools(List<Map<String, dynamic>> tools) => [
 }
 
 class OpenAiResponsesClient implements ChatClient {
-  OpenAiResponsesClient({
-    required String baseUrl,
-    required this.apiKey,
-    required this.model,
-    this.maxOutputTokens,
-    this.reasoningEffort,
-    http.Client? httpClient,
-  }) : baseUrl = _trimBase(baseUrl, const ['/responses']),
-       _http = httpClient ?? http.Client();
+  OpenAiResponsesClient({required String baseUrl, required this.apiKey, required this.model, this.maxOutputTokens, this.reasoningEffort, http.Client? httpClient})
+    : baseUrl = _trimBase(baseUrl, const ['/responses']),
+      _http = httpClient ?? http.Client();
 
   final String baseUrl;
   final String apiKey;
@@ -399,10 +379,7 @@ class OpenAiResponsesClient implements ChatClient {
   final http.Client _http;
 
   @override
-  Stream<ChatDelta> streamChat({
-    required List<Map<String, dynamic>> messages,
-    List<Map<String, dynamic>> tools = const [],
-  }) async* {
+  Stream<ChatDelta> streamChat({required List<Map<String, dynamic>> messages, List<Map<String, dynamic>> tools = const []}) async* {
     if (model.trim().isEmpty) throw ChatApiException('还没选模型');
     final uri = _endpoint(baseUrl, '/responses');
     final converted = responsesInput(messages);
@@ -450,7 +427,9 @@ class OpenAiResponsesClient implements ChatClient {
           final d = json['delta'];
           if (d is String) {
             gotArgs.add(index);
-            yield ChatDelta(toolCalls: [ToolCallDelta(index: index, arguments: d)]);
+            yield ChatDelta(
+              toolCalls: [ToolCallDelta(index: index, arguments: d)],
+            );
           }
         case 'response.output_item.done':
           // 有的接口不发增量，只在这里给完整参数。
@@ -458,14 +437,7 @@ class OpenAiResponsesClient implements ChatClient {
           if (item is Map && item['type'] == 'function_call' && !gotArgs.contains(index)) {
             sawCall = true;
             yield ChatDelta(
-              toolCalls: [
-                ToolCallDelta(
-                  index: index,
-                  id: '${item['call_id'] ?? item['id'] ?? ''}',
-                  name: '${item['name'] ?? ''}',
-                  arguments: '${item['arguments'] ?? ''}',
-                ),
-              ],
+              toolCalls: [ToolCallDelta(index: index, id: '${item['call_id'] ?? item['id'] ?? ''}', name: '${item['name'] ?? ''}', arguments: '${item['arguments'] ?? ''}')],
             );
           }
         case 'response.failed':
@@ -499,12 +471,7 @@ class RemoteModel {
 }
 
 /// 读渠道的模型列表。只发一个 GET，不产生对话费用；“测试连接”也是它。
-Future<List<RemoteModel>> listRemoteModels({
-  required ChatProtocol protocol,
-  required String baseUrl,
-  required String apiKey,
-  http.Client? httpClient,
-}) async {
+Future<List<RemoteModel>> listRemoteModels({required ChatProtocol protocol, required String baseUrl, required String apiKey, http.Client? httpClient}) async {
   final client = httpClient ?? http.Client();
   final base = _trimBase(baseUrl, const ['/chat/completions', '/responses', '/messages', '/models']);
   final anthropic = protocol == ChatProtocol.anthropic;
@@ -512,12 +479,7 @@ Future<List<RemoteModel>> listRemoteModels({
   final http.Response response;
   try {
     response = await client
-        .get(
-          uri,
-          headers: anthropic
-              ? {'x-api-key': apiKey, 'anthropic-version': AnthropicChatClient.apiVersion}
-              : {if (apiKey.isNotEmpty) 'Authorization': 'Bearer $apiKey'},
-        )
+        .get(uri, headers: anthropic ? {'x-api-key': apiKey, 'anthropic-version': AnthropicChatClient.apiVersion} : {if (apiKey.isNotEmpty) 'Authorization': 'Bearer $apiKey'})
         .timeout(const Duration(seconds: 20));
   } on TimeoutException {
     throw ChatApiException('连接超时（${uri.host}）：20 秒没有回应');
@@ -561,21 +523,7 @@ ChatClient buildChatClient(ResolvedModel r, String apiKey, {http.Client? httpCli
       maxTokens: m.maxOutput == ModelSpec.defaultMaxOutput ? null : m.maxOutput,
       httpClient: httpClient,
     ),
-    ChatProtocol.anthropic => AnthropicChatClient(
-      baseUrl: r.channel.baseUrl,
-      apiKey: apiKey,
-      model: m.id,
-      maxTokens: m.maxOutput,
-      thinkingLevel: level,
-      httpClient: httpClient,
-    ),
-    ChatProtocol.openaiResponses => OpenAiResponsesClient(
-      baseUrl: r.channel.baseUrl,
-      apiKey: apiKey,
-      model: m.id,
-      maxOutputTokens: m.maxOutput,
-      reasoningEffort: level,
-      httpClient: httpClient,
-    ),
+    ChatProtocol.anthropic => AnthropicChatClient(baseUrl: r.channel.baseUrl, apiKey: apiKey, model: m.id, maxTokens: m.maxOutput, thinkingLevel: level, httpClient: httpClient),
+    ChatProtocol.openaiResponses => OpenAiResponsesClient(baseUrl: r.channel.baseUrl, apiKey: apiKey, model: m.id, maxOutputTokens: m.maxOutput, reasoningEffort: level, httpClient: httpClient),
   };
 }

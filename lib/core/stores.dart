@@ -47,11 +47,9 @@ class SettingsStore {
     return v is T ? v : null;
   }
 
-  String getString(String key, [String fallback = '']) =>
-      get<String>(key) ?? fallback;
+  String getString(String key, [String fallback = '']) => get<String>(key) ?? fallback;
 
-  bool getBool(String key, [bool fallback = false]) =>
-      get<bool>(key) ?? fallback;
+  bool getBool(String key, [bool fallback = false]) => get<bool>(key) ?? fallback;
 
   Future<void> set(String key, Object? value) async {
     if (value == null) {

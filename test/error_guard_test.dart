@@ -138,9 +138,7 @@ void main() {
       await tester.pumpWidget(
         appFor(
           env,
-          const Scaffold(
-            body: Column(children: [Text('上面这块好好的'), _Bomb(), Text('下面这块也好好的')]),
-          ),
+          const Scaffold(body: Column(children: [Text('上面这块好好的'), _Bomb(), Text('下面这块也好好的')])),
           mode: mode,
           font: kTestFont,
         ),

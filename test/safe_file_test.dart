@@ -19,13 +19,7 @@ List<File> badBackups(File file) => [
 ];
 
 /// 各种“坏内容”：半截、乱码、形状不对、空。
-const corruptSamples = {
-  '半截': '{"a": 1, "b": [1, 2',
-  '乱码': '\u0000\u0001not json at all }{',
-  '形状不对（数字）': '42',
-  '形状不对（字符串）': '"hello"',
-  'null': 'null',
-};
+const corruptSamples = {'半截': '{"a": 1, "b": [1, 2', '乱码': '\u0000\u0001not json at all }{', '形状不对（数字）': '42', '形状不对（字符串）': '"hello"', 'null': 'null'};
 
 void main() {
   late Directory tmp;
@@ -49,7 +43,9 @@ void main() {
     test('同一个文件连着写很多次：最后留下的是最后一次的内容，每一刻文件都是完整的', () async {
       final file = File(p.join(tmp.path, 'data.json'));
       await writeJsonAtomic(file, {'n': -1});
-      final writes = [for (var i = 0; i < 40; i++) writeJsonAtomic(file, {'n': i, 'pad': 'x' * 2000})];
+      final writes = [
+        for (var i = 0; i < 40; i++) writeJsonAtomic(file, {'n': i, 'pad': 'x' * 2000}),
+      ];
       // 写的同时不停地读：读到的必须总是完整的 JSON
       for (var i = 0; i < 40; i++) {
         final decoded = jsonDecode(await file.readAsString());
@@ -166,7 +162,14 @@ void main() {
 
     test('旧版本 / 字段类型不对的内容：读到哪算哪，不抛异常', () async {
       // 设置：值的类型不对 → 取的时候回退默认
-      final sfile = File(p.join(tmp.path, 'settings.json'))..writeAsStringSync(jsonEncode({'ui.themeMode': 7, 'models.channels': 'oops', 'unknown.future.key': {'a': 1}}));
+      final sfile = File(p.join(tmp.path, 'settings.json'))
+        ..writeAsStringSync(
+          jsonEncode({
+            'ui.themeMode': 7,
+            'models.channels': 'oops',
+            'unknown.future.key': {'a': 1},
+          }),
+        );
       final settings = SettingsStore(sfile);
       await settings.load();
       expect(settings.getString('ui.themeMode', 'system'), 'system');
@@ -176,13 +179,30 @@ void main() {
       expect(badBackups(sfile), isEmpty, reason: '文件本身是合法 JSON，不算坏文件');
 
       // 自动化：混着好的和坏的条目
-      final afile = File(p.join(tmp.path, 'automations.json'))..writeAsStringSync(jsonEncode([42, 'x', {'id': 7}, null, <int>[]]));
+      final afile = File(p.join(tmp.path, 'automations.json'))
+        ..writeAsStringSync(
+          jsonEncode([
+            42,
+            'x',
+            {'id': 7},
+            null,
+            <int>[],
+          ]),
+        );
       final autos = AutomationStore(afile);
       await autos.load();
       expect(autos.items, isEmpty);
 
       // 团队：字段类型全错
-      final tfile = File(p.join(tmp.path, 'team.json'))..writeAsStringSync(jsonEncode({'members': {'not': 'a list'}, 'tasks': 'nope', 'messages': 3, 'seq': 'x'}));
+      final tfile = File(p.join(tmp.path, 'team.json'))
+        ..writeAsStringSync(
+          jsonEncode({
+            'members': {'not': 'a list'},
+            'tasks': 'nope',
+            'messages': 3,
+            'seq': 'x',
+          }),
+        );
       final board = TeamBoard(file: tfile);
       await board.load();
       expect(board.tasks, isEmpty);

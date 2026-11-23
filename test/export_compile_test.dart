@@ -15,11 +15,7 @@ import 'support/sample_doc.dart';
 void main() {
   test('检入的样本和导出器当前的输出一致', () {
     final current = exportDart(sample(), className: 'SamplePage');
-    expect(
-      File('test/generated/sample_page.dart').readAsStringSync(),
-      current,
-      reason: '导出器改了：运行 dart run tool/gen_sample_export.dart 重新生成',
-    );
+    expect(File('test/generated/sample_page.dart').readAsStringSync(), current, reason: '导出器改了：运行 dart run tool/gen_sample_export.dart 重新生成');
   });
 
   testWidgets('导出的页面能在 390 宽的屏幕上渲染，没有溢出或布局异常', (tester) async {

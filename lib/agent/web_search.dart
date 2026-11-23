@@ -85,10 +85,15 @@ class WebSearchClient {
   }
 
   ExtraTool get tool => ExtraTool(
-    spec: toolSpec('web_search', '联网搜索，返回若干条结果的标题、网址和摘要。', {
-      'query': {'type': 'string', 'description': '搜索词'},
-      'max_results': {'type': 'integer', 'description': '要几条结果，1 到 $maxResults，默认 5'},
-    }, ['query']),
+    spec: toolSpec(
+      'web_search',
+      '联网搜索，返回若干条结果的标题、网址和摘要。',
+      {
+        'query': {'type': 'string', 'description': '搜索词'},
+        'max_results': {'type': 'integer', 'description': '要几条结果，1 到 $maxResults，默认 5'},
+      },
+      ['query'],
+    ),
     kind: ToolKind.read,
     run: (args) => search(AgentToolbox.argString(args, 'query'), count: args['max_results'] is int ? args['max_results'] as int : 5),
   );

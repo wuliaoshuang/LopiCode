@@ -36,7 +36,12 @@ class TurnFootnote extends StatelessWidget {
   final VoidCallback? onTap;
 
   static double _width(BuildContext context, String text, TextStyle? style) {
-    final painter = TextPainter(text: TextSpan(text: text, style: style), textDirection: TextDirection.ltr, textScaler: MediaQuery.textScalerOf(context), maxLines: 1)..layout();
+    final painter = TextPainter(
+      text: TextSpan(text: text, style: style),
+      textDirection: TextDirection.ltr,
+      textScaler: MediaQuery.textScalerOf(context),
+      maxLines: 1,
+    )..layout();
     final w = painter.width;
     painter.dispose();
     return w;
@@ -68,7 +73,9 @@ class TurnFootnote extends StatelessWidget {
                   return Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Flexible(child: Text(text, key: const Key('turn-footnote-text'), maxLines: 1, softWrap: false, overflow: TextOverflow.fade, style: style)),
+                      Flexible(
+                        child: Text(text, key: const Key('turn-footnote-text'), maxLines: 1, softWrap: false, overflow: TextOverflow.fade, style: style),
+                      ),
                       Icon(Icons.chevron_right, size: 18, color: c.textFaint),
                     ],
                   );
@@ -206,10 +213,7 @@ class _TrajectorySheetState extends State<TrajectorySheet> {
   final Set<_GroupRow> _open = {};
   late final List<_Row> _rows = [
     ..._rowsOf(widget.turn),
-    for (final kid in widget.turn.children) ...[
-      _HeaderRow('子代理“${kid.name}”：${totalsLine(kid.turn.totals)}'),
-      ..._rowsOf(kid.turn, owner: kid.name),
-    ],
+    for (final kid in widget.turn.children) ...[_HeaderRow('子代理“${kid.name}”：${totalsLine(kid.turn.totals)}'), ..._rowsOf(kid.turn, owner: kid.name)],
   ];
 
   void _openStep(Widget page) => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => page));
@@ -238,7 +242,12 @@ class _TrajectorySheetState extends State<TrajectorySheet> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(title, style: t.bodyMedium?.copyWith(color: tone ?? c.text), maxLines: 1, overflow: TextOverflow.ellipsis),
+                    Text(
+                      title,
+                      style: t.bodyMedium?.copyWith(color: tone ?? c.text),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                     if (sub != null) Text(sub, style: faint, maxLines: 1, overflow: TextOverflow.ellipsis),
                   ],
                 ),
@@ -270,45 +279,53 @@ class _TrajectorySheetState extends State<TrajectorySheet> {
     for (final row in _rows) {
       switch (row) {
         case _HeaderRow(:final text):
-          children.add(Padding(
-            padding: const EdgeInsets.fromLTRB(Space.x4, Space.x3, Space.x4, Space.x1),
-            child: Text(text, style: t.labelMedium?.copyWith(color: c.textMuted)),
-          ));
+          children.add(
+            Padding(
+              padding: const EdgeInsets.fromLTRB(Space.x4, Space.x3, Space.x4, Space.x1),
+              child: Text(text, style: t.labelMedium?.copyWith(color: c.textMuted)),
+            ),
+          );
         case _RequestRow(:final index, :final request, :final owner):
           final u = request.usage;
-          children.add(line(
-            key: Key('traj-request-${owner ?? ''}$index'),
-            icon: Icons.auto_awesome_outlined,
-            title: '模型请求 $index',
-            sub: u == null ? '接口没返回用量' : '输入 ${formatTokens(u.input)} · 输出 ${formatTokens(u.output)}',
-            trailing: formatSpan(request.ms),
-            onTap: () => _openStep(RequestStepPage(index: index, request: request, owner: owner)),
-          ));
+          children.add(
+            line(
+              key: Key('traj-request-${owner ?? ''}$index'),
+              icon: Icons.auto_awesome_outlined,
+              title: '模型请求 $index',
+              sub: u == null ? '接口没返回用量' : '输入 ${formatTokens(u.input)} · 输出 ${formatTokens(u.output)}',
+              trailing: formatSpan(request.ms),
+              onTap: () => _openStep(RequestStepPage(index: index, request: request, owner: owner)),
+            ),
+          );
         case _ToolRow(:final step):
           children.add(toolLine(step));
         case final _GroupRow group:
           final open = _open.contains(group);
           final ms = group.tools.fold<int>(0, (n, s) => n + (s.ms ?? 0));
-          children.add(InkWell(
-            key: const Key('traj-group'),
-            onTap: () => setState(() => open ? _open.remove(group) : _open.add(group)),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(minHeight: 48),
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(Space.x4, Space.x2, Space.x3, Space.x2),
-                child: Row(
-                  children: [
-                    Icon(Icons.build_outlined, size: 20, color: c.textMuted),
-                    const SizedBox(width: Space.x3),
-                    Expanded(child: Text(toolGroupSummary(group.tools), style: t.bodyMedium, maxLines: 2, overflow: TextOverflow.ellipsis)),
-                    const SizedBox(width: Space.x2),
-                    Text(formatSpan(ms), style: faint),
-                    Icon(open ? Icons.expand_less : Icons.expand_more, size: 18, color: c.textFaint),
-                  ],
+          children.add(
+            InkWell(
+              key: const Key('traj-group'),
+              onTap: () => setState(() => open ? _open.remove(group) : _open.add(group)),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 48),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(Space.x4, Space.x2, Space.x3, Space.x2),
+                  child: Row(
+                    children: [
+                      Icon(Icons.build_outlined, size: 20, color: c.textMuted),
+                      const SizedBox(width: Space.x3),
+                      Expanded(
+                        child: Text(toolGroupSummary(group.tools), style: t.bodyMedium, maxLines: 2, overflow: TextOverflow.ellipsis),
+                      ),
+                      const SizedBox(width: Space.x2),
+                      Text(formatSpan(ms), style: faint),
+                      Icon(open ? Icons.expand_less : Icons.expand_more, size: 18, color: c.textFaint),
+                    ],
+                  ),
                 ),
               ),
             ),
-          ));
+          );
           if (open) children.addAll([for (final s in group.tools) toolLine(s, indent: Space.x6)]);
       }
     }
@@ -328,15 +345,23 @@ class _TrajectorySheetState extends State<TrajectorySheet> {
                 children: [
                   Text('本轮轨迹', style: t.titleLarge),
                   const SizedBox(height: Space.x1),
-                  Text('用时 ${formatSpan(turn.ms)} · ${totalsLine(totals)}', key: const Key('traj-summary'), style: t.bodySmall?.copyWith(color: c.textMuted, height: 1.5)),
-                  if (totals.requests > 0 && totals.reported == 0)
-                    const InfoBanner('这一轮接口没返回用量，所以没有 token 数。', margin: EdgeInsets.only(top: Space.x2)),
+                  Text(
+                    '用时 ${formatSpan(turn.ms)} · ${totalsLine(totals)}',
+                    key: const Key('traj-summary'),
+                    style: t.bodySmall?.copyWith(color: c.textMuted, height: 1.5),
+                  ),
+                  if (totals.requests > 0 && totals.reported == 0) const InfoBanner('这一轮接口没返回用量，所以没有 token 数。', margin: EdgeInsets.only(top: Space.x2)),
                 ],
               ),
             ),
             Divider(height: 1, color: c.border),
             Flexible(
-              child: ListView(key: const Key('traj-list'), shrinkWrap: true, padding: const EdgeInsets.only(bottom: Space.x2), children: children),
+              child: ListView(
+                key: const Key('traj-list'),
+                shrinkWrap: true,
+                padding: const EdgeInsets.only(bottom: Space.x2),
+                children: children,
+              ),
             ),
           ],
         ),
@@ -353,9 +378,15 @@ Widget _kv(BuildContext context, String label, String value, {Key? key}) {
     padding: const EdgeInsets.symmetric(vertical: 6),
     child: Row(
       children: [
-        Expanded(child: Text(label, style: t.bodyMedium?.copyWith(color: context.colors.textMuted))),
+        Expanded(
+          child: Text(label, style: t.bodyMedium?.copyWith(color: context.colors.textMuted)),
+        ),
         const SizedBox(width: Space.x3),
-        Text(value, key: key, style: t.bodyMedium?.copyWith(fontFeatures: const [FontFeature.tabularFigures()])),
+        Text(
+          value,
+          key: key,
+          style: t.bodyMedium?.copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
+        ),
       ],
     ),
   );
@@ -381,7 +412,11 @@ class RequestStepPage extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(Space.x4, Space.x2, Space.x4, Space.x8),
         children: [
-          if (owner != null) Padding(padding: const EdgeInsets.only(left: Space.x4, bottom: Space.x2), child: Text('子代理“$owner”发的请求', style: t.bodySmall?.copyWith(color: c.textMuted))),
+          if (owner != null)
+            Padding(
+              padding: const EdgeInsets.only(left: Space.x4, bottom: Space.x2),
+              child: Text('子代理“$owner”发的请求', style: t.bodySmall?.copyWith(color: c.textMuted)),
+            ),
           const GroupLabel('计时'),
           GroupCard(
             dividers: false,
@@ -399,7 +434,16 @@ class RequestStepPage extends StatelessWidget {
             dividers: false,
             padding: const EdgeInsets.symmetric(horizontal: Space.x4, vertical: Space.x2),
             children: u == null
-                ? [Padding(padding: const EdgeInsets.symmetric(vertical: Space.x2), child: Text('这次请求接口没返回用量。', key: const Key('step-no-usage'), style: t.bodyMedium?.copyWith(color: c.textMuted)))]
+                ? [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: Space.x2),
+                      child: Text(
+                        '这次请求接口没返回用量。',
+                        key: const Key('step-no-usage'),
+                        style: t.bodyMedium?.copyWith(color: c.textMuted),
+                      ),
+                    ),
+                  ]
                 : [
                     _kv(context, '命中缓存', u.hasCache ? formatTokens(u.cacheRead) : '—', key: const Key('step-hit')),
                     _kv(context, '未命中', formatTokens(u.uncached), key: const Key('step-miss')),
@@ -414,10 +458,7 @@ class RequestStepPage extends StatelessWidget {
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: Space.x4),
-            child: Text(
-              '用量是接口返回的原始数字；“—”表示接口没给这一项。速度 = 输出 ÷ 生成用时。${r.cost != null ? '费用按你给模型填的单价估算，以服务商账单为准。' : ''}',
-              style: t.bodySmall?.copyWith(color: c.textFaint, height: 1.6),
-            ),
+            child: Text('用量是接口返回的原始数字；“—”表示接口没给这一项。速度 = 输出 ÷ 生成用时。${r.cost != null ? '费用按你给模型填的单价估算，以服务商账单为准。' : ''}', style: t.bodySmall?.copyWith(color: c.textFaint, height: 1.6)),
           ),
         ],
       ),
@@ -452,11 +493,7 @@ class ToolStepPage extends StatelessWidget {
           GroupCard(
             dividers: false,
             padding: const EdgeInsets.symmetric(horizontal: Space.x4, vertical: Space.x2),
-            children: [
-              _kv(context, '工具', step.name),
-              _kv(context, '用时', step.ms == null ? '没结束' : formatSpan(step.ms!)),
-              _kv(context, '结果', item?.denied ?? false ? '被拒绝' : (step.ok ? '成功' : '没成功')),
-            ],
+            children: [_kv(context, '工具', step.name), _kv(context, '用时', step.ms == null ? '没结束' : formatSpan(step.ms!)), _kv(context, '结果', item?.denied ?? false ? '被拒绝' : (step.ok ? '成功' : '没成功'))],
           ),
           if (item == null)
             const InfoBanner('这次调用的参数和结果已经不在对话记录里了（对话被压缩过）。')
@@ -506,7 +543,11 @@ class ContextRing extends StatelessWidget {
                   child: CircularProgressIndicator(value: f, strokeWidth: 2.5, color: tone, backgroundColor: c.border),
                 ),
                 const SizedBox(width: Space.x1),
-                Text(label, key: const Key('context-ring-label'), style: Theme.of(context).textTheme.labelSmall?.copyWith(color: f >= 0.6 ? tone : c.textFaint)),
+                Text(
+                  label,
+                  key: const Key('context-ring-label'),
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(color: f >= 0.6 ? tone : c.textFaint),
+                ),
               ],
             ),
           ),
@@ -562,7 +603,11 @@ class _UsageSheetState extends State<UsageSheet> {
         children: [
           Text(label, style: t.bodySmall?.copyWith(color: c.textMuted)),
           const SizedBox(height: 2),
-          Text(value, key: key, style: t.titleMedium?.copyWith(fontFeatures: const [FontFeature.tabularFigures()])),
+          Text(
+            value,
+            key: key,
+            style: t.titleMedium?.copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
+          ),
         ],
       ),
     );
@@ -592,9 +637,17 @@ class _UsageSheetState extends State<UsageSheet> {
                 crossAxisAlignment: CrossAxisAlignment.baseline,
                 textBaseline: TextBaseline.alphabetic,
                 children: [
-                  Text(formatPercent(ctx.fraction), key: const Key('usage-context-pct'), style: t.headlineSmall?.copyWith(color: ctx.fraction >= 0.6 ? contextTone(c, ctx.fraction) : c.text)),
+                  Text(
+                    formatPercent(ctx.fraction),
+                    key: const Key('usage-context-pct'),
+                    style: t.headlineSmall?.copyWith(color: ctx.fraction >= 0.6 ? contextTone(c, ctx.fraction) : c.text),
+                  ),
                   const SizedBox(width: Space.x3),
-                  Text('${formatTokens(ctx.used)} / ${formatTokens(ctx.limit)}', key: const Key('usage-context'), style: t.bodyMedium?.copyWith(color: c.textMuted)),
+                  Text(
+                    '${formatTokens(ctx.used)} / ${formatTokens(ctx.limit)}',
+                    key: const Key('usage-context'),
+                    style: t.bodyMedium?.copyWith(color: c.textMuted),
+                  ),
                 ],
               ),
               const SizedBox(height: Space.x2),
@@ -608,7 +661,12 @@ class _UsageSheetState extends State<UsageSheet> {
                 key: const Key('usage-context-parts'),
                 style: faint,
               ),
-              if (ctx.fraction > 0.85) const InfoBanner('上下文快满了。发 /compact 可以把前面的内容压缩成摘要再继续。', tone: BannerTone.warning, margin: EdgeInsets.only(top: Space.x2)),
+              if (ctx.fraction > 0.85)
+                const InfoBanner(
+                  '上下文快满了。发 /compact 可以把前面的内容压缩成摘要再继续。',
+                  tone: BannerTone.warning,
+                  margin: EdgeInsets.only(top: Space.x2),
+                ),
             ],
             const SizedBox(height: Space.x4),
             Divider(height: 1, color: c.border),
@@ -617,7 +675,11 @@ class _UsageSheetState extends State<UsageSheet> {
             Text('本对话', style: t.labelMedium),
             const SizedBox(height: Space.x2),
             if (u.requests == 0)
-              Text('还没有向模型发过请求。', key: const Key('usage-empty'), style: t.bodyMedium?.copyWith(color: c.textMuted))
+              Text(
+                '还没有向模型发过请求。',
+                key: const Key('usage-empty'),
+                style: t.bodyMedium?.copyWith(color: c.textMuted),
+              )
             else ...[
               Row(
                 children: [
@@ -677,7 +739,10 @@ class BalanceCard extends StatelessWidget {
     final t = Theme.of(context).textTheme;
     final state = app.quota.stateOf(channel.id);
     final info = state.result?.preferred;
-    final others = [for (final i in state.result?.infos ?? const <BalanceInfo>[]) if (i != info) i];
+    final others = [
+      for (final i in state.result?.infos ?? const <BalanceInfo>[])
+        if (i != info) i,
+    ];
     final q = app.quota.quotaOf(channel.id);
     final faint = t.bodySmall?.copyWith(color: c.textFaint, height: 1.5);
     final line = app.quota.lowLine;
@@ -699,7 +764,11 @@ class BalanceCard extends StatelessWidget {
             style: t.bodyLarge?.copyWith(color: c.textMuted),
           )
         else ...[
-          Text(formatMoney(info.currency, info.total), key: const Key('balance-amount'), style: t.headlineSmall?.copyWith(color: info.total < line ? c.danger : c.text)),
+          Text(
+            formatMoney(info.currency, info.total),
+            key: const Key('balance-amount'),
+            style: t.headlineSmall?.copyWith(color: info.total < line ? c.danger : c.text),
+          ),
           Text(
             [
               if (info.toppedUp != null) '充值 ${formatMoney(info.currency, info.toppedUp!)}',
@@ -711,10 +780,19 @@ class BalanceCard extends StatelessWidget {
           if (state.keyInvalid) Text('Key 无效，查不到余额；上面是上一次查到的数。', style: faint?.copyWith(color: c.danger)),
         ],
         if (state.result != null && !state.result!.isAvailable)
-          const InfoBanner('DeepSeek 说这个账号的余额已经不能调用接口了，充值后才能继续用。', key: Key('balance-unavailable'), tone: BannerTone.danger, margin: EdgeInsets.only(top: Space.x2)),
+          const InfoBanner(
+            'DeepSeek 说这个账号的余额已经不能调用接口了，充值后才能继续用。',
+            key: Key('balance-unavailable'),
+            tone: BannerTone.danger,
+            margin: EdgeInsets.only(top: Space.x2),
+          ),
         if (q != null) ...[
           const SizedBox(height: Space.x3),
-          Text('额度上限：已使用 ${q.percent}%（剩余 ${formatMoney(q.currency, q.remaining)}）', key: const Key('balance-quota'), style: t.bodyMedium?.copyWith(color: q.reached ? c.danger : c.text)),
+          Text(
+            '额度上限：已使用 ${q.percent}%（剩余 ${formatMoney(q.currency, q.remaining)}）',
+            key: const Key('balance-quota'),
+            style: t.bodyMedium?.copyWith(color: q.reached ? c.danger : c.text),
+          ),
           const SizedBox(height: Space.x1),
           ClipRRect(
             borderRadius: BorderRadius.circular(2),
@@ -784,7 +862,10 @@ class LowBalanceStrip extends StatelessWidget {
                 ),
               ),
               TextButton(
-                style: TextButton.styleFrom(minimumSize: const Size(0, 44), padding: const EdgeInsets.symmetric(horizontal: Space.x2)),
+                style: TextButton.styleFrom(
+                  minimumSize: const Size(0, 44),
+                  padding: const EdgeInsets.symmetric(horizontal: Space.x2),
+                ),
                 onPressed: () => copyTopUpLink(context),
                 child: const Text('去充值'),
               ),

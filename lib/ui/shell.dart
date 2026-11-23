@@ -103,8 +103,19 @@ class ShellAppBar extends StatelessWidget implements PreferredSizeWidget {
     Widget middle = Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(title, style: (pill ? t.titleSmall : t.titleLarge)?.copyWith(fontWeight: pill ? FontWeight.w600 : FontWeight.w400), maxLines: 1, overflow: TextOverflow.ellipsis),
-        if (sub != null && sub.isNotEmpty) Text(sub, style: t.bodySmall?.copyWith(color: c.textFaint, height: 1.25), maxLines: 1, overflow: TextOverflow.ellipsis),
+        Text(
+          title,
+          style: (pill ? t.titleSmall : t.titleLarge)?.copyWith(fontWeight: pill ? FontWeight.w600 : FontWeight.w400),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        if (sub != null && sub.isNotEmpty)
+          Text(
+            sub,
+            style: t.bodySmall?.copyWith(color: c.textFaint, height: 1.25),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
       ],
     );
     if (pill) {
@@ -127,18 +138,7 @@ class ShellAppBar extends StatelessWidget implements PreferredSizeWidget {
 
 /// 侧边栏。没打开项目时（[session] 为空）只有“项目”和“设置”。
 class AppDrawer extends StatelessWidget {
-  const AppDrawer({
-    super.key,
-    this.project,
-    this.session,
-    this.current,
-    this.onDest,
-    this.onNewConversation,
-    this.onConversation,
-    this.onClose,
-    required this.onProjects,
-    required this.onSettings,
-  });
+  const AppDrawer({super.key, this.project, this.session, this.current, this.onDest, this.onNewConversation, this.onConversation, this.onClose, required this.onProjects, required this.onSettings});
 
   final Project? project;
   final ProjectSession? session;
@@ -202,20 +202,13 @@ class AppDrawer extends StatelessWidget {
                   if (s == null)
                     _DrawerItem(icon: Icons.folder_copy_outlined, label: '工作区', selected: true, onTap: onClose)
                   else ...[
-                    for (final d in ShellDest.drawerOnly)
-                      _DrawerItem(icon: d.icon, label: d.label, selected: current == d, onTap: () => onDest?.call(d)),
+                    for (final d in ShellDest.drawerOnly) _DrawerItem(icon: d.icon, label: d.label, selected: current == d, onTap: () => onDest?.call(d)),
                     Padding(
                       padding: const EdgeInsets.fromLTRB(Space.x3, Space.x6, Space.x3, Space.x2),
                       child: Text('对话', style: t.labelMedium),
                     ),
                     // 当前对话还是空的时候，“新对话”这一项就代表它，不另外列一行。
-                    _DrawerItem(
-                      icon: Icons.add_comment_outlined,
-                      label: '新对话',
-                      selected: current == ShellDest.chat && s.activeConversation.title.isEmpty,
-                      enabled: !busy,
-                      onTap: onNewConversation,
-                    ),
+                    _DrawerItem(icon: Icons.add_comment_outlined, label: '新对话', selected: current == ShellDest.chat && s.activeConversation.title.isEmpty, enabled: !busy, onTap: onNewConversation),
                     for (final conv in s.topConversations)
                       if (conv.title.isNotEmpty)
                         _DrawerItem(

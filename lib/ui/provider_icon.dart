@@ -25,10 +25,7 @@ class ProviderIcon extends StatelessWidget {
       width: size,
       height: size,
       alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: p == null ? c.accentSoft : c.surfaceMuted,
-        borderRadius: BorderRadius.circular(size >= 36 ? Radii.md : Radii.sm),
-      ),
+      decoration: BoxDecoration(color: p == null ? c.accentSoft : c.surfaceMuted, borderRadius: BorderRadius.circular(size >= 36 ? Radii.md : Radii.sm)),
       child: p == null
           ? Icon(Icons.hub_outlined, color: c.accent, size: inner)
           : SvgPicture.asset(

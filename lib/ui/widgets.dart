@@ -28,7 +28,11 @@ class EmptyState extends StatelessWidget {
             const SizedBox(height: Space.x4),
             Text(title, style: t.titleMedium, textAlign: TextAlign.center),
             const SizedBox(height: Space.x2),
-            Text(message, style: t.bodyMedium?.copyWith(color: c.textMuted), textAlign: TextAlign.center),
+            Text(
+              message,
+              style: t.bodyMedium?.copyWith(color: c.textMuted),
+              textAlign: TextAlign.center,
+            ),
             if (action != null) ...[const SizedBox(height: Space.x6), action!],
           ],
         ),
@@ -75,7 +79,9 @@ class InfoBanner extends StatelessWidget {
         children: [
           Icon(icon, size: 18, color: fg),
           const SizedBox(width: Space.x2),
-          Expanded(child: Text(text, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: fg, height: 1.5))),
+          Expanded(
+            child: Text(text, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: fg, height: 1.5)),
+          ),
         ],
       ),
     );
@@ -88,13 +94,7 @@ void showSnack(BuildContext context, String text) {
     ..showSnackBar(SnackBar(content: Text(text)));
 }
 
-Future<bool> confirmDialog(
-  BuildContext context, {
-  required String title,
-  required String message,
-  required String confirmLabel,
-  bool danger = false,
-}) async {
+Future<bool> confirmDialog(BuildContext context, {required String title, required String message, required String confirmLabel, bool danger = false}) async {
   final c = context.colors;
   final result = await showDialog<bool>(
     context: context,
@@ -119,13 +119,7 @@ Future<bool> confirmDialog(
 }
 
 /// 输入一行文字的对话框；返回 null 表示取消。
-Future<String?> promptDialog(
-  BuildContext context, {
-  required String title,
-  String initial = '',
-  String? hint,
-  String confirmLabel = '确定',
-}) {
+Future<String?> promptDialog(BuildContext context, {required String title, String initial = '', String? hint, String confirmLabel = '确定'}) {
   final controller = TextEditingController(text: initial);
   return showDialog<String>(
     context: context,

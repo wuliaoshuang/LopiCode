@@ -174,9 +174,7 @@ class AgentRunner {
           });
         }
       }
-      final note = asFiles.isEmpty
-          ? ''
-          : '\n\n（用户附了 ${asFiles.length} 个文件，${vision ? '读取失败，' : '当前模型不能看图，'}已存在工作区里：${asFiles.join('、')}）';
+      final note = asFiles.isEmpty ? '' : '\n\n（用户附了 ${asFiles.length} 个文件，${vision ? '读取失败，' : '当前模型不能看图，'}已存在工作区里：${asFiles.join('、')}）';
       if (parts.isEmpty) {
         out.add({'role': 'user', 'content': '$text$note'});
       } else {
@@ -324,9 +322,7 @@ class AgentRunner {
     } on FormatException {
       args = null;
     }
-    return args is Map<String, dynamic>
-        ? await toolbox.execute(call.name, args)
-        : ToolOutcome('错误：工具参数不是合法的 JSON 对象', ok: false);
+    return args is Map<String, dynamic> ? await toolbox.execute(call.name, args) : ToolOutcome('错误：工具参数不是合法的 JSON 对象', ok: false);
   }
 
   /// 请求失败时：模型已经说了一些就留下这半截；一个字都没回且上一条是用户消息，

@@ -12,7 +12,10 @@ void main() {
   const jniDir = 'android/app/src/main/jniLibs/arm64-v8a';
 
   test('安装包里要带的四个文件都在，大小和 sha256 与声明一致', () {
-    final declared = {for (final c in bundledComponents) for (final b in c.binaries) b.fileName: b};
+    final declared = {
+      for (final c in bundledComponents)
+        for (final b in c.binaries) b.fileName: b,
+    };
     expect(declared.keys.toSet(), ProotFiles.bundled.toSet(), reason: '声明里的文件要和启动代码找的文件一一对应');
     for (final binary in declared.values) {
       final file = File('$jniDir/${binary.fileName}');
@@ -35,10 +38,7 @@ void main() {
   });
 
   test('留档的 Termux 原始包与声明、SHA256SUMS 一致', () {
-    final sums = {
-      for (final line in File('third_party/termux/SHA256SUMS').readAsLinesSync().where((l) => l.trim().isNotEmpty))
-        line.split(RegExp(r'\s+'))[1]: line.split(RegExp(r'\s+'))[0],
-    };
+    final sums = {for (final line in File('third_party/termux/SHA256SUMS').readAsLinesSync().where((l) => l.trim().isNotEmpty)) line.split(RegExp(r'\s+'))[1]: line.split(RegExp(r'\s+'))[0]};
     for (final component in bundledComponents) {
       final name = Uri.parse(component.packageUrl).pathSegments.last;
       final file = File('third_party/termux/debs/$name');

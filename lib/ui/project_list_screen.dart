@@ -82,7 +82,10 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
   }
 
   Future<void> _add() async {
-    final choice = await showModalBottomSheet<String>(context: context, builder: (_) => _AddSheet(hasHidden: _hidden.isNotEmpty));
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      builder: (_) => _AddSheet(hasHidden: _hidden.isNotEmpty),
+    );
     if (choice == null || !mounted) return;
     if (choice == 'new') await _create();
     if (choice == 'linux') await _addLinux();
@@ -91,11 +94,7 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
 
   Future<void> _create() async {
     final store = AppScope.of(context).projects;
-    final result = await showModalBottomSheet<(String, ProjectTemplate)>(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) => const _NewProjectSheet(),
-    );
+    final result = await showModalBottomSheet<(String, ProjectTemplate)>(context: context, isScrollControlled: true, builder: (_) => const _NewProjectSheet());
     if (result == null || !mounted) return;
     await _guard(() async {
       final project = await store.create(result.$1, result.$2);
@@ -128,8 +127,7 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
               padding: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x2),
               child: Text('加回已移除的项目', style: Theme.of(context).textTheme.titleLarge),
             ),
-            for (final p in _hidden)
-              ListTile(leading: Icon(templateIcon(p.template)), title: Text(p.name), subtitle: Text(p.displayDir), onTap: () => Navigator.pop(context, p)),
+            for (final p in _hidden) ListTile(leading: Icon(templateIcon(p.template)), title: Text(p.name), subtitle: Text(p.displayDir), onTap: () => Navigator.pop(context, p)),
           ],
         ),
       ),
@@ -174,13 +172,7 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
 
   Future<void> _delete(Project project) async {
     final store = AppScope.of(context).projects;
-    final ok = await confirmDialog(
-      context,
-      title: '删除“${project.name}”？',
-      message: '项目里的所有文件和对话记录都会被删除，无法恢复。',
-      confirmLabel: '删除',
-      danger: true,
-    );
+    final ok = await confirmDialog(context, title: '删除“${project.name}”？', message: '项目里的所有文件和对话记录都会被删除，无法恢复。', confirmLabel: '删除', danger: true);
     if (ok) await _guard(() => store.delete(project));
   }
 
@@ -198,13 +190,7 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
     final page = Scaffold(
       appBar: ShellAppBar(title: '工作区', subtitle: projects == null || projects.isEmpty ? 'LopiCode' : '${projects.length} 个工作区'),
       floatingActionButton: projects != null && projects.isNotEmpty
-          ? FloatingActionButton.extended(
-              onPressed: _add,
-              elevation: 2,
-              shape: const StadiumBorder(),
-              icon: const Icon(Icons.add),
-              label: const Text('添加工作区'),
-            )
+          ? FloatingActionButton.extended(onPressed: _add, elevation: 2, shape: const StadiumBorder(), icon: const Icon(Icons.add), label: const Text('添加工作区'))
           : null,
       body: _error != null
           ? EmptyState(icon: Icons.error_outline, title: '读取工作区失败', message: _error!)
@@ -306,7 +292,9 @@ class _ProjectCard extends StatelessWidget {
                   children: [
                     Row(
                       children: [
-                        Flexible(child: Text(project.name, style: t.titleMedium, maxLines: 1, overflow: TextOverflow.ellipsis)),
+                        Flexible(
+                          child: Text(project.name, style: t.titleMedium, maxLines: 1, overflow: TextOverflow.ellipsis),
+                        ),
                         if (project.pinned)
                           Padding(
                             padding: const EdgeInsets.only(left: Space.x1),
@@ -335,7 +323,11 @@ class _ProjectCard extends StatelessWidget {
                   const PopupMenuItem(value: 'group', child: Text('分组…')),
                   const PopupMenuItem(value: 'rename', child: Text('重命名')),
                   const PopupMenuItem(value: 'remove', child: Text('从列表移除')),
-                  if (!project.isLinux) PopupMenuItem(value: 'delete', child: Text('删除', style: TextStyle(color: c.danger))),
+                  if (!project.isLinux)
+                    PopupMenuItem(
+                      value: 'delete',
+                      child: Text('删除', style: TextStyle(color: c.danger)),
+                    ),
                 ],
               ),
             ],

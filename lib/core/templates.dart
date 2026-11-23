@@ -13,10 +13,7 @@ enum ProjectTemplate {
   final String label;
   final String description;
 
-  static ProjectTemplate byId(String? id) => ProjectTemplate.values.firstWhere(
-    (t) => t.id == id,
-    orElse: () => ProjectTemplate.empty,
-  );
+  static ProjectTemplate byId(String? id) => ProjectTemplate.values.firstWhere((t) => t.id == id, orElse: () => ProjectTemplate.empty);
 }
 
 /// 低代码页面在项目里的固定文件名。
@@ -29,7 +26,8 @@ Map<String, String> templateFiles(ProjectTemplate template, String name) {
       return {'README.md': '# $name\n\n在这里写下项目说明。\n'};
     case ProjectTemplate.web:
       return {
-        'index.html': '''<!DOCTYPE html>
+        'index.html':
+            '''<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
@@ -87,10 +85,6 @@ document.getElementById('btn').addEventListener('click', () => {
     case ProjectTemplate.lowcode:
       final doc = LcDocument.starter(name);
       final export = exportHtml(doc);
-      return {
-        kLowcodePageFile: const JsonEncoder.withIndent('  ').convert(doc.toJson()),
-        'index.html': export.html,
-        'style.css': export.css,
-      };
+      return {kLowcodePageFile: const JsonEncoder.withIndent('  ').convert(doc.toJson()), 'index.html': export.html, 'style.css': export.css};
   }
 }

@@ -56,8 +56,7 @@ class FakeApi {
   Future<void> stop() => _server.close(force: true);
 }
 
-String sseOf(List<Map<String, dynamic>> events, {bool named = true}) =>
-    events.map((e) => '${named ? 'event: ${e['type']}\n' : ''}data: ${jsonEncode(e)}\n\n').join();
+String sseOf(List<Map<String, dynamic>> events, {bool named = true}) => events.map((e) => '${named ? 'event: ${e['type']}\n' : ''}data: ${jsonEncode(e)}\n\n').join();
 
 void main() {
   late Directory tmp;
@@ -104,7 +103,13 @@ void main() {
     test('编辑渠道时 Key 留空＝保留原来的 Key', () async {
       final store = ModelConfigStore(settings, secrets);
       await store.load();
-      final ch = await store.upsert(name: 'A', protocol: ChatProtocol.anthropic, baseUrl: 'https://a.test/v1', apiKey: 'k1', models: [ModelSpec(id: 'm1')]);
+      final ch = await store.upsert(
+        name: 'A',
+        protocol: ChatProtocol.anthropic,
+        baseUrl: 'https://a.test/v1',
+        apiKey: 'k1',
+        models: [ModelSpec(id: 'm1')],
+      );
       await store.upsert(id: ch.id, name: 'A2', protocol: ChatProtocol.anthropic, baseUrl: 'https://a.test/v1', apiKey: '');
       expect(await store.apiKey(ch.id), 'k1');
       expect(store.channel(ch.id)!.name, 'A2');
@@ -118,7 +123,15 @@ void main() {
     test('新对话默认：沿用上次 / 固定默认', () async {
       final store = ModelConfigStore(settings, secrets);
       await store.load();
-      final ch = await store.upsert(name: 'A', protocol: ChatProtocol.openaiChat, baseUrl: 'https://a.test/v1', models: [ModelSpec(id: 'm1'), ModelSpec(id: 'm2', thinking: true)]);
+      final ch = await store.upsert(
+        name: 'A',
+        protocol: ChatProtocol.openaiChat,
+        baseUrl: 'https://a.test/v1',
+        models: [
+          ModelSpec(id: 'm1'),
+          ModelSpec(id: 'm2', thinking: true),
+        ],
+      );
       await store.setLastSelection(ModelSelection(ch.id, 'm2', 'high'));
       expect(store.defaultForNewChat()!.model.id, 'm2');
       expect(store.defaultForNewChat()!.level, 'high');
@@ -126,7 +139,13 @@ void main() {
       await store.setNewChatUsesFixed(true);
       expect(store.defaultForNewChat()!.model.id, 'm1');
       // 选中的模型被删了：退回还能用的第一个
-      await store.upsert(id: ch.id, name: 'A', protocol: ChatProtocol.openaiChat, baseUrl: 'https://a.test/v1', models: [ModelSpec(id: 'm2')]);
+      await store.upsert(
+        id: ch.id,
+        name: 'A',
+        protocol: ChatProtocol.openaiChat,
+        baseUrl: 'https://a.test/v1',
+        models: [ModelSpec(id: 'm2')],
+      );
       expect(store.defaultForNewChat()!.model.id, 'm2');
     });
 
@@ -163,53 +182,91 @@ void main() {
       expect(api!.requests.last.headers['anthropic-version'], '2023-06-01');
       expect(api!.requests.every((r) => r.method == 'GET' && r.path == '/v1/models'), isTrue, reason: '不能发任何会产生费用的请求');
       // 地址不对：给人话
-      await expectLater(
-        listRemoteModels(protocol: ChatProtocol.openaiChat, baseUrl: 'http://127.0.0.1:${Uri.parse(api!.base).port}/nope', apiKey: ''),
-        throwsA(isA<ChatApiException>()),
-      );
+      await expectLater(listRemoteModels(protocol: ChatProtocol.openaiChat, baseUrl: 'http://127.0.0.1:${Uri.parse(api!.base).port}/nope', apiKey: ''), throwsA(isA<ChatApiException>()));
     });
   });
 
   group('协议', () {
     final tools = [
-      toolSpec('read_file', '读文件', {
-        'path': {'type': 'string'},
-      }, ['path']),
+      toolSpec(
+        'read_file',
+        '读文件',
+        {
+          'path': {'type': 'string'},
+        },
+        ['path'],
+      ),
     ];
 
     test('Anthropic Messages：请求格式、流式文字、工具调用、工具结果回传', () async {
       api = FakeApi()
         ..sse['/v1/messages'] = sseOf([
-          {'type': 'message_start', 'message': {'id': 'm', 'role': 'assistant', 'content': <Object>[]}},
-          {'type': 'content_block_start', 'index': 0, 'content_block': {'type': 'text', 'text': ''}},
+          {
+            'type': 'message_start',
+            'message': {'id': 'm', 'role': 'assistant', 'content': <Object>[]},
+          },
+          {
+            'type': 'content_block_start',
+            'index': 0,
+            'content_block': {'type': 'text', 'text': ''},
+          },
           {'type': 'ping'},
-          {'type': 'content_block_delta', 'index': 0, 'delta': {'type': 'text_delta', 'text': '我先'}},
-          {'type': 'content_block_delta', 'index': 0, 'delta': {'type': 'text_delta', 'text': '看看'}},
+          {
+            'type': 'content_block_delta',
+            'index': 0,
+            'delta': {'type': 'text_delta', 'text': '我先'},
+          },
+          {
+            'type': 'content_block_delta',
+            'index': 0,
+            'delta': {'type': 'text_delta', 'text': '看看'},
+          },
           {'type': 'content_block_stop', 'index': 0},
-          {'type': 'content_block_start', 'index': 1, 'content_block': {'type': 'tool_use', 'id': 'toolu_1', 'name': 'read_file', 'input': <String, dynamic>{}}},
-          {'type': 'content_block_delta', 'index': 1, 'delta': {'type': 'input_json_delta', 'partial_json': '{"path":'}},
-          {'type': 'content_block_delta', 'index': 1, 'delta': {'type': 'input_json_delta', 'partial_json': '"a.txt"}'}},
+          {
+            'type': 'content_block_start',
+            'index': 1,
+            'content_block': {'type': 'tool_use', 'id': 'toolu_1', 'name': 'read_file', 'input': <String, dynamic>{}},
+          },
+          {
+            'type': 'content_block_delta',
+            'index': 1,
+            'delta': {'type': 'input_json_delta', 'partial_json': '{"path":'},
+          },
+          {
+            'type': 'content_block_delta',
+            'index': 1,
+            'delta': {'type': 'input_json_delta', 'partial_json': '"a.txt"}'},
+          },
           {'type': 'content_block_stop', 'index': 1},
-          {'type': 'message_delta', 'delta': {'stop_reason': 'tool_use'}},
+          {
+            'type': 'message_delta',
+            'delta': {'stop_reason': 'tool_use'},
+          },
           {'type': 'message_stop'},
         ]);
       await api!.start();
       final client = AnthropicChatClient(baseUrl: api!.base, apiKey: 'ak-9', model: 'claude-x', maxTokens: 32000, thinkingLevel: 'low');
-      final deltas = await client.streamChat(
-        messages: [
-          {'role': 'system', 'content': '系统话'},
-          {'role': 'user', 'content': '看 a.txt'},
-          {
-            'role': 'assistant',
-            'content': '好',
-            'tool_calls': [
-              {'id': 'toolu_0', 'type': 'function', 'function': {'name': 'read_file', 'arguments': '{"path":"b.txt"}'}},
+      final deltas = await client
+          .streamChat(
+            messages: [
+              {'role': 'system', 'content': '系统话'},
+              {'role': 'user', 'content': '看 a.txt'},
+              {
+                'role': 'assistant',
+                'content': '好',
+                'tool_calls': [
+                  {
+                    'id': 'toolu_0',
+                    'type': 'function',
+                    'function': {'name': 'read_file', 'arguments': '{"path":"b.txt"}'},
+                  },
+                ],
+              },
+              {'role': 'tool', 'tool_call_id': 'toolu_0', 'content': 'B 的内容'},
             ],
-          },
-          {'role': 'tool', 'tool_call_id': 'toolu_0', 'content': 'B 的内容'},
-        ],
-        tools: tools,
-      ).toList();
+            tools: tools,
+          )
+          .toList();
       expect(deltas.map((d) => d.content ?? '').join(), '我先看看');
       final calls = deltas.expand((d) => d.toolCalls).toList();
       expect(calls.first.id, 'toolu_1');
@@ -231,7 +288,12 @@ void main() {
       final msgs = body['messages'] as List;
       expect(msgs.map((m) => (m as Map)['role']), ['user', 'assistant', 'user']);
       final assistantBlocks = (msgs[1] as Map)['content'] as List;
-      expect(assistantBlocks.last, {'type': 'tool_use', 'id': 'toolu_0', 'name': 'read_file', 'input': {'path': 'b.txt'}});
+      expect(assistantBlocks.last, {
+        'type': 'tool_use',
+        'id': 'toolu_0',
+        'name': 'read_file',
+        'input': {'path': 'b.txt'},
+      });
       final resultBlock = ((msgs[2] as Map)['content'] as List).single as Map;
       expect(resultBlock['type'], 'tool_result');
       expect(resultBlock['tool_use_id'], 'toolu_0');
@@ -241,28 +303,42 @@ void main() {
       api = FakeApi()
         ..sse['/v1/responses'] = sseOf([
           {'type': 'response.output_text.delta', 'output_index': 0, 'delta': '查一下'},
-          {'type': 'response.output_item.added', 'output_index': 1, 'item': {'type': 'function_call', 'id': 'fc_1', 'call_id': 'call_9', 'name': 'read_file', 'arguments': ''}},
+          {
+            'type': 'response.output_item.added',
+            'output_index': 1,
+            'item': {'type': 'function_call', 'id': 'fc_1', 'call_id': 'call_9', 'name': 'read_file', 'arguments': ''},
+          },
           {'type': 'response.function_call_arguments.delta', 'output_index': 1, 'delta': '{"path":"a.txt"}'},
-          {'type': 'response.output_item.done', 'output_index': 1, 'item': {'type': 'function_call', 'call_id': 'call_9', 'name': 'read_file', 'arguments': '{"path":"a.txt"}'}},
+          {
+            'type': 'response.output_item.done',
+            'output_index': 1,
+            'item': {'type': 'function_call', 'call_id': 'call_9', 'name': 'read_file', 'arguments': '{"path":"a.txt"}'},
+          },
           {'type': 'response.completed', 'response': <String, dynamic>{}},
         ]);
       await api!.start();
       final client = OpenAiResponsesClient(baseUrl: api!.base, apiKey: 'sk-r', model: 'gpt-x', maxOutputTokens: 8000, reasoningEffort: 'high');
-      final deltas = await client.streamChat(
-        messages: [
-          {'role': 'system', 'content': '系统话'},
-          {'role': 'user', 'content': '看 a.txt'},
-          {
-            'role': 'assistant',
-            'content': null,
-            'tool_calls': [
-              {'id': 'call_0', 'type': 'function', 'function': {'name': 'read_file', 'arguments': '{"path":"b.txt"}'}},
+      final deltas = await client
+          .streamChat(
+            messages: [
+              {'role': 'system', 'content': '系统话'},
+              {'role': 'user', 'content': '看 a.txt'},
+              {
+                'role': 'assistant',
+                'content': null,
+                'tool_calls': [
+                  {
+                    'id': 'call_0',
+                    'type': 'function',
+                    'function': {'name': 'read_file', 'arguments': '{"path":"b.txt"}'},
+                  },
+                ],
+              },
+              {'role': 'tool', 'tool_call_id': 'call_0', 'content': 'B 的内容'},
             ],
-          },
-          {'role': 'tool', 'tool_call_id': 'call_0', 'content': 'B 的内容'},
-        ],
-        tools: tools,
-      ).toList();
+            tools: tools,
+          )
+          .toList();
       expect(deltas.map((d) => d.content ?? '').join(), '查一下');
       final calls = deltas.expand((d) => d.toolCalls).toList();
       expect(calls.first.id, 'call_9', reason: '回传结果要用 call_id，不是 item 的 id');
@@ -285,8 +361,18 @@ void main() {
 
     test('内部字段（_raw、_images）不会发给 Chat Completions 接口', () {
       final out = stripInternal([
-        {'role': 'user', 'content': 'hi', '_images': [{'path': 'a.png'}]},
-        {'role': 'assistant', 'content': 'x', '_raw': {'protocol': 'anthropic'}},
+        {
+          'role': 'user',
+          'content': 'hi',
+          '_images': [
+            {'path': 'a.png'},
+          ],
+        },
+        {
+          'role': 'assistant',
+          'content': 'x',
+          '_raw': {'protocol': 'anthropic'},
+        },
       ]);
       expect(out.every((m) => m.keys.every((k) => !k.startsWith('_'))), isTrue);
     });
@@ -399,10 +485,14 @@ void main() {
 
     test('预设的工具勾选：没勾的不给模型，硬调用被拒绝；额外工具同样受管', () async {
       var ran = 0;
-      final extra = ExtraTool(spec: toolSpec('web_search', '搜', {}), kind: ToolKind.read, run: (_) async {
-        ran++;
-        return ToolOutcome('结果');
-      });
+      final extra = ExtraTool(
+        spec: toolSpec('web_search', '搜', {}),
+        kind: ToolKind.read,
+        run: (_) async {
+          ran++;
+          return ToolOutcome('结果');
+        },
+      );
       final b = box(allowed: {'read_file', 'list_files'}, extras: [extra]);
       expect(names(b), unorderedEquals(['read_file', 'list_files']));
       final w = await b.execute('write_file', {'path': 'a.txt', 'content': '改'});
@@ -448,7 +538,10 @@ void main() {
       final seen = <List<String>>[];
       late AgentRunner runner;
       final client = _SpyClient((messages, n) {
-        seen.add([for (final m in messages) if (m['role'] == 'user') '${m['content']}']);
+        seen.add([
+          for (final m in messages)
+            if (m['role'] == 'user') '${m['content']}',
+        ]);
         if (n == 0) {
           runner.steer('顺便把标题改成红色');
           return [call(0, 'read_file', '{"path":"a.txt"}'), ChatDelta(finishReason: 'tool_calls')];
@@ -511,7 +604,12 @@ void main() {
         {'role': 'user', 'content': '做个页面'},
         {'role': 'assistant', 'content': '做好了'},
       ];
-      final err = await compactHistory(ScriptedChatClient([[say('摘要：做了个页面'), ChatDelta(finishReason: 'stop')]]), history);
+      final err = await compactHistory(
+        ScriptedChatClient([
+          [say('摘要：做了个页面'), ChatDelta(finishReason: 'stop')],
+        ]),
+        history,
+      );
       expect(err, isNull);
       expect(history, hasLength(2), reason: '一条摘要 + 一句承接');
       expect('${history.first['content']}', contains('摘要：做了个页面'));
@@ -597,12 +695,14 @@ void main() {
       expect(list.firstWhere((w) => w.id == b.id).group, '工作');
       expect(await ProjectStore.conversationCount(a), 0);
       Directory(p.join(a.dir, '.lopicode')).createSync(recursive: true);
-      File(p.join(a.dir, '.lopicode', 'chats.json')).writeAsStringSync(jsonEncode([
-        {'id': 'main', 'title': '第一段'},
-        {'id': 'x1', 'title': '第二段'},
-        {'id': 'x2', 'title': ''},
-        {'id': 'x3', 'title': '子代理', 'parent': 'main'},
-      ]));
+      File(p.join(a.dir, '.lopicode', 'chats.json')).writeAsStringSync(
+        jsonEncode([
+          {'id': 'main', 'title': '第一段'},
+          {'id': 'x1', 'title': '第二段'},
+          {'id': 'x2', 'title': ''},
+          {'id': 'x3', 'title': '子代理', 'parent': 'main'},
+        ]),
+      );
       expect(await ProjectStore.conversationCount(a), 2, reason: '不算空对话和子代理');
     });
 
@@ -750,7 +850,10 @@ void main() {
       final tools = {for (final t in board.tools('前端')) (t.spec['function'] as Map)['name'] as String: t};
       expect(tools.keys, unorderedEquals(['team_board', 'team_task', 'team_message']));
       expect(tools['team_board']!.kind, ToolKind.read);
-      final made = await tools['team_task']!.run({'title': '做登录页', 'write_scope': ['login/']});
+      final made = await tools['team_task']!.run({
+        'title': '做登录页',
+        'write_scope': ['login/'],
+      });
       expect(made.ok, isTrue);
       final id = board.tasks.single.id;
       expect((await tools['team_task']!.run({'id': id, 'status': 'doing'})).ok, isTrue);
@@ -821,7 +924,12 @@ void main() {
       await again.setEnabled(again.items.single, false);
       expect(again.pending(utc(2026, 11, 25, 9, 1)).due, isEmpty, reason: '停用的不触发');
       await expectLater(
-        again.upsert(title: '', instruction: 'x', workspaceId: 'w', rule: TimeRule(kind: RuleKind.daily, tzOffsetMinutes: 0)),
+        again.upsert(
+          title: '',
+          instruction: 'x',
+          workspaceId: 'w',
+          rule: TimeRule(kind: RuleKind.daily, tzOffsetMinutes: 0),
+        ),
         throwsA(isA<AutomationException>()),
       );
     });

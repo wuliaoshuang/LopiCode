@@ -67,16 +67,11 @@ class PreviewServer {
       file = File('$full/index.html');
     }
     if (!await file.exists()) {
-      return Response.notFound(
-        _notFoundPage(path),
-        headers: {'content-type': 'text/html; charset=utf-8'},
-      );
+      return Response.notFound(_notFoundPage(path), headers: {'content-type': 'text/html; charset=utf-8'});
     }
     final type = lookupMimeType(file.path) ?? 'application/octet-stream';
     final headers = {
-      'content-type': type.startsWith('text/') || type.contains('javascript') || type.contains('json')
-          ? '$type; charset=utf-8'
-          : type,
+      'content-type': type.startsWith('text/') || type.contains('javascript') || type.contains('json') ? '$type; charset=utf-8' : type,
       // 预览要的是“保存即生效”，一律不缓存。
       'cache-control': 'no-store',
     };
@@ -113,7 +108,8 @@ class PreviewServer {
       '<h3 style="margin:0 0 8px">找不到 ${const HtmlEscape().convert(path.isEmpty ? 'index.html' : path)}</h3>'
       '<p style="margin:0;line-height:1.5">预览会打开项目根目录的 index.html。可以在“文件”里新建，或让 Agent 帮你写一个。</p></body>';
 
-  static const String _hook = '<script>(function(){'
+  static const String _hook =
+      '<script>(function(){'
       'function send(l,a){try{var m=Array.prototype.map.call(a,function(x){'
       'if(x instanceof Error)return x.stack||x.message;'
       'if(typeof x==="object"){try{return JSON.stringify(x)}catch(e){return String(x)}}return String(x)}).join(" ");'

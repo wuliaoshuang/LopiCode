@@ -7,16 +7,7 @@ import 'package:lopicode/core/templates.dart';
 import 'package:path/path.dart' as p;
 
 class Project {
-  Project({
-    required this.id,
-    required this.name,
-    required this.template,
-    required this.createdAt,
-    required this.dir,
-    this.linuxPath,
-    this.pinned = false,
-    this.group = '',
-  });
+  Project({required this.id, required this.name, required this.template, required this.createdAt, required this.dir, this.linuxPath, this.pinned = false, this.group = ''});
 
   /// 目录名，创建后不变（改名只改显示名）。
   final String id;
@@ -40,11 +31,7 @@ class Project {
 
   PathGuard get guard => PathGuard(dir);
 
-  Map<String, dynamic> toJson() => {
-    'name': name,
-    'template': template.id,
-    'createdAt': createdAt.toIso8601String(),
-  };
+  Map<String, dynamic> toJson() => {'name': name, 'template': template.id, 'createdAt': createdAt.toIso8601String()};
 }
 
 class ProjectException implements Exception {
@@ -231,9 +218,7 @@ class ProjectStore {
         id: p.basename(dir),
         name: json['name'] is String && (json['name'] as String).trim().isNotEmpty ? json['name'] as String : p.basename(dir),
         template: ProjectTemplate.byId(json['template'] is String ? json['template'] as String : null),
-        createdAt:
-            DateTime.tryParse(json['createdAt'] is String ? json['createdAt'] as String : '') ??
-            DateTime.fromMillisecondsSinceEpoch(0),
+        createdAt: DateTime.tryParse(json['createdAt'] is String ? json['createdAt'] as String : '') ?? DateTime.fromMillisecondsSinceEpoch(0),
         dir: dir,
       );
     } catch (_) {
@@ -254,13 +239,7 @@ class ProjectStore {
     final id = await _freeId(name);
     final dir = p.join(rootDir, id);
     await Directory(p.join(dir, PathGuard.reservedDir)).create(recursive: true);
-    final project = Project(
-      id: id,
-      name: name,
-      template: template,
-      createdAt: DateTime.now(),
-      dir: dir,
-    );
+    final project = Project(id: id, name: name, template: template, createdAt: DateTime.now(), dir: dir);
     await _writeMeta(project);
     for (final entry in templateFiles(template, name).entries) {
       final file = File(p.join(dir, entry.key));
@@ -299,10 +278,7 @@ class ProjectStore {
   }
 
   Future<String> _freeId(String name) async {
-    var slug = name
-        .toLowerCase()
-        .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
-        .replaceAll(RegExp(r'^-+|-+$'), '');
+    var slug = name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-').replaceAll(RegExp(r'^-+|-+$'), '');
     if (slug.isEmpty) slug = 'project';
     if (slug.length > 24) slug = slug.substring(0, 24);
     var candidate = slug;
@@ -316,11 +292,7 @@ class ProjectStore {
 }
 
 /// 列出项目里的文件（相对路径，目录以 `/` 结尾），跳过内部目录。
-Future<List<String>> listProjectFiles(
-  PathGuard guard, {
-  String sub = '',
-  int limit = 500,
-}) async {
+Future<List<String>> listProjectFiles(PathGuard guard, {String sub = '', int limit = 500}) async {
   final start = Directory(guard.resolve(sub));
   if (!await start.exists()) {
     throw PathGuardException('目录不存在：${sub.isEmpty ? '.' : sub}');

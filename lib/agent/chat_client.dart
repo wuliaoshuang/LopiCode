@@ -39,23 +39,14 @@ class ChatApiException implements Exception {
 }
 
 abstract class ChatClient {
-  Stream<ChatDelta> streamChat({
-    required List<Map<String, dynamic>> messages,
-    List<Map<String, dynamic>> tools = const [],
-  });
+  Stream<ChatDelta> streamChat({required List<Map<String, dynamic>> messages, List<Map<String, dynamic>> tools = const []});
 }
 
 /// 任意 OpenAI 兼容的 Chat Completions 接口。
 class OpenAiChatClient implements ChatClient {
-  OpenAiChatClient({
-    required String baseUrl,
-    required this.apiKey,
-    required this.model,
-    this.reasoningEffort,
-    this.maxTokens,
-    http.Client? httpClient,
-  }) : baseUrl = normalizeBaseUrl(baseUrl),
-       _http = httpClient ?? http.Client();
+  OpenAiChatClient({required String baseUrl, required this.apiKey, required this.model, this.reasoningEffort, this.maxTokens, http.Client? httpClient})
+    : baseUrl = normalizeBaseUrl(baseUrl),
+      _http = httpClient ?? http.Client();
 
   final String baseUrl;
   final String apiKey;
@@ -83,10 +74,7 @@ class OpenAiChatClient implements ChatClient {
   }
 
   @override
-  Stream<ChatDelta> streamChat({
-    required List<Map<String, dynamic>> messages,
-    List<Map<String, dynamic>> tools = const [],
-  }) async* {
+  Stream<ChatDelta> streamChat({required List<Map<String, dynamic>> messages, List<Map<String, dynamic>> tools = const []}) async* {
     if (baseUrl.isEmpty || model.trim().isEmpty) {
       throw ChatApiException('还没配置模型：请到“设置 → 模型与渠道”添加渠道和模型');
     }
@@ -166,12 +154,14 @@ class OpenAiChatClient implements ChatClient {
             final c = rawCalls[i];
             if (c is! Map) continue;
             final fn = c['function'];
-            calls.add(ToolCallDelta(
-              index: c['index'] is int ? c['index'] as int : i,
-              id: c['id'] is String ? c['id'] as String : null,
-              name: fn is Map && fn['name'] is String ? fn['name'] as String : null,
-              arguments: fn is Map && fn['arguments'] is String ? fn['arguments'] as String : null,
-            ));
+            calls.add(
+              ToolCallDelta(
+                index: c['index'] is int ? c['index'] as int : i,
+                id: c['id'] is String ? c['id'] as String : null,
+                name: fn is Map && fn['name'] is String ? fn['name'] as String : null,
+                arguments: fn is Map && fn['arguments'] is String ? fn['arguments'] as String : null,
+              ),
+            );
           }
         }
       }
@@ -219,10 +209,7 @@ Stream<List<int>> guardChatStream(Stream<List<int>> bytes, String host, {Duratio
           sink.close();
         },
       )
-      .handleError(
-        (Object e) => throw ChatApiException('和模型接口（$host）的连接中断了：${shortError(e)}'),
-        test: (e) => e is! ChatApiException,
-      );
+      .handleError((Object e) => throw ChatApiException('和模型接口（$host）的连接中断了：${shortError(e)}'), test: (e) => e is! ChatApiException);
 }
 
 String shortError(Object e) {

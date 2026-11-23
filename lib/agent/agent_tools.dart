@@ -141,8 +141,7 @@ class AgentToolbox {
     'lowcode_update_page': ToolKind.write,
   };
 
-  static Map<String, dynamic> _fn(String name, String description, Map<String, dynamic> props, [List<String> required = const []]) =>
-      toolSpec(name, description, props, required);
+  static Map<String, dynamic> _fn(String name, String description, Map<String, dynamic> props, [List<String> required = const []]) => toolSpec(name, description, props, required);
 
   ExtraTool? _extra(String name) => extras.where((e) => e.name == name).firstOrNull;
 
@@ -174,23 +173,48 @@ class AgentToolbox {
     _fn('list_files', '列出项目里的文件和目录（相对路径，目录以 / 结尾）。', {
       'path': {'type': 'string', 'description': '要列出的子目录，省略表示项目根目录'},
     }),
-    _fn('read_file', '读取项目里的一个文本文件。', {
-      'path': {'type': 'string', 'description': '项目内的相对路径'},
-    }, ['path']),
-    _fn('write_file', '创建或整体覆盖项目里的一个文本文件，会自动创建上级目录。', {
-      'path': {'type': 'string', 'description': '项目内的相对路径'},
-      'content': {'type': 'string', 'description': '文件的完整内容'},
-    }, ['path', 'content']),
-    _fn('delete_file', '删除项目里的一个文件或目录。需要用户确认。', {
-      'path': {'type': 'string', 'description': '项目内的相对路径'},
-    }, ['path']),
-    _fn('run_command', '在项目目录里用 shell 执行一条命令并返回输出。需要用户确认。', {
-      'command': {'type': 'string', 'description': '要执行的命令'},
-    }, ['command']),
+    _fn(
+      'read_file',
+      '读取项目里的一个文本文件。',
+      {
+        'path': {'type': 'string', 'description': '项目内的相对路径'},
+      },
+      ['path'],
+    ),
+    _fn(
+      'write_file',
+      '创建或整体覆盖项目里的一个文本文件，会自动创建上级目录。',
+      {
+        'path': {'type': 'string', 'description': '项目内的相对路径'},
+        'content': {'type': 'string', 'description': '文件的完整内容'},
+      },
+      ['path', 'content'],
+    ),
+    _fn(
+      'delete_file',
+      '删除项目里的一个文件或目录。需要用户确认。',
+      {
+        'path': {'type': 'string', 'description': '项目内的相对路径'},
+      },
+      ['path'],
+    ),
+    _fn(
+      'run_command',
+      '在项目目录里用 shell 执行一条命令并返回输出。需要用户确认。',
+      {
+        'command': {'type': 'string', 'description': '要执行的命令'},
+      },
+      ['command'],
+    ),
     _fn('lowcode_get_page', '读取低代码页面（$kLowcodePageFile）的 JSON。', {}),
-    _fn('lowcode_update_page', '用新的 JSON 整体替换低代码页面，并重新导出 index.html 和 style.css。', {
-      'page': {'type': 'object', 'description': '完整的页面对象：{title, root}，root.type 必须是 page'},
-    }, ['page']),
+    _fn(
+      'lowcode_update_page',
+      '用新的 JSON 整体替换低代码页面，并重新导出 index.html 和 style.css。',
+      {
+        'page': {'type': 'object', 'description': '完整的页面对象：{title, root}，root.type 必须是 page'},
+      },
+      ['page'],
+    ),
   ];
 
   Future<ToolOutcome> execute(String name, Map<String, dynamic> args) async {
@@ -315,11 +339,7 @@ class AgentToolbox {
       output = '…（前面省略 ${output.length - maxOutputChars} 字符）\n${output.substring(output.length - maxOutputChars)}';
     }
     final status = result.timedOut ? '超过 ${timeout.inSeconds} 秒，已强制结束' : '退出码 ${result.exitCode}';
-    return ToolOutcome(
-      '$status\n${output.isEmpty ? '（没有输出）' : output}',
-      ok: !result.timedOut && result.exitCode == 0,
-      changedFiles: true,
-    );
+    return ToolOutcome('$status\n${output.isEmpty ? '（没有输出）' : output}', ok: !result.timedOut && result.exitCode == 0, changedFiles: true);
   }
 
   Future<ToolOutcome> _updatePage(Object? page) async {

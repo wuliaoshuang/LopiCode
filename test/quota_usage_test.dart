@@ -53,8 +53,7 @@ class FakeBalance {
   });
 }
 
-TokenUsage u(int miss, int hit, int out, {int? think, int write = 0}) =>
-    TokenUsage(uncached: miss, cacheRead: hit, cacheWrite: write, output: out, reasoning: think, hasCache: true);
+TokenUsage u(int miss, int hit, int out, {int? think, int write = 0}) => TokenUsage(uncached: miss, cacheRead: hit, cacheWrite: write, output: out, reasoning: think, hasCache: true);
 
 void main() {
   group('判定是不是 DeepSeek 官方', () {
@@ -121,8 +120,20 @@ void main() {
     setUp(() async {
       fake = FakeBalance();
       env = await TestEnv.create(quotaHttp: fake.client);
-      ds = await env.services.models.upsert(name: 'DeepSeek', protocol: ChatProtocol.openaiChat, baseUrl: 'https://api.deepseek.com', apiKey: 'sk-ds', models: [ModelSpec(id: 'deepseek-chat')]);
-      other = await env.services.models.upsert(name: '中转', protocol: ChatProtocol.openaiChat, baseUrl: 'https://relay.example.cn/v1', apiKey: 'sk-x', models: [ModelSpec(id: 'm')]);
+      ds = await env.services.models.upsert(
+        name: 'DeepSeek',
+        protocol: ChatProtocol.openaiChat,
+        baseUrl: 'https://api.deepseek.com',
+        apiKey: 'sk-ds',
+        models: [ModelSpec(id: 'deepseek-chat')],
+      );
+      other = await env.services.models.upsert(
+        name: '中转',
+        protocol: ChatProtocol.openaiChat,
+        baseUrl: 'https://relay.example.cn/v1',
+        apiKey: 'sk-x',
+        models: [ModelSpec(id: 'm')],
+      );
       clock = DateTime(2026, 11, 23, 18);
       quota = QuotaStore(env.services.settings, env.services.models, httpClient: fake.client, now: () => clock);
     });
@@ -293,7 +304,13 @@ void main() {
       turn = (_, _) => reply('好的。');
       fake = FakeBalance();
       env = await TestEnv.create(chatClient: () => RoutingClient((m, t) => turn(m, t), log), quotaHttp: fake.client);
-      ds = await env.services.models.upsert(name: 'DeepSeek', protocol: ChatProtocol.openaiChat, baseUrl: 'https://api.deepseek.com', apiKey: 'sk-ds', models: [ModelSpec(id: 'deepseek-chat')]);
+      ds = await env.services.models.upsert(
+        name: 'DeepSeek',
+        protocol: ChatProtocol.openaiChat,
+        baseUrl: 'https://api.deepseek.com',
+        apiKey: 'sk-ds',
+        models: [ModelSpec(id: 'deepseek-chat')],
+      );
       project = await env.services.projects.create('测试工作区', ProjectTemplate.web);
       session = ProjectSession(env.services, project, headless: true);
       session.commandRunnerFactory = RecordingRunner.new;
@@ -392,7 +409,13 @@ void main() {
 
     test('别的渠道不受影响', () async {
       await reach();
-      final other = await env.services.models.upsert(name: '中转', protocol: ChatProtocol.openaiChat, baseUrl: 'https://relay.example.cn/v1', apiKey: 'sk-x', models: [ModelSpec(id: 'm')]);
+      final other = await env.services.models.upsert(
+        name: '中转',
+        protocol: ChatProtocol.openaiChat,
+        baseUrl: 'https://relay.example.cn/v1',
+        apiKey: 'sk-x',
+        models: [ModelSpec(id: 'm')],
+      );
       await session.setModel(ModelSelection(other.id, 'm'));
       await session.sendToAgent('你好');
       expect(log, hasLength(1));
@@ -468,10 +491,7 @@ void main() {
     });
 
     test('Anthropic：input_tokens 不含缓存；读取、写入分开；输出取 message_delta 的累计值', () {
-      final t = usageFromAnthropic(
-        {'input_tokens': 100, 'cache_read_input_tokens': 700, 'cache_creation_input_tokens': 200, 'output_tokens': 1},
-        {'output_tokens': 90},
-      )!;
+      final t = usageFromAnthropic({'input_tokens': 100, 'cache_read_input_tokens': 700, 'cache_creation_input_tokens': 200, 'output_tokens': 1}, {'output_tokens': 90})!;
       expect((t.uncached, t.cacheRead, t.cacheWrite, t.output), (100, 700, 200, 90));
       expect(t.input, 1000);
       expect(t.total, 1090);
@@ -525,12 +545,7 @@ void main() {
     });
 
     test('脚注从全到简：依次省 tokens、步数、花费，用时永远在', () {
-      final turn = TurnUsage(
-        ms: 47000,
-        steps: [
-          for (var i = 0; i < 12; i++) RequestStep(RequestUsage(usage: u(1000, 2000, 0), ms: 100, cost: 0.0025)),
-        ],
-      );
+      final turn = TurnUsage(ms: 47000, steps: [for (var i = 0; i < 12; i++) RequestStep(RequestUsage(usage: u(1000, 2000, 0), ms: 100, cost: 0.0025))]);
       expect(footnoteVariants(turn), ['47 秒 · 12 步 · 约 ¥0.03 · 36K tokens', '47 秒 · 12 步 · 约 ¥0.03', '47 秒 · 约 ¥0.03', '47 秒']);
       // 没单价：没有花费那一段
       final plain = TurnUsage(ms: 3000, steps: [RequestStep(RequestUsage(usage: u(10, 0, 5), ms: 100))]);
@@ -548,7 +563,9 @@ void main() {
           ToolStep('c1', 'read_file', ms: 12, ok: true),
           RequestStep(RequestUsage(ms: 400)),
         ],
-        children: [ChildUsage('前端', TurnUsage(ms: 100, steps: [RequestStep(RequestUsage(usage: u(1, 0, 1), ms: 50))]))],
+        children: [
+          ChildUsage('前端', TurnUsage(ms: 100, steps: [RequestStep(RequestUsage(usage: u(1, 0, 1), ms: 50))])),
+        ],
       );
       final back = TurnUsage.fromJson(jsonDecode(jsonEncode(turn.toJson())))!;
       expect(back.ms, 5000);
@@ -577,7 +594,13 @@ void main() {
     setUp(() async {
       log = [];
       env = await TestEnv.create(chatClient: () => RoutingClient((m, t) => turn(m, t), log));
-      await env.services.models.upsert(name: '中转', protocol: ChatProtocol.openaiChat, baseUrl: 'https://relay.example.cn/v1', apiKey: 'k', models: [ModelSpec(id: 'm')]);
+      await env.services.models.upsert(
+        name: '中转',
+        protocol: ChatProtocol.openaiChat,
+        baseUrl: 'https://relay.example.cn/v1',
+        apiKey: 'k',
+        models: [ModelSpec(id: 'm')],
+      );
       project = await env.services.projects.create('测试工作区', ProjectTemplate.web);
       session = ProjectSession(env.services, project, headless: true);
       session.commandRunnerFactory = RecordingRunner.new;
@@ -638,7 +661,10 @@ void main() {
         protocol: ChatProtocol.openaiChat,
         baseUrl: 'https://relay.example.cn/v1',
         apiKey: 'k',
-        models: [ModelSpec(id: 'priced', priceHit: 0.5, priceMiss: 2, priceOutput: 8), ModelSpec(id: 'free')],
+        models: [
+          ModelSpec(id: 'priced', priceHit: 0.5, priceMiss: 2, priceOutput: 8),
+          ModelSpec(id: 'free'),
+        ],
       );
       turn = (m, t) => withUsage(reply('好'), u(100000, 0, 10000));
       await session.setModel(ModelSelection(ch.id, 'free'));
@@ -720,7 +746,18 @@ void main() {
       ]);
       await server!.start();
       final client = OpenAiChatClient(baseUrl: server!.baseUrl, apiKey: 'sk-test-key', model: 'fake-model');
-      final deltas = await client.streamChat(messages: [{'role': 'assistant', 'content': '上一轮', '_usage': {'ms': 1}}, {'role': 'user', 'content': '嗨'}]).toList();
+      final deltas = await client
+          .streamChat(
+            messages: [
+              {
+                'role': 'assistant',
+                'content': '上一轮',
+                '_usage': {'ms': 1},
+              },
+              {'role': 'user', 'content': '嗨'},
+            ],
+          )
+          .toList();
       expect(server!.requests.single['stream_options'], {'include_usage': true});
       expect(jsonEncode(server!.requests.single['messages']), isNot(contains('_usage')), reason: '内部字段不上线');
       final usage = deltas.map((d) => d.usage).whereType<TokenUsage>().last;
@@ -731,15 +768,36 @@ void main() {
     test('DeepSeek 的形状：用量附在最后一个内容块上（choices 不为空）也认', () async {
       api = FakeApi()
         ..sse['/v1/chat/completions'] = sseOf([
-          {'choices': [{'index': 0, 'delta': {'content': '你好'}, 'finish_reason': null}], 'usage': null},
           {
-            'choices': [{'index': 0, 'delta': {'content': ''}, 'finish_reason': 'stop'}],
+            'choices': [
+              {
+                'index': 0,
+                'delta': {'content': '你好'},
+                'finish_reason': null,
+              },
+            ],
+            'usage': null,
+          },
+          {
+            'choices': [
+              {
+                'index': 0,
+                'delta': {'content': ''},
+                'finish_reason': 'stop',
+              },
+            ],
             'usage': {'prompt_tokens': 10, 'completion_tokens': 2, 'total_tokens': 12, 'prompt_cache_hit_tokens': 0, 'prompt_cache_miss_tokens': 10},
           },
         ]);
       await api!.start();
       final client = OpenAiChatClient(baseUrl: api!.base, apiKey: 'k', model: 'deepseek-chat');
-      final deltas = await client.streamChat(messages: [{'role': 'user', 'content': '嗨'}]).toList();
+      final deltas = await client
+          .streamChat(
+            messages: [
+              {'role': 'user', 'content': '嗨'},
+            ],
+          )
+          .toList();
       final usages = deltas.map((d) => d.usage).whereType<TokenUsage>().toList();
       expect(usages, hasLength(1));
       expect((usages.single.uncached, usages.single.cacheRead, usages.single.output), (10, 0, 2));
@@ -750,13 +808,25 @@ void main() {
       server = FakeModelServer([ScriptedReply(text: '一'), ScriptedReply(text: '二')], rejectStreamOptions: true);
       await server!.start();
       final client = OpenAiChatClient(baseUrl: server!.baseUrl, apiKey: 'sk-test-key', model: 'fake-model');
-      final first = await client.streamChat(messages: [{'role': 'user', 'content': '嗨'}]).toList();
+      final first = await client
+          .streamChat(
+            messages: [
+              {'role': 'user', 'content': '嗨'},
+            ],
+          )
+          .toList();
       expect(first.map((d) => d.content ?? '').join(), '一');
       expect(first.map((d) => d.usage).whereType<TokenUsage>(), isEmpty);
       expect(server!.requests, hasLength(2));
       expect(server!.requests[0].containsKey('stream_options'), isTrue);
       expect(server!.requests[1].containsKey('stream_options'), isFalse);
-      final second = await client.streamChat(messages: [{'role': 'user', 'content': '嗨'}]).toList();
+      final second = await client
+          .streamChat(
+            messages: [
+              {'role': 'user', 'content': '嗨'},
+            ],
+          )
+          .toList();
       expect(second.map((d) => d.content ?? '').join(), '二');
       expect(server!.requests, hasLength(3));
       expect(server!.requests[2].containsKey('stream_options'), isFalse);
@@ -765,16 +835,39 @@ void main() {
     test('Anthropic：message_start 给输入、message_delta 给输出', () async {
       api = FakeApi()
         ..sse['/v1/messages'] = sseOf([
-          {'type': 'message_start', 'message': {'usage': {'input_tokens': 25, 'cache_read_input_tokens': 300, 'cache_creation_input_tokens': 75, 'output_tokens': 1}}},
-          {'type': 'content_block_start', 'index': 0, 'content_block': {'type': 'text', 'text': ''}},
-          {'type': 'content_block_delta', 'index': 0, 'delta': {'type': 'text_delta', 'text': '好'}},
+          {
+            'type': 'message_start',
+            'message': {
+              'usage': {'input_tokens': 25, 'cache_read_input_tokens': 300, 'cache_creation_input_tokens': 75, 'output_tokens': 1},
+            },
+          },
+          {
+            'type': 'content_block_start',
+            'index': 0,
+            'content_block': {'type': 'text', 'text': ''},
+          },
+          {
+            'type': 'content_block_delta',
+            'index': 0,
+            'delta': {'type': 'text_delta', 'text': '好'},
+          },
           {'type': 'content_block_stop', 'index': 0},
-          {'type': 'message_delta', 'delta': {'stop_reason': 'end_turn'}, 'usage': {'output_tokens': 42}},
+          {
+            'type': 'message_delta',
+            'delta': {'stop_reason': 'end_turn'},
+            'usage': {'output_tokens': 42},
+          },
           {'type': 'message_stop'},
         ]);
       await api!.start();
       final client = AnthropicChatClient(baseUrl: api!.base, apiKey: 'ak', model: 'claude-x', maxTokens: 1000);
-      final deltas = await client.streamChat(messages: [{'role': 'user', 'content': '嗨'}]).toList();
+      final deltas = await client
+          .streamChat(
+            messages: [
+              {'role': 'user', 'content': '嗨'},
+            ],
+          )
+          .toList();
       final usage = deltas.map((d) => d.usage).whereType<TokenUsage>().single;
       expect((usage.uncached, usage.cacheRead, usage.cacheWrite, usage.output), (25, 300, 75, 42));
     });
@@ -786,13 +879,25 @@ void main() {
           {
             'type': 'response.completed',
             'response': {
-              'usage': {'input_tokens': 400, 'input_tokens_details': {'cached_tokens': 100}, 'output_tokens': 30, 'output_tokens_details': {'reasoning_tokens': 12}, 'total_tokens': 430},
+              'usage': {
+                'input_tokens': 400,
+                'input_tokens_details': {'cached_tokens': 100},
+                'output_tokens': 30,
+                'output_tokens_details': {'reasoning_tokens': 12},
+                'total_tokens': 430,
+              },
             },
           },
         ]);
       await api!.start();
       final client = OpenAiResponsesClient(baseUrl: api!.base, apiKey: 'sk', model: 'gpt-x');
-      final deltas = await client.streamChat(messages: [{'role': 'user', 'content': '嗨'}]).toList();
+      final deltas = await client
+          .streamChat(
+            messages: [
+              {'role': 'user', 'content': '嗨'},
+            ],
+          )
+          .toList();
       final usage = deltas.map((d) => d.usage).whereType<TokenUsage>().single;
       expect((usage.uncached, usage.cacheRead, usage.output, usage.reasoning), (300, 100, 30, 12));
     });

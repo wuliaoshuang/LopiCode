@@ -195,13 +195,7 @@ void main() {
             return const DiagRun(exitCode: 0, stdout: 'proot 5.1.107', stderr: '', elapsed: Duration(milliseconds: 5));
           }
           if (hangs(environment ?? const {}, args)) {
-            return DiagRun(
-              exitCode: null,
-              stdout: '',
-              stderr: environment!.containsKey('PROOT_VERBOSE') ? 'proot info: loading...' : '',
-              elapsed: timeout,
-              timedOut: true,
-            );
+            return DiagRun(exitCode: null, stdout: '', stderr: environment!.containsKey('PROOT_VERBOSE') ? 'proot info: loading...' : '', elapsed: timeout, timedOut: true);
           }
           return DiagRun(exitCode: 0, stdout: args.contains('/bin/ls') ? 'index.html\n' : 'ok\nuid=0(root)\n', stderr: '', elapsed: const Duration(milliseconds: 40));
         },
@@ -294,8 +288,7 @@ void main() {
         commandTimeout: const Duration(milliseconds: 300),
         ptyTimeout: const Duration(milliseconds: 600),
         localShell: '/bin/sh',
-        runProcess: (exe, args, {environment, required timeout}) async =>
-            const DiagRun(exitCode: 0, stdout: 'ok', stderr: '', elapsed: Duration(milliseconds: 1)),
+        runProcess: (exe, args, {environment, required timeout}) async => const DiagRun(exitCode: 0, stdout: 'ok', stderr: '', elapsed: Duration(milliseconds: 1)),
         ptySpawner: (exe, {required workingDirectory, required environment, required rows, required columns}) => EchoPty(echo: false),
         ptyArgsSpawner: (exe, args, {required workingDirectory, required environment, required rows, required columns}) => FakePty()..exit(1),
       );

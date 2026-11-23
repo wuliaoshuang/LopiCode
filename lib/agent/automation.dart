@@ -23,8 +23,7 @@ class AutomationException implements Exception {
 }
 
 class TimeRule {
-  TimeRule({required this.kind, this.hour = 9, this.minute = 0, List<int>? weekdays, this.date, this.everyMinutes = 60, required this.tzOffsetMinutes})
-    : weekdays = weekdays ?? [];
+  TimeRule({required this.kind, this.hour = 9, this.minute = 0, List<int>? weekdays, this.date, this.everyMinutes = 60, required this.tzOffsetMinutes}) : weekdays = weekdays ?? [];
   final RuleKind kind;
   final int hour;
   final int minute;
@@ -115,15 +114,7 @@ class TimeRule {
     }
   }
 
-  Map<String, dynamic> toJson() => {
-    'kind': kind.id,
-    'hour': hour,
-    'minute': minute,
-    'weekdays': weekdays,
-    'date': date,
-    'every': everyMinutes,
-    'tz': tzOffsetMinutes,
-  };
+  Map<String, dynamic> toJson() => {'kind': kind.id, 'hour': hour, 'minute': minute, 'weekdays': weekdays, 'date': date, 'every': everyMinutes, 'tz': tzOffsetMinutes};
 
   static TimeRule? fromJson(Object? j, {int defaultTz = 480}) {
     if (j is! Map) return null;

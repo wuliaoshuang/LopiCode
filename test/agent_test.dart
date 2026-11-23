@@ -76,7 +76,11 @@ void main() {
   test('正常流程：流式文字 + 工具调用 + 结果回填', () async {
     final runner = await runnerFor([
       ScriptedReply(text: '我先看看。', calls: [ScriptedCall('list_files', '{}'), ScriptedCall('read_file', '{"path":"index.html"}')]),
-      ScriptedReply(calls: [ScriptedCall('write_file', jsonEncode({'path': 'css/a.css', 'content': 'body{color:red}'}))]),
+      ScriptedReply(
+        calls: [
+          ScriptedCall('write_file', jsonEncode({'path': 'css/a.css', 'content': 'body{color:red}'})),
+        ],
+      ),
       ScriptedReply(text: '改好了。'),
     ]);
     final events = await runner.send('帮我加个样式').toList();
@@ -94,8 +98,10 @@ void main() {
     final first = server!.requests.first;
     expect(first['stream'], true);
     expect(first['model'], 'fake-model');
-    expect((first['tools'] as List).map((t) => (t as Map)['function']['name']),
-        containsAll(['list_files', 'read_file', 'write_file', 'delete_file', 'run_command', 'lowcode_get_page', 'lowcode_update_page']));
+    expect(
+      (first['tools'] as List).map((t) => (t as Map)['function']['name']),
+      containsAll(['list_files', 'read_file', 'write_file', 'delete_file', 'run_command', 'lowcode_get_page', 'lowcode_update_page']),
+    );
     expect(server!.authHeaders.first, 'Bearer sk-test-key');
 
     // 第二次请求带上了 assistant.tool_calls 和对应的 tool 消息
@@ -112,15 +118,17 @@ void main() {
 
   test('强制场景：模型想读写项目目录以外的文件 → 被代码拦下', () async {
     final runner = await runnerFor([
-      ScriptedReply(calls: [
-        ScriptedCall('read_file', '{"path":"../outside.txt"}'),
-        ScriptedCall('read_file', jsonEncode({'path': p.join(tmp.path, 'outside.txt')})),
-        ScriptedCall('write_file', '{"path":"../../evil.sh","content":"rm -rf /"}'),
-        ScriptedCall('write_file', '{"path":"/tmp/lopi_evil.txt","content":"x"}'),
-        ScriptedCall('delete_file', '{"path":"../outside.txt"}'),
-        ScriptedCall('list_files', '{"path":".."}'),
-        ScriptedCall('read_file', '{"path":".lopicode/chat.json"}'),
-      ]),
+      ScriptedReply(
+        calls: [
+          ScriptedCall('read_file', '{"path":"../outside.txt"}'),
+          ScriptedCall('read_file', jsonEncode({'path': p.join(tmp.path, 'outside.txt')})),
+          ScriptedCall('write_file', '{"path":"../../evil.sh","content":"rm -rf /"}'),
+          ScriptedCall('write_file', '{"path":"/tmp/lopi_evil.txt","content":"x"}'),
+          ScriptedCall('delete_file', '{"path":"../outside.txt"}'),
+          ScriptedCall('list_files', '{"path":".."}'),
+          ScriptedCall('read_file', '{"path":".lopicode/chat.json"}'),
+        ],
+      ),
       ScriptedReply(text: '好吧。'),
     ]);
     approveAnswer = true; // 即使用户会点允许，越界删除也不该走到确认那一步
@@ -141,11 +149,7 @@ void main() {
   });
 
   test('强制场景：模型停不下来 → 到轮次上限由代码停下', () async {
-    final runner = await runnerFor(
-      [],
-      fallback: ScriptedReply(calls: [ScriptedCall('list_files', '{}')]),
-      maxRounds: 4,
-    );
+    final runner = await runnerFor([], fallback: ScriptedReply(calls: [ScriptedCall('list_files', '{}')]), maxRounds: 4);
     final events = await runner.send('一直干').toList();
     expect(server!.requests.length, 4, reason: '最多调 4 次模型');
     expect(finished(events).length, 4);
@@ -162,10 +166,7 @@ void main() {
 
   test('强制场景：命令和删除没有用户同意就不执行', () async {
     final runner = await runnerFor([
-      ScriptedReply(calls: [
-        ScriptedCall('run_command', '{"command":"rm -rf ."}'),
-        ScriptedCall('delete_file', '{"path":"index.html"}'),
-      ]),
+      ScriptedReply(calls: [ScriptedCall('run_command', '{"command":"rm -rf ."}'), ScriptedCall('delete_file', '{"path":"index.html"}')]),
       ScriptedReply(text: '明白，不执行了。'),
     ]);
     approveAnswer = false;
@@ -206,13 +207,15 @@ void main() {
 
   test('坏参数、未知工具、缺参数都变成错误结果，不会崩', () async {
     final runner = await runnerFor([
-      ScriptedReply(calls: [
-        ScriptedCall('read_file', '{"path": "index.h'), // 截断的 JSON
-        ScriptedCall('format_disk', '{}'),
-        ScriptedCall('write_file', '{"path":"a.txt"}'), // 缺 content
-        ScriptedCall('read_file', '{"path":"nope.txt"}'),
-        ScriptedCall('read_file', '[1,2]'),
-      ]),
+      ScriptedReply(
+        calls: [
+          ScriptedCall('read_file', '{"path": "index.h'), // 截断的 JSON
+          ScriptedCall('format_disk', '{}'),
+          ScriptedCall('write_file', '{"path":"a.txt"}'), // 缺 content
+          ScriptedCall('read_file', '{"path":"nope.txt"}'),
+          ScriptedCall('read_file', '[1,2]'),
+        ],
+      ),
       ScriptedReply(text: '抱歉。'),
     ]);
     final events = await runner.send('x').toList();
@@ -230,10 +233,20 @@ void main() {
     final next = LcDocument.starter('新标题')..root.children.first.props['text'] = 'Agent 改的标题';
     final runner = await runnerFor([
       ScriptedReply(calls: [ScriptedCall('lowcode_get_page', '{}')]),
-      ScriptedReply(calls: [
-        ScriptedCall('lowcode_update_page', jsonEncode({'page': next.toJson()})),
-        ScriptedCall('lowcode_update_page', jsonEncode({'page': {'title': 'x', 'root': {'type': 'text'}}})),
-      ]),
+      ScriptedReply(
+        calls: [
+          ScriptedCall('lowcode_update_page', jsonEncode({'page': next.toJson()})),
+          ScriptedCall(
+            'lowcode_update_page',
+            jsonEncode({
+              'page': {
+                'title': 'x',
+                'root': {'type': 'text'},
+              },
+            }),
+          ),
+        ],
+      ),
       ScriptedReply(text: '好了'),
     ]);
     final done = finished(await runner.send('改标题').toList());
@@ -247,9 +260,7 @@ void main() {
   });
 
   test('接口报错：给出人话，不泄露 Key，用户消息撤回', () async {
-    final runner = await runnerFor([
-      ScriptedReply(status: 401, errorBody: '{"error":{"message":"Incorrect API key provided"}}'),
-    ]);
+    final runner = await runnerFor([ScriptedReply(status: 401, errorBody: '{"error":{"message":"Incorrect API key provided"}}')]);
     final events = await runner.send('hi').toList();
     final err = events.whereType<AgentError>().single;
     expect(err.text, contains('401'));
@@ -270,7 +281,10 @@ void main() {
   });
 
   test('没配置模型时直接提示去设置', () async {
-    final runner = AgentRunner(client: OpenAiChatClient(baseUrl: '', apiKey: '', model: ''), toolbox: toolbox());
+    final runner = AgentRunner(
+      client: OpenAiChatClient(baseUrl: '', apiKey: '', model: ''),
+      toolbox: toolbox(),
+    );
     final events = await runner.send('hi').toList();
     expect(events.whereType<AgentError>().single.text, contains('设置'));
   });

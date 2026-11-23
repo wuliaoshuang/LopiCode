@@ -77,11 +77,7 @@ class _TerminalTabState extends State<TerminalTab> {
     final navigator = Navigator.of(context);
     final config = await navigator.push<SshConfig>(MaterialPageRoute(builder: (_) => const SshConnectScreen()));
     if (config == null || !mounted) return;
-    s.addSshTerminal(
-      config,
-      onUnknownHost: (config, type, fingerprint) async =>
-          mounted ? confirmHostKey(navigator.context, config, type, fingerprint) : false,
-    );
+    s.addSshTerminal(config, onUnknownHost: (config, type, fingerprint) async => mounted ? confirmHostKey(navigator.context, config, type, fingerprint) : false);
   }
 
   void _newSession() {
@@ -211,7 +207,11 @@ class _TerminalTabState extends State<TerminalTab> {
                   },
                 ),
               ),
-              IconButton(tooltip: '新建会话', icon: Icon(Icons.add, color: c.accent), onPressed: _newSession),
+              IconButton(
+                tooltip: '新建会话',
+                icon: Icon(Icons.add, color: c.accent),
+                onPressed: _newSession,
+              ),
               const SizedBox(width: Space.x1),
             ],
           ),
@@ -233,7 +233,10 @@ class _TerminalTabState extends State<TerminalTab> {
         if (stalledBackend != null) _StalledBar(backend: stalledBackend),
         Container(
           height: 44,
-          decoration: BoxDecoration(color: c.surface, border: Border(top: BorderSide(color: c.border))),
+          decoration: BoxDecoration(
+            color: c.surface,
+            border: Border(top: BorderSide(color: c.border)),
+          ),
           child: ListView(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: Space.x2, vertical: 6),
@@ -286,7 +289,10 @@ class _Key extends StatelessWidget {
             constraints: const BoxConstraints(minWidth: 36),
             alignment: Alignment.center,
             padding: const EdgeInsets.symmetric(horizontal: Space.x2),
-            child: Text(label, style: TextStyle(fontFamily: kMonoFont, fontFamilyFallback: kMonoFallback, fontSize: 13, color: active ? c.accent : c.text)),
+            child: Text(
+              label,
+              style: TextStyle(fontFamily: kMonoFont, fontFamilyFallback: kMonoFallback, fontSize: 13, color: active ? c.accent : c.text),
+            ),
           ),
         ),
       ),
@@ -308,7 +314,10 @@ class _StalledBar extends StatelessWidget {
       key: const Key('terminal-stalled'),
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(Space.x4, Space.x3, Space.x4, Space.x3),
-      decoration: BoxDecoration(color: c.warningSoft, border: Border(top: BorderSide(color: c.border))),
+      decoration: BoxDecoration(
+        color: c.warningSoft,
+        border: Border(top: BorderSide(color: c.border)),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -316,26 +325,14 @@ class _StalledBar extends StatelessWidget {
           const SizedBox(height: 2),
           Text('进去 ${backend.stallTimeout.inSeconds} 秒了一个字都没输出，多半卡在启动这一步。', style: t.bodySmall),
           const SizedBox(height: Space.x2),
-          FilledButton(
-            key: const Key('stalled-retry-compat'),
-            onPressed: backend.retryCompat,
-            child: const Text('改用兼容模式重试'),
-          ),
+          FilledButton(key: const Key('stalled-retry-compat'), onPressed: backend.retryCompat, child: const Text('改用兼容模式重试')),
           Row(
             children: [
               Expanded(
-                child: TextButton(
-                  key: const Key('stalled-use-local'),
-                  onPressed: backend.switchToLocal,
-                  child: const Text('先用本机 shell'),
-                ),
+                child: TextButton(key: const Key('stalled-use-local'), onPressed: backend.switchToLocal, child: const Text('先用本机 shell')),
               ),
               Expanded(
-                child: TextButton(
-                  key: const Key('stalled-diagnose'),
-                  onPressed: () => ShellScope.maybeOf(context)?.go(ShellDest.runtime),
-                  child: const Text('去做一键诊断'),
-                ),
+                child: TextButton(key: const Key('stalled-diagnose'), onPressed: () => ShellScope.maybeOf(context)?.go(ShellDest.runtime), child: const Text('去做一键诊断')),
               ),
             ],
           ),

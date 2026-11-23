@@ -119,7 +119,14 @@ void main() {
     }
 
     Future<void> show(WidgetTester tester, Widget home, {int rounds = 6, bool push = false}) async {
-      await tester.pumpWidget(appFor(env, push ? Launcher(key: UniqueKey(), page: home) : home, mode: mode, font: font));
+      await tester.pumpWidget(
+        appFor(
+          env,
+          push ? Launcher(key: UniqueKey(), page: home) : home,
+          mode: mode,
+          font: font,
+        ),
+      );
       await settle(tester, rounds: rounds);
     }
 
@@ -136,7 +143,11 @@ void main() {
       // 不是 DeepSeek 官方渠道：只有模型名和渠道名，没有进度条和百分比（运行环境那一块仍有自己的进度条）
       expect(find.descendant(of: overview, matching: find.textContaining('新对话用的模型 · 我的中转站')), findsOneWidget);
       expect(find.descendant(of: overview, matching: find.textContaining('%')), findsNothing);
-      expect(find.descendant(of: overview, matching: find.byKey(const Key('overview-bar'))), findsOneWidget, reason: '只剩运行环境那一根');
+      expect(
+        find.descendant(of: overview, matching: find.byKey(const Key('overview-bar'))),
+        findsOneWidget,
+        reason: '只剩运行环境那一根',
+      );
       expect(find.byKey(const Key('overview-set-quota')), findsNothing);
       expect(find.descendant(of: overview, matching: find.text('运行环境')), findsWidgets);
       expect(find.descendant(of: overview, matching: find.text('未安装')), findsOneWidget);
@@ -146,10 +157,23 @@ void main() {
         await tester.scrollUntilVisible(find.text(title), 120, scrollable: list);
         expect(find.text(title), findsOneWidget);
       }
-      for (final key in ['settings-channels', 'settings-personalize', 'settings-permission', 'settings-subagents', 'settings-automations', 'settings-search', 'settings-skills', 'settings-third-party']) {
+      for (final key in [
+        'settings-channels',
+        'settings-personalize',
+        'settings-permission',
+        'settings-subagents',
+        'settings-automations',
+        'settings-search',
+        'settings-skills',
+        'settings-third-party',
+      ]) {
         await tester.scrollUntilVisible(find.byKey(Key(key)), -120, scrollable: list);
         expect(find.byKey(Key(key)), findsOneWidget, reason: key);
-        expect(find.descendant(of: find.byKey(Key(key)), matching: find.byIcon(Icons.chevron_right)), findsOneWidget, reason: '$key 右边有箭头');
+        expect(
+          find.descendant(of: find.byKey(Key(key)), matching: find.byIcon(Icons.chevron_right)),
+          findsOneWidget,
+          reason: '$key 右边有箭头',
+        );
       }
       await tester.scrollUntilVisible(find.byKey(const Key('settings-permission')), -120, scrollable: list);
       await tester.drag(list, const Offset(0, 2000));

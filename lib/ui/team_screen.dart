@@ -70,9 +70,16 @@ class _TeamScreenState extends State<TeamScreen> {
       length: 3,
       child: Scaffold(
         backgroundColor: context.colors.canvas,
-      appBar: PageBar(background: context.colors.canvas, 
+        appBar: PageBar(
+          background: context.colors.canvas,
           title: const Text('智能体团队'),
-          bottom: const TabBar(tabs: [Tab(text: '成员'), Tab(text: '任务'), Tab(text: '消息')]),
+          bottom: const TabBar(
+            tabs: [
+              Tab(text: '成员'),
+              Tab(text: '任务'),
+              Tab(text: '消息'),
+            ],
+          ),
         ),
         body: board == null
             ? const Center(child: CircularProgressIndicator())
@@ -87,10 +94,7 @@ class _TeamScreenState extends State<TeamScreen> {
                           leading: Icon(m.name == TeamBoard.lead ? Icons.star_outline : Icons.smart_toy_outlined, color: c.accent),
                           title: Text(m.name),
                           subtitle: Text(
-                            [
-                              if (m.role.isNotEmpty) m.role,
-                              '负责 ${board.tasks.where((x) => x.owner == m.name && x.status != TaskStatus.done).length} 个未完成任务',
-                            ].join(' · '),
+                            [if (m.role.isNotEmpty) m.role, '负责 ${board.tasks.where((x) => x.owner == m.name && x.status != TaskStatus.done).length} 个未完成任务'].join(' · '),
                             style: t.bodySmall,
                           ),
                         ),
@@ -104,8 +108,7 @@ class _TeamScreenState extends State<TeamScreen> {
                   ListView(
                     padding: const EdgeInsets.only(bottom: Space.x8),
                     children: [
-                      for (final w in board.overlapWarnings())
-                        InfoBanner(w, tone: BannerTone.warning, margin: const EdgeInsets.fromLTRB(Space.x4, Space.x3, Space.x4, 0)),
+                      for (final w in board.overlapWarnings()) InfoBanner(w, tone: BannerTone.warning, margin: const EdgeInsets.fromLTRB(Space.x4, Space.x3, Space.x4, 0)),
                       if (board.tasks.isEmpty)
                         Padding(
                           padding: const EdgeInsets.fromLTRB(Space.x4, Space.x6, Space.x4, Space.x2),
@@ -140,7 +143,10 @@ class _TeamScreenState extends State<TeamScreen> {
                                 itemBuilder: (_) => [
                                   for (final s in TaskStatus.values)
                                     if (s != task.status) PopupMenuItem(value: s.id, child: Text('改为${s.label}')),
-                                  PopupMenuItem(value: 'delete', child: Text('删除', style: TextStyle(color: c.danger))),
+                                  PopupMenuItem(
+                                    value: 'delete',
+                                    child: Text('删除', style: TextStyle(color: c.danger)),
+                                  ),
                                 ],
                               ),
                             ),
@@ -225,11 +231,21 @@ class _TaskSheetState extends State<_TaskSheet> {
             children: [
               Text('新建任务', style: t.titleLarge),
               const SizedBox(height: Space.x4),
-              TextField(key: const Key('task-title'), controller: _title, decoration: const InputDecoration(labelText: '要做什么')),
+              TextField(
+                key: const Key('task-title'),
+                controller: _title,
+                decoration: const InputDecoration(labelText: '要做什么'),
+              ),
               const SizedBox(height: Space.x3),
-              TextField(controller: _owner, decoration: const InputDecoration(labelText: '负责人（可不填）', hintText: '成员的名字')),
+              TextField(
+                controller: _owner,
+                decoration: const InputDecoration(labelText: '负责人（可不填）', hintText: '成员的名字'),
+              ),
               const SizedBox(height: Space.x3),
-              TextField(controller: _deps, decoration: const InputDecoration(labelText: '依赖哪些任务（可不填）', hintText: '任务编号，如 t1、t2')),
+              TextField(
+                controller: _deps,
+                decoration: const InputDecoration(labelText: '依赖哪些任务（可不填）', hintText: '任务编号，如 t1、t2'),
+              ),
               const SizedBox(height: Space.x3),
               TextField(
                 key: const Key('task-scope'),

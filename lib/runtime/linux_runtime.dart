@@ -126,8 +126,7 @@ class LinuxRuntime extends ChangeNotifier {
   CancelToken? _cancel;
 
   bool get installed => phase == RuntimePhase.installed;
-  bool get busy =>
-      phase == RuntimePhase.downloading || phase == RuntimePhase.verifying || phase == RuntimePhase.extracting;
+  bool get busy => phase == RuntimePhase.downloading || phase == RuntimePhase.verifying || phase == RuntimePhase.extracting;
 
   // ── 下载源 ───────────────────────────────────────────
   MirrorOption get rootfsSource => mirrorById(rootfsSources, settings.getString(SettingKeys.runtimeRootfsSource));
@@ -156,9 +155,7 @@ class LinuxRuntime extends ChangeNotifier {
           ];
     prootBundled = missingLauncherFiles.isEmpty;
     if (!busy) {
-      phase = _marker.existsSync() && Directory(rootfsDir).existsSync()
-          ? RuntimePhase.installed
-          : RuntimePhase.notInstalled;
+      phase = _marker.existsSync() && Directory(rootfsDir).existsSync() ? RuntimePhase.installed : RuntimePhase.notInstalled;
     }
     freeSpace = await host.freeBytes(Directory(baseDir).parent.path);
     notifyListeners();
@@ -283,8 +280,7 @@ class LinuxRuntime extends ChangeNotifier {
     await _writeAptSources();
   }
 
-  Future<void> _writeAptSources() =>
-      _writeReplacing(p.join(rootfsDir, 'etc', 'apt', 'sources.list.d', 'ubuntu.sources'), aptSourcesFor(aptMirror));
+  Future<void> _writeAptSources() => _writeReplacing(p.join(rootfsDir, 'etc', 'apt', 'sources.list.d', 'ubuntu.sources'), aptSourcesFor(aptMirror));
 
   Future<void> _writeReplacing(String path, String content) async {
     // 目标可能是个符号链接（比如 resolv.conf），先删掉再写，免得写到链接指向的别处去。
@@ -297,8 +293,7 @@ class LinuxRuntime extends ChangeNotifier {
   // ── 常用运行时 ───────────────────────────────────────
   List<RuntimePack> get packs => runtimePacks(rootfsSource.id);
 
-  bool packInstalled(RuntimePack pack) =>
-      installed && FileSystemEntity.typeSync(p.join(rootfsDir, pack.marker), followLinks: false) != FileSystemEntityType.notFound;
+  bool packInstalled(RuntimePack pack) => installed && FileSystemEntity.typeSync(p.join(rootfsDir, pack.marker), followLinks: false) != FileSystemEntityType.notFound;
 
   String? runningPack;
   final List<String> packOutput = [];
@@ -316,12 +311,7 @@ class LinuxRuntime extends ChangeNotifier {
     var ok = false;
     try {
       final command = prootCommand(guestCommand: guestRun(pack.script), term: 'dumb');
-      final process = _packProcess = await Process.start(
-        command.executable,
-        command.arguments,
-        environment: command.environment,
-        includeParentEnvironment: false,
-      );
+      final process = _packProcess = await Process.start(command.executable, command.arguments, environment: command.environment, includeParentEnvironment: false);
       void collect(String line) {
         packOutput.add(line);
         if (packOutput.length > 400) packOutput.removeRange(0, packOutput.length - 400);
@@ -427,16 +417,16 @@ class LinuxRuntime extends ChangeNotifier {
   ProotCommand prootCommand({required List<String> guestCommand, String? projectDir, String? guestCwd, String term = 'xterm-256color'}) {
     prepareLauncherLibs();
     return buildProotCommand(
-        nativeLibDir: nativeLibDir ?? '',
-        libDir: hostLibDir,
-        rootfs: rootfsDir,
-        tmpDir: tmpDir,
-        guestCommand: guestCommand,
-        projectDir: projectDir,
-        guestCwd: guestCwd,
-        term: term,
-        noSeccomp: compatMode,
-      );
+      nativeLibDir: nativeLibDir ?? '',
+      libDir: hostLibDir,
+      rootfs: rootfsDir,
+      tmpDir: tmpDir,
+      guestCommand: guestCommand,
+      projectDir: projectDir,
+      guestCwd: guestCwd,
+      term: term,
+      noSeccomp: compatMode,
+    );
   }
 
   /// 一次启动成功（进去后稳定运行了几秒，或者命令正常结束）。

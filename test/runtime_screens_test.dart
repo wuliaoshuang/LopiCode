@@ -56,11 +56,7 @@ class Env {
     final runtime = LinuxRuntime(settings: settings, baseDir: p.join(tmp.path, 'runtime'), host: host);
     if (installed) markInstalled(runtime);
     await runtime.init();
-    return Env(
-      tmp,
-      AppServices(settings: settings, secrets: MemorySecretStore(), projects: ProjectStore(p.join(tmp.path, 'projects')), runtime: runtime),
-      host,
-    );
+    return Env(tmp, AppServices(settings: settings, secrets: MemorySecretStore(), projects: ProjectStore(p.join(tmp.path, 'projects')), runtime: runtime), host);
   }
 
   Widget app(Widget home, ThemeMode mode) => RepaintBoundary(
@@ -211,7 +207,11 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.textContaining('packages.termux.dev/apt/termux-main/pool/main/p/proot/proot_5.1.107.102_aarch64.deb'), findsOneWidget);
       expect(find.text('10a394b585c2fc2b2c8502544f4e5f1be581dc8bfff79e8ba62f16207423e030'), findsOneWidget);
-      await tester.scrollUntilVisible(find.text('https://github.com/termux/proot/archive/v5.1.107.102.zip'), 200, scrollable: find.descendant(of: find.byKey(const Key('third-party-list')), matching: find.byType(Scrollable)).first);
+      await tester.scrollUntilVisible(
+        find.text('https://github.com/termux/proot/archive/v5.1.107.102.zip'),
+        200,
+        scrollable: find.descendant(of: find.byKey(const Key('third-party-list')), matching: find.byType(Scrollable)).first,
+      );
       await tester.pumpAndSettle();
       await shot(tester, '31b-third-party-source-$suffix');
 
@@ -345,9 +345,7 @@ void main() {
       await tester.dragUntilVisible(find.text('中文'), find.byType(ListView).last, const Offset(-120, 0));
       await tester.tap(find.text('中文'));
       await tester.pump(const Duration(milliseconds: 400));
-      tester.testTextInput.updateEditingValue(
-        const TextEditingValue(text: '  nihao', selection: TextSelection.collapsed(offset: 7), composing: TextRange(start: 2, end: 7)),
-      );
+      tester.testTextInput.updateEditingValue(const TextEditingValue(text: '  nihao', selection: TextSelection.collapsed(offset: 7), composing: TextRange(start: 2, end: 7)));
       await tester.pump();
       expect(find.byKey(const Key('terminal-composing')), findsOneWidget);
       expect(utf8.decode(ptys.last.written), 'ls\t', reason: '拼音没选字前不写入');

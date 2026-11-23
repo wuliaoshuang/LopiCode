@@ -29,9 +29,7 @@ class ChannelsScreen extends StatefulWidget {
 class _ChannelsScreenState extends State<ChannelsScreen> {
   /// 点已有渠道进编辑页；“添加渠道”先去选服务商。
   Future<void> _edit([Channel? channel]) async {
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (_) => channel == null ? const ProviderPickerScreen() : ChannelEditScreen(channel: channel)),
-    );
+    await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => channel == null ? const ProviderPickerScreen() : ChannelEditScreen(channel: channel)));
     if (mounted) setState(() {});
   }
 
@@ -61,13 +59,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
       appBar: PageBar(background: context.colors.canvas, title: const Text('模型与渠道')),
       floatingActionButton: channels.isEmpty
           ? null
-          : FloatingActionButton.extended(
-              onPressed: _edit,
-              elevation: 2,
-              shape: const StadiumBorder(),
-              icon: const Icon(Icons.add),
-              label: const Text('添加渠道'),
-            ),
+          : FloatingActionButton.extended(onPressed: _edit, elevation: 2, shape: const StadiumBorder(), icon: const Icon(Icons.add), label: const Text('添加渠道')),
       body: channels.isEmpty
           ? EmptyState(
               icon: Icons.hub_outlined,
@@ -268,7 +260,11 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
   }
 
   Future<void> _editModel(ModelSpec m) async {
-    final result = await showModalBottomSheet<Object>(context: context, isScrollControlled: true, builder: (_) => ModelSpecSheet(model: m));
+    final result = await showModalBottomSheet<Object>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => ModelSpecSheet(model: m),
+    );
     if (!mounted) return;
     setState(() {
       if (result == 'remove') _models.remove(m);
@@ -330,7 +326,12 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
             PopupMenuButton<String>(
               tooltip: '更多',
               onSelected: (_) => _delete(),
-              itemBuilder: (_) => [PopupMenuItem(value: 'delete', child: Text('删除渠道', style: TextStyle(color: c.danger)))],
+              itemBuilder: (_) => [
+                PopupMenuItem(
+                  value: 'delete',
+                  child: Text('删除渠道', style: TextStyle(color: c.danger)),
+                ),
+              ],
             ),
         ],
       ),
@@ -342,7 +343,10 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
               ProviderIcon(key: const Key('channel-icon'), preset: recognized),
               const SizedBox(width: Space.x3),
               Expanded(
-                child: TextField(controller: _name, decoration: const InputDecoration(labelText: '渠道名称', hintText: '给自己看的名字，不填就用协议名')),
+                child: TextField(
+                  controller: _name,
+                  decoration: const InputDecoration(labelText: '渠道名称', hintText: '给自己看的名字，不填就用协议名'),
+                ),
               ),
             ],
           ),
@@ -384,13 +388,18 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
             tone: app.secrets.persistent ? BannerTone.info : BannerTone.warning,
           ),
           const SizedBox(height: Space.x3),
-          OutlinedButton.icon(
-            onPressed: _busy ? null : _test,
-            icon: const Icon(Icons.wifi_tethering, size: 18),
-            label: const Text('测试连接'),
-          ),
-          if (_busy) const Padding(padding: EdgeInsets.only(top: Space.x2), child: LinearProgressIndicator()),
-          if (_status != null) InfoBanner(_status!, tone: _statusOk ? BannerTone.info : BannerTone.danger, margin: const EdgeInsets.only(top: Space.x2)),
+          OutlinedButton.icon(onPressed: _busy ? null : _test, icon: const Icon(Icons.wifi_tethering, size: 18), label: const Text('测试连接')),
+          if (_busy)
+            const Padding(
+              padding: EdgeInsets.only(top: Space.x2),
+              child: LinearProgressIndicator(),
+            ),
+          if (_status != null)
+            InfoBanner(
+              _status!,
+              tone: _statusOk ? BannerTone.info : BannerTone.danger,
+              margin: const EdgeInsets.only(top: Space.x2),
+            ),
           const SizedBox(height: Space.x6),
           Text('模型（${_models.length}）', style: t.labelMedium),
           const SizedBox(height: Space.x2),
@@ -410,12 +419,7 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
                 onTap: () => _editModel(m),
               ),
           const SizedBox(height: Space.x2),
-          OutlinedButton.icon(
-            key: const Key('channel-fetch'),
-            onPressed: _busy ? null : _fetchModels,
-            icon: const Icon(Icons.cloud_download_outlined, size: 18),
-            label: const Text('获取模型'),
-          ),
+          OutlinedButton.icon(key: const Key('channel-fetch'), onPressed: _busy ? null : _fetchModels, icon: const Icon(Icons.cloud_download_outlined, size: 18), label: const Text('获取模型')),
           const SizedBox(height: Space.x2),
           TextButton(onPressed: _addManually, child: const Text('手动添加模型 ID')),
           const SizedBox(height: Space.x4),
@@ -535,7 +539,10 @@ class _ModelSpecSheetState extends State<ModelSpecSheet> {
       ..maxOutput = ((out ?? ModelSpec.defaultMaxOutput ~/ 1000) * 1000).clamp(1000, 400000)
       ..vision = _vision
       ..thinking = _thinking && _levels.isNotEmpty
-      ..levels = [for (final l in kThinkingLevels) if (_levels.contains(l)) l]
+      ..levels = [
+        for (final l in kThinkingLevels)
+          if (_levels.contains(l)) l,
+      ]
       ..priceHit = _price(_priceHit)
       ..priceMiss = _price(_priceMiss)
       ..priceOutput = _price(_priceOut);
@@ -559,7 +566,10 @@ class _ModelSpecSheetState extends State<ModelSpecSheet> {
             const SizedBox(height: Space.x1),
             Text(widget.model.id, style: t.bodySmall, maxLines: 1, overflow: TextOverflow.ellipsis),
             const SizedBox(height: Space.x4),
-            TextField(controller: _name, decoration: const InputDecoration(labelText: '显示名')),
+            TextField(
+              controller: _name,
+              decoration: const InputDecoration(labelText: '显示名'),
+            ),
             const SizedBox(height: Space.x4),
             Text('上下文长度', style: t.labelMedium),
             const SizedBox(height: Space.x2),
@@ -568,11 +578,7 @@ class _ModelSpecSheetState extends State<ModelSpecSheet> {
               runSpacing: Space.x1,
               children: [
                 for (final v in ModelSpec.contextChoices)
-                  ChoiceChip(
-                    label: Text(v >= 1000000 ? '1M' : '${v ~/ 1000}K'),
-                    selected: ctxK == v ~/ 1000,
-                    onSelected: (_) => setState(() => _context.text = '${v ~/ 1000}'),
-                  ),
+                  ChoiceChip(label: Text(v >= 1000000 ? '1M' : '${v ~/ 1000}K'), selected: ctxK == v ~/ 1000, onSelected: (_) => setState(() => _context.text = '${v ~/ 1000}')),
               ],
             ),
             const SizedBox(height: Space.x2),
@@ -600,25 +606,14 @@ class _ModelSpecSheetState extends State<ModelSpecSheet> {
               selected: {_vision},
               onSelectionChanged: (v) => setState(() => _vision = v.first),
             ),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('可以思考'),
-              subtitle: const Text('模型支持“思考 / 推理”时打开'),
-              value: _thinking,
-              onChanged: (v) => setState(() => _thinking = v),
-            ),
+            SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('可以思考'), subtitle: const Text('模型支持“思考 / 推理”时打开'), value: _thinking, onChanged: (v) => setState(() => _thinking = v)),
             if (_thinking) ...[
               Text('对话里可选的思考档位', style: t.labelMedium),
               const SizedBox(height: Space.x2),
               Wrap(
                 spacing: Space.x2,
                 children: [
-                  for (final l in kThinkingLevels)
-                    FilterChip(
-                      label: Text(thinkingLabel(l)),
-                      selected: _levels.contains(l),
-                      onSelected: (v) => setState(() => v ? _levels.add(l) : _levels.remove(l)),
-                    ),
+                  for (final l in kThinkingLevels) FilterChip(label: Text(thinkingLabel(l)), selected: _levels.contains(l), onSelected: (v) => setState(() => v ? _levels.add(l) : _levels.remove(l))),
                 ],
               ),
             ],

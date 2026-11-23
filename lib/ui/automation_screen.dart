@@ -52,9 +52,7 @@ class _AutomationListScreenState extends State<AutomationListScreen> {
     return Scaffold(
       backgroundColor: context.colors.canvas,
       appBar: PageBar(background: context.colors.canvas, title: const Text('自动化任务')),
-      floatingActionButton: items.isEmpty
-          ? null
-          : FloatingActionButton.extended(onPressed: _new, elevation: 2, shape: const StadiumBorder(), icon: const Icon(Icons.add), label: const Text('新建任务')),
+      floatingActionButton: items.isEmpty ? null : FloatingActionButton.extended(onPressed: _new, elevation: 2, shape: const StadiumBorder(), icon: const Icon(Icons.add), label: const Text('新建任务')),
       body: SectionedList(
         bottom: 96,
         children: [
@@ -98,7 +96,11 @@ class _AutomationListScreenState extends State<AutomationListScreen> {
                 },
               ),
               onTap: () async {
-                await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => AutomationDetailScreen(id: a.id, workspaceName: _names?[a.workspaceId], workspaceKnown: _names != null)));
+                await Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => AutomationDetailScreen(id: a.id, workspaceName: _names?[a.workspaceId], workspaceKnown: _names != null),
+                  ),
+                );
                 if (mounted) setState(() {});
               },
             ),
@@ -135,14 +137,18 @@ class _AutomationDetailScreenState extends State<AutomationDetailScreen> {
     final t = Theme.of(context).textTheme;
     final a = app.automations.byId(widget.id);
     if (a == null) {
-      return Scaffold(backgroundColor: context.colors.canvas,
-      appBar: PageBar(background: context.colors.canvas, title: const Text('自动化任务')), body: const EmptyState(icon: Icons.event_busy, title: '这个任务已经删除', message: ''));
+      return Scaffold(
+        backgroundColor: context.colors.canvas,
+        appBar: PageBar(background: context.colors.canvas, title: const Text('自动化任务')),
+        body: const EmptyState(icon: Icons.event_busy, title: '这个任务已经删除', message: ''),
+      );
     }
     final next = a.nextRun(DateTime.now());
     final running = app.scheduler.running.contains(a.id);
     return Scaffold(
       backgroundColor: context.colors.canvas,
-      appBar: PageBar(background: context.colors.canvas, 
+      appBar: PageBar(
+        background: context.colors.canvas,
         title: Text(a.title, maxLines: 1, overflow: TextOverflow.ellipsis),
         actions: [
           PopupMenuButton<String>(
@@ -154,7 +160,12 @@ class _AutomationDetailScreenState extends State<AutomationDetailScreen> {
               app.touch();
               if (context.mounted) Navigator.pop(context);
             },
-            itemBuilder: (_) => [PopupMenuItem(value: 'delete', child: Text('删除任务', style: TextStyle(color: c.danger)))],
+            itemBuilder: (_) => [
+              PopupMenuItem(
+                value: 'delete',
+                child: Text('删除任务', style: TextStyle(color: c.danger)),
+              ),
+            ],
           ),
         ],
       ),
@@ -165,7 +176,11 @@ class _AutomationDetailScreenState extends State<AutomationDetailScreen> {
           const SizedBox(height: Space.x1),
           Text(
             '工作区：${widget.workspaceName ?? (widget.workspaceKnown ? '已不在' : '读取中…')} · 权限：${PermissionLevel.byId(a.permission).label}\n'
-            '${!a.enabled ? '已停用' : next == null ? '不会再触发' : '下一次：${ProjectSession.formatLocal(next, a.rule.tzOffsetMinutes)}'}',
+            '${!a.enabled
+                ? '已停用'
+                : next == null
+                ? '不会再触发'
+                : '下一次：${ProjectSession.formatLocal(next, a.rule.tzOffsetMinutes)}'}',
             style: t.bodySmall?.copyWith(height: 1.6),
           ),
           const SizedBox(height: Space.x3),
@@ -175,7 +190,11 @@ class _AutomationDetailScreenState extends State<AutomationDetailScreen> {
           const SizedBox(height: Space.x2),
           Container(
             padding: const EdgeInsets.all(Space.x3),
-            decoration: BoxDecoration(color: c.surface, borderRadius: BorderRadius.circular(Radii.md), border: Border.all(color: c.border)),
+            decoration: BoxDecoration(
+              color: c.surface,
+              borderRadius: BorderRadius.circular(Radii.md),
+              border: Border.all(color: c.border),
+            ),
             child: SelectableText(a.instruction, style: t.bodyMedium),
           ),
           const SizedBox(height: Space.x4),
@@ -209,7 +228,12 @@ class _AutomationDetailScreenState extends State<AutomationDetailScreen> {
                       },
                     ),
                   ),
-                  Text(r.summary, style: t.bodySmall?.copyWith(color: c.text), maxLines: 4, overflow: TextOverflow.ellipsis),
+                  Text(
+                    r.summary,
+                    style: t.bodySmall?.copyWith(color: c.text),
+                    maxLines: 4,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ],
               ),
             ),
@@ -309,7 +333,12 @@ class _AutomationEditScreenState extends State<AutomationEditScreen> {
 
   Future<void> _pickDate() async {
     final now = DateTime.now();
-    final picked = await showDatePicker(context: context, firstDate: now, lastDate: now.add(const Duration(days: 365 * 2)), initialDate: DateTime.tryParse(_date.text) ?? now);
+    final picked = await showDatePicker(
+      context: context,
+      firstDate: now,
+      lastDate: now.add(const Duration(days: 365 * 2)),
+      initialDate: DateTime.tryParse(_date.text) ?? now,
+    );
     if (picked != null && mounted) setState(() => _date.text = '${picked.year}-${_two(picked.month)}-${_two(picked.day)}');
   }
 
@@ -370,7 +399,11 @@ class _AutomationEditScreenState extends State<AutomationEditScreen> {
       body: SectionedList(
         inner: const EdgeInsets.all(Space.x4),
         children: [
-          TextField(key: const Key('automation-title'), controller: _title, decoration: const InputDecoration(labelText: '任务名', hintText: '如：每天早上检查依赖更新')),
+          TextField(
+            key: const Key('automation-title'),
+            controller: _title,
+            decoration: const InputDecoration(labelText: '任务名', hintText: '如：每天早上检查依赖更新'),
+          ),
           const SizedBox(height: Space.x3),
           TextField(
             key: const Key('automation-instruction'),
@@ -385,7 +418,13 @@ class _AutomationEditScreenState extends State<AutomationEditScreen> {
             initialValue: _workspaces.any((p) => p.id == _workspaceId) ? _workspaceId : null,
             isExpanded: true,
             decoration: const InputDecoration(labelText: '在哪个工作区里运行'),
-            items: [for (final p in _workspaces) DropdownMenuItem(value: p.id, child: Text(p.name, overflow: TextOverflow.ellipsis))],
+            items: [
+              for (final p in _workspaces)
+                DropdownMenuItem(
+                  value: p.id,
+                  child: Text(p.name, overflow: TextOverflow.ellipsis),
+                ),
+            ],
             onChanged: (v) => setState(() => _workspaceId = v),
           ),
           const SizedBox(height: Space.x3),
@@ -414,12 +453,7 @@ class _AutomationEditScreenState extends State<AutomationEditScreen> {
               spacing: Space.x1,
               children: [
                 for (var d = 1; d <= 7; d++)
-                  FilterChip(
-                    label: Text(_weekdayNames[d - 1]),
-                    showCheckmark: false,
-                    selected: _weekdays.contains(d),
-                    onSelected: (v) => setState(() => v ? _weekdays.add(d) : _weekdays.remove(d)),
-                  ),
+                  FilterChip(label: Text(_weekdayNames[d - 1]), showCheckmark: false, selected: _weekdays.contains(d), onSelected: (v) => setState(() => v ? _weekdays.add(d) : _weekdays.remove(d))),
               ],
             ),
             const SizedBox(height: Space.x3),
@@ -442,10 +476,7 @@ class _AutomationEditScreenState extends State<AutomationEditScreen> {
           DropdownButtonFormField<int>(
             initialValue: _tz,
             decoration: const InputDecoration(labelText: '时区', helperText: '固定的时差，不会自动调夏令时'),
-            items: [
-              for (final o in _tzChoices)
-                DropdownMenuItem(value: o, child: Text('${TimeRule.tzLabel(o)}${o == ProjectSession.deviceTzOffset ? '（手机当前时区）' : ''}')),
-            ],
+            items: [for (final o in _tzChoices) DropdownMenuItem(value: o, child: Text('${TimeRule.tzLabel(o)}${o == ProjectSession.deviceTzOffset ? '（手机当前时区）' : ''}'))],
             onChanged: (v) => setState(() => _tz = v ?? _tz),
           ),
           const SizedBox(height: Space.x3),

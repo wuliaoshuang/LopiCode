@@ -15,9 +15,7 @@ enum TaskStatus {
 }
 
 class TeamTask {
-  TeamTask({required this.id, required this.title, this.status = TaskStatus.todo, this.owner = '', List<String>? deps, List<String>? scope, this.note = ''})
-    : deps = deps ?? [],
-      scope = scope ?? [];
+  TeamTask({required this.id, required this.title, this.status = TaskStatus.todo, this.owner = '', List<String>? deps, List<String>? scope, this.note = ''}) : deps = deps ?? [], scope = scope ?? [];
   final String id;
   String title;
   TaskStatus status;
@@ -113,16 +111,12 @@ class TeamBoard {
       if (!members.any((m) => m.name == lead)) members.insert(0, TeamMember(lead, '负责拆任务、分工、汇总'));
       tasks
         ..clear()
-        ..addAll([
-          for (final t in j['tasks'] is List ? j['tasks'] as List : const [])
-            ?TeamTask.fromJson(t),
-        ]);
+        ..addAll([for (final t in j['tasks'] is List ? j['tasks'] as List : const []) ?TeamTask.fromJson(t)]);
       messages
         ..clear()
         ..addAll([
           for (final m in j['messages'] is List ? j['messages'] as List : const [])
-            if (m is Map)
-              TeamMessage('${m['from']}', '${m['to']}', '${m['text']}', DateTime.tryParse('${m['at']}') ?? DateTime.fromMillisecondsSinceEpoch(0)),
+            if (m is Map) TeamMessage('${m['from']}', '${m['to']}', '${m['text']}', DateTime.tryParse('${m['at']}') ?? DateTime.fromMillisecondsSinceEpoch(0)),
         ]);
       _seq = j['seq'] is int ? j['seq'] as int : tasks.length;
     } catch (_) {
@@ -290,10 +284,22 @@ class TeamBoard {
       spec: toolSpec('team_task', '在任务板上新建任务（不给 id）或更新任务（给 id）。依赖没完成的任务不能改成进行中。', {
         'id': {'type': 'string', 'description': '要更新的任务编号，如 t1；新建时省略'},
         'title': {'type': 'string', 'description': '任务标题（新建时必填）'},
-        'status': {'type': 'string', 'enum': ['todo', 'doing', 'done'], 'description': '待办 / 进行中 / 完成'},
+        'status': {
+          'type': 'string',
+          'enum': ['todo', 'doing', 'done'],
+          'description': '待办 / 进行中 / 完成',
+        },
         'owner': {'type': 'string', 'description': '负责人的名字'},
-        'depends_on': {'type': 'array', 'items': {'type': 'string'}, 'description': '依赖的任务编号'},
-        'write_scope': {'type': 'array', 'items': {'type': 'string'}, 'description': '允许改动的目录或文件（工作区内相对路径）；省略表示整个工作区'},
+        'depends_on': {
+          'type': 'array',
+          'items': {'type': 'string'},
+          'description': '依赖的任务编号',
+        },
+        'write_scope': {
+          'type': 'array',
+          'items': {'type': 'string'},
+          'description': '允许改动的目录或文件（工作区内相对路径）；省略表示整个工作区',
+        },
         'note': {'type': 'string', 'description': '备注 / 进展'},
       }),
       kind: ToolKind.other,
@@ -306,39 +312,39 @@ class TeamBoard {
               id.trim(),
               status: TaskStatus.byId(args['status']),
               // 没写负责人就开工：开工的人自己负责。
-              owner: args['owner'] is String
-                  ? args['owner'] as String
-                  : (TaskStatus.byId(args['status']) == TaskStatus.doing && (task(id.trim())?.owner.isEmpty ?? false) ? self : null),
+              owner: args['owner'] is String ? args['owner'] as String : (TaskStatus.byId(args['status']) == TaskStatus.doing && (task(id.trim())?.owner.isEmpty ?? false) ? self : null),
               note: args['note'] is String ? args['note'] as String : null,
               title: args['title'] is String ? args['title'] as String : null,
               scope: args['write_scope'] is List ? _strings(args['write_scope']) : null,
               deps: args['depends_on'] is List ? _strings(args['depends_on']) : null,
             );
           } else {
-            t = await create(
-              title: '${args['title'] ?? ''}',
-              owner: args['owner'] is String ? args['owner'] as String : '',
-              deps: _strings(args['depends_on']),
-              scope: _strings(args['write_scope']),
-            );
+            t = await create(title: '${args['title'] ?? ''}', owner: args['owner'] is String ? args['owner'] as String : '', deps: _strings(args['depends_on']), scope: _strings(args['write_scope']));
             final status = TaskStatus.byId(args['status']);
             if (status != null && status != TaskStatus.todo) {
               await update(t.id, status: status, owner: status == TaskStatus.doing && t.owner.isEmpty ? self : null);
             }
           }
           final warnings = overlapWarnings();
-          return ToolOutcome('任务 ${t.id}「${t.title}」：${t.status.label}，负责人 ${t.owner.isEmpty ? '未指派' : t.owner}。'
-              '${warnings.isEmpty ? '' : '\n⚠ 范围重叠：${warnings.join('；')}'}');
+          return ToolOutcome(
+            '任务 ${t.id}「${t.title}」：${t.status.label}，负责人 ${t.owner.isEmpty ? '未指派' : t.owner}。'
+            '${warnings.isEmpty ? '' : '\n⚠ 范围重叠：${warnings.join('；')}'}',
+          );
         } on TeamException catch (e) {
           return ToolOutcome('错误：${e.message}', ok: false);
         }
       },
     ),
     ExtraTool(
-      spec: toolSpec('team_message', '给团队成员留言（写在任务板的留言栏，所有成员下次看任务板时能看到）。', {
-        'to': {'type': 'string', 'description': '收件人的名字；省略表示全体'},
-        'text': {'type': 'string', 'description': '留言内容'},
-      }, ['text']),
+      spec: toolSpec(
+        'team_message',
+        '给团队成员留言（写在任务板的留言栏，所有成员下次看任务板时能看到）。',
+        {
+          'to': {'type': 'string', 'description': '收件人的名字；省略表示全体'},
+          'text': {'type': 'string', 'description': '留言内容'},
+        },
+        ['text'],
+      ),
       kind: ToolKind.other,
       run: (args) async {
         try {

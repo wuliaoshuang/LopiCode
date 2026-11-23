@@ -120,7 +120,10 @@ class _PreviewTabState extends State<PreviewTab> {
         ),
         Expanded(
           child: DecoratedBox(
-            decoration: BoxDecoration(color: Colors.white, border: Border.symmetric(horizontal: BorderSide(color: c.border))),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border.symmetric(horizontal: BorderSide(color: c.border)),
+            ),
             child: LayoutBuilder(
               builder: (context, box) {
                 final view = PreviewTab.debugViewBuilder?.call(server.baseUri) ?? WebViewWidget(controller: _web!);

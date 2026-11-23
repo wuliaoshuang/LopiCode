@@ -27,7 +27,7 @@ Future<(TestEnv, Project, ProjectSession)> openProject(WidgetTester tester, {Tes
     e = env ?? await TestEnv.create();
     project = await e.services.projects.create('我的小站', template);
     session = ProjectSession(e.services, project);
-        await session.loadChat();
+    await session.loadChat();
     await Future<void>.delayed(const Duration(milliseconds: 150));
   });
   addTearDown(() async {
@@ -109,7 +109,11 @@ void main() {
     final nav = find.byType(IconBottomNav);
     expect(nav, findsOneWidget);
     expect(ShellDest.bottom.map((d) => d.label).toList(), ['Agent 聊天', '文件', '终端', '低代码', '打包']);
-    expect(find.descendant(of: nav, matching: find.byType(Text)), findsNothing, reason: '底部导航只有图标，没有文字');
+    expect(
+      find.descendant(of: nav, matching: find.byType(Text)),
+      findsNothing,
+      reason: '底部导航只有图标，没有文字',
+    );
     // 贴着屏幕底边
     expect(tester.getRect(nav).bottom, 844);
     // 进项目先看到聊天页
@@ -195,7 +199,11 @@ void main() {
       expect(y, lessThan(bottom));
     }
     for (final d in ShellDest.bottom) {
-      expect(find.descendant(of: drawer, matching: find.text(d.label)), findsNothing, reason: '“${d.label}”在底部导航里，侧边栏不重复放');
+      expect(
+        find.descendant(of: drawer, matching: find.text(d.label)),
+        findsNothing,
+        reason: '“${d.label}”在底部导航里，侧边栏不重复放',
+      );
     }
     expect(highlighted(tester, '新对话'), isTrue, reason: '一进来在对话页');
     await closeDrawer(tester);
@@ -382,7 +390,11 @@ void main() {
     usePhoneViewport(tester);
     late TestEnv env;
     await tester.runAsync(() async {
-      env = await TestEnv.create(chatClient: () => ScriptedChatClient([[say('好的。')]]));
+      env = await TestEnv.create(
+        chatClient: () => ScriptedChatClient([
+          [say('好的。')],
+        ]),
+      );
     });
     final (_, project, session) = await openProject(tester, env: env, template: ProjectTemplate.web);
     await tester.pumpWidget(appFor(env, ProjectShell(project: project, session: session)));

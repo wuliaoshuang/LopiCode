@@ -82,7 +82,14 @@ void main() {
     }
 
     Future<void> showChat(WidgetTester tester) async {
-      await tester.pumpWidget(appFor(env, ProjectShell(project: project, session: session, initial: ShellDest.chat), mode: mode, font: font));
+      await tester.pumpWidget(
+        appFor(
+          env,
+          ProjectShell(project: project, session: session, initial: ShellDest.chat),
+          mode: mode,
+          font: font,
+        ),
+      );
       await settle(tester);
     }
 
@@ -155,7 +162,14 @@ void main() {
     });
 
     testWidgets('接口没返回用量：脚注和详情如实写；关掉开关就不显示脚注 ($suffix)', (tester) async {
-      await boot(tester, script: [[say('好的。'), ChatDelta(finishReason: 'stop')]], deepseek: false, priced: false);
+      await boot(
+        tester,
+        script: [
+          [say('好的。'), ChatDelta(finishReason: 'stop')],
+        ],
+        deepseek: false,
+        priced: false,
+      );
       await showChat(tester);
       await send(tester, '你好');
       final text = tester.widget<Text>(find.byKey(const Key('turn-footnote-text'))).data!;
@@ -185,7 +199,22 @@ void main() {
       addTearDown(e.dispose);
       final turn = TurnUsage(ms: 47000, steps: [for (var i = 0; i < 12; i++) RequestStep(RequestUsage(usage: u(1000, 2000, 0), ms: 100, cost: 0.0025))]);
       Future<String> at(double width) async {
-        await tester.pumpWidget(appFor(e, Scaffold(body: Align(alignment: Alignment.topLeft, child: SizedBox(width: width, child: TurnFootnote(turn: turn, onTap: () {})))), mode: mode, font: font));
+        await tester.pumpWidget(
+          appFor(
+            e,
+            Scaffold(
+              body: Align(
+                alignment: Alignment.topLeft,
+                child: SizedBox(
+                  width: width,
+                  child: TurnFootnote(turn: turn, onTap: () {}),
+                ),
+              ),
+            ),
+            mode: mode,
+            font: font,
+          ),
+        );
         await tester.pump();
         expect(tester.takeException(), isNull);
         return tester.widget<Text>(find.byKey(const Key('turn-footnote-text'))).data!;
@@ -247,14 +276,23 @@ void main() {
       late TestEnv e;
       await tester.runAsync(() async => e = await TestEnv.create());
       addTearDown(e.dispose);
-      await tester.pumpWidget(appFor(e, Builder(builder: (context) {
-        final c = context.colors;
-        expect(contextTone(c, 0.59), c.accent);
-        expect(contextTone(c, 0.6), c.warning);
-        expect(contextTone(c, 0.85), c.warning);
-        expect(contextTone(c, 0.86), c.danger);
-        return const SizedBox();
-      }), mode: mode, font: font));
+      await tester.pumpWidget(
+        appFor(
+          e,
+          Builder(
+            builder: (context) {
+              final c = context.colors;
+              expect(contextTone(c, 0.59), c.accent);
+              expect(contextTone(c, 0.6), c.warning);
+              expect(contextTone(c, 0.85), c.warning);
+              expect(contextTone(c, 0.86), c.danger);
+              return const SizedBox();
+            },
+          ),
+          mode: mode,
+          font: font,
+        ),
+      );
       expect(tester.takeException(), isNull);
     });
 
@@ -288,7 +326,12 @@ void main() {
     });
 
     testWidgets('到上限：聊天里有拦截提示和“去调额度上限”，点了进额度上限页 ($suffix)', (tester) async {
-      await boot(tester, script: [[say('不该出现'), ChatDelta(finishReason: 'stop')]]);
+      await boot(
+        tester,
+        script: [
+          [say('不该出现'), ChatDelta(finishReason: 'stop')],
+        ],
+      );
       await tester.runAsync(() async {
         await env.services.quota.setLimit(ds, limit: 10, currency: 'CNY');
         bal.cny = 89;
@@ -310,12 +353,23 @@ void main() {
 
     testWidgets('设置顶部卡：DeepSeek 没设上限只有余额；设了上限有进度条和百分比 ($suffix)', (tester) async {
       await boot(tester);
-      await tester.pumpWidget(appFor(env, SettingsScreen(workspace: project, session: session), mode: mode, font: font));
+      await tester.pumpWidget(
+        appFor(
+          env,
+          SettingsScreen(workspace: project, session: session),
+          mode: mode,
+          font: font,
+        ),
+      );
       await settle(tester, rounds: 4);
       final overview = find.byKey(const Key('settings-overview'));
       expect(tester.widget<Text>(find.byKey(const Key('overview-balance'))).data, contains('余额 ¥100.00'));
       expect(find.descendant(of: overview, matching: find.textContaining('%')), findsNothing);
-      expect(find.descendant(of: overview, matching: find.byKey(const Key('overview-bar'))), findsOneWidget, reason: '只有运行环境那一根');
+      expect(
+        find.descendant(of: overview, matching: find.byKey(const Key('overview-bar'))),
+        findsOneWidget,
+        reason: '只有运行环境那一根',
+      );
       expect(find.text('设置额度上限'), findsOneWidget);
       await shot(tester, '82-settings-deepseek-nolimit-$suffix');
 
@@ -351,7 +405,14 @@ void main() {
     testWidgets('设置顶部卡：余额查不到时如实写，不编数字 ($suffix)', (tester) async {
       await boot(tester);
       bal.status = 401;
-      await tester.pumpWidget(appFor(env, SettingsScreen(workspace: project, session: session), mode: mode, font: font));
+      await tester.pumpWidget(
+        appFor(
+          env,
+          SettingsScreen(workspace: project, session: session),
+          mode: mode,
+          font: font,
+        ),
+      );
       await settle(tester, rounds: 4);
       expect(tester.widget<Text>(find.byKey(const Key('overview-balance'))).data, contains('Key 无效，查不到余额'));
       expect(find.descendant(of: find.byKey(const Key('settings-overview')), matching: find.textContaining('¥')), findsNothing);
@@ -360,7 +421,14 @@ void main() {
 
     testWidgets('设置里的两个开关和项目规则 ($suffix)', (tester) async {
       await boot(tester, deepseek: false);
-      await tester.pumpWidget(appFor(env, SettingsScreen(workspace: project, session: session), mode: mode, font: font));
+      await tester.pumpWidget(
+        appFor(
+          env,
+          SettingsScreen(workspace: project, session: session),
+          mode: mode,
+          font: font,
+        ),
+      );
       await settle(tester, rounds: 3);
       final list = find.byType(Scrollable).first;
       await tester.scrollUntilVisible(find.byKey(const Key('settings-usage')), 120, scrollable: list);

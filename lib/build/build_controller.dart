@@ -22,14 +22,7 @@ abstract class BuildJob extends ChangeNotifier {
   String? apkPath;
   int? apkBytes;
 
-  bool get busy => const {
-    BuildPhase.connecting,
-    BuildPhase.pushing,
-    BuildPhase.dispatching,
-    BuildPhase.waiting,
-    BuildPhase.building,
-    BuildPhase.downloading,
-  }.contains(phase);
+  bool get busy => const {BuildPhase.connecting, BuildPhase.pushing, BuildPhase.dispatching, BuildPhase.waiting, BuildPhase.building, BuildPhase.downloading}.contains(phase);
 
   void cancel();
 
@@ -186,8 +179,7 @@ class ApkBuildController extends BuildJob {
     _ => c,
   };
 
-  static String formatBytes(int n) =>
-      n >= 1024 * 1024 ? '${(n / 1024 / 1024).toStringAsFixed(1)} MB' : '${(n / 1024).toStringAsFixed(n < 10240 ? 1 : 0)} KB';
+  static String formatBytes(int n) => n >= 1024 * 1024 ? '${(n / 1024 / 1024).toStringAsFixed(1)} MB' : '${(n / 1024).toStringAsFixed(n < 10240 ? 1 : 0)} KB';
 }
 
 class _Cancelled implements Exception {}

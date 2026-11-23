@@ -10,34 +10,12 @@ class FlutterPtyProcess implements PtyProcess {
   FlutterPtyProcess(this._pty);
   final Pty _pty;
 
-  static PtyProcess spawn(
-    String executable, {
-    required String workingDirectory,
-    required Map<String, String> environment,
-    required int rows,
-    required int columns,
-  }) => FlutterPtyProcess(
-    Pty.start(executable, workingDirectory: workingDirectory, environment: environment, rows: rows, columns: columns),
-  );
+  static PtyProcess spawn(String executable, {required String workingDirectory, required Map<String, String> environment, required int rows, required int columns}) =>
+      FlutterPtyProcess(Pty.start(executable, workingDirectory: workingDirectory, environment: environment, rows: rows, columns: columns));
 
   /// 带参数的版本（进 Ubuntu 环境时要给 PRoot 传一长串参数）。
-  static PtyProcess spawnWithArgs(
-    String executable,
-    List<String> arguments, {
-    required String workingDirectory,
-    required Map<String, String> environment,
-    required int rows,
-    required int columns,
-  }) => FlutterPtyProcess(
-    Pty.start(
-      executable,
-      arguments: arguments,
-      workingDirectory: workingDirectory,
-      environment: environment,
-      rows: rows,
-      columns: columns,
-    ),
-  );
+  static PtyProcess spawnWithArgs(String executable, List<String> arguments, {required String workingDirectory, required Map<String, String> environment, required int rows, required int columns}) =>
+      FlutterPtyProcess(Pty.start(executable, arguments: arguments, workingDirectory: workingDirectory, environment: environment, rows: rows, columns: columns));
 
   @override
   // flutter_pty 给的是 Stream<Uint8List>。直接拿去接 Utf8Decoder 会在运行时报类型错误

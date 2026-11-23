@@ -278,10 +278,7 @@ void main() {
 
     test('connectSsh：没存密码 / 私钥时不发起连接，直接说明', () async {
       final secrets = MemorySecretStore();
-      await expectLater(
-        connectSsh(config: config, secrets: secrets, knownHosts: KnownHosts(settings)),
-        throwsA(isA<SshConnectException>().having((e) => e.message, 'message', contains('还没保存密码'))),
-      );
+      await expectLater(connectSsh(config: config, secrets: secrets, knownHosts: KnownHosts(settings)), throwsA(isA<SshConnectException>().having((e) => e.message, 'message', contains('还没保存密码'))));
       await expectLater(
         connectSsh(
           config: const SshConfig(host: 'h', user: 'u', useKey: true),
@@ -425,8 +422,7 @@ void main() {
     test('伪终端开不出来：退回管道模式，屏幕上如实说明，命令照样能跑', () async {
       final backend = LocalShellBackend(
         tmp.path,
-        spawner: (executable, {required workingDirectory, required environment, required rows, required columns}) =>
-            throw ArgumentError('Failed to load dynamic library libflutter_pty.so'),
+        spawner: (executable, {required workingDirectory, required environment, required rows, required columns}) => throw ArgumentError('Failed to load dynamic library libflutter_pty.so'),
       );
       File(p.join(tmp.path, 'hello.txt')).writeAsStringSync('x');
       final seen = StringBuffer();
@@ -505,7 +501,12 @@ void main() {
       job.addListener(() {
         if (phases.isEmpty || phases.last != job.phase) phases.add(job.phase);
       });
-      await job.run(uploadFiles: {'pubspec.yaml': [1], 'lib/main.dart': [2, 3]});
+      await job.run(
+        uploadFiles: {
+          'pubspec.yaml': [1],
+          'lib/main.dart': [2, 3],
+        },
+      );
       expect(phases, [BuildPhase.connecting, BuildPhase.pushing, BuildPhase.building, BuildPhase.downloading, BuildPhase.done]);
       expect(exec.commands.first, startsWith('mkdir -p '));
       expect(exec.commands.first, contains("~/'work dir/lib'"));
@@ -570,14 +571,7 @@ void main() {
 
     test('输出只保留末尾一段，不会越攒越大', () async {
       final exec = FakeRemoteExec();
-      final job = SshBuildController(
-        exec: exec,
-        remoteDir: '/w',
-        command: 'x',
-        apkRemotePath: 'a.apk',
-        outputDir: tmp.path,
-        maxOutputChars: 30,
-      );
+      final job = SshBuildController(exec: exec, remoteDir: '/w', command: 'x', apkRemotePath: 'a.apk', outputDir: tmp.path, maxOutputChars: 30);
       await job.run();
       expect(job.output.length, lessThanOrEqualTo(30));
       expect(job.output, endsWith('Built out/app-release.apk\n'));

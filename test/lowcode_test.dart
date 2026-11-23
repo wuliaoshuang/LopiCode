@@ -37,31 +37,85 @@ void main() {
       bad('not json');
       bad([1, 2]);
       bad({'title': 'x'});
-      bad({'title': 'x', 'root': {'type': 'text'}}); // 根必须是 page
-      bad({'title': 'x', 'root': {'type': 'page', 'children': [{'type': 'nope'}]}});
-      bad({'title': 'x', 'root': {'type': 'page', 'children': [{'type': 'text', 'children': [{'type': 'text'}]}]}});
-      bad({'title': 'x', 'root': {'type': 'page', 'children': [{'type': 'page'}]}});
-      bad({'title': 'x', 'root': {'type': 'page', 'children': 'oops'}});
-      // 嵌套过深
-      Map<String, dynamic> deep = {'type': 'text'};
-      for (var i = 0; i < 40; i++) {
-        deep = {'type': 'container', 'children': [deep]};
-      }
-      bad({'title': 'x', 'root': {'type': 'page', 'children': [deep]}});
-    });
-
-    test('不认识或非法的属性被清掉，重复 id 被修正', () {
-      final doc = LcDocument.parse(jsonEncode({
-        'title': 't',
+      bad({
+        'title': 'x',
+        'root': {'type': 'text'},
+      }); // 根必须是 page
+      bad({
+        'title': 'x',
         'root': {
           'type': 'page',
           'children': [
-            {'id': 'a', 'type': 'text', 'props': {'text': 'x', 'color': 'red', 'fontSize': -3, 'onclick': 'alert(1)', 'width': 'huge'}},
-            {'id': 'a', 'type': 'text', 'props': {'text': 'y', 'color': '#abcdef'}},
-            {'id': 'bad id!', 'type': 'text'},
+            {'type': 'nope'},
           ],
         },
-      }));
+      });
+      bad({
+        'title': 'x',
+        'root': {
+          'type': 'page',
+          'children': [
+            {
+              'type': 'text',
+              'children': [
+                {'type': 'text'},
+              ],
+            },
+          ],
+        },
+      });
+      bad({
+        'title': 'x',
+        'root': {
+          'type': 'page',
+          'children': [
+            {'type': 'page'},
+          ],
+        },
+      });
+      bad({
+        'title': 'x',
+        'root': {'type': 'page', 'children': 'oops'},
+      });
+      // 嵌套过深
+      Map<String, dynamic> deep = {'type': 'text'};
+      for (var i = 0; i < 40; i++) {
+        deep = {
+          'type': 'container',
+          'children': [deep],
+        };
+      }
+      bad({
+        'title': 'x',
+        'root': {
+          'type': 'page',
+          'children': [deep],
+        },
+      });
+    });
+
+    test('不认识或非法的属性被清掉，重复 id 被修正', () {
+      final doc = LcDocument.parse(
+        jsonEncode({
+          'title': 't',
+          'root': {
+            'type': 'page',
+            'children': [
+              {
+                'id': 'a',
+                'type': 'text',
+                'props': {'text': 'x', 'color': 'red', 'fontSize': -3, 'onclick': 'alert(1)', 'width': 'huge'},
+              },
+              {
+                'id': 'a',
+                'type': 'text',
+                'props': {'text': 'y', 'color': '#abcdef'},
+              },
+              {'id': 'bad id!', 'type': 'text'},
+            ],
+          },
+        }),
+      );
       final kids = doc.root.children;
       expect(kids[0].props, {'text': 'x'});
       expect(kids[1].props['color'], '#ABCDEF');

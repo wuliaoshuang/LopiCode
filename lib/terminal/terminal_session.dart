@@ -29,14 +29,7 @@ abstract class PtyProcess {
   void kill();
 }
 
-typedef PtySpawner =
-    PtyProcess Function(
-      String executable, {
-      required String workingDirectory,
-      required Map<String, String> environment,
-      required int rows,
-      required int columns,
-    });
+typedef PtySpawner = PtyProcess Function(String executable, {required String workingDirectory, required Map<String, String> environment, required int rows, required int columns});
 
 enum LocalShellMode { none, pty, pipe }
 
@@ -44,8 +37,7 @@ enum LocalShellMode { none, pty, pipe }
 /// 能跑 vi、top 这类全屏程序。伪终端开不出来时退回管道模式（一次一条命令），
 /// 并在屏幕上如实说明。
 class LocalShellBackend implements TerminalBackend {
-  LocalShellBackend(this.workingDirectory, {PtySpawner? spawner, this.allowPipeFallback = true})
-    : _spawn = spawner ?? FlutterPtyProcess.spawn;
+  LocalShellBackend(this.workingDirectory, {PtySpawner? spawner, this.allowPipeFallback = true}) : _spawn = spawner ?? FlutterPtyProcess.spawn;
 
   final String workingDirectory;
   final PtySpawner _spawn;
@@ -76,12 +68,7 @@ class LocalShellBackend implements TerminalBackend {
     if (!_closed) _out.add(text);
   }
 
-  Map<String, String> get _environment => {
-    'HOME': workingDirectory,
-    'TERM': 'xterm-256color',
-    'PATH': ?Platform.environment['PATH'],
-    'TMPDIR': ?Platform.environment['TMPDIR'],
-  };
+  Map<String, String> get _environment => {'HOME': workingDirectory, 'TERM': 'xterm-256color', 'PATH': ?Platform.environment['PATH'], 'TMPDIR': ?Platform.environment['TMPDIR']};
 
   @override
   Future<void> start({required int columns, required int rows}) async {
@@ -119,12 +106,7 @@ class LocalShellBackend implements TerminalBackend {
       _emit('\x1b[33m伪终端不可用，已退回基础模式：一次一条命令，不支持 vi、top 这类全屏程序。\x1b[0m\r\n');
     }
     try {
-      final process = await Process.start(
-        shellPath,
-        const [],
-        workingDirectory: workingDirectory,
-        environment: {'TERM': 'dumb', 'HOME': workingDirectory},
-      );
+      final process = await Process.start(shellPath, const [], workingDirectory: workingDirectory, environment: {'TERM': 'dumb', 'HOME': workingDirectory});
       _pipe = process;
       const decoder = Utf8Decoder(allowMalformed: true);
       void show(String text) => _emit(text.replaceAll('\r\n', '\n').replaceAll('\n', '\r\n'));

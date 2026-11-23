@@ -46,7 +46,9 @@ class SshShellBackend implements TerminalBackend {
         unawaited(client.close()); // 关连接不等它：对端没响应时不能卡住
         return;
       }
-      final shell = await client.shell(pty: SSHPtyConfig(type: 'xterm-256color', width: _columns, height: _rows));
+      final shell = await client.shell(
+        pty: SSHPtyConfig(type: 'xterm-256color', width: _columns, height: _rows),
+      );
       _client = client;
       _shell = shell;
       const decoder = Utf8Decoder(allowMalformed: true);

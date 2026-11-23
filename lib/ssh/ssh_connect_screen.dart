@@ -189,11 +189,7 @@ class _SshConnectScreenState extends State<SshConnectScreen> {
               autocorrect: false,
               enableSuggestions: false,
               style: const TextStyle(fontFamily: kMonoFont, fontFamilyFallback: kMonoFallback, fontSize: FontSize.xs),
-              decoration: InputDecoration(
-                labelText: '私钥',
-                alignLabelWithHint: true,
-                hintText: _hasKey ? '已保存，留空表示不改' : '粘贴整段私钥（-----BEGIN … PRIVATE KEY----- 开头）',
-              ),
+              decoration: InputDecoration(labelText: '私钥', alignLabelWithHint: true, hintText: _hasKey ? '已保存，留空表示不改' : '粘贴整段私钥（-----BEGIN … PRIVATE KEY----- 开头）'),
             ),
             const SizedBox(height: Space.x3),
             TextField(
@@ -205,7 +201,12 @@ class _SshConnectScreenState extends State<SshConnectScreen> {
             ),
           ],
           const SizedBox(height: Space.x3),
-          if (_error != null) InfoBanner(_error!, tone: BannerTone.danger, margin: const EdgeInsets.only(bottom: Space.x3)),
+          if (_error != null)
+            InfoBanner(
+              _error!,
+              tone: BannerTone.danger,
+              margin: const EdgeInsets.only(bottom: Space.x3),
+            ),
           if (!app.secrets.persistent)
             const InfoBanner(
               '这台设备上安全存储不可用，密码 / 私钥只保存在内存里，关掉应用后要重新填写。',
@@ -253,7 +254,10 @@ Future<bool> confirmHostKey(BuildContext context, SshConfig config, String keyTy
             style: TextStyle(fontFamily: kMonoFont, fontFamilyFallback: kMonoFallback, fontSize: FontSize.xs, color: c.text),
           ),
           const SizedBox(height: Space.x3),
-          Text('确认是你的服务器再信任。之后每次连接都会核对，指纹变了会拒绝连接。', style: TextStyle(fontSize: FontSize.sm, color: c.textMuted)),
+          Text(
+            '确认是你的服务器再信任。之后每次连接都会核对，指纹变了会拒绝连接。',
+            style: TextStyle(fontSize: FontSize.sm, color: c.textMuted),
+          ),
         ],
       ),
       actions: [

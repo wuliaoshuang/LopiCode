@@ -30,10 +30,7 @@ class PathGuard {
       throw PathGuardException('路径里有非法字符');
     }
     if (rel.isEmpty || rel == '.' || rel == './') return root;
-    if (rel.startsWith('/') ||
-        rel.startsWith('~') ||
-        RegExp(r'^[A-Za-z]:').hasMatch(rel) ||
-        rel.contains('://')) {
+    if (rel.startsWith('/') || rel.startsWith('~') || RegExp(r'^[A-Za-z]:').hasMatch(rel) || rel.contains('://')) {
       throw PathGuardException('只能使用项目内的相对路径，不能用绝对路径：$relative');
     }
     final full = p.normalize(p.join(root, rel));
@@ -56,8 +53,7 @@ class PathGuard {
   }
 
   /// 绝对路径 → 项目内相对路径（统一用 `/`）。
-  String relative(String full) =>
-      p.relative(full, from: root).replaceAll('\\', '/');
+  String relative(String full) => p.relative(full, from: root).replaceAll('\\', '/');
 
   /// 解析“最深的已存在祖先”的真实路径，再拼回尚不存在的部分。
   static String _realExisting(String path) {
@@ -68,18 +64,12 @@ class PathGuard {
       if (type != FileSystemEntityType.notFound) {
         String real;
         try {
-          real = type == FileSystemEntityType.directory
-              ? Directory(current).resolveSymbolicLinksSync()
-              : File(current).resolveSymbolicLinksSync();
+          real = type == FileSystemEntityType.directory ? Directory(current).resolveSymbolicLinksSync() : File(current).resolveSymbolicLinksSync();
         } on FileSystemException {
           // 断掉的符号链接：按链接目标处理，宁可拒绝。
-          real = p.normalize(
-            p.join(p.dirname(current), Link(current).targetSync()),
-          );
+          real = p.normalize(p.join(p.dirname(current), Link(current).targetSync()));
         }
-        return pending.isEmpty
-            ? real
-            : p.normalize(p.joinAll([real, ...pending.reversed]));
+        return pending.isEmpty ? real : p.normalize(p.joinAll([real, ...pending.reversed]));
       }
       final parent = p.dirname(current);
       if (parent == current) return path;

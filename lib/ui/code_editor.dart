@@ -41,13 +41,7 @@ import 'package:re_highlight/styles/atom-one-light.dart';
 };
 
 class LopiCodeEditor extends StatelessWidget {
-  const LopiCodeEditor({
-    super.key,
-    required this.path,
-    required this.controller,
-    required this.findController,
-    required this.wordWrap,
-  });
+  const LopiCodeEditor({super.key, required this.path, required this.controller, required this.findController, required this.wordWrap});
 
   final String path;
   final CodeLineEditingController controller;
@@ -81,10 +75,7 @@ class LopiCodeEditor extends StatelessWidget {
             ? null
             : CodeHighlightTheme(
                 languages: {mode.$1: CodeHighlightThemeMode(mode: mode.$2)},
-                theme: {
-                  for (final e in (dark ? atomOneDarkTheme : atomOneLightTheme).entries)
-                    e.key: e.value.copyWith(fontWeight: FontWeight.w400, fontStyle: FontStyle.normal),
-                },
+                theme: {for (final e in (dark ? atomOneDarkTheme : atomOneLightTheme).entries) e.key: e.value.copyWith(fontWeight: FontWeight.w400, fontStyle: FontStyle.normal)},
               ),
       ),
       indicatorBuilder: (context, editingController, chunkController, notifier) => Padding(
@@ -152,16 +143,14 @@ class CodeFindPanel extends StatelessWidget implements PreferredSizeWidget {
         ),
       ),
     );
-    Widget icon(IconData data, String tip, VoidCallback? onTap) => IconButton(
-      tooltip: tip,
-      visualDensity: VisualDensity.compact,
-      icon: Icon(data, size: 20),
-      onPressed: onTap,
-    );
+    Widget icon(IconData data, String tip, VoidCallback? onTap) => IconButton(tooltip: tip, visualDensity: VisualDensity.compact, icon: Icon(data, size: 20), onPressed: onTap);
     final hasMatch = result != null && result.matches.isNotEmpty;
     return Container(
       height: preferredSize.height,
-      decoration: BoxDecoration(color: c.surface, border: Border(bottom: BorderSide(color: c.border))),
+      decoration: BoxDecoration(
+        color: c.surface,
+        border: Border(bottom: BorderSide(color: c.border)),
+      ),
       child: Column(
         children: [
           SizedBox(
@@ -195,7 +184,11 @@ class CodeFindPanel extends StatelessWidget implements PreferredSizeWidget {
                 if (count.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(left: Space.x2),
-                    child: Text(count, key: const Key('find-count'), style: t.bodySmall?.copyWith(color: hasMatch ? c.textMuted : c.danger)),
+                    child: Text(
+                      count,
+                      key: const Key('find-count'),
+                      style: t.bodySmall?.copyWith(color: hasMatch ? c.textMuted : c.danger),
+                    ),
                   ),
                 icon(Icons.keyboard_arrow_up, '上一个', hasMatch ? controller.previousMatch : null),
                 icon(Icons.keyboard_arrow_down, '下一个', hasMatch ? controller.nextMatch : null),

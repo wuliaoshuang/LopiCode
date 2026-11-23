@@ -158,17 +158,20 @@ class SkillStore {
   }
 
   /// 拼进系统提示词的技能清单（只有名字和描述）。
-  static String promptSection(List<Skill> skills) => skills.isEmpty
-      ? ''
-      : '可用的技能（需要时先用 read_skill 读全文，再照着做）：\n${skills.map((s) => '- ${s.name}：${s.description}').join('\n')}';
+  static String promptSection(List<Skill> skills) => skills.isEmpty ? '' : '可用的技能（需要时先用 read_skill 读全文，再照着做）：\n${skills.map((s) => '- ${s.name}：${s.description}').join('\n')}';
 
   /// `read_skill` 工具。没有开着的技能时返回 null（工具不出现）。
   ExtraTool? tool(List<Skill> skills) => skills.isEmpty
       ? null
       : ExtraTool(
-          spec: toolSpec('read_skill', '读取一个技能的完整说明（SKILL.md）。', {
-            'name': {'type': 'string', 'description': '技能名：${skills.map((s) => s.name).join('、')}'},
-          }, ['name']),
+          spec: toolSpec(
+            'read_skill',
+            '读取一个技能的完整说明（SKILL.md）。',
+            {
+              'name': {'type': 'string', 'description': '技能名：${skills.map((s) => s.name).join('、')}'},
+            },
+            ['name'],
+          ),
           kind: ToolKind.read,
           run: (args) async {
             final name = AgentToolbox.argString(args, 'name').trim();

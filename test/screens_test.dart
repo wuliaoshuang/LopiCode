@@ -53,7 +53,10 @@ Widget fakeWebPage(Uri uri) => ColoredBox(
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('你好，LopiCode', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700, color: Color(0xFF12202B))),
+        const Text(
+          '你好，LopiCode',
+          style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700, color: Color(0xFF12202B)),
+        ),
         const SizedBox(height: 8),
         Text('（截图里的占位网页，真机上这里是 WebView：$uri）', style: const TextStyle(fontSize: 13, color: Color(0xFF51606C))),
       ],
@@ -99,7 +102,14 @@ void main() {
       late TestEnv env;
       await tester.runAsync(() async => env = await TestEnv.create());
       addTearDown(env.dispose);
-      await tester.pumpWidget(appFor(env, ProjectListScreen(onOpen: (_) {}), mode: mode, font: font));
+      await tester.pumpWidget(
+        appFor(
+          env,
+          ProjectListScreen(onOpen: (_) {}),
+          mode: mode,
+          font: font,
+        ),
+      );
       await settle(tester);
       expect(find.text('还没有工作区'), findsOneWidget);
       await shot(tester, '01-projects-empty-$suffix');
@@ -120,7 +130,14 @@ void main() {
         await env.services.projects.create('活动报名页', ProjectTemplate.lowcode);
         await env.services.projects.create('脚本练习', ProjectTemplate.empty);
       });
-      await tester.pumpWidget(appFor(env, ProjectListScreen(key: UniqueKey(), onOpen: (_) {}), mode: mode, font: font));
+      await tester.pumpWidget(
+        appFor(
+          env,
+          ProjectListScreen(key: UniqueKey(), onOpen: (_) {}),
+          mode: mode,
+          font: font,
+        ),
+      );
       // 列表要读每个项目的元数据：一连串真实 IO，每一步都要让出一轮
       await settle(tester, rounds: 40, ms: 5);
       expect(find.text('个人主页'), findsOneWidget);
@@ -130,7 +147,14 @@ void main() {
 
     testWidgets('文件与编辑器 ($suffix)', (tester) async {
       final (env, project, session) = await open(tester, ProjectTemplate.web);
-      await tester.pumpWidget(appFor(env, ProjectShell(project: project, session: session, initial: ShellDest.files), mode: mode, font: font));
+      await tester.pumpWidget(
+        appFor(
+          env,
+          ProjectShell(project: project, session: session, initial: ShellDest.files),
+          mode: mode,
+          font: font,
+        ),
+      );
       await settle(tester, rounds: 20, ms: 5);
       expect(find.text('index.html'), findsWidgets);
       await shot(tester, '08-files-$suffix');
@@ -174,17 +198,20 @@ void main() {
         env = await TestEnv.create(
           chatClient: () => ScriptedChatClient([
             [say('好的，我先看看项目里有什么。'), call(0, 'list_files', '{}')],
-            [
-              say('我来加一个深色主题的样式，然后看一下目录。'),
-              call(0, 'write_file', '{"path":"dark.css","content":"body { background: #111; color: #eee; }\\n"}'),
-              call(1, 'run_command', '{"command":"ls -la"}'),
-            ],
+            [say('我来加一个深色主题的样式，然后看一下目录。'), call(0, 'write_file', '{"path":"dark.css","content":"body { background: #111; color: #eee; }\\n"}'), call(1, 'run_command', '{"command":"ls -la"}')],
             [say('已经加好 dark.css。在 index.html 里引入它就能生效。')],
           ]),
         );
       });
       final (_, project, session) = await open(tester, ProjectTemplate.web, env: env);
-      await tester.pumpWidget(appFor(env, ProjectShell(project: project, session: session, initial: ShellDest.chat), mode: mode, font: font));
+      await tester.pumpWidget(
+        appFor(
+          env,
+          ProjectShell(project: project, session: session, initial: ShellDest.chat),
+          mode: mode,
+          font: font,
+        ),
+      );
       await settle(tester);
       expect(find.text('新对话'), findsOneWidget);
       expect(find.textContaining('我的小站 / '), findsOneWidget);
@@ -244,7 +271,14 @@ void main() {
 
     testWidgets('终端：真的跑一条命令 ($suffix)', (tester) async {
       final (env, project, session) = await open(tester, ProjectTemplate.web);
-      await tester.pumpWidget(appFor(env, ProjectShell(project: project, session: session, initial: ShellDest.terminal), mode: mode, font: font));
+      await tester.pumpWidget(
+        appFor(
+          env,
+          ProjectShell(project: project, session: session, initial: ShellDest.terminal),
+          mode: mode,
+          font: font,
+        ),
+      );
       await settle(tester);
       await tester.runAsync(() async {
         session.terminals[session.activeTerminal].run('ls');
@@ -293,9 +327,7 @@ void main() {
             builder: (context) => Scaffold(
               body: Center(
                 child: FilledButton(
-                  onPressed: () async => result = await Navigator.of(
-                    context,
-                  ).push<SshConfig>(MaterialPageRoute(builder: (_) => const SshConnectScreen(submitLabel: '保存'))),
+                  onPressed: () async => result = await Navigator.of(context).push<SshConfig>(MaterialPageRoute(builder: (_) => const SshConnectScreen(submitLabel: '保存'))),
                   child: const Text('打开'),
                 ),
               ),
@@ -342,7 +374,14 @@ void main() {
 
     testWidgets('预览 ($suffix)', (tester) async {
       final (env, project, session) = await open(tester, ProjectTemplate.web);
-      await tester.pumpWidget(appFor(env, ProjectShell(project: project, session: session, initial: ShellDest.preview), mode: mode, font: font));
+      await tester.pumpWidget(
+        appFor(
+          env,
+          ProjectShell(project: project, session: session, initial: ShellDest.preview),
+          mode: mode,
+          font: font,
+        ),
+      );
       await settle(tester, rounds: 6);
       expect(session.preview.port, isNotNull);
       await shot(tester, '11-preview-$suffix');
@@ -350,7 +389,14 @@ void main() {
 
     testWidgets('低代码搭建器 ($suffix)', (tester) async {
       final (env, project, session) = await open(tester, ProjectTemplate.lowcode);
-      await tester.pumpWidget(appFor(env, ProjectShell(project: project, session: session, initial: ShellDest.builder), mode: mode, font: font));
+      await tester.pumpWidget(
+        appFor(
+          env,
+          ProjectShell(project: project, session: session, initial: ShellDest.builder),
+          mode: mode,
+          font: font,
+        ),
+      );
       await settle(tester, rounds: 8);
       expect(find.byTooltip('打开侧边栏'), findsOneWidget);
       await shot(tester, '12-builder-$suffix');
@@ -376,7 +422,14 @@ void main() {
     testWidgets('APK 打包 ($suffix)', (tester) async {
       final (env, project, session) = await open(tester, ProjectTemplate.web);
       // 从外壳里进：顶栏左边是汉堡按钮，不是返回箭头
-      await tester.pumpWidget(appFor(env, ProjectShell(project: project, session: session, initial: ShellDest.apk), mode: mode, font: font));
+      await tester.pumpWidget(
+        appFor(
+          env,
+          ProjectShell(project: project, session: session, initial: ShellDest.apk),
+          mode: mode,
+          font: font,
+        ),
+      );
       await settle(tester);
       expect(find.textContaining('手机上跑不了 Android SDK 和 Gradle'), findsOneWidget);
       expect(find.byTooltip('打开侧边栏'), findsOneWidget);
@@ -391,7 +444,14 @@ void main() {
       expect(find.text('还没设置'), findsOneWidget);
       expect(env.services.settings.getString(SettingKeys.apkBuildMode), 'ssh');
       await tester.runAsync(() => const SshConfig(host: 'build.example.com', user: 'dev').save(env.services.settings));
-      await tester.pumpWidget(appFor(env, ProjectShell(key: UniqueKey(), project: project, session: session, initial: ShellDest.apk), mode: mode, font: font));
+      await tester.pumpWidget(
+        appFor(
+          env,
+          ProjectShell(key: UniqueKey(), project: project, session: session, initial: ShellDest.apk),
+          mode: mode,
+          font: font,
+        ),
+      );
       await settle(tester);
       expect(find.text('dev@build.example.com'), findsOneWidget);
       await shot(tester, '20-apk-ssh-$suffix');
@@ -407,7 +467,14 @@ void main() {
             ..phase = BuildPhase.done
             ..log.addAll(['连接构建机…', '上传 4 个文件到 ~/lopicode-build/demo…', '上传完成', '运行构建命令…', '构建命令成功', 'APK 已保存（21.3 MB）'])
             ..apkPath = '/storage/emulated/0/Android/data/com.lopicode.app/files/apk/demo/app-release.apk';
-      await tester.pumpWidget(appFor(env, inShell(BuildScreen(key: UniqueKey(), session: session, debugController: sshJob)), mode: mode, font: font));
+      await tester.pumpWidget(
+        appFor(
+          env,
+          inShell(BuildScreen(key: UniqueKey(), session: session, debugController: sshJob)),
+          mode: mode,
+          font: font,
+        ),
+      );
       await settle(tester);
       await tester.drag(find.byType(ListView), const Offset(0, -520));
       await settle(tester, rounds: 2);
@@ -426,7 +493,14 @@ void main() {
             ..log.addAll(['推送 4 个文件到 shuang/demo 的 main 分支…', '已提交 a1b2c3d', '触发工作流 android.yml…', '运行 #777 已开始', '构建中…（一般要几分钟）', '构建结束：成功', 'APK 已保存（18.4 MB）'])
             ..runUrl = 'https://github.com/shuang/demo/actions/runs/777'
             ..apkPath = '/storage/emulated/0/Android/data/com.lopicode.app/files/apk/demo/app-debug.apk';
-      await tester.pumpWidget(appFor(env, inShell(BuildScreen(key: UniqueKey(), session: session, debugController: job)), mode: mode, font: font));
+      await tester.pumpWidget(
+        appFor(
+          env,
+          inShell(BuildScreen(key: UniqueKey(), session: session, debugController: job)),
+          mode: mode,
+          font: font,
+        ),
+      );
       await settle(tester);
       await tester.drag(find.byType(ListView), const Offset(0, -520));
       await settle(tester, rounds: 2);

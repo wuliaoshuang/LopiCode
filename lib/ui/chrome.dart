@@ -81,18 +81,7 @@ class ActionPill extends StatelessWidget {
 ///
 /// [fade] 为真时不画实底，而是一条从页面底色到透明的渐变——配合 `extendBodyBehindAppBar`，内容从按钮下面滚过去并渐隐。
 class PageBar extends StatelessWidget implements PreferredSizeWidget {
-  const PageBar({
-    super.key,
-    this.title,
-    this.titleText,
-    this.subtitle,
-    this.leading,
-    this.actions,
-    this.bottom,
-    this.fade = false,
-    this.background,
-    this.backTooltip = '返回',
-  });
+  const PageBar({super.key, this.title, this.titleText, this.subtitle, this.leading, this.actions, this.bottom, this.fade = false, this.background, this.backTooltip = '返回'});
 
   static const double kHeight = 64;
 
@@ -117,20 +106,26 @@ class PageBar extends StatelessWidget implements PreferredSizeWidget {
     final c = context.colors;
     final t = Theme.of(context).textTheme;
     final bg = background ?? Theme.of(context).scaffoldBackgroundColor;
-    final lead =
-        leading ??
-        (Navigator.canPop(context)
-            ? RoundIconButton(icon: Icons.arrow_back_ios_new_rounded, tooltip: backTooltip, onPressed: () => Navigator.maybePop(context))
-            : null);
+    final lead = leading ?? (Navigator.canPop(context) ? RoundIconButton(icon: Icons.arrow_back_ios_new_rounded, tooltip: backTooltip, onPressed: () => Navigator.maybePop(context)) : null);
     final acts = actions?.where((w) => w is! SizedBox).toList() ?? const <Widget>[];
     Widget? middle = title;
     if (middle == null && titleText != null) {
       middle = Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(titleText!, style: t.titleLarge?.copyWith(fontWeight: FontWeight.w400), maxLines: 1, overflow: TextOverflow.ellipsis),
+          Text(
+            titleText!,
+            style: t.titleLarge?.copyWith(fontWeight: FontWeight.w400),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
           if (subtitle != null && subtitle!.isNotEmpty)
-            Text(subtitle!, style: t.bodySmall?.copyWith(color: c.textFaint), maxLines: 1, overflow: TextOverflow.ellipsis),
+            Text(
+              subtitle!,
+              style: t.bodySmall?.copyWith(color: c.textFaint),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
         ],
       );
     } else if (middle != null) {
@@ -146,12 +141,7 @@ class PageBar extends StatelessWidget implements PreferredSizeWidget {
       child: DecoratedBox(
         decoration: fade
             ? BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [bg, bg.withValues(alpha: 0.92), bg.withValues(alpha: 0)],
-                  stops: const [0, 0.45, 1],
-                ),
+                gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [bg, bg.withValues(alpha: 0.92), bg.withValues(alpha: 0)], stops: const [0, 0.45, 1]),
               )
             : BoxDecoration(color: bg),
         child: SafeArea(
@@ -251,11 +241,19 @@ class GroupRow extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(title, style: t.bodyLarge?.copyWith(fontSize: FontSize.lg, height: 1.3, color: danger ? c.danger : c.text)),
+                    Text(
+                      title,
+                      style: t.bodyLarge?.copyWith(fontSize: FontSize.lg, height: 1.3, color: danger ? c.danger : c.text),
+                    ),
                     if (subtitle != null && subtitle!.isNotEmpty)
                       Padding(
                         padding: const EdgeInsets.only(top: 2),
-                        child: Text(subtitle!, style: t.bodySmall?.copyWith(color: c.textFaint), maxLines: 2, overflow: TextOverflow.ellipsis),
+                        child: Text(
+                          subtitle!,
+                          style: t.bodySmall?.copyWith(color: c.textFaint),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                   ],
                 ),
@@ -264,7 +262,13 @@ class GroupRow extends StatelessWidget {
                 const SizedBox(width: Space.x3),
                 ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 132),
-                  child: Text(value!, style: t.bodyMedium?.copyWith(color: c.textFaint), maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.end),
+                  child: Text(
+                    value!,
+                    style: t.bodyMedium?.copyWith(color: c.textFaint),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.end,
+                  ),
                 ),
               ],
               const SizedBox(width: Space.x2),
@@ -363,7 +367,9 @@ class TerminalGlyph extends StatelessWidget {
     return SizedBox(
       width: size,
       height: size,
-      child: CustomPaint(painter: _TerminalPainter(color: theme.color ?? context.colors.text, knockout: context.colors.bg, filled: filled)),
+      child: CustomPaint(
+        painter: _TerminalPainter(color: theme.color ?? context.colors.text, knockout: context.colors.bg, filled: filled),
+      ),
     );
   }
 }
@@ -434,10 +440,6 @@ class SectionedList extends StatelessWidget {
       }
     }
     flush();
-    return ListView(
-      key: listKey,
-      padding: EdgeInsets.fromLTRB(Space.x4, Space.x2, Space.x4, bottom),
-      children: out,
-    );
+    return ListView(key: listKey, padding: EdgeInsets.fromLTRB(Space.x4, Space.x2, Space.x4, bottom), children: out);
   }
 }

@@ -27,18 +27,7 @@ void main() {
   });
 
   test('越界路径一律拒绝', () {
-    for (final bad in [
-      '../secret.txt',
-      'src/../../secret.txt',
-      '..',
-      '/etc/passwd',
-      '~/x',
-      r'C:\Windows\x',
-      'file:///etc/passwd',
-      'http://example.com/x',
-      r'..\secret.txt',
-      'a\u0000b',
-    ]) {
+    for (final bad in ['../secret.txt', 'src/../../secret.txt', '..', '/etc/passwd', '~/x', r'C:\Windows\x', 'file:///etc/passwd', 'http://example.com/x', r'..\secret.txt', 'a\u0000b']) {
       expect(() => guard.resolve(bad), throwsA(isA<PathGuardException>()), reason: bad);
     }
   });

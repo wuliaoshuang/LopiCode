@@ -24,13 +24,7 @@ class TestEnv {
     final tmp = Directory.systemTemp.createTempSync('lopi_ui_');
     final settings = SettingsStore(File(p.join(tmp.path, 'settings.json')));
     await settings.load();
-    final services = AppServices(
-      settings: settings,
-      secrets: MemorySecretStore(),
-      projects: ProjectStore(p.join(tmp.path, 'projects')),
-      chatClientFactory: chatClient,
-      quotaHttp: quotaHttp,
-    );
+    final services = AppServices(settings: settings, secrets: MemorySecretStore(), projects: ProjectStore(p.join(tmp.path, 'projects')), chatClientFactory: chatClient, quotaHttp: quotaHttp);
     // 真实文件读写只能在 runAsync 里完成：先把渠道配置和自动化任务读好。
     await services.ready();
     // “没配好模型”的引导弹窗默认当作已经弹过，免得每个界面测试一进聊天页就被它挡住；
@@ -112,5 +106,6 @@ class ScriptedChatClient implements ChatClient {
 }
 
 ChatDelta say(String text) => ChatDelta(content: text);
-ChatDelta call(int index, String name, String args) =>
-    ChatDelta(toolCalls: [ToolCallDelta(index: index, id: 'call_${name}_$index', name: name, arguments: args)]);
+ChatDelta call(int index, String name, String args) => ChatDelta(
+  toolCalls: [ToolCallDelta(index: index, id: 'call_${name}_$index', name: name, arguments: args)],
+);

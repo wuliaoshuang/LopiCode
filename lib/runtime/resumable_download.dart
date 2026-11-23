@@ -31,14 +31,7 @@ class ResumableDownload {
 
   static File partFile(File target) => File('${target.path}.part');
 
-  Future<void> fetch(
-    Uri url,
-    File target, {
-    required int expectedSize,
-    required String expectedSha256,
-    void Function(int received, int total)? onProgress,
-    CancelToken? cancel,
-  }) async {
+  Future<void> fetch(Uri url, File target, {required int expectedSize, required String expectedSha256, void Function(int received, int total)? onProgress, CancelToken? cancel}) async {
     final part = partFile(target);
     await target.parent.create(recursive: true);
     if (await target.exists() && await target.length() == expectedSize && await sha256Of(target) == expectedSha256) {
@@ -68,15 +61,7 @@ class ResumableDownload {
     await part.rename(target.path);
   }
 
-  Future<void> _download(
-    Uri url,
-    File part,
-    int have,
-    int expectedSize,
-    void Function(int received, int total)? onProgress,
-    CancelToken? cancel, {
-    required bool allowRestart,
-  }) async {
+  Future<void> _download(Uri url, File part, int have, int expectedSize, void Function(int received, int total)? onProgress, CancelToken? cancel, {required bool allowRestart}) async {
     final request = http.Request('GET', url);
     if (have > 0) request.headers['Range'] = 'bytes=$have-';
     final http.StreamedResponse response;

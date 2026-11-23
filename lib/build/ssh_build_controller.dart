@@ -8,14 +8,7 @@ import 'package:path/path.dart' as p;
 /// 在 SSH 构建机上打包：
 /// 连接 →（可选）把项目文件传到远程目录 → 在那个目录里跑构建命令、流式看日志 → SFTP 把 APK 拉回来。
 class SshBuildController extends BuildJob {
-  SshBuildController({
-    required this.exec,
-    required this.remoteDir,
-    required this.command,
-    required this.apkRemotePath,
-    required this.outputDir,
-    this.maxOutputChars = 20000,
-  });
+  SshBuildController({required this.exec, required this.remoteDir, required this.command, required this.apkRemotePath, required this.outputDir, this.maxOutputChars = 20000});
 
   final RemoteExec exec;
 
@@ -34,8 +27,7 @@ class SshBuildController extends BuildJob {
   @override
   String get output => _output.toString();
 
-  String get _apkAbsolute =>
-      apkRemotePath.startsWith('/') || apkRemotePath.startsWith('~') ? apkRemotePath : p.posix.join(remoteDir, apkRemotePath);
+  String get _apkAbsolute => apkRemotePath.startsWith('/') || apkRemotePath.startsWith('~') ? apkRemotePath : p.posix.join(remoteDir, apkRemotePath);
 
   /// `~/x` 这种路径不能整个加引号（加了就不展开了）。
   static String quotePath(String path) {
@@ -108,10 +100,7 @@ class SshBuildController extends BuildJob {
 
       setPhase(BuildPhase.downloading);
       final resolved = StringBuffer();
-      final found = await exec.run(
-        'f=${quotePath(_apkAbsolute)}; [ -f "\$f" ] && (cd "\$(dirname "\$f")" && printf "%s/%s" "\$(pwd)" "\$(basename "\$f")")',
-        onOutput: resolved.write,
-      );
+      final found = await exec.run('f=${quotePath(_apkAbsolute)}; [ -f "\$f" ] && (cd "\$(dirname "\$f")" && printf "%s/%s" "\$(pwd)" "\$(basename "\$f")")', onOutput: resolved.write);
       final remoteApk = resolved.toString().trim();
       if (found != 0 || !remoteApk.startsWith('/')) {
         throw _Failed('构建成功了，但在构建机上没找到 $_apkAbsolute。检查“APK 路径”。');

@@ -29,22 +29,8 @@ class RuntimeScreen extends StatelessWidget {
               child: _StatusCard(runtime: runtime),
             ),
             const SectionLabel('下载源'),
-            _MirrorRow(
-              keyName: 'rootfs-source',
-              label: '系统包',
-              options: rootfsSources,
-              value: runtime.rootfsSource.id,
-              enabled: !runtime.busy,
-              onChanged: runtime.setRootfsSource,
-            ),
-            _MirrorRow(
-              keyName: 'apt-mirror',
-              label: '装软件（apt）',
-              options: aptMirrors,
-              value: runtime.aptMirror.id,
-              enabled: !runtime.busy,
-              onChanged: runtime.setAptMirror,
-            ),
+            _MirrorRow(keyName: 'rootfs-source', label: '系统包', options: rootfsSources, value: runtime.rootfsSource.id, enabled: !runtime.busy, onChanged: runtime.setRootfsSource),
+            _MirrorRow(keyName: 'apt-mirror', label: '装软件（apt）', options: aptMirrors, value: runtime.aptMirror.id, enabled: !runtime.busy, onChanged: runtime.setAptMirror),
             if (runtime.installed) ...[
               const SectionLabel('常用运行时'),
               if (!runtime.usable)
@@ -149,40 +135,29 @@ class _StatusCard extends StatelessWidget {
         children: [
           Text('Ubuntu 24.04', style: t.titleLarge),
           const SizedBox(height: Space.x1),
-          Text(status, key: const Key('runtime-status'), style: t.bodyMedium?.copyWith(color: tone)),
-          const SizedBox(height: Space.x3),
           Text(
-            runtime.installed
-                ? '在手机上跑一个不需要 root 的 Ubuntu，终端和 Agent 的命令都在里面执行，项目目录挂在 /workspace。'
-                : '装好后终端里能直接用 apt、node、python。不装也不影响别的功能。',
-            style: t.bodySmall?.copyWith(height: 1.5),
+            status,
+            key: const Key('runtime-status'),
+            style: t.bodyMedium?.copyWith(color: tone),
           ),
+          const SizedBox(height: Space.x3),
+          Text(runtime.installed ? '在手机上跑一个不需要 root 的 Ubuntu，终端和 Agent 的命令都在里面执行，项目目录挂在 /workspace。' : '装好后终端里能直接用 apt、node、python。不装也不影响别的功能。', style: t.bodySmall?.copyWith(height: 1.5)),
           if (!runtime.prootBundled) ...[
             const SizedBox(height: Space.x3),
             InfoBanner('这个安装包里缺少进入 Ubuntu 要用的文件（${runtime.missingLauncherFiles.join('、')}），环境装了也进不去，所以这里先不提供安装。请重新安装完整的 LopiCode 安装包。', key: const Key('runtime-no-proot'), tone: BannerTone.warning),
           ],
-          if (runtime.installError != null) ...[
-            const SizedBox(height: Space.x3),
-            InfoBanner(runtime.installError!, key: const Key('runtime-install-error'), tone: BannerTone.danger),
-          ],
+          if (runtime.installError != null) ...[const SizedBox(height: Space.x3), InfoBanner(runtime.installError!, key: const Key('runtime-install-error'), tone: BannerTone.danger)],
           if (runtime.installed && runtime.usable && !runtime.shouldUseLinux) ...[
             const SizedBox(height: Space.x3),
             InfoBanner(runtime.lastLaunchError ?? '连续启动失败', tone: BannerTone.danger),
             const SizedBox(height: Space.x3),
-            FilledButton(
-              key: const Key('runtime-retry-launch'),
-              onPressed: runtime.resetLaunchFailures,
-              child: const Text('重新尝试进入 Ubuntu'),
-            ),
+            FilledButton(key: const Key('runtime-retry-launch'), onPressed: runtime.resetLaunchFailures, child: const Text('重新尝试进入 Ubuntu')),
           ],
           if (runtime.busy) ...[
             const SizedBox(height: Space.x4),
             ClipRRect(
               borderRadius: BorderRadius.circular(Radii.sm),
-              child: LinearProgressIndicator(
-                minHeight: 6,
-                value: runtime.progressTotal > 0 ? runtime.progressDone / runtime.progressTotal : null,
-              ),
+              child: LinearProgressIndicator(minHeight: 6, value: runtime.progressTotal > 0 ? runtime.progressDone / runtime.progressTotal : null),
             ),
             const SizedBox(height: Space.x2),
             Text(
@@ -195,21 +170,13 @@ class _StatusCard extends StatelessWidget {
               style: t.bodySmall,
             ),
             const SizedBox(height: Space.x3),
-            OutlinedButton(
-              key: const Key('runtime-cancel'),
-              onPressed: runtime.cancelInstall,
-              child: const Text('取消（下到一半的会留着）'),
-            ),
+            OutlinedButton(key: const Key('runtime-cancel'), onPressed: runtime.cancelInstall, child: const Text('取消（下到一半的会留着）')),
           ],
           if (runtime.phase == RuntimePhase.notInstalled && runtime.prootBundled) ...[
             const SizedBox(height: Space.x3),
             Text(_spaceNote(runtime), key: const Key('runtime-space'), style: t.bodySmall?.copyWith(height: 1.5)),
             const SizedBox(height: Space.x4),
-            FilledButton(
-              key: const Key('runtime-install'),
-              onPressed: runtime.install,
-              child: Text(runtime.partialBytes > 0 ? '继续下载（已有 ${formatBytes(runtime.partialBytes)}）' : '安装运行环境'),
-            ),
+            FilledButton(key: const Key('runtime-install'), onPressed: runtime.install, child: Text(runtime.partialBytes > 0 ? '继续下载（已有 ${formatBytes(runtime.partialBytes)}）' : '安装运行环境')),
           ],
         ],
       ),
@@ -226,14 +193,7 @@ class _StatusCard extends StatelessWidget {
 }
 
 class _MirrorRow extends StatelessWidget {
-  const _MirrorRow({
-    required this.keyName,
-    required this.label,
-    required this.options,
-    required this.value,
-    required this.enabled,
-    required this.onChanged,
-  });
+  const _MirrorRow({required this.keyName, required this.label, required this.options, required this.value, required this.enabled, required this.onChanged});
   final String keyName;
   final String label;
   final List<MirrorOption> options;
@@ -294,13 +254,13 @@ class _PackRow extends StatelessWidget {
           if (running)
             OutlinedButton(onPressed: runtime.cancelPack, child: const Text('停止'))
           else if (installed)
-            Text('已安装', key: Key('pack-${pack.id}-installed'), style: t.bodySmall?.copyWith(color: c.accent))
+            Text(
+              '已安装',
+              key: Key('pack-${pack.id}-installed'),
+              style: t.bodySmall?.copyWith(color: c.accent),
+            )
           else
-            OutlinedButton(
-              key: Key('pack-${pack.id}-install'),
-              onPressed: runtime.runningPack == null && runtime.shouldUseLinux ? () => runtime.installPack(pack) : null,
-              child: const Text('安装'),
-            ),
+            OutlinedButton(key: Key('pack-${pack.id}-install'), onPressed: runtime.runningPack == null && runtime.shouldUseLinux ? () => runtime.installPack(pack) : null, child: const Text('安装')),
         ],
       ),
     );
@@ -390,13 +350,7 @@ class _LogBox extends StatelessWidget {
             child: SelectableText(
               shown.join('\n'),
               // 等宽字体里没有中文时，退回界面的默认字体。
-              style: TextStyle(
-                fontFamily: 'monospace',
-                fontFamilyFallback: [?Theme.of(context).textTheme.bodySmall?.fontFamily],
-                fontSize: FontSize.xs,
-                height: 1.5,
-                color: c.text,
-              ),
+              style: TextStyle(fontFamily: 'monospace', fontFamilyFallback: [?Theme.of(context).textTheme.bodySmall?.fontFamily], fontSize: FontSize.xs, height: 1.5, color: c.text),
             ),
           ),
         ),

@@ -107,10 +107,7 @@ class _QuotaScreenState extends State<QuotaScreen> {
       backgroundColor: c.canvas,
       appBar: PageBar(background: c.canvas, title: const Text('额度上限')),
       body: ch == null || !isDeepSeekOfficial(ch.baseUrl)
-          ? const Padding(
-              padding: EdgeInsets.all(Space.x4),
-              child: InfoBanner('这个渠道不是 DeepSeek 官方接口（api.deepseek.com），查不了余额，也就设不了额度上限。'),
-            )
+          ? const Padding(padding: EdgeInsets.all(Space.x4), child: InfoBanner('这个渠道不是 DeepSeek 官方接口（api.deepseek.com），查不了余额，也就设不了额度上限。'))
           : AnimatedBuilder(
               animation: app.quota,
               builder: (context, _) {
@@ -163,14 +160,15 @@ class _QuotaScreenState extends State<QuotaScreen> {
                             margin: const EdgeInsets.only(top: Space.x1, bottom: Space.x2),
                           ),
                         if (state.result != null && !state.result!.isAvailable)
-                          const InfoBanner('DeepSeek 说这个账号的余额已经不够调用接口了。', tone: BannerTone.warning, margin: EdgeInsets.only(bottom: Space.x2)),
+                          const InfoBanner(
+                            'DeepSeek 说这个账号的余额已经不够调用接口了。',
+                            tone: BannerTone.warning,
+                            margin: EdgeInsets.only(bottom: Space.x2),
+                          ),
                         Row(
                           children: [
                             Expanded(
-                              child: Text(
-                                state.at == null ? '数字来自 DeepSeek 的余额接口' : '${state.error == null ? '更新于' : '上次尝试'} ${_clock(state.at!)}',
-                                style: t.bodySmall?.copyWith(color: c.textFaint),
-                              ),
+                              child: Text(state.at == null ? '数字来自 DeepSeek 的余额接口' : '${state.error == null ? '更新于' : '上次尝试'} ${_clock(state.at!)}', style: t.bodySmall?.copyWith(color: c.textFaint)),
                             ),
                             TextButton.icon(
                               key: const Key('quota-refresh'),
@@ -199,16 +197,25 @@ class _QuotaScreenState extends State<QuotaScreen> {
                             child: LinearProgressIndicator(value: q.fraction, minHeight: 6, color: q.reached ? c.danger : c.accentFill, backgroundColor: c.border),
                           ),
                           const SizedBox(height: Space.x3),
-                          Text(
-                            '已用 ${formatMoney(q.currency, q.used)} / 上限 ${formatMoney(q.currency, q.limit)} · 从 ${_day(q.since)} 算起',
-                            style: t.bodySmall?.copyWith(color: c.textFaint),
-                          ),
+                          Text('已用 ${formatMoney(q.currency, q.used)} / 上限 ${formatMoney(q.currency, q.limit)} · 从 ${_day(q.since)} 算起', style: t.bodySmall?.copyWith(color: c.textFaint)),
                           if (q.lastBalance == null)
-                            const InfoBanner('还没查到过余额，起点没记上；查到第一次余额后才开始算已用。', tone: BannerTone.warning, margin: EdgeInsets.only(top: Space.x3)),
+                            const InfoBanner(
+                              '还没查到过余额，起点没记上；查到第一次余额后才开始算已用。',
+                              tone: BannerTone.warning,
+                              margin: EdgeInsets.only(top: Space.x3),
+                            ),
                           if (q.reached)
-                            const InfoBanner('已达到你设的额度上限，这个渠道的新请求现在会被拦住。调高上限或“从现在重新算”后恢复。', tone: BannerTone.danger, margin: EdgeInsets.only(top: Space.x3)),
+                            const InfoBanner(
+                              '已达到你设的额度上限，这个渠道的新请求现在会被拦住。调高上限或“从现在重新算”后恢复。',
+                              tone: BannerTone.danger,
+                              margin: EdgeInsets.only(top: Space.x3),
+                            ),
                           if (q.recharge)
-                            const InfoBanner('余额比上次查到的变多了（可能充值了）。已用没有因此减少；想从现在的余额重新开始算，点下面的“从现在重新算”。', key: Key('quota-recharge'), margin: EdgeInsets.only(top: Space.x3)),
+                            const InfoBanner(
+                              '余额比上次查到的变多了（可能充值了）。已用没有因此减少；想从现在的余额重新开始算，点下面的“从现在重新算”。',
+                              key: Key('quota-recharge'),
+                              margin: EdgeInsets.only(top: Space.x3),
+                            ),
                         ],
                       ),
                     ],
@@ -233,7 +240,11 @@ class _QuotaScreenState extends State<QuotaScreen> {
                           ),
                         ],
                         if (dirtyCurrency)
-                          const InfoBanner('换币种会把已用清零，按新币种的余额重新开始算。', tone: BannerTone.warning, margin: EdgeInsets.only(top: Space.x3)),
+                          const InfoBanner(
+                            '换币种会把已用清零，按新币种的余额重新开始算。',
+                            tone: BannerTone.warning,
+                            margin: EdgeInsets.only(top: Space.x3),
+                          ),
                         const SizedBox(height: Space.x3),
                         TextField(
                           key: const Key('quota-warn'),
@@ -241,7 +252,12 @@ class _QuotaScreenState extends State<QuotaScreen> {
                           keyboardType: TextInputType.number,
                           decoration: const InputDecoration(labelText: '提醒阈值', suffixText: '%', helperText: '用到这个比例时在聊天里提醒一次，不拦。填 0 不提醒'),
                         ),
-                        if (_formError != null) InfoBanner(_formError!, tone: BannerTone.danger, margin: const EdgeInsets.only(top: Space.x3)),
+                        if (_formError != null)
+                          InfoBanner(
+                            _formError!,
+                            tone: BannerTone.danger,
+                            margin: const EdgeInsets.only(top: Space.x3),
+                          ),
                         const SizedBox(height: Space.x4),
                         FilledButton(key: const Key('quota-save'), onPressed: () => _save(app, ch, currency), child: const Text('保存')),
                       ],

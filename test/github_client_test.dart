@@ -102,9 +102,15 @@ class FakeGitHub {
     } else if (req.method == 'GET' && path == '$repo/actions/artifacts/12/zip') {
       json(410, {'message': 'Artifact has expired'});
     } else if (req.method == 'GET' && path == '$repo/git/ref/heads/main') {
-      json(200, {'ref': 'refs/heads/main', 'object': {'sha': 'parent111', 'type': 'commit'}});
+      json(200, {
+        'ref': 'refs/heads/main',
+        'object': {'sha': 'parent111', 'type': 'commit'},
+      });
     } else if (req.method == 'GET' && path == '$repo/git/commits/parent111') {
-      json(200, {'sha': 'parent111', 'tree': {'sha': 'tree000'}});
+      json(200, {
+        'sha': 'parent111',
+        'tree': {'sha': 'tree000'},
+      });
     } else if (req.method == 'POST' && path == '$repo/git/blobs') {
       json(201, {'sha': 'blob${requests.where((r) => r.path.endsWith('/git/blobs')).length}'});
     } else if (req.method == 'POST' && path == '$repo/git/trees') {
@@ -112,7 +118,10 @@ class FakeGitHub {
     } else if (req.method == 'POST' && path == '$repo/git/commits') {
       json(201, {'sha': 'commit222'});
     } else if (req.method == 'PATCH' && path == '$repo/git/refs/heads/main') {
-      json(200, {'ref': 'refs/heads/main', 'object': {'sha': 'commit222'}});
+      json(200, {
+        'ref': 'refs/heads/main',
+        'object': {'sha': 'commit222'},
+      });
     } else {
       json(404, {'message': 'Not Found'});
     }
@@ -227,16 +236,11 @@ void main() {
     final bad = GitHubClient(token: 'ghp_wrong_secret', owner: 'shuang', repo: 'demo', baseUrl: gh.base);
     await expectLater(
       bad.getRun(777),
-      throwsA(isA<GitHubException>()
-          .having((e) => e.statusCode, 'status', 401)
-          .having((e) => e.message, 'message', allOf(contains('Token'), isNot(contains('ghp_wrong_secret'))))),
+      throwsA(isA<GitHubException>().having((e) => e.statusCode, 'status', 401).having((e) => e.message, 'message', allOf(contains('Token'), isNot(contains('ghp_wrong_secret'))))),
     );
     await expectLater(client.getRun(999), throwsA(isA<GitHubException>().having((e) => e.statusCode, 'status', 404)));
     gh.dispatchStatus = 422;
-    await expectLater(
-      client.dispatchWorkflow('android.yml', 'main'),
-      throwsA(isA<GitHubException>().having((e) => e.message, 'message', contains('workflow_dispatch'))),
-    );
+    await expectLater(client.dispatchWorkflow('android.yml', 'main'), throwsA(isA<GitHubException>().having((e) => e.message, 'message', contains('workflow_dispatch'))));
     final offline = GitHubClient(token: 'ghp_wrong_secret', owner: 'a', repo: 'b', baseUrl: 'http://127.0.0.1:1');
     await expectLater(offline.getRun(1), throwsA(isA<GitHubException>().having((e) => e.message, 'message', isNot(contains('ghp_')))));
   });

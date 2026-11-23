@@ -48,8 +48,7 @@ const List<MirrorOption> aptMirrors = [
   MirrorOption('official', 'Ubuntu 官方', 'http://ports.ubuntu.com/ubuntu-ports'),
 ];
 
-MirrorOption mirrorById(List<MirrorOption> list, String id) =>
-    list.firstWhere((m) => m.id == id, orElse: () => list.first);
+MirrorOption mirrorById(List<MirrorOption> list, String id) => list.firstWhere((m) => m.id == id, orElse: () => list.first);
 
 /// apt 的软件源文件内容（deb822 格式，和基础系统自带的文件同一格式）。
 String aptSourcesFor(MirrorOption mirror) =>
@@ -78,8 +77,7 @@ class RuntimePack {
 const String _aptInstall = 'export DEBIAN_FRONTEND=noninteractive; apt-get update && apt-get install -y --no-install-recommends';
 
 /// Node.js 官方包的下载源（和基础系统包的下载源同一个选择：国内 / 官方）。
-String nodeDistBase(String sourceId) =>
-    sourceId == 'official' ? 'https://nodejs.org/dist' : 'https://npmmirror.com/mirrors/node';
+String nodeDistBase(String sourceId) => sourceId == 'official' ? 'https://nodejs.org/dist' : 'https://npmmirror.com/mirrors/node';
 
 List<RuntimePack> runtimePacks(String sourceId) => [
   RuntimePack(
@@ -113,11 +111,5 @@ npm --version
     marker: 'usr/bin/python3',
     script: 'set -e\n$_aptInstall python3 python3-pip python3-venv\npython3 --version\n',
   ),
-  const RuntimePack(
-    id: 'git',
-    title: 'Git',
-    subtitle: 'Ubuntu 软件源里的 git',
-    marker: 'usr/bin/git',
-    script: 'set -e\n$_aptInstall ca-certificates git\ngit --version\n',
-  ),
+  const RuntimePack(id: 'git', title: 'Git', subtitle: 'Ubuntu 软件源里的 git', marker: 'usr/bin/git', script: 'set -e\n$_aptInstall ca-certificates git\ngit --version\n'),
 ];

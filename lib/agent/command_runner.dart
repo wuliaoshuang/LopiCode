@@ -32,16 +32,10 @@ class LocalShellRunner implements CommandRunner {
   static String get shellPath => Platform.isAndroid ? '/system/bin/sh' : '/bin/sh';
 
   @override
-  String get description => Platform.isAndroid
-      ? '手机自带的 sh（toybox 基础命令；没有 git、node、python、编译器）'
-      : '本机 /bin/sh';
+  String get description => Platform.isAndroid ? '手机自带的 sh（toybox 基础命令；没有 git、node、python、编译器）' : '本机 /bin/sh';
 
   @override
-  Future<CommandResult> run(
-    String command, {
-    required String workingDirectory,
-    Duration timeout = const Duration(seconds: 60),
-  }) async {
+  Future<CommandResult> run(String command, {required String workingDirectory, Duration timeout = const Duration(seconds: 60)}) async {
     onOutput?.call('\r\n\x1b[2m[Agent] \$ $command\x1b[0m\r\n');
     return runAndCollect(
       () => Process.start(shellPath, ['-c', command], workingDirectory: workingDirectory),
@@ -53,12 +47,7 @@ class LocalShellRunner implements CommandRunner {
 }
 
 /// 启动一个进程，收集并回显它的输出，超时就结束它。
-Future<CommandResult> runAndCollect(
-  Future<Process> Function() start, {
-  required Duration timeout,
-  void Function(String text)? onOutput,
-  String startError = '无法启动',
-}) async {
+Future<CommandResult> runAndCollect(Future<Process> Function() start, {required Duration timeout, void Function(String text)? onOutput, String startError = '无法启动'}) async {
   final Process process;
   try {
     process = await start();

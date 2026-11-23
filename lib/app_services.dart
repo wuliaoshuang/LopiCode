@@ -19,18 +19,12 @@ import 'package:path_provider/path_provider.dart';
 
 /// 全应用共用的服务：设置、密钥、项目仓库。测试里可以整体替换。
 class AppServices extends ChangeNotifier {
-  AppServices({
-    required this.settings,
-    required this.secrets,
-    required this.projects,
-    this.chatClientFactory,
-    this.quotaHttp,
-    LinuxRuntime? runtime,
-  }) : runtime = runtime ?? LinuxRuntime(settings: settings, baseDir: p.join(settings.file.parent.path, 'runtime')),
-       models = ModelConfigStore(settings, secrets),
-       presets = PresetStore(settings),
-       skills = SkillStore(settings, p.join(settings.file.parent.path, 'skills')),
-       automations = AutomationStore(File(p.join(settings.file.parent.path, 'automations.json'))) {
+  AppServices({required this.settings, required this.secrets, required this.projects, this.chatClientFactory, this.quotaHttp, LinuxRuntime? runtime})
+    : runtime = runtime ?? LinuxRuntime(settings: settings, baseDir: p.join(settings.file.parent.path, 'runtime')),
+      models = ModelConfigStore(settings, secrets),
+      presets = PresetStore(settings),
+      skills = SkillStore(settings, p.join(settings.file.parent.path, 'skills')),
+      automations = AutomationStore(File(p.join(settings.file.parent.path, 'automations.json'))) {
     projects.linuxRootfs ??= this.runtime.rootfsDir;
     scheduler = AutomationScheduler(this);
     quota = QuotaStore(settings, models, httpClient: quotaHttp);
@@ -91,12 +85,7 @@ class AppServices extends ChangeNotifier {
     final support = await getApplicationSupportDirectory();
     final runtime = LinuxRuntime(settings: settings, baseDir: p.join(support.path, 'runtime'), host: ChannelRuntimeHost());
     await runtime.init();
-    final app = AppServices(
-      settings: settings,
-      secrets: secrets,
-      projects: ProjectStore(p.join(docs.path, 'projects')),
-      runtime: runtime,
-    );
+    final app = AppServices(settings: settings, secrets: secrets, projects: ProjectStore(p.join(docs.path, 'projects')), runtime: runtime);
     await app.ready();
     app.scheduler.start();
     return app;
@@ -133,8 +122,7 @@ class AppServices extends ChangeNotifier {
 class AppScope extends InheritedNotifier<AppServices> {
   const AppScope({super.key, required AppServices services, required super.child}) : super(notifier: services);
 
-  static AppServices of(BuildContext context) =>
-      context.dependOnInheritedWidgetOfExactType<AppScope>()!.notifier!;
+  static AppServices of(BuildContext context) => context.dependOnInheritedWidgetOfExactType<AppScope>()!.notifier!;
 }
 
 class _UnconfiguredClient implements ChatClient {

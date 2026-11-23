@@ -129,10 +129,7 @@ class _ModelPickerSheetState extends State<ModelPickerSheet> {
                 ),
               ],
               const SizedBox(height: Space.x4),
-              FilledButton(
-                onPressed: model == null ? null : () => Navigator.pop(context, ModelSelectionResult(ModelSelection(channel.id, model.id, level))),
-                child: const Text('用这个模型'),
-              ),
+              FilledButton(onPressed: model == null ? null : () => Navigator.pop(context, ModelSelectionResult(ModelSelection(channel.id, model.id, level))), child: const Text('用这个模型')),
             ],
             TextButton(onPressed: () => Navigator.pop(context, 'manage'), child: const Text('管理渠道和模型')),
           ],
@@ -182,13 +179,8 @@ class PermissionSheet extends StatelessWidget {
   }
 }
 
-Future<bool> confirmFullPermission(BuildContext context) => confirmDialog(
-  context,
-  title: '改成完全权限？',
-  message: '改成完全权限后，Agent 删除文件、执行命令都不再问你。命令在运行环境里什么都能做，请只在你信得过这次任务时使用。随时可以改回来。',
-  confirmLabel: '改成完全权限',
-  danger: true,
-);
+Future<bool> confirmFullPermission(BuildContext context) =>
+    confirmDialog(context, title: '改成完全权限？', message: '改成完全权限后，Agent 删除文件、执行命令都不再问你。命令在运行环境里什么都能做，请只在你信得过这次任务时使用。随时可以改回来。', confirmLabel: '改成完全权限', danger: true);
 
 // ── 预设 ─────────────────────────────────────────────
 class PresetPickerSheet extends StatelessWidget {
@@ -264,13 +256,7 @@ class SendModeSheet extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         const _SheetOption(icon: Icons.schedule, title: '排队', subtitle: '等 AI 这一轮做完再发', value: SendMode.queue),
-        _SheetOption(
-          icon: Icons.subdirectory_arrow_right,
-          title: '插话',
-          subtitle: hasImages ? '带图片的消息不能插话' : 'AI 做下一步时就能看到，不打断它',
-          value: SendMode.steer,
-          enabled: !hasImages,
-        ),
+        _SheetOption(icon: Icons.subdirectory_arrow_right, title: '插话', subtitle: hasImages ? '带图片的消息不能插话' : 'AI 做下一步时就能看到，不打断它', value: SendMode.steer, enabled: !hasImages),
         const _SheetOption(icon: Icons.stop_circle_outlined, title: '中断并发送', subtitle: '让 AI 马上停下，改做这条', value: SendMode.interrupt),
         const SizedBox(height: Space.x2),
       ],
@@ -300,7 +286,13 @@ class PlusSheet extends StatelessWidget {
           ? null
           : ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 150),
-              child: Text(state, style: t.bodyMedium?.copyWith(color: stateColor ?? c.textFaint), maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.end),
+              child: Text(
+                state,
+                style: t.bodyMedium?.copyWith(color: stateColor ?? c.textFaint),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.end,
+              ),
             ),
       onTap: () => Navigator.pop(context, value),
     );
@@ -454,7 +446,14 @@ class StatusChipRow extends StatelessWidget {
         children: [
           Icon(icon, size: 16, color: fg),
           const SizedBox(width: Space.x2),
-          Expanded(child: Text(text, style: t.bodySmall?.copyWith(color: c.text), maxLines: 2, overflow: TextOverflow.ellipsis)),
+          Expanded(
+            child: Text(
+              text,
+              style: t.bodySmall?.copyWith(color: c.text),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
           TextButton(onPressed: onTap, child: Text(action)),
         ],
       ),
@@ -490,9 +489,14 @@ class SlashSuggestions extends StatelessWidget {
                   children: [
                     SizedBox(
                       width: 104,
-                      child: Text(cmd, style: TextStyle(fontFamily: kMonoFont, fontFamilyFallback: kMonoFallback, fontSize: FontSize.sm, color: c.accent)),
+                      child: Text(
+                        cmd,
+                        style: TextStyle(fontFamily: kMonoFont, fontFamilyFallback: kMonoFallback, fontSize: FontSize.sm, color: c.accent),
+                      ),
                     ),
-                    Expanded(child: Text(hint, style: t.bodySmall, maxLines: 1, overflow: TextOverflow.ellipsis)),
+                    Expanded(
+                      child: Text(hint, style: t.bodySmall, maxLines: 1, overflow: TextOverflow.ellipsis),
+                    ),
                   ],
                 ),
               ),
@@ -536,7 +540,12 @@ class QueueStrip extends StatelessWidget {
                   ),
                   const SizedBox(width: Space.x2),
                   Expanded(
-                    child: Text('${q.images.isEmpty ? '' : '[${q.images.length} 张图] '}${q.text}', style: t.bodySmall?.copyWith(color: c.text), maxLines: 1, overflow: TextOverflow.ellipsis),
+                    child: Text(
+                      '${q.images.isEmpty ? '' : '[${q.images.length} 张图] '}${q.text}',
+                      style: t.bodySmall?.copyWith(color: c.text),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                   PopupMenuButton<String>(
                     tooltip: '处理这条消息',
@@ -610,10 +619,7 @@ class ApprovalCard extends StatelessWidget {
               Icon(icon, size: 18, color: c.warning),
               const SizedBox(width: Space.x2),
               Expanded(
-                child: Text(
-                  isSchedule ? '$who 想${req.title}，请核对后再确认' : '$who 想${req.title}，要允许吗？',
-                  style: t.titleSmall?.copyWith(color: c.warning),
-                ),
+                child: Text(isSchedule ? '$who 想${req.title}，请核对后再确认' : '$who 想${req.title}，要允许吗？', style: t.titleSmall?.copyWith(color: c.warning)),
               ),
             ],
           ),
@@ -632,13 +638,16 @@ class ApprovalCard extends StatelessWidget {
           const SizedBox(height: Space.x3),
           Row(
             children: [
-              Expanded(child: OutlinedButton(onPressed: () => onAnswer(false), child: const Text('拒绝'))),
+              Expanded(
+                child: OutlinedButton(onPressed: () => onAnswer(false), child: const Text('拒绝')),
+              ),
               const SizedBox(width: Space.x2),
-              Expanded(child: FilledButton(onPressed: () => onAnswer(true), child: Text(isSchedule ? '确认保存' : '允许这一次'))),
+              Expanded(
+                child: FilledButton(onPressed: () => onAnswer(true), child: Text(isSchedule ? '确认保存' : '允许这一次')),
+              ),
             ],
           ),
-          if (req.allowAlways)
-            TextButton(onPressed: () => onAnswer(true, always: true), child: const Text('本对话都允许')),
+          if (req.allowAlways) TextButton(onPressed: () => onAnswer(true, always: true), child: const Text('本对话都允许')),
         ],
       ),
     );
@@ -693,7 +702,9 @@ class _QuestionCardState extends State<QuestionCard> {
               children: [
                 Icon(Icons.help_outline, size: 18, color: c.accent),
                 const SizedBox(width: Space.x2),
-                Expanded(child: Text(q.agentName.isEmpty ? 'Agent 想问你' : '子代理“${q.agentName}”想问你', style: t.titleSmall?.copyWith(color: c.accent))),
+                Expanded(
+                  child: Text(q.agentName.isEmpty ? 'Agent 想问你' : '子代理“${q.agentName}”想问你', style: t.titleSmall?.copyWith(color: c.accent)),
+                ),
               ],
             ),
             const SizedBox(height: Space.x2),
@@ -755,7 +766,10 @@ class SubAgentCapsule extends StatelessWidget {
               children: [
                 Icon(Icons.account_tree_outlined, size: 14, color: running > 0 ? c.accent : c.textMuted),
                 const SizedBox(width: Space.x1),
-                Text('$total', style: t.bodySmall?.copyWith(color: running > 0 ? c.accent : c.textMuted, fontWeight: FontWeight.w600)),
+                Text(
+                  '$total',
+                  style: t.bodySmall?.copyWith(color: running > 0 ? c.accent : c.textMuted, fontWeight: FontWeight.w600),
+                ),
               ],
             ),
           ),
@@ -858,11 +872,7 @@ class _SubConversationScreenState extends State<SubConversationScreen> {
     final parent = s.conversationById(conv?.parentId);
     final parentName = parent == null ? '上级' : (parent.agentName.isEmpty ? '主智能体' : parent.agentName);
     return Scaffold(
-      appBar: PageBar(
-        backTooltip: '返回上级',
-        titleText: conv?.agentName ?? '子代理',
-        subtitle: '子代理 · 上级：$parentName · ${s.modelOf(conv ?? s.activeConversation)?.model.name ?? '未设置模型'}',
-      ),
+      appBar: PageBar(backTooltip: '返回上级', titleText: conv?.agentName ?? '子代理', subtitle: '子代理 · 上级：$parentName · ${s.modelOf(conv ?? s.activeConversation)?.model.name ?? '未设置模型'}'),
       body: SafeArea(
         top: false,
         child: Column(
@@ -879,7 +889,9 @@ class _SubConversationScreenState extends State<SubConversationScreen> {
                           ChatItemView(
                             item: item,
                             onOpenChild: (id) => Navigator.of(context).push(
-                              MaterialPageRoute<void>(builder: (_) => SubConversationScreen(session: s, conversationId: id)),
+                              MaterialPageRoute<void>(
+                                builder: (_) => SubConversationScreen(session: s, conversationId: id),
+                              ),
                             ),
                           ),
                         if (run.busy)
@@ -893,7 +905,11 @@ class _SubConversationScreenState extends State<SubConversationScreen> {
             PendingArea(session: s),
             Padding(
               padding: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x3),
-              child: Text('子代理的对话只能看。要改方向，回到上级对话里说。', style: t.bodySmall?.copyWith(color: c.textFaint), textAlign: TextAlign.center),
+              child: Text(
+                '子代理的对话只能看。要改方向，回到上级对话里说。',
+                style: t.bodySmall?.copyWith(color: c.textFaint),
+                textAlign: TextAlign.center,
+              ),
             ),
           ],
         ),

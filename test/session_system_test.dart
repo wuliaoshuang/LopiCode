@@ -538,7 +538,11 @@ void main() {
         protocol: ChatProtocol.openaiChat,
         baseUrl: 'http://127.0.0.1:1/v1',
         apiKey: 'k',
-        models: [ModelSpec(id: 'big'), ModelSpec(id: 'small'), ModelSpec(id: 'other')],
+        models: [
+          ModelSpec(id: 'big'),
+          ModelSpec(id: 'small'),
+          ModelSpec(id: 'other'),
+        ],
       );
       await session.setModel(ModelSelection(ch.id, 'big'));
       await env.services.settings.set(SettingKeys.subagentAllowedModels, ['${ch.id}/small']);
@@ -613,9 +617,9 @@ void main() {
         }
         return switch (step++) {
           0 => use('team_task', {
-              'title': '写页面',
-              'write_scope': ['pages/'],
-            }),
+            'title': '写页面',
+            'write_scope': ['pages/'],
+          }),
           1 => use('spawn_agent', {'name': '前端', 'task': '写页面 pages/a.html', 'task_id': 't1'}),
           _ => reply('完'),
         };

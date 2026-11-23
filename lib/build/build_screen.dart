@@ -72,10 +72,7 @@ class _BuildScreenState extends State<BuildScreen> {
     _ssh = app.settings.getString(SettingKeys.apkBuildMode) == 'ssh' || widget.debugController is SshBuildController;
     _sshDir.text = app.settings.getString(SettingKeys.sshBuildDir, '~/lopicode-build/${widget.session.project.id}');
     _sshCommand.text = app.settings.getString(SettingKeys.sshBuildCommand, _isFlutterProject ? 'flutter build apk --release' : '');
-    _sshApk.text = app.settings.getString(
-      SettingKeys.sshBuildOutput,
-      _isFlutterProject ? 'build/app/outputs/flutter-apk/app-release.apk' : '',
-    );
+    _sshApk.text = app.settings.getString(SettingKeys.sshBuildOutput, _isFlutterProject ? 'build/app/outputs/flutter-apk/app-release.apk' : '');
     _job = widget.debugController?..addListener(_onJob);
   }
 
@@ -178,8 +175,7 @@ class _BuildScreenState extends State<BuildScreen> {
           config: config,
           secrets: app.secrets,
           knownHosts: KnownHosts(app.settings),
-          onUnknownHost: (config, type, fingerprint) async =>
-              mounted ? confirmHostKey(navigator.context, config, type, fingerprint) : false,
+          onUnknownHost: (config, type, fingerprint) async => mounted ? confirmHostKey(navigator.context, config, type, fingerprint) : false,
         ),
       ),
       remoteDir: dir,
@@ -207,7 +203,10 @@ class _BuildScreenState extends State<BuildScreen> {
       const SizedBox(height: Space.x3),
       Material(
         color: c.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Radii.md), side: BorderSide(color: c.border)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(Radii.md),
+          side: BorderSide(color: c.border),
+        ),
         clipBehavior: Clip.antiAlias,
         child: ListTile(
           key: const Key('ssh-build-host'),
@@ -215,9 +214,7 @@ class _BuildScreenState extends State<BuildScreen> {
           leading: Icon(Icons.dns_outlined, color: c.textMuted),
           title: Text(
             config.isComplete ? config.display : '还没设置',
-            style: config.isComplete
-                ? const TextStyle(fontFamily: kMonoFont, fontFamilyFallback: kMonoFallback, fontSize: FontSize.sm)
-                : null,
+            style: config.isComplete ? const TextStyle(fontFamily: kMonoFont, fontFamilyFallback: kMonoFallback, fontSize: FontSize.sm) : null,
           ),
           subtitle: Text(config.isComplete ? (config.useKey ? '私钥登录' : '密码登录') : '填一台装好 Android SDK 的服务器'),
           trailing: const Icon(Icons.chevron_right),
@@ -261,12 +258,7 @@ class _BuildScreenState extends State<BuildScreen> {
       const SizedBox(height: Space.x2),
       busy
           ? OutlinedButton(onPressed: job!.cancel, child: const Text('停止并断开'))
-          : FilledButton.icon(
-              key: const Key('ssh-build-start'),
-              onPressed: _startSsh,
-              icon: const Icon(Icons.rocket_launch_outlined, size: 18),
-              label: Text(job == null ? '开始打包' : '重新打包'),
-            ),
+          : FilledButton.icon(key: const Key('ssh-build-start'), onPressed: _startSsh, icon: const Icon(Icons.rocket_launch_outlined, size: 18), label: Text(job == null ? '开始打包' : '重新打包')),
       if (job != null) ...[const SizedBox(height: Space.x4), _JobCard(job: job)],
     ];
   }
@@ -323,70 +315,60 @@ class _BuildScreenState extends State<BuildScreen> {
             onSelectionChanged: busy ? null : (s) => _setMode(s.first),
           ),
           const SizedBox(height: Space.x6),
-          if (_ssh) ..._sshForm(context, busy) else ...[
-          Text('① 仓库', style: t.titleMedium),
-          const SizedBox(height: Space.x3),
-          TextField(
-            controller: _repo,
-            enabled: !busy,
-            autocorrect: false,
-            decoration: const InputDecoration(labelText: '仓库', hintText: '用户名/仓库名'),
-          ),
-          const SizedBox(height: Space.x3),
-          TextField(
-            controller: _ref,
-            enabled: !busy,
-            autocorrect: false,
-            decoration: const InputDecoration(labelText: '分支', hintText: 'main'),
-          ),
-          const SizedBox(height: Space.x3),
-          TextField(
-            controller: _token,
-            enabled: !busy,
-            obscureText: true,
-            autocorrect: false,
-            enableSuggestions: false,
-            decoration: InputDecoration(
-              labelText: 'GitHub Token',
-              hintText: _hasToken ? '已保存，留空表示不改' : '粘贴 Token',
-              helperText: '需要这个仓库的 Contents 和 Actions 读写权限；要推送工作流文件还得有 Workflows 权限。加密保存在本机。',
+          if (_ssh)
+            ..._sshForm(context, busy)
+          else ...[
+            Text('① 仓库', style: t.titleMedium),
+            const SizedBox(height: Space.x3),
+            TextField(
+              controller: _repo,
+              enabled: !busy,
+              autocorrect: false,
+              decoration: const InputDecoration(labelText: '仓库', hintText: '用户名/仓库名'),
             ),
-          ),
-          const SizedBox(height: Space.x6),
-          Text('② 工作流', style: t.titleMedium),
-          const SizedBox(height: Space.x3),
-          TextField(
-            controller: _workflow,
-            enabled: !busy,
-            autocorrect: false,
-            decoration: const InputDecoration(labelText: '工作流文件名', hintText: 'android.yml'),
-          ),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton.icon(
-              onPressed: _showTemplate,
-              icon: const Icon(Icons.description_outlined, size: 18),
-              label: Text(_isFlutterProject ? '查看现成模板（Flutter 项目）' : '查看现成模板（网页套壳成 App）'),
+            const SizedBox(height: Space.x3),
+            TextField(
+              controller: _ref,
+              enabled: !busy,
+              autocorrect: false,
+              decoration: const InputDecoration(labelText: '分支', hintText: 'main'),
             ),
-          ),
-          const SizedBox(height: Space.x4),
-          Text('③ 打包', style: t.titleMedium),
-          const SizedBox(height: Space.x1),
-          Row(
-            children: [
-              Expanded(child: Text('先把项目文件推送到仓库', style: t.bodyMedium)),
-              Switch(value: _pushFirst, onChanged: busy ? null : (v) => setState(() => _pushFirst = v)),
-            ],
-          ),
-          const SizedBox(height: Space.x2),
-          busy
-              ? OutlinedButton(onPressed: job!.cancel, child: const Text('停止等待'))
-              : FilledButton.icon(
-                  onPressed: _start,
-                  icon: const Icon(Icons.rocket_launch_outlined, size: 18),
-                  label: Text(job == null ? '开始打包' : '重新打包'),
-                ),
-          if (job != null) ...[const SizedBox(height: Space.x4), _JobCard(job: job)],
+            const SizedBox(height: Space.x3),
+            TextField(
+              controller: _token,
+              enabled: !busy,
+              obscureText: true,
+              autocorrect: false,
+              enableSuggestions: false,
+              decoration: InputDecoration(labelText: 'GitHub Token', hintText: _hasToken ? '已保存，留空表示不改' : '粘贴 Token', helperText: '需要这个仓库的 Contents 和 Actions 读写权限；要推送工作流文件还得有 Workflows 权限。加密保存在本机。'),
+            ),
+            const SizedBox(height: Space.x6),
+            Text('② 工作流', style: t.titleMedium),
+            const SizedBox(height: Space.x3),
+            TextField(
+              controller: _workflow,
+              enabled: !busy,
+              autocorrect: false,
+              decoration: const InputDecoration(labelText: '工作流文件名', hintText: 'android.yml'),
+            ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(onPressed: _showTemplate, icon: const Icon(Icons.description_outlined, size: 18), label: Text(_isFlutterProject ? '查看现成模板（Flutter 项目）' : '查看现成模板（网页套壳成 App）')),
+            ),
+            const SizedBox(height: Space.x4),
+            Text('③ 打包', style: t.titleMedium),
+            const SizedBox(height: Space.x1),
+            Row(
+              children: [
+                Expanded(child: Text('先把项目文件推送到仓库', style: t.bodyMedium)),
+                Switch(value: _pushFirst, onChanged: busy ? null : (v) => setState(() => _pushFirst = v)),
+              ],
+            ),
+            const SizedBox(height: Space.x2),
+            busy
+                ? OutlinedButton(onPressed: job!.cancel, child: const Text('停止等待'))
+                : FilledButton.icon(onPressed: _start, icon: const Icon(Icons.rocket_launch_outlined, size: 18), label: Text(job == null ? '开始打包' : '重新打包')),
+            if (job != null) ...[const SizedBox(height: Space.x4), _JobCard(job: job)],
           ],
           if (widget.session.project.template == ProjectTemplate.lowcode) ...[
             const SizedBox(height: Space.x2),
@@ -428,7 +410,10 @@ class _JobCard extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: Text(value, style: TextStyle(fontFamily: kMonoFont, fontFamilyFallback: kMonoFallback, fontSize: FontSize.xs, height: 1.5, color: c.text)),
+                child: Text(
+                  value,
+                  style: TextStyle(fontFamily: kMonoFont, fontFamilyFallback: kMonoFallback, fontSize: FontSize.xs, height: 1.5, color: c.text),
+                ),
               ),
               IconButton(
                 tooltip: '复制',
@@ -458,7 +443,9 @@ class _JobCard extends StatelessWidget {
             children: [
               Icon(icon, size: 20, color: color),
               const SizedBox(width: Space.x2),
-              Expanded(child: Text(title, style: t.titleMedium?.copyWith(color: color))),
+              Expanded(
+                child: Text(title, style: t.titleMedium?.copyWith(color: color)),
+              ),
               if (job.busy) const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
             ],
           ),
@@ -474,7 +461,11 @@ class _JobCard extends StatelessWidget {
               width: double.infinity,
               constraints: const BoxConstraints(maxHeight: 220),
               padding: const EdgeInsets.all(Space.x2),
-              decoration: BoxDecoration(color: c.codeBg, borderRadius: BorderRadius.circular(Radii.sm), border: Border.all(color: c.border)),
+              decoration: BoxDecoration(
+                color: c.codeBg,
+                borderRadius: BorderRadius.circular(Radii.sm),
+                border: Border.all(color: c.border),
+              ),
               child: SingleChildScrollView(
                 reverse: true,
                 child: SelectableText(
