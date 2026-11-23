@@ -10,7 +10,10 @@ import 'package:lopicode/lowcode/model.dart';
 
 /// 需要用户点头的一次操作（显示成对话里的确认卡）。
 class ApprovalRequest {
-  ApprovalRequest({required this.tool, required this.title, required this.detail});
+  ApprovalRequest({required this.tool, required this.title, required this.detail, this.allowAlways = true});
+
+  /// 这类确认能不能用“本对话都允许”带过。自动化任务的确认卡不能。
+  final bool allowAlways;
   final String tool;
   final String title;
   final String detail;
@@ -28,9 +31,63 @@ class ToolOutcome {
   final bool changedFiles;
 }
 
+/// 权限三档。
+enum PermissionLevel {
+  view('view', '仅可查看', '只能看文件，不能写、不能删、不能执行命令'),
+  workspace('workspace', '工作区内修改', '可以改工作区里的文件；删除文件、执行命令每次先问你'),
+  full('full', '完全权限', '删除文件、执行命令都不再问你');
+
+  const PermissionLevel(this.id, this.label, this.hint);
+  final String id;
+  final String label;
+  final String hint;
+
+  static PermissionLevel byId(Object? id) => values.firstWhere((p) => p.id == id, orElse: () => workspace);
+}
+
+/// 工具的性质：权限和计划模式按它来拦。
+enum ToolKind {
+  /// 只读：任何权限、计划模式下都能用。
+  read,
+
+  /// 改动工作区文件。
+  write,
+
+  /// 执行命令。
+  exec,
+
+  /// 别的（提问、派子代理、任务板……），自己另有规则。
+  other,
+}
+
+/// 核心工具之外的工具（提问、联网搜索、技能、子代理、任务板、自动化）。
+class ExtraTool {
+  ExtraTool({required this.spec, required this.kind, required this.run});
+
+  /// OpenAI 格式的工具定义。
+  final Map<String, dynamic> spec;
+  final ToolKind kind;
+  final Future<ToolOutcome> Function(Map<String, dynamic> args) run;
+
+  String get name => '${(spec['function'] as Map)['name']}';
+}
+
+/// 造一个 OpenAI 格式的工具定义。
+Map<String, dynamic> toolSpec(String name, String description, Map<String, dynamic> props, [List<String> required = const []]) => {
+  'type': 'function',
+  'function': {
+    'name': name,
+    'description': description,
+    'parameters': {'type': 'object', 'properties': props, 'required': required},
+  },
+};
+
 /// Agent 能用的全部工具。安全规则都写在这里的代码里，不靠提示词：
 /// - 所有路径经 [PathGuard] 解析，越界直接报错，不碰磁盘；
-/// - `run_command` 和 `delete_file` 必须过 [requestApproval]，除非该项目开了自动批准；
+/// - 权限三档、计划模式、Agent 预设里的工具开关都在 [blockReason] 一处判断：
+///   被挡住的工具既不会出现在发给模型的工具列表里（[specs]），
+///   模型硬要调用时 [execute] 也会直接拒绝，不碰磁盘、不弹确认卡；
+/// - `run_command` 和 `delete_file` 必须过 [requestApproval]，除非是“完全权限”或这段对话点过“本对话都允许”；
 /// - 读写大小、命令输出、命令时长都有上限。
 class AgentToolbox {
   AgentToolbox({
@@ -38,12 +95,35 @@ class AgentToolbox {
     required this.runner,
     required this.requestApproval,
     required this.autoApprove,
-  });
+    PermissionLevel Function()? permission,
+    bool Function()? planMode,
+    this.allowedTools,
+    this.writeScope,
+    this.extras = const [],
+  }) : permission = permission ?? (() => PermissionLevel.workspace),
+       planMode = planMode ?? (() => false);
 
   final PathGuard guard;
   final CommandRunner runner;
   final ApprovalRequester requestApproval;
+
+  /// 这段对话是不是点过“本对话都允许”（只在内存里，重启后恢复逐次询问）。
   final bool Function() autoApprove;
+
+  /// 当前对话的权限档位。
+  final PermissionLevel Function() permission;
+
+  /// 是不是计划模式（只出计划，不改动）。
+  final bool Function() planMode;
+
+  /// Agent 预设勾选的工具；null 表示全部可用。
+  final Set<String>? allowedTools;
+
+  /// 团队任务给的写入范围（工作区内的相对路径前缀）；null 表示不限。
+  /// 只管文件类工具，管不住 run_command 里的命令。
+  final List<String>? writeScope;
+
+  final List<ExtraTool> extras;
 
   static const Set<String> approvalRequired = {'run_command', 'delete_file'};
   static const int maxReadChars = 60000;
@@ -51,17 +131,46 @@ class AgentToolbox {
   static const int maxOutputChars = 8000;
   static const Duration commandTimeout = Duration(seconds: 60);
 
-  static Map<String, dynamic> _fn(String name, String description, Map<String, dynamic> props, [List<String> required = const []]) => {
-    'type': 'function',
-    'function': {
-      'name': name,
-      'description': description,
-      'parameters': {'type': 'object', 'properties': props, 'required': required},
-    },
+  static const Map<String, ToolKind> coreKinds = {
+    'list_files': ToolKind.read,
+    'read_file': ToolKind.read,
+    'write_file': ToolKind.write,
+    'delete_file': ToolKind.write,
+    'run_command': ToolKind.exec,
+    'lowcode_get_page': ToolKind.read,
+    'lowcode_update_page': ToolKind.write,
   };
 
+  static Map<String, dynamic> _fn(String name, String description, Map<String, dynamic> props, [List<String> required = const []]) =>
+      toolSpec(name, description, props, required);
+
+  ExtraTool? _extra(String name) => extras.where((e) => e.name == name).firstOrNull;
+
+  ToolKind? kindOf(String name) => coreKinds[name] ?? _extra(name)?.kind;
+
+  /// 这个工具现在为什么不能用；能用返回 null。发工具列表和真正执行都走这里。
+  String? blockReason(String name) {
+    final kind = kindOf(name);
+    if (kind == null) return '没有名为 $name 的工具';
+    final allowed = allowedTools;
+    if (allowed != null && !allowed.contains(name)) return '当前的 Agent 预设没有开启 $name 这个工具';
+    if (kind == ToolKind.write || kind == ToolKind.exec) {
+      if (planMode()) return '现在是计划模式：只能查看和出计划，不能改文件、不能执行命令。请把要做的事写进计划，等用户退出计划模式';
+      if (permission() == PermissionLevel.view) return '当前权限是“仅可查看”：不能改文件、不能删除、不能执行命令。需要改动请让用户调高权限';
+    }
+    return null;
+  }
+
+  /// 这一轮发给模型的工具定义：被挡住的不出现。
+  List<Map<String, dynamic>> get specs => [
+    for (final s in coreSpecs)
+      if (blockReason('${(s['function'] as Map)['name']}') == null) s,
+    for (final e in extras)
+      if (blockReason(e.name) == null) e.spec,
+  ];
+
   /// 发给模型的工具定义（`tools` 参数）。
-  static final List<Map<String, dynamic>> specs = [
+  static final List<Map<String, dynamic>> coreSpecs = [
     _fn('list_files', '列出项目里的文件和目录（相对路径，目录以 / 结尾）。', {
       'path': {'type': 'string', 'description': '要列出的子目录，省略表示项目根目录'},
     }),
@@ -85,20 +194,24 @@ class AgentToolbox {
   ];
 
   Future<ToolOutcome> execute(String name, Map<String, dynamic> args) async {
+    final blocked = blockReason(name);
+    if (blocked != null) return ToolOutcome('错误：$blocked', ok: false, denied: kindOf(name) != null);
     try {
+      final extra = _extra(name);
+      if (extra != null) return await extra.run(args);
       // 先把参数解析、路径校验做完，再去问用户；越界的请求连确认卡都不会出现。
       switch (name) {
         case 'list_files':
-          final files = await listProjectFiles(guard, sub: _optString(args, 'path') ?? '');
+          final files = await listProjectFiles(guard, sub: argOptString(args, 'path') ?? '');
           return ToolOutcome(files.isEmpty ? '（空目录）' : files.join('\n'));
         case 'read_file':
-          return await _read(_string(args, 'path'));
+          return await _read(argString(args, 'path'));
         case 'write_file':
-          return await _write(_string(args, 'path'), _string(args, 'content', allowEmpty: true));
+          return await _write(argString(args, 'path'), argString(args, 'content', allowEmpty: true));
         case 'delete_file':
-          return await _delete(_string(args, 'path'));
+          return await _delete(argString(args, 'path'));
         case 'run_command':
-          return await _run(_string(args, 'command'));
+          return await _run(argString(args, 'command'));
         case 'lowcode_get_page':
           return await _read(kLowcodePageFile);
         case 'lowcode_update_page':
@@ -108,19 +221,37 @@ class AgentToolbox {
       }
     } on PathGuardException catch (e) {
       return ToolOutcome('错误：${e.message}', ok: false);
-    } on _ArgError catch (e) {
+    } on ToolArgError catch (e) {
       return ToolOutcome('错误：${e.message}', ok: false);
     } on FormatException catch (e) {
       return ToolOutcome('错误：${e.message}', ok: false);
     } on FileSystemException catch (e) {
       return ToolOutcome('错误：文件操作失败（${e.osError?.message ?? e.message}）', ok: false);
+    } on Exception catch (e) {
+      final text = '$e';
+      return ToolOutcome('错误：${text.length > 300 ? '${text.substring(0, 300)}…' : text}', ok: false);
     }
   }
 
   Future<bool> _approved(ApprovalRequest request) async {
     assert(approvalRequired.contains(request.tool));
-    if (autoApprove()) return true;
+    if (permission() == PermissionLevel.full || autoApprove()) return true;
     return requestApproval(request);
+  }
+
+  /// 团队任务限定了写入范围时，范围外的写和删直接拒绝。
+  void _checkScope(String full) {
+    final scope = writeScope;
+    if (scope == null) return;
+    final rel = guard.relative(full);
+    for (final raw in scope) {
+      var prefix = raw.trim();
+      while (prefix.endsWith('/')) {
+        prefix = prefix.substring(0, prefix.length - 1);
+      }
+      if (prefix.isEmpty || prefix == '.' || rel == prefix || rel.startsWith('$prefix/')) return;
+    }
+    throw ToolArgError('这个任务的写入范围是 ${scope.join('、')}，$rel 不在范围内，没有改动');
   }
 
   Future<ToolOutcome> _read(String path) async {
@@ -139,11 +270,12 @@ class AgentToolbox {
 
   Future<ToolOutcome> _write(String path, String content) async {
     final full = guard.resolve(path);
-    if (full == guard.root) throw _ArgError('path 不能是项目根目录');
+    if (full == guard.root) throw ToolArgError('path 不能是项目根目录');
+    _checkScope(full);
     if (content.length > maxWriteChars) {
-      throw _ArgError('内容太大（${content.length} 字符，上限 $maxWriteChars）');
+      throw ToolArgError('内容太大（${content.length} 字符，上限 $maxWriteChars）');
     }
-    if (await Directory(full).exists()) throw _ArgError('$path 是一个目录');
+    if (await Directory(full).exists()) throw ToolArgError('$path 是一个目录');
     final file = File(full);
     await file.parent.create(recursive: true);
     await file.writeAsString(content);
@@ -152,7 +284,8 @@ class AgentToolbox {
 
   Future<ToolOutcome> _delete(String path) async {
     final full = guard.resolve(path);
-    if (full == guard.root) throw _ArgError('不能删除项目根目录');
+    if (full == guard.root) throw ToolArgError('不能删除项目根目录');
+    _checkScope(full);
     final type = await FileSystemEntity.type(full, followLinks: false);
     if (type == FileSystemEntityType.notFound) {
       return ToolOutcome('错误：文件不存在：$path', ok: false);
@@ -195,31 +328,34 @@ class AgentToolbox {
       try {
         value = jsonDecode(value);
       } on FormatException {
-        throw _ArgError('page 不是合法 JSON');
+        throw ToolArgError('page 不是合法 JSON');
       }
     }
-    if (value is! Map<String, dynamic>) throw _ArgError('缺少参数 page（应为对象）');
+    if (value is! Map<String, dynamic>) throw ToolArgError('缺少参数 page（应为对象）');
     final doc = LcDocument.fromJson(value); // 结构不合法会抛 FormatException，文件不会被改
+    for (final f in [kLowcodePageFile, 'index.html', 'style.css']) {
+      _checkScope(guard.resolve(f));
+    }
     await saveLowcodePage(guard, doc);
     return ToolOutcome('页面已更新，并重新导出了 index.html 和 style.css。', changedFiles: true);
   }
 
-  static String _string(Map<String, dynamic> args, String key, {bool allowEmpty = false}) {
+  static String argString(Map<String, dynamic> args, String key, {bool allowEmpty = false}) {
     final v = args[key];
-    if (v is! String || (!allowEmpty && v.trim().isEmpty)) throw _ArgError('缺少参数 $key（应为字符串）');
+    if (v is! String || (!allowEmpty && v.trim().isEmpty)) throw ToolArgError('缺少参数 $key（应为字符串）');
     return v;
   }
 
-  static String? _optString(Map<String, dynamic> args, String key) {
+  static String? argOptString(Map<String, dynamic> args, String key) {
     final v = args[key];
     if (v == null) return null;
-    if (v is! String) throw _ArgError('参数 $key 应为字符串');
+    if (v is! String) throw ToolArgError('参数 $key 应为字符串');
     return v;
   }
 }
 
-class _ArgError implements Exception {
-  _ArgError(this.message);
+class ToolArgError implements Exception {
+  ToolArgError(this.message);
   final String message;
 }
 

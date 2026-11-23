@@ -91,7 +91,12 @@ class SettingKeys {
   static const runtimeAptMirror = 'runtime.aptMirror';
   static const terminalChineseIme = 'terminal.chinese_ime'; // 终端软键盘：中文输入（默认是直接输入）
   static const runtimeCompat = 'runtime.compat'; // PRoot 兼容模式（PROOT_NO_SECCOMP）
-  static String autoApprove(String projectId) => 'project.$projectId.autoApprove';
+  static const defaultPermission = 'agent.defaultPermission'; // view / workspace / full
+  static const subagentEnabled = 'subagent.enabled';
+  static const subagentMaxDepth = 'subagent.maxDepth'; // 委派层数，0–3，默认 1
+  static const subagentMaxConcurrent = 'subagent.maxConcurrent'; // 同时跑几个，1–4，默认 2
+  static const subagentAllowedModels = 'subagent.allowedModels'; // ["渠道ID/模型ID"]；空＝只能跟随上级
+  static const teamEnabled = 'team.enabled';
 }
 
 class SecretKeys {

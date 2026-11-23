@@ -32,6 +32,12 @@ class ToolFinished extends AgentEvent {
   final ToolOutcome outcome;
 }
 
+/// 生成过程中用户插的话，已经交给模型（从这一步起它能看到）。
+class UserInjected extends AgentEvent {
+  UserInjected(this.text);
+  final String text;
+}
+
 /// 应用自己的提示（例如达到轮次上限）。
 class AgentNotice extends AgentEvent {
   AgentNotice(this.text);
@@ -60,6 +66,10 @@ class AgentRunner {
     this.maxRounds = defaultMaxRounds,
     String? systemPrompt,
     List<Map<String, dynamic>>? history,
+    this.vision = false,
+    this.loadImage,
+    this.parallelTools = const {'spawn_agent'},
+    this.maxParallel = 1,
   }) : systemPrompt = systemPrompt ?? defaultSystemPrompt,
        messages = history ?? [];
 
@@ -79,7 +89,18 @@ class AgentRunner {
   final int maxRounds;
   final String systemPrompt;
 
+  /// 当前模型能不能看图。不能看时，图片附件只把文件路径告诉它。
+  final bool vision;
+
+  /// 读图片附件的字节（[path] 是工作区内的相对路径）；读不到返回 null。
+  final Future<List<int>?> Function(String path)? loadImage;
+
+  /// 可以同时跑的工具（派子代理）。同一轮里连着出现时并行执行，最多 [maxParallel] 个同时跑。
+  final Set<String> parallelTools;
+  final int maxParallel;
+
   /// 对话历史（不含 system），格式就是发给接口的 messages，可直接存盘。
+  /// 以 `_` 开头的键是我们自己的（`_images` 图片附件、`_raw` 原协议内容），发出去前会处理掉。
   final List<Map<String, dynamic>> messages;
 
   bool _cancelled = false;
@@ -88,9 +109,80 @@ class AgentRunner {
   /// 让当前这次 [send] 尽快停下（在下一个检查点生效）。
   void cancel() => _cancelled = true;
 
-  Stream<AgentEvent> send(String userText) async* {
+  final List<String> _steer = [];
+
+  /// 生成过程中插话：下一步（下一次调用模型之前）交给模型。
+  void steer(String text) {
+    if (text.trim().isNotEmpty) _steer.add(text);
+  }
+
+  /// 还没交给模型的插话。
+  List<String> get pendingSteer => List.unmodifiable(_steer);
+
+  /// 撤回一条还没交出去的插话。
+  bool withdrawSteer(String text) => _steer.remove(text);
+
+  /// 粗略估算对话占了多少上下文（按 3 个字符 1 个 token，偏保守）。
+  static int estimateTokens(List<Map<String, dynamic>> messages) {
+    var chars = 0;
+    for (final m in messages) {
+      chars += '${m['content'] ?? ''}'.length;
+      for (final c in (m['tool_calls'] as List?) ?? const []) {
+        chars += '$c'.length;
+      }
+      chars += ((m['_images'] as List?)?.length ?? 0) * 3000;
+    }
+    return chars ~/ 3;
+  }
+
+  /// 把存盘格式的消息变成这一次请求要发的样子：图片附件按模型能力展开。
+  Future<List<Map<String, dynamic>>> buildRequest() async {
+    final out = <Map<String, dynamic>>[
+      {'role': 'system', 'content': systemPrompt},
+    ];
+    for (final m in messages) {
+      final images = m['_images'];
+      if (m['role'] != 'user' || images is! List || images.isEmpty) {
+        out.add(m);
+        continue;
+      }
+      final text = '${m['content'] ?? ''}';
+      final parts = <Map<String, dynamic>>[];
+      final asFiles = <String>[];
+      for (final img in images) {
+        if (img is! Map) continue;
+        final path = '${img['path']}';
+        final bytes = vision ? await loadImage?.call(path) : null;
+        if (bytes == null) {
+          asFiles.add(path);
+        } else {
+          parts.add({
+            'type': 'image_url',
+            'image_url': {'url': 'data:${img['mime'] ?? 'image/png'};base64,${base64Encode(bytes)}'},
+          });
+        }
+      }
+      final note = asFiles.isEmpty
+          ? ''
+          : '\n\n（用户附了 ${asFiles.length} 个文件，${vision ? '读取失败，' : '当前模型不能看图，'}已存在工作区里：${asFiles.join('、')}）';
+      if (parts.isEmpty) {
+        out.add({'role': 'user', 'content': '$text$note'});
+      } else {
+        out.add({
+          'role': 'user',
+          'content': [
+            {'type': 'text', 'text': '$text$note'},
+            ...parts,
+          ],
+        });
+      }
+    }
+    return out;
+  }
+
+  Stream<AgentEvent> send(String userText, {List<Map<String, dynamic>> images = const []}) async* {
     _cancelled = false;
-    messages.add({'role': 'user', 'content': userText});
+    messages.add({'role': 'user', 'content': userText, if (images.isNotEmpty) '_images': images});
 
     for (var round = 1; ; round++) {
       if (_cancelled) {
@@ -101,15 +193,20 @@ class AgentRunner {
         yield AgentNotice('已连续调用工具 $maxRounds 轮，达到上限，已自动停下。可以发“继续”让它接着做。');
         return;
       }
+      // 插话在这里交给模型：这一步起它就能看到。
+      while (_steer.isNotEmpty) {
+        final text = _steer.removeAt(0);
+        messages.add({'role': 'user', 'content': text});
+        yield UserInjected(text);
+      }
 
       final text = StringBuffer();
       final calls = <int, _PendingCall>{};
+      Map<String, dynamic>? raw;
       try {
-        final request = [
-          {'role': 'system', 'content': systemPrompt},
-          ...messages,
-        ];
-        await for (final delta in client.streamChat(messages: request, tools: AgentToolbox.specs)) {
+        final request = await buildRequest();
+        // 工具列表每一轮现取：权限、计划模式中途改了，下一轮就生效。
+        await for (final delta in client.streamChat(messages: request, tools: toolbox.specs)) {
           if (_cancelled) break;
           if (delta.content != null && delta.content!.isNotEmpty) {
             text.write(delta.content);
@@ -121,6 +218,7 @@ class AgentRunner {
             if (c.name != null && c.name!.isNotEmpty) call.name = c.name!;
             if (c.arguments != null) call.arguments.write(c.arguments);
           }
+          if (delta.raw != null) raw = delta.raw;
         }
       } on ChatApiException catch (e) {
         _rollbackIfEmpty(text);
@@ -128,11 +226,12 @@ class AgentRunner {
         return;
       } on Exception catch (e) {
         _rollbackIfEmpty(text);
-        yield AgentError('和模型的连接中断了：${_short(e)}');
+        yield AgentError('和模型的连接中断了：${shortError(e)}');
         return;
       }
 
       if (_cancelled) {
+        // 被打断的这一轮不留工具调用（没执行，留下会让下一次请求对不上）。
         if (text.isNotEmpty) messages.add({'role': 'assistant', 'content': text.toString()});
         yield AssistantMessage(text.toString());
         yield AgentNotice('已停止。');
@@ -157,33 +256,51 @@ class AgentRunner {
                 'function': {'name': c.name, 'arguments': c.arguments.toString()},
               },
           ],
+        '_raw': ?raw,
       });
       yield AssistantMessage(text.toString());
 
-      if (ordered.isEmpty) return;
+      if (ordered.isEmpty) {
+        if (_steer.isEmpty) return;
+        continue; // 它说完了，但用户刚插了话：接着处理
+      }
 
-      for (final call in ordered) {
-        final rawArgs = call.arguments.toString();
-        yield ToolStarted(call.id, call.name, rawArgs);
-        ToolOutcome outcome;
-        if (_cancelled) {
-          outcome = ToolOutcome('用户已停止，本次调用没有执行。', ok: false, denied: true);
-        } else {
-          Object? args;
-          try {
-            args = rawArgs.trim().isEmpty ? <String, dynamic>{} : jsonDecode(rawArgs);
-          } on FormatException {
-            args = null;
+      var i = 0;
+      while (i < ordered.length) {
+        // 连着的“可并行”工具凑成一批同时跑，其余一个一个来。
+        var j = i + 1;
+        if (maxParallel > 1 && parallelTools.contains(ordered[i].name)) {
+          while (j < ordered.length && j - i < maxParallel && parallelTools.contains(ordered[j].name)) {
+            j++;
           }
-          outcome = args is Map<String, dynamic>
-              ? await toolbox.execute(call.name, args)
-              : ToolOutcome('错误：工具参数不是合法的 JSON 对象', ok: false);
         }
-        // 每个 tool_call 都必须有对应的 tool 消息，否则下一次请求会被接口拒绝。
-        messages.add({'role': 'tool', 'tool_call_id': call.id, 'content': outcome.text});
-        yield ToolFinished(call.id, call.name, outcome);
+        final batch = ordered.sublist(i, j);
+        for (final call in batch) {
+          yield ToolStarted(call.id, call.name, call.arguments.toString());
+        }
+        final outcomes = await Future.wait([for (final call in batch) _runCall(call)]);
+        for (var k = 0; k < batch.length; k++) {
+          // 每个 tool_call 都必须有对应的 tool 消息，否则下一次请求会被接口拒绝。
+          messages.add({'role': 'tool', 'tool_call_id': batch[k].id, 'content': outcomes[k].text});
+          yield ToolFinished(batch[k].id, batch[k].name, outcomes[k]);
+        }
+        i = j;
       }
     }
+  }
+
+  Future<ToolOutcome> _runCall(_PendingCall call) async {
+    if (_cancelled) return ToolOutcome('用户已停止，本次调用没有执行。', ok: false, denied: true);
+    final rawArgs = call.arguments.toString();
+    Object? args;
+    try {
+      args = rawArgs.trim().isEmpty ? <String, dynamic>{} : jsonDecode(rawArgs);
+    } on FormatException {
+      args = null;
+    }
+    return args is Map<String, dynamic>
+        ? await toolbox.execute(call.name, args)
+        : ToolOutcome('错误：工具参数不是合法的 JSON 对象', ok: false);
   }
 
   /// 请求失败时：模型已经说了一些就留下这半截；一个字都没回且上一条是用户消息，
@@ -195,9 +312,39 @@ class AgentRunner {
       messages.removeLast();
     }
   }
+}
 
-  static String _short(Object e) {
-    final s = e.toString();
-    return s.length > 160 ? '${s.substring(0, 160)}…' : s;
+/// /compact：让模型把到目前为止的对话压成一段摘要，然后用摘要顶替原来的记录。
+/// 成功返回 null 并就地改写 [messages]；失败返回原因，记录不动。
+Future<String?> compactHistory(ChatClient client, List<Map<String, dynamic>> messages) async {
+  if (messages.length < 2) return '对话还很短，不需要压缩';
+  final request = <Map<String, dynamic>>[
+    {'role': 'system', 'content': '你是对话记录整理员。'},
+    ...messages,
+    {
+      'role': 'user',
+      'content':
+          '请把上面到目前为止的对话压缩成一份摘要，之后会用它顶替原来的记录接着干活。写清楚：用户的目标和要求、已经做完的事（改了哪些文件）、'
+          '还没做完的事、要注意的约定。只输出摘要本身，用简体中文。',
+    },
+  ];
+  final text = StringBuffer();
+  try {
+    await for (final d in client.streamChat(messages: request)) {
+      if (d.content != null) text.write(d.content);
+    }
+  } on ChatApiException catch (e) {
+    return e.message;
+  } on Exception catch (e) {
+    return '和模型的连接中断了：${shortError(e)}';
   }
+  final summary = text.toString().trim();
+  if (summary.isEmpty) return '模型没有给出摘要，对话记录没有动';
+  messages
+    ..clear()
+    ..addAll([
+      {'role': 'user', 'content': '（之前的对话已压缩，以下是摘要）\n$summary'},
+      {'role': 'assistant', 'content': '好的，我已经了解之前的进展，可以接着做。'},
+    ]);
+  return null;
 }
