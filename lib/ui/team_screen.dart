@@ -6,7 +6,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lopicode/agent/team.dart';
 import 'package:lopicode/project_session.dart';
-import 'package:lopicode/state/workspace_chat.dart';
+import 'package:lopicode/state/team_state.dart';
 import 'package:lopicode/state/workspace_conversations.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/chrome.dart';
@@ -22,22 +22,10 @@ class TeamScreen extends ConsumerStatefulWidget {
 }
 
 class _TeamScreenState extends ConsumerState<TeamScreen> {
-  TeamBoard? _board;
+  /// 进来时所在对话的主对话：看的就是它的任务板（团队没开时也能看，只是 Agent 没有任务板工具）。
+  late final TeamKey _key = (widget.session, widget.session.rootOf(widget.session.activeConversation).id);
 
-  @override
-  void initState() {
-    super.initState();
-    // 任务板变了、对话目录变了（子代理来去）：重画
-    ref.listenManual(teamRevProvider(widget.session), (_, _) => _changed());
-    ref.listenManual(conversationsProvider(widget.session), (_, _) => _changed());
-    widget.session.teamBoard.then((b) {
-      if (mounted) setState(() => _board = b);
-    });
-  }
-
-  void _changed() {
-    if (mounted) setState(() {});
-  }
+  TeamNotifier get _team => ref.read(teamProvider(_key).notifier);
 
   Future<void> _run(Future<void> Function() action) async {
     try {
@@ -45,18 +33,13 @@ class _TeamScreenState extends ConsumerState<TeamScreen> {
     } on TeamException catch (e) {
       if (mounted) showSnack(context, e.message);
     }
-    if (mounted) setState(() {});
   }
 
-  Future<void> _newTask(TeamBoard board) async {
-    final result = await showModalBottomSheet<({String title, String owner, List<String> deps, List<String> scope})>(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) => _TaskSheet(board: board),
-    );
+  Future<void> _newTask() async {
+    final result = await showModalBottomSheet<({String title, String owner, List<String> deps, List<String> scope})>(context: context, isScrollControlled: true, builder: (_) => const _TaskSheet());
     if (result == null) return;
     await _run(() async {
-      await board.create(title: result.title, owner: result.owner, deps: result.deps, scope: result.scope);
+      await _team.createTask(title: result.title, owner: result.owner, deps: result.deps, scope: result.scope);
     });
   }
 
@@ -64,7 +47,9 @@ class _TeamScreenState extends ConsumerState<TeamScreen> {
   Widget build(BuildContext context) {
     final c = context.colors;
     final t = Theme.of(context).textTheme;
-    final board = _board;
+    // 任务板变了、对话目录变了（子代理来去）：重画
+    ref.watch(conversationsProvider(widget.session));
+    final board = ref.watch(teamProvider(_key));
     return DefaultTabController(
       length: 3,
       child: Scaffold(
@@ -134,9 +119,9 @@ class _TeamScreenState extends ConsumerState<TeamScreen> {
                                 icon: Icon(Icons.more_vert, color: c.textFaint),
                                 onSelected: (v) => _run(() async {
                                   if (v == 'delete') {
-                                    await board.remove(task.id);
+                                    await _team.removeTask(task.id);
                                   } else {
-                                    await board.update(task.id, status: TaskStatus.byId(v));
+                                    if (TaskStatus.byId(v) case final status?) await _team.setStatus(task.id, status);
                                   }
                                 }),
                                 itemBuilder: (_) => [
@@ -152,7 +137,7 @@ class _TeamScreenState extends ConsumerState<TeamScreen> {
                         ],
                       Padding(
                         padding: const EdgeInsets.fromLTRB(Space.x4, Space.x4, Space.x4, 0),
-                        child: FilledButton.icon(key: const Key('team-new-task'), onPressed: () => _newTask(board), icon: const Icon(Icons.add, size: 18), label: const Text('新建任务')),
+                        child: FilledButton.icon(key: const Key('team-new-task'), onPressed: _newTask, icon: const Icon(Icons.add, size: 18), label: const Text('新建任务')),
                       ),
                     ],
                   ),
@@ -189,8 +174,7 @@ class _TeamScreenState extends ConsumerState<TeamScreen> {
 }
 
 class _TaskSheet extends StatefulWidget {
-  const _TaskSheet({required this.board});
-  final TeamBoard board;
+  const _TaskSheet();
 
   @override
   State<_TaskSheet> createState() => _TaskSheetState();

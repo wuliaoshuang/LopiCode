@@ -308,18 +308,3 @@ class SendQueueNotifier extends Notifier<SendQueueState> with _Snapshot<SendQueu
 
 /// 某个工作区里排队的消息和要还给输入框的草稿（按工作区分身）。
 final sendQueueProvider = NotifierProvider.family<SendQueueNotifier, SendQueueState, ProjectSession>(SendQueueNotifier.new);
-
-/// 团队任务板变了的次数（任务板自己存自己的文件，这里只是“变了”的信号——过渡写法）。
-class TeamRev extends Notifier<int> {
-  TeamRev(this.session);
-  final ProjectSession session;
-
-  @override
-  int build() => 0;
-
-  void bump() {
-    if (ref.mounted && !session.disposed) state = state + 1;
-  }
-}
-
-final teamRevProvider = NotifierProvider.family<TeamRev, int, ProjectSession>(TeamRev.new);

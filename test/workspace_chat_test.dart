@@ -6,6 +6,7 @@ import 'package:lopicode/agent/usage.dart';
 import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/core/templates.dart';
 import 'package:lopicode/project_session.dart';
+import 'package:lopicode/state/team_state.dart';
 import 'package:lopicode/state/workspace_chat.dart';
 import 'package:lopicode/state/workspace_conversations.dart';
 import 'package:riverpod/riverpod.dart';
@@ -222,16 +223,30 @@ void main() {
     });
   });
 
-  test('任务板变动信号：工作区关掉以后不再通知', () {
+  test('任务板的状态：工作区关掉以后不再通知', () async {
+    final key = (session, session.activeConversationId);
     var n = 0;
-    box.listen(teamRevProvider(session), (_, _) => n++);
-    final rev = box.read(teamRevProvider(session).notifier)..bump();
-    expect(n, 1);
+    box.listen(teamProvider(key), (_, _) => n++);
+    final board = await session.boardById(key.$2);
+    await board.create(title: '搭框架');
+    final seen = n;
+    expect(seen, greaterThan(0));
+    expect(box.read(teamProvider(key))!.tasks.single.title, '搭框架');
+
     final closing = ProjectSession(env.services, project, headless: true);
-    final late_ = box.read(teamRevProvider(closing).notifier);
+    final closingKey = (closing, 'c1');
+    var m = 0;
+    box.listen(teamProvider(closingKey), (_, _) => m++);
+    final late_ = box.read(teamProvider(closingKey).notifier);
+    final lateBoard = await closing.boardById('c1');
     closing.dispose();
-    late_.bump();
-    rev.bump();
-    expect(n, 2);
+    box.read(teamProvider(closingKey));
+    final after = m;
+    late_.publish(lateBoard.view);
+    await lateBoard.create(title: '关掉以后');
+    expect(m, after, reason: '关掉的工作区不再写状态');
+    expect(box.read(teamProvider(closingKey)), isNull);
+    await board.create(title: '写页面');
+    expect(n, greaterThan(seen));
   });
 }

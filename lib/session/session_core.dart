@@ -16,6 +16,7 @@ import 'package:lopicode/core/safe_file.dart';
 import 'package:lopicode/core/stores.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/session/chat_items.dart';
+import 'package:lopicode/state/team_state.dart';
 import 'package:lopicode/state/workspace_chat.dart';
 import 'package:lopicode/state/workspace_conversations.dart';
 import 'package:lopicode/state/workspace_files.dart';
@@ -65,7 +66,9 @@ class SessionCore {
     }
     box.invalidate(pendingCardsProvider(session));
     box.invalidate(sendQueueProvider(session));
-    box.invalidate(teamRevProvider(session));
+    for (final id in boards.keys) {
+      box.invalidate(teamProvider((session, id)));
+    }
   }
 
   // ── 每段对话的运行状态 ───────────────────────────────
@@ -158,16 +161,28 @@ class SessionCore {
   // ── 团队任务板 ───────────────────────────────────────
   final Map<String, TeamBoard> boards = {};
 
-  Future<TeamBoard> boardOf(Conversation root) async {
-    final existing = boards[root.id];
-    if (existing != null) return existing;
-    final board = TeamBoard(file: reserved('team-${root.id}.json'))..onChanged = _teamChanged;
-    boards[root.id] = board;
-    await board.load();
-    return board;
+  Future<TeamBoard> boardOf(Conversation root) => boardById(root.id);
+
+  /// 主对话 [rootId] 的任务板（第一次用到时读文件）。
+  Future<TeamBoard> boardById(String rootId) {
+    final loading = _boardLoads[rootId];
+    if (loading != null) return loading;
+    final board = TeamBoard(file: reserved('team-$rootId.json'))..onChanged = (view) => _teamChanged(rootId, view);
+    boards[rootId] = board;
+    return _boardLoads[rootId] = board.load().then((_) => board);
   }
 
-  void _teamChanged() {
-    if (!disposed && !app.disposed) app.container.read(teamRevProvider(session).notifier).bump();
+  final Map<String, Future<TeamBoard>> _boardLoads = {};
+
+  /// 对话删掉了：它的任务板也不要了。
+  void dropBoard(String rootId) {
+    boards.remove(rootId);
+    _boardLoads.remove(rootId);
+    if (!app.disposed) app.container.invalidate(teamProvider((session, rootId)));
+  }
+
+  /// 任务板变了：把新的样子送给状态层。
+  void _teamChanged(String rootId, TeamView view) {
+    if (!disposed && !app.disposed) app.container.read(teamProvider((session, rootId)).notifier).publish(view);
   }
 }

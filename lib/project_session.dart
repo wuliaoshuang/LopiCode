@@ -240,7 +240,7 @@ class ProjectSession {
           // 删不掉：索引里照样移除
         }
       }
-      _core.boards.remove(d);
+      _core.dropBoard(d);
       _core.cards.clearAutoAllow(d);
       if (!app.disposed) app.container.invalidate(chatRunProvider((this, d)));
     }
@@ -271,9 +271,7 @@ class ProjectSession {
   bool get teamEnabled => _core.teamEnabled;
 
   Future<TeamBoard> boardOf(Conversation root) => _core.boardOf(root);
-
-  /// 当前对话的任务板（团队没开时也能看，只是 Agent 没有任务板工具）。
-  Future<TeamBoard> get teamBoard => boardOf(rootOf(activeConversation));
+  Future<TeamBoard> boardById(String rootId) => _core.boardById(rootId);
 
   bool get subagentsEnabled => _core.subagentsEnabled;
   int get subagentMaxDepth => _core.subagentMaxDepth;
