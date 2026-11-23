@@ -44,7 +44,7 @@ class SshBuildController extends BuildJob {
         ..clear()
         ..write(kept);
     }
-    notifyListeners();
+    changed();
   }
 
   @override

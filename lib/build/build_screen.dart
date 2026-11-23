@@ -75,12 +75,12 @@ class _BuildScreenState extends ConsumerState<BuildScreen> {
     _sshDir.text = app.settings.getString(SettingKeys.sshBuildDir, '~/lopicode-build/${widget.session.project.id}');
     _sshCommand.text = app.settings.getString(SettingKeys.sshBuildCommand, _isFlutterProject ? 'flutter build apk --release' : '');
     _sshApk.text = app.settings.getString(SettingKeys.sshBuildOutput, _isFlutterProject ? 'build/app/outputs/flutter-apk/app-release.apk' : '');
-    _job = widget.debugController?..addListener(_onJob);
+    _job = widget.debugController?..onChanged = _onJob;
   }
 
   @override
   void dispose() {
-    _job?.removeListener(_onJob);
+    _job?.onChanged = null;
     _repo.dispose();
     _ref.dispose();
     _workflow.dispose();
@@ -122,13 +122,13 @@ class _BuildScreenState extends ConsumerState<BuildScreen> {
     final outDir = await _apkOutDir();
     final files = _pushFirst ? await ApkBuildController.collectFiles(widget.session.guard) : null;
     if (!mounted) return;
-    _job?.removeListener(_onJob);
+    _job?.onChanged = null;
     final job = ApkBuildController(
       client: GitHubClient(token: token, owner: parts[0].trim(), repo: parts[1].trim()),
       workflowFile: workflow,
       ref: ref,
       outputDir: outDir.path,
-    )..addListener(_onJob);
+    )..onChanged = _onJob;
     setState(() => _job = job);
     FocusScope.of(context).unfocus();
     await job.run(pushFiles: files);
@@ -170,7 +170,7 @@ class _BuildScreenState extends ConsumerState<BuildScreen> {
     final outDir = await _apkOutDir();
     final files = _uploadFirst ? await ApkBuildController.collectFiles(widget.session.guard) : null;
     if (!mounted) return;
-    _job?.removeListener(_onJob);
+    _job?.onChanged = null;
     final job = SshBuildController(
       exec: DartSshRemoteExec(
         () => connectSsh(
@@ -184,7 +184,7 @@ class _BuildScreenState extends ConsumerState<BuildScreen> {
       command: command,
       apkRemotePath: apk,
       outputDir: outDir.path,
-    )..addListener(_onJob);
+    )..onChanged = _onJob;
     setState(() => _job = job);
     FocusScope.of(context).unfocus();
     await job.run(uploadFiles: files);

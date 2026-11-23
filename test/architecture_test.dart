@@ -43,7 +43,6 @@ const _allowedLayers = {
 const _legacyNotifiers = {
   'lib/runtime/linux_runtime.dart LinuxRuntime': '运行环境（管进程和文件）；界面已改成订阅 runtimeRevProvider，对象本身还是旧式通知',
   'lib/runtime/runtime_diagnostics.dart RuntimeDiagnostics': '一键诊断；界面已改成订阅 runtimeDiagnosticsRevProvider',
-  'lib/build/build_controller.dart BuildJob': '一次打包任务（页面自己建、自己销毁，不是全局状态）',
   'lib/ui/push_drawer.dart PushDrawerController': '侧边栏开合动画的控制器（纯界面）',
 };
 

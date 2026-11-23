@@ -41,9 +41,9 @@ void main() {
 
     final job = controller();
     final phases = <BuildPhase>[];
-    job.addListener(() {
+    job.onChanged = () {
       if (phases.isEmpty || phases.last != job.phase) phases.add(job.phase);
-    });
+    };
     await job.run(pushFiles: files);
     expect(phases, [BuildPhase.pushing, BuildPhase.dispatching, BuildPhase.waiting, BuildPhase.downloading, BuildPhase.done]);
     expect(job.apkPath, p.join(tmp.path, 'out', 'app-debug.apk'));

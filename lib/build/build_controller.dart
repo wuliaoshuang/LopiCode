@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:lopicode/build/github_client.dart';
 import 'package:lopicode/core/path_guard.dart';
 import 'package:lopicode/core/project_store.dart';
@@ -10,7 +9,12 @@ import 'package:path/path.dart' as p;
 enum BuildPhase { idle, connecting, pushing, dispatching, waiting, building, downloading, done, failed, cancelled }
 
 /// 一次打包任务对界面暴露的东西（GitHub 和 SSH 两种方式共用一张进度卡）。
-abstract class BuildJob extends ChangeNotifier {
+abstract class BuildJob {
+  /// 进度变了（阶段、日志、输出）回调一声。任务是打包页自己建、自己丢的，所以只留一个回调位，不做全局状态。
+  void Function()? onChanged;
+
+  void changed() => onChanged?.call();
+
   BuildPhase phase = BuildPhase.idle;
 
   /// 一步一句的进度。
@@ -26,16 +30,14 @@ abstract class BuildJob extends ChangeNotifier {
 
   void cancel();
 
-  @protected
   void say(String line) {
     log.add(line);
-    notifyListeners();
+    changed();
   }
 
-  @protected
   void setPhase(BuildPhase next) {
     phase = next;
-    notifyListeners();
+    changed();
   }
 }
 
@@ -122,7 +124,7 @@ class ApkBuildController extends BuildJob {
         run = await client.getRun(runId);
         if (run.htmlUrl.isNotEmpty && runUrl == null) {
           runUrl = run.htmlUrl;
-          notifyListeners();
+          changed();
         }
         if (run.status != lastStatus) {
           lastStatus = run.status;

@@ -498,9 +498,9 @@ void main() {
       final exec = FakeRemoteExec();
       final job = controller(exec);
       final phases = <BuildPhase>[];
-      job.addListener(() {
+      job.onChanged = () {
         if (phases.isEmpty || phases.last != job.phase) phases.add(job.phase);
-      });
+      };
       await job.run(
         uploadFiles: {
           'pubspec.yaml': [1],
