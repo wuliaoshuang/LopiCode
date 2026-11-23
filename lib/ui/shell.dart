@@ -14,7 +14,8 @@ enum ShellDest {
   terminal('终端', Icons.terminal),
   preview('预览', Icons.play_circle_outline),
   builder('低代码搭建', Icons.dashboard_customize_outlined),
-  apk('APK 打包', Icons.android);
+  apk('APK 打包', Icons.android),
+  runtime('运行环境', Icons.memory_outlined);
 
   const ShellDest(this.label, this.icon);
   final String label;

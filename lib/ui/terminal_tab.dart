@@ -81,13 +81,25 @@ class _TerminalTabState extends State<TerminalTab> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (AppScope.of(context).runtime.usable)
+              ListTile(
+                key: const Key('new-linux-session'),
+                leading: const Icon(Icons.memory_outlined),
+                title: const Text('Ubuntu 环境'),
+                subtitle: const Text('能跑 node、python，项目目录在 /workspace'),
+                onTap: () {
+                  Navigator.pop(context);
+                  AppScope.of(this.context).runtime.resetLaunchFailures();
+                  s.addTerminal();
+                },
+              ),
             ListTile(
               leading: const Icon(Icons.phone_android),
               title: const Text('本机 shell'),
               subtitle: const Text('手机自带的 sh，在项目目录里打开'),
               onTap: () {
                 Navigator.pop(context);
-                s.addTerminal();
+                s.addTerminal(forceLocal: true);
               },
             ),
             ListTile(

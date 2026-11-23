@@ -2,6 +2,7 @@
 // - 进项目先看到的是 Agent 对话；其余页面（文件、终端、预览、低代码、APK 打包）从侧边栏去。
 // - 没有底部导航。侧边栏从左边缘右滑也能拉出来；终端和低代码画布上自己有横向手势，那两页只能点汉堡按钮。
 // - 切页面不丢状态：各页共用一个 ProjectSession，用 IndexedStack 保活；没去过的页面先不建。
+import 'package:lopicode/runtime/runtime_screen.dart';
 import 'dart:io';
 
 import 'package:lopicode/app_services.dart';
@@ -135,6 +136,7 @@ class _ProjectShellState extends State<ProjectShell> {
             lazy(ShellDest.preview, () => page(ShellDest.preview, PreviewTab(session: session, active: _dest == ShellDest.preview))),
             lazy(ShellDest.builder, () => BuilderScreen(key: ValueKey(_builderEpoch), session: session)),
             lazy(ShellDest.apk, () => BuildScreen(session: session)),
+            lazy(ShellDest.runtime, () => const RuntimeScreen()),
           ],
         ),
       ),
