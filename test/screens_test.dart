@@ -9,6 +9,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lopicode/build/build_controller.dart';
 import 'package:lopicode/build/build_screen.dart';
 import 'package:lopicode/build/github_client.dart';
+import 'package:lopicode/build/remote_exec.dart';
+import 'package:lopicode/build/ssh_build_controller.dart';
+import 'package:lopicode/core/stores.dart';
+import 'package:lopicode/ssh/ssh_config.dart';
+import 'package:lopicode/ssh/ssh_connect_screen.dart';
 import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/core/templates.dart';
 import 'package:lopicode/project_session.dart';
@@ -18,6 +23,8 @@ import 'package:lopicode/ui/project_shell.dart';
 import 'package:lopicode/ui/settings_screen.dart';
 import 'package:lopicode/ui/shell.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:re_editor/re_editor.dart';
+import 'package:xterm/xterm.dart';
 
 import 'support/harness.dart';
 
@@ -52,6 +59,9 @@ Widget fakeWebPage(Uri uri) => ColoredBox(
     ),
   ),
 );
+
+/// 单独渲染某一页时套一层外壳，顶栏才是真实使用时的汉堡按钮。
+Widget inShell(Widget child) => ShellScope(openDrawer: () {}, go: (_) {}, projectName: '我的小站', child: child);
 
 void main() {
   setUpAll(() async {
@@ -121,8 +131,35 @@ void main() {
       await shot(tester, '08-files-$suffix');
       await tester.tap(find.text('style.css').first);
       await settle(tester, rounds: 20, ms: 5);
-      expect(find.textContaining('box-sizing'), findsWidgets);
+      // 编辑器是 re_editor：有行号，内容从控制器里读
+      final editor = tester.widget<CodeEditor>(find.byType(CodeEditor));
+      expect(editor.controller!.text, contains('box-sizing'));
+      expect(find.byType(DefaultCodeLineNumber), findsOneWidget);
+      expect(find.text('已保存'), findsOneWidget);
       await shot(tester, '09-editor-$suffix');
+
+      // 查找并替换：⋮ → 查找并替换 → 输入 → 计数 → 全部替换 → 保存落盘
+      await tester.tap(find.byTooltip('编辑器菜单'));
+      await settle(tester, rounds: 3);
+      await tester.tap(find.text('查找并替换'));
+      await settle(tester, rounds: 3);
+      await tester.enterText(find.byKey(const Key('find-input')), 'box-sizing');
+      await settle(tester, rounds: 6);
+      expect(tester.widget<Text>(find.byKey(const Key('find-count'))).data, matches(RegExp(r'^1/\d+$')));
+      await tester.enterText(find.byKey(const Key('replace-input')), 'box_sizing');
+      await settle(tester, rounds: 2);
+      await shot(tester, '09b-editor-find-$suffix');
+      await tester.tap(find.byKey(const Key('replace-all')));
+      await settle(tester, rounds: 6);
+      expect(editor.controller!.text, isNot(contains('box-sizing')));
+      expect(editor.controller!.text, contains('box_sizing'));
+      await tester.tap(find.byTooltip('关闭查找'));
+      await settle(tester, rounds: 2);
+      expect(find.byKey(const Key('find-input')), findsNothing);
+      await tester.tap(find.text('保存'));
+      await settle(tester, rounds: 6);
+      expect(File('${project.dir}/style.css').readAsStringSync(), contains('box_sizing'));
+      expect(find.text('已保存'), findsOneWidget);
     });
 
     testWidgets('Agent：工具卡片、确认卡 ($suffix)', (tester) async {
@@ -190,8 +227,93 @@ void main() {
         await Future<void>.delayed(const Duration(milliseconds: 600));
       });
       await settle(tester, rounds: 2);
+      expect(find.byType(TerminalView), findsOneWidget);
       expect(session.terminals[session.activeTerminal].text, contains('index.html'));
+      // 粘滞 Ctrl：点亮 → 状态在会话上
+      await tester.tap(find.text('Ctrl'));
+      await settle(tester, rounds: 1);
+      expect(session.terminals[session.activeTerminal].ctrlArmed, isTrue);
+      await tester.tap(find.text('Ctrl'));
+      await settle(tester, rounds: 1);
       await shot(tester, '10-terminal-$suffix');
+
+      // ＋ 里的 SSH 入口现在能点：进 SSH 主机表单
+      await tester.tap(find.byTooltip('新建会话'));
+      await settle(tester, rounds: 3);
+      await shot(tester, '10b-terminal-new-$suffix');
+      await tester.tap(find.byKey(const Key('new-ssh-session')));
+      await settle(tester, rounds: 4);
+      expect(find.text('SSH 主机'), findsOneWidget);
+      // 什么都没填就提交：停在表单上并说明
+      await tester.tap(find.byKey(const Key('ssh-submit')));
+      await settle(tester, rounds: 2);
+      expect(find.text('请填写主机地址'), findsOneWidget);
+      await tester.enterText(find.byKey(const Key('ssh-host')), 'build.example.com');
+      await tester.enterText(find.byKey(const Key('ssh-user')), 'dev');
+      await tester.enterText(find.byKey(const Key('ssh-password')), 'pw-not-real');
+      await settle(tester, rounds: 1);
+      expect(find.text('请填写主机地址'), findsNothing, reason: '改了内容，旧的错误提示要消失');
+      await shot(tester, '19-ssh-connect-$suffix');
+    });
+
+    testWidgets('SSH 主机表单：保存后主机信息进设置、密码进密钥存储 ($suffix)', (tester) async {
+      usePhoneViewport(tester);
+      late TestEnv env;
+      await tester.runAsync(() async => env = await TestEnv.create());
+      addTearDown(env.dispose);
+      SshConfig? result;
+      await tester.pumpWidget(
+        appFor(
+          env,
+          Builder(
+            builder: (context) => Scaffold(
+              body: Center(
+                child: FilledButton(
+                  onPressed: () async => result = await Navigator.of(
+                    context,
+                  ).push<SshConfig>(MaterialPageRoute(builder: (_) => const SshConnectScreen(submitLabel: '保存'))),
+                  child: const Text('打开'),
+                ),
+              ),
+            ),
+          ),
+          mode: mode,
+          font: font,
+        ),
+      );
+      await tester.tap(find.text('打开'));
+      await settle(tester, rounds: 4);
+      await tester.enterText(find.byKey(const Key('ssh-host')), ' 10.0.0.8 ');
+      await tester.enterText(find.byKey(const Key('ssh-port')), '2222');
+      await tester.enterText(find.byKey(const Key('ssh-user')), 'builder');
+      await tester.tap(find.text('私钥登录'));
+      await settle(tester, rounds: 2);
+      await tester.enterText(find.byKey(const Key('ssh-key')), 'hello');
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.scrollUntilVisible(find.byKey(const Key('ssh-submit')), 120, scrollable: find.byType(Scrollable).first);
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(find.byKey(const Key('ssh-submit')));
+      await settle(tester, rounds: 2);
+      expect(find.textContaining('这不像一把私钥'), findsOneWidget);
+      await shot(tester, '19b-ssh-key-error-$suffix');
+      const pem = '-----BEGIN OPENSSH PRIVATE KEY-----\nZmFrZQ==\n-----END OPENSSH PRIVATE KEY-----';
+      await tester.enterText(find.byKey(const Key('ssh-key')), pem);
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.scrollUntilVisible(find.byKey(const Key('ssh-submit')), 120, scrollable: find.byType(Scrollable).first);
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(find.byKey(const Key('ssh-submit')));
+      // 保存是一连串真实文件 IO，每一步都要让出一轮
+      await settle(tester, rounds: 24, ms: 5);
+      expect(result, isNotNull);
+      expect(result!.display, 'builder@10.0.0.8:2222');
+      final saved = SshConfig.load(env.services.settings);
+      expect((saved.host, saved.port, saved.user, saved.useKey), ('10.0.0.8', 2222, 'builder', true));
+      late String? key;
+      await tester.runAsync(() async => key = await env.services.secrets.read(SecretKeys.sshPrivateKey));
+      expect(key, startsWith('-----BEGIN OPENSSH PRIVATE KEY-----'));
+      expect(File('${env.tmp.path}/settings.json').readAsStringSync(), isNot(contains('PRIVATE KEY')));
     });
 
     testWidgets('预览 ($suffix)', (tester) async {
@@ -226,12 +348,47 @@ void main() {
     });
 
     testWidgets('APK 打包 ($suffix)', (tester) async {
-      final (env, _, session) = await open(tester, ProjectTemplate.web);
-      await tester.pumpWidget(appFor(env, BuildScreen(session: session), mode: mode, font: font));
+      final (env, project, session) = await open(tester, ProjectTemplate.web);
+      // 从外壳里进：顶栏左边是汉堡按钮，不是返回箭头
+      await tester.pumpWidget(appFor(env, ProjectShell(project: project, session: session, initial: ShellDest.apk), mode: mode, font: font));
       await settle(tester);
       expect(find.textContaining('手机上跑不了 Android SDK 和 Gradle'), findsOneWidget);
+      expect(find.byTooltip('打开侧边栏'), findsOneWidget);
+      expect(find.byType(BackButton), findsNothing);
       await shot(tester, '16-apk-$suffix');
 
+      // 切到 SSH 构建机：只出现 SSH 的表单，选择会记住
+      await tester.tap(find.text('SSH 构建机'));
+      await settle(tester, rounds: 3);
+      expect(find.text('① 构建机'), findsOneWidget);
+      expect(find.text('① 仓库'), findsNothing);
+      expect(find.text('还没设置'), findsOneWidget);
+      expect(env.services.settings.getString(SettingKeys.apkBuildMode), 'ssh');
+      await tester.runAsync(() => const SshConfig(host: 'build.example.com', user: 'dev').save(env.services.settings));
+      await tester.pumpWidget(appFor(env, ProjectShell(key: UniqueKey(), project: project, session: session, initial: ShellDest.apk), mode: mode, font: font));
+      await settle(tester);
+      expect(find.text('dev@build.example.com'), findsOneWidget);
+      await shot(tester, '20-apk-ssh-$suffix');
+
+      final sshJob =
+          SshBuildController(
+              exec: DartSshRemoteExec(() => throw StateError('截图用，不连接')),
+              remoteDir: '~/lopicode-build/demo',
+              command: 'flutter build apk --release',
+              apkRemotePath: 'build/app/outputs/flutter-apk/app-release.apk',
+              outputDir: '/storage/emulated/0/Android/data/com.lopicode.app/files/apk/demo',
+            )
+            ..phase = BuildPhase.done
+            ..log.addAll(['连接构建机…', '上传 4 个文件到 ~/lopicode-build/demo…', '上传完成', '运行构建命令…', '构建命令成功', 'APK 已保存（21.3 MB）'])
+            ..apkPath = '/storage/emulated/0/Android/data/com.lopicode.app/files/apk/demo/app-release.apk';
+      await tester.pumpWidget(appFor(env, inShell(BuildScreen(key: UniqueKey(), session: session, debugController: sshJob)), mode: mode, font: font));
+      await settle(tester);
+      await tester.drag(find.byType(ListView), const Offset(0, -520));
+      await settle(tester, rounds: 2);
+      expect(find.text('打包完成'), findsOneWidget);
+      await shot(tester, '21-apk-ssh-done-$suffix');
+
+      await tester.runAsync(() => env.services.settings.set(SettingKeys.apkBuildMode, 'github'));
       final job =
           ApkBuildController(
               client: GitHubClient(token: 'x', owner: 'shuang', repo: 'demo'),
@@ -243,7 +400,7 @@ void main() {
             ..log.addAll(['推送 4 个文件到 shuang/demo 的 main 分支…', '已提交 a1b2c3d', '触发工作流 android.yml…', '运行 #777 已开始', '构建中…（一般要几分钟）', '构建结束：成功', 'APK 已保存（18.4 MB）'])
             ..runUrl = 'https://github.com/shuang/demo/actions/runs/777'
             ..apkPath = '/storage/emulated/0/Android/data/com.lopicode.app/files/apk/demo/app-debug.apk';
-      await tester.pumpWidget(appFor(env, BuildScreen(key: UniqueKey(), session: session, debugController: job), mode: mode, font: font));
+      await tester.pumpWidget(appFor(env, inShell(BuildScreen(key: UniqueKey(), session: session, debugController: job)), mode: mode, font: font));
       await settle(tester);
       await tester.drag(find.byType(ListView), const Offset(0, -520));
       await settle(tester, rounds: 2);
