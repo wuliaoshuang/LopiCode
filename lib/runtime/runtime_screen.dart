@@ -1,6 +1,7 @@
 import 'package:flutter/services.dart';
 import 'package:lopicode/runtime/linux_runtime.dart';
 import 'package:lopicode/runtime/runtime_sources.dart';
+import 'package:lopicode/state/runtime_state.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/app_ref.dart';
 import 'package:lopicode/ui/shell.dart';
@@ -19,8 +20,8 @@ class RuntimeScreen extends StatelessWidget {
     final runtime = appOf(context).runtime;
     return Scaffold(
       appBar: const ShellAppBar(title: '运行环境'),
-      body: ListenableBuilder(
-        listenable: runtime,
+      body: RevBuilder(
+        rev: runtimeRevProvider,
         builder: (context, _) => ListView(
           padding: const EdgeInsets.only(bottom: Space.x12),
           children: [
@@ -277,8 +278,8 @@ class _DiagnosticsPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final diag = runtime.diagnostics;
     final t = Theme.of(context).textTheme;
-    return ListenableBuilder(
-      listenable: diag,
+    return RevBuilder(
+      rev: runtimeDiagnosticsRevProvider,
       builder: (context, _) => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

@@ -39,6 +39,18 @@ const _allowedLayers = {
   'terminal': {'core', 'terminal'},
 };
 
+/// 还没迁到 Riverpod 的旧式状态对象（`文件 类名或字段名` ⇒ 为什么还在）。只许变短，不许加新的。
+const _legacyNotifiers = {
+  'lib/project_session.dart ProjectSession': '一个工作区的全部状态（对话、Agent 运行、终端、文件）；Riverpod 迁移的最后一步，还没拆',
+  'lib/project_session.dart fileRevision': '同上：文件变动信号，跟 ProjectSession 一起拆',
+  'lib/terminal/terminal_session.dart TerminalSession': '一个终端会话（持有进程和 xterm 缓冲区）；跟 ProjectSession 的终端列表一起迁',
+  'lib/runtime/linux_shell_backend.dart stalled': '终端“没有响应”的标记；跟终端会话一起迁',
+  'lib/runtime/linux_runtime.dart LinuxRuntime': '运行环境（管进程和文件）；界面已改成订阅 runtimeRevProvider，对象本身还是旧式通知',
+  'lib/runtime/runtime_diagnostics.dart RuntimeDiagnostics': '一键诊断；界面已改成订阅 runtimeDiagnosticsRevProvider',
+  'lib/build/build_controller.dart BuildJob': '一次打包任务（页面自己建、自己销毁，不是全局状态）',
+  'lib/ui/push_drawer.dart PushDrawerController': '侧边栏开合动画的控制器（纯界面）',
+};
+
 const int kMaxLines = 600;
 
 /// 已经超过 [kMaxLines] 的文件和它们的上限（＝收紧规则时的行数，留一点余量）。只许变短。
@@ -172,12 +184,80 @@ void main() {
     expect(bad, isEmpty, reason: '改用 writeJsonAtomic：\n${bad.join('\n')}');
   });
 
+  test('Riverpod 的界面部分（flutter_riverpod）只许界面文件用；逻辑和状态层只用 package:riverpod', () {
+    final bad = [
+      for (final f in files)
+        if (!isUiFile(f) && importsOf(f).any((i) => i.startsWith('package:flutter_riverpod/'))) f,
+    ];
+    expect(bad, isEmpty, reason: '这些不是界面文件，却用了 flutter_riverpod：\n${bad.join('\n')}');
+  });
+
+  test('provider 只定义在 lib/state/ 里（别处只订阅，不自己新开状态）', () {
+    final def = RegExp(r'^\s*(final|late final|const)\s+\w+\s*=\s*(Notifier|AsyncNotifier|Future|Stream|State)?Provider(\.family|\.autoDispose)*[<(]');
+    final bad = <String>[];
+    for (final f in files) {
+      if (f.startsWith('lib/state/')) continue;
+      final lines = File(f).readAsLinesSync();
+      for (var i = 0; i < lines.length; i++) {
+        if (def.hasMatch(lines[i])) bad.add('$f:${i + 1}');
+      }
+    }
+    expect(bad, isEmpty, reason: '把 provider 挪到 lib/state/：\n${bad.join('\n')}');
+    expect(files.where((f) => f.startsWith('lib/state/')), isNotEmpty);
+  });
+
+  test('状态层（lib/state）不依赖界面文件；只有应用外壳和测试直接建状态容器', () {
+    final bad = <String>[];
+    for (final f in files) {
+      if (f.startsWith('lib/state/')) {
+        for (final imp in importsOf(f)) {
+          if (imp.startsWith('package:lopicode/') && isUiFile('lib/${imp.substring('package:lopicode/'.length)}')) bad.add('$f -> $imp');
+        }
+      }
+      if (f != 'lib/app_services.dart' && File(f).readAsStringSync().contains('ProviderContainer(')) bad.add('$f：不许自己建 ProviderContainer（全应用只有 AppServices.container 一个）');
+    }
+    expect(bad, isEmpty, reason: bad.join('\n'));
+  });
+
+  test('旧写法不许回来：没有 AppScope、没有 app.touch()', () {
+    final bad = <String>[];
+    for (final f in files) {
+      final lines = File(f).readAsLinesSync();
+      for (var i = 0; i < lines.length; i++) {
+        final code = lines[i].split('//').first;
+        if (RegExp(r'\bAppScope\b|\.touch\(\)').hasMatch(code)) bad.add('$f:${i + 1}');
+      }
+    }
+    expect(bad, isEmpty, reason: '改完状态不用手动通知全应用：订阅 lib/state/ 里对应的 provider。\n${bad.join('\n')}');
+  });
+
+  test('不许再新增 ChangeNotifier / ValueNotifier 形式的状态：清单只许变短', () {
+    final found = <String>{};
+    for (final f in files) {
+      final lines = File(f).readAsLinesSync();
+      for (var i = 0; i < lines.length; i++) {
+        final code = lines[i].split('//').first;
+        final cls = RegExp(r'class\s+(\w+)[^{]*\b(extends|with)\s+[^{]*\bChangeNotifier\b').firstMatch(code);
+        if (cls != null) found.add('$f ${cls[1]}');
+        // 界面文件里页面自己的 ValueNotifier（动画、输入框之类）不算全局状态
+        if (!isUiFile(f)) {
+          final field = RegExp(r'ValueNotifier<[^>]*>\s+(\w+)\s*=').firstMatch(code);
+          if (field != null) found.add('$f ${field[1]}');
+        }
+      }
+    }
+    final unexpected = found.difference(_legacyNotifiers.keys.toSet());
+    expect(unexpected, isEmpty, reason: '新状态请写成 lib/state/ 里的 Notifier（规矩见 AGENTS.md“状态怎么放”）：\n${unexpected.join('\n')}');
+    final stale = _legacyNotifiers.keys.toSet().difference(found);
+    expect(stale, isEmpty, reason: '这些已经迁走了，从 _legacyNotifiers 里删掉：\n${stale.join('\n')}');
+  });
+
   test('工程规矩文件都在', () {
     for (final f in ['AGENTS.md', 'tool/check.sh', 'analysis_options.yaml', 'docs/dsh-go-architecture-study.md']) {
       expect(File(f).existsSync(), isTrue, reason: '$f 不在');
     }
     final agents = File('AGENTS.md').readAsStringSync();
-    for (final must in ['依赖方向', 'tool/check.sh', 'cast<List<int>>', 'writeJsonAtomic', 'CrashLog']) {
+    for (final must in ['依赖方向', 'lib/state', 'ref.watch', '销毁后不写', 'tool/check.sh', 'cast<List<int>>', 'writeJsonAtomic', 'CrashLog']) {
       expect(agents, contains(must), reason: 'AGENTS.md 里要讲到 $must');
     }
   });

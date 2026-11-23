@@ -6,6 +6,7 @@ import 'package:lopicode/agent/presets.dart';
 import 'package:lopicode/core/stores.dart';
 import 'package:lopicode/state/app_providers.dart';
 import 'package:lopicode/state/config_providers.dart';
+import 'package:lopicode/state/runtime_state.dart';
 import 'package:lopicode/state/ui_prefs.dart';
 import 'package:riverpod/misc.dart' show ProviderListenable;
 import 'package:riverpod/riverpod.dart';
@@ -161,6 +162,21 @@ void main() {
     rev.bump();
     web.bump();
     await env.services.automations.save();
+  });
+
+  test('运行环境：它一通知，订阅的人就收到；容器销毁后不再监听', () {
+    final n = count(runtimeRevProvider);
+    final d = count(runtimeDiagnosticsRevProvider);
+    env.services.runtime.lastLaunchError = '上次没起来';
+    env.services.runtime.recordLaunchSuccess(); // 清掉失败记录，会通知
+    expect(n(), greaterThan(0));
+    expect(d(), 0, reason: '诊断没动');
+
+    final bare = ProviderContainer(overrides: [appServicesProvider.overrideWithValue(env.services)]);
+    bare.listen(runtimeRevProvider, (_, _) {});
+    bare.dispose();
+    env.services.runtime.lastLaunchError = '又没起来';
+    env.services.runtime.recordLaunchSuccess(); // 销毁后再通知：不报错
   });
 
   test('应用服务销毁后：调度器不再往状态里写（跑到一半的自动化任务收尾时不报错）', () async {

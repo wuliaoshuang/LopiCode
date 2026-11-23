@@ -48,18 +48,54 @@ tool/check.sh --fix    # 先自动排版
 新文件不超过 600 行。已经超了的（`builder_screen.dart`、`project_session.dart`、`chat_screen.dart` 等）记在守门测试的清单里，**只许变短不许变长**：
 往这些文件里加新功能之前，先把新功能写到新文件里。
 
-## 状态怎么放（现状，没迁移到 Riverpod）
+## 状态怎么放（Riverpod；2026-11-23 霜霜批准迁移，分步进行中）
 
-- 全应用共享的：`AppServices`（`ChangeNotifier`），用 `AppScope.of(context)` 取。改了以后调 `app.touch()` 或对应的 `notifyListeners()`。
-- 一个工作区的：`ProjectSession`（`ChangeNotifier`），页面用 `addListener` / `ListenableBuilder` 订阅，`dispose` 里必须 `removeListener`。
+用的是 `flutter_riverpod` / `riverpod` 3.5。**已经迁完的**和**还没迁的**分开写，别搞混。
+
+### 已经迁完的（新代码一律照这个写）
+
+- **全应用只有一个状态容器**：`AppServices.container`。应用最外层用 `UncontrolledProviderScope` 把它交给界面；
+  逻辑层（不是界面的代码）要读状态也从 `app.container` 读。别处不许再 `ProviderContainer(...)`（测试除外）。
+- **provider 只定义在 `lib/state/`**，那里只 import `package:riverpod/riverpod.dart`（不带界面）。
+  `flutter_riverpod`（`ConsumerWidget`、`ref.watch` 这些界面部分）只许界面文件用。守门测试会拦。
+- **界面怎么用**：
+  - 要“跟着变”的：`ConsumerWidget` / `ConsumerStatefulWidget` / `Consumer` 里 `ref.watch(某个 provider)`；
+    小块重画可以用 `lib/ui/app_ref.dart` 里的 `QuotaBuilder`、`RevBuilder`。只订阅自己关心的那一个，别订阅一大片。
+  - 只是取个“干活的对象”（存设置、调接口）：`appOf(context)`，它不订阅任何东西。
+  - 界面不直接改底层对象的字段；要改就调 Notifier 或存储对象的方法。
+  - **不许在搭界面的过程中改状态**（`build`、`initState`、`didChangeDependencies` 里直接改会报错）：放到按钮回调里，
+    或者像 `QuotaNotifier.refresh` 那样用 `Future.microtask` 推后一拍。
+- **现在有哪些**（都在 `lib/state/`）：
+  - `app_providers.dart`：`appServicesProvider`、`settingRevProvider(键)`（某个设置键变了）、`settingsAnyRevProvider`（只给设置总览页）。
+    `SettingsStore.set` 写完会自己通知，**不用也不许再手动“通知全应用”**（`AppScope`、`app.touch()` 已删，守门测试不让回来）。
+  - `ui_prefs.dart`：`themeModeProvider`（外观）、`chatPrefsProvider`（开场建议、显示用量）。
+  - `quota_state.dart`：`quotaProvider`——额度上限和余额。这是**标准样板**：状态是不可变对象，只有 `QuotaNotifier` 能改。
+  - `config_providers.dart`：渠道与模型、预设、Agent 设置、技能、自动化、联网搜索的“变了”计数（`xxxRevProvider`）。
+    这几样的数据主人还是各自的存储对象（`ModelConfigStore` 等，带存盘）；界面 `ref.watch(xxxRevProvider)` 之后照常从存储对象读。
+    这是过渡写法，比 `quotaProvider` 那种弱；以后哪块要大改，就顺手改成不可变状态 + Notifier。
+  - `runtime_state.dart`：`runtimeRevProvider`、`runtimeDiagnosticsRevProvider`（运行环境对象本身还是旧式通知，界面已经只订阅 provider）。
+- **防旧数据盖新数据**（照 `QuotaNotifier` 写）：
+  - **代次**：每个渠道一个代次号；发请求时记下，回来时号变了（比如换了 Key）就整个丢掉，不写状态。
+  - **销毁后不写**：`await` 之后先查 `ref.mounted`；逻辑层查 `app.disposed`。销毁后还可能被读的，留一份本地快照（`QuotaNotifier._snap`）。
+  - 同一件事只发一个请求：进行中的 `Future` 存起来复用，不要写会等待自己的 Future。
+  - 换 Key 后：旧请求作废、旧余额不显示、“上次余额”清掉，新 Key 第一次查到的余额当新起点（不和旧账号相减）。
+- 每个新 Notifier 都要在 `test/` 里有单元测试（参考 `test/state_providers_test.dart`、`test/quota_usage_test.dart`）：
+  用 `ProviderContainer(overrides: [appServicesProvider.overrideWithValue(env.services), …])` 建一个独立容器。
+
+### 还没迁的（旧写法，只许减少，不许照着新增）
+
+- 一个工作区的：`ProjectSession`（`ChangeNotifier`，对话、Agent 运行、终端、文件、子代理都在里面），页面用 `addListener` 订阅，
+  `dispose` 里必须 `removeListener`。它是迁移的最后一步，方案在 `docs/dsh-go-architecture-study.md` 第 6 节第 4 步。
+- `TerminalSession`、`BuildJob`、`LinuxRuntime`、`RuntimeDiagnostics` 还是 `ChangeNotifier`。
+- 清单在 `test/architecture_test.dart` 的 `_legacyNotifiers`：迁走一个删一个；**不许再新增 `ChangeNotifier` / 全局 `ValueNotifier` 状态**。
+
+### 一直有效的规矩
+
 - 只属于一个页面的：`State` 里的字段 + `setState`。
-- 规矩：
-  - `await` 之后要用 `context` 或 `setState`，先查 `mounted`（`use_build_context_synchronously` 是 error 级）。
-  - `Future` 要么 `await`，要么明确写 `unawaited(...)` 并说明为什么不等（`unawaited_futures` 是 error 级）。
-  - **防旧数据盖新数据**：一个异步请求回来时，先确认“我还是最新的那一次”再写状态
-    （例子：`QuotaStore.refresh` 用同一个进行中的 Future；`ProjectSession.loadChat` 用 `_loading ??=`）。不要写会等待自己的 Future。
-  - 订阅（`StreamSubscription`）、`Timer`、控制器要在 `dispose` 里取消 / 释放（`cancel_subscriptions`、`close_sinks` 是 error 级）。
-- 要不要整体迁到 Riverpod：方案、工作量、风险写在研究文档里，**等霜霜定，没定之前不要自己迁**。
+- `await` 之后要用 `context` 或 `setState`，先查 `mounted`（`use_build_context_synchronously` 是 error 级）。
+- `Future` 要么 `await`，要么明确写 `unawaited(...)` 并说明为什么不等（`unawaited_futures` 是 error 级）。
+- 订阅（`StreamSubscription`）、`Timer`、控制器要在 `dispose` 里取消 / 释放（`cancel_subscriptions`、`close_sinks` 是 error 级）。
+- 测试收尾删临时目录前，如果被测代码有“不等它写完”的存盘，先 `await pendingWrites()`（`lib/core/safe_file.dart`）。
 
 ## 存盘（`lib/core/safe_file.dart`）
 

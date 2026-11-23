@@ -19,6 +19,7 @@ import 'package:lopicode/runtime/linux_runtime.dart';
 import 'package:lopicode/runtime/runtime_screen.dart';
 import 'package:lopicode/state/app_providers.dart';
 import 'package:lopicode/state/config_providers.dart';
+import 'package:lopicode/state/runtime_state.dart';
 import 'package:lopicode/state/ui_prefs.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/app_ref.dart';
@@ -364,8 +365,8 @@ class _OverviewCardState extends ConsumerState<_OverviewCard> {
       children: [
         modelBlock(),
         const SizedBox(height: Space.x4),
-        AnimatedBuilder(
-          animation: app.runtime,
+        RevBuilder(
+          rev: runtimeRevProvider,
           builder: (context, _) {
             final r = app.runtime;
             final (String state, double? value) = switch (r.phase) {
