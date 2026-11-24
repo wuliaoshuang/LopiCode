@@ -422,6 +422,7 @@ class BackendScreenState extends ConsumerState<BackendScreen> {
       host: host,
       title: '后端积木',
       subtitle: _status(host),
+      dockMemoryKey: 'backend',
       menuExtra: _menuExtra,
       onHostChanged: () => setState(() {}),
       extraActions: [

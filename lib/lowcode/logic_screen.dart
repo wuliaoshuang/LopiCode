@@ -104,6 +104,7 @@ class _LogicScreenState extends State<LogicScreen> {
     return BlockEditorView(
       host: _host,
       title: '积木逻辑',
+      dockMemoryKey: 'logic',
       focusScriptId: _focus,
       menuExtra: _menuExtra,
       onHostChanged: () => setState(() {}),

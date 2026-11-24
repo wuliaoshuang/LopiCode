@@ -396,10 +396,13 @@ void main() {
     await tester.pumpAndSettle();
     expect(rig.s.paletteCollapsed, isTrue);
     expect(find.byKey(const ValueKey('bk-palette-item-block-alert')).hitTestable(), findsNothing);
-    // 收起时点分类＝展开到那一类。
-    await tester.tap(find.byKey(const ValueKey('bk-palette-tab-流程')));
+    // 收起以后只剩手柄条，分类那一行也看不到了；再点一下手柄条回到默认档。
+    expect(find.byKey(const ValueKey('bk-palette-tab-流程')).hitTestable(), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('bk-palette-handle')));
     await tester.pumpAndSettle();
     expect(rig.s.paletteCollapsed, isFalse);
+    await tester.tap(find.byKey(const ValueKey('bk-palette-tab-流程')));
+    await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('bk-palette-item-block-repeat')), findsOneWidget);
   });
 

@@ -1,10 +1,13 @@
 // 设计约束（积木盒 · 底部抽屉，390 宽，浅色 + 深色）— 2026-11-24
-// - 从上到下三行东西：一条小把手；一行分类（彩色圆点 + 名字，横着滑，选中的那个整颗填成它的颜色）；下面是这一类的积木。
+// - 从上到下三行东西：手柄条（44 高：正中一条小把手；右边可以放外面给的几个小按钮——编辑器放的是撤销、重做、缩放比例）；
+//   一行分类（彩色圆点 + 名字，横着滑，选中的那个整颗填成它的颜色）；下面是这一类的积木。
 // - 积木不是文字列表：每一样都用和画布上同一套画法画成真的积木外形（帽子 / 语句 / C 形 / 表达式），小块的并排，放不下换行。
 // - 主操作就是“拿一块积木”：按住一块（约 0.18 秒）或直接横着拖，就把它拿出来了（回调交给外面的编辑器接着拖）；
 //   上下滑还是翻这一页。点一下＝快捷添加（回调告诉外面点了哪一样）。
 // - 手指一按上去，那块样品就微微缩一下（96%）、暗一点：告诉人“按到了，可以拿”。松手 / 拿走就弹回来。
-// - 可以收起：点最上面的把手，只留把手 + 分类那一行（66 高），画布地方更大；收起时点分类会自动展开到那一类。
+// - 面板多高由外面说了算（[BlockPaletteView.height]，可以矮到只剩手柄条：里面的东西不挤扁，只是被裁掉）。
+//   按住手柄条、或者分类那一行，上下拖＝改高度（只把手势报给外面）；分类那一行横着滑还是翻分类，积木那一片上下滑还是翻积木，互不抢。
+//   点一下手柄条（按钮以外的地方）＝外面决定收起还是展开。收到只剩手柄条时，下面两行淡出、点不到。
 import 'package:flutter/gestures.dart';
 import 'package:lopicode/blocks/block_geometry.dart';
 import 'package:lopicode/blocks/block_host.dart';
@@ -32,16 +35,23 @@ class BlockPaletteView extends StatefulWidget {
     this.onPick,
     this.initialCategory,
     this.height = 300,
-    this.collapsed = false,
-    this.onToggle,
+    this.handleTrailing,
+    this.onHandleTap,
+    this.onResizeDown,
+    this.onResizeStart,
+    this.onResizeUpdate,
+    this.onResizeEnd,
     this.onDragStart,
     this.onDragUpdate,
     this.onDragEnd,
     this.onDragCancel,
   });
 
-  /// 收起来以后的高度（把手 + 分类那一行）。
-  static const double collapsedHeight = 66;
+  /// 手柄条的高度（也是面板收到最矮时露在外面的那一条）。
+  static const double handleHeight = 44;
+
+  /// 手柄条 + 分类那一行 + 分隔线：里面的东西至少按这么高排（面板比这矮时下面的被裁掉）。
+  static const double headHeight = handleHeight + 48 + 1;
 
   final BlockHost host;
 
@@ -50,11 +60,23 @@ class BlockPaletteView extends StatefulWidget {
 
   /// 一开始停在哪一类（[BlockCategory.id]）；不给就是第一类。
   final String? initialCategory;
+
+  /// 面板现在多高（外面每一帧给；比 [headHeight] 矮时里面的东西被裁掉，不挤扁）。
   final double height;
 
-  /// 收起（只留分类那一行）。点把手、或收起时点分类，会调 [onToggle]。
-  final bool collapsed;
-  final void Function()? onToggle;
+  /// 手柄条右边放的东西（编辑器放撤销 / 重做 / 缩放）。
+  final Widget? handleTrailing;
+
+  /// 点了一下手柄条（按钮以外的地方）。
+  final void Function()? onHandleTap;
+
+  /// 手指刚按到手柄条或分类那一行上（还不知道是点还是拖）：面板正滑着的话先停住。
+  final void Function()? onResizeDown;
+
+  /// 按住手柄条或分类那一行上下拖：开始；手指又竖着动了多少（往下为正）；松手时的速度（每秒像素，往下为正）。
+  final void Function()? onResizeStart;
+  final void Function(double dy)? onResizeUpdate;
+  final void Function(double velocity)? onResizeEnd;
 
   /// 把一样东西拿出来了：`global`＝手指在屏幕的哪里；`grab`＝手指离样品左上角多远。之后手指每动一下调 [onDragUpdate]，
   /// 松手调 [onDragEnd]，被系统打断调 [onDragCancel]。
@@ -106,13 +128,13 @@ class _BlockPaletteViewState extends State<BlockPaletteView> with BkKitHolder {
         if (!c.isEmpty) c,
     ];
     final current = categories.isEmpty ? null : categories.firstWhere((c) => c.id == _category, orElse: () => categories.first);
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 180),
-      curve: Curves.easeOutCubic,
-      height: widget.collapsed ? BlockPaletteView.collapsedHeight : widget.height,
-      clipBehavior: Clip.antiAlias,
+    final handleColor = theme.dividerColor;
+    final safeBottom = MediaQuery.paddingOf(context).bottom;
+    // 收到只剩手柄条时，下面那两行淡出去（屏幕底部有系统手势条时不露半截分类）。
+    final shown = ((widget.height - BlockPaletteView.handleHeight - safeBottom) / 40).clamp(0.0, 1.0);
+    return Container(
+      height: widget.height,
       decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
         boxShadow: [
           BoxShadow(
@@ -122,48 +144,105 @@ class _BlockPaletteViewState extends State<BlockPaletteView> with BkKitHolder {
           ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          GestureDetector(
-            key: const ValueKey('bk-palette-handle'),
-            behavior: HitTestBehavior.opaque,
-            onTap: widget.onToggle,
-            child: Center(
-              child: Container(
-                margin: const EdgeInsets.only(top: 8, bottom: 4),
-                width: 36,
-                height: 4,
-                decoration: BoxDecoration(color: theme.dividerColor, borderRadius: BorderRadius.circular(2)),
+      child: Material(
+        color: theme.colorScheme.surface,
+        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+        clipBehavior: Clip.antiAlias,
+        // 面板被拖矮时里面照原样排、下面的裁掉：不挤扁，也不报溢出。
+        child: OverflowBox(
+          alignment: Alignment.topCenter,
+          minHeight: 0,
+          maxHeight: widget.height < BlockPaletteView.headHeight ? BlockPaletteView.headHeight : widget.height,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _resizable(
+                key: const ValueKey('bk-palette-handle'),
+                onTap: widget.onHandleTap,
+                child: SizedBox(
+                  height: BlockPaletteView.handleHeight,
+                  child: Stack(
+                    children: [
+                      Center(
+                        child: Container(
+                          key: const ValueKey('bk-palette-grip'),
+                          width: 36,
+                          height: 4,
+                          decoration: BoxDecoration(color: handleColor, borderRadius: BorderRadius.circular(2)),
+                        ),
+                      ),
+                      if (widget.handleTrailing != null)
+                        // 按钮之间的缝、按不动的按钮：点到了不算“点手柄”。
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: () {}, child: widget.handleTrailing),
+                        ),
+                    ],
+                  ),
+                ),
               ),
-            ),
-          ),
-          SizedBox(
-            height: 48,
-            child: ListView.separated(
-              key: const ValueKey('bk-palette-tabs'),
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              itemCount: categories.length,
-              separatorBuilder: (_, _) => const SizedBox(width: 6),
-              itemBuilder: (_, i) => _tab(categories[i], identical(categories[i], current)),
-            ),
-          ),
-          Divider(height: 1, color: theme.dividerColor),
-          Expanded(
-            child: current == null
-                ? const SizedBox.shrink()
-                : SingleChildScrollView(
-                    key: ValueKey('bk-palette-page-${current.id}'),
-                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 20),
-                    child: Align(
-                      alignment: Alignment.topLeft,
-                      child: Wrap(spacing: 12, runSpacing: 12, crossAxisAlignment: WrapCrossAlignment.start, children: [for (final item in _itemsOf(current)) _sample(item)]),
+              Expanded(
+                child: IgnorePointer(
+                  ignoring: shown <= 0,
+                  child: Opacity(
+                    opacity: shown,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _resizable(
+                          key: const ValueKey('bk-palette-tabs-grip'),
+                          child: SizedBox(
+                            height: 48,
+                            child: ListView.separated(
+                              key: const ValueKey('bk-palette-tabs'),
+                              scrollDirection: Axis.horizontal,
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                              itemCount: categories.length,
+                              separatorBuilder: (_, _) => const SizedBox(width: 6),
+                              itemBuilder: (_, i) => _tab(categories[i], identical(categories[i], current)),
+                            ),
+                          ),
+                        ),
+                        Divider(height: 1, color: theme.dividerColor),
+                        Expanded(
+                          child: current == null
+                              ? const SizedBox.shrink()
+                              : SingleChildScrollView(
+                                  key: ValueKey('bk-palette-page-${current.id}'),
+                                  padding: EdgeInsets.fromLTRB(16, 14, 16, 20 + safeBottom),
+                                  child: Align(
+                                    alignment: Alignment.topLeft,
+                                    child: Wrap(spacing: 12, runSpacing: 12, crossAxisAlignment: WrapCrossAlignment.start, children: [for (final item in _itemsOf(current)) _sample(item)]),
+                                  ),
+                                ),
+                        ),
+                      ],
                     ),
                   ),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
+    );
+  }
+
+  /// 按住上下拖＝改面板高度的那两行。只认竖着的拖：横着滑（翻分类）、点（选分类、点按钮）都不拦。
+  Widget _resizable({required Key key, required Widget child, VoidCallback? onTap}) {
+    if (widget.onResizeUpdate == null && onTap == null) return KeyedSubtree(key: key, child: child);
+    return GestureDetector(
+      key: key,
+      behavior: HitTestBehavior.opaque,
+      // 一认出是竖着拖，就把认出来之前走的那一小段也补上：面板上沿贴着手指，不落后一截。
+      dragStartBehavior: DragStartBehavior.down,
+      onTap: onTap,
+      onVerticalDragDown: (_) => widget.onResizeDown?.call(),
+      onVerticalDragStart: (_) => widget.onResizeStart?.call(),
+      onVerticalDragUpdate: (d) => widget.onResizeUpdate?.call(d.primaryDelta ?? 0),
+      onVerticalDragEnd: (d) => widget.onResizeEnd?.call(d.primaryVelocity ?? 0),
+      onVerticalDragCancel: () => widget.onResizeEnd?.call(0),
+      child: child,
     );
   }
 
@@ -173,10 +252,7 @@ class _BlockPaletteViewState extends State<BlockPaletteView> with BkKitHolder {
     return GestureDetector(
       key: ValueKey('bk-palette-tab-${c.id}'),
       behavior: HitTestBehavior.opaque,
-      onTap: () {
-        setState(() => _category = c.id);
-        if (widget.collapsed) widget.onToggle?.call();
-      },
+      onTap: () => setState(() => _category = c.id),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 140),
         padding: const EdgeInsets.symmetric(horizontal: 12),

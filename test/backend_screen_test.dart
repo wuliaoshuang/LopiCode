@@ -12,6 +12,7 @@ import 'package:lopicode/backend/backend_edit.dart';
 import 'package:lopicode/backend/backend_launch.dart';
 import 'package:lopicode/backend/backend_model.dart';
 import 'package:lopicode/backend/backend_targets.dart';
+import 'package:lopicode/blocks/block_dock.dart';
 import 'package:lopicode/blocks/block_editor_view.dart';
 import 'package:lopicode/blocks/block_geometry.dart';
 import 'package:lopicode/core/project_store.dart';
@@ -783,6 +784,64 @@ void main() {
     await boot(tester, ProjectTemplate.empty, mode: ThemeMode.dark);
     expect(k('hub-empty'), findsOneWidget);
     await shot(tester, 'be-hub-empty-dark');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('积木盒面板在后端积木页一样能上下拖：收到只剩手柄条、顶到页面顶；撤销 / 重做 / 缩放在手柄条上；切到别的页再回来高度还在', (tester) async {
+    addTearDown(BkDockMemory.clear);
+    await boot(tester, ProjectTemplate.backendBlocks, language: 'node');
+    Rect dock() => tester.getRect(k('bk-dock'));
+    // 把样本接口挪出视野，在空地方搭。
+    ed(tester).setPan(const Offset(0, -4000));
+    await tester.pumpAndSettle();
+    final page = tester.getRect(find.byType(BlockEditorView));
+    expect(dock().height, 248);
+    expect(dock().bottom, page.bottom);
+    // 撤销 / 重做 / 缩放都在手柄条里，画布上没有浮条。
+    final handle = tester.getRect(k('bk-palette-handle'));
+    for (final key in ['bk-undo', 'bk-redo', 'bk-zoom']) {
+      final r = tester.getRect(k(key));
+      expect(handle.contains(r.center), isTrue, reason: key);
+      expect(r.width, greaterThanOrEqualTo(44), reason: key);
+      expect(r.height, greaterThanOrEqualTo(44), reason: key);
+    }
+
+    Future<void> pull(double dy) async {
+      final g = await tester.startGesture(tester.getCenter(k('bk-palette-grip')));
+      for (var i = 0; i < 8; i++) {
+        await g.moveBy(Offset(0, dy / 8));
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      await g.up();
+      await tester.pumpAndSettle();
+    }
+
+    // 往上：顶到页面顶（盖住顶栏），底部导航不受影响。
+    await pull(-1500);
+    expect(dock().top, page.top);
+    expect(k('be-run').hitTestable(), findsNothing);
+    expect(k('nav-0').hitTestable(), findsOneWidget);
+    // 全展开时拿一块积木：面板让开，照样放到画布上。
+    final before = doc(tester).routes.length;
+    final (g, from) = await liftFromPalette(tester, 'event', 'hat-POST');
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(dock().height, 248);
+    await glideAndDrop(tester, g, from, () => tester.getTopLeft(k('bk-canvas')) + const Offset(200, 330));
+    expect(doc(tester).routes.length, before + 1);
+
+    // 往下：只剩手柄条；撤销还能点。
+    await pull(1500);
+    expect(dock().height, 44);
+    expect(dock().bottom, page.bottom);
+    await tapKey(tester, 'bk-undo');
+    expect(doc(tester).routes.length, before);
+    expect(dock().height, 44);
+
+    // 切到别的页再回来：还是收起的。
+    await tapNav(tester, ShellDest.files);
+    await tapNav(tester, ShellDest.builder);
+    expect(dock().height, 44);
+    await flushed(tester);
     expect(tester.takeException(), isNull);
   });
 }
