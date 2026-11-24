@@ -503,4 +503,15 @@ void main() {
       }
     });
   });
+
+  test('声明后面夹着 } 和别的规则：前面的声明不丢，多出来的那条要上报', () {
+    final r = parseCss('margin: 8px 4px; foo-bar: baz; color: red; } body{display:none');
+    expect(r.declarations['margin-top'], '8px');
+    expect(r.declarations['foo-bar'], 'baz');
+    expect(r.declarations['color'], 'red');
+    expect(r.declarations.containsKey('display'), isFalse);
+    expect(r.dropped, hasLength(1));
+    // 正常的整条规则仍然只读花括号里面
+    expect(parseCss('.a { color: red; }').declarations, {'color': 'red'});
+  });
 }

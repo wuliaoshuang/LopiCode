@@ -52,6 +52,12 @@ String stripCssComments(String css) {
 ({String body, String rest}) cssRuleBody(String css) {
   final open = _indexOfTopLevel(css, 0x7B, 0);
   if (open < 0) return (body: css, rest: '');
+  // 第一个 { 前面已经有分号或 }，说明前面是声明而不是选择器：
+  // 整段按声明逐条读，带花括号的那条由调用方拒收并上报，不能静默丢掉前面的。
+  final head = css.substring(0, open);
+  if (_indexOfTopLevel(head, 0x3B, 0) >= 0 || _indexOfTopLevel(head, 0x7D, 0) >= 0) {
+    return (body: css, rest: '');
+  }
   var depth = 0;
   var quote = 0;
   for (var i = open; i < css.length; i++) {
