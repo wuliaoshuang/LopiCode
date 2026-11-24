@@ -18,6 +18,7 @@ class ThirdPartyScreen extends StatelessWidget {
     final c = context.colors;
     return Scaffold(
       backgroundColor: context.colors.canvas,
+      extendBodyBehindAppBar: true,
       appBar: ShellAppBar(background: context.colors.canvas, title: '第三方声明', subtitle: '随安装包带的开源组件'),
       body: SectionedList(
         listKey: const Key('third-party-list'),
@@ -150,20 +151,23 @@ class LicenseTextScreen extends StatelessWidget {
     final t = Theme.of(context).textTheme;
     return Scaffold(
       backgroundColor: context.colors.canvas,
+      extendBodyBehindAppBar: true,
       appBar: ShellAppBar(background: context.colors.canvas, title: licenseTitle(asset), subtitle: '英文原文'),
       body: FutureBuilder<String>(
         future: (bundle ?? DefaultAssetBundle.of(context)).loadString(asset),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
-            return const Padding(
-              padding: EdgeInsets.all(Space.x4),
-              child: InfoBanner('许可证全文读不出来。这是安装包的问题，请告诉 LopiCode 的发布者。', tone: BannerTone.danger),
+            return const BelowBar(
+              child: Padding(
+                padding: EdgeInsets.all(Space.x4),
+                child: InfoBanner('许可证全文读不出来。这是安装包的问题，请告诉 LopiCode 的发布者。', tone: BannerTone.danger),
+              ),
             );
           }
           if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
           return SingleChildScrollView(
             key: const Key('license-text'),
-            padding: const EdgeInsets.all(Space.x4),
+            padding: EdgeInsets.fromLTRB(Space.x4, PageBar.insetOf(context) + Space.x4, Space.x4, Space.x4),
             child: SelectableText(
               snapshot.data!,
               style: t.bodySmall?.copyWith(fontFamily: 'monospace', fontFamilyFallback: const ['sans-serif'], fontSize: 11, height: 1.45),

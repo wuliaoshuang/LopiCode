@@ -24,6 +24,7 @@ import 'package:lopicode/state/config_providers.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/app_ref.dart';
 import 'package:lopicode/ui/shell.dart';
+import 'package:lopicode/ui/top_bar.dart';
 import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:path/path.dart' as p;
@@ -298,9 +299,10 @@ class _BuildScreenState extends ConsumerState<BuildScreen> {
     final job = _job;
     final busy = job?.busy ?? false;
     return Scaffold(
+      extendBodyBehindAppBar: true,
       appBar: const ShellAppBar(title: 'APK 打包'),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(Space.x4, Space.x2, Space.x4, Space.x8),
+        padding: EdgeInsets.fromLTRB(Space.x4, PageBar.insetOf(context) + Space.x2, Space.x4, Space.x8),
         children: [
           InfoBanner(
             _ssh

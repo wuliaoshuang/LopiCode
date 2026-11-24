@@ -1,7 +1,7 @@
 // 设计约束（积木编辑器整页，390 宽，浅色 + 深色）— 2026-11-24
 // - 这一页就是一张桌子：整屏是点阵画布，积木摆在上面；底部是积木盒（可收起）。主操作＝用手把积木拖来拖去拼起来。
-// - 顶栏是沉浸式的（lib/ui/immersive_bar.dart）：没有底色，画布从屏幕最顶铺起，顶栏的三样悬浮在画布上面——
-//   返回、标题小胶囊（标题 + 一行状态小字）、少数入口（宿主给的，例如“变量”）＋“问题”（有问题才带数字）＋“看代码”。
+// - 顶栏是全应用统一的悬浮顶栏（lib/ui/top_bar.dart）：没有底色，画布从屏幕最顶铺起，顶栏的三样悬浮在画布上面——
+//   返回、标题（只有文字：标题 + 一行状态小字）、少数入口（宿主给的，例如“变量”）＋“问题”（有问题才带数字）＋“看代码”。
 //   三样之间的空白是画布：可以在那里拖画布、点积木。画布的起始位置、定位都把顶栏那一段当成被盖住的。
 // - 画布上没有常驻的浮条：撤销、重做、缩放比例（点一下回到 100%）在积木盒手柄条的右边，
 //   左边是“积木盒”名字（点一下收起 / 展开）和问题数量（block_editor_dock_view.dart）。
@@ -27,7 +27,8 @@ import 'package:lopicode/blocks/block_panels_sheet.dart';
 import 'package:lopicode/blocks/block_script_view.dart';
 import 'package:lopicode/lowcode/logic_blocks.dart';
 import 'package:lopicode/theme/tokens.dart';
-import 'package:lopicode/ui/immersive_bar.dart';
+import 'package:lopicode/ui/shell.dart';
+import 'package:lopicode/ui/top_bar.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// 下拉小菜单最底下额外的一项（例如“新建变量…”）。`run` 里宿主自己问用户要什么；
@@ -178,8 +179,9 @@ class BlockEditorViewState extends State<BlockEditorView> with TickerProviderSta
     reduceMotion = MediaQuery.disableAnimationsOf(context);
     final all = layout; // 先排版：issues、选中都跟着刷新
     final errors = issues.where((i) => i.isError).length;
-    final bar = ImmersiveBar(
+    final bar = ShellAppBar(
       key: const ValueKey('bk-bar'),
+      background: kit.palette.canvas,
       title: widget.title,
       subtitle: widget.subtitle,
       actions: [
@@ -204,7 +206,7 @@ class BlockEditorViewState extends State<BlockEditorView> with TickerProviderSta
         builder: (context, page) {
           final safe = MediaQuery.paddingOf(context);
           // 悬浮顶栏连同状态栏一共多高：画布铺满整页，这一段算被盖住的。
-          final barHeight = ImmersiveBar.kHeight + safe.top;
+          final barHeight = PageBar.insetOf(context);
           coveredTop = barHeight;
           layoutDock(area: page.maxHeight - safe.top, safeBottom: safe.bottom);
           final dragging = drag != null;

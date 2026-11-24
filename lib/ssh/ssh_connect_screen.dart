@@ -119,6 +119,7 @@ class _SshConnectScreenState extends State<SshConnectScreen> {
     final t = Theme.of(context).textTheme;
     return Scaffold(
       backgroundColor: context.colors.canvas,
+      extendBodyBehindAppBar: true,
       appBar: PageBar(background: context.colors.canvas, title: const Text('SSH 主机')),
       body: SectionedList(
         inner: const EdgeInsets.all(Space.x4),

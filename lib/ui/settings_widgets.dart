@@ -40,12 +40,13 @@ class SettingsPage extends StatelessWidget {
     final c = context.colors;
     return Scaffold(
       backgroundColor: c.canvas,
+      extendBodyBehindAppBar: true,
       appBar: PageBar(background: c.canvas, titleText: title, subtitle: subtitle, actions: actions),
       floatingActionButton: floatingActionButton,
       // 不用懒加载的 ListView：设置页都不长，一次排完，滚出屏幕的输入框不会被拆掉重建，底部的“保存”也一直在。
       body: SingleChildScrollView(
         key: listKey,
-        padding: EdgeInsets.fromLTRB(Space.x4, Space.x2, Space.x4, bottom),
+        padding: EdgeInsets.fromLTRB(Space.x4, PageBar.insetOf(context) + Space.x2, Space.x4, bottom),
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: children),
       ),
     );

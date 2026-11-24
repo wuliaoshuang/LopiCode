@@ -338,7 +338,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final running = subs.where((a) => s.isRunning(a.id)).length;
     final text = _input.text;
     final slash = text.startsWith('/') && !text.contains(RegExp(r'\s')) ? kSlashCommands.where((k) => k.$1.startsWith(text.toLowerCase())).toList() : const <(String, String)>[];
-    final topInset = MediaQuery.paddingOf(context).top + PageBar.kHeight;
+    final topInset = PageBar.insetOf(context);
     final rows = deriveChatRows(s.chat, busy: s.agentBusy, showThinking: prefs.thinking);
     final todos = latestTodos(s.chat);
     // 最后一行已经是“进行中”的步骤组（它自己在转圈）或正在往外冒的回复时，不再另起一行“处理中”。
@@ -351,7 +351,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: ShellAppBar(
-        fade: true,
         title: s.conversationTitle,
         subtitle: '${s.project.name} / ${model == null ? '未设置模型' : model.model.name}',
         actions: [

@@ -1,6 +1,6 @@
 // 设计约束（低代码 · 编辑组件的内容 · 390×844）
 // - 整页：和搭建页同一套排法，只是画布上放的不是页面，而是“这个组件的内容”（外面垫一张空白页当背景）。
-//   顶栏（沉浸式，悬浮在画布上面，没有底色）：标题小胶囊“编辑组件”+ 组件名；右边胶囊 撤销 / 重做 /“⋮”（图层、可配置的属性）/ 主操作“完成”。
+//   顶栏（沉浸式，悬浮在画布上面，没有底色）：标题“编辑组件”+ 组件名；右边胶囊 撤销 / 重做 /“⋮”（图层、可配置的属性）/ 主操作“完成”。
 //   中间画布；选中控件后底下出现一行操作（名字在左；属性 / 样式 在右；上移、下移、复制、删除收进“更多操作”）；最底下组件栏。
 // - 这里没有积木逻辑的入口：组件里面的控件不支持逻辑。
 // - 组件最外层只能有一个控件：最外层不能删、不能移走，旁边也放不了别的控件（要放就放进它里面）。
@@ -20,7 +20,8 @@ import 'package:lopicode/lowcode/props_sheet.dart';
 import 'package:lopicode/lowcode/style_editor_sheet.dart';
 import 'package:lopicode/lowcode/style_model.dart';
 import 'package:lopicode/theme/tokens.dart';
-import 'package:lopicode/ui/immersive_bar.dart';
+import 'package:lopicode/ui/shell.dart';
+import 'package:lopicode/ui/top_bar.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// “编辑组件”用的临时页面的根 id。带下划线：定义里的节点 id 只有字母数字，不会和它撞。
@@ -289,40 +290,40 @@ class _ComponentEditorState extends State<_ComponentEditor> {
     final node = _selected == null ? null : _temp.find(_selected!);
     final name = _real.component(widget.componentId)?.name ?? _temp.title;
     return Scaffold(
-      body: ImmersiveBody(
-        bar: ImmersiveBar(
-          title: '编辑组件',
-          subtitle: name,
-          actions: [
-            IconButton(tooltip: '撤销', icon: const Icon(Icons.undo), onPressed: _history.canUndo ? () => _restore(_history.undo()) : null),
-            IconButton(tooltip: '重做', icon: const Icon(Icons.redo), onPressed: _history.canRedo ? () => _restore(_history.redo()) : null),
-            PopupMenuButton<String>(
-              tooltip: '更多',
-              onSelected: (v) => v == 'layers' ? _openLayers() : unawaited(_openComponentProps()),
-              itemBuilder: (_) => const [PopupMenuItem(value: 'layers', child: Text('图层')), PopupMenuItem(value: 'props', child: Text('可配置的属性'))],
+      extendBodyBehindAppBar: true,
+      appBar: ShellAppBar(
+        background: context.colors.surfaceMuted,
+        title: '编辑组件',
+        subtitle: name,
+        actions: [
+          IconButton(tooltip: '撤销', icon: const Icon(Icons.undo), onPressed: _history.canUndo ? () => _restore(_history.undo()) : null),
+          IconButton(tooltip: '重做', icon: const Icon(Icons.redo), onPressed: _history.canRedo ? () => _restore(_history.redo()) : null),
+          PopupMenuButton<String>(
+            tooltip: '更多',
+            onSelected: (v) => v == 'layers' ? _openLayers() : unawaited(_openComponentProps()),
+            itemBuilder: (_) => const [PopupMenuItem(value: 'layers', child: Text('图层')), PopupMenuItem(value: 'props', child: Text('可配置的属性'))],
+          ),
+          TextButton(key: const ValueKey('comp-editor-done'), onPressed: () => Navigator.pop(context), child: const Text('完成')),
+        ],
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child: CanvasView(
+              doc: _temp,
+              selected: _selected,
+              dragging: _dragging,
+              onSelect: _select,
+              onDrop: _drop,
+              canDrop: _canDrop,
+              onDragging: _setDragging,
+              onResize: _resize,
+              topInset: PageBar.insetOf(context),
             ),
-            TextButton(key: const ValueKey('comp-editor-done'), onPressed: () => Navigator.pop(context), child: const Text('完成')),
-          ],
-        ),
-        child: Column(
-          children: [
-            Expanded(
-              child: CanvasView(
-                doc: _temp,
-                selected: _selected,
-                dragging: _dragging,
-                onSelect: _select,
-                onDrop: _drop,
-                canDrop: _canDrop,
-                onDragging: _setDragging,
-                onResize: _resize,
-                topInset: ImmersiveBar.extentOf(context),
-              ),
-            ),
-            if (node != null) _selectionBar(context, node),
-            PaletteBar(onTap: _addByTap, onDragging: _setDragging, components: _temp.components),
-          ],
-        ),
+          ),
+          if (node != null) _selectionBar(context, node),
+          PaletteBar(onTap: _addByTap, onDragging: _setDragging, components: _temp.components),
+        ],
       ),
     );
   }

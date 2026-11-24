@@ -8,7 +8,7 @@ import 'package:lopicode/blocks/block_geometry.dart';
 import 'package:lopicode/lowcode/logic_blocks.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 import 'package:lopicode/lowcode/model.dart';
-import 'package:lopicode/ui/immersive_bar.dart';
+import 'package:lopicode/ui/top_bar.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'blocks_motion_test.dart' show bigDoc;
@@ -20,7 +20,7 @@ import 'support/harness.dart';
 LcDocument emptyDoc() => sampleDoc()..logic.handlers.clear();
 
 /// 画布露出来那一段里的一点（从悬浮顶栏的下沿量起：顶栏那一段画布虽然也铺着，但上面浮着按钮）。
-Offset canvasAt(WidgetTester tester, Offset d) => Offset(tester.getTopLeft(find.byKey(const ValueKey('bk-canvas'))).dx, tester.getRect(find.byType(ImmersiveBar)).bottom) + d;
+Offset canvasAt(WidgetTester tester, Offset d) => Offset(tester.getTopLeft(find.byKey(const ValueKey('bk-canvas'))).dx, tester.getRect(find.byType(PageBar)).bottom) + d;
 
 BkWorkspacePainter painterOf(WidgetTester tester) => tester.widget<CustomPaint>(find.byKey(const ValueKey('bk-canvas'))).painter! as BkWorkspacePainter;
 

@@ -6,6 +6,7 @@ import 'package:lopicode/runtime/runtime_sources.dart';
 import 'package:lopicode/state/runtime_state.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/shell.dart';
+import 'package:lopicode/ui/top_bar.dart';
 import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -21,10 +22,11 @@ class RuntimeScreen extends ConsumerWidget {
     final runtime = ref.watch(runtimeProvider);
     final ctl = ref.read(runtimeProvider.notifier);
     return Scaffold(
+      extendBodyBehindAppBar: true,
       appBar: const ShellAppBar(title: '运行环境'),
       body: Builder(
         builder: (context) => ListView(
-          padding: const EdgeInsets.only(bottom: Space.x12),
+          padding: EdgeInsets.only(top: PageBar.insetOf(context), bottom: Space.x12),
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(Space.x4, Space.x4, Space.x4, 0),

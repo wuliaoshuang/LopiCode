@@ -53,6 +53,7 @@ class _AutomationListScreenState extends ConsumerState<AutomationListScreen> {
     final now = DateTime.now();
     return Scaffold(
       backgroundColor: context.colors.canvas,
+      extendBodyBehindAppBar: true,
       appBar: PageBar(background: context.colors.canvas, title: const Text('自动化任务')),
       floatingActionButton: items.isEmpty ? null : FloatingActionButton.extended(onPressed: _new, elevation: 2, shape: const StadiumBorder(), icon: const Icon(Icons.add), label: const Text('新建任务')),
       body: SectionedList(
@@ -127,14 +128,18 @@ class _AutomationDetailScreenState extends ConsumerState<AutomationDetailScreen>
     if (a == null) {
       return Scaffold(
         backgroundColor: context.colors.canvas,
+        extendBodyBehindAppBar: true,
         appBar: PageBar(background: context.colors.canvas, title: const Text('自动化任务')),
-        body: const EmptyState(icon: Icons.event_busy, title: '这个任务已经删除', message: ''),
+        body: const BelowBar(
+          child: EmptyState(icon: Icons.event_busy, title: '这个任务已经删除', message: ''),
+        ),
       );
     }
     final next = a.nextRun(DateTime.now());
     final running = autos.isRunning(a.id);
     return Scaffold(
       backgroundColor: context.colors.canvas,
+      extendBodyBehindAppBar: true,
       appBar: PageBar(
         background: context.colors.canvas,
         title: Text(a.title, maxLines: 1, overflow: TextOverflow.ellipsis),
@@ -380,6 +385,7 @@ class _AutomationEditScreenState extends ConsumerState<AutomationEditScreen> {
     final t = Theme.of(context).textTheme;
     return Scaffold(
       backgroundColor: context.colors.canvas,
+      extendBodyBehindAppBar: true,
       appBar: PageBar(background: context.colors.canvas, title: Text(widget.existing == null ? '新建自动化任务' : '修改自动化任务')),
       body: SectionedList(
         inner: const EdgeInsets.all(Space.x4),

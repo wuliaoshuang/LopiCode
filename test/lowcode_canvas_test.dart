@@ -14,7 +14,7 @@ import 'package:lopicode/lowcode/logic_edit.dart';
 import 'package:lopicode/lowcode/logic_screen.dart';
 import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/project_session.dart';
-import 'package:lopicode/ui/immersive_bar.dart';
+import 'package:lopicode/ui/top_bar.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'support/harness.dart';
@@ -654,7 +654,7 @@ void main() {
         await tester.dragFrom(view.center, const Offset(120, 400));
         await tester.pump(const Duration(seconds: 3));
       }
-      expect(tester.getRect(find.byKey(const ValueKey('lowcode-page'))).topLeft, view.topLeft + const Offset(0, ImmersiveBar.kHeight), reason: '顶边停在悬浮顶栏的下沿');
+      expect(tester.getRect(find.byKey(const ValueKey('lowcode-page'))).topLeft, view.topLeft + const Offset(0, PageBar.kHeight), reason: '顶边停在悬浮顶栏的下沿');
       expect(tester.takeException(), isNull);
     });
 
