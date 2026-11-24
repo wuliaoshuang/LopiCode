@@ -342,7 +342,7 @@ class IconBottomNav extends StatelessWidget {
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 IconTheme(
-                                  data: IconThemeData(size: 24, color: i == current ? c.accent : c.textMuted),
+                                  data: IconThemeData(size: 24, color: i == current ? c.text : c.textFaint),
                                   child: Center(child: i == current ? items[i].selectedIcon : items[i].icon),
                                 ),
                                 const SizedBox(height: 2),
@@ -350,7 +350,7 @@ class IconBottomNav extends StatelessWidget {
                                   items[i].label,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(fontSize: FontSize.xs, height: 1.1, color: i == current ? c.accent : c.textMuted, fontWeight: i == current ? FontWeight.w600 : FontWeight.w400),
+                                  style: TextStyle(fontSize: FontSize.xs, height: 1.1, color: i == current ? c.text : c.textFaint, fontWeight: i == current ? FontWeight.w600 : FontWeight.w400),
                                 ),
                               ],
                             ),

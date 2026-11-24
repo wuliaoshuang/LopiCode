@@ -97,11 +97,23 @@ Future<({TextEditingController controller, _FakeVoice voice, _Calls calls})> _pu
 void main() {
   testWidgets('输入工具栏直接打开模型、权限和附件，文字就绪后可发送', (tester) async {
     final state = await _pump(tester);
+    // 没点进去：收成一行，只有 ＋、提示、麦克风、发送
     expect(find.byKey(const ValueKey('plus-button')), findsOneWidget);
+    expect(find.byKey(const ValueKey('voice-button')), findsOneWidget);
+    expect(find.byKey(const ValueKey('send-button')), findsOneWidget);
+    expect(find.byKey(const ValueKey('permission-button')), findsNothing);
+    expect(find.byKey(const ValueKey('model-button')), findsNothing);
+    expect(find.text('描述你的任务…'), findsOneWidget);
+    final collapsedHeight = tester.getSize(find.byKey(const ValueKey('chat-input'))).height;
+
+    // 点进去：展开成两行，权限和模型出现
+    await tester.tap(find.byType(TextField));
+    await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('permission-button')), findsOneWidget);
     expect(find.byKey(const ValueKey('model-button')), findsOneWidget);
     expect(find.byKey(const ValueKey('voice-button')), findsOneWidget);
-    expect(find.text('描述你的任务…'), findsOneWidget);
+    expect(tester.getSize(find.byKey(const ValueKey('chat-input'))).height, greaterThan(collapsedHeight));
+    expect(tester.testTextInput.hasAnyClients, isTrue, reason: '换排法时输入框没丢焦点');
 
     await tester.tap(find.byKey(const ValueKey('model-button')));
     await tester.tap(find.byKey(const ValueKey('permission-button')));
@@ -165,5 +177,21 @@ void main() {
     expect(state.controller.text, '你好');
     expect(find.text('没听清，请再说一次。'), findsOneWidget);
     expect(find.byTooltip('语音输入'), findsOneWidget);
+  });
+
+  testWidgets('有草稿时即使没聚焦也保持展开；清空并失焦后收回一行', (tester) async {
+    await _pump(tester);
+    await tester.enterText(find.byType(TextField), '草稿');
+    await tester.pumpAndSettle();
+    FocusManager.instance.primaryFocus?.unfocus();
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('model-button')), findsOneWidget, reason: '有字就不收');
+
+    await tester.enterText(find.byType(TextField), '');
+    await tester.pumpAndSettle();
+    FocusManager.instance.primaryFocus?.unfocus();
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('model-button')), findsNothing);
+    expect(find.byKey(const ValueKey('plus-button')), findsOneWidget);
   });
 }

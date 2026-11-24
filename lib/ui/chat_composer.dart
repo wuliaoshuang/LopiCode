@@ -1,5 +1,6 @@
 // 设计约束（聊天输入栏 · 390×844）
-// - 输入区常驻底部：上方多行输入，下方工具栏只放附件、权限、模型、语音和发送。
+// - 输入区常驻底部。没点进去且没有字：收成一行胶囊（附件、提示、用量小环、语音、发送）。
+// - 点进去或有草稿：展开成两行，上方多行输入，下方工具栏放附件、权限、模型、用量小环、语音和发送。
 // - 键盘弹出时底部导航让位，输入栏贴着键盘；长按发送仍可选排队、插话或中断。
 // - 语音识别把实时结果接进草稿，不覆盖已有文字；不可用时给出明确原因。
 import 'dart:async';
@@ -120,8 +121,44 @@ class _ChatComposerState extends State<ChatComposer> {
   bool _listening = false;
   bool _acceptingDictation = false;
 
+  /// 收起和展开是两种排法，输入框靠这把钥匙在两边搬来搬去，焦点和光标不丢。
+  final GlobalKey _fieldKey = GlobalKey();
+  bool _wasCollapsed = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _wasCollapsed = _collapsed;
+    widget.focusNode.addListener(_onInputChanged);
+    widget.controller.addListener(_onInputChanged);
+  }
+
+  @override
+  void didUpdateWidget(ChatComposer old) {
+    super.didUpdateWidget(old);
+    if (old.focusNode != widget.focusNode) {
+      old.focusNode.removeListener(_onInputChanged);
+      widget.focusNode.addListener(_onInputChanged);
+    }
+    if (old.controller != widget.controller) {
+      old.controller.removeListener(_onInputChanged);
+      widget.controller.addListener(_onInputChanged);
+    }
+  }
+
+  /// 只在“收起 / 展开”真的变了的时候重画，打字时不跟着每个字重画。
+  void _onInputChanged() {
+    if (!mounted) return;
+    final now = _collapsed;
+    if (now == _wasCollapsed) return;
+    _wasCollapsed = now;
+    setState(() {});
+  }
+
   @override
   void dispose() {
+    widget.focusNode.removeListener(_onInputChanged);
+    widget.controller.removeListener(_onInputChanged);
     _voice.dispose();
     super.dispose();
   }
@@ -209,49 +246,75 @@ class _ChatComposerState extends State<ChatComposer> {
     widget.onLongSend();
   }
 
+  /// 收起＝没在输入、没有字、没在听写：只留一行胶囊（＋、提示、麦克风、发送）。
+  /// 点进去或有内容时展开成两行，第二行放权限、模型。
+  /// 用量小环两种状态都在：它是打开用量弹层的唯一入口，收起时藏掉就得先弹键盘才看得到。
+  bool get _collapsed => !widget.focusNode.hasFocus && widget.controller.text.isEmpty && !_listening && !_startingVoice;
+
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
     final t = Theme.of(context).textTheme;
     const noBorder = OutlineInputBorder(borderSide: BorderSide.none);
-    return Container(
-      key: const ValueKey('chat-input'),
-      margin: const EdgeInsets.fromLTRB(Space.x3, 0, Space.x3, Space.x2),
-      padding: const EdgeInsets.fromLTRB(Space.x3, Space.x2, Space.x3, Space.x2),
-      decoration: BoxDecoration(
-        color: c.surface,
-        borderRadius: BorderRadius.circular(Radii.xl),
-        border: Border.all(color: c.border),
+    final collapsed = _collapsed;
+    _wasCollapsed = collapsed;
+    final field = TextField(
+      key: _fieldKey,
+      controller: widget.controller,
+      focusNode: widget.focusNode,
+      minLines: 1,
+      maxLines: 5,
+      style: t.bodyLarge,
+      cursorColor: c.text,
+      textInputAction: TextInputAction.newline,
+      scrollPadding: const EdgeInsets.only(bottom: Space.x12),
+      decoration: InputDecoration(
+        hintText: widget.busy ? '接着说，或长按发送选择方式' : '描述你的任务…',
+        hintStyle: t.bodyLarge?.copyWith(color: c.textFaint),
+        hintMaxLines: 1,
+        filled: false,
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(horizontal: Space.x1, vertical: Space.x2),
+        border: noBorder,
+        enabledBorder: noBorder,
+        focusedBorder: noBorder,
       ),
-      child: Column(
+    );
+    final plus = _PlainAction(key: const ValueKey('plus-button'), tooltip: '附件与对话设置', icon: Icons.add, color: c.text, onPressed: widget.onPlus);
+    final voice = _PlainAction(
+      key: const ValueKey('voice-button'),
+      tooltip: _listening ? '停止语音输入' : '语音输入',
+      icon: _listening ? Icons.graphic_eq_rounded : Icons.mic_none_rounded,
+      color: _listening ? c.accent : c.text,
+      onPressed: _startingVoice ? null : _toggleVoice,
+      child: _startingVoice ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : null,
+    );
+    final send = _SendAction(busy: widget.busy, canSend: widget.canSend, onSend: _send, onLongSend: _longSend, onStop: widget.onStop);
+    final ring = widget.context_ != null && widget.onContext != null ? ContextRing(usage: widget.context_!, onTap: widget.onContext!) : null;
+
+    final Widget body;
+    if (collapsed) {
+      body = Row(
+        children: [
+          plus,
+          const SizedBox(width: Space.x1),
+          Expanded(child: field),
+          ?ring,
+          voice,
+          const SizedBox(width: Space.x1),
+          send,
+        ],
+      );
+    } else {
+      body = Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          TextField(
-            controller: widget.controller,
-            focusNode: widget.focusNode,
-            minLines: 1,
-            maxLines: 5,
-            style: t.bodyLarge,
-            cursorColor: c.accent,
-            textInputAction: TextInputAction.newline,
-            scrollPadding: const EdgeInsets.only(bottom: Space.x12),
-            decoration: InputDecoration(
-              hintText: widget.busy ? '接着说，或长按发送选择方式' : '描述你的任务…',
-              hintStyle: t.bodyLarge?.copyWith(color: c.textFaint),
-              hintMaxLines: 1,
-              filled: false,
-              isDense: true,
-              contentPadding: const EdgeInsets.symmetric(horizontal: Space.x1, vertical: Space.x2),
-              border: noBorder,
-              enabledBorder: noBorder,
-              focusedBorder: noBorder,
-            ),
-          ),
-          const SizedBox(height: Space.x1),
+          Padding(padding: const EdgeInsets.fromLTRB(Space.x2, Space.x1, Space.x2, 0), child: field),
+          const SizedBox(height: Space.x2),
           Row(
             children: [
-              _PlainAction(key: const ValueKey('plus-button'), tooltip: '附件与对话设置', icon: Icons.add, onPressed: widget.onPlus),
+              plus,
               _PlainAction(
                 key: const ValueKey('permission-button'),
                 tooltip: '权限：${widget.permission.label}',
@@ -259,36 +322,49 @@ class _ChatComposerState extends State<ChatComposer> {
                 color: widget.permission == PermissionLevel.full ? c.warning : c.textMuted,
                 onPressed: widget.onPermission,
               ),
-              const Spacer(),
-              Flexible(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 132),
-                  child: TextButton(
-                    key: const ValueKey('model-button'),
-                    onPressed: widget.onModel,
-                    style: TextButton.styleFrom(
-                      foregroundColor: c.textMuted,
-                      minimumSize: const Size(0, 40),
-                      padding: const EdgeInsets.symmetric(horizontal: Space.x2),
+              Expanded(
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 132),
+                    child: TextButton(
+                      key: const ValueKey('model-button'),
+                      onPressed: widget.onModel,
+                      style: TextButton.styleFrom(
+                        foregroundColor: c.text,
+                        minimumSize: const Size(0, 40),
+                        padding: const EdgeInsets.symmetric(horizontal: Space.x2),
+                      ),
+                      child: Text(
+                        widget.modelName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: t.bodyMedium?.copyWith(color: c.text),
+                      ),
                     ),
-                    child: Text(widget.modelName, maxLines: 1, overflow: TextOverflow.ellipsis, style: t.bodySmall),
                   ),
                 ),
               ),
-              if (widget.context_ != null && widget.onContext != null) ContextRing(usage: widget.context_!, onTap: widget.onContext!),
-              _PlainAction(
-                key: const ValueKey('voice-button'),
-                tooltip: _listening ? '停止语音输入' : '语音输入',
-                icon: _listening ? Icons.graphic_eq_rounded : Icons.mic_none_rounded,
-                color: _listening ? c.accent : c.textMuted,
-                onPressed: _startingVoice ? null : _toggleVoice,
-                child: _startingVoice ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : null,
-              ),
-              _SendAction(busy: widget.busy, canSend: widget.canSend, onSend: _send, onLongSend: _longSend, onStop: widget.onStop),
+              ?ring,
+              voice,
+              const SizedBox(width: Space.x1),
+              send,
             ],
           ),
         ],
+      );
+    }
+
+    return Container(
+      key: const ValueKey('chat-input'),
+      margin: const EdgeInsets.fromLTRB(Space.x3, 0, Space.x3, Space.x2),
+      padding: collapsed ? const EdgeInsets.symmetric(horizontal: Space.x2, vertical: 6) : const EdgeInsets.fromLTRB(Space.x2, Space.x2, Space.x2, Space.x2),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(collapsed ? 30 : 28),
+        border: Border.all(color: c.border),
       ),
+      child: AnimatedSize(duration: const Duration(milliseconds: 140), curve: Curves.easeOut, alignment: Alignment.bottomCenter, child: body),
     );
   }
 }
