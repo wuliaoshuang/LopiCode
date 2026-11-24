@@ -869,6 +869,14 @@ void main() {
       expect(r.width, greaterThanOrEqualTo(44), reason: key);
       expect(r.height, greaterThanOrEqualTo(44), reason: key);
     }
+    // 手柄条左边不空着：“积木盒”名字在把手左边，把手在页面正中。
+    final grip = tester.getRect(k('bk-palette-grip'));
+    expect(grip.center.dx, page.center.dx);
+    final title = tester.getRect(k('bk-dock-title'));
+    expect(handle.contains(title.center), isTrue);
+    expect(title.right, lessThan(grip.left));
+    expect(title.height, greaterThanOrEqualTo(44));
+    expect(find.descendant(of: k('bk-dock-title'), matching: find.text('积木盒')), findsOneWidget);
 
     Future<void> pull(double dy) async {
       final g = await tester.startGesture(tester.getCenter(k('bk-palette-grip')));

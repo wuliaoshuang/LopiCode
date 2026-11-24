@@ -1,5 +1,6 @@
 // 设计约束（积木盒 · 底部抽屉，390 宽，浅色 + 深色）— 2026-11-24
-// - 从上到下三行东西：手柄条（44 高：正中一条小把手；右边可以放外面给的几个小按钮——编辑器放的是撤销、重做、缩放比例）；
+// - 从上到下三行东西：手柄条（44 高：正中一条小把手，严格水平居中；左边、右边各可以放外面给的东西——
+//   编辑器左边放“积木盒”名字（点一下收起 / 展开）和问题数量，右边放撤销、重做、缩放比例。左边那块最宽到把手左边 8 处，不压把手）；
 //   一行分类（彩色圆点 + 名字，横着滑，选中的那个整颗填成它的颜色）；下面是这一类的积木。
 // - 积木不是文字列表：每一样都用和画布上同一套画法画成真的积木外形（帽子 / 语句 / C 形 / 表达式），小块的并排，放不下换行。
 // - 主操作就是“拿一块积木”：按住一块（约 0.18 秒）或直接横着拖，就把它拿出来了（回调交给外面的编辑器接着拖）；
@@ -8,6 +9,8 @@
 // - 面板多高由外面说了算（[BlockPaletteView.height]，可以矮到只剩手柄条：里面的东西不挤扁，只是被裁掉）。
 //   按住手柄条、或者分类那一行，上下拖＝改高度（只把手势报给外面）；分类那一行横着滑还是翻分类，积木那一片上下滑还是翻积木，互不抢。
 //   点一下手柄条（按钮以外的地方）＝外面决定收起还是展开。收到只剩手柄条时，下面两行淡出、点不到。
+import 'dart:math' as math;
+
 import 'package:flutter/gestures.dart';
 import 'package:lopicode/blocks/block_geometry.dart';
 import 'package:lopicode/blocks/block_host.dart';
@@ -35,6 +38,7 @@ class BlockPaletteView extends StatefulWidget {
     this.onPick,
     this.initialCategory,
     this.height = 300,
+    this.handleLeading,
     this.handleTrailing,
     this.onHandleTap,
     this.onResizeDown,
@@ -63,6 +67,13 @@ class BlockPaletteView extends StatefulWidget {
 
   /// 面板现在多高（外面每一帧给；比 [headHeight] 矮时里面的东西被裁掉，不挤扁）。
   final double height;
+
+  /// 把手多宽；左边那块离把手至少留多少。
+  static const double gripWidth = 36;
+  static const double gripGap = 8;
+
+  /// 手柄条左边放的东西（编辑器放“积木盒”名字和问题数量）。最宽到把手左边 [gripGap] 处；里面没人接的点按算“点手柄”。
+  final Widget? handleLeading;
 
   /// 手柄条右边放的东西（编辑器放撤销 / 重做 / 缩放）。
   final Widget? handleTrailing;
@@ -161,23 +172,33 @@ class _BlockPaletteViewState extends State<BlockPaletteView> with BkKitHolder {
                 onTap: widget.onHandleTap,
                 child: SizedBox(
                   height: BlockPaletteView.handleHeight,
-                  child: Stack(
-                    children: [
-                      Center(
-                        child: Container(
-                          key: const ValueKey('bk-palette-grip'),
-                          width: 36,
-                          height: 4,
-                          decoration: BoxDecoration(color: handleColor, borderRadius: BorderRadius.circular(2)),
+                  child: LayoutBuilder(
+                    builder: (context, row) => Stack(
+                      children: [
+                        Center(
+                          child: Container(
+                            key: const ValueKey('bk-palette-grip'),
+                            width: BlockPaletteView.gripWidth,
+                            height: 4,
+                            decoration: BoxDecoration(color: handleColor, borderRadius: BorderRadius.circular(2)),
+                          ),
                         ),
-                      ),
-                      if (widget.handleTrailing != null)
-                        // 按钮之间的缝、按不动的按钮：点到了不算“点手柄”。
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: () {}, child: widget.handleTrailing),
-                        ),
-                    ],
+                        if (widget.handleLeading != null)
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(maxWidth: math.max(0, row.maxWidth / 2 - BlockPaletteView.gripWidth / 2 - BlockPaletteView.gripGap)),
+                              child: widget.handleLeading,
+                            ),
+                          ),
+                        if (widget.handleTrailing != null)
+                          // 按钮之间的缝、按不动的按钮：点到了不算“点手柄”。
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: () {}, child: widget.handleTrailing),
+                          ),
+                      ],
+                    ),
                   ),
                 ),
               ),
