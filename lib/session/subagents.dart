@@ -55,6 +55,9 @@ class Subagents {
 
   late final RunSlots _slots = RunSlots(2);
 
+  /// 正在等下级交回的子代理：对话 id → 还有几个下级没交回。等的时候它不占名额。
+  final Map<String, int> _waitingOnKids = {};
+
   ExtraTool tool(ChatRunNotifier parent, Conversation root, List<Skill> skills) {
     final allowed = core.subagentAllowedModels;
     return ExtraTool(
@@ -131,6 +134,15 @@ class Subagents {
     await core.saveIndex();
 
     _slots.max = core.subagentMaxConcurrent;
+    // 上级自己也是子代理时，它正占着一个名额；等下级的这段时间它不调模型，先把名额让出来，
+    // 不然“占着名额等下级、下级又在等名额”会永远卡住（并发 1 层数 2，或两个子代理各派一个孙代理）。
+    final yields = parent.conv.parentId != null;
+    final parentId = parent.conv.id;
+    if (yields) {
+      final waiting = (_waitingOnKids[parentId] ?? 0) + 1;
+      _waitingOnKids[parentId] = waiting;
+      if (waiting == 1) _slots.release();
+    }
     await _slots.acquire();
     String result;
     var failed = false;
@@ -148,6 +160,16 @@ class Subagents {
       }
     } finally {
       _slots.release();
+      if (yields) {
+        final waiting = (_waitingOnKids[parentId] ?? 1) - 1;
+        if (waiting <= 0) {
+          _waitingOnKids.remove(parentId);
+          // 同一批下级都交回来了：上级要接着调模型，把名额拿回来（满了就排队）。
+          await _slots.acquire();
+        } else {
+          _waitingOnKids[parentId] = waiting;
+        }
+      }
     }
     if (board != null && taskId != null) {
       final t = board.task(taskId);
