@@ -623,7 +623,7 @@ void main() {
       expect(answers, [kContinueAnswer, kStopAnswer]);
     });
 
-    testWidgets('设置 › 对话：显示思考过程、自动压缩（写明代价）、步数上限（底部弹层选档） ($suffix)', (tester) async {
+    testWidgets('设置：显示思考过程（对话显示页）、自动压缩（写明代价）与步数上限（权限与执行页，底部弹层选档） ($suffix)', (tester) async {
       await bootEnv(tester);
       late Project project;
       await tester.runAsync(() async => project = await env.services.projects.create('我的小站', ProjectTemplate.web));
@@ -637,24 +637,40 @@ void main() {
       );
       await settle(tester);
       final list = find.byType(Scrollable).first;
-      await tester.scrollUntilVisible(find.byKey(const Key('settings-step-limit')), 120, scrollable: list);
+      // 显示思考过程在 设置 › 界面 › 对话显示
+      await tester.scrollUntilVisible(find.byKey(const Key('settings-chat')), 120, scrollable: list);
+      await tester.ensureVisible(find.byKey(const Key('settings-chat')));
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(find.byKey(const Key('settings-chat')));
       await tester.pumpAndSettle();
       expect(find.text('显示思考过程'), findsOneWidget);
+      expect(tester.widget<Switch>(find.byKey(const Key('settings-thinking'))).value, isTrue);
+      await shot(tester, '99-settings-chat-$suffix');
+      await tester.tap(find.byKey(const Key('settings-thinking')));
+      await settle(tester, rounds: 2);
+      expect(env.services.settings.getBool(SettingKeys.chatThinking, true), isFalse);
+      expect(tester.widget<Switch>(find.byKey(const Key('settings-thinking'))).value, isFalse);
+      await tester.tap(find.byTooltip('返回').last);
+      await tester.pumpAndSettle();
+
+      // 自动压缩、步数上限在 设置 › Agent › 权限与执行
+      await tester.scrollUntilVisible(find.byKey(const Key('settings-agent')), -120, scrollable: list);
+      await tester.ensureVisible(find.byKey(const Key('settings-agent')));
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(find.byKey(const Key('settings-agent')));
+      await tester.pumpAndSettle();
       expect(find.text('上下文快满时自动压缩'), findsOneWidget);
       expect(find.textContaining('会多调用一次模型、多花一点额度'), findsOneWidget);
       expect(find.text('连续执行多少步后问我'), findsOneWidget);
       expect(find.text('30 步'), findsOneWidget);
       // 默认都开
-      expect(tester.widget<Switch>(find.byKey(const Key('settings-thinking'))).value, isTrue);
       expect(tester.widget<Switch>(find.byKey(const Key('settings-auto-compact'))).value, isTrue);
-      await shot(tester, '99-settings-chat-$suffix');
+      await shot(tester, '99a-settings-agent-$suffix');
 
-      await tester.tap(find.byKey(const Key('settings-thinking')));
       await tester.tap(find.byKey(const Key('settings-auto-compact')));
       await settle(tester, rounds: 2);
-      expect(env.services.settings.getBool(SettingKeys.chatThinking, true), isFalse);
       expect(env.services.settings.getBool(SettingKeys.agentAutoCompact, true), isFalse);
-      expect(tester.widget<Switch>(find.byKey(const Key('settings-thinking'))).value, isFalse);
+      expect(tester.widget<Switch>(find.byKey(const Key('settings-auto-compact'))).value, isFalse);
 
       await tester.tap(find.byKey(const Key('settings-step-limit')));
       await tester.pumpAndSettle();

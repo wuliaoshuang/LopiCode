@@ -1,13 +1,14 @@
+// 设计约束（模型与渠道 · 390×844）— 2026-11-24 按设置的统一样式重排
+// - 渠道列表页两组：〔新对话用哪个模型〕分段选择独占一行（沿用上次 / 固定默认），选了“固定默认”下面多一行跳转行选模型；
+//   〔渠道〕一行一个渠道（服务商图标 + 名字，副标题是协议和模型数）。主操作只有右下角“添加渠道”。
+// - 渠道编辑页三组：〔连接〕名称 → 协议 → 接口地址 → API Key → Key 怎么存的说明 → 测试连接（表单组）；
+//   〔模型〕一行一个模型，下面两行操作（获取模型 / 手动添加模型 ID）；最底下一个实心“保存”。删除渠道收进右上角菜单。
+// - Key 输入框默认遮住；已保存的 Key 不回显，留空＝不改。
+// - 单个模型的细节在底部面板里改（settings_model_sheets.dart），不挤在列表行上。
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lopicode/agent/chat_client.dart';
-// 设计约束（模型与渠道 · 390×844）
-// - 渠道列表：一行一个渠道（名字强，协议 + 模型数弱）。最上面一块是“新对话用哪个模型”。主操作只有“添加渠道”。
-// - 渠道编辑页从上到下：名称 → 协议 → 接口地址 → API Key → 两个次要按钮（测试连接、获取模型）→ 模型列表 → 保存。
-//   每行只做一件事；删除渠道收进右上角菜单。
-// - Key 输入框默认遮住；已保存的 Key 不回显，留空＝不改。
-// - 单个模型的细节（显示名、上下文、最大输出、能不能看图、思考档位）在底部面板里改，不挤在列表行上。
 import 'package:lopicode/agent/model_config.dart';
 import 'package:lopicode/agent/protocols.dart';
 import 'package:lopicode/agent/provider_presets.dart';
@@ -18,8 +19,12 @@ import 'package:lopicode/ui/chat_panels.dart';
 import 'package:lopicode/ui/chrome.dart';
 import 'package:lopicode/ui/model_setup.dart';
 import 'package:lopicode/ui/provider_icon.dart';
+import 'package:lopicode/ui/settings_model_sheets.dart';
+import 'package:lopicode/ui/settings_widgets.dart';
 import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
+
+export 'package:lopicode/ui/settings_model_sheets.dart';
 
 class ChannelsScreen extends ConsumerStatefulWidget {
   const ChannelsScreen({super.key});
@@ -54,69 +59,63 @@ class _ChannelsScreenState extends ConsumerState<ChannelsScreen> {
   Widget build(BuildContext context) {
     ref.watch(modelsProvider);
     final app = appOf(context);
-    final t = Theme.of(context).textTheme;
     final channels = app.models.channels;
     final fixed = app.models.resolve(app.models.fixedSelection);
-    return Scaffold(
-      backgroundColor: context.colors.canvas,
-      appBar: PageBar(background: context.colors.canvas, title: const Text('模型与渠道')),
-      floatingActionButton: channels.isEmpty
-          ? null
-          : FloatingActionButton.extended(onPressed: _edit, elevation: 2, shape: const StadiumBorder(), icon: const Icon(Icons.add), label: const Text('添加渠道')),
-      body: channels.isEmpty
-          ? EmptyState(
-              icon: Icons.hub_outlined,
-              title: '还没有渠道',
-              message: '渠道就是一个模型服务。\n选一个服务商、填上 API Key，再勾选要用的模型。',
-              action: FilledButton.icon(onPressed: _edit, icon: const Icon(Icons.add), label: const Text('添加渠道')),
-            )
-          : SectionedList(
-              bottom: 96,
-              children: [
-                const SectionLabel('新对话用哪个模型'),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: Space.x4),
-                  child: SegmentedButton<bool>(
-                    showSelectedIcon: false,
-                    segments: const [
-                      ButtonSegment(value: false, label: Text('沿用上次')),
-                      ButtonSegment(value: true, label: Text('固定默认')),
-                    ],
-                    selected: {app.models.newChatUsesFixed},
-                    onSelectionChanged: (v) async {
-                      if (v.first && fixed == null) {
-                        await _pickFixed();
-                      } else {
-                        await ref.read(modelsProvider.notifier).setNewChatUsesFixed(v.first);
-                        if (mounted) setState(() {});
-                      }
-                    },
-                  ),
-                ),
-                if (app.models.newChatUsesFixed)
-                  ListTile(
-                    key: const Key('fixed-model'),
-                    title: Text(fixed == null ? '还没选固定的模型' : fixed.model.name),
-                    subtitle: Text(fixed == null ? '点这里选一个' : '${fixed.channel.name}${fixed.level == 'off' ? '' : ' · 思考：${thinkingLabel(fixed.level)}'}'),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: _pickFixed,
-                  )
-                else
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(Space.x4, Space.x2, Space.x4, 0),
-                    child: Text('新对话会用你上一次在对话里选的模型。', style: t.bodySmall),
-                  ),
-                const SectionLabel('渠道'),
-                for (final ch in channels)
-                  ListTile(
-                    leading: ProviderIcon.forBaseUrl(ch.baseUrl),
-                    title: Text(ch.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-                    subtitle: Text('${ch.protocol.label} · ${ch.models.isEmpty ? '还没勾选模型' : '${ch.models.length} 个模型'}', maxLines: 1, overflow: TextOverflow.ellipsis),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () => _edit(ch),
-                  ),
-              ],
+    if (channels.isEmpty) {
+      return Scaffold(
+        backgroundColor: context.colors.canvas,
+        appBar: PageBar(background: context.colors.canvas, titleText: '模型与渠道'),
+        body: EmptyState(
+          icon: Icons.hub_outlined,
+          title: '还没有渠道',
+          message: '渠道就是一个模型服务。\n选一个服务商、填上 API Key，再勾选要用的模型。',
+          action: FilledButton.icon(onPressed: _edit, icon: const Icon(Icons.add), label: const Text('添加渠道')),
+        ),
+      );
+    }
+    return SettingsPage(
+      title: '模型与渠道',
+      bottom: 96,
+      floatingActionButton: FloatingActionButton.extended(onPressed: _edit, elevation: 2, shape: const StadiumBorder(), icon: const Icon(Icons.add), label: const Text('添加渠道')),
+      children: [
+        SettingsGroup(
+          title: '新对话用哪个模型',
+          footer: app.models.newChatUsesFixed ? '每段新对话都从上面这个模型开始；对话里还可以随时换。' : '新对话会用你上一次在对话里选的模型。',
+          children: [
+            SettingsSegmentRow<bool>(
+              segments: const [(false, '沿用上次'), (true, '固定默认')],
+              selected: app.models.newChatUsesFixed,
+              onChanged: (v) async {
+                if (v && fixed == null) {
+                  await _pickFixed();
+                } else {
+                  await ref.read(modelsProvider.notifier).setNewChatUsesFixed(v);
+                  if (mounted) setState(() {});
+                }
+              },
             ),
+            if (app.models.newChatUsesFixed)
+              SettingsRow(
+                key: const Key('fixed-model'),
+                title: fixed == null ? '还没选固定的模型' : fixed.model.name,
+                subtitle: fixed == null ? '点这里选一个' : '${fixed.channel.name}${fixed.level == 'off' ? '' : ' · 思考：${thinkingLabel(fixed.level)}'}',
+                onTap: _pickFixed,
+              ),
+          ],
+        ),
+        SettingsGroup(
+          title: '渠道',
+          children: [
+            for (final ch in channels)
+              SettingsRow(
+                leading: ProviderIcon.forBaseUrl(ch.baseUrl, size: 32),
+                title: ch.name,
+                subtitle: '${ch.protocol.label} · ${ch.models.isEmpty ? '还没勾选模型' : '${ch.models.length} 个模型'}',
+                onTap: () => _edit(ch),
+              ),
+          ],
+        ),
+      ],
     );
   }
 }
@@ -240,7 +239,7 @@ class _ChannelEditScreenState extends ConsumerState<ChannelEditScreen> {
     final picked = await showModalBottomSheet<Set<String>>(
       context: context,
       isScrollControlled: true,
-      builder: (_) => _RemoteModelsSheet(models: list, selected: {for (final m in _models) m.id}),
+      builder: (_) => RemoteModelsSheet(models: list, selected: {for (final m in _models) m.id}),
     );
     if (picked == null || !mounted) return;
     setState(() {
@@ -315,335 +314,112 @@ class _ChannelEditScreenState extends ConsumerState<ChannelEditScreen> {
     ref.watch(modelsProvider);
     final app = appOf(context);
     final c = context.colors;
-    final t = Theme.of(context).textTheme;
     final recognized = presetForBaseUrl(_baseUrl.text);
     // 提醒只在地址还是这家的时候显示（改成别家的地址就不该再说这句）。
     final note = recognized?.note;
     final keyHint = recognized?.keyHint;
     final local = isLocalBaseUrl(_baseUrl.text);
-    return Scaffold(
-      backgroundColor: context.colors.canvas,
-      appBar: PageBar(
-        background: context.colors.canvas,
-        title: Text(widget.channel == null ? '添加渠道' : '编辑渠道'),
-        actions: [
-          if (widget.channel != null)
-            PopupMenuButton<String>(
-              tooltip: '更多',
-              onSelected: (_) => _delete(),
-              itemBuilder: (_) => [
-                PopupMenuItem(
-                  value: 'delete',
-                  child: Text('删除渠道', style: TextStyle(color: c.danger)),
-                ),
-              ],
-            ),
-        ],
-      ),
-      body: SectionedList(
-        inner: const EdgeInsets.all(Space.x4),
-        children: [
-          Row(
-            children: [
-              ProviderIcon(key: const Key('channel-icon'), preset: recognized),
-              const SizedBox(width: Space.x3),
-              Expanded(
-                child: TextField(
-                  controller: _name,
-                  decoration: const InputDecoration(labelText: '渠道名称', hintText: '给自己看的名字，不填就用协议名'),
-                ),
+    return SettingsPage(
+      title: widget.channel == null ? '添加渠道' : '编辑渠道',
+      actions: [
+        if (widget.channel != null)
+          PopupMenuButton<String>(
+            tooltip: '更多',
+            onSelected: (_) => _delete(),
+            itemBuilder: (_) => [
+              PopupMenuItem(
+                value: 'delete',
+                child: Text('删除渠道', style: TextStyle(color: c.danger)),
               ),
             ],
           ),
-          if (note != null) InfoBanner(note, margin: const EdgeInsets.only(top: Space.x3)),
-          const SizedBox(height: Space.x3),
-          DropdownButtonFormField<ChatProtocol>(
-            key: const Key('channel-protocol'),
-            initialValue: _protocol,
-            decoration: const InputDecoration(labelText: '接口协议'),
-            items: [for (final p in ChatProtocol.values) DropdownMenuItem(value: p, child: Text(p.label))],
-            onChanged: (v) => setState(() => _protocol = v ?? _protocol),
-          ),
-          const SizedBox(height: Space.x3),
-          TextField(
-            key: const Key('channel-url'),
-            controller: _baseUrl,
-            keyboardType: TextInputType.url,
-            autocorrect: false,
-            decoration: InputDecoration(labelText: '接口地址', hintText: _protocol.exampleBaseUrl),
-          ),
-          const SizedBox(height: Space.x3),
-          TextField(
-            key: const Key('channel-key'),
-            controller: _key,
-            obscureText: true,
-            autocorrect: false,
-            enableSuggestions: false,
-            decoration: InputDecoration(
-              labelText: 'API Key',
-              hintText: _hasKey ? '已保存，留空表示不改' : (local ? '本机服务可以不填' : '粘贴你的 Key'),
-              helperText: _hasKey ? '已保存一个 Key（不显示明文）' : keyHint,
-              helperMaxLines: 2,
-              suffixIcon: _hasKey ? IconButton(tooltip: '清除已保存的 Key', icon: const Icon(Icons.delete_outline), onPressed: _clearKey) : null,
-            ),
-          ),
-          const SizedBox(height: Space.x3),
-          InfoBanner(
-            app.secrets.persistent ? 'Key 用系统密钥库（Android Keystore）加密保存，不会写进普通设置文件或日志。' : '这台设备上安全存储不可用，Key 只保存在内存里，关掉应用后要重新填写。',
-            tone: app.secrets.persistent ? BannerTone.info : BannerTone.warning,
-          ),
-          const SizedBox(height: Space.x3),
-          OutlinedButton.icon(onPressed: _busy ? null : _test, icon: const Icon(Icons.wifi_tethering, size: 18), label: const Text('测试连接')),
-          if (_busy)
-            const Padding(
-              padding: EdgeInsets.only(top: Space.x2),
-              child: LinearProgressIndicator(),
-            ),
-          if (_status != null)
-            InfoBanner(
-              _status!,
-              tone: _statusOk ? BannerTone.info : BannerTone.danger,
-              margin: const EdgeInsets.only(top: Space.x2),
-            ),
-          const SizedBox(height: Space.x6),
-          Text('模型（${_models.length}）', style: t.labelMedium),
-          const SizedBox(height: Space.x2),
-          if (_models.isEmpty)
-            Text('还没有模型。点“获取模型”从接口读列表勾选，或者手动添加模型 ID。', style: t.bodySmall)
-          else
-            for (final m in _models)
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: Text(m.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-                subtitle: Text(
-                  '${m.contextLength ~/ 1000}K 上下文 · 输出 ${m.maxOutput ~/ 1000}K · ${m.vision ? '文本和图片' : '文本'}${m.thinking ? ' · 可思考' : ''}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                trailing: const Icon(Icons.tune, size: 20),
-                onTap: () => _editModel(m),
-              ),
-          const SizedBox(height: Space.x2),
-          OutlinedButton.icon(key: const Key('channel-fetch'), onPressed: _busy ? null : _fetchModels, icon: const Icon(Icons.cloud_download_outlined, size: 18), label: const Text('获取模型')),
-          const SizedBox(height: Space.x2),
-          TextButton(onPressed: _addManually, child: const Text('手动添加模型 ID')),
-          const SizedBox(height: Space.x4),
-          FilledButton(key: const Key('channel-save'), onPressed: _save, child: const Text('保存')),
-        ],
-      ),
-    );
-  }
-}
-
-class _RemoteModelsSheet extends StatefulWidget {
-  const _RemoteModelsSheet({required this.models, required this.selected});
-  final List<RemoteModel> models;
-  final Set<String> selected;
-
-  @override
-  State<_RemoteModelsSheet> createState() => _RemoteModelsSheetState();
-}
-
-class _RemoteModelsSheetState extends State<_RemoteModelsSheet> {
-  late final Set<String> _picked = {...widget.selected};
-  String _filter = '';
-
-  @override
-  Widget build(BuildContext context) {
-    final t = Theme.of(context).textTheme;
-    final shown = widget.models.where((m) => m.id.toLowerCase().contains(_filter.toLowerCase())).toList();
-    return SafeArea(
-      top: false,
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, MediaQuery.viewInsetsOf(context).bottom + Space.x4),
-        child: ConstrainedBox(
-          constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.75),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text('勾选要用的模型', style: t.titleLarge),
-              const SizedBox(height: Space.x1),
-              Text('接口一共有 ${widget.models.length} 个，已勾 ${_picked.length} 个。', style: t.bodySmall),
-              const SizedBox(height: Space.x3),
-              TextField(
-                decoration: const InputDecoration(hintText: '搜索模型 ID', prefixIcon: Icon(Icons.search)),
-                onChanged: (v) => setState(() => _filter = v.trim()),
-              ),
-              Flexible(
-                child: ListView(
-                  shrinkWrap: true,
-                  children: [
-                    for (final m in shown)
-                      CheckboxListTile(
-                        dense: true,
-                        contentPadding: EdgeInsets.zero,
-                        controlAffinity: ListTileControlAffinity.leading,
-                        value: _picked.contains(m.id),
-                        title: Text(m.id, maxLines: 1, overflow: TextOverflow.ellipsis),
-                        subtitle: m.displayName == null || m.displayName == m.id ? null : Text(m.displayName!, maxLines: 1, overflow: TextOverflow.ellipsis),
-                        onChanged: (v) => setState(() => v == true ? _picked.add(m.id) : _picked.remove(m.id)),
-                      ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: Space.x3),
-              FilledButton(onPressed: () => Navigator.pop(context, _picked), child: const Text('确定')),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// 改一个模型的细节。不动传进来的 [model]：点“确定”交回一份改好的 [ModelSpec]；交回 'remove' 表示把它从渠道里去掉。
-class ModelSpecSheet extends StatefulWidget {
-  const ModelSpecSheet({super.key, required this.model});
-  final ModelSpec model;
-
-  @override
-  State<ModelSpecSheet> createState() => _ModelSpecSheetState();
-}
-
-class _ModelSpecSheetState extends State<ModelSpecSheet> {
-  late final _name = TextEditingController(text: widget.model.name);
-  late final _context = TextEditingController(text: '${widget.model.contextLength ~/ 1000}');
-  late final _maxOut = TextEditingController(text: '${widget.model.maxOutput ~/ 1000}');
-  static String _priceText(double? v) => v == null ? '' : (v == v.roundToDouble() ? v.toStringAsFixed(0) : '$v');
-  late final _priceHit = TextEditingController(text: _priceText(widget.model.priceHit));
-  late final _priceMiss = TextEditingController(text: _priceText(widget.model.priceMiss));
-  late final _priceOut = TextEditingController(text: _priceText(widget.model.priceOutput));
-  late bool _vision = widget.model.vision;
-  late bool _thinking = widget.model.thinking;
-  late final Set<String> _levels = {...widget.model.levels};
-
-  @override
-  void dispose() {
-    _name.dispose();
-    _context.dispose();
-    _maxOut.dispose();
-    _priceHit.dispose();
-    _priceMiss.dispose();
-    _priceOut.dispose();
-    super.dispose();
-  }
-
-  static double? _price(TextEditingController c) {
-    final v = double.tryParse(c.text.trim());
-    return v == null || v < 0 || !v.isFinite ? null : v;
-  }
-
-  void _save() {
-    final m = widget.model;
-    final ctx = int.tryParse(_context.text.trim());
-    final out = int.tryParse(_maxOut.text.trim());
-    final edited = m.copyWith(
-      name: _name.text.trim().isEmpty ? m.id : _name.text.trim(),
-      contextLength: ModelSpec.clampContext((ctx ?? ModelSpec.defaultContext ~/ 1000) * 1000),
-      maxOutput: ((out ?? ModelSpec.defaultMaxOutput ~/ 1000) * 1000).clamp(1000, 400000),
-      vision: _vision,
-      thinking: _thinking && _levels.isNotEmpty,
-      levels: [
-        for (final l in kThinkingLevels)
-          if (_levels.contains(l)) l,
       ],
-      prices: (hit: _price(_priceHit), miss: _price(_priceMiss), output: _price(_priceOut)),
-    );
-    Navigator.pop(context, edited);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.colors;
-    final t = Theme.of(context).textTheme;
-    final ctxK = int.tryParse(_context.text.trim());
-    return SafeArea(
-      top: false,
-      child: SingleChildScrollView(
-        padding: EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, MediaQuery.viewInsetsOf(context).bottom + Space.x4),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SettingsGroup(
+          title: '连接',
+          padded: true,
           children: [
-            Text('模型设置', style: t.titleLarge),
-            const SizedBox(height: Space.x1),
-            Text(widget.model.id, style: t.bodySmall, maxLines: 1, overflow: TextOverflow.ellipsis),
-            const SizedBox(height: Space.x4),
-            TextField(
-              controller: _name,
-              decoration: const InputDecoration(labelText: '显示名'),
-            ),
-            const SizedBox(height: Space.x4),
-            Text('上下文长度', style: t.labelMedium),
-            const SizedBox(height: Space.x2),
-            Wrap(
-              spacing: Space.x2,
-              runSpacing: Space.x1,
+            Row(
               children: [
-                for (final v in ModelSpec.contextChoices)
-                  ChoiceChip(label: Text(v >= 1000000 ? '1M' : '${v ~/ 1000}K'), selected: ctxK == v ~/ 1000, onSelected: (_) => setState(() => _context.text = '${v ~/ 1000}')),
+                ProviderIcon(key: const Key('channel-icon'), preset: recognized),
+                const SizedBox(width: Space.x3),
+                Expanded(
+                  child: TextField(
+                    controller: _name,
+                    decoration: const InputDecoration(labelText: '渠道名称', hintText: '给自己看的名字，不填就用协议名'),
+                  ),
+                ),
               ],
             ),
-            const SizedBox(height: Space.x2),
-            TextField(
-              controller: _context,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: '或者手动输入', suffixText: 'K', helperText: '32 到 1000（也就是 32K 到 1M）'),
-              onChanged: (_) => setState(() {}),
+            if (note != null) InfoBanner(note, margin: const EdgeInsets.only(top: Space.x3)),
+            const SizedBox(height: Space.x3),
+            DropdownButtonFormField<ChatProtocol>(
+              key: const Key('channel-protocol'),
+              initialValue: _protocol,
+              decoration: const InputDecoration(labelText: '接口协议'),
+              items: [for (final p in ChatProtocol.values) DropdownMenuItem(value: p, child: Text(p.label))],
+              onChanged: (v) => setState(() => _protocol = v ?? _protocol),
             ),
             const SizedBox(height: Space.x3),
             TextField(
-              controller: _maxOut,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: '最大输出', suffixText: 'K', helperText: '默认 32'),
+              key: const Key('channel-url'),
+              controller: _baseUrl,
+              keyboardType: TextInputType.url,
+              autocorrect: false,
+              decoration: InputDecoration(labelText: '接口地址', hintText: _protocol.exampleBaseUrl),
             ),
             const SizedBox(height: Space.x3),
-            Text('输入类型', style: t.labelMedium),
-            const SizedBox(height: Space.x2),
-            SegmentedButton<bool>(
-              showSelectedIcon: false,
-              segments: const [
-                ButtonSegment(value: false, label: Text('文本')),
-                ButtonSegment(value: true, label: Text('文本和图片')),
-              ],
-              selected: {_vision},
-              onSelectionChanged: (v) => setState(() => _vision = v.first),
-            ),
-            SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('可以思考'), subtitle: const Text('模型支持“思考 / 推理”时打开'), value: _thinking, onChanged: (v) => setState(() => _thinking = v)),
-            if (_thinking) ...[
-              Text('对话里可选的思考档位', style: t.labelMedium),
-              const SizedBox(height: Space.x2),
-              Wrap(
-                spacing: Space.x2,
-                children: [
-                  for (final l in kThinkingLevels) FilterChip(label: Text(thinkingLabel(l)), selected: _levels.contains(l), onSelected: (v) => setState(() => v ? _levels.add(l) : _levels.remove(l))),
-                ],
+            TextField(
+              key: const Key('channel-key'),
+              controller: _key,
+              obscureText: true,
+              autocorrect: false,
+              enableSuggestions: false,
+              decoration: InputDecoration(
+                labelText: 'API Key',
+                hintText: _hasKey ? '已保存，留空表示不改' : (local ? '本机服务可以不填' : '粘贴你的 Key'),
+                helperText: _hasKey ? '已保存一个 Key（不显示明文）' : keyHint,
+                helperMaxLines: 2,
+                suffixIcon: _hasKey ? IconButton(tooltip: '清除已保存的 Key', icon: const Icon(Icons.delete_outline), onPressed: _clearKey) : null,
               ),
-            ],
+            ),
             const SizedBox(height: Space.x3),
-            Text('单价（可不填）', style: t.labelMedium),
-            const SizedBox(height: Space.x1),
-            Text('单位：元 / 百万 tokens。三项都填了，聊天里的用量才会带“估算”金额；价格请照服务商官网填，LopiCode 不内置价格表。', style: t.bodySmall),
-            const SizedBox(height: Space.x2),
-            for (final (key, label, ctrl) in [('price-hit', '输入（缓存命中）', _priceHit), ('price-miss', '输入（缓存未命中）', _priceMiss), ('price-out', '输出', _priceOut)]) ...[
-              TextField(
-                key: Key(key),
-                controller: ctrl,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: InputDecoration(labelText: label, suffixText: '元 / 百万'),
-              ),
-              const SizedBox(height: Space.x2),
-            ],
-            const SizedBox(height: Space.x2),
-            FilledButton(onPressed: _save, child: const Text('确定')),
-            TextButton(
-              onPressed: () => Navigator.pop(context, 'remove'),
-              child: Text('从这个渠道去掉', style: TextStyle(color: c.danger)),
+            InfoBanner(
+              app.secrets.persistent ? 'Key 用系统密钥库（Android Keystore）加密保存，不会写进普通设置文件或日志。' : '这台设备上安全存储不可用，Key 只保存在内存里，关掉应用后要重新填写。',
+              tone: app.secrets.persistent ? BannerTone.info : BannerTone.warning,
             ),
+            const SizedBox(height: Space.x3),
+            OutlinedButton.icon(onPressed: _busy ? null : _test, icon: const Icon(Icons.wifi_tethering, size: 18), label: const Text('测试连接')),
+            if (_busy)
+              const Padding(
+                padding: EdgeInsets.only(top: Space.x2),
+                child: LinearProgressIndicator(),
+              ),
+            if (_status != null)
+              InfoBanner(
+                _status!,
+                tone: _statusOk ? BannerTone.info : BannerTone.danger,
+                margin: const EdgeInsets.only(top: Space.x2),
+              ),
           ],
         ),
-      ),
+        SettingsGroup(
+          title: '模型（${_models.length}）',
+          footer: _models.isEmpty ? '还没有模型。点“获取模型”从接口读列表勾选，或者手动添加模型 ID。' : '点一个模型改它的上下文长度、最大输出、能不能看图、思考档位和单价。',
+          children: [
+            for (final m in _models)
+              SettingsRow(
+                title: m.name,
+                subtitle: '${m.contextLength ~/ 1000}K 上下文 · 输出 ${m.maxOutput ~/ 1000}K · ${m.vision ? '文本和图片' : '文本'}${m.thinking ? ' · 可思考' : ''}',
+                trailing: Icon(Icons.tune, size: 20, color: c.textFaint),
+                onTap: () => _editModel(m),
+              ),
+            SettingsRow(key: const Key('channel-fetch'), icon: Icons.cloud_download_outlined, title: '获取模型', subtitle: '从接口读模型列表，勾选要用的', enabled: !_busy, onTap: _fetchModels),
+            SettingsRow(icon: Icons.add, title: '手动添加模型 ID', accent: true, onTap: _addManually),
+          ],
+        ),
+        FilledButton(key: const Key('channel-save'), onPressed: _save, child: const Text('保存')),
+      ],
     );
   }
 }

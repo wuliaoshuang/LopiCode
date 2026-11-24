@@ -130,7 +130,7 @@ void main() {
       await settle(tester, rounds: rounds);
     }
 
-    testWidgets('设置目录页：概况卡 + AI / 能力 / 通用 / 关于四组卡片，一行一件事 ($suffix)', (tester) async {
+    testWidgets('设置目录页：概况卡 + 模型 / Agent / 能力 / 界面 / 运行与打包 / 当前工作区 / 关于，只放入口 ($suffix)', (tester) async {
       await boot(tester);
       await addChannels(tester);
       await show(tester, SettingsScreen(workspace: project), push: true);
@@ -153,22 +153,29 @@ void main() {
       expect(find.descendant(of: overview, matching: find.text('未安装')), findsOneWidget);
       // 每一项都在：滚到它再看
       final list = find.byType(Scrollable).first;
-      for (final title in ['AI', '能力', '对话', '通用', '关于']) {
+      for (final title in ['模型', 'Agent', '能力', '界面', '运行与打包', '当前工作区 · ${project.name}', '关于']) {
         await tester.scrollUntilVisible(find.text(title), 120, scrollable: list);
         expect(find.text(title), findsOneWidget);
       }
-      // 回到顶上，再按从上到下的顺序一项项找（“对话”那张卡 2026-11-24 多了三行，页面变长了，不能再假设往上滚就找得到）。
+      // 回到顶上，再按从上到下的顺序一项项找。一级页只放入口：每一行右边都有箭头，开关和输入框都不在这一页。
+      expect(find.byType(Switch), findsNothing, reason: '一级页没有开关');
+      expect(find.byType(TextField), findsNothing, reason: '一级页没有输入框');
       await tester.drag(list, const Offset(0, 4000));
       await settle(tester, rounds: 2);
       for (final key in [
         'settings-channels',
+        'settings-agent',
         'settings-personalize',
-        'settings-permission',
         'settings-subagents',
-        'settings-automations',
         'settings-search',
         'settings-skills',
+        'settings-automations',
+        'settings-chat',
+        'settings-appearance',
+        'settings-runtime',
+        'settings-ssh',
         'settings-third-party',
+        'settings-error-log',
       ]) {
         await tester.scrollUntilVisible(find.byKey(Key(key)), 120, scrollable: list);
         expect(find.byKey(Key(key)), findsOneWidget, reason: key);
@@ -178,15 +185,18 @@ void main() {
           reason: '$key 右边有箭头',
         );
       }
-      await tester.scrollUntilVisible(find.byKey(const Key('settings-permission')), -120, scrollable: list);
+      expect(find.byKey(const Key('settings-permission')), findsNothing, reason: '权限这一项挪进了“权限与执行”页');
       await tester.drag(list, const Offset(0, 2000));
       await settle(tester, rounds: 2);
       final yChannels = tester.getTopLeft(find.byKey(const Key('settings-channels'))).dy;
-      final yPerm = tester.getTopLeft(find.byKey(const Key('settings-permission'))).dy;
+      final yPerm = tester.getTopLeft(find.byKey(const Key('settings-agent'))).dy;
       expect(yChannels, lessThan(yPerm));
       await shot(tester, '37-settings-directory-$suffix');
 
-      // 新对话的权限：选完全权限要先确认
+      // 新对话的权限（在“权限与执行”页里）：选完全权限要先确认
+      await tester.tap(find.byKey(const Key('settings-agent')));
+      await settle(tester, rounds: 6);
+      expect(find.text('权限与执行'), findsWidgets);
       await tester.tap(find.byKey(const Key('settings-permission')));
       await settle(tester, rounds: 3);
       expect(find.text('仅可查看'), findsOneWidget);

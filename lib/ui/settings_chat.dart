@@ -1,12 +1,9 @@
-// 设计约束（设置 ›“对话”里和 Agent 干活方式有关的三行 · 390×844）— 2026-11-24
-// - 和这张卡里别的行同一个样子：图标 + 名称 + 一行说明 + 右边的开关 / 当前值。一行只管一件事。
-// - 说明里把代价写明白（自动压缩会多调用一次模型、多花一点额度），不藏。
-// - 步数上限点开是底部弹层，几个固定档位单选（不用滑块：手机上滑块拖不准，档位一眼能比）。
+// 设计约束（步数上限的底部弹层 · 390×844）— 2026-11-24
+// - 入口在 设置 › 权限与执行 ›“连续执行多少步后问我”（settings_pages.dart）。
+// - 几个固定档位单选（不用滑块：手机上滑块拖不准，档位一眼能比），一行一档，点了就收起。
 import 'package:lopicode/agent/agent_runner.dart';
-import 'package:lopicode/app_services.dart';
 import 'package:lopicode/core/stores.dart';
 import 'package:lopicode/theme/tokens.dart';
-import 'package:lopicode/ui/chrome.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// 步数上限可选的档位。
@@ -14,40 +11,6 @@ const List<int> kStepLimitChoices = [10, 20, 30, 50, 80, 100];
 
 /// 现在的步数上限（没设过是默认 30；存了范围外的数会夹回 10–100）。
 int stepLimitOf(SettingsStore settings) => (settings.get<int>(SettingKeys.agentMaxSteps) ?? AgentRunner.defaultMaxSteps).clamp(AgentRunner.minMaxSteps, AgentRunner.maxMaxSteps);
-
-/// “对话”卡片里的三行：显示思考过程、上下文快满时自动压缩、连续执行多少步后问我。
-List<Widget> agentChatSettingRows(BuildContext context, AppServices app) {
-  final s = app.settings;
-  final limit = stepLimitOf(s);
-  return [
-    GroupRow(
-      icon: Icons.psychology_alt_outlined,
-      title: '显示思考过程',
-      subtitle: '模型给了思考内容时，在聊天里折成一行，点开看',
-      trailing: Switch(key: const Key('settings-thinking'), value: s.getBool(SettingKeys.chatThinking, true), onChanged: (v) => s.set(SettingKeys.chatThinking, v)),
-    ),
-    GroupRow(
-      icon: Icons.compress,
-      title: '上下文快满时自动压缩',
-      subtitle: '把较早的对话压成摘要再继续。会多调用一次模型、多花一点额度',
-      trailing: Switch(key: const Key('settings-auto-compact'), value: s.getBool(SettingKeys.agentAutoCompact, true), onChanged: (v) => s.set(SettingKeys.agentAutoCompact, v)),
-    ),
-    GroupRow(
-      key: const Key('settings-step-limit'),
-      icon: Icons.format_list_numbered,
-      title: '连续执行多少步后问我',
-      subtitle: '到了会停下来问要不要继续；自动化任务到了直接停',
-      value: '$limit 步',
-      onTap: () async {
-        final picked = await showModalBottomSheet<int>(
-          context: context,
-          builder: (_) => StepLimitSheet(current: limit),
-        );
-        if (picked != null && picked != limit) await s.set(SettingKeys.agentMaxSteps, picked);
-      },
-    ),
-  ];
-}
 
 class StepLimitSheet extends StatelessWidget {
   const StepLimitSheet({super.key, required this.current});
