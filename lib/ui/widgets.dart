@@ -13,28 +13,29 @@ class EmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.colors;
     final t = Theme.of(context).textTheme;
-    return Center(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(Space.x8),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 64,
-              height: 64,
-              decoration: BoxDecoration(color: c.accentSoft, shape: BoxShape.circle),
-              child: Icon(icon, size: 30, color: c.accent),
-            ),
-            const SizedBox(height: Space.x4),
-            Text(title, style: t.titleMedium, textAlign: TextAlign.center),
-            const SizedBox(height: Space.x2),
-            Text(
-              message,
-              style: t.bodyMedium?.copyWith(color: c.textMuted),
-              textAlign: TextAlign.center,
-            ),
-            if (action != null) ...[const SizedBox(height: Space.x6), action!],
-          ],
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 360),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(Space.x6, Space.x6, Space.x6, Space.x8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(color: c.accentSoft, borderRadius: BorderRadius.circular(Radii.md)),
+                child: Icon(icon, size: 22, color: c.accent),
+              ),
+              const SizedBox(height: Space.x4),
+              Text(title, style: t.titleMedium),
+              const SizedBox(height: Space.x1),
+              Text(message, style: t.bodyMedium?.copyWith(color: c.textMuted, height: 1.45)),
+              if (action != null) ...[const SizedBox(height: Space.x4), action!],
+            ],
+          ),
         ),
       ),
     );

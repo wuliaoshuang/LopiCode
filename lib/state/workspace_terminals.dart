@@ -78,17 +78,17 @@ class TerminalsNotifier extends Notifier<TerminalsState> {
       );
       t.append(
         '\x1b[2mLopiCode 终端 · Ubuntu 24.04\n'
-        '${project.isLinux ? '工作区目录是 ${project.linuxPath}' : '项目目录挂在 /workspace'}。装软件用 apt，常用运行时可以在侧边栏“运行环境”里一键安装。\x1b[0m\n\n',
+        '${project.isLinux ? '项目：${project.linuxPath}' : '项目：/workspace'} · 装软件用 apt\x1b[0m\n\n',
       );
       return t;
     }
     final String hint;
     if (runtime.usable) {
-      hint = 'Ubuntu 环境连续启动失败，这里先用手机自带的 sh。到侧边栏“运行环境”看日志、重新尝试。';
+      hint = 'Ubuntu 启动失败，可到“运行环境”重试。';
     } else if (runtime.installed) {
-      hint = 'Ubuntu 环境已下载，但这个安装包缺少进入 Ubuntu 要用的文件，进不去。';
+      hint = 'Ubuntu 文件不完整，可到“运行环境”重新下载。';
     } else {
-      hint = '需要 node、python：安装 Ubuntu 环境，或点右上角 ＋ 连接 SSH。';
+      hint = '需要 Node / Python？安装 Ubuntu 或连接 SSH。';
     }
     final t = TerminalSession(
       title: '本机 ${++_localCounter}',

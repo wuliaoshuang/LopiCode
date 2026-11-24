@@ -78,7 +78,7 @@ class _TerminalTabState extends ConsumerState<TerminalTab> {
                 key: const Key('new-linux-session'),
                 leading: const Icon(Icons.memory_outlined),
                 title: const Text('Ubuntu 环境'),
-                subtitle: const Text('能跑 node、python，项目目录在 /workspace'),
+                subtitle: const Text('Node / Python · 项目在 /workspace'),
                 onTap: () {
                   Navigator.pop(context);
                   appOf(this.context).runtime.resetLaunchFailures();
@@ -88,7 +88,7 @@ class _TerminalTabState extends ConsumerState<TerminalTab> {
             ListTile(
               leading: const Icon(Icons.phone_android),
               title: const Text('本机 shell'),
-              subtitle: const Text('手机自带的 sh，在项目目录里打开'),
+              subtitle: const Text('系统自带 sh · 在项目目录运行'),
               onTap: () {
                 Navigator.pop(context);
                 s.addTerminal(forceLocal: true);
@@ -316,7 +316,7 @@ class _StalledBar extends StatelessWidget {
         children: [
           Text('Ubuntu 没有响应', style: t.titleSmall?.copyWith(color: c.warning)),
           const SizedBox(height: 2),
-          Text('进去 ${backend.stallTimeout.inSeconds} 秒了一个字都没输出，多半卡在启动这一步。', style: t.bodySmall),
+          Text('${backend.stallTimeout.inSeconds} 秒没有输出，可能卡在启动。', style: t.bodySmall),
           const SizedBox(height: Space.x2),
           FilledButton(key: const Key('stalled-retry-compat'), onPressed: backend.retryCompat, child: const Text('改用兼容模式重试')),
           Row(

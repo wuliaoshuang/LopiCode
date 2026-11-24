@@ -86,8 +86,9 @@ String automationCardText({required String title, required String instruction, r
     '运行时的权限：${permission.label}（没人在场，需要你确认的操作会被自动拒绝）\n'
     '只有 App 正在运行时才会触发；错过的不会补跑。\n\n完整指令：\n$instruction';
 
-String formatLocalTime(DateTime utc, int tzOffsetMinutes) {
+String formatLocalTime(DateTime utc, int tzOffsetMinutes, {bool showZone = true}) {
   final t = utc.toUtc().add(Duration(minutes: tzOffsetMinutes));
   String two(int v) => v.toString().padLeft(2, '0');
-  return '${t.year}-${two(t.month)}-${two(t.day)} ${two(t.hour)}:${two(t.minute)}（${TimeRule.tzLabel(tzOffsetMinutes)}）';
+  final time = '${t.year}-${two(t.month)}-${two(t.day)} ${two(t.hour)}:${two(t.minute)}';
+  return showZone ? '$time（${TimeRule.tzLabel(tzOffsetMinutes)}）' : time;
 }

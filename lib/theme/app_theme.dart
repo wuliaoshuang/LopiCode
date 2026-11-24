@@ -31,7 +31,7 @@ ThemeData buildAppTheme(Brightness brightness, {String? fontFamily}) {
   final textTheme = TextTheme(
     headlineMedium: t(FontSize.xxl, strong, c.text, 1.25),
     headlineSmall: t(FontSize.xl, strong, c.text, 1.3),
-    titleLarge: t(FontSize.lg, strong, c.text, 1.3),
+    titleLarge: t(FontSize.xl, strong, c.text, 1.3),
     titleMedium: t(FontSize.base, strong, c.text),
     titleSmall: t(FontSize.sm, strong, c.text),
     bodyLarge: t(FontSize.base, regular, c.text, 1.5),
@@ -63,7 +63,7 @@ ThemeData buildAppTheme(Brightness brightness, {String? fontFamily}) {
       foregroundColor: c.text,
       elevation: 0,
       scrolledUnderElevation: 0,
-      centerTitle: true,
+      centerTitle: false,
       titleSpacing: Space.x4,
       titleTextStyle: textTheme.titleLarge?.copyWith(fontFamily: fontFamily),
     ),
@@ -125,6 +125,12 @@ ThemeData buildAppTheme(Brightness brightness, {String? fontFamily}) {
         (s) => t(FontSize.xs, s.contains(WidgetState.selected) ? strong : regular, s.contains(WidgetState.selected) ? c.accent : c.textMuted, 1.2).copyWith(fontFamily: fontFamily),
       ),
       iconTheme: WidgetStateProperty.resolveWith((s) => IconThemeData(size: 22, color: s.contains(WidgetState.selected) ? c.accent : c.textMuted)),
+    ),
+    floatingActionButtonTheme: FloatingActionButtonThemeData(
+      backgroundColor: c.accentFill,
+      foregroundColor: c.onAccent,
+      elevation: 0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Radii.lg)),
     ),
     bottomSheetTheme: BottomSheetThemeData(
       backgroundColor: c.surface,

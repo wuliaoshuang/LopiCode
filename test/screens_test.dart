@@ -116,8 +116,8 @@ void main() {
 
       await tester.tap(find.widgetWithText(FilledButton, '添加工作区').first);
       await settle(tester, rounds: 3);
-      expect(find.text('Ubuntu 里的目录'), findsOneWidget);
-      await tester.tap(find.text('新建项目'));
+      expect(find.text('添加 Ubuntu 目录'), findsOneWidget);
+      await tester.tap(find.text('新建工作区'));
       await settle(tester, rounds: 3);
       expect(find.text('前端网页'), findsOneWidget);
       expect(find.text('低代码页面'), findsOneWidget);
@@ -214,9 +214,9 @@ void main() {
       );
       await settle(tester);
       expect(find.text('新对话'), findsOneWidget);
-      expect(find.textContaining('我的小站 / '), findsOneWidget);
+      expect(find.textContaining('我的小站 · '), findsOneWidget);
       expect(find.text('项目规则'), findsNothing, reason: '项目规则搬到设置里了');
-      expect(find.text('先连上一个模型'), findsOneWidget);
+      expect(find.text('先连接模型'), findsOneWidget);
       expect(find.text('添加模型'), findsOneWidget, reason: '当前会话没有可用模型时给出明确入口');
       expect(find.byKey(const Key('chat-ideas')), findsNothing, reason: '没有模型时先引导配置，不显示开场建议');
       expect(find.byType(IconBottomNav), findsOneWidget, reason: '底部导航五项');
@@ -455,7 +455,7 @@ void main() {
         ),
       );
       await settle(tester);
-      expect(find.textContaining('手机上跑不了 Android SDK 和 Gradle'), findsOneWidget);
+      expect(find.textContaining('手机不运行 Android SDK 和 Gradle'), findsOneWidget);
       expect(find.byTooltip('打开侧边栏'), findsOneWidget);
       expect(find.byType(BackButton), findsNothing);
       await shot(tester, '16-apk-$suffix');
@@ -463,8 +463,8 @@ void main() {
       // 切到 SSH 构建机：只出现 SSH 的表单，选择会记住
       await tester.tap(find.text('SSH 构建机'));
       await settle(tester, rounds: 3);
-      expect(find.text('① 构建机'), findsOneWidget);
-      expect(find.text('① 仓库'), findsNothing);
+      expect(find.text('构建机'), findsOneWidget);
+      expect(find.text('仓库'), findsNothing);
       expect(find.text('还没设置'), findsOneWidget);
       expect(env.services.settings.getString(SettingKeys.apkBuildMode), 'ssh');
       await tester.runAsync(() => const SshConfig(host: 'build.example.com', user: 'dev').save(env.services.settings));

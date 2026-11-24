@@ -202,7 +202,7 @@ class _BuildScreenState extends ConsumerState<BuildScreen> {
     final config = SshConfig.load(appOf(context).settings);
     final job = _job;
     return [
-      Text('① 构建机', style: t.titleMedium),
+      Text('构建机', style: t.titleMedium),
       const SizedBox(height: Space.x3),
       Material(
         color: c.surface,
@@ -224,8 +224,8 @@ class _BuildScreenState extends ConsumerState<BuildScreen> {
           onTap: _editSshHost,
         ),
       ),
-      const SizedBox(height: Space.x6),
-      Text('② 构建命令', style: t.titleMedium),
+      const SizedBox(height: Space.x4),
+      Text('构建命令', style: t.titleMedium),
       const SizedBox(height: Space.x3),
       TextField(
         controller: _sshDir,
@@ -249,8 +249,8 @@ class _BuildScreenState extends ConsumerState<BuildScreen> {
         autocorrect: false,
         decoration: const InputDecoration(labelText: 'APK 路径', helperText: '构建完 APK 在哪；相对路径按远程目录算'),
       ),
-      const SizedBox(height: Space.x6),
-      Text('③ 打包', style: t.titleMedium),
+      const SizedBox(height: Space.x4),
+      Text('打包', style: t.titleMedium),
       const SizedBox(height: Space.x1),
       Row(
         children: [
@@ -302,11 +302,7 @@ class _BuildScreenState extends ConsumerState<BuildScreen> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(Space.x4, Space.x2, Space.x4, Space.x8),
         children: [
-          InfoBanner(
-            _ssh
-                ? '手机上跑不了 Android SDK 和 Gradle，所以不是在手机里打包：LopiCode 通过 SSH 连到你的服务器，在上面运行构建命令，再把 APK 拉回手机。'
-                : '手机上跑不了 Android SDK 和 Gradle，所以不是在手机里打包：LopiCode 把项目推到你的 GitHub 仓库，让 GitHub Actions 打包，再把 APK 下载回来。',
-          ),
+          InfoBanner(_ssh ? '手机不运行 Android SDK 和 Gradle。LopiCode 通过 SSH 在服务器构建，再把 APK 取回手机。' : '手机不运行 Android SDK 和 Gradle。项目推送到 GitHub Actions 构建后，再下载 APK。'),
           const SizedBox(height: Space.x4),
           SegmentedButton<bool>(
             showSelectedIcon: false,
@@ -317,11 +313,11 @@ class _BuildScreenState extends ConsumerState<BuildScreen> {
             selected: {_ssh},
             onSelectionChanged: busy ? null : (s) => _setMode(s.first),
           ),
-          const SizedBox(height: Space.x6),
+          const SizedBox(height: Space.x4),
           if (_ssh)
             ..._sshForm(context, busy)
           else ...[
-            Text('① 仓库', style: t.titleMedium),
+            Text('仓库', style: t.titleMedium),
             const SizedBox(height: Space.x3),
             TextField(
               controller: _repo,
@@ -343,10 +339,10 @@ class _BuildScreenState extends ConsumerState<BuildScreen> {
               obscureText: true,
               autocorrect: false,
               enableSuggestions: false,
-              decoration: InputDecoration(labelText: 'GitHub Token', hintText: _hasToken ? '已保存，留空表示不改' : '粘贴 Token', helperText: '需要这个仓库的 Contents 和 Actions 读写权限；要推送工作流文件还得有 Workflows 权限。加密保存在本机。'),
+              decoration: InputDecoration(labelText: 'GitHub Token', hintText: _hasToken ? '已保存，留空表示不改' : '粘贴 Token', helperText: '需要 Contents、Actions 读写权限；推送工作流还需 Workflow 权限。仅保存在本机。'),
             ),
-            const SizedBox(height: Space.x6),
-            Text('② 工作流', style: t.titleMedium),
+            const SizedBox(height: Space.x4),
+            Text('工作流', style: t.titleMedium),
             const SizedBox(height: Space.x3),
             TextField(
               controller: _workflow,
@@ -359,7 +355,7 @@ class _BuildScreenState extends ConsumerState<BuildScreen> {
               child: TextButton.icon(onPressed: _showTemplate, icon: const Icon(Icons.description_outlined, size: 18), label: Text(_isFlutterProject ? '查看现成模板（Flutter 项目）' : '查看现成模板（网页套壳成 App）')),
             ),
             const SizedBox(height: Space.x4),
-            Text('③ 打包', style: t.titleMedium),
+            Text('打包', style: t.titleMedium),
             const SizedBox(height: Space.x1),
             Row(
               children: [

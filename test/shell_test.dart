@@ -96,7 +96,7 @@ void main() {
     ShellDest.terminal: find.byTooltip('新建会话'),
     ShellDest.preview: find.text('手机'),
     ShellDest.builder: find.byTooltip('图层'),
-    ShellDest.apk: find.textContaining('手机上跑不了 Android SDK 和 Gradle'),
+    ShellDest.apk: find.textContaining('手机不运行 Android SDK 和 Gradle'),
     ShellDest.runtime: find.byKey(const Key('runtime-status')),
   };
 
@@ -476,7 +476,7 @@ void main() {
     await settle(tester, rounds: 4);
     final row = find.byKey(const Key('settings-rules'));
     expect(find.descendant(of: row, matching: find.text('未设置')), findsOneWidget);
-    expect(find.descendant(of: row, matching: find.textContaining('只对工作区“我的小站”生效')), findsOneWidget);
+    expect(find.descendant(of: row, matching: find.textContaining('适用于“我的小站”')), findsOneWidget);
     await tester.tap(row);
     await settle(tester, rounds: 4);
     expect(find.textContaining('只对这个工作区生效'), findsOneWidget);
@@ -505,9 +505,9 @@ void main() {
 
     await tester.tap(find.widgetWithText(FilledButton, '添加工作区').first);
     await settle(tester, rounds: 3);
-    await tester.tap(find.text('新建项目'));
+    await tester.tap(find.text('新建工作区'));
     await settle(tester, rounds: 3);
-    await tester.tap(find.widgetWithText(FilledButton, '创建'));
+    await tester.tap(find.widgetWithText(FilledButton, '创建工作区'));
     await settle(tester, rounds: 150, ms: 5);
     expect(find.byTooltip('发送'), findsOneWidget, reason: '新建后直接进项目的对话页');
     final last = env.services.settings.getString('ui.lastProject');

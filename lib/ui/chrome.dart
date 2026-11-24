@@ -1,9 +1,7 @@
-// 设计约束（公共外观 · 390×844）— 照霜霜 2026-11-23 给的两张参考图
-// - 顶部没有“一整条栏”：左、右各一个悬浮的白色圆按钮（44），中间是居中的标题。按钮有 1px 细边 + 很轻的阴影。
-//   右边这一页自己的操作装进同样高度的白色胶囊里；只有一个操作时它就是一个圆。
-// - 页面底色两种：对话等主页面用 bg（近白）；设置这类页面用 canvas（浅灰），上面叠白色大圆角卡片（28）。
-// - 卡片里一行只做一件事：左线性图标 + 名称（可带一行弱化的说明或右侧的当前值）+ 右箭头；行间是缩进的细分隔线。
-// - 底部导航图标配短标签：选中 = 强调色实心图标，未选中 = 弱化描边。没有底色分界线。
+// 设计约束（公共外观 · 390×844）
+// - 顶部标题左对齐，右侧只放这一页的操作；按钮不再悬浮，靠位置和细分隔线建立层级。
+// - 页面底色两种：主页面用 bg，设置类页面用 canvas；卡片圆角 20，一行只做一件事。
+// - 底部导航有独立底色和顶边，选中项用强调色浅底；图标配短标签。
 import 'package:flutter/services.dart' show SystemUiOverlayStyle;
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/widgets.dart';
@@ -18,10 +16,10 @@ BoxDecoration floatingDecoration(AppColors c, {BorderRadius? radius}) => BoxDeco
   boxShadow: const [BoxShadow(color: Color(0x0F000000), blurRadius: 12, offset: Offset(0, 2))],
 );
 
-/// 悬浮的白色圆按钮（顶栏左右两侧）。
+/// 顶栏左右两侧的紧凑图标按钮。
 class RoundIconButton extends StatelessWidget {
   const RoundIconButton({super.key, required this.icon, required this.tooltip, required this.onPressed, this.size = kSize});
-  static const double kSize = 44;
+  static const double kSize = 40;
   final IconData icon;
   final String tooltip;
   final VoidCallback? onPressed;
@@ -30,21 +28,16 @@ class RoundIconButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    return Container(
-      width: size,
-      height: size,
-      decoration: floatingDecoration(c),
-      child: IconButton(
-        tooltip: tooltip,
-        padding: EdgeInsets.zero,
-        onPressed: onPressed,
-        icon: Icon(icon, size: 22, color: c.text),
-      ),
+    return IconButton(
+      tooltip: tooltip,
+      onPressed: onPressed,
+      style: IconButton.styleFrom(minimumSize: Size(size, size), fixedSize: Size(size, size), padding: EdgeInsets.zero, tapTargetSize: MaterialTapTargetSize.shrinkWrap, foregroundColor: c.text),
+      icon: Icon(icon, size: 22),
     );
   }
 }
 
-/// 把这一页的操作（若干 IconButton / PopupMenuButton）装进一个白色胶囊。
+/// 顶栏右侧的操作区。
 class ActionPill extends StatelessWidget {
   const ActionPill({super.key, required this.children});
   final List<Widget> children;
@@ -52,26 +45,20 @@ class ActionPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    return Container(
-      height: RoundIconButton.kSize,
-      constraints: const BoxConstraints(minWidth: RoundIconButton.kSize),
-      decoration: floatingDecoration(c, radius: BorderRadius.circular(RoundIconButton.kSize / 2)),
-      clipBehavior: Clip.antiAlias,
-      child: IconTheme.merge(
-        data: IconThemeData(color: c.text, size: 22),
-        child: IconButtonTheme(
-          data: IconButtonThemeData(
-            style: IconButton.styleFrom(
-              minimumSize: const Size(42, 42),
-              fixedSize: const Size(42, 42),
-              padding: EdgeInsets.zero,
-              foregroundColor: c.text,
-              disabledForegroundColor: c.textFaint.withValues(alpha: 0.45),
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            ),
+    return IconTheme.merge(
+      data: IconThemeData(color: c.text, size: 22),
+      child: IconButtonTheme(
+        data: IconButtonThemeData(
+          style: IconButton.styleFrom(
+            minimumSize: const Size(40, 40),
+            fixedSize: const Size(40, 40),
+            padding: EdgeInsets.zero,
+            foregroundColor: c.text,
+            disabledForegroundColor: c.textFaint.withValues(alpha: 0.45),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
           ),
-          child: Row(mainAxisSize: MainAxisSize.min, mainAxisAlignment: MainAxisAlignment.center, children: children),
         ),
+        child: Row(mainAxisSize: MainAxisSize.min, mainAxisAlignment: MainAxisAlignment.center, children: children),
       ),
     );
   }
@@ -83,7 +70,7 @@ class ActionPill extends StatelessWidget {
 class PageBar extends StatelessWidget implements PreferredSizeWidget {
   const PageBar({super.key, this.title, this.titleText, this.subtitle, this.leading, this.actions, this.bottom, this.fade = false, this.background, this.backTooltip = '返回'});
 
-  static const double kHeight = 64;
+  static const double kHeight = 68;
 
   /// 自定义的标题控件；和 [titleText] 二选一。
   final Widget? title;
@@ -113,12 +100,7 @@ class PageBar extends StatelessWidget implements PreferredSizeWidget {
       middle = Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            titleText!,
-            style: t.titleLarge?.copyWith(fontWeight: FontWeight.w400),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
+          Text(titleText!, style: t.titleLarge, maxLines: 1, overflow: TextOverflow.ellipsis),
           if (subtitle != null && subtitle!.isNotEmpty)
             Text(
               subtitle!,
@@ -129,12 +111,7 @@ class PageBar extends StatelessWidget implements PreferredSizeWidget {
         ],
       );
     } else if (middle != null) {
-      middle = DefaultTextStyle.merge(
-        style: t.titleLarge?.copyWith(fontWeight: FontWeight.w400),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        child: middle,
-      );
+      middle = DefaultTextStyle.merge(style: t.titleLarge, maxLines: 1, overflow: TextOverflow.ellipsis, child: middle);
     }
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: Theme.of(context).brightness == Brightness.light ? SystemUiOverlayStyle.dark : SystemUiOverlayStyle.light,
@@ -143,7 +120,10 @@ class PageBar extends StatelessWidget implements PreferredSizeWidget {
             ? BoxDecoration(
                 gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [bg, bg.withValues(alpha: 0.92), bg.withValues(alpha: 0)], stops: const [0, 0.45, 1]),
               )
-            : BoxDecoration(color: bg),
+            : BoxDecoration(
+                color: bg,
+                border: Border(bottom: BorderSide(color: c.border)),
+              ),
         child: SafeArea(
           bottom: false,
           child: Column(
@@ -152,13 +132,13 @@ class PageBar extends StatelessWidget implements PreferredSizeWidget {
               SizedBox(
                 height: kHeight,
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: Space.x4),
+                  padding: const EdgeInsets.symmetric(horizontal: Space.x2),
                   child: NavigationToolbar(
                     leading: lead,
                     middle: middle,
                     trailing: acts.isEmpty ? null : ActionPill(children: acts),
-                    centerMiddle: true,
-                    middleSpacing: Space.x3,
+                    centerMiddle: false,
+                    middleSpacing: Space.x2,
                   ),
                 ),
               ),
@@ -226,25 +206,22 @@ class GroupRow extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 64),
+        constraints: const BoxConstraints(minHeight: 56),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: Space.x4, vertical: Space.x3),
+          padding: const EdgeInsets.symmetric(horizontal: Space.x4, vertical: Space.x2),
           child: Row(
             children: [
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: Space.x1),
-                child: Icon(icon, size: 26, color: danger ? c.danger : c.text),
+                child: Icon(icon, size: 22, color: danger ? c.danger : c.textMuted),
               ),
-              const SizedBox(width: Space.x4),
+              const SizedBox(width: Space.x3),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      title,
-                      style: t.bodyLarge?.copyWith(fontSize: FontSize.lg, height: 1.3, color: danger ? c.danger : c.text),
-                    ),
+                    Text(title, style: t.bodyLarge?.copyWith(height: 1.3, color: danger ? c.danger : c.text)),
                     if (subtitle != null && subtitle!.isNotEmpty)
                       Padding(
                         padding: const EdgeInsets.only(top: 2),
@@ -261,10 +238,10 @@ class GroupRow extends StatelessWidget {
               if (value != null && value!.isNotEmpty) ...[
                 const SizedBox(width: Space.x3),
                 ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 132),
+                  constraints: const BoxConstraints(maxWidth: 120),
                   child: Text(
                     value!,
-                    style: t.bodyMedium?.copyWith(color: c.textFaint),
+                    style: t.bodySmall?.copyWith(color: c.textFaint),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     textAlign: TextAlign.end,
@@ -288,7 +265,7 @@ class GroupLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.fromLTRB(Space.x4, Space.x2, Space.x4, Space.x2),
+    padding: const EdgeInsets.fromLTRB(Space.x4, Space.x3, Space.x4, Space.x2),
     child: Text(text, style: Theme.of(context).textTheme.labelMedium?.copyWith(color: context.colors.textFaint)),
   );
 }
@@ -304,7 +281,7 @@ class BottomNavItem {
 /// 图标配短标签的底部导航。键盘弹出时它留在键盘下面（由外层 Scaffold 保证），不会被顶起来。
 class IconBottomNav extends StatelessWidget {
   const IconBottomNav({super.key, required this.items, required this.current, required this.onTap});
-  static const double kHeight = 64;
+  static const double kHeight = 60;
   final List<BottomNavItem> items;
 
   /// 当前选中项；不在五项里的页面（预览、运行环境）传 -1。
@@ -314,14 +291,17 @@ class IconBottomNav extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    return ColoredBox(
-      color: c.bg,
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: c.surface,
+        border: Border(top: BorderSide(color: c.border)),
+      ),
       child: SafeArea(
         top: false,
         child: SizedBox(
           height: kHeight,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: Space.x6),
+            padding: const EdgeInsets.symmetric(horizontal: Space.x2),
             child: Row(
               children: [
                 for (var i = 0; i < items.length; i++)
@@ -334,26 +314,28 @@ class IconBottomNav extends StatelessWidget {
                       child: Tooltip(
                         message: items[i].label,
                         child: InkResponse(
-                          radius: 28,
+                          radius: 16,
                           onTap: () => onTap(i),
-                          child: SizedBox(
-                            height: kHeight,
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                IconTheme(
-                                  data: IconThemeData(size: 24, color: i == current ? c.accent : c.textMuted),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Container(
+                                width: 40,
+                                height: 28,
+                                decoration: BoxDecoration(color: i == current ? c.accentSoft : Colors.transparent, borderRadius: BorderRadius.circular(Radii.sm)),
+                                child: IconTheme(
+                                  data: IconThemeData(size: 22, color: i == current ? c.accent : c.textMuted),
                                   child: Center(child: i == current ? items[i].selectedIcon : items[i].icon),
                                 ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  items[i].label,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(fontSize: FontSize.xs, height: 1.1, color: i == current ? c.accent : c.textMuted, fontWeight: i == current ? FontWeight.w600 : FontWeight.w400),
-                                ),
-                              ],
-                            ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                items[i].label,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(fontSize: FontSize.xs, height: 1.1, color: i == current ? c.accent : c.textMuted, fontWeight: i == current ? FontWeight.w600 : FontWeight.w400),
+                              ),
+                            ],
                           ),
                         ),
                       ),

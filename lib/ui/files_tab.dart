@@ -289,8 +289,16 @@ class _FilesTabState extends ConsumerState<FilesTab> {
           padding: const EdgeInsets.fromLTRB(Space.x4, Space.x1, Space.x2, Space.x1),
           child: Row(
             children: [
-              Expanded(child: Text(files == null ? '文件' : '${files.where((f) => !f.endsWith('/')).length} 个文件', style: t.labelMedium)),
-              if (_open.isNotEmpty) TextButton(onPressed: () => setState(() => _active = 0), child: Text('回到编辑器（${_open.length}）')),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('工作区文件', style: t.titleSmall),
+                    if (files != null) Text('${files.where((f) => !f.endsWith('/')).length} 个文件', style: t.bodySmall?.copyWith(color: c.textMuted)),
+                  ],
+                ),
+              ),
+              if (_open.isNotEmpty) TextButton(onPressed: () => setState(() => _active = 0), child: const Text('继续编辑')),
               PopupMenuButton<String>(
                 tooltip: '新建',
                 onSelected: (v) => _create(folder: v == 'folder'),
@@ -331,13 +339,13 @@ class _FilesTabState extends ConsumerState<FilesTab> {
                       onTap: isDir ? null : () => _openFile(path),
                       onLongPress: () => _showItemMenu(path),
                       child: Padding(
-                        padding: EdgeInsets.fromLTRB(Space.x4 + (parts.length - 1) * Space.x4, 10, Space.x2, 10),
+                        padding: EdgeInsets.fromLTRB(Space.x4 + (parts.length - 1) * Space.x4, 8, Space.x1, 8),
                         child: Row(
                           children: [
                             Icon(isDir ? Icons.folder_outlined : _fileIcon(path), size: 20, color: isDir ? c.accent : c.textFaint),
                             const SizedBox(width: Space.x3),
                             Expanded(
-                              child: Text(parts.last, style: isDir ? t.titleSmall : t.bodyMedium, maxLines: 1, overflow: TextOverflow.ellipsis),
+                              child: Text(parts.last, style: t.bodyMedium, maxLines: 1, overflow: TextOverflow.ellipsis),
                             ),
                             IconButton(
                               tooltip: '更多',
@@ -372,7 +380,7 @@ class _FilesTabState extends ConsumerState<FilesTab> {
     return Column(
       children: [
         Container(
-          height: 44,
+          height: 48,
           decoration: BoxDecoration(
             border: Border(bottom: BorderSide(color: c.border)),
           ),
@@ -389,10 +397,9 @@ class _FilesTabState extends ConsumerState<FilesTab> {
                     return InkWell(
                       onTap: () => setState(() => _active = i),
                       child: Container(
-                        padding: const EdgeInsets.only(left: Space.x3, right: Space.x1),
-                        decoration: BoxDecoration(
-                          border: Border(bottom: BorderSide(color: active ? c.accentFill : Colors.transparent, width: 2)),
-                        ),
+                        margin: const EdgeInsets.symmetric(horizontal: Space.x1, vertical: Space.x1),
+                        padding: const EdgeInsets.only(left: Space.x3),
+                        decoration: BoxDecoration(color: active ? c.accentSoft : Colors.transparent, borderRadius: BorderRadius.circular(Radii.sm)),
                         child: Row(
                           children: [
                             if (f.dirty)

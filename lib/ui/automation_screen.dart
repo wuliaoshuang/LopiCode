@@ -17,7 +17,7 @@ import 'package:lopicode/ui/chrome.dart';
 import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
 
-const String kAutomationHonesty = '只有 LopiCode 正在运行（开着或刚切到后台、没被系统清掉）时才会触发。到点时 App 没在运行，那一次只记为“错过”，不会补跑。';
+const String kAutomationHonesty = '仅在 LopiCode 运行时触发；App 未运行时错过的任务不会补跑。';
 
 class AutomationListScreen extends ConsumerStatefulWidget {
   const AutomationListScreen({super.key, this.workspace});
@@ -54,7 +54,7 @@ class _AutomationListScreenState extends ConsumerState<AutomationListScreen> {
     return Scaffold(
       backgroundColor: context.colors.canvas,
       appBar: PageBar(background: context.colors.canvas, title: const Text('自动化任务')),
-      floatingActionButton: items.isEmpty ? null : FloatingActionButton.extended(onPressed: _new, elevation: 2, shape: const StadiumBorder(), icon: const Icon(Icons.add), label: const Text('新建任务')),
+      floatingActionButton: items.isEmpty ? null : FloatingActionButton.extended(onPressed: _new, elevation: 0, icon: const Icon(Icons.add), label: const Text('新建任务')),
       body: SectionedList(
         bottom: 96,
         children: [
@@ -65,7 +65,7 @@ class _AutomationListScreenState extends ConsumerState<AutomationListScreen> {
               child: EmptyState(
                 icon: Icons.event_repeat,
                 title: '还没有自动化任务',
-                message: '到时间后，在指定的工作区里自动开一段对话执行你写好的指令。\n也可以在对话里直接让 Agent 帮你安排。',
+                message: '到时间后，在指定工作区自动执行指令。也可以让 Agent 帮你创建。',
                 action: FilledButton.icon(onPressed: _new, icon: const Icon(Icons.add), label: const Text('新建任务')),
               ),
             ),
@@ -77,7 +77,14 @@ class _AutomationListScreenState extends ConsumerState<AutomationListScreen> {
                 [
                   a.rule.describe(),
                   _names == null ? '工作区：读取中…' : (_names![a.workspaceId] == null ? '工作区已不在' : '工作区：${_names![a.workspaceId]}'),
-                  if (autos.isRunning(a.id)) '正在运行' else if (!a.enabled) '已停用' else if (a.nextRun(now) case final next?) '下一次 ${formatLocalTime(next, a.rule.tzOffsetMinutes)}' else '不会再触发',
+                  if (autos.isRunning(a.id))
+                    '正在运行'
+                  else if (!a.enabled)
+                    '已停用'
+                  else if (a.nextRun(now) case final next?)
+                    '下一次 ${formatLocalTime(next, a.rule.tzOffsetMinutes, showZone: false)}'
+                  else
+                    '不会再触发',
                 ].join('\n'),
                 style: t.bodySmall?.copyWith(color: a.enabled ? null : c.textFaint),
               ),
@@ -111,7 +118,7 @@ class AutomationDetailScreen extends ConsumerStatefulWidget {
 class _AutomationDetailScreenState extends ConsumerState<AutomationDetailScreen> {
   Future<void> _runNow(Automation a) async {
     final app = appOf(context);
-    final ok = await confirmDialog(context, title: '现在运行一次？', message: '会马上在工作区里开一段对话执行这条指令，会消耗模型费用。不影响原来的时间安排。', confirmLabel: '运行');
+    final ok = await confirmDialog(context, title: '现在运行一次？', message: '会立即在工作区执行指令并消耗模型费用，不影响原定时间。', confirmLabel: '运行');
     if (!ok) return;
     if (mounted) showSnack(context, '已开始运行，结果会出现在下面的运行历史里');
     await app.scheduler.runNow(a);
@@ -142,7 +149,7 @@ class _AutomationDetailScreenState extends ConsumerState<AutomationDetailScreen>
           PopupMenuButton<String>(
             tooltip: '更多',
             onSelected: (_) async {
-              final ok = await confirmDialog(context, title: '删除任务“${a.title}”？', message: '任务和它的运行历史会被删除。它以前跑出来的对话不受影响。', confirmLabel: '删除', danger: true);
+              final ok = await confirmDialog(context, title: '删除任务“${a.title}”？', message: '任务和历史会删除，已生成的对话保留。', confirmLabel: '删除', danger: true);
               if (!ok) return;
               await ref.read(automationsProvider.notifier).remove(a.id);
               if (context.mounted) Navigator.pop(context);
@@ -167,7 +174,7 @@ class _AutomationDetailScreenState extends ConsumerState<AutomationDetailScreen>
                 ? '已停用'
                 : next == null
                 ? '不会再触发'
-                : '下一次：${formatLocalTime(next, a.rule.tzOffsetMinutes)}'}',
+                : '下一次：${formatLocalTime(next, a.rule.tzOffsetMinutes, showZone: false)}'}',
             style: t.bodySmall?.copyWith(height: 1.6),
           ),
           const SizedBox(height: Space.x3),
