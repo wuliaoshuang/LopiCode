@@ -1,13 +1,15 @@
 // 设计约束（模型与渠道 · 390×844）— 2026-11-24 按设置的统一样式重排
 // - 渠道列表页两组：〔新对话用哪个模型〕分段选择独占一行（沿用上次 / 固定默认），选了“固定默认”下面多一行跳转行选模型；
 //   〔渠道〕一行一个渠道（服务商图标 + 名字，副标题是协议和模型数）。主操作只有右下角“添加渠道”。
-// - 渠道编辑页三组：〔连接〕名称 → 协议 → 接口地址 → API Key → Key 怎么存的说明 → 测试连接（表单组）；
-//   〔模型〕一行一个模型，下面两行操作（获取模型 / 手动添加模型 ID）；最底下一个实心“保存”。删除渠道收进右上角菜单。
+// - 渠道编辑页按步骤排（控件在 channel_steps.dart）：〔第 1 步〕名称 → 协议 → 接口地址 → API Key → Key 怎么存的说明；
+//   〔第 2 步〕获取模型（同时就是“连接测试”，结果写在按钮下）；〔第 3 步〕一行一个模型（右边可单独“测试”）+ 手动添加模型 ID；
+//   〔第 4 步〕实心“保存”。新建和编辑同一套。删除渠道收进右上角菜单。
 // - Key 输入框默认遮住；已保存的 Key 不回显，留空＝不改。
 // - 单个模型的细节在底部面板里改（settings_model_sheets.dart），不挤在列表行上。
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lopicode/agent/channel_check.dart';
 import 'package:lopicode/agent/chat_client.dart';
 import 'package:lopicode/agent/model_config.dart';
 import 'package:lopicode/agent/protocols.dart';
@@ -15,6 +17,7 @@ import 'package:lopicode/agent/provider_presets.dart';
 import 'package:lopicode/state/models_state.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/app_ref.dart';
+import 'package:lopicode/ui/channel_steps.dart';
 import 'package:lopicode/ui/chat_panels.dart';
 import 'package:lopicode/ui/chrome.dart';
 import 'package:lopicode/ui/model_setup.dart';
@@ -139,8 +142,16 @@ class _ChannelEditScreenState extends ConsumerState<ChannelEditScreen> {
   final List<ModelSpec> _models = [];
   bool _hasKey = false;
   bool _busy = false;
-  String? _status;
-  bool _statusOk = true;
+
+  /// 第 2 步“获取模型”的结果；地址、Key、协议一改就作废。
+  CheckResult? _fetchResult;
+
+  /// 第 3 步每个模型“测试”的结果（按模型 ID），和正在测的那个。
+  final Map<String, CheckResult> _tests = {};
+  String? _testing;
+
+  /// 连接信息每改一次加一：检查发出去以后信息被改了，回来的结果就丢掉（防旧结果盖在新地址上）。
+  int _gen = 0;
 
   @override
   void initState() {
@@ -156,11 +167,27 @@ class _ChannelEditScreenState extends ConsumerState<ChannelEditScreen> {
       _baseUrl.text = p.baseUrl;
       _protocol = p.protocol;
     }
-    _baseUrl.addListener(_onUrl);
+    _baseUrl.addListener(_onConnectionEdited);
+    _key.addListener(_onConnectionEdited);
   }
 
-  void _onUrl() {
-    if (mounted) setState(() {}); // 图标和“要不要 Key”跟着地址变
+  /// 地址 / Key / 协议改了：图标、“要不要 Key”、后面几步能不能点都跟着变；之前的检查结果不作数了。
+  void _onConnectionEdited() {
+    if (!mounted) return;
+    setState(() {
+      _gen++;
+      _busy = false;
+      _testing = null;
+      _fetchResult = null;
+      _tests.clear();
+    });
+  }
+
+  /// 第 1 步还差什么（后面的“获取模型”“测试”据此置灰）。本机 / 局域网地址不要 Key。
+  String? get _missing {
+    if (_baseUrl.text.trim().isEmpty) return '接口地址';
+    if (!isLocalBaseUrl(_baseUrl.text) && _key.text.trim().isEmpty && !_hasKey) return ' API Key';
+    return null;
   }
 
   @override
@@ -182,71 +209,65 @@ class _ChannelEditScreenState extends ConsumerState<ChannelEditScreen> {
     super.dispose();
   }
 
-  /// 测试连接 / 获取模型用的 Key：新填的优先，否则用已保存的。
+  /// 获取模型 / 测试模型用的 Key：新填的优先，否则用已保存的。
   Future<String> _effectiveKey() async {
     if (_key.text.trim().isNotEmpty) return _key.text.trim();
     final ch = widget.channel;
     return ch == null ? '' : appOf(context).models.apiKey(ch.id);
   }
 
-  Future<List<RemoteModel>?> _fetch() async {
-    if (_baseUrl.text.trim().isEmpty) {
-      setState(() {
-        _status = '先填接口地址';
-        _statusOk = false;
-      });
-      return null;
-    }
+  /// 第 2 步：读模型列表（只发 GET，不花钱）。结果写在按钮下面；读到了就接着弹出勾选面板。
+  Future<void> _fetchModels() async {
+    if (_missing != null || _busy) return;
+    final local = isLocalBaseUrl(_baseUrl.text);
+    final gen = _gen;
     setState(() {
       _busy = true;
-      _status = null;
+      _fetchResult = null;
     });
+    final key = await _effectiveKey();
+    List<RemoteModel>? list;
+    CheckResult result;
     try {
-      return await listRemoteModels(protocol: _protocol, baseUrl: _baseUrl.text.trim(), apiKey: await _effectiveKey());
+      list = await listRemoteModels(protocol: _protocol, baseUrl: _baseUrl.text.trim(), apiKey: key);
+      result = modelListOk(list.length);
     } on ChatApiException catch (e) {
-      if (mounted) {
-        setState(() {
-          _status = e.message;
-          _statusOk = false;
-        });
-      }
-      return null;
-    } finally {
-      if (mounted) setState(() => _busy = false);
+      result = modelListFailed(e, apiKey: key, local: local);
     }
-  }
-
-  Future<void> _test() async {
-    final list = await _fetch();
-    if (list != null && mounted) {
-      setState(() {
-        _status = '连接正常：读到 ${list.length} 个模型（只读了模型列表，没有产生对话费用）';
-        _statusOk = true;
-      });
-    }
-  }
-
-  Future<void> _fetchModels() async {
-    final list = await _fetch();
-    if (list == null || !mounted) return;
-    if (list.isEmpty) {
-      setState(() {
-        _status = '接口返回的模型列表是空的，可以手动添加模型 ID';
-        _statusOk = false;
-      });
-      return;
-    }
+    if (!mounted || gen != _gen) return;
+    setState(() {
+      _busy = false;
+      _fetchResult = result;
+    });
+    if (list == null || list.isEmpty) return;
+    final found = list;
     final picked = await showModalBottomSheet<Set<String>>(
       context: context,
       isScrollControlled: true,
-      builder: (_) => RemoteModelsSheet(models: list, selected: {for (final m in _models) m.id}),
+      builder: (_) => RemoteModelsSheet(models: found, selected: {for (final m in _models) m.id}),
     );
     if (picked == null || !mounted) return;
     setState(() {
-      _models.removeWhere((m) => !picked.contains(m.id) && list.any((r) => r.id == m.id));
-      for (final r in list) {
+      _models.removeWhere((m) => !picked.contains(m.id) && found.any((r) => r.id == m.id));
+      for (final r in found) {
         if (picked.contains(r.id) && !_models.any((m) => m.id == r.id)) _models.add(ModelSpec(id: r.id, name: r.displayName));
       }
+    });
+  }
+
+  /// 第 3 步：测一个模型能不能对话。发一句很短的话，会花一点点额度——只在用户点“测试”时发。
+  Future<void> _testModel(ModelSpec m) async {
+    if (_missing != null || _busy || _testing != null) return;
+    final gen = _gen;
+    setState(() {
+      _testing = m.id;
+      _tests.remove(m.id);
+    });
+    final result = await testModelChat(protocol: _protocol, baseUrl: _baseUrl.text.trim(), apiKey: await _effectiveKey(), model: m);
+    if (!mounted || gen != _gen) return;
+    setState(() {
+      _testing = null;
+      _tests[m.id] = result;
     });
   }
 
@@ -307,6 +328,7 @@ class _ChannelEditScreenState extends ConsumerState<ChannelEditScreen> {
   Future<void> _clearKey() async {
     await ref.read(modelsProvider.notifier).clearKey(widget.channel!.id);
     if (mounted) setState(() => _hasKey = false);
+    _onConnectionEdited();
   }
 
   @override
@@ -319,6 +341,7 @@ class _ChannelEditScreenState extends ConsumerState<ChannelEditScreen> {
     final note = recognized?.note;
     final keyHint = recognized?.keyHint;
     final local = isLocalBaseUrl(_baseUrl.text);
+    final missing = _missing;
     return SettingsPage(
       title: widget.channel == null ? '添加渠道' : '编辑渠道',
       actions: [
@@ -336,7 +359,7 @@ class _ChannelEditScreenState extends ConsumerState<ChannelEditScreen> {
       ],
       children: [
         SettingsGroup(
-          title: '连接',
+          title: '第 1 步 · 填接口地址和 Key',
           padded: true,
           children: [
             Row(
@@ -358,7 +381,10 @@ class _ChannelEditScreenState extends ConsumerState<ChannelEditScreen> {
               initialValue: _protocol,
               decoration: const InputDecoration(labelText: '接口协议'),
               items: [for (final p in ChatProtocol.values) DropdownMenuItem(value: p, child: Text(p.label))],
-              onChanged: (v) => setState(() => _protocol = v ?? _protocol),
+              onChanged: (v) {
+                _protocol = v ?? _protocol;
+                _onConnectionEdited();
+              },
             ),
             const SizedBox(height: Space.x3),
             TextField(
@@ -388,37 +414,23 @@ class _ChannelEditScreenState extends ConsumerState<ChannelEditScreen> {
               app.secrets.persistent ? 'Key 用系统密钥库（Android Keystore）加密保存，不会写进普通设置文件或日志。' : '这台设备上安全存储不可用，Key 只保存在内存里，关掉应用后要重新填写。',
               tone: app.secrets.persistent ? BannerTone.info : BannerTone.warning,
             ),
-            const SizedBox(height: Space.x3),
-            OutlinedButton.icon(onPressed: _busy ? null : _test, icon: const Icon(Icons.wifi_tethering, size: 18), label: const Text('测试连接')),
-            if (_busy)
-              const Padding(
-                padding: EdgeInsets.only(top: Space.x2),
-                child: LinearProgressIndicator(),
-              ),
-            if (_status != null)
-              InfoBanner(
-                _status!,
-                tone: _statusOk ? BannerTone.info : BannerTone.danger,
-                margin: const EdgeInsets.only(top: Space.x2),
-              ),
           ],
         ),
         SettingsGroup(
-          title: '模型（${_models.length}）',
-          footer: _models.isEmpty ? '还没有模型。点“获取模型”从接口读列表勾选，或者手动添加模型 ID。' : '点一个模型改它的上下文长度、最大输出、能不能看图、思考档位和单价。',
+          title: '第 2 步 · 获取模型',
+          padded: true,
+          children: [FetchModelsStep(missing: missing, busy: _busy, result: _fetchResult, onFetch: _fetchModels)],
+        ),
+        SettingsGroup(
+          title: '第 3 步 · 选模型（${_models.length}）',
+          footer: _models.isEmpty ? '第 2 步读到列表后在弹出的面板里勾选，选中的会出现在这里。读不到列表的服务，在这里手动添加模型 ID。' : '点模型改它的上下文长度、最大输出、能不能看图、思考档位和单价。\n点“测试”会给这个模型发一句很短的话，确认它能对话——会花一点点额度（几个 token），不点不会发。',
           children: [
             for (final m in _models)
-              SettingsRow(
-                title: m.name,
-                subtitle: '${m.contextLength ~/ 1000}K 上下文 · 输出 ${m.maxOutput ~/ 1000}K · ${m.vision ? '文本和图片' : '文本'}${m.thinking ? ' · 可思考' : ''}',
-                trailing: Icon(Icons.tune, size: 20, color: c.textFaint),
-                onTap: () => _editModel(m),
-              ),
-            SettingsRow(key: const Key('channel-fetch'), icon: Icons.cloud_download_outlined, title: '获取模型', subtitle: '从接口读模型列表，勾选要用的', enabled: !_busy, onTap: _fetchModels),
-            SettingsRow(icon: Icons.add, title: '手动添加模型 ID', accent: true, onTap: _addManually),
+              ModelStepRow(model: m, onEdit: () => _editModel(m), onTest: missing != null || _busy || _testing != null ? null : () => _testModel(m), testing: _testing == m.id, result: _tests[m.id]),
+            SettingsRow(key: const Key('channel-add-manual'), icon: Icons.add, title: '手动添加模型 ID', accent: true, onTap: _addManually),
           ],
         ),
-        FilledButton(key: const Key('channel-save'), onPressed: _save, child: const Text('保存')),
+        SaveStep(noModels: _models.isEmpty, onSave: _save),
       ],
     );
   }

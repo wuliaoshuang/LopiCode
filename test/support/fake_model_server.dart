@@ -31,7 +31,16 @@ class ScriptedCall {
 /// 本地假模型服务器：按 OpenAI Chat Completions 的流式格式回 SSE。
 /// 回复按脚本顺序给；脚本用完后重复 [fallback]（用来模拟“模型停不下来”）。
 class FakeModelServer {
-  FakeModelServer(this.script, {this.fallback, this.rejectStreamOptions = false});
+  FakeModelServer(this.script, {this.fallback, this.rejectStreamOptions = false, this.models, this.requireKey});
+
+  /// `GET /v1/models` 给的模型 ID；不给（null）就和以前一样回 404，当作“这家没有模型列表接口”。
+  final List<String>? models;
+
+  /// 给了就检查 `Authorization: Bearer <这个值>`：对不上回 401（模型列表和对话都查）。
+  final String? requireKey;
+
+  /// 收到过几次 `GET /v1/models`。
+  int modelListRequests = 0;
 
   /// 模拟不认 stream_options 的兼容接口：带了就回 400。
   final bool rejectStreamOptions;
@@ -53,6 +62,32 @@ class FakeModelServer {
   Future<void> stop() => _server.close(force: true);
 
   Future<void> _handle(HttpRequest req) async {
+    final denied = requireKey != null && req.headers.value('authorization') != 'Bearer $requireKey';
+    if (req.method == 'GET' && req.uri.path == '/v1/models' && models != null) {
+      modelListRequests++;
+      req.response.statusCode = denied ? 401 : 200;
+      req.response.headers.contentType = ContentType.json;
+      req.response.write(
+        denied
+            ? '{"error":{"message":"Incorrect API key provided"}}'
+            : jsonEncode({
+                'object': 'list',
+                'data': [
+                  for (final id in models!) {'id': id, 'object': 'model'},
+                ],
+              }),
+      );
+      await req.response.close();
+      return;
+    }
+    if (req.method == 'POST' && req.uri.path == '/v1/chat/completions' && denied) {
+      await req.drain<void>();
+      req.response.statusCode = 401;
+      req.response.headers.contentType = ContentType.json;
+      req.response.write('{"error":{"message":"Incorrect API key provided"}}');
+      await req.response.close();
+      return;
+    }
     if (req.method != 'POST' || req.uri.path != '/v1/chat/completions') {
       req.response.statusCode = 404;
       await req.response.close();

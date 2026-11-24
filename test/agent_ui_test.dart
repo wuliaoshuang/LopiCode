@@ -228,6 +228,8 @@ void main() {
       expect(find.textContaining('sk-demo'), findsNothing);
       await shot(tester, '40-channel-edit-$suffix');
       await tester.enterText(find.byKey(const Key('channel-url')), 'https://api2.example.com/v1');
+      // 页面分了四步、变长了：刚输过字的输入框会把页面滚回去露出光标，先等它滚完，再滚到“保存”。
+      await tester.pump(const Duration(milliseconds: 500));
       await tester.ensureVisible(find.byKey(const Key('channel-save')));
       await tester.pump(const Duration(milliseconds: 300));
       await tester.tap(find.byKey(const Key('channel-save')));
