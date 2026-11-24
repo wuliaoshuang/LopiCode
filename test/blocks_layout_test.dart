@@ -448,7 +448,7 @@ void main() {
       expect(setVar.slots.first.placeholder, isTrue);
       expect(setVar.slots.last.look, BkSlotLook.empty);
       final join = layout.blockAt([lcStep(4)])!.slots.last.expr!;
-      expect([for (final s in join.slots) s.look], [BkSlotLook.empty, BkSlotLook.expr, BkSlotLook.empty]);
+      expect([for (final s in join.slots) s.look], [BkSlotLook.empty, BkSlotLook.expr, BkSlotLook.empty, BkSlotLook.add], reason: '三项 + 末尾“加一项”的小＋');
       expect(layout.blockAt([lcStep(7)])!.slots.single.expr!.slots.single.text, '第一行 第二行');
     });
   });

@@ -67,13 +67,14 @@ class BlockLayoutEngine {
 
   // —— 对外 ——
 
-  /// 排一整串：帽子 + 下面所有积木。
-  BkScriptLayout layoutScript(LcBlockTree tree) {
+  /// 排一整串：帽子 + 下面所有积木。`body` 给了就用它代替 `tree.body`
+  /// （拖动时预览“拿走一截 / 让出落点”以后的样子，不用真去改模型）。
+  BkScriptLayout layoutScript(LcBlockTree tree, {List<LcBlock>? body}) {
     final blocks = <BkBlock>[];
     final snaps = <BkSnap>[];
     final hat = _hat(host.hatOf(tree));
     blocks.add(hat);
-    _list(tree.body, const [], false, 0, hat.rect.bottom, blocks, snaps, 0, hat.rect.width);
+    _list(body ?? tree.body, const [], false, 0, hat.rect.bottom, blocks, snaps, 0, hat.rect.width);
     return _finish(tree.id, blocks, snaps);
   }
 
@@ -184,6 +185,8 @@ class BlockLayoutEngine {
         if (value is! List) return const [];
         return [
           for (var i = 0; i < value.length; i++) _exprSlot(a, value[i], arg, [...path, i], maxW, depth),
+          // 末尾的小“＋”：点一下加一项。
+          BkSlot(arg: arg, exprPath: [...path, value.length], spec: a, look: BkSlotLook.add, rect: Rect.fromLTWH(0, 0, 24, metrics.fieldH)),
         ];
       case LcArgKind.variable || LcArgKind.node || LcArgKind.collection || LcArgKind.choice:
         final has = value is String && value.isNotEmpty;

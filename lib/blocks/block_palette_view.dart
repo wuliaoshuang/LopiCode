@@ -1,8 +1,10 @@
 // 设计约束（积木盒 · 底部抽屉，390 宽，浅色 + 深色）— 2026-11-24
 // - 从上到下三行东西：一条小把手；一行分类（彩色圆点 + 名字，横着滑，选中的那个整颗填成它的颜色）；下面是这一类的积木。
 // - 积木不是文字列表：每一样都用和画布上同一套画法画成真的积木外形（帽子 / 语句 / C 形 / 表达式），小块的并排，放不下换行。
-// - 这一版只做展示和点选（回调告诉外面点了哪一样）；“拖出来”由画布那边接。
-// - 主操作就是“拿一块积木”，没有别的按钮。
+// - 主操作就是“拿一块积木”：按住一块（约 0.18 秒）或直接横着拖，就把它拿出来了（回调交给外面的编辑器接着拖）；
+//   上下滑还是翻这一页。点一下＝快捷添加（回调告诉外面点了哪一样）。
+// - 可以收起：点最上面的把手，只留把手 + 分类那一行（66 高），画布地方更大；收起时点分类会自动展开到那一类。
+import 'package:flutter/gestures.dart';
 import 'package:lopicode/blocks/block_geometry.dart';
 import 'package:lopicode/blocks/block_host.dart';
 import 'package:lopicode/blocks/block_script_view.dart';
@@ -23,7 +25,22 @@ class BlockPaletteItem {
 }
 
 class BlockPaletteView extends StatefulWidget {
-  const BlockPaletteView({super.key, required this.host, this.onPick, this.initialCategory, this.height = 300});
+  const BlockPaletteView({
+    super.key,
+    required this.host,
+    this.onPick,
+    this.initialCategory,
+    this.height = 300,
+    this.collapsed = false,
+    this.onToggle,
+    this.onDragStart,
+    this.onDragUpdate,
+    this.onDragEnd,
+    this.onDragCancel,
+  });
+
+  /// 收起来以后的高度（把手 + 分类那一行）。
+  static const double collapsedHeight = 66;
 
   final BlockHost host;
 
@@ -33,6 +50,17 @@ class BlockPaletteView extends StatefulWidget {
   /// 一开始停在哪一类（[BlockCategory.id]）；不给就是第一类。
   final String? initialCategory;
   final double height;
+
+  /// 收起（只留分类那一行）。点把手、或收起时点分类，会调 [onToggle]。
+  final bool collapsed;
+  final void Function()? onToggle;
+
+  /// 把一样东西拿出来了：`global`＝手指在屏幕的哪里；`grab`＝手指离样品左上角多远。之后手指每动一下调 [onDragUpdate]，
+  /// 松手调 [onDragEnd]，被系统打断调 [onDragCancel]。
+  final void Function(BlockPaletteItem item, Offset global, Offset grab)? onDragStart;
+  final void Function(Offset global)? onDragUpdate;
+  final void Function()? onDragEnd;
+  final void Function()? onDragCancel;
 
   @override
   State<BlockPaletteView> createState() => _BlockPaletteViewState();
@@ -77,8 +105,11 @@ class _BlockPaletteViewState extends State<BlockPaletteView> with BkKitHolder {
         if (!c.isEmpty) c,
     ];
     final current = categories.isEmpty ? null : categories.firstWhere((c) => c.id == _category, orElse: () => categories.first);
-    return Container(
-      height: widget.height,
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOutCubic,
+      height: widget.collapsed ? BlockPaletteView.collapsedHeight : widget.height,
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
@@ -93,17 +124,23 @@ class _BlockPaletteViewState extends State<BlockPaletteView> with BkKitHolder {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Center(
-            child: Container(
-              margin: const EdgeInsets.only(top: 8, bottom: 4),
-              width: 36,
-              height: 4,
-              decoration: BoxDecoration(color: theme.dividerColor, borderRadius: BorderRadius.circular(2)),
+          GestureDetector(
+            key: const ValueKey('bk-palette-handle'),
+            behavior: HitTestBehavior.opaque,
+            onTap: widget.onToggle,
+            child: Center(
+              child: Container(
+                margin: const EdgeInsets.only(top: 8, bottom: 4),
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(color: theme.dividerColor, borderRadius: BorderRadius.circular(2)),
+              ),
             ),
           ),
           SizedBox(
             height: 48,
             child: ListView.separated(
+              key: const ValueKey('bk-palette-tabs'),
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
               itemCount: categories.length,
@@ -135,7 +172,10 @@ class _BlockPaletteViewState extends State<BlockPaletteView> with BkKitHolder {
     return GestureDetector(
       key: ValueKey('bk-palette-tab-${c.id}'),
       behavior: HitTestBehavior.opaque,
-      onTap: () => setState(() => _category = c.id),
+      onTap: () {
+        setState(() => _category = c.id);
+        if (widget.collapsed) widget.onToggle?.call();
+      },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 140),
         padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -161,14 +201,38 @@ class _BlockPaletteViewState extends State<BlockPaletteView> with BkKitHolder {
 
   Widget _sample(BlockPaletteItem item) {
     final view = BkLayoutView(layout: item.layout, kit: kit);
-    return GestureDetector(
-      key: ValueKey('bk-palette-item-${item.kind.name}-${item.id}'),
-      behavior: HitTestBehavior.opaque,
-      onTap: widget.onPick == null ? null : () => widget.onPick!(item),
-      // 小的表达式块也要有 40 高的触控范围。
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 40),
-        child: Align(alignment: Alignment.centerLeft, widthFactor: 1, heightFactor: 1, child: view),
+    void start(Offset global, Offset local, double boxHeight) {
+      // 样品在 40 高的触控范围里是竖着居中的。
+      final dy = (boxHeight - item.layout.size.height) / 2;
+      widget.onDragStart?.call(item, global, local - Offset(0, dy > 0 ? dy : 0));
+    }
+
+    return Builder(
+      builder: (box) => RawGestureDetector(
+        key: ValueKey('bk-palette-item-${item.kind.name}-${item.id}'),
+        behavior: HitTestBehavior.opaque,
+        gestures: {
+          TapGestureRecognizer: GestureRecognizerFactoryWithHandlers<TapGestureRecognizer>(TapGestureRecognizer.new, (r) => r.onTap = widget.onPick == null ? null : () => widget.onPick!(item)),
+          if (widget.onDragStart != null) ...{
+            LongPressGestureRecognizer: GestureRecognizerFactoryWithHandlers<LongPressGestureRecognizer>(() => LongPressGestureRecognizer(duration: const Duration(milliseconds: 180)), (r) {
+              r.onLongPressStart = (d) => start(d.globalPosition, d.localPosition, box.size?.height ?? 0);
+              r.onLongPressMoveUpdate = (d) => widget.onDragUpdate?.call(d.globalPosition);
+              r.onLongPressEnd = (_) => widget.onDragEnd?.call();
+              r.onLongPressCancel = () => widget.onDragCancel?.call();
+            }),
+            HorizontalDragGestureRecognizer: GestureRecognizerFactoryWithHandlers<HorizontalDragGestureRecognizer>(HorizontalDragGestureRecognizer.new, (r) {
+              r.onStart = (d) => start(d.globalPosition, d.localPosition, box.size?.height ?? 0);
+              r.onUpdate = (d) => widget.onDragUpdate?.call(d.globalPosition);
+              r.onEnd = (_) => widget.onDragEnd?.call();
+              r.onCancel = () => widget.onDragCancel?.call();
+            }),
+          },
+        },
+        // 小的表达式块也要有 40 高的触控范围。
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 40),
+          child: Align(alignment: Alignment.centerLeft, widthFactor: 1, heightFactor: 1, child: view),
+        ),
       ),
     );
   }

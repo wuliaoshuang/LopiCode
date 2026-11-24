@@ -71,16 +71,32 @@ class BkCanvasLayout {
 }
 
 /// 把宿主的所有脚本排到画布上。`margin`＝离画布左上的留白；`spacing`＝自动排时两串之间的间距。
-BkCanvasLayout layoutBlockCanvas(BlockHost host, BlockLayoutEngine engine, {double margin = 16, double spacing = 28}) {
-  final trees = host.scripts;
-  final layouts = [for (final t in trees) engine.layoutScript(t)];
+///
+/// 拖动时的预览用后面三个参数（都不改模型）：`bodies`＝某几串换一份积木来排（拿走一截 / 让出落点以后的样子）；
+/// `hide`＝不排的那几串（整串被拖在手上）；`origins`＝位置照这张表摆（拖动期间别的脚本不跟着跳）。
+BkCanvasLayout layoutBlockCanvas(
+  BlockHost host,
+  BlockLayoutEngine engine, {
+  double margin = 16,
+  double spacing = 28,
+  Map<String, List<LcBlock>> bodies = const {},
+  Set<String> hide = const {},
+  Map<String, Offset> origins = const {},
+}) {
+  final trees = [
+    for (final t in host.scripts)
+      if (!hide.contains(t.id)) t,
+  ];
+  final layouts = [for (final t in trees) engine.layoutScript(t, body: bodies[t.id])];
   final placed = List<BkPlaced?>.filled(trees.length, null);
   var floor = margin;
   for (var i = 0; i < trees.length; i++) {
     final x = trees[i].x, y = trees[i].y;
-    if (x == null || y == null || !x.isFinite || !y.isFinite) continue;
-    placed[i] = BkPlaced(id: trees[i].id, origin: Offset(x, y), layout: layouts[i], auto: false);
-    floor = math.max(floor, y + layouts[i].size.height + spacing);
+    final fixed = x != null && y != null && x.isFinite && y.isFinite;
+    final at = origins[trees[i].id] ?? (fixed ? Offset(x, y) : null);
+    if (at == null) continue;
+    placed[i] = BkPlaced(id: trees[i].id, origin: at, layout: layouts[i], auto: !fixed);
+    floor = math.max(floor, at.dy + layouts[i].size.height + spacing);
   }
   var right = 0.0, bottom = 0.0;
   for (var i = 0; i < trees.length; i++) {

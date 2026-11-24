@@ -153,6 +153,9 @@ enum BkSlotLook {
 
   /// 空的表达式槽（等着拖一个表达式进来）。
   empty,
+
+  /// 一串值（`join` 的 items）末尾的小“＋”：点一下加一项。[BkSlot.exprPath] 的最后一步是“新的一项会在第几位”。
+  add,
 }
 
 /// 一个参数槽。
@@ -197,7 +200,7 @@ class BkSlot {
   final String? hatSlotId;
 
   /// 能不能把表达式拖进来（表达式槽、以及放着字面量表达式的槽）。
-  bool get acceptsExpr => spec?.kind == LcArgKind.expr || spec?.kind == LcArgKind.exprList || look == BkSlotLook.expr || look == BkSlotLook.empty;
+  bool get acceptsExpr => look != BkSlotLook.add && (spec?.kind == LcArgKind.expr || spec?.kind == LcArgKind.exprList || look == BkSlotLook.expr || look == BkSlotLook.empty);
 }
 
 /// 一个表达式块（嵌在槽里，或单独摆在积木盒里）。

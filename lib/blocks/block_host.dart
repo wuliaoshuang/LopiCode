@@ -195,7 +195,16 @@ abstract class BlockHost {
   /// 一个表达式槽被拖空以后放回什么。默认按参数想要的类型给一个字面量。可覆盖。
   Map<String, dynamic> defaultExpr(LcArgSpec arg) => defaultExprFor(arg.valueType);
 
+  /// 往“一串值”的参数（`join` 的 items、后端 `obj` 的 fields）里加一项时放什么。`expr` 是那个表达式，`arg` 是那个参数。
+  /// 默认同 [defaultExpr]。可覆盖。
+  Map<String, dynamic> newListItem(Map<String, dynamic> expr, LcArgSpec arg) => defaultExpr(arg);
+
   // —— 参数 ——
+
+  /// 编辑器刚改了一块积木的某个参数（`exprPath` 为空＝积木自己的参数；否则是参数里某个表达式的字段）。
+  /// 宿主可以在这里顺手把别的参数调成对得上的（例如换了控件以后，“改什么”换成它有的属性）。
+  /// 在 [edit] 里被调。默认什么都不做。可覆盖。
+  void argChanged(LcBlockTree tree, LcBlock block, String arg, List<Object> exprPath) {}
 
   /// 某种参数（[LcArgKind.variable] / node / collection / choice）现在有哪些可选项。
   /// `tree`、`block`、`arg` 说明是在给哪一串的哪块积木的哪个参数挑（宿主可以据此筛选，比如“改文字”只列有文字的控件）；

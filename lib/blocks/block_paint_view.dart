@@ -61,7 +61,18 @@ class BkText {
 
 /// 画的时候的附加状态。
 class BkPaintState {
-  const BkPaintState({this.selected, this.selectedHat = false, this.selectedSlot, this.lifted = false, this.ghost = false, this.errors = const [], this.warnings = const []});
+  const BkPaintState({
+    this.selected,
+    this.selectedHat = false,
+    this.selectedSlot,
+    this.slotColor,
+    this.lifted = false,
+    this.ghost = false,
+    this.ghostRange,
+    this.flash = 0,
+    this.errors = const [],
+    this.warnings = const [],
+  });
 
   /// 选中的积木（路径）；`selectedHat`＝选中的是帽子。
   final LcBlockPath? selected;
@@ -69,6 +80,15 @@ class BkPaintState {
 
   /// 选中的槽位（积木路径 + 参数名 + 参数里的位置）。
   final ({LcBlockPath block, String arg, BkExprPath path})? selectedSlot;
+
+  /// [selectedSlot] 的描边换一种颜色（拖表达式时：类型对不上的槽用提醒色）；null＝和选中积木一样的亮黄。
+  final Color? slotColor;
+
+  /// 这一段积木画成落点阴影（拖动时“让出来的位置”）：`parent / inElse` 下面从 `start` 起的 `count` 块，连同它们里面的。
+  final ({LcBlockPath parent, bool inElse, int start, int count})? ghostRange;
+
+  /// 选中的那块闪一下的强度（0–1；跳到某块积木时用）。
+  final double flash;
 
   /// 被拖起来了：整串底下加投影（放大由外面的控件做）。
   final bool lifted;
@@ -110,26 +130,51 @@ class BkScriptPainter {
       }
       if (loose != null) canvas.drawPath(bkSlotPath(loose.rect, metrics, hex: loose.hex).shift(const Offset(0, 6)), shadow);
     }
+    final range = state.ghostRange;
     for (final b in layout.blocks) {
-      _block(canvas, b, state);
+      if (range != null && _inRange(b, range)) {
+        canvas.drawPath(bkBlockPath(b, metrics), Paint()..color = palette.ghost);
+      } else {
+        _block(canvas, b, state);
+      }
     }
     if (loose != null) _expr(canvas, loose, palette.tone(loose.colorKey), const [], state);
     // 选中描边最后画，压在所有积木上面（不会被下一块盖住半边）。
     final sel = state.selected;
     for (final b in layout.blocks) {
       final hit = b.isHat ? state.selectedHat : (sel != null && bkSameBlockPath(sel, b.path));
-      if (hit) _outline(canvas, bkBlockPath(b, metrics));
+      if (!hit) continue;
+      final path = bkBlockPath(b, metrics);
+      if (state.flash > 0) {
+        canvas.drawPath(
+          path,
+          Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 5 + 12 * state.flash
+            ..strokeJoin = StrokeJoin.round
+            ..color = palette.selection.withValues(alpha: 0.45 * state.flash),
+        );
+      }
+      _outline(canvas, path);
     }
   }
 
-  void _outline(Canvas canvas, Path path) {
+  static bool _inRange(BkBlock b, ({LcBlockPath parent, bool inElse, int start, int count}) r) {
+    final n = r.parent.length;
+    if (b.isHat || b.path.length <= n || !bkSameBlockPath(r.parent, b.path.sublist(0, n))) return false;
+    final step = b.path[n];
+    return (n == 0 || step.inElse == r.inElse) && step.index >= r.start && step.index < r.start + r.count;
+  }
+
+  void _outline(Canvas canvas, Path path, [Color? color]) {
+    final c = color ?? palette.selection;
     canvas.drawPath(
       path,
       Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = 5
         ..strokeJoin = StrokeJoin.round
-        ..color = palette.selection.withValues(alpha: 0.35),
+        ..color = c.withValues(alpha: 0.35),
     );
     canvas.drawPath(
       path,
@@ -137,7 +182,7 @@ class BkScriptPainter {
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2.2
         ..strokeJoin = StrokeJoin.round
-        ..color = palette.selection,
+        ..color = c,
     );
   }
 
@@ -225,13 +270,24 @@ class BkScriptPainter {
       case BkSlotLook.empty:
         canvas.drawPath(path, Paint()..color = tone.deep);
         _inset(canvas, path, 0.30);
+      case BkSlotLook.add:
+        final c = s.rect.center;
+        canvas.drawCircle(c, 10, Paint()..color = tone.deep);
+        final plus = Paint()
+          ..color = tone.text.withValues(alpha: 0.9)
+          ..strokeWidth = 2
+          ..strokeCap = StrokeCap.round;
+        canvas.drawLine(c - const Offset(4.5, 0), c + const Offset(4.5, 0), plus);
+        canvas.drawLine(c - const Offset(0, 4.5), c + const Offset(0, 4.5), plus);
       case BkSlotLook.expr:
         final e = s.expr!;
         final own = palette.tone(e.colorKey);
         _expr(canvas, e, e.bare ? tone : (identical(own.fill, tone.fill) || own.fill == tone.fill ? own.nested : own), block, state, parent: tone);
     }
     final sel = state.selectedSlot;
-    if (sel != null && sel.arg == s.arg && bkSameBlockPath(sel.block, block) && bkSameExprPath(sel.path, s.exprPath) && s.hatSlotId == null) _outline(canvas, path);
+    if (sel != null && sel.arg == s.arg && bkSameBlockPath(sel.block, block) && bkSameExprPath(sel.path, s.exprPath) && s.hatSlotId == null && s.look != BkSlotLook.add) {
+      _outline(canvas, path, state.slotColor);
+    }
   }
 
   void _expr(Canvas canvas, BkExpr e, BkTone tone, LcBlockPath block, BkPaintState state, {BkTone? parent}) {
