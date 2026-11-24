@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:lopicode/lowcode/logic_js.dart';
 import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/lowcode/style_resolve.dart';
 
@@ -7,9 +8,12 @@ import 'package:lopicode/lowcode/style_resolve.dart';
 export 'package:lopicode/lowcode/style_resolve.dart' show nodeCssDeclarations, nodeCssRule, nodeCssSelector;
 
 class LcHtmlExport {
-  const LcHtmlExport(this.html, this.css);
+  const LcHtmlExport(this.html, this.css, [this.js = '']);
   final String html;
   final String css;
+
+  /// `logic.js` 的内容；页面没有逻辑时是空字符串（这时不生成文件，网页里也不引用它）。
+  final String js;
 }
 
 const _esc = HtmlEscape(HtmlEscapeMode.element);
@@ -34,7 +38,13 @@ body {
 .lc-divider { border: 0; border-top: 1px solid #d3dee4; margin: 0; align-self: stretch; }
 ''';
 
-/// 把页面导出成 `index.html` + `style.css` 两个文件的内容。
+/// 页面逻辑导出成的脚本文件名。
+const String kLowcodeLogicFile = 'logic.js';
+
+/// 我们生成的 logic.js 的第一行都以它开头；用来认“这是不是我们导出的文件”。
+const String kLowcodeLogicMarker = '// 由 LopiCode 低代码搭建器生成';
+
+/// 把页面导出成 `index.html` + `style.css`（有逻辑时再加 `logic.js`）的内容。
 LcHtmlExport exportHtml(LcDocument doc) {
   final css = StringBuffer(_baseCss);
   final body = StringBuffer();
@@ -76,6 +86,9 @@ LcHtmlExport exportHtml(LcDocument doc) {
   }
 
   walk(doc.root, null, 0);
+  final js = exportLogicJs(doc);
+  // 没有逻辑的页面一个字节都不多（和第 1 版导出的一样）。
+  final script = js.isEmpty ? '' : '  <script src="$kLowcodeLogicFile" defer></script>\n';
 
   final html =
       '''<!DOCTYPE html>
@@ -85,10 +98,10 @@ LcHtmlExport exportHtml(LcDocument doc) {
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>${_esc.convert(doc.title)}</title>
   <link rel="stylesheet" href="style.css">
-</head>
+$script</head>
 <body>
 $body</body>
 </html>
 ''';
-  return LcHtmlExport(html, css.toString());
+  return LcHtmlExport(html, css.toString(), js);
 }

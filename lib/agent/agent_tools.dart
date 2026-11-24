@@ -211,7 +211,7 @@ class AgentToolbox {
       'lowcode_update_page',
       '用新的 JSON 整体替换低代码页面，并重新导出 index.html 和 style.css。',
       {
-        'page': {'type': 'object', 'description': '完整的页面对象：{title, root}，root.type 必须是 page'},
+        'page': {'type': 'object', 'description': '完整的页面对象：{title, root, logic?, components?}，root.type 必须是 page；节点可带 style（CSS 声明表）。logic（积木逻辑）/ components（自定义组件）不传就沿用现有的，要清空请传 {} / []'},
       },
       ['page'],
     ),
@@ -352,8 +352,28 @@ class AgentToolbox {
       }
     }
     if (value is! Map<String, dynamic>) throw ToolArgError('缺少参数 page（应为对象）');
-    final doc = LcDocument.fromJson(value); // 结构不合法会抛 FormatException，文件不会被改
-    for (final f in [kLowcodePageFile, 'index.html', 'style.css']) {
+    // Agent 只想改版面时常常不带 logic / components：没带就沿用文件里现有的，免得把用户搭好的积木和组件冲掉。
+    // 想清空要明确传空的（logic: {}，components: []）。
+    var merged = value;
+    if (!merged.containsKey('logic') || !merged.containsKey('components')) {
+      final current = File(guard.resolve(kLowcodePageFile));
+      if (await current.exists()) {
+        try {
+          final old = jsonDecode(await current.readAsString());
+          if (old is Map<String, dynamic>) {
+            merged = {
+              ...merged,
+              for (final k in const ['logic', 'components'])
+                if (!merged.containsKey(k) && old[k] != null) k: old[k],
+            };
+          }
+        } on FormatException {
+          // 现有文件本来就坏了：没有可沿用的，照新的写。
+        }
+      }
+    }
+    final doc = LcDocument.fromJson(merged); // 结构不合法会抛 FormatException，文件不会被改
+    for (final f in [kLowcodePageFile, 'index.html', 'style.css', kLowcodeLogicFile]) {
       _checkScope(guard.resolve(f));
     }
     await saveLowcodePage(guard, doc);
@@ -385,4 +405,12 @@ Future<void> saveLowcodePage(PathGuard guard, LcDocument doc) async {
   await File(guard.resolve(kLowcodePageFile)).writeAsString(doc.encode());
   await File(guard.resolve('index.html')).writeAsString(export.html);
   await File(guard.resolve('style.css')).writeAsString(export.css);
+  final logic = File(guard.resolve(kLowcodeLogicFile));
+  if (export.js.isNotEmpty) {
+    await logic.writeAsString(export.js);
+  } else if (await logic.exists()) {
+    // 逻辑删光了：把上次导出的 logic.js 也删掉。只删我们自己生成的（看开头那行标记），用户自己写的同名文件不碰。
+    final head = await logic.openRead(0, 200).transform(const Utf8Decoder(allowMalformed: true)).join();
+    if (head.startsWith(kLowcodeLogicMarker)) await logic.delete();
+  }
 }
