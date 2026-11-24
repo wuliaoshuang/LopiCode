@@ -498,7 +498,9 @@ public final class Lc {
                 byte[] chunk = new byte[8192];
                 for (int n = in.read(chunk); n >= 0; n = in.read(chunk)) all.write(chunk, 0, n);
                 // 不是合法 UTF-8 的地方换成 U+FFFD
-                return new String(all.toByteArray(), StandardCharsets.UTF_8);
+                String text = new String(all.toByteArray(), StandardCharsets.UTF_8);
+                // 开头的 BOM（U+FEFF）去掉一个
+                return text.startsWith("\uFEFF") ? text.substring(1) : text;
             }
         } catch (Exception e) { // 连不上、超时、网址写错……都算失败
             return null;

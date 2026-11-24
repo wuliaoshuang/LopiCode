@@ -127,6 +127,7 @@ func Fetch(method string, url any, data any) any {
 	if err != nil {
 		return nil
 	}
-	return decodeUTF8(raw)
+	// 开头的 BOM（U+FEFF）去掉一个
+	return strings.TrimPrefix(decodeUTF8(raw), "\uFEFF")
 }
 ''';

@@ -76,7 +76,7 @@ const Map<String, String> kBeRuntimeFns = {
   'sendText': '(状态, 值) → 响应：内容是值的文字化，text/plain; charset=utf-8；其余同 sendJson',
   'fetch':
       '(方式, 网址, 数据) → 文字或空：只许 http / https，主机那一段带 @（用户名密码）的不请求；网址里字母数字和 -._~:/?#[]@!\$&\'()*+,;= 之外的字符、'
-      '后面不是两位十六进制的 % 先按 UTF-8 做百分号转义；POST 且数据不是空时把它的 JSON 当请求内容；最多等 $kBeFetchTimeoutSeconds 秒；2xx 返回响应文字，其余一律空',
+      '后面不是两位十六进制的 % 先按 UTF-8 做百分号转义；POST 且数据不是空时把它的 JSON 当请求内容；最多等 $kBeFetchTimeoutSeconds 秒；2xx 返回响应文字（按 UTF-8 读，坏的地方换成 U+FFFD，开头的 BOM 去掉一个），其余一律空',
 };
 
 /// 返回“语言自己的布尔”或“是否”值的函数：它们的结果可以直接放进 if 的条件，不用再包一层 truthy。

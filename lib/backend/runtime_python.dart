@@ -465,7 +465,8 @@ def fetch(method, url, data):
         with urllib.request.urlopen(request, timeout=FETCH_TIMEOUT_SECONDS) as res:
             if not 200 <= res.status <= 299:
                 return None
-            return res.read().decode("utf-8", errors="replace")
+            text = res.read().decode("utf-8", errors="replace")
+            return text[1:] if text.startswith("\ufeff") else text  # 开头的 BOM 去掉一个
     except Exception:  # 连不上、超时、4xx / 5xx、网址写错……都算失败
         return None
 

@@ -37,6 +37,7 @@ const Map<String, Set<String>> _expectedFiles = {
   'python': {'server.py', 'lc_runtime.py', 'README.md'},
   'go': {'main.go', 'lc/values.go', 'lc/server.go', 'lc/fetch.go', 'go.mod', 'README.md'},
   'java': {'Main.java', 'Lc.java', 'LcJson.java', 'LcServer.java', 'README.md'},
+  'php': {'server.php', 'lc_runtime.php', 'lc_json.php', 'lc_data.php', 'lc_server.php', 'README.md'},
 };
 
 /// 生成的源码里所有不在字符串和注释里的部分（粗略：去掉双引号字符串和整行注释）。

@@ -8,6 +8,7 @@ import 'package:lopicode/backend/backend_target.dart';
 import 'package:lopicode/backend/backend_targets.dart';
 import 'package:lopicode/backend/target_go.dart';
 import 'package:lopicode/backend/target_java.dart';
+import 'package:lopicode/backend/target_php.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 
 import 'support/backend_conformance.dart';
@@ -46,6 +47,57 @@ BeDocument _trickyDoc() => _doc([
 
 /// 源码里所有双引号字符串字面量的内容都去掉以后剩下的部分（粗略）。
 String _withoutStrings(String source) => source.replaceAll(RegExp(r'"(?:[^"\\\n]|\\.)*"'), '""');
+
+/// PHP 源码去掉字符串和注释以后剩下的部分；引号没配上就抛错。只认小库和生成器会写出来的写法（没有 heredoc）。
+String _phpCodeOnly(String source) {
+  final out = StringBuffer();
+  var i = 0;
+  while (i < source.length) {
+    final c = source[i];
+    final two = i + 1 < source.length ? source.substring(i, i + 2) : '';
+    if (two == '//' || c == '#') {
+      final end = source.indexOf('\n', i);
+      final line = source.substring(i, end < 0 ? source.length : end);
+      if (line.contains('?>')) throw StateError('注释里有 ?>：$line');
+      i = end < 0 ? source.length : end;
+    } else if (two == '/*') {
+      final end = source.indexOf('*/', i + 2);
+      if (end < 0) throw StateError('块注释没有结束');
+      i = end + 2;
+    } else if (c == '"' || c == "'") {
+      var j = i + 1;
+      while (j < source.length && source[j] != c) {
+        if (source[j] == r'\') {
+          j += 2;
+          continue;
+        }
+        if (c == '"' && source[j] == r'$') throw StateError('双引号文字里有没转义的 \$：${source.substring(i, j + 1)}');
+        j++;
+      }
+      if (j >= source.length) throw StateError('引号没有配上：${source.substring(i, (i + 40).clamp(0, source.length))}');
+      out.write(c == '"' ? '""' : "''");
+      i = j + 1;
+    } else {
+      out.write(c);
+      i++;
+    }
+  }
+  return out.toString();
+}
+
+/// 括号成对、嵌套对得上。
+void _expectBalanced(String code, String where) {
+  const pairs = {')': '(', ']': '[', '}': '{'};
+  final stack = <String>[];
+  for (final ch in code.split('')) {
+    if (pairs.containsValue(ch)) stack.add(ch);
+    if (pairs.containsKey(ch)) {
+      expect(stack, isNotEmpty, reason: '$where：多了一个 $ch');
+      expect(stack.removeLast(), pairs[ch], reason: '$where：括号没对上');
+    }
+  }
+  expect(stack, isEmpty, reason: '$where：括号没关上');
+}
 
 void _expectNoRawSpecials(String source, String where) {
   expect(source, isNot(matches(RegExp('[\\x00-\\x08\\x0b-\\x1f\\x7f\\u0085\\u2028\\u2029\\ufeff]'))), reason: '$where：源码里不许有原样的控制字符 / 换行类字符 / BOM');
@@ -227,6 +279,119 @@ void main() {
       expect(target.buildCommands.single, containsAll(files.keys.where((k) => k.endsWith('.java'))));
       expect(files['README.md'], contains('不用 Maven / Gradle'));
       expect(target.verified, isTrue);
+    });
+  });
+
+  group('PHP（本机没有 php，只做结构检查）', () {
+    const target = PhpBackendTarget();
+
+    test('标明没有实际运行过：verified 是 false，名字、说明、README 顶部、每个文件开头都写了', () {
+      expect(target.verified, isFalse);
+      expect(target.label, contains('未实际运行'));
+      expect(target.summary, contains('未实际运行'));
+      final files = target.generate(conformanceDocument());
+      expect(files['README.md'], contains('还没有在真机器上实际运行过'));
+      for (final f in files.entries.where((f) => f.key.endsWith('.php'))) {
+        expect(f.value, startsWith('<?php\n'), reason: f.key);
+        expect(f.value.split('\n').take(6).join('\n'), contains('还没有'), reason: '${f.key} 开头要写明没运行过');
+        expect(f.value, isNot(contains('?>')), reason: '${f.key}：不写结束标记（后面多一个空行都会被当成响应内容发出去）');
+      }
+    });
+
+    test('数字带小数点（PHP 里 1 和 1.0 用 === 比不相等）；文字里的 \$ 加反斜杠；控制字符写成 \\u{…}', () {
+      expect(target.literal(200), '200.0');
+      expect(target.literal(1e21), '1e+21');
+      expect(target.literal(null), 'null');
+      expect(target.literal(r'a$b ${c} {$d} "e" \f'), r'"a\$b \${c} {\$d} \"e\" \\f"');
+      expect(target.literal('\u0001\n\u2028\ufeff'), r'"\u{1}\n\u{2028}\u{feff}"');
+      expect(target.variable('class'), r'$v_class');
+      expect(target.call('dbGet', ['"todos"', r'$v_x']), r'lc_dbGet("todos", $v_x)');
+    });
+
+    test('注释里的 ?> 被拆开（PHP 的 // 注释碰到 ?> 就结束，后面的会被当成网页内容）', () {
+      expect(phpComment('a ?> b <?php c'), 'a ? > b < ?php c');
+      final src = target.generate(_trickyDoc())['server.php']!;
+      for (final line in src.split('\n').where((l) => l.trimLeft().startsWith('//'))) {
+        expect(line, isNot(contains('?>')), reason: line);
+      }
+      _expectNoRawSpecials(src, 'server.php');
+    });
+
+    test('生成的文件和小库：引号、括号都配得上；刁钻的文字只出现在字符串和注释里', () {
+      for (final doc in [conformanceDocument(), _trickyDoc(), BeDocument()]) {
+        final files = target.generate(doc);
+        for (final f in files.entries.where((f) => f.key.endsWith('.php'))) {
+          final code = _phpCodeOnly(f.value);
+          _expectBalanced(code, f.key);
+          expect(code, isNot(anyOf(contains('evil'), contains('script'))), reason: f.key);
+        }
+      }
+      final entry = _phpCodeOnly(target.generate(_trickyDoc())['server.php']!);
+      expect(entry, contains(r'$v_class = 1.5;'));
+      expect(entry, contains(r'$v_class = 1e+21;'));
+      expect(entry, contains(r'function route_'));
+      expect(entry.trimRight(), endsWith('lc_start();'));
+    });
+
+    test('每句话都以分号 / 花括号结尾（PHP 少一个分号整份文件都跑不了）', () {
+      final files = target.generate(conformanceDocument());
+      for (final f in files.entries.where((f) => f.key.endsWith('.php'))) {
+        final lines = _phpCodeOnly(f.value).split('\n').map((l) => l.trim()).where((l) => l.isNotEmpty).toList();
+        for (var i = 1; i < lines.length; i++) {
+          final line = lines[i];
+          final next = i + 1 < lines.length ? lines[i + 1] : '';
+          // 允许：语句、块的开头结尾、case 标签、跨行的调用 / 表达式（下一行以 . 或 ) 开头，或这一行以 ( , 结尾）
+          final ok =
+              RegExp(r'[;{}:,(]$').hasMatch(line) ||
+              line.startsWith('function ') ||
+              line.startsWith('final class ') ||
+              next.startsWith('.') ||
+              next.startsWith(')') ||
+              next.startsWith('{') ||
+              line.startsWith('. ');
+          expect(ok, isTrue, reason: '${f.key} 第 ${i + 1} 句：$line');
+        }
+      }
+    });
+
+    test('小库实现了表上的每个函数；函数名不重复（PHP 的函数名不分大小写）；用到的小库函数都有定义', () {
+      final files = target.generate(conformanceDocument());
+      final lib = files.entries.where((f) => f.key.startsWith('lc_')).map((f) => f.value).join('\n');
+      final defined = [for (final m in RegExp(r'^function (\w+)\(', multiLine: true).allMatches(lib)) m[1]!];
+      for (final fn in kBeRuntimeFns.keys) {
+        expect(defined, contains('lc_$fn'), reason: '小库没有 $fn');
+      }
+      expect(defined, containsAll(['lc_collection', 'lc_route', 'lc_start']));
+      expect(defined.map((d) => d.toLowerCase()).toSet(), hasLength(defined.length), reason: '函数名重复（不分大小写）');
+      final all = files.entries.where((f) => f.key.endsWith('.php')).map((f) => _phpCodeOnly(f.value)).join('\n');
+      for (final m in RegExp(r'\blc_\w+(?=\()').allMatches(all)) {
+        expect(defined, contains(m[0]), reason: '用到了没定义的 ${m[0]}');
+      }
+      expect(lib, contains('const LC_BODY_LIMIT = $kBeBodyLimit;'));
+      expect(lib, contains('const LC_REPEAT_LIMIT = $kBeRepeatLimit;'));
+      expect(lib, contains('const LC_JSON_DEPTH_LIMIT = $kBeJsonDepthLimit;'));
+      expect(lib, contains('const LC_FETCH_TIMEOUT = $kBeFetchTimeoutSeconds;'));
+      // 小库之间靠入口文件按顺序引入
+      final entry = files['server.php']!;
+      for (final f in files.keys.where((k) => k.startsWith('lc_'))) {
+        expect(entry, contains("require_once __DIR__ . '/$f';"));
+      }
+    });
+
+    test('集合存在文件里、加文件锁；端口写在启动命令里；README 写明这些和别的语言不一样', () {
+      final doc = conformanceDocument()..port = 3210;
+      final files = target.generate(doc);
+      expect(target.dataInMemory, isFalse);
+      expect(target.portFromEnv, isFalse);
+      expect(target.startCommandFor(3210), ['php', '-S', '0.0.0.0:3210', 'server.php']);
+      expect(files['lc_data.php'], allOf(contains("'/lc_data.json'"), contains('flock(\$h, LOCK_EX)'), contains('flock(\$h, LOCK_UN)'), contains('ftruncate(')));
+      final readme = files['README.md']!;
+      expect(readme, contains('php -S 0.0.0.0:3210 server.php'));
+      expect(readme, contains('lc_data.json'));
+      expect(readme, contains('和别的语言不一样'));
+      expect(readme, isNot(contains('环境变量 `PORT`')));
+      expect(readme, isNot(contains('服务一重启数据就没了')));
+      expect(files['server.php'], isNot(contains('存在内存里')));
     });
   });
 

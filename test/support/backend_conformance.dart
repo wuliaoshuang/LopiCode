@@ -440,6 +440,8 @@ BeDocument conformanceDocument() {
   route('GET', '/relay-get', [
     _b('fetch', {'url': beQuery('url'), 'method': 'GET', 'into': 's'}, body: [_text(200, exVar('s'))], orElse: [_text(502, exText('失败'))]),
   ]);
+  // 把网址参数 t 原样当文字返回。
+  route('GET', '/say', [_text(200, beQuery('t'))]);
   route('GET', '/now', [_text(200, beNow())]);
   return doc;
 }
@@ -693,6 +695,9 @@ final List<BeCase> conformanceCases = [
   _t('GET', '/relay-get?url=HTTP://127.0.0.1:{port}/text/%E5%A4%A7%E5%86%99?q=%22%3C%3E%5C%5E%60%7B%7C%7D', 200, '你好，大写！3true1.5{"a":1}"<>\\^`{|}'),
   _t('GET', '/relay-get?url=%20{self}/', 502, '失败'),
   _t('GET', '/relay-get?url={self}/text/a%5Bb%5D?q=%2540', 200, '你好，a[b]！3true1.5{"a":1}@'),
+  // 对方的响应开头带 BOM（U+FEFF）：只去掉一个（对方回的是两个 BOM + a + BOM）
+  _t('GET', '/relay-get?url={self}/say?t=%25EF%25BB%25BF%25EF%25BB%25BFa%25EF%25BB%25BF', 200, '\ufeffa\ufeff'),
+  _t('GET', '/relay-get?url={self}/say?t=%25EF%25BB%25BFa', 200, 'a'),
   // 网址里带用户名密码的不请求
   _t('GET', '/relay-get?url=http://user:pw@127.0.0.1:{port}/', 502, '失败'),
   _t('GET', '/relay-get?url=http://user@127.0.0.1:{port}/', 502, '失败'),
@@ -886,7 +891,9 @@ Future<List<BeResponse>> runCases(RunningBackend server, String label) async {
     final target = c.target.replaceAll('{self}', 'http://127.0.0.1:${server.port}').replaceAll('{port}', '${server.port}');
     final body = c.bodyBytes ?? (c.body == null ? null : utf8.encode(c.body!));
     final r = await sendRaw(server.port, c.method, target, body: body, headers: c.headers);
-    final text = utf8.decode(r.body, allowMalformed: true);
+    // Dart 的 utf8.decode 会吃掉开头的 BOM：补回去，不然“响应开头是 BOM”的用例比不出来（后面还有逐字节的比较）。
+    final hasBom = r.body.length >= 3 && r.body[0] == 0xEF && r.body[1] == 0xBB && r.body[2] == 0xBF;
+    final text = '${hasBom ? '\ufeff' : ''}${utf8.decode(r.body, allowMalformed: true)}';
     final where = '[$label] 第 ${i + 1} 条 $c\n服务的错误输出：${server.stderrText}';
     expect(r.status, c.status, reason: '$where\n响应内容：$text');
     expect(r.type, c.type, reason: where);

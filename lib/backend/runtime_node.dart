@@ -368,7 +368,9 @@ async function fetchText(method, url, data) {
     }
     const res = await fetch(target, init);
     if (!res.ok) return null;
-    return (await res.text()).toWellFormed();
+    // 自己按 UTF-8 读（坏的地方换成 U+FFFD），开头的 BOM 去掉一个。不用 res.text()：Node 24 上它会去掉两个。
+    const text = new TextDecoder("utf-8", { ignoreBOM: true }).decode(await res.arrayBuffer());
+    return text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
   } catch (e) {
     return null;
   }

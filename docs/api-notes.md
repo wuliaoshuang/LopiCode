@@ -191,14 +191,15 @@
 
 记录时间：2026-11-24。**这一节都没有对着官方文档逐条核对**（做的时候不许联网），是凭对标准库的了解写的，下面写明各自实际验证到什么程度。
 
-- Node.js “请求别的网址”：全局 `fetch(url, { method, body, headers, signal: AbortSignal.timeout(10000) })`，`res.ok` 判断 2xx，`res.text()` 取文字。
+- Node.js “请求别的网址”：全局 `fetch(url, { method, body, headers, signal: AbortSignal.timeout(10000) })`，`res.ok` 判断 2xx，
+  `res.arrayBuffer()` 取内容后自己用 `TextDecoder` 按 UTF-8 读（不用 `res.text()`：本机 Node 24 上实测它会去掉开头的**两个** BOM）。
   状态：**未核对官方文档**；在本机 Node 24.22.1 上实际跑过（请求自己的 GET / POST、对方回 404、连不上、不是 http 网址），结果符合预期。
   没有实际验证的：真的等满 10 秒超时、https、跳转。
 - Python “请求别的网址”：`urllib.request.urlopen(urllib.request.Request(url, data=…, headers=…, method=…), timeout=10)`，4xx / 5xx 会抛 `HTTPError`（一律当失败）。
   状态：**未核对官方文档**；在本机 Python 3.12.3 上实际跑过同样几种情况。没有实际验证的同上。
 - Node.js 服务：`node:http` 的 `createServer / listen / writeHead / end`，请求体用 `for await (const chunk of req)` 读；
   `String.prototype.toWellFormed()`（所以写了“需要 Node 20 或更新”）、`TextDecoder("utf-8", { fatal: true, ignoreBOM: true })`、`Number.prototype.toExponential(11)`。
-  状态：**未核对官方文档**；本机一致性测试（现在 133 条请求）通过。更老的 Node 版本没试过。
+  状态：**未核对官方文档**；本机一致性测试（现在 135 条请求）通过。更老的 Node 版本没试过。
 - Python 服务：`http.server.ThreadingHTTPServer` + `BaseHTTPRequestHandler`（`do_GET` 等、`send_response / send_header / end_headers`），
   数字的写法用 `decimal.Context(prec=12, rounding=ROUND_HALF_UP)`，JSON 用 `json.loads(parse_int=float, parse_constant=…)`。
   状态：**未核对官方文档**；本机一致性测试通过。写了“需要 Python 3.8 或更新”是估计的，只在 3.12 上跑过。
@@ -206,7 +207,7 @@
 - Go 服务（`runtime_go*.dart`）：`net/http` 的 `http.Server{Handler, ConnContext}`、`net.Listen`、`srv.SetKeepAlivesEnabled(false)`、`r.Host`；
   JSON 解析用 `encoding/json` 的 `Decoder.UseNumber()`；数字的写法用 `strconv.FormatFloat` 展开后手写进位；
   “请求别的网址”用 `http.Client{Timeout: 10 * time.Second}`。
-  状态：**未核对官方文档**；本机 Go 1.25 上一致性测试（133 条请求）通过，`go vet` 没有意见。`go.mod` 里写的 `go 1.18` 是估计的最低版本
+  状态：**未核对官方文档**；本机 Go 1.25 上一致性测试（135 条请求）通过，`go vet` 没有意见。`go.mod` 里写的 `go 1.18` 是估计的最低版本
   （用了 `any`），**没有在更老的 Go 上试过**。没有实际验证的：真的等满 10 秒超时、https、跳转、Windows 上的 `./server` 写法。
 - Java 服务（`runtime_java*.dart`）：`java.net.ServerSocket / Socket`（自己读 HTTP/1.1 请求）、`java.math.BigDecimal`（`MathContext(12, RoundingMode.HALF_UP)`）、
   `java.nio.charset.CharsetDecoder`（`CodingErrorAction.REPORT`）、`HttpURLConnection`（`setConnectTimeout / setReadTimeout` 各 10 秒、`setDoOutput`）、
@@ -214,5 +215,20 @@
   （用了 `readNBytes`、`String.repeat` 之类），**只在 JDK 21 上跑过**。
   已知差别：只认 `Content-Length`，不解分块传输；“请求别的网址”的时限是连接、读各 10 秒；`HttpURLConnection` 默认会跟着跳转、
   对 `127.*` / `localhost` 不走系统代理（本机设了代理的情况下请求自己成功，算是验证了这一点）。
+- PHP（`runtime_php*.dart`、`target_php.dart`）：**整份没有实际运行过**（本机没有 php，也不许联网查文档），下面每一条都是凭记忆写的，**全部未核对**：
+  - 自带开发服务器 `php -S 地址:端口 路由脚本`：每个请求跑一遍路由脚本；`$_SERVER['REQUEST_METHOD']`、`$_SERVER['REQUEST_URI']`（假定是没解码的原样地址，含 `?` 后面的部分）、
+    `$_SERVER['CONTENT_LENGTH']`、`file_get_contents('php://input')`、`getallheaders()`（假定开发服务器下可用，没有就退回 `$_SERVER['HTTP_*']`）。
+    **没法确认**：它对 `/a/%zz`、开头 `//`、带扩展名的路径（`/a.css`）是不是原样交给路由脚本；重名请求头怎么合并；`HEAD` 怎么处理。
+  - 响应：`http_response_code()`、`header()`、`header_remove('X-Powered-By')`、`ini_set('default_mimetype', '')`（为了 204 不带 Content-Type——**没法确认**这样够不够）。
+  - 数字的写法：`sprintf('%.40e', …)`（假定给的是精确展开后正确舍入的 41 位、指数形如 `e+3` / `e-10`）、`sprintf('%.0F', …)`、`sprintf('%.16e', …)`（存文件用）；
+    `(float) "1e3"` 文字转数字、`fmod()`（符号跟被除数）、`is_finite()`。
+  - 文字：`preg_match('//u', $s) === 1` 判断合法 UTF-8、`strtr()` 做 JSON 转义、`strspn / strcspn`（带起点参数）、`rawurldecode()`、`preg_replace_callback()`、
+    `sort($keys, SORT_STRING)`（按字节比＝按码点比）、数组键 `"12"` 会变成整数 12（读键时一律 `(string)` 转回）。
+  - 数据文件：`fopen($f, 'c+')`、`flock($h, LOCK_EX / LOCK_UN)`、`stream_get_contents()`、`rewind()`、`ftruncate()`、`fwrite()`、`fflush()`。
+  - “请求别的网址”：`file_get_contents($url, false, stream_context_create(['http' => ['method', 'header', 'content', 'timeout', 'ignore_errors']]))`，
+    状态码从 `$http_response_header`（PHP 8.4 起 `http_get_last_response_headers()`）最后一行状态行里取。需要 `allow_url_fopen` 开着；`timeout` 假定是读超时（连接超时可能另算）。
+  - “写到日志”：`fopen('php://stdout', 'w')`（假定开发服务器下写到它所在的终端），打不开退回 `error_log()`。
+  - 语法：`final class`、`...$items` 不定参数、`??`、`catch (Throwable $e)`、`"\u{feff}"` 转义、顶层 `const X = __DIR__ . '…'`——据此估计“需要 PHP 7.4 或更新”，**没有验证**。
+  - 已知和别的语言不一样：集合存文件（见设计文档）；用到集合的接口请求自己会等到超时（开发服务器默认单进程）；不打印“后端已启动”。
 - 跨域：所有响应带 `Access-Control-Allow-Origin: *`；`OPTIONS` 回 204 并带 `Access-Control-Allow-Methods`、`Access-Control-Allow-Headers: *`。
   状态：**未核对**（没有用真浏览器试过跨域调用）。
