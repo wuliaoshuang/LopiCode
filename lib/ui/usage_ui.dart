@@ -196,7 +196,7 @@ String toolLabel(String name) => switch (name) {
   'team_message' => '团队留言',
   'list_scheduled_tasks' => '查看自动化任务',
   'schedule_task' => '安排自动化任务',
-  _ => name,
+  _ => name == 'update_todos' ? '更新待办清单' : name,
 };
 
 class TrajectorySheet extends StatefulWidget {

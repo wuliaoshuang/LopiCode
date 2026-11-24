@@ -3,7 +3,13 @@ import 'dart:io';
 
 /// 一次模型回复的脚本：文字和 / 或若干工具调用。
 class ScriptedReply {
-  ScriptedReply({this.text, this.calls = const [], this.status = 200, this.errorBody, this.usage});
+  ScriptedReply({this.text, this.calls = const [], this.status = 200, this.errorBody, this.usage, this.reasoning, this.finish});
+
+  /// 思考内容（按 DeepSeek 的 `delta.reasoning_content` 发）。
+  final String? reasoning;
+
+  /// 指定 finish_reason（默认按有没有工具调用给 stop / tool_calls）。
+  final String? finish;
 
   /// 收尾块里的 usage；不给就发一个没有可用字段的 usage（当作“接口没返回用量”）。
   final Map<String, dynamic>? usage;
@@ -90,6 +96,12 @@ class FakeModelServer {
     }
 
     chunk({'role': 'assistant', 'content': ''});
+    final thought = reply.reasoning;
+    if (thought != null) {
+      final mid = thought.length ~/ 2;
+      chunk({'reasoning_content': thought.substring(0, mid)});
+      chunk({'reasoning_content': thought.substring(mid)});
+    }
     final text = reply.text;
     if (text != null) {
       // 拆成两半发，验证客户端会拼接。
@@ -122,7 +134,7 @@ class FakeModelServer {
         });
       }
     }
-    chunk({}, reply.calls.isEmpty ? 'stop' : 'tool_calls');
+    chunk({}, reply.finish ?? (reply.calls.isEmpty ? 'stop' : 'tool_calls'));
     // 带 usage 的收尾块：choices 为空数组，客户端必须能跳过。
     // 和真实接口一样：只有请求里带了 stream_options.include_usage 才发。
     final opts = requests.last['stream_options'];

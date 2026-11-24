@@ -1,5 +1,5 @@
 // 给一段对话组装工具箱：基础的文件 / 命令工具（AgentToolbox）加上按设置才出现的那些——
-// 提问、联网搜索、技能、派子代理、任务板、自动化任务。
+// 待办清单、提问、联网搜索、技能、派子代理、任务板、自动化任务。
 //
 // 安全规矩都在这里接线，改动要小心：
 // - 没人在场（自动化任务）：没有提问工具、没有自动化工具，确认一律按拒绝；
@@ -9,6 +9,7 @@
 import 'package:lopicode/agent/agent_tools.dart';
 import 'package:lopicode/agent/skills.dart';
 import 'package:lopicode/agent/team.dart';
+import 'package:lopicode/agent/todos.dart';
 import 'package:lopicode/agent/web_search.dart';
 import 'package:lopicode/runtime/linux_command_runner.dart';
 import 'package:lopicode/session/automation_tools.dart';
@@ -68,6 +69,7 @@ class ToolboxBuilder {
     final session = core.session;
     final conv = run.conv;
     final extras = <ExtraTool>[];
+    extras.add(todoTool());
     if (!run.unattended) extras.add(_askTool(run));
     final search = await WebSearchConfig.load(app.settings, app.secrets);
     if (search != null) extras.add((session.webSearchFactory ?? WebSearchClient.new)(search).tool);

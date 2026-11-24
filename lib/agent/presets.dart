@@ -10,6 +10,7 @@ const Map<String, String> kToolLabels = {
   'lowcode_get_page': '读取低代码页面',
   'lowcode_update_page': '更新低代码页面',
   'ask_user': '向你提问',
+  'update_todos': '列待办清单',
   'web_search': '联网搜索',
   'read_skill': '读取技能',
   'spawn_agent': '派出子代理',

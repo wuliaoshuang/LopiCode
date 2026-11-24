@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:lopicode/agent/agent_tools.dart';
 import 'package:lopicode/agent/chat_client.dart';
+import 'package:lopicode/agent/loop_guard.dart';
 import 'package:lopicode/agent/usage.dart';
 
 sealed class AgentEvent {}
@@ -82,6 +83,9 @@ class AgentRunner {
     this.loadImage,
     this.parallelTools = const {'spawn_agent'},
     this.maxParallel = 1,
+    this.contextLimit,
+    this.maxRetries = 2,
+    this.retryDelayOf = retryDelay,
   }) : systemPrompt = systemPrompt ?? defaultSystemPrompt,
        messages = history ?? [];
 
@@ -94,6 +98,8 @@ class AgentRunner {
       '- 执行命令和删除文件需要用户确认，被拒绝后不要重复请求，换个办法或说明情况。\n'
       '- 手机自带的 shell 没有编译器和包管理器，不要假设能运行 npm、flutter、gradle。\n'
       '- 用户消息里的 @路径 指项目里的那个文件，回答前先读它。\n'
+      '- 要分 3 步以上的任务，先用 update_todos 列出待办，每做完一项就更新；一两步的小事不用。\n'
+      '- 工具报错时先看清报错原因再改，不要用同样的参数重复同一个失败的调用。\n'
       '- 用简体中文回答，说明你做了什么、结果如何。';
 
   final ChatClient client;
@@ -110,6 +116,21 @@ class AgentRunner {
   /// 可以同时跑的工具（派子代理）。同一轮里连着出现时并行执行，最多 [maxParallel] 个同时跑。
   final Set<String> parallelTools;
   final int maxParallel;
+
+  /// 同一轮里连着的只读工具（读文件、列目录、搜索……）最多几个同时跑。
+  static const int maxReadParallel = 4;
+
+  /// 模型的上下文长度（token）。给了的话，快占满时自动省掉较早的工具结果。
+  final int? contextLimit;
+
+  /// 对话估算占到上下文的这个比例就开始省。
+  static const double pruneAt = 0.85;
+
+  /// 接口临时出错（限流、服务端 5xx、连不上）而且一个字都还没回时，最多自动重试几次。
+  final int maxRetries;
+
+  /// 第几次重试前等多久（测试里换成 0）。
+  final Duration Function(int attempt) retryDelayOf;
 
   /// 对话历史（不含 system），格式就是发给接口的 messages，可直接存盘。
   /// 以 `_` 开头的键是我们自己的（`_images` 图片附件、`_raw` 原协议内容），发出去前会处理掉。
@@ -210,53 +231,77 @@ class AgentRunner {
         yield UserInjected(text);
       }
 
+      // 上下文快满了：先把较早的工具结果换成一句占位（不删消息，接口要求的配对不受影响）。
+      final limit = contextLimit;
+      if (limit != null && estimateTokens(messages) > limit * pruneAt) {
+        final pruned = pruneOldToolResults(messages);
+        if (pruned > 0) yield AgentNotice('对话快把模型的上下文占满了，已省略 $pruned 条较早的工具结果（需要时 Agent 会重新读取）。');
+      }
+
       final text = StringBuffer();
+      final reasoning = StringBuffer();
       final calls = <int, _PendingCall>{};
       Map<String, dynamic>? raw;
       TokenUsage? usage;
       var started = false;
       int? firstMs;
       DateTime? startedAt;
+      String? finishReason;
       final clock = Stopwatch();
-      try {
-        final request = await buildRequest();
-        startedAt = DateTime.now();
-        clock.start();
-        // 工具列表每一轮现取：权限、计划模式中途改了，下一轮就生效。
-        await for (final delta in client.streamChat(messages: request, tools: toolbox.specs)) {
-          started = true;
-          if (delta.usage != null) usage = delta.usage;
-          if (firstMs == null && ((delta.content?.isNotEmpty ?? false) || delta.toolCalls.isNotEmpty)) firstMs = clock.elapsedMilliseconds;
-          if (_cancelled) break;
-          if (delta.content != null && delta.content!.isNotEmpty) {
-            text.write(delta.content);
-            yield AssistantDelta(delta.content!);
+      for (var attempt = 0; ; attempt++) {
+        try {
+          final request = await buildRequest();
+          startedAt = DateTime.now();
+          clock
+            ..reset()
+            ..start();
+          // 工具列表每一轮现取：权限、计划模式中途改了，下一轮就生效。
+          await for (final delta in client.streamChat(messages: request, tools: toolbox.specs)) {
+            started = true;
+            if (delta.usage != null) usage = delta.usage;
+            if (delta.finishReason != null) finishReason = delta.finishReason;
+            if (firstMs == null && ((delta.content?.isNotEmpty ?? false) || delta.toolCalls.isNotEmpty)) firstMs = clock.elapsedMilliseconds;
+            if (_cancelled) break;
+            if (delta.reasoning != null) reasoning.write(delta.reasoning);
+            if (delta.content != null && delta.content!.isNotEmpty) {
+              text.write(delta.content);
+              yield AssistantDelta(delta.content!);
+            }
+            for (final c in delta.toolCalls) {
+              final call = calls.putIfAbsent(c.index, _PendingCall.new);
+              if (c.id != null && c.id!.isNotEmpty) call.id = c.id!;
+              if (c.name != null && c.name!.isNotEmpty) call.name = c.name!;
+              if (c.arguments != null) call.arguments.write(c.arguments);
+            }
+            if (delta.raw != null) raw = delta.raw;
           }
-          for (final c in delta.toolCalls) {
-            final call = calls.putIfAbsent(c.index, _PendingCall.new);
-            if (c.id != null && c.id!.isNotEmpty) call.id = c.id!;
-            if (c.name != null && c.name!.isNotEmpty) call.name = c.name!;
-            if (c.arguments != null) call.arguments.write(c.arguments);
+          break;
+        } on ChatApiException catch (e) {
+          // 临时性的错误、而且接口一个字都还没回：等一下自动再试，不让整轮白跑。
+          if (!started && !_cancelled && attempt < maxRetries && (e.transient || isRetryableStatus(e.statusCode))) {
+            final wait = retryDelayOf(attempt + 1);
+            yield AgentNotice('${e.message}。${wait.inMilliseconds >= 1000 ? '${(wait.inMilliseconds / 1000).round()} 秒后' : '马上'}自动重试（第 ${attempt + 1} 次，最多 $maxRetries 次）。');
+            await _pause(wait);
+            if (!_cancelled) continue;
+            // 等的时候用户点了停止：按出错收尾（一个字没回，把用户消息还给输入框）。
           }
-          if (delta.raw != null) raw = delta.raw;
+          _rollbackIfEmpty(text);
+          // 接口已经开始回话才算一次请求（被额度上限拦下、连不上的不算）。
+          if (started) yield RequestFinished(usage, clock.elapsedMilliseconds, firstMs: firstMs, startedAt: startedAt);
+          yield AgentError(e.message);
+          return;
+        } on Exception catch (e) {
+          _rollbackIfEmpty(text);
+          if (started) yield RequestFinished(usage, clock.elapsedMilliseconds, firstMs: firstMs, startedAt: startedAt);
+          yield AgentError('和模型的连接中断了：${shortError(e)}');
+          return;
         }
-      } on ChatApiException catch (e) {
-        _rollbackIfEmpty(text);
-        // 接口已经开始回话才算一次请求（被额度上限拦下、连不上的不算）。
-        if (started) yield RequestFinished(usage, clock.elapsedMilliseconds, firstMs: firstMs, startedAt: startedAt);
-        yield AgentError(e.message);
-        return;
-      } on Exception catch (e) {
-        _rollbackIfEmpty(text);
-        if (started) yield RequestFinished(usage, clock.elapsedMilliseconds, firstMs: firstMs, startedAt: startedAt);
-        yield AgentError('和模型的连接中断了：${shortError(e)}');
-        return;
       }
       yield RequestFinished(usage, clock.elapsedMilliseconds, firstMs: firstMs, startedAt: startedAt);
 
       if (_cancelled) {
         // 被打断的这一轮不留工具调用（没执行，留下会让下一次请求对不上）。
-        if (text.isNotEmpty) messages.add({'role': 'assistant', 'content': text.toString()});
+        if (text.isNotEmpty) messages.add({'role': 'assistant', 'content': text.toString(), if (reasoning.isNotEmpty) '_reasoning': reasoning.toString()});
         yield AssistantMessage(text.toString());
         yield AgentNotice('已停止。');
         return;
@@ -281,6 +326,8 @@ class AgentRunner {
               },
           ],
         '_raw': ?raw,
+        // 思考内容（DeepSeek 的 reasoning_content）：带工具的对话里之后每次请求都要原样带回，见 docs/api-notes.md。
+        if (reasoning.isNotEmpty) '_reasoning': reasoning.toString(),
       });
       yield AssistantMessage(text.toString());
 
@@ -289,40 +336,93 @@ class AgentRunner {
         continue; // 它说完了，但用户刚插了话：接着处理
       }
 
+      // 输出被长度上限截断时，最后一个工具调用的参数多半没写完。
+      final cutOff = finishReason == 'length';
       var i = 0;
       while (i < ordered.length) {
-        // 连着的“可并行”工具凑成一批同时跑，其余一个一个来。
+        // 连着的“可并行”工具凑成一批同时跑：派子代理按设置的并发数，只读工具最多 [maxReadParallel] 个；其余一个一个来。
         var j = i + 1;
         if (maxParallel > 1 && parallelTools.contains(ordered[i].name)) {
           while (j < ordered.length && j - i < maxParallel && parallelTools.contains(ordered[j].name)) {
             j++;
           }
+        } else if (_readOnly(ordered[i].name)) {
+          while (j < ordered.length && j - i < maxReadParallel && _readOnly(ordered[j].name)) {
+            j++;
+          }
         }
         final batch = ordered.sublist(i, j);
+        // 重复失败的检测按顺序先过一遍，再一起跑。
+        final verdicts = <LoopVerdict>[];
+        for (final call in batch) {
+          final v = _loop.check(call.name, call.arguments.toString());
+          verdicts.add(v);
+          if (v != LoopVerdict.run) _loop.record(call.name, call.arguments.toString(), ok: false);
+        }
         for (final call in batch) {
           yield ToolStarted(call.id, call.name, call.arguments.toString());
         }
-        final outcomes = await Future.wait([for (final call in batch) _runCall(call)]);
+        final outcomes = await Future.wait([
+          for (var k = 0; k < batch.length; k++)
+            verdicts[k] == LoopVerdict.run ? _runCall(batch[k], truncated: cutOff && identical(batch[k], ordered.last)) : Future.value(ToolOutcome(LoopGuard.refusal(batch[k].name), ok: false)),
+        ]);
         for (var k = 0; k < batch.length; k++) {
+          var outcome = outcomes[k];
+          if (verdicts[k] == LoopVerdict.run) {
+            final nudge = _loop.record(batch[k].name, batch[k].arguments.toString(), ok: outcome.ok);
+            if (nudge != null) outcome = outcome.withText('${outcome.text}$nudge');
+          }
           // 每个 tool_call 都必须有对应的 tool 消息，否则下一次请求会被接口拒绝。
-          messages.add({'role': 'tool', 'tool_call_id': batch[k].id, 'content': outcomes[k].text});
-          yield ToolFinished(batch[k].id, batch[k].name, outcomes[k]);
+          messages.add({'role': 'tool', 'tool_call_id': batch[k].id, 'content': outcome.text});
+          yield ToolFinished(batch[k].id, batch[k].name, outcome);
+        }
+        if (verdicts.contains(LoopVerdict.stop)) {
+          // 剩下没跑的调用也要有对应的 tool 消息。
+          for (final rest in ordered.sublist(j)) {
+            const skipped = '这一轮已经停下，本次调用没有执行。';
+            yield ToolStarted(rest.id, rest.name, rest.arguments.toString());
+            messages.add({'role': 'tool', 'tool_call_id': rest.id, 'content': skipped});
+            yield ToolFinished(rest.id, rest.name, ToolOutcome(skipped, ok: false, denied: true));
+          }
+          yield AgentNotice('Agent 连续 $kRepeatFailStop 次用同样的参数重复同一个失败的操作，已自动停下，免得白白消耗。可以换个说法，或者告诉它哪里不对。');
+          return;
         }
         i = j;
       }
     }
   }
 
-  Future<ToolOutcome> _runCall(_PendingCall call) async {
+  final LoopGuard _loop = LoopGuard();
+
+  bool _readOnly(String name) => toolbox.kindOf(name) == ToolKind.read;
+
+  /// 等一会儿；中途被 [cancel] 就提前结束。
+  Future<void> _pause(Duration d) async {
+    final end = DateTime.now().add(d);
+    while (!_cancelled && DateTime.now().isBefore(end)) {
+      final left = end.difference(DateTime.now());
+      await Future<void>.delayed(left > const Duration(milliseconds: 100) ? const Duration(milliseconds: 100) : left);
+    }
+  }
+
+  Future<ToolOutcome> _runCall(_PendingCall call, {bool truncated = false}) async {
     if (_cancelled) return ToolOutcome('用户已停止，本次调用没有执行。', ok: false, denied: true);
     final rawArgs = call.arguments.toString();
+    // 输出被长度上限截断时，最后一个调用即使看起来完整也不执行（内容可能只写了一半）。
+    if (truncated) return ToolOutcome(badArgumentsMessage(call.name, rawArgs, truncated: true), ok: false);
     Object? args;
+    FormatException? error;
     try {
       args = rawArgs.trim().isEmpty ? <String, dynamic>{} : jsonDecode(rawArgs);
-    } on FormatException {
-      args = null;
+    } on FormatException catch (e) {
+      error = e;
     }
-    return args is Map<String, dynamic> ? await toolbox.execute(call.name, args) : ToolOutcome('错误：工具参数不是合法的 JSON 对象', ok: false);
+    // 参数解析不了：把错在哪、该怎么改说清楚回给模型，让它自己重来，不让整轮失败。
+    if (args is! Map<String, dynamic>) return ToolOutcome(badArgumentsMessage(call.name, rawArgs, error: error), ok: false);
+    final outcome = await toolbox.execute(call.name, args);
+    // 兜底：任何工具的结果都不许无限长（各工具自己还有更小的上限）。
+    final clipped = clipToolResult(outcome.text);
+    return identical(clipped, outcome.text) ? outcome : outcome.withText(clipped);
   }
 
   /// 请求失败时：模型已经说了一些就留下这半截；一个字都没回且上一条是用户消息，

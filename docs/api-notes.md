@@ -115,7 +115,7 @@
 - 有些 OpenAI 兼容的中转站可能不认 `stream_options`。我们的处理：接口回 400 / 422 且报错里提到 `stream_options` 时，去掉它重发一次，这个客户端之后不再带（那就拿不到用量，界面如实写“接口没返回用量”）。别的报错方式认不出来。
 - 接口不给缓存字段时，我们不显示命中率（显示“—”），不当成 0%。
 - DeepSeek 默认开思考模式；思考内容走 `delta.reasoning_content`，我们的客户端目前不读它，所以步骤详情里的“首字”是第一个**回答字或工具调用**到达的时间，思考时间算在首字之前。
-- **待核实的旧问题**（不是这次改的）：第三方整理的 DeepSeek 指南说，思考模式下带工具调用的助手消息回传时要保留 `reasoning_content`；我们现在不保存也不回传它。真接口上会不会因此报错，没有 Key 验证不了。
+- **（2026-11-24 已核对并改掉，见文末「DeepSeek 思考模式与工具调用」）** 原来记的旧问题：第三方整理的 DeepSeek 指南说，思考模式下带工具调用的助手消息回传时要保留 `reasoning_content`；我们现在不保存也不回传它。真接口上会不会因此报错，没有 Key 验证不了。
 
 # 2026-11-23 补充：服务商预设的接口地址（`lib/agent/provider_presets.dart`）
 
@@ -186,3 +186,40 @@
 - Android 需要 `RECORD_AUDIO`，并在 `queries` 里声明 `android.speech.RecognitionService`；麦克风权限只在用户点语音按钮后请求。
 - iOS / macOS 需要 `NSSpeechRecognitionUsageDescription` 和 `NSMicrophoneUsageDescription`。本仓库目前没有 iOS 目录，新增平台时须同时补这两项。
 - 状态：官方 API 与权限配置已核对；Widget 测试用假识别器覆盖，**尚未在真机验证识别质量、权限弹窗和厂商语音服务**。
+
+
+# 2026-11-24 补充：DeepSeek 思考模式与工具调用（`lib/agent/chat_client.dart`、`lib/agent/agent_runner.dart`）
+
+来源（都是 2026-11-24 抓的官方页面；页面上没有“最后更新”日期）：
+- https://api-docs.deepseek.com/zh-cn/guides/thinking_mode/
+- https://api-docs.deepseek.com/zh-cn/api/create-chat-completion
+
+| 事实 | 状态 |
+| --- | --- |
+| 现在的模型是 `deepseek-flash`、`deepseek-v4-pro`；**思考模式默认是开的** | 已核对 |
+| 开关：`thinking: {"type": "enabled" \| "disabled"}`，优先级高于 `reasoning_effort` | 已核对 |
+| `reasoning_effort`：`none / low / high / max`；`none` 等于关；默认 `high`；`minimal` 当 `low`，`medium`、`xhigh` 当 `high` | 已核对 |
+| **带了 `tools` 参数的请求，之后所有请求都必须把 `reasoning_content` 完整带回——哪怕那一轮模型没有真的调用工具；没带回会返回 400。** 之后新的用户轮次也要继续带着之前各轮的 | 已核对（原文意思如此） |
+| 没带 `tools` 的对话，带回的 `reasoning_content` 会被忽略 | 已核对 |
+| assistant 消息要带回的字段：`content`、`reasoning_content`、`tool_calls`；工具调用那一轮 `content` 可以是空字符串 | 已核对 |
+| 非流式返回里的位置：`choices[0].message.reasoning_content` | 已核对 |
+| 流式返回里的字段名 `delta.reasoning_content` | **未核对**：官方正文没写到流式字段名，只有第三方镜像这么写。我们按这个名字读，读不到就当没有 |
+| 400 报错的具体文字 | **未核对**（官方没给） |
+| 思考模式下 `tool_choice` 传 `required` 或指定函数会 400；`none` / `auto` 可以 | 已核对（我们一直只发 `auto`） |
+| 思考模式下 `temperature` 不起作用 | 已核对（我们不发） |
+| 旧对话里没存过思考内容的 assistant 消息该怎么带 | **未核对**：官方没写。第三方说补空字符串能过，不是官方说法 |
+
+我们现在的做法：
+- 流里有 `delta.reasoning_content` 就累加起来，存在那条 assistant 消息的内部字段 `_reasoning` 上（跟着对话记录存盘；不显示在聊天里）。
+- 发请求时，**接口地址是 `api.deepseek.com`，或模型名里带 `deepseek`（中转站）**：把 `_reasoning` 以 `reasoning_content` 的名字带回去。别的服务商一律不带（内部字段照旧去掉）。
+- 只对官方地址多做两件事：思考档位选“关”时明说 `thinking: {"type": "disabled"}`（以前什么都不发，等于默认开着）；
+  思考开着而某条旧 assistant 消息没存思考内容时，补 `reasoning_content: ""`（**未核对**的权宜做法：不补的话按文档一定 400）。
+- **没有用真实接口验证过**（没有 Key，也不许花钱）。以前的写法（不读、不存、不带回）按官方文档在“思考默认开 + 带工具”的第二次请求就会 400。
+
+# 2026-11-24 补充：模型接口临时出错的自动重试（`lib/agent/agent_runner.dart`、`lib/agent/loop_guard.dart`）
+
+这是我们自己定的规矩，不是哪家接口的要求：
+- 只在**一个字都还没回**的时候重试（已经开始回话就不重试，避免重复内容和重复扣费）。
+- 值得重试的：连不上、等响应头超时，以及状态码 408、429、500、502、503、504、529。401、403、400、404 这些重试也没用，直接报错。
+  （其余是通用的 HTTP 含义；529 凭印象是 Anthropic 的“过载”，**未核对**。各家有没有 `Retry-After` 头没查，我们也不读它——**未核对**。）
+- 最多重试 2 次，间隔 1.5 秒、6 秒；等的时候点停止立刻生效。每次重试在聊天里出一行提示，写明真正的原因。

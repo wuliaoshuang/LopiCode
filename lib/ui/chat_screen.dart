@@ -9,13 +9,12 @@
 // - 空对话：没有可用模型时给明确的上手入口；模型可用时默认显示几条弱化的开场建议，可在“设置”里关闭。
 // - 主操作只有一个：发送。AI 生成时长按发送键选“排队 / 插话 / 中断并发送”。
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lopicode/agent/agent_tools.dart';
-import 'package:lopicode/agent/quota.dart';
 import 'package:lopicode/agent/usage.dart';
 import 'package:lopicode/project_session.dart';
+import 'package:lopicode/session/chat_rows.dart';
 import 'package:lopicode/state/models_state.dart';
 import 'package:lopicode/state/presets_state.dart';
 import 'package:lopicode/state/ui_prefs.dart';
@@ -24,6 +23,8 @@ import 'package:lopicode/state/workspace_conversations.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/chat_composer.dart';
 import 'package:lopicode/ui/chat_panels.dart';
+import 'package:lopicode/ui/chat_row_view.dart';
+import 'package:lopicode/ui/chat_todos.dart';
 import 'package:lopicode/ui/chrome.dart';
 import 'package:lopicode/ui/file_picker_sheet.dart';
 import 'package:lopicode/ui/model_setup.dart';
@@ -336,6 +337,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final text = _input.text;
     final slash = text.startsWith('/') && !text.contains(RegExp(r'\s')) ? kSlashCommands.where((k) => k.$1.startsWith(text.toLowerCase())).toList() : const <(String, String)>[];
     final topInset = MediaQuery.paddingOf(context).top + PageBar.kHeight;
+    final rows = deriveChatRows(s.chat, busy: s.agentBusy);
+    final todos = latestTodos(s.chat);
+    // 最后一行已经是“进行中”的步骤组（它自己在转圈）或正在往外冒的回复时，不再另起一行“处理中”。
+    final last = rows.lastOrNull;
+    final showsProgress = (last is StepGroupRow && last.live) || (last is ItemRow && last.item is AssistantItem && (last.item as AssistantItem).streaming);
+    final working = s.agentBusy && pending == null && question == null && !showsProgress;
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: ShellAppBar(
@@ -388,13 +395,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   : ListView.builder(
                       controller: _scroll,
                       padding: EdgeInsets.fromLTRB(Space.x4, topInset + Space.x2, Space.x4, Space.x4),
-                      itemCount: s.chat.length + (s.agentBusy && pending == null && question == null ? 1 : 0),
+                      itemCount: rows.length + (working ? 1 : 0),
                       itemBuilder: (context, i) {
-                        if (i >= s.chat.length) return const _Working();
-                        return ChatItemView(item: s.chat[i], onOpenChild: _openChild, onOpenQuota: _openQuota, onOpenTurn: _showTurn);
+                        if (i >= rows.length) return const _Working();
+                        return ChatRowView(row: rows[i], onOpenChild: _openChild, onOpenQuota: _openQuota, onOpenTurn: _showTurn);
                       },
                     ),
             ),
+            if (todos != null && todos.isNotEmpty) TodoBar(todos: todos),
             PendingArea(session: s),
             if (s.queue.isNotEmpty) QueueStrip(session: s),
             if (s.autoAllowActive && s.permission != PermissionLevel.full)
@@ -511,218 +519,4 @@ class _Working extends StatelessWidget {
       ],
     ),
   );
-}
-
-class ChatItemView extends ConsumerWidget {
-  const ChatItemView({super.key, required this.item, this.onOpenChild, this.onOpenQuota, this.onOpenTurn});
-
-  /// 点回合脚注时打开本轮轨迹。
-  final void Function(TurnUsage turn)? onOpenTurn;
-
-  /// 被额度上限拦住的提示下面“去调额度上限”的去处。
-  final VoidCallback? onOpenQuota;
-  final ChatItem item;
-
-  /// 点“派子代理”那张卡时进子对话。
-  final void Function(String conversationId)? onOpenChild;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final showUsage = ref.watch(chatPrefsProvider).usage;
-    final c = context.colors;
-    final t = Theme.of(context).textTheme;
-    switch (item) {
-      case UserItem(:final text, :final images):
-        return Align(
-          alignment: Alignment.centerRight,
-          child: Container(
-            margin: const EdgeInsets.only(top: Space.x2, bottom: Space.x1, left: Space.x8),
-            padding: const EdgeInsets.symmetric(horizontal: Space.x4, vertical: Space.x3),
-            decoration: BoxDecoration(
-              color: c.accentSoft,
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(Radii.bubble),
-                topRight: Radius.circular(Radii.sm),
-                bottomLeft: Radius.circular(Radii.bubble),
-                bottomRight: Radius.circular(Radii.bubble),
-              ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (images.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: Space.x2),
-                    child: Wrap(
-                      spacing: Space.x1,
-                      runSpacing: Space.x1,
-                      alignment: WrapAlignment.end,
-                      children: [for (final path in images) ImageThumb(path: path, size: 64)],
-                    ),
-                  ),
-                SelectableText(text, style: t.bodyLarge),
-              ],
-            ),
-          ),
-        );
-      case AssistantItem(:final text, :final streaming):
-        return Align(
-          alignment: Alignment.centerLeft,
-          child: Container(
-            margin: const EdgeInsets.only(top: Space.x1, bottom: Space.x1, right: Space.x6),
-            padding: const EdgeInsets.symmetric(horizontal: Space.x4, vertical: Space.x3),
-            decoration: BoxDecoration(
-              color: c.surfaceMuted,
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(Radii.sm),
-                topRight: Radius.circular(Radii.bubble),
-                bottomLeft: Radius.circular(Radii.bubble),
-                bottomRight: Radius.circular(Radii.bubble),
-              ),
-            ),
-            child: SelectableText(streaming ? '$text▍' : text, style: t.bodyLarge),
-          ),
-        );
-      case final ToolItem tool:
-        return _ToolCard(tool: tool, onOpenChild: onOpenChild);
-      case UsageItem(:final turn):
-        if (!showUsage) return const SizedBox.shrink();
-        return TurnFootnote(turn: turn, onTap: onOpenTurn == null ? null : () => onOpenTurn!(turn));
-      case NoticeItem(:final text, :final isError):
-        final banner = InfoBanner(
-          text,
-          tone: isError ? BannerTone.danger : BannerTone.info,
-          margin: const EdgeInsets.symmetric(vertical: Space.x2),
-        );
-        // 被额度上限拦住：紧跟一个去调上限的入口。
-        if (!isError || !text.startsWith(kQuotaBlockedPrefix) || onOpenQuota == null) return banner;
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            banner,
-            TextButton.icon(onPressed: onOpenQuota, icon: const Icon(Icons.speed_outlined, size: 18), label: const Text('去调额度上限')),
-          ],
-        );
-    }
-  }
-}
-
-/// 工具名 → 人话。
-String describeTool(String name, String rawArgs) {
-  Map<String, dynamic> args = const {};
-  try {
-    final decoded = jsonDecode(rawArgs);
-    if (decoded is Map<String, dynamic>) args = decoded;
-  } on FormatException {
-    // 参数不是合法 JSON：只显示动作名
-  }
-  String a(String key) => '${args[key] ?? ''}';
-  return switch (name) {
-    'list_files' => '查看文件列表${a('path').isEmpty ? '' : ' ${a('path')}'}',
-    'read_file' => '读取 ${a('path')}',
-    'write_file' => '写入 ${a('path')}',
-    'delete_file' => '删除 ${a('path')}',
-    'run_command' => '执行 ${a('command')}',
-    'lowcode_get_page' => '读取低代码页面',
-    'lowcode_update_page' => '更新低代码页面',
-    'ask_user' => '向你提问：${a('question')}',
-    'web_search' => '联网搜索 ${a('query')}',
-    'read_skill' => '读技能 ${a('name')}',
-    'spawn_agent' => '派子代理${a('name').isEmpty ? '' : '“${a('name')}”'}：${a('task')}',
-    'team_board' => '查看任务板',
-    'team_task' => '更新任务板${a('title').isEmpty ? '' : '：${a('title')}'}',
-    'team_message' => '团队留言${a('to').isEmpty ? '' : '给 ${a('to')}'}',
-    'list_scheduled_tasks' => '查看自动化任务',
-    'schedule_task' => '安排自动化任务：${a('title')}',
-    _ => name,
-  };
-}
-
-class _ToolCard extends StatefulWidget {
-  const _ToolCard({required this.tool, this.onOpenChild});
-  final ToolItem tool;
-  final void Function(String conversationId)? onOpenChild;
-
-  @override
-  State<_ToolCard> createState() => _ToolCardState();
-}
-
-class _ToolCardState extends State<_ToolCard> {
-  bool _expanded = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.colors;
-    final t = Theme.of(context).textTheme;
-    final tool = widget.tool;
-    final (IconData icon, Color color) = tool.running
-        ? (Icons.more_horiz, c.textFaint)
-        : tool.denied
-        ? (Icons.block, c.warning)
-        : tool.ok
-        ? (Icons.check_circle_outline, c.accent)
-        : (Icons.error_outline, c.danger);
-    final mono = TextStyle(fontFamily: kMonoFont, fontFamilyFallback: kMonoFallback, fontSize: FontSize.xs, height: 1.5, color: c.textMuted);
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: Space.x1),
-      decoration: BoxDecoration(
-        color: c.surface,
-        borderRadius: BorderRadius.circular(Radii.lg),
-        border: Border.all(color: c.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          InkWell(
-            borderRadius: BorderRadius.circular(Radii.lg),
-            onTap: () => setState(() => _expanded = !_expanded),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: Space.x3, vertical: Space.x2),
-              child: Row(
-                children: [
-                  Icon(icon, size: 16, color: color),
-                  const SizedBox(width: Space.x2),
-                  Expanded(
-                    child: Text(
-                      describeTool(tool.name, tool.arguments),
-                      style: t.bodySmall?.copyWith(color: c.text),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  if (tool.childConversationId != null && widget.onOpenChild != null)
-                    InkWell(
-                      onTap: () => widget.onOpenChild!(tool.childConversationId!),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: Space.x2),
-                        child: Text('查看', style: t.bodySmall?.copyWith(color: c.accent)),
-                      ),
-                    ),
-                  if (tool.denied) Text('已拒绝', style: t.bodySmall?.copyWith(color: c.warning)),
-                  if (!tool.running && !tool.ok && !tool.denied) Text('失败', style: t.bodySmall?.copyWith(color: c.danger)),
-                  Icon(_expanded ? Icons.expand_less : Icons.expand_more, size: 18, color: c.textFaint),
-                ],
-              ),
-            ),
-          ),
-          if (_expanded)
-            Container(
-              constraints: const BoxConstraints(maxHeight: 220),
-              decoration: BoxDecoration(
-                color: c.codeBg,
-                border: Border(top: BorderSide(color: c.border)),
-                borderRadius: const BorderRadius.vertical(bottom: Radius.circular(Radii.lg)),
-              ),
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(Space.x3),
-                child: SelectableText('${tool.name} ${_clip(tool.arguments, 600)}\n\n${tool.result == null ? '执行中…' : _clip(tool.result!, 4000)}', style: mono),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  static String _clip(String s, int max) => s.length > max ? '${s.substring(0, max)}…' : s;
 }
