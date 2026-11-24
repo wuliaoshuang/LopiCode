@@ -146,25 +146,82 @@ abstract class BlockHost {
 - 一个接口跑完没有“返回”积木时，回 204 空响应。“返回”之后的积木不再执行。
 - 集合：存在内存里（进程重启就没了）；`id` 从 1 递增；找不到的 id 读出来是空。
 
-### 积木（op）与表达式（e）——最少要有这些，名字由做的人定并写回这里
+### 积木（op）与表达式（e）——最终的表（`lib/backend/backend_blocks.dart`，`test/backend_model_test.dart` 核对两边一致）
 
-- 复用前端语义的：`setVar`、`changeVar`、`if`、`repeat`、`log`，表达式 `text / num / bool / var / bin / not / join`。
-- 请求：`pathParam{name}`、`query{name}`、`bodyField{name}`、`body{}`、`header{name}`。
-- 返回：`respondJson{status, value}`、`respondText{status, value}`。
-- 数据：`dbInsert{collection, value, into?}`、`dbUpdate{collection, id, value}`、`dbDelete{collection, id}`；
-  表达式 `dbAll{collection}`、`dbGet{collection, id}`、`dbCount{collection}`。
-- 造值：`obj{fields:[{key, value}]}`、`field{of, key}`、`len{x}`、`isNull{x}`；`forEach{list, item}` ＋ body。
-- 外部请求 `fetch`：可以只生成代码，不参加一致性测试。
+积木盒分类：返回、数据、变量、流程、调试、网络。表达式分类：直接填、请求、数据、变量、运算、对象。
+
+<!-- be-ops:start -->
+| op | args | 说明 |
+| --- | --- | --- |
+| `respondJson` | `status`(表达式), `value`(表达式) | 返回数据（JSON），这个接口到此结束 |
+| `respondText` | `status`(表达式), `value`(表达式) | 返回纯文字，这个接口到此结束 |
+| `dbInsert` | `collection`(集合名), `value`(表达式), `into`(变量名，可空) | 往集合里加一条（值要是对象，自动带 `id`），加好的那条可以放进变量 |
+| `dbUpdate` | `collection`, `id`(表达式), `value`(表达式) | 只改给出的字段；`id` 不许改；找不到就不动 |
+| `dbDelete` | `collection`, `id`(表达式) | 删一条；找不到就不动 |
+| `setVar` | `name`(变量名), `value`(表达式) | 设置变量（什么值都能放，不按声明的类型转换） |
+| `changeVar` | `name`(变量名), `by`(表达式) | 变量加上一个数（两边先转数字） |
+| `if` | `cond`(表达式) ＋ `body` ＋ `else` | 如果…否则… |
+| `repeat` | `times`(表达式) ＋ `body` | 重复 N 次（运行时封顶 10000 次） |
+| `forEach` | `list`(表达式), `item`(变量名) ＋ `body` | 列表的每一项轮流放进变量；不是列表就一遍也不做 |
+| `log` | `value`(表达式) | 写一行到服务的标准输出 |
+| `fetch` | `url`(表达式), `method`(GET/POST), `data`(表达式，可空，POST 时当 JSON 提交), `into`(变量名，可空) ＋ `body`(成功后) ＋ `else`(失败后) | 请求别的网址，最多等 10 秒；2xx 算成功，响应文字放进变量 |
+<!-- be-ops:end -->
+
+<!-- be-exprs:start -->
+表达式（`e`）：`text{v}`、`num{v}`、`bool{v}`、`var{name}`、`bin{l, op, r}`（运算符同前端）、`not{x}`、`join{items:[…]}`、
+`pathParam{name}`、`query{name}`、`bodyField{name}`、`body{}`、`header{name}`（`name` 都是直接填的文字，读不到是空）、
+`dbAll{collection}`、`dbGet{collection, id}`、`dbFind{collection, key, value}`（字段 `key` 等于 `value` 的那些）、`dbCount{collection}`、
+`len{x}`、`isNull{x}`、`now{}`（世界标准时间的文字 `2026-11-24T06:00:00Z`）、
+`obj{fields:[…]}`、`pair{key, value}`、`field{of, key}`（`key` 是直接填的文字）。
+<!-- be-exprs:end -->
+
+- `obj` 的 `fields` 是一串 `pair`：`{"e":"obj","fields":[{"e":"pair","key":"title","value":{…}}]}`。这样“一串值”的参数种类（`exprList`）够用，
+  不用给 `LcArgKind` 加新种类；编辑器往 `fields` 里加一项时用 `newBeListItem('obj', 'fields')`。`pair` 只能出现在 `obj` 里，不单独挑（`beExprSpecsIn` 不列它）。
+- 比设计时多加的两个：`dbFind`（做“只看已完成的”这类筛选）和 `now`（记创建时间）。没有再多加。
+- 变量：`type` 只决定初始值，运行时什么值都能放（`dbInsert` 的 `into`、`forEach` 的 `item` 放的是对象）。每次请求开始时重置。
+- 校验（`validateBackend`）沿用前端的 `LcLogicIssue`（`handlerId`＝接口 id），后端特有的问题种类在 `BeIssueCode`。
+- 新建积木 / 表达式：`newBeBlock(op, doc)`、`newBeExpr(kind, doc, route)`；中文读法：`describeBeBlock / describeBeExpr / describeBeRoute`。
+
+### 值的规矩的细则（实现时定的，写死在一致性测试里）
+
+- **数字的写法**：整数且绝对值小于 1e15 → 不带小数点；否则保留 12 位有效数字（正好一半时远离 0，`0.1 + 0.2` 写成 `0.3`）、去掉末尾的 0，
+  指数在 -7 到 14 之间写普通小数，其余写 `1.5e-10`、`1e21`（不带加号）。
+- **文字转数字**：去掉两头的空格 / 制表 / 换行后是十进制写法（`-1.5`、`.5`、`1e3`）才算，其余（`0x10`、全角数字、`Infinity`、空文字）当 0；是→1，否→0。
+- **JSON 输出**：对象的键按 Unicode 码点排序（不是按写入顺序——这样每种语言都能做到一样）；不加空格；
+  文字只转义 `"`、`\`、U+0000–U+001F。
+- **转成文字**：空→空文字，是 / 否→`true` / `false`，列表 / 对象→它的 JSON。“等于”：类型一样直接比（列表 / 对象比 JSON），不一样都转文字再比。
+- **请求**：路径按 `/` 切段再逐段做百分号解码，空段忽略（`/todos/` ＝ `/todos`）；解码失败（`%zz`、不是合法 UTF-8）原样保留；
+  网址参数里 `+` 当空格、重名取第一个；请求内容不是合法 UTF-8 / JSON（含带 BOM、`NaN`）当成空；超出范围的数当 0；
+  不成对的代理项换成 U+FFFD；请求内容最多 1MB（超过回 413）。
+- **响应**：状态码取整后不在 200–599 里当 200；204 / 304 不带内容也不带 Content-Type；JSON 是 `application/json; charset=utf-8`，
+  文字是 `text/plain; charset=utf-8`；都带 `Access-Control-Allow-Origin: *`，`OPTIONS` 一律回 204（跨域预检）。
+- **路由**：按声明顺序匹配，先对上的先用（所以 `/todos/count` 要排在 `/todos/:id` 前面，校验会提示）；
+  地址没对上 404 `{"error":"没有这个接口"}`，地址对了方式不对 405，接口里出错 500。
+- **集合**：`id` 从 1 递增、删了不回收；往里加的不是对象就当空对象；读出来的记录是“当时的样子”（之后改集合不影响已经读出来的）。
 
 ### 各语言生成
 
 每种语言生成一个**不用装任何第三方包**就能启动的小工程（只用该语言标准库）＋ README（怎么启动）。这样手机上不用联网装依赖，
 也能在本机真跑来验证。框架版（Express / FastAPI / Spring Boot）是加分项，放最后，API 写法没对着官方文档核对的记进 docs/api-notes.md 标“未核对”。
 
+架构（`lib/backend/`）：积木先翻成**与语言无关的中间形式**（`backend_ir.dart` 的 `lowerBackend`）——所有运算都是对“运行时小库”的一次函数调用
+（`add(a, b)`、`dbGet("todos", id)`…，函数表是 `kBeRuntimeFns`，每个函数的规矩写在表里），语句只有七种（赋值、存临时值、调函数、如果、重复、逐项、返回）。
+值的规矩全在小库里，翻译这一层没有优先级和类型转换的问题。
+
+**加一种语言要写三样**（照 `target_node.dart` ＋ `runtime_node.dart` 抄一份改）：
+
+1. 运行时小库（一个字符串常量）：实现 `kBeRuntimeFns` 的每个函数，外加 `collection / route / start`。
+2. 一个 `BeCodeTarget` 子类（约 100 行）：字面量怎么写、变量叫什么、调小库函数怎么写、七种语句怎么写、路由文件怎么拼。
+3. 在 `backend_targets.dart` 的 `backendTargets` 里加一行；在 `test/backend_conformance_test.dart` 的 `_languages` 里加一行。
+   同一份样本模型和请求脚本（`test/support/backend_conformance.dart`）就会对着它跑；需要先编译的语言在生成器的 `buildCommands` 里写。
+
+生成的文件：入口（`server.js` / `server.py`，积木翻出来的，每块积木上面一行中文注释）＋小库（`lc_runtime.*`，每份都一样）＋ `README.md`。
+端口读环境变量 `PORT`（没有用文档里的 `port`），`HOST` 默认 `0.0.0.0`；启动后打印一行 `后端已启动：http://主机:端口`（测试靠它知道端口）。
+
 | 语言 | 用什么 | 本机能不能真跑 |
 | --- | --- | --- |
-| Node.js | `node:http` | 能（node 24） |
-| Python | `http.server` | 能（python 3.12） |
+| Node.js | `node:http` | 能（node 24）——**已做，一致性测试通过** |
+| Python | `http.server` | 能（python 3.12）——**已做，一致性测试通过** |
 | Go | `net/http` | 能（`~/workspace/tools/gosdk/go/bin/go` 1.25） |
 | Java | JDK 自带 `com.sun.net.httpserver`（JSON 自己带一个小实现） | 能（`~/workspace/tools/jdk`，JDK 21） |
 | PHP | 内置服务器 `php -S` 的路由脚本 | 不能（本机没有 php）——只做结构检查，标“未实际运行” |

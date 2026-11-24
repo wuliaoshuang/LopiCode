@@ -186,3 +186,22 @@
 - Android 需要 `RECORD_AUDIO`，并在 `queries` 里声明 `android.speech.RecognitionService`；麦克风权限只在用户点语音按钮后请求。
 - iOS / macOS 需要 `NSSpeechRecognitionUsageDescription` 和 `NSMicrophoneUsageDescription`。本仓库目前没有 iOS 目录，新增平台时须同时补这两项。
 - 状态：官方 API 与权限配置已核对；Widget 测试用假识别器覆盖，**尚未在真机验证识别质量、权限弹窗和厂商语音服务**。
+
+## 后端积木生成的代码里用到的接口（`lib/backend/runtime_node.dart`、`runtime_python.dart`）
+
+记录时间：2026-11-24。**这一节都没有对着官方文档逐条核对**（做的时候不许联网），是凭对标准库的了解写的，下面写明各自实际验证到什么程度。
+
+- Node.js “请求别的网址”：全局 `fetch(url, { method, body, headers, signal: AbortSignal.timeout(10000) })`，`res.ok` 判断 2xx，`res.text()` 取文字。
+  状态：**未核对官方文档**；在本机 Node 24.22.1 上实际跑过（请求自己的 GET / POST、对方回 404、连不上、不是 http 网址），结果符合预期。
+  没有实际验证的：真的等满 10 秒超时、https、跳转。
+- Python “请求别的网址”：`urllib.request.urlopen(urllib.request.Request(url, data=…, headers=…, method=…), timeout=10)`，4xx / 5xx 会抛 `HTTPError`（一律当失败）。
+  状态：**未核对官方文档**；在本机 Python 3.12.3 上实际跑过同样几种情况。没有实际验证的同上。
+- Node.js 服务：`node:http` 的 `createServer / listen / writeHead / end`，请求体用 `for await (const chunk of req)` 读；
+  `String.prototype.toWellFormed()`（所以写了“需要 Node 20 或更新”）、`TextDecoder("utf-8", { fatal: true, ignoreBOM: true })`、`Number.prototype.toExponential(11)`。
+  状态：**未核对官方文档**；本机一致性测试（121 条请求）通过。更老的 Node 版本没试过。
+- Python 服务：`http.server.ThreadingHTTPServer` + `BaseHTTPRequestHandler`（`do_GET` 等、`send_response / send_header / end_headers`），
+  数字的写法用 `decimal.Context(prec=12, rounding=ROUND_HALF_UP)`，JSON 用 `json.loads(parse_int=float, parse_constant=…)`。
+  状态：**未核对官方文档**；本机一致性测试通过。写了“需要 Python 3.8 或更新”是估计的，只在 3.12 上跑过。
+  已知差别：`http.server` 不解分块传输（`Transfer-Encoding: chunked`）的请求内容——不带 `Content-Length` 的请求内容会被当成没有；Node 版能读。
+- 跨域：所有响应带 `Access-Control-Allow-Origin: *`；`OPTIONS` 回 204 并带 `Access-Control-Allow-Methods`、`Access-Control-Allow-Headers: *`。
+  状态：**未核对**（没有用真浏览器试过跨域调用）。
