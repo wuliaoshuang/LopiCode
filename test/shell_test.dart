@@ -151,7 +151,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('聊天键盘弹出时隐藏底部导航，输入框贴着键盘；终端保留原避让', (tester) async {
+  testWidgets('键盘弹出时底部导航留在原位（键盘盖在它上面），聊天输入框贴着键盘；终端同样', (tester) async {
     usePhoneViewport(tester);
     final (env, project, session) = await openProject(tester);
     await tester.pumpWidget(appFor(env, ProjectShell(project: project, session: session)));
@@ -171,7 +171,8 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
 
     const keyboardTop = 844 - keyboard;
-    expect(nav, findsNothing, reason: '聊天输入时导航让位，不挡输入工具栏');
+    expect(nav, findsOneWidget, reason: '键盘升起时导航不隐藏');
+    expect(tester.getRect(nav), navBefore, reason: '导航留在屏幕最底部原位，不被键盘顶起');
     final inputRect = tester.getRect(input);
     expect(inputRect.bottom, lessThanOrEqualTo(keyboardTop), reason: '输入框在键盘上方');
     expect(inputRect.bottom, greaterThan(keyboardTop - 16), reason: '输入框贴着键盘');

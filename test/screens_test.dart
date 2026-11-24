@@ -227,7 +227,7 @@ void main() {
       addTearDown(tester.view.resetViewInsets);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
-      expect(find.byType(IconBottomNav), findsNothing, reason: '键盘弹出时聊天导航让位');
+      expect(tester.getRect(find.byType(IconBottomNav)).bottom, 844, reason: '键盘弹出时导航留在屏幕底部原位（键盘盖在它上面）');
       expect(find.byKey(const ValueKey('model-button')), findsOneWidget);
       expect(find.byKey(const ValueKey('voice-button')), findsOneWidget);
       await shot(tester, '04b-chat-keyboard-$suffix');
