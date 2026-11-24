@@ -1,5 +1,6 @@
 // 设计约束（Agent 聊天 · 390×844）— 2026-11-23 按霜霜的参考图（workspace/user/files/88187_0_7hlw.jpg）改版
-// - 近白底。顶部不是一条栏：左上悬浮白色圆按钮（汉堡），右上悬浮白色圆按钮（···），正中一个白色小胶囊写对话名和“工作区 / 模型名”。
+// - 近白底。顶部不是一条栏：左上悬浮圆按钮（汉堡），右上悬浮圆按钮（···）；对话名和“工作区 / 模型名”只是贴着左按钮的两行文字，
+//   不带胶囊底色和描边（2026-11-24 霜霜要求弱化），也不可点。
 //   聊天内容从它们下面滚过去，顶部渐隐。有子代理时，右上的圆变成胶囊，多一个子代理计数。
 // - 气泡：Agent 的回复是靠左的大圆角浅灰块（左上角小圆角），右边留出一截；我的消息是靠右的浅蓝块（右上角小圆角）。正文 16 号字。
 // - 输入区是贴底的白色圆角面板：上方多行输入，下方附件、权限、模型、语音、发送常驻。
@@ -351,7 +352,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       extendBodyBehindAppBar: true,
       appBar: ShellAppBar(
         fade: true,
-        pill: true,
         title: s.conversationTitle,
         subtitle: '${s.project.name} / ${model == null ? '未设置模型' : model.model.name}',
         actions: [

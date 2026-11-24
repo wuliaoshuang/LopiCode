@@ -134,9 +134,9 @@ void main() {
       await boot(tester);
       await addChannels(tester);
       await show(tester, SettingsScreen(workspace: project), push: true);
-      // 顶部：圆形返回按钮 + 居中标题
+      // 顶部：圆形返回按钮 + 贴着它左对齐的标题（2026-11-24 起全应用的标题都不再居中）
       expect(find.byTooltip('返回'), findsOneWidget);
-      expect(tester.getCenter(find.text('设置')).dx, closeTo(195, 1), reason: '标题居中');
+      expect(tester.getTopLeft(find.text('设置')).dx, tester.getRect(find.byTooltip('返回')).right + 12, reason: '标题贴着返回按钮');
       // 概况卡：新对话用的模型 + 运行环境，都是真实状态
       final overview = find.byKey(const Key('settings-overview'));
       expect(find.descendant(of: overview, matching: find.text('主力模型')), findsOneWidget);
