@@ -2,7 +2,8 @@
 // - 底部导航五项、图标配短标签：聊天、文件、终端、搭建、打包。选中 = 强调色实心，未选中 = 弱化描边。
 //   键盘弹出时导航留在键盘下面，不会被顶起来（外层 Scaffold 负责，见 project_shell.dart）。
 // - 侧边栏（左上汉堡按钮打开；形式是把主界面向右推开，见 push_drawer.dart）只放底部导航里没有的东西：工作区切换在最上，然后是预览、运行环境、对话列表，设置钉在最下。
-// - 每个页面的顶部是同一个样子：左边悬浮的白色圆按钮（汉堡 / 返回），标题居中，右边是这一页自己的操作（白色胶囊）。
+// - 每个页面的顶部是同一个样子（2026-11-24 改）：左边悬浮的圆按钮（汉堡 / 返回），标题贴着它左对齐、只有文字（不带胶囊底色和描边），
+//   右边是这一页自己的操作（胶囊）。对话页也一样，不再有正中的名字胶囊。
 // - 侧边栏里当前所在的那一项高亮（强调色浅底 + 强调色文字），其余是普通文字。
 import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/project_session.dart';
@@ -82,9 +83,11 @@ class _MenuButton extends StatelessWidget {
   Widget build(BuildContext context) => RoundIconButton(tooltip: '打开侧边栏', icon: Icons.drag_handle_rounded, onPressed: onPressed);
 }
 
-/// 统一的顶部：左圆按钮（汉堡 / 返回）+ 居中的两行标题 + 这一页的操作。
+/// 统一的顶部：左圆按钮（汉堡 / 返回）+ 贴着它的标题（只有文字，见 [BarTitle]）+ 这一页的操作。
+///
+/// 在外壳里不传 [subtitle] 时，第二行小字是工作区的名字。
 class ShellAppBar extends StatelessWidget implements PreferredSizeWidget {
-  const ShellAppBar({super.key, required this.title, this.subtitle, this.actions, this.fade = false, this.background, this.pill = false});
+  const ShellAppBar({super.key, required this.title, this.subtitle, this.actions, this.fade = false, this.background});
   final String title;
   final String? subtitle;
   final List<Widget>? actions;
@@ -93,46 +96,14 @@ class ShellAppBar extends StatelessWidget implements PreferredSizeWidget {
   final bool fade;
   final Color? background;
 
-  /// 标题装进一个白色小胶囊（对话页，对应参考图顶部正中的名字胶囊）。
-  final bool pill;
-
   @override
   Size get preferredSize => const Size.fromHeight(PageBar.kHeight);
 
   @override
   Widget build(BuildContext context) {
-    final t = Theme.of(context).textTheme;
-    final c = context.colors;
-    final sub = subtitle ?? ShellScope.maybeOf(context)?.projectName;
-    Widget middle = Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          title,
-          style: (pill ? t.titleSmall : t.titleLarge)?.copyWith(fontWeight: pill ? FontWeight.w600 : FontWeight.w400),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        if (sub != null && sub.isNotEmpty)
-          Text(
-            sub,
-            style: t.bodySmall?.copyWith(color: c.textFaint, height: 1.25),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-      ],
-    );
-    if (pill) {
-      middle = Container(
-        height: RoundIconButton.kSize,
-        padding: const EdgeInsets.symmetric(horizontal: Space.x4),
-        decoration: floatingDecoration(c, radius: BorderRadius.circular(RoundIconButton.kSize / 2)),
-        child: Center(widthFactor: 1, child: middle),
-      );
-    }
     return PageBar(
       leading: Builder(builder: (context) => shellLeading(context) ?? const SizedBox.shrink()),
-      title: middle,
+      title: BarTitle(title: title, subtitle: subtitle ?? ShellScope.maybeOf(context)?.projectName),
       actions: actions,
       fade: fade,
       background: background,
