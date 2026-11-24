@@ -75,6 +75,25 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  /// 点了“导出到项目”以后，等到结果提示出来为止。
+  ///
+  /// 导出是真的写磁盘：每建一个目录、写一个文件都要“真等一下 + 让测试时钟走一下”才往下走一步。
+  /// 以前这里用固定轮数的 settle（一共 24 小步），而 React 的 5 个文件正好要 24 步，一步慢了就等不到。
+  /// 现在等到结果出来为止；最多等约 20 秒，等不到就说清楚卡在哪。
+  Future<void> waitForExportResult(WidgetTester tester, String what) async {
+    final result = k('lc-export-result');
+    final watch = Stopwatch()..start();
+    while (result.evaluate().isEmpty && watch.elapsed < const Duration(seconds: 20)) {
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 10)));
+      await tester.pump(const Duration(milliseconds: 20));
+    }
+    if (result.evaluate().isEmpty) {
+      final button = tester.widget<FilledButton>(k('lc-export-write'));
+      fail('$what：等了 ${watch.elapsed.inSeconds} 秒，导出的结果提示还没出来（按钮${button.onPressed == null ? '还在“正在导出…”' : '已经恢复可点，但没有结果提示'}）');
+    }
+    await tester.pump(const Duration(milliseconds: 120));
+  }
+
   Map<String, String> readTree(String root) => {
     for (final f in Directory(root).listSync(recursive: true).whereType<File>()) p.relative(f.path, from: root).replaceAll(r'\', '/'): f.readAsStringSync(),
   };
@@ -116,7 +135,7 @@ void main() {
       final exportDir = p.join(project.dir, 'export');
       expect(Directory(exportDir).existsSync(), isFalse);
       await tester.tap(k('lc-export-write'));
-      await settle(tester);
+      await waitForExportResult(tester, '导出 Vue');
       expect(tester.widget<Text>(k('lc-export-result')).data, '已导出 2 个文件到 export/vue/');
       late Map<String, String> written;
       await tester.runAsync(() async => written = readTree(exportDir));
@@ -134,7 +153,7 @@ void main() {
       expect(tester.widget<Text>(k('lc-export-notes')).data, contains('StrictMode'));
       await shot(tester, 'lc-export-react-$suffix');
       await tester.tap(k('lc-export-write'));
-      await settle(tester);
+      await waitForExportResult(tester, '导出 React');
       expect(tester.widget<Text>(k('lc-export-result')).data, '已导出 5 个文件到 export/react/');
       await tester.runAsync(() async => written = readTree(exportDir));
       expect(written, {for (final f in vue.files) 'vue/${f.path}': f.content, for (final f in react.files) 'react/${f.path}': f.content});
@@ -182,7 +201,7 @@ void main() {
     await tester.runAsync(() async => File(p.join(project.dir, 'export')).writeAsString('占位'));
     await pumpHost(tester, env, session, ThemeMode.light);
     await tester.tap(k('lc-export-write'));
-    await settle(tester);
+    await waitForExportResult(tester, '写不进去');
     final result = tester.widget<Text>(k('lc-export-result')).data!;
     expect(result, startsWith('写文件失败'));
     expect(result, contains('export/vue'));
