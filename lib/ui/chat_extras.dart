@@ -9,6 +9,7 @@ import 'dart:async';
 
 import 'package:lopicode/session/chat_models.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/chrome.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// 聊天行里要用到、但行自己拿不到的几个动作。由聊天页在列表外面套一层提供；没套（比如只读的子对话页）就不出现对应按钮。
@@ -296,7 +297,7 @@ class CommandOutputPage extends StatelessWidget {
     final t = Theme.of(context).textTheme;
     return Scaffold(
       backgroundColor: c.canvas,
-      appBar: AppBar(backgroundColor: c.canvas, title: const Text('完整输出')),
+      appBar: PageBar(background: c.canvas, title: const Text('完整输出')),
       body: FutureBuilder<String?>(
         future: load(path),
         builder: (context, snap) {

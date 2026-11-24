@@ -581,14 +581,14 @@ void main() {
       expect(find.byKey(const ValueKey('output-full-text')), findsOneWidget);
       expect(find.textContaining('line 200 '), findsOneWidget, reason: '中间被省略的部分在这里看得到');
       await shot(tester, '97-output-full-$suffix');
-      await tester.pageBack();
+      await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
 
       stored = null;
       await tester.tap(find.text('查看完整输出'));
       await tester.pumpAndSettle();
       expect(find.textContaining('已经不在了'), findsOneWidget);
-      await tester.pageBack();
+      await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
 
       // 普通结果、或者页面没给读取入口：没有这个链接
