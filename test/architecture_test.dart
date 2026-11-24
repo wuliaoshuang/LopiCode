@@ -45,14 +45,7 @@ const _legacyNotifiers = {'lib/ui/push_drawer.dart PushDrawerController': '侧�
 const int kMaxLines = 600;
 
 /// 已经超过 [kMaxLines] 的文件和它们的上限（＝收紧规则时的行数，留一点余量）。只许变短。
-const _oversized = {
-  'lib/lowcode/builder_screen.dart': 1180,
-  'lib/ui/chat_screen.dart': 860,
-  'lib/ui/chat_panels.dart': 793,
-  'lib/ui/usage_ui.dart': 718,
-  'lib/ui/settings_agent.dart': 725,
-  'lib/ui/settings_ai.dart': 649,
-};
+const _oversized = {'lib/ui/chat_screen.dart': 860, 'lib/ui/chat_panels.dart': 793, 'lib/ui/usage_ui.dart': 718, 'lib/ui/settings_agent.dart': 725, 'lib/ui/settings_ai.dart': 649};
 
 List<String> libFiles() => [
   for (final e in Directory('lib').listSync(recursive: true))
