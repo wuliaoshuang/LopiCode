@@ -29,6 +29,9 @@ enum LcArgKind {
   /// 几个固定值里选一个（[LcArgSpec.choices]）。
   choice,
 
+  /// 数据集合的名字（只有后端积木用，见 lib/backend；前端页面里没有集合）。
+  collection,
+
   /// 直接填的文字 / 数字 / 是否（只有 text / num / bool 这三种表达式的 `v` 用）。
   literalText,
   literalNumber,

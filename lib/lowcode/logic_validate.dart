@@ -256,6 +256,8 @@ class _Validator {
         } else if (doc.find(value) == null) {
           _error(LcIssueCode.nodeNotFound, '它指的控件已经不在页面里了', arg: a.name);
         }
+      case LcArgKind.collection:
+        _error(LcIssueCode.badArg, '页面逻辑里没有“数据集合”', arg: a.name);
       case LcArgKind.choice:
         if (missing) {
           _error(LcIssueCode.missingArg, '“${a.label}”还没选', arg: a.name);

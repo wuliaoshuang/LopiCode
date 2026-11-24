@@ -101,25 +101,15 @@ typedef LcBlockPath = List<LcBlockStep>;
 /// 造一步路径（少写点字）。
 LcBlockStep lcStep(int index, {bool inElse = false}) => (inElse: inElse, index: index);
 
-/// 一个事件处理：`event` 是 click / input / load；`target` 是触发它的组件 id（load 没有）。
-class LcHandler {
-  LcHandler({required this.id, required this.event, this.target, List<LcBlock>? body}) : body = body ?? [];
-
-  String id;
-  String event;
-  String? target;
-  final List<LcBlock> body;
-
-  static const List<String> events = ['click', 'input', 'load'];
-
-  Map<String, dynamic> toJson() => {
-    'id': id,
-    'event': event,
-    if (target != null) 'target': target,
-    'body': [for (final b in body) b.toJson()],
-  };
-
-  LcHandler clone() => LcHandler(id: id, event: event, target: target, body: [for (final b in body) b.clone()]);
+/// “一串积木”的按路径操作（找、插、删、挪、遍历）。谁有一个 `body` 就能混进来用：
+/// 前端的事件处理（[LcHandler]）和后端的接口（lib/backend）共用这一套，积木编辑器也只认它。
+///
+/// `x` / `y` 是这串积木在积木画布上的位置（左上角，逻辑像素）；null＝还没摆过，编辑器打开时自动排。
+mixin LcBlockTree {
+  String get id;
+  List<LcBlock> get body;
+  double? x;
+  double? y;
 
   /// 按路径找积木；路径不对（越界、空）返回 null。
   LcBlock? blockAt(LcBlockPath path) {
@@ -192,7 +182,7 @@ class LcHandler {
   }
 
   /// `inner` 的前 `outer.length` 步是不是正好就是 `outer`（＝inner 在 outer 那块积木里面，或就是它）。
-  static bool _samePrefix(LcBlockPath outer, LcBlockPath inner) {
+  bool _samePrefix(LcBlockPath outer, LcBlockPath inner) {
     for (var i = 0; i < outer.length; i++) {
       if (outer[i].index != inner[i].index) return false;
       if (i > 0 && outer[i].inElse != inner[i].inElse) return false;
@@ -213,6 +203,34 @@ class LcHandler {
 
     walk(body, const [], false);
   }
+}
+
+/// 一个事件处理：`event` 是 click / input / load；`target` 是触发它的组件 id（load 没有）。
+class LcHandler with LcBlockTree {
+  LcHandler({required this.id, required this.event, this.target, List<LcBlock>? body, double? x, double? y}) : body = body ?? [] {
+    this.x = x;
+    this.y = y;
+  }
+
+  @override
+  String id;
+  String event;
+  String? target;
+  @override
+  final List<LcBlock> body;
+
+  static const List<String> events = ['click', 'input', 'load'];
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'event': event,
+    if (target != null) 'target': target,
+    if (x != null) 'x': x,
+    if (y != null) 'y': y,
+    'body': [for (final b in body) b.toJson()],
+  };
+
+  LcHandler clone() => LcHandler(id: id, event: event, target: target, body: [for (final b in body) b.clone()], x: x, y: y);
 
   static LcHandler? tryParse(Object? json) {
     if (json is! Map) return null;
@@ -220,7 +238,16 @@ class LcHandler {
     if (event is! String || !events.contains(event)) return null;
     final id = json['id'];
     final target = json['target'];
-    return LcHandler(id: id is String ? id : '', event: event, target: target is String && target.isNotEmpty ? target : null, body: LcBlock.parseList(json['body'], 0));
+    final x = json['x'];
+    final y = json['y'];
+    return LcHandler(
+      id: id is String ? id : '',
+      event: event,
+      target: target is String && target.isNotEmpty ? target : null,
+      body: LcBlock.parseList(json['body'], 0),
+      x: x is num && x.isFinite ? x.toDouble() : null,
+      y: y is num && y.isFinite ? y.toDouble() : null,
+    );
   }
 }
 
