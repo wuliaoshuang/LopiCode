@@ -1,15 +1,20 @@
 // 设计约束（积木编辑器整页，390 宽，浅色 + 深色）— 2026-11-24
 // - 这一页就是一张桌子：整屏是点阵画布，积木摆在上面；底部是积木盒（可收起）。主操作＝用手把积木拖来拖去拼起来。
 // - 顶栏只放三样：返回、标题、少数入口（宿主给的，例如“变量”）＋“问题”（有问题才带数字）＋“看代码”。
-// - 画布右下角（积木盒上方）浮着一小条：撤销、重做、缩放比例（点一下回到 100%）。不占画布的地方。
+// - 画布上没有常驻的浮条：撤销、重做、缩放比例（点一下回到 100%）在积木盒手柄条的右边（block_editor_dock_view.dart）。
+// - 积木盒面板可以上下拖：最矮只剩手柄条，最高顶到状态栏下沿（盖住顶栏）。所以它和“手上的积木”不在画布那一层里，
+//   而是盖在整页（顶栏 + 画布）上面的一层；顶栏不放进 Scaffold 的 appBar，自己摆在最上面。
 // - 选中一块积木：画布上方出现一条小工具条（这块的问题、复制、删除）；没选中就没有。
 // - 拖动时：积木盒换成“拖到这里删除”，别的浮动控件都收起来，眼里只有积木。
 // - 提示用一句话小条（两秒多自己消失），贴在积木盒上沿之上：不盖画布顶上那串的帽子；需要时带一个“撤销”。不弹对话框打断。
-// - 一块积木都没有时，画布中间一句话 + 一个往上走的箭头教第一步：从下面拿一块“事件”拖上来。
+//   面板高到画布放不下提示条时，提示条改放在面板里分类那一行的下面（不被面板盖住，也不挡手柄）。
+// - 一块积木都没有时，画布中间一句话 + 一个往上走的箭头教第一步：从下面拿一块“事件”拖上来（画布露出来不够高时不显示）。
 import 'dart:async';
 
+import 'package:lopicode/blocks/block_canvas_layout.dart';
 import 'package:lopicode/blocks/block_canvas_view.dart';
 import 'package:lopicode/blocks/block_editor_canvas_view.dart';
+import 'package:lopicode/blocks/block_editor_dock_view.dart';
 import 'package:lopicode/blocks/block_editor_drag_view.dart';
 import 'package:lopicode/blocks/block_editor_edit_view.dart';
 import 'package:lopicode/blocks/block_editor_fx_view.dart';
@@ -44,6 +49,7 @@ class BlockEditorView extends StatefulWidget {
     this.menuExtra,
     this.onHostChanged,
     this.paletteHeight = 248,
+    this.dockMemoryKey,
   });
 
   final BlockHost host;
@@ -61,14 +67,18 @@ class BlockEditorView extends StatefulWidget {
 
   /// 宿主的内容变了（改动、撤销）以后顺带通知外壳一声（比如顶栏上的数量要跟着变）。
   final VoidCallback? onHostChanged;
+
+  /// 积木盒面板默认档多高（不算屏幕底部的系统手势条）。
   final double paletteHeight;
+
+  /// 给了就在这次运行里记住面板停在多高（同一个名字的编辑器离开再回来还在那里）；不给就每次从默认档开始。
+  final String? dockMemoryKey;
 
   @override
   State<BlockEditorView> createState() => BlockEditorViewState();
 }
 
-class BlockEditorViewState extends State<BlockEditorView> with TickerProviderStateMixin, BkKitHolder, BkEditorCanvas, BkEditorDrag, BkEditorEdit {
-  bool paletteCollapsed = false;
+class BlockEditorViewState extends State<BlockEditorView> with TickerProviderStateMixin, BkKitHolder, BkEditorCanvas, BkEditorDrag, BkEditorEdit, BkEditorDock {
   String? _toast;
   String? _toastAction;
   VoidCallback? _onToastAction;
@@ -107,11 +117,9 @@ class BlockEditorViewState extends State<BlockEditorView> with TickerProviderSta
     disposeCanvas();
     disposeDrag();
     disposeEdit();
+    disposeDock();
     super.dispose();
   }
-
-  @override
-  double get dockHeight => editing != null ? 0 : (paletteCollapsed ? (drag != null ? 96 : BlockPaletteView.collapsedHeight) : widget.paletteHeight);
 
   @override
   void toast(String text, {String? actionLabel, VoidCallback? onAction}) {
@@ -167,60 +175,53 @@ class BlockEditorViewState extends State<BlockEditorView> with TickerProviderSta
     reduceMotion = MediaQuery.disableAnimationsOf(context);
     final all = layout; // 先排版：issues、选中都跟着刷新
     final errors = issues.where((i) => i.isError).length;
+    final bar = ShellAppBar(
+      title: widget.title,
+      subtitle: widget.subtitle,
+      actions: [
+        ...widget.extraActions,
+        IconButton(
+          key: const ValueKey('bk-issues'),
+          tooltip: issues.isEmpty ? '没有问题' : '${issues.length} 个问题',
+          onPressed: _showIssues,
+          icon: Badge(
+            isLabelVisible: issues.isNotEmpty,
+            backgroundColor: errors > 0 ? c.danger : c.warning,
+            label: Text('${issues.length}'),
+            child: Icon(issues.isEmpty ? Icons.check_circle_outline_rounded : Icons.error_outline_rounded),
+          ),
+        ),
+        IconButton(key: const ValueKey('bk-code'), tooltip: '看代码', onPressed: _showCode, icon: const Icon(Icons.code_rounded)),
+      ],
+    );
     return Scaffold(
       backgroundColor: kit.palette.canvas,
-      appBar: ShellAppBar(
-        title: widget.title,
-        subtitle: widget.subtitle,
-        actions: [
-          ...widget.extraActions,
-          IconButton(
-            key: const ValueKey('bk-issues'),
-            tooltip: issues.isEmpty ? '没有问题' : '${issues.length} 个问题',
-            onPressed: _showIssues,
-            icon: Badge(
-              isLabelVisible: issues.isNotEmpty,
-              backgroundColor: errors > 0 ? c.danger : c.warning,
-              label: Text('${issues.length}'),
-              child: Icon(issues.isEmpty ? Icons.check_circle_outline_rounded : Icons.error_outline_rounded),
-            ),
-          ),
-          IconButton(key: const ValueKey('bk-code'), tooltip: '看代码', onPressed: _showCode, icon: const Icon(Icons.code_rounded)),
-        ],
-      ),
       body: LayoutBuilder(
-        builder: (context, box) {
-          viewSize = Size(box.maxWidth, box.maxHeight);
-          if (!_focused) {
-            _focused = true;
-            final id = widget.focusScriptId;
-            final placed = id == null ? null : all.placed(id);
-            if (placed != null) {
-              selection = BlockSelection(placed.id, const []);
-              setPan(Offset(16 - placed.origin.dx, 72 - placed.origin.dy));
-            }
-          }
+        builder: (context, page) {
+          final safe = MediaQuery.paddingOf(context);
+          // 顶栏连同状态栏一共多高；下面就是编辑区（画布那一层）。
+          final barHeight = bar.preferredSize.height + safe.top;
+          layoutDock(area: page.maxHeight - safe.top, safeBottom: safe.bottom);
           final dragging = drag != null;
           final dock = dockHeight;
+          final room = page.maxHeight - barHeight - dock;
+          // 画布放不下提示条了（面板拖得很高）：提示条放到面板里、分类那一行下面。
+          final toastInPanel = _toast != null && editing == null && room < BkEditorDock.toastRoom + 16;
           return Stack(
-            key: viewKey,
             fit: StackFit.expand,
-            clipBehavior: Clip.hardEdge,
             children: [
-              Positioned.fill(key: const ValueKey('bk-canvas-layer'), child: buildCanvas(context)),
-              if (all.scripts.isEmpty && !dragging)
-                Positioned(
-                  key: const ValueKey('bk-empty-layer'),
-                  left: 32,
-                  right: 32,
-                  top: 0,
-                  bottom: dock,
-                  child: IgnorePointer(
-                    child: Center(child: BkEmptyGuide(nudge: _nudge)),
+              Column(
+                children: [
+                  SizedBox(height: barHeight, child: bar),
+                  Expanded(
+                    child: MediaQuery.removePadding(
+                      context: context,
+                      removeTop: true,
+                      child: _area(context, all, showToast: !toastInPanel),
+                    ),
                   ),
-                ),
-              if (selection != null && !dragging && editing == null) Positioned(key: const ValueKey('bk-selection-bar'), left: 12, right: 12, top: 8, child: _selectionBar(context)),
-              if (!dragging && editing == null) Positioned(key: const ValueKey('bk-tools'), right: 12, bottom: dock + 12, child: _tools(context)),
+                ],
+              ),
               // 带 key：别的浮动控件出现 / 消失时，积木盒不能被当成新的重建（手指正按在它上面拖）。
               if (editing == null)
                 Positioned(
@@ -232,10 +233,19 @@ class BlockEditorViewState extends State<BlockEditorView> with TickerProviderSta
                       ? buildTrash(context)
                       : BlockPaletteView(
                           host: host,
-                          height: widget.paletteHeight,
-                          collapsed: paletteCollapsed,
-                          onToggle: () => setState(() => paletteCollapsed = !paletteCollapsed),
-                          onPick: quickAdd,
+                          height: panelHeight,
+                          handleTrailing: buildDockTools(context, onUndo: host.canUndo ? _undo : null, onRedo: host.canRedo ? _redo : null),
+                          onHandleTap: dockToggle,
+                          onResizeDown: dockHold,
+                          onResizeStart: dockResizeStart,
+                          onResizeUpdate: dockResizeUpdate,
+                          onResizeEnd: dockResizeEnd,
+                          onPick: (item) {
+                            final rev = host.revision;
+                            quickAdd(item);
+                            // 真加上去了：面板比默认档高就让开，看得见加在了哪。
+                            if (host.revision != rev) dockYield();
+                          },
                           onDragStart: (item, global, grab) {
                             commitEdit();
                             dragStartFromPalette(item, global, grab);
@@ -245,29 +255,73 @@ class BlockEditorViewState extends State<BlockEditorView> with TickerProviderSta
                           onDragCancel: dragCancel,
                         ),
                 ),
-              ...buildInlineEdit(context),
-              if (dragging) buildDragPiece(context),
-              // 提示条贴在积木盒上沿之上（右下角那一小条工具的上面）：不盖顶上那串的帽子；键盘弹出时页面整体上移，它还在键盘上面。
-              if (_toast != null)
+              if (toastInPanel) Positioned(key: const ValueKey('bk-toast-layer'), left: 24, right: 24, top: page.maxHeight - dock + BlockPaletteView.headHeight + 8, child: _toastBar()),
+              // 手上的积木：最上面一层，只画在编辑区的范围里（和以前一样不盖顶栏）。
+              if (dragging)
                 Positioned(
-                  key: const ValueKey('bk-toast-layer'),
-                  left: 24,
-                  right: 24,
-                  bottom: dock + (dragging || editing != null ? 16 : 68),
-                  child: BkToastBar(
-                    text: _toast!,
-                    actionLabel: _toastAction,
-                    onAction: () {
-                      final f = _onToastAction;
-                      _hideToast();
-                      f?.call();
-                    },
-                  ),
+                  left: 0,
+                  right: 0,
+                  top: barHeight,
+                  bottom: 0,
+                  child: Stack(clipBehavior: Clip.hardEdge, children: [buildDragPiece(context)]),
                 ),
             ],
           );
         },
       ),
+    );
+  }
+
+  Widget _toastBar() => BkToastBar(
+    text: _toast!,
+    actionLabel: _toastAction,
+    onAction: () {
+      final f = _onToastAction;
+      _hideToast();
+      f?.call();
+    },
+  );
+
+  /// 编辑区：画布和画布上的浮层（积木盒、手上的积木在它外面那一层）。
+  Widget _area(BuildContext context, BkCanvasLayout all, {required bool showToast}) {
+    return LayoutBuilder(
+      builder: (context, box) {
+        viewSize = Size(box.maxWidth, box.maxHeight);
+        if (!_focused) {
+          _focused = true;
+          final id = widget.focusScriptId;
+          final placed = id == null ? null : all.placed(id);
+          if (placed != null) {
+            selection = BlockSelection(placed.id, const []);
+            setPan(Offset(16 - placed.origin.dx, 72 - placed.origin.dy));
+          }
+        }
+        final dragging = drag != null;
+        final dock = dockHeight;
+        return Stack(
+          key: viewKey,
+          fit: StackFit.expand,
+          clipBehavior: Clip.hardEdge,
+          children: [
+            Positioned.fill(key: const ValueKey('bk-canvas-layer'), child: buildCanvas(context)),
+            if (all.scripts.isEmpty && !dragging && box.maxHeight - dock >= BkEditorDock.guideRoom)
+              Positioned(
+                key: const ValueKey('bk-empty-layer'),
+                left: 32,
+                right: 32,
+                top: 0,
+                bottom: dock,
+                child: IgnorePointer(
+                  child: Center(child: BkEmptyGuide(nudge: _nudge)),
+                ),
+              ),
+            if (selection != null && !dragging && editing == null) Positioned(key: const ValueKey('bk-selection-bar'), left: 12, right: 12, top: 8, child: _selectionBar(context)),
+            ...buildInlineEdit(context),
+            // 提示条贴在积木盒上沿之上：不盖顶上那串的帽子；键盘弹出时页面整体上移，它还在键盘上面。
+            if (_toast != null && showToast) Positioned(key: const ValueKey('bk-toast-layer'), left: 24, right: 24, bottom: dock + 16, child: _toastBar()),
+          ],
+        );
+      },
     );
   }
 
@@ -280,37 +334,6 @@ class BlockEditorViewState extends State<BlockEditorView> with TickerProviderSta
       shape: const StadiumBorder(),
       clipBehavior: Clip.antiAlias,
       child: Row(mainAxisSize: MainAxisSize.min, children: children),
-    );
-  }
-
-  Widget _tools(BuildContext context) {
-    final c = context.colors;
-    Widget button(String key, IconData icon, String tip, VoidCallback? onTap) => IconButton(
-      key: ValueKey(key),
-      tooltip: tip,
-      onPressed: onTap,
-      icon: Icon(icon, size: 20),
-      color: c.text,
-      disabledColor: c.textMuted.withValues(alpha: 0.4),
-      constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-    );
-    return _pill(
-      context,
-      children: [
-        button('bk-undo', Icons.undo_rounded, '撤销', host.canUndo ? _undo : null),
-        button('bk-redo', Icons.redo_rounded, '重做', host.canRedo ? _redo : null),
-        InkWell(
-          key: const ValueKey('bk-zoom'),
-          onTap: () => setState(() => setZoom(1, Offset(viewSize.width / 2, (viewSize.height - dockHeight) / 2))),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(6, 13, 14, 13),
-            child: Text(
-              '${(zoom * 100).round()}%',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: c.textMuted, fontWeight: FontWeight.w600),
-            ),
-          ),
-        ),
-      ],
     );
   }
 

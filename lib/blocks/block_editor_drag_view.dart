@@ -1,7 +1,8 @@
 // 设计约束（拖积木这一层，390 宽，浅色 + 深色）— 2026-11-24
 // - 手上的积木画在最上面一层（盖过积木盒），跟着手指走，略放大带投影；它原来的位置立刻合拢。
 // - 靠近能拼的地方：那里的积木让开，露出一块落点阴影，手机轻轻“咔”一下；表达式则是目标槽亮起描边。
-// - 拖动时底部的积木盒换成一整条“拖到这里删除”，手指进去变红；从积木盒新拿出来的积木拖回去＝不要了。
+// - 拖动时底部的积木盒换成一整条“拖到这里删除”（和面板一样高，面板收起时也不矮于 96），手指进去变红；从积木盒新拿出来的积木拖回去＝不要了。
+//   一开始拖，面板要是比默认档高就自己滑回默认档，把画布让出来。
 // - 拿起来：积木从原大“被拿起”放大到 104%（约 110 毫秒，带一点过冲）；原位的积木滑着合拢。
 // - 靠近落点：手上的积木被“吸”过去一半（看得出它要去哪），落点处的积木滑开让位、露出同形的落点阴影。
 // - 松手：飞向落点（120 毫秒，缓出），到位立刻改模型，然后画布上那块轻弹一下（100 毫秒，1.04 → 0.98 → 1）＋亮一圈。
@@ -72,6 +73,9 @@ mixin BkEditorDrag on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Tick
 
   /// 底部那一条（积木盒 / 垃圾桶）现在多高。
   double get dockHeight;
+
+  /// 要往画布上放东西了：面板比默认档高就让开。
+  void dockYield();
   void toast(String text, {String? actionLabel, VoidCallback? onAction});
 
   @override
@@ -115,6 +119,7 @@ mixin BkEditorDrag on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Tick
   void _begin(BkDragSession session, Offset viewAt, Offset grab) {
     // 原位合拢是滑着合的：从拿起来之前的样子滑到“拿走以后”。
     motion.jump(session.normal);
+    dockYield();
     setState(() {
       _drag = session;
       _fingerAt = viewAt;
@@ -405,35 +410,38 @@ mixin BkEditorDrag on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Tick
     final c = context.colors;
     final hot = overTrash;
     final n = _drag?.deleteCount ?? 0;
-    return AnimatedContainer(
+    // 高度不做动画：它跟着面板走（面板自己会滑），再做一层就总慢一拍。
+    return SizedBox(
       key: const ValueKey('bk-trash'),
-      duration: const Duration(milliseconds: 120),
       height: dockHeight,
-      decoration: BoxDecoration(
-        // 整片染成淡红就够了：满屏大红太吓人，也会盖过手上那块积木。
-        color: hot ? Color.alphaBlend(c.danger.withValues(alpha: 0.18), c.surface) : c.surface,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-        border: Border(
-          top: BorderSide(color: hot ? c.danger : c.border, width: hot ? 2 : 1),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 120),
+        decoration: BoxDecoration(
+          // 整片染成淡红就够了：满屏大红太吓人，也会盖过手上那块积木。
+          color: hot ? Color.alphaBlend(c.danger.withValues(alpha: 0.18), c.surface) : c.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+          border: Border(
+            top: BorderSide(color: hot ? c.danger : c.border, width: hot ? 2 : 1),
+          ),
         ),
-      ),
-      // 字放在上沿：手指和手上的积木在下面，不会把它挡住。
-      alignment: Alignment.topCenter,
-      padding: const EdgeInsets.only(top: 18),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          AnimatedScale(
-            scale: hot ? 1.25 : 1,
-            duration: const Duration(milliseconds: 120),
-            child: Icon(hot ? Icons.delete_forever_rounded : Icons.delete_outline_rounded, color: hot ? c.danger : c.textMuted, size: 26),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            hot ? (n > 1 ? '松手删除（$n 块）' : '松手删除') : '拖到这里删除',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: hot ? c.danger : c.textMuted, fontWeight: FontWeight.w600),
-          ),
-        ],
+        // 字放在上沿：手指和手上的积木在下面，不会把它挡住。
+        alignment: Alignment.topCenter,
+        padding: const EdgeInsets.only(top: 18),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AnimatedScale(
+              scale: hot ? 1.25 : 1,
+              duration: const Duration(milliseconds: 120),
+              child: Icon(hot ? Icons.delete_forever_rounded : Icons.delete_outline_rounded, color: hot ? c.danger : c.textMuted, size: 26),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              hot ? (n > 1 ? '松手删除（$n 块）' : '松手删除') : '拖到这里删除',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: hot ? c.danger : c.textMuted, fontWeight: FontWeight.w600),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -369,7 +369,7 @@ void main() {
     expect(t.bottom, lessThanOrEqualTo(dock.top));
     expect(t.top, greaterThan(dock.top - 130));
     expect(t.overlaps(hatOnScreen), isFalse);
-    expect(t.overlaps(tester.getRect(find.byKey(const ValueKey('bk-undo')))), isFalse, reason: '也不盖右下角的撤销');
+    expect(t.overlaps(tester.getRect(find.byKey(const ValueKey('bk-undo')))), isFalse, reason: '也不盖手柄条上的撤销');
     await tester.pumpAndSettle(const Duration(seconds: 3));
   });
 
