@@ -1,6 +1,7 @@
 // 一个工作区开着的终端：有哪些会话、当前是哪个。
 //
 // 终端会话本身（[TerminalSession]）拿着进程和 xterm 的屏幕缓冲区，是“干活的对象”，不放进不可变状态里复制；
+// 没有会话是正常状态：安卓上运行环境没装好时不开本机 shell（见 LinuxRuntime.localShellAllowed），终端页显示安装引导。
 // 这里的状态只记“有哪些、当前哪个”，外加一个 [TerminalsState.tick]：某个会话的 Ctrl 点亮状态、
 // Ubuntu“没有响应”标记变了就加一，终端页订阅它重画。
 import 'package:lopicode/project_session.dart';
@@ -36,6 +37,7 @@ class TerminalsNotifier extends Notifier<TerminalsState> {
   int _localCounter = 0;
   int _sshCounter = 0;
   int _linuxCounter = 0;
+  bool _wasUsable = false;
 
   @override
   TerminalsState build() {
@@ -46,9 +48,44 @@ class TerminalsNotifier extends Notifier<TerminalsState> {
       }
       _owned.clear();
     });
-    // 带界面的工作区一打开就有一个本机会话；不带界面的（自动化任务）不开终端
+    // 不带界面的（自动化任务）不开终端
     if (session.headless || session.disposed) return const TerminalsState();
-    return TerminalsState(sessions: List.unmodifiable([_track(_newLocal(forceLocal: false))]));
+    final runtime = session.app.runtime;
+    _wasUsable = runtime.usable;
+    runtime.changeListeners.add(_onRuntimeChanged);
+    ref.onDispose(() => runtime.changeListeners.remove(_onRuntimeChanged));
+    // 带界面的工作区一打开就有一个会话：Ubuntu（装好了）或本机 shell（只在允许的平台，见 LinuxRuntime.localShellAllowed）。
+    // 安卓上没装运行环境时一个都不开：终端页显示安装引导。
+    final first = _newLocal(forceLocal: false);
+    return TerminalsState(sessions: List.unmodifiable([if (first != null) _track(first)]));
+  }
+
+  /// 运行环境变了（装好了 / 卸掉了）。只在不许用本机 shell 的平台上有事要做：
+  /// - 装好了而还没有 Ubuntu 会话：自动开一个并切过去（安装引导的“装好后直接进终端”）；
+  /// - 环境没了：把 Ubuntu 会话都关掉（它们已经进不去了），终端页回到安装引导。
+  ///
+  /// 只在“能用 ↔ 不能用”翻转的那一下动手：用户自己关掉了 Ubuntu 会话的话，不会因为环境记了一行日志又被开回来。
+  void _onRuntimeChanged() {
+    final runtime = session.app.runtime;
+    final usable = runtime.usable;
+    if (usable == _wasUsable) return;
+    _wasUsable = usable;
+    if (!_alive || runtime.localShellAllowed) return;
+    final hasLinux = state.sessions.any((t) => t.backend is LinuxShellBackend);
+    if (usable && !hasLinux) {
+      addLocal();
+    } else if (!usable && hasLinux) {
+      final keep = <TerminalSession>[];
+      for (final t in state.sessions) {
+        if (t.backend is LinuxShellBackend) {
+          _owned.remove(t);
+          t.dispose();
+        } else {
+          keep.add(t);
+        }
+      }
+      state = state.copyWith(sessions: keep, active: keep.isEmpty ? 0 : state.active.clamp(0, keep.length - 1));
+    }
   }
 
   /// 这里建的会话，销毁时要负责关掉。
@@ -68,10 +105,13 @@ class TerminalsNotifier extends Notifier<TerminalsState> {
     return t;
   }
 
-  TerminalSession _newLocal({required bool forceLocal}) {
+  /// 造一个新会话（还没放进列表）。不许用本机 shell 而环境又不能用时返回 null。
+  TerminalSession? _newLocal({required bool forceLocal}) {
     final runtime = session.app.runtime;
     final project = session.project;
-    if (!forceLocal && runtime.shouldUseLinux) {
+    if (!runtime.localShellAllowed && !runtime.usable) return null;
+    // 不许用本机 shell 的平台：只要环境能用就进 Ubuntu，之前连续失败过也照样试（失败了显示原因和出路，不退回本机）。
+    if (!runtime.localShellAllowed || (!forceLocal && runtime.shouldUseLinux)) {
       final t = TerminalSession(
         title: 'Ubuntu ${++_linuxCounter}',
         backend: LinuxShellBackend(runtime: runtime, projectDir: project.dir, guestCwd: project.linuxPath, spawner: session.linuxPtySpawner, fallbackSpawner: session.ptySpawner),
@@ -114,9 +154,13 @@ class TerminalsNotifier extends Notifier<TerminalsState> {
     return t;
   }
 
-  /// 新开一个本机会话。Ubuntu 环境能用就进 Ubuntu，否则是手机自带的 sh。
-  /// [forceLocal] 为 true 时不管环境装没装，都开手机自带的 sh。
-  TerminalSession addLocal({bool forceLocal = false}) => _add(_newLocal(forceLocal: forceLocal));
+  /// 新开一个会话。Ubuntu 环境能用就进 Ubuntu；否则在允许本机 shell 的平台（桌面调试、宿主机测试）开本机 shell。
+  /// 安卓上环境不能用时什么都不开，返回 null（调用方切到终端页，那里是安装引导）。
+  /// [forceLocal] 为 true 时不管环境装没装都开本机 shell——同样只在允许的平台有效。
+  TerminalSession? addLocal({bool forceLocal = false}) {
+    final t = _newLocal(forceLocal: forceLocal);
+    return t == null ? null : _add(t);
+  }
 
   /// 新开一个 SSH 会话。[onUnknownHost] 在第一次连这台主机时弹指纹确认。
   TerminalSession addSsh(SshConfig config, {HostKeyPrompt? onUnknownHost}) {
@@ -132,14 +176,16 @@ class TerminalsNotifier extends Notifier<TerminalsState> {
     );
   }
 
-  /// 关掉第 [index] 个会话。只剩一个时不关。
+  /// 关掉第 [index] 个会话。只剩一个时不关——除非终端页此刻本来就该显示安装引导
+  /// （安卓上环境没装好，剩下的只会是 SSH 会话），那时可以关到一个不剩。
   void close(int index) {
-    if (!_alive || state.sessions.length <= 1 || index < 0 || index >= state.sessions.length) return;
+    final min = session.app.runtime.needsSetup ? 0 : 1;
+    if (!_alive || state.sessions.length <= min || index < 0 || index >= state.sessions.length) return;
     final list = [...state.sessions];
     final gone = list.removeAt(index);
     _owned.remove(gone);
     gone.dispose();
-    state = state.copyWith(sessions: list, active: state.active.clamp(0, list.length - 1));
+    state = state.copyWith(sessions: list, active: list.isEmpty ? 0 : state.active.clamp(0, list.length - 1));
   }
 
   void select(int index) {

@@ -17,7 +17,9 @@ import 'package:lopicode/session/automation_tools.dart';
 import 'package:lopicode/session/chat_models.dart';
 import 'package:lopicode/session/conversation.dart';
 import 'package:lopicode/session/session_core.dart';
+import 'package:lopicode/ssh/ssh_shell_backend.dart';
 import 'package:lopicode/state/workspace_chat.dart';
+import 'package:lopicode/terminal/terminal_session.dart';
 
 /// 造“派子代理”工具的函数（在 subagents.dart 里；从外面传进来免得两个文件互相拿着对方）。
 typedef SpawnToolFactory = ExtraTool Function(ChatRunNotifier parent, Conversation root, List<Skill> skills);
@@ -67,6 +69,10 @@ class ToolboxBuilder {
     },
   );
 
+  /// run_command 的回显写进哪个终端：第一个不是 SSH 的会话（Ubuntu，桌面上是本机 shell）。
+  /// 安卓上没装运行环境时可能一个都没有，或者只有 SSH 会话——那就不回显，免得把本机命令的输出混进远程主机的屏幕里。
+  TerminalSession? _echoTerminal() => core.session.terminals.where((t) => t.backend is! SshShellBackend).firstOrNull;
+
   Future<AgentToolbox> build(ChatRunNotifier run, Conversation root, List<Skill> skills, {List<String>? writeScope}) async {
     final app = core.app;
     final session = core.session;
@@ -85,7 +91,7 @@ class ToolboxBuilder {
     if (!run.unattended) extras.addAll(automationTools(store: app.automations, project: core.project, approve: (request) => requestApproval(run, request)));
     return AgentToolbox(
       guard: core.guard,
-      runner: session.commandRunnerFactory?.call() ?? LinuxCommandRunner(app.runtime, guestCwd: core.project.linuxPath, onOutput: (t) => session.terminals.firstOrNull?.append(t)),
+      runner: session.commandRunnerFactory?.call() ?? LinuxCommandRunner(app.runtime, guestCwd: core.project.linuxPath, onOutput: (t) => _echoTerminal()?.append(t)),
       requestApproval: (r) => requestApproval(run, r),
       autoApprove: () => core.cards.autoAllowed(root.id),
       // 权限和计划模式每次都现查目录里的最新值：跑到一半改了档位、开了计划模式，下一步就生效

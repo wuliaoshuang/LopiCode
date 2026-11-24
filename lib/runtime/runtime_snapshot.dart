@@ -28,6 +28,8 @@ class RuntimeView {
     required this.shouldUseLinux,
     required this.compatMode,
     required List<String> logLines,
+    this.localShellAllowed = true,
+    this.compatPinned = false,
   }) : missingLauncherFiles = List.unmodifiable(missingLauncherFiles),
        packs = List.unmodifiable(packs),
        installedPacks = Set.unmodifiable(installedPacks),
@@ -67,6 +69,15 @@ class RuntimeView {
   final bool shouldUseLinux;
   final bool compatMode;
   final List<String> logLines;
+
+  /// 能不能用本机 shell（安卓上不能，见 `LinuxRuntime.localShellAllowed`）。
+  final bool localShellAllowed;
+
+  /// 兼容模式是不是已经定下来了（这时“重试”就是兼容模式）。
+  final bool compatPinned;
+
+  /// 必须先装好运行环境才有终端可用。
+  bool get needsSetup => !localShellAllowed && !usable;
 
   bool get installed => phase == RuntimePhase.installed;
   bool get busy => phase == RuntimePhase.downloading || phase == RuntimePhase.verifying || phase == RuntimePhase.extracting;

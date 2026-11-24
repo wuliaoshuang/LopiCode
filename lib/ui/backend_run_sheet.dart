@@ -106,7 +106,7 @@ class BeRunSheet extends StatelessWidget {
             ),
           const SectionLabel('2 · 要执行的命令'),
           if (command != null) _code(context, 'be-run-command', command, '命令'),
-          _para(context, '点“在终端启动”会切到终端页，在一个叫“后端”的终端里替你打这一行（再点一次会先停掉上一次的）。工具没装的话，终端里会提示找不到命令。'),
+          _para(context, '点“在终端启动”会切到终端页，在一个叫“后端”的终端里替你打这一行（再点一次会先停掉上一次的）。工具没装的话，终端里会提示找不到命令；连运行环境都还没装的话，终端页会先带你装。'),
           const SectionLabel('3 · 停止和地址'),
           _para(context, '停止：在终端底下那排键里点 Ctrl，再按 C。${target.dataInMemory ? '数据存在内存里，服务一停就没了。' : '数据存在后端目录的 lc_data.json 里，重启还在。'}'),
           _code(context, 'be-run-url', url, '地址'),

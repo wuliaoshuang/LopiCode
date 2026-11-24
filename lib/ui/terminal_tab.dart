@@ -1,10 +1,15 @@
 // 设计约束（终端 · 390×844）
 // - 屏幕几乎全留给终端：xterm 仿真，等宽 13px，深浅色都用 codeBg。点一下屏幕弹键盘，直接打字。
-// - 顶上一行只管“会话”：会话标签 + 新建（本机 shell / SSH 远程主机）。
+// - 顶上一行只管“会话”：会话标签 + 新建（Ubuntu 环境 / SSH 远程主机；桌面调试时还有本机 shell）。
+// - 安卓上不用手机自带的命令行（没有 git、node、python）。平台判断只在 LinuxRuntime.localShellAllowed 一处：
+//   · 运行环境没装好、也没有别的会话：整页换成安装引导（lib/ui/terminal_setup_view.dart），会话行和按键行都不出现；
+//   · 装了但 Ubuntu 没起来：会话行还在，终端区换成“启动失败”页（原因 + 重试 / 兼容模式重试 / 一键诊断 / 连接 SSH）；
+//   · 桌面平台和宿主机测试：和以前一样可以开本机 shell（开发调试用）。
 // - 底下一排手机键盘没有的键（Esc / Tab / Ctrl / 方向键 / 常用符号 / 清屏），横向可滚。
 //   Ctrl 是粘滞键：点亮后下一个字母变成控制字符（Ctrl 再点 C = 中断）。
 //   “中文”也在这排：默认每按一个键立刻进终端；点亮后才让输入法攒拼音选字。
-// - Ubuntu 进去后一直没输出：终端下方出一条提示，三个出路各占一个按钮，不让人对着空屏。
+// - Ubuntu 进去后一直没输出：终端下方出一条提示，三个出路各占一个按钮，不让人对着空屏
+//   （兼容模式重试、去做一键诊断，第三个在安卓上是“连接 SSH”，桌面上是“先用本机 shell”）。
 // - 没有单独的输入行：真正的终端里输入就在光标处。
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lopicode/core/stores.dart';
@@ -12,12 +17,14 @@ import 'package:lopicode/project_session.dart';
 import 'package:lopicode/runtime/linux_shell_backend.dart';
 import 'package:lopicode/ssh/ssh_config.dart';
 import 'package:lopicode/ssh/ssh_connect_screen.dart';
+import 'package:lopicode/state/runtime_state.dart';
 import 'package:lopicode/state/workspace_terminals.dart';
 import 'package:lopicode/terminal/terminal_input.dart';
 import 'package:lopicode/terminal/terminal_session.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/app_ref.dart';
 import 'package:lopicode/ui/shell.dart';
+import 'package:lopicode/ui/terminal_setup_view.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:xterm/xterm.dart';
 
@@ -34,8 +41,9 @@ class _TerminalTabState extends ConsumerState<TerminalTab> {
   TerminalSession? _startedFor;
 
   ProjectSession get s => widget.session;
-  // 工作区刚关掉的那一帧列表已经空了：先用着上一个，免得越界
-  TerminalSession get term => ref.read(terminalsProvider(s)).current ?? _startedFor!;
+  // 一个会话都没有是正常状态（安卓上运行环境没装好）：这时是 null，页面显示安装引导。
+  // 工作区刚关掉的那一帧列表也是空的：先用着上一个，免得闪一下。
+  TerminalSession? get _term => ref.read(terminalsProvider(s)).current ?? (appOf(context).runtime.needsSetup ? null : _startedFor);
 
   @override
   void initState() {
@@ -52,7 +60,8 @@ class _TerminalTabState extends ConsumerState<TerminalTab> {
   }
 
   void _startCurrent() {
-    if (identical(_startedFor, term)) return;
+    final term = ref.read(terminalsProvider(s)).current;
+    if (term == null || identical(_startedFor, term)) return;
     // 等第一帧排完版、终端知道自己有几行几列，再启动 shell。
     final target = _startedFor = term;
     WidgetsBinding.instance.addPostFrameCallback((_) => target.ensureStarted());
@@ -67,13 +76,14 @@ class _TerminalTabState extends ConsumerState<TerminalTab> {
 
   void _newSession() {
     final saved = SshConfig.load(appOf(context).settings);
+    final runtime = appOf(context).runtime;
     showModalBottomSheet<void>(
       context: context,
       builder: (context) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (appOf(context).runtime.usable)
+            if (runtime.usable)
               ListTile(
                 key: const Key('new-linux-session'),
                 leading: const Icon(Icons.memory_outlined),
@@ -85,15 +95,30 @@ class _TerminalTabState extends ConsumerState<TerminalTab> {
                   s.addTerminal();
                 },
               ),
-            ListTile(
-              leading: const Icon(Icons.phone_android),
-              title: const Text('本机 shell'),
-              subtitle: const Text('手机自带的 sh，在项目目录里打开'),
-              onTap: () {
-                Navigator.pop(context);
-                s.addTerminal(forceLocal: true);
-              },
-            ),
+            // 还没装运行环境（这时开着的只会是 SSH 会话）：给一个去装的入口
+            if (runtime.needsSetup)
+              ListTile(
+                key: const Key('new-session-install-runtime'),
+                leading: const Icon(Icons.download_outlined),
+                title: const Text('安装 Ubuntu 运行环境'),
+                subtitle: const Text('装好后终端里能用 git、node、python'),
+                onTap: () {
+                  Navigator.pop(context);
+                  ShellScope.maybeOf(this.context)?.go(ShellDest.runtime);
+                },
+              ),
+            // 本机 shell 只在桌面调试 / 宿主机测试时有（见 LinuxRuntime.localShellAllowed）；安卓上没有这个入口
+            if (runtime.localShellAllowed)
+              ListTile(
+                key: const Key('new-local-session'),
+                leading: const Icon(Icons.computer_outlined),
+                title: const Text('本机 shell'),
+                subtitle: const Text('这台机器自带的 shell，在项目目录里打开'),
+                onTap: () {
+                  Navigator.pop(context);
+                  s.addTerminal(forceLocal: true);
+                },
+              ),
             ListTile(
               key: const Key('new-ssh-session'),
               leading: const Icon(Icons.dns_outlined),
@@ -141,6 +166,10 @@ class _TerminalTabState extends ConsumerState<TerminalTab> {
   Widget build(BuildContext context) {
     // 会话列表、当前是哪个、Ctrl 的点亮状态、Ubuntu“没有响应”的提示：都从这里订阅
     ref.watch(terminalsProvider(s));
+    // 运行环境装没装好：决定显示安装引导还是终端
+    final runtime = ref.watch(runtimeProvider);
+    final term = _term;
+    if (term == null) return runtime.needsSetup ? TerminalSetupView(onConnectSsh: _newSsh) : const SizedBox.expand();
     final c = context.colors;
     final t = Theme.of(context).textTheme;
     final dark = Theme.of(context).brightness == Brightness.dark;
@@ -148,6 +177,9 @@ class _TerminalTabState extends ConsumerState<TerminalTab> {
     final chinese = settings.getBool(SettingKeys.terminalChineseIme);
     final backend = term.backend;
     final stalledBackend = backend is LinuxShellBackend && backend.stalled ? backend : null;
+    final failedBackend = backend is LinuxShellBackend && backend.failure != null ? backend : null;
+    // 平时只剩一个会话时不让关；没装运行环境时（剩下的只会是 SSH 会话）可以关到一个不剩，回到安装引导
+    final closable = s.terminals.length > 1 || runtime.needsSetup;
     return Column(
       children: [
         SizedBox(
@@ -173,11 +205,11 @@ class _TerminalTabState extends ConsumerState<TerminalTab> {
                         child: InkWell(
                           onTap: () => s.selectTerminal(i),
                           child: Padding(
-                            padding: EdgeInsets.only(left: Space.x3, right: s.terminals.length > 1 ? Space.x1 : Space.x3),
+                            padding: EdgeInsets.only(left: Space.x3, right: closable ? Space.x1 : Space.x3),
                             child: Row(
                               children: [
                                 Text(s.terminals[i].title, style: t.labelLarge?.copyWith(color: active ? c.accent : c.textMuted)),
-                                if (s.terminals.length > 1)
+                                if (closable)
                                   IconButton(
                                     tooltip: '关闭会话',
                                     onPressed: () => s.closeTerminal(i),
@@ -208,53 +240,59 @@ class _TerminalTabState extends ConsumerState<TerminalTab> {
             ],
           ),
         ),
-        Expanded(
-          child: ColoredBox(
-            color: c.codeBg,
-            child: TerminalInputView(
-              key: ObjectKey(term),
-              session: term,
-              focusNode: _focus,
-              theme: _theme(c, dark),
-              textStyle: const TerminalStyle(fontSize: 13, height: 1.3, fontFamily: kMonoFont, fontFamilyFallback: kMonoFallback),
-              padding: const EdgeInsets.symmetric(horizontal: Space.x2, vertical: Space.x1),
-              mode: chinese ? TerminalImeMode.chinese : TerminalImeMode.direct,
+        if (failedBackend != null)
+          Expanded(
+            child: TerminalFailureView(backend: failedBackend, reason: failedBackend.failure!, onConnectSsh: _newSsh, projectDir: s.project.dir),
+          )
+        else ...[
+          Expanded(
+            child: ColoredBox(
+              color: c.codeBg,
+              child: TerminalInputView(
+                key: ObjectKey(term),
+                session: term,
+                focusNode: _focus,
+                theme: _theme(c, dark),
+                textStyle: const TerminalStyle(fontSize: 13, height: 1.3, fontFamily: kMonoFont, fontFamilyFallback: kMonoFallback),
+                padding: const EdgeInsets.symmetric(horizontal: Space.x2, vertical: Space.x1),
+                mode: chinese ? TerminalImeMode.chinese : TerminalImeMode.direct,
+              ),
             ),
           ),
-        ),
-        if (stalledBackend != null) _StalledBar(backend: stalledBackend),
-        Container(
-          height: 52,
-          decoration: BoxDecoration(
-            color: c.surface,
-            border: Border(top: BorderSide(color: c.border)),
+          if (stalledBackend != null) _StalledBar(backend: stalledBackend, localShellAllowed: runtime.localShellAllowed, onConnectSsh: _newSsh),
+          Container(
+            height: 52,
+            decoration: BoxDecoration(
+              color: c.surface,
+              border: Border(top: BorderSide(color: c.border)),
+            ),
+            child: ListView(
+              key: const Key('terminal-keys'),
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: Space.x2, vertical: 4),
+              children: [
+                _Key('Esc', onTap: () => term.sendKey(TerminalKey.escape)),
+                _Key('Tab', tooltip: '补全', onTap: () => term.sendKey(TerminalKey.tab)),
+                _Key('Ctrl', tooltip: '点亮后再按字母，例如 Ctrl 再按 C 是中断', active: term.ctrlArmed, onTap: term.toggleCtrl),
+                _Key('↑', onTap: () => term.sendKey(TerminalKey.arrowUp)),
+                _Key('↓', onTap: () => term.sendKey(TerminalKey.arrowDown)),
+                _Key('←', onTap: () => term.sendKey(TerminalKey.arrowLeft)),
+                _Key('→', onTap: () => term.sendKey(TerminalKey.arrowRight)),
+                for (final ch in const ['/', '-', '|', '~', '>', '&', '*', '"']) _Key(ch, onTap: () => term.sendText(ch)),
+                _Key(
+                  '中文',
+                  tooltip: '点亮后输入法可以打拼音选字；不点亮时每按一个键立刻进终端',
+                  active: chinese,
+                  onTap: () {
+                    settings.setLater(SettingKeys.terminalChineseIme, !chinese); // 内存里立刻生效，写盘在后台
+                    setState(() {});
+                  },
+                ),
+                _Key('清屏', onTap: term.clear),
+              ],
+            ),
           ),
-          child: ListView(
-            key: const Key('terminal-keys'),
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: Space.x2, vertical: 4),
-            children: [
-              _Key('Esc', onTap: () => term.sendKey(TerminalKey.escape)),
-              _Key('Tab', tooltip: '补全', onTap: () => term.sendKey(TerminalKey.tab)),
-              _Key('Ctrl', tooltip: '点亮后再按字母，例如 Ctrl 再按 C 是中断', active: term.ctrlArmed, onTap: term.toggleCtrl),
-              _Key('↑', onTap: () => term.sendKey(TerminalKey.arrowUp)),
-              _Key('↓', onTap: () => term.sendKey(TerminalKey.arrowDown)),
-              _Key('←', onTap: () => term.sendKey(TerminalKey.arrowLeft)),
-              _Key('→', onTap: () => term.sendKey(TerminalKey.arrowRight)),
-              for (final ch in const ['/', '-', '|', '~', '>', '&', '*', '"']) _Key(ch, onTap: () => term.sendText(ch)),
-              _Key(
-                '中文',
-                tooltip: '点亮后输入法可以打拼音选字；不点亮时每按一个键立刻进终端',
-                active: chinese,
-                onTap: () {
-                  settings.setLater(SettingKeys.terminalChineseIme, !chinese); // 内存里立刻生效，写盘在后台
-                  setState(() {});
-                },
-              ),
-              _Key('清屏', onTap: term.clear),
-            ],
-          ),
-        ),
+        ],
       ],
     );
   }
@@ -296,8 +334,12 @@ class _Key extends StatelessWidget {
 
 /// Ubuntu 进去后一直没有输出时的提示条：一行说明，下面三个出路各占一行按钮位。
 class _StalledBar extends StatelessWidget {
-  const _StalledBar({required this.backend});
+  const _StalledBar({required this.backend, required this.localShellAllowed, required this.onConnectSsh});
   final LinuxShellBackend backend;
+
+  /// 能不能退回本机 shell（安卓上不能：第二个出路换成“连接 SSH”）。
+  final bool localShellAllowed;
+  final VoidCallback onConnectSsh;
 
   @override
   Widget build(BuildContext context) {
@@ -322,7 +364,9 @@ class _StalledBar extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: TextButton(key: const Key('stalled-use-local'), onPressed: backend.switchToLocal, child: const Text('先用本机 shell')),
+                child: localShellAllowed
+                    ? TextButton(key: const Key('stalled-use-local'), onPressed: backend.switchToLocal, child: const Text('先用本机 shell'))
+                    : TextButton(key: const Key('stalled-use-ssh'), onPressed: onConnectSsh, child: const Text('连接 SSH')),
               ),
               Expanded(
                 child: TextButton(key: const Key('stalled-diagnose'), onPressed: () => ShellScope.maybeOf(context)?.go(ShellDest.runtime), child: const Text('去做一键诊断')),

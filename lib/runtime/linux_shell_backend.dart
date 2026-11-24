@@ -17,9 +17,11 @@ typedef PtyArgsSpawner = PtyProcess Function(
 
 /// 终端后端：在伪终端里跑 PRoot，进到 Ubuntu 的 bash。
 ///
-/// 起不来的时候不能把人卡在黑屏上：
-/// - 第一次失败：屏幕上说明原因，按回车重试，重试会改用兼容模式；
-/// - 连续失败到上限：退回手机自带的 sh，并告诉用户去“运行环境”页看日志。
+/// 起不来的时候不能把人卡在黑屏上。分两种平台（判断在 `LinuxRuntime.localShellAllowed`）：
+/// - 安卓（不许用本机 shell）：一失败就进“启动失败”状态（[failure] 有原因），终端页据此换成失败页，
+///   给出重试、兼容模式重试、一键诊断、连接 SSH 四条出路；**不退回手机自带的 sh**。
+/// - 桌面 / 宿主机测试（允许本机 shell，开发调试用）：和以前一样——第一次失败提示按回车重试（改用兼容模式），
+///   连续失败到上限退回本机 shell。
 class LinuxShellBackend implements TerminalBackend {
   LinuxShellBackend({
     required this.runtime,
@@ -45,12 +47,22 @@ class LinuxShellBackend implements TerminalBackend {
   /// 进去后这么久一个字都没输出，算“没有响应”（PRoot 活着但卡住了）。
   final Duration stallTimeout;
 
-  /// 现在是不是处于“没有响应”状态。界面据此显示三个出路：兼容模式重试、退回本机、去诊断。
+  /// 现在是不是处于“没有响应”状态。界面据此显示三个出路：兼容模式重试、连接 SSH（桌面上是退回本机）、去诊断。
   bool get stalled => _stalled;
   bool _stalled = false;
 
-  /// “没有响应”状态变了：终端列表接这个回调，通知终端页重画。
+  /// 启动失败的真实原因；没失败（或已经在重试）是 null。只在不许用本机 shell 的平台上会有值。
+  String? get failure => _failure;
+  String? _failure;
+
+  /// “没有响应”或“启动失败”状态变了：终端列表接这个回调，通知终端页重画。
   void Function()? onStalledChanged;
+
+  void _setFailure(String? value) {
+    if (_failure == value) return;
+    _failure = value;
+    onStalledChanged?.call();
+  }
 
   void _setStalled(bool value) {
     if (_stalled == value) return;
@@ -92,7 +104,16 @@ class LinuxShellBackend implements TerminalBackend {
     _rows = rows;
     if (_closed || isRunning) return;
     if (_fallback != null) return _fallback!.start(columns: columns, rows: rows);
-    if (!runtime.shouldUseLinux) return _startFallback(runtime.lastLaunchError);
+    if (!runtime.shouldUseLinux) {
+      if (runtime.localShellAllowed) return _startFallback(runtime.lastLaunchError);
+      if (!runtime.usable) {
+        // 环境没装（或被卸掉了）：不开本机 shell，如实说进不去。
+        _setFailure(runtime.installed ? '这个安装包里缺少进入 Ubuntu 要用的文件，进不去。' : '运行环境还没有安装。');
+        return;
+      }
+      // 装了但之前连续失败：这次是用户主动再试，照常往下走，不退回本机 shell。
+    }
+    _setFailure(null);
 
     final command = runtime.prootCommand(guestCommand: guestLoginShell, projectDir: projectDir, guestCwd: guestCwd);
     final startedAt = DateTime.now();
@@ -128,7 +149,7 @@ class LinuxShellBackend implements TerminalBackend {
       runtime.recordStall(stallTimeout);
       _emit(
         '\r\n\x1b[33mUbuntu 环境 ${stallTimeout.inSeconds} 秒了还没有任何响应，多半是卡在启动这一步。\r\n'
-        '下面有三个办法：改用兼容模式重试、先退回本机 shell、去“运行环境”页做一键诊断。\x1b[0m\r\n',
+        '下面有三个办法：改用兼容模式重试、${runtime.localShellAllowed ? '先退回本机 shell' : '改连 SSH 远程主机'}、去“运行环境”页做一键诊断。\x1b[0m\r\n',
       );
     });
     pty.output.cast<List<int>>().transform(const Utf8Decoder(allowMalformed: true)).listen((text) {
@@ -165,6 +186,12 @@ class LinuxShellBackend implements TerminalBackend {
 
   Future<void> _afterFailure() async {
     if (_closed) return;
+    if (!runtime.localShellAllowed) {
+      final reason = runtime.lastLaunchError ?? '没有拿到具体原因';
+      _emit('\r\n\x1b[33mUbuntu 环境没能启动：$reason\x1b[0m\r\n');
+      _setFailure(reason);
+      return;
+    }
     if (runtime.shouldUseLinux) {
       _emit('\r\n\x1b[33mUbuntu 环境没能启动：${runtime.lastLaunchError}\r\n按回车再试一次（会改用兼容模式）。\x1b[0m\r\n');
     } else {
@@ -198,7 +225,17 @@ class LinuxShellBackend implements TerminalBackend {
     _releaseKeepAlive();
   }
 
-  /// “没有响应”时的出路一：结束卡住的进程，改用兼容模式再进一次。
+  /// 启动失败后的“重试”：清掉失败计数，按原来的方式再进一次（没定下兼容模式的话就是默认模式）。
+  Future<void> retry() async {
+    if (_closed || _fallback != null) return;
+    _dropStalled();
+    runtime.resetLaunchFailures();
+    runtime.log('用户选择：重试进入 Ubuntu');
+    _emit('\r\n\x1b[2m正在重新进入 Ubuntu…\x1b[0m\r\n');
+    await start(columns: _columns, rows: _rows);
+  }
+
+  /// “没有响应”/“启动失败”时的出路：结束卡住的进程，改用兼容模式再进一次。
   Future<void> retryCompat() async {
     if (_closed) return;
     _dropStalled();
@@ -208,9 +245,9 @@ class LinuxShellBackend implements TerminalBackend {
     await start(columns: _columns, rows: _rows);
   }
 
-  /// “没有响应”时的出路二：结束卡住的进程，这个会话改用手机自带的 sh。
+  /// “没有响应”时的出路二（只在允许本机 shell 的平台上有）：结束卡住的进程，这个会话改用本机 shell。
   Future<void> switchToLocal() async {
-    if (_closed || _fallback != null) return;
+    if (_closed || _fallback != null || !runtime.localShellAllowed) return;
     _dropStalled();
     runtime.log('用户选择：这个会话退回本机 shell');
     _emit('\r\n\x1b[33m已退回手机自带的 sh。Ubuntu 的问题可以到侧边栏“运行环境”页做一键诊断。\x1b[0m\r\n\r\n');

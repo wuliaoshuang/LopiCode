@@ -90,9 +90,9 @@ class ProjectSession {
   /// 测试用：换掉“带参数的伪终端”（进 Ubuntu 用的那种）。
   PtyArgsSpawner? linuxPtySpawner;
 
-  /// 新开一个本机会话。Ubuntu 环境能用就进 Ubuntu，否则是手机自带的 sh。
-  /// [forceLocal] 为 true 时不管环境装没装，都开手机自带的 sh。
-  TerminalSession addTerminal({bool forceLocal = false}) => _terminalsCtl.addLocal(forceLocal: forceLocal);
+  /// 新开一个会话。Ubuntu 环境能用就进 Ubuntu，否则在允许本机 shell 的平台（桌面调试、测试）开本机 shell；
+  /// 安卓上环境没装好时不开，返回 null（终端页是安装引导）。[forceLocal] 只在允许本机 shell 的平台有效。
+  TerminalSession? addTerminal({bool forceLocal = false}) => _terminalsCtl.addLocal(forceLocal: forceLocal);
 
   /// 新开一个 SSH 会话。[onUnknownHost] 在第一次连这台主机时弹指纹确认。
   TerminalSession addSshTerminal(SshConfig config, {HostKeyPrompt? onUnknownHost}) => _terminalsCtl.addSsh(config, onUnknownHost: onUnknownHost);
