@@ -74,6 +74,9 @@ class LocalShellRunner implements CommandRunner {
 /// 一条命令的输出最多收集这么多字符（约 2 MB）；再多的只回显到终端，不留。
 const int kMaxCollectedOutputChars = 2000000;
 
+/// 进程结束以后，最多再等这么久把剩下的输出读完（正常情况下输出早就读完了，一点都不用等）。
+const Duration kOutputDrainGrace = Duration(seconds: 2);
+
 /// 启动一个进程，收集并回显它的输出，超时就结束它。
 Future<CommandResult> runAndCollect(Future<Process> Function() start, {required Duration timeout, void Function(String text)? onOutput, String startError = '无法启动'}) async {
   final Process process;
@@ -90,6 +93,9 @@ Future<CommandResult> runAndCollect(Future<Process> Function() start, {required 
 
   final out = process.stdout.transform(const Utf8Decoder(allowMalformed: true)).listen(collect, onError: (_) {});
   final err = process.stderr.transform(const Utf8Decoder(allowMalformed: true)).listen(collect, onError: (_) {});
+  // 先把“读完了”的 Future 拿到手再等退出码：输出可能比退出码先结束，之后再拿就永远等不到了，
+  // 每条命令都会白等满下面的兜底时限。
+  final drained = Future.wait([out.asFuture<void>(), err.asFuture<void>()]);
   var timedOut = false;
   final code = await process.exitCode.timeout(
     timeout,
@@ -99,7 +105,8 @@ Future<CommandResult> runAndCollect(Future<Process> Function() start, {required 
       return -1;
     },
   );
-  await Future.wait([out.asFuture<void>(), err.asFuture<void>()]).timeout(const Duration(seconds: 2), onTimeout: () => const []);
+  // 进程结束了输出却没读完：留在后台的子进程（`xxx &`）、被杀掉的进程的子进程还攥着管道。最多再等这么久。
+  await drained.timeout(kOutputDrainGrace, onTimeout: () => const []);
   await out.cancel();
   await err.cancel();
   return CommandResult(exitCode: code, output: buffer.toString(), timedOut: timedOut);
