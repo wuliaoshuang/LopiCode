@@ -294,3 +294,40 @@
 - 自动压缩那一次请求：只发一条 system + 一条 user 的纯文字，不带 `tools`，三种协议都是最普通的请求形状；用量照常从各自的用量字段读。
 - **都没有用真实接口验证过**（没有 Key，也不许花钱）。
 
+
+## 语言工具的一键安装（`lib/runtime/runtime_sources.dart` 的 `runtimePacks`、`lib/runtime/pack_install.dart`）
+
+2026-11-25 加（真机反馈第三轮第 3 条：后端“运行”时所选语言的工具没装就自动装）。核对方式：只读了下面这些网页的文字，
+**没有下载任何安装包，也没有在 PRoot arm64 里真装过**（开发机是 x86 的 Linux，没有那个环境）。
+
+生成的后端代码要什么版本（读 `lib/backend/target_*.dart` 和设计文档得来）：Node 20+、Python 3.8+、Go 1.18+、JDK 11+（要 javac）、
+PHP 估计 7.4+（PHP 那份代码从没运行过）。下面选的版本都够。
+
+| 项 | 装法 | 来源网址 | 核对日期 | 状态 |
+| --- | --- | --- | --- | --- |
+| Go | 官方包 `go1.26.11.linux-arm64.tar.gz`，61MB，sha256 `6c2f29b458b5add0835f18b776f69c8881a6d88428f1484a6da55755e620757e` | https://go.dev/dl/ | 2026-11-25 | 下载页上有这一行（文件名、大小、校验值）。**文件本身没下载过**；下载地址按 `https://go.dev/dl/<文件名>` 拼，未实测 |
+| Go 的国内源 | 同一个文件，从 `https://golang.google.cn/dl/<文件名>` 下 | https://golang.google.cn/dl/ | 2026-11-25 | 页面列出的版本、文件、校验值和 go.dev 一致。**下载地址未实测** |
+| Go 的阿里云镜像 | 没用 | https://mirrors.aliyun.com/golang/ | 2026-11-25 | 页面打不开（超时），**未核对**，所以没用它 |
+| Go 用 apt 装（`golang-go`） | 没用 | packages.ubuntu.com 的 `golang-go`、`golang-1.22-go` 页 | 2026-11-25 | 页面打不开，**未核对**包体积，所以没选这条路 |
+| Go 装好后占多少 | 界面写“约 240 MB” | — | 2026-11-25 | **估的**：开发机上 Go 1.25 amd64 解开是 236MB；arm64 的 1.26.11 没量过 |
+| JDK | `apt install openjdk-21-jdk-headless` | https://packages.ubuntu.com/noble/openjdk-21-jdk-headless | 2026-11-25 | 包存在；arm64 包 79,697.7 kB、装好 94,118 kB（页面上是 21.0.3+9-1ubuntu1 这一版的数，现在源里的版本可能更新） |
+| JDK 的依赖 | `openjdk-21-jre-headless` | https://packages.ubuntu.com/noble/openjdk-21-jre-headless | 2026-11-25 | arm64 包 44,765.0 kB、装好 198,195 kB。它自己的依赖（ca-certificates-java、java-common、libnss3 等）体积**未核对** |
+| JDK 总下载量、占用 | 界面写“下载约 130 MB，装好后占约 300 MB” | 上面两页 | 2026-11-25 | **估的**：79.7 + 44.8 = 124.5MB，加依赖按 130 算；占用 94 + 198 = 292MB，按 300 算 |
+| OpenJDK 17 | 没用 | packages.ubuntu.com 的 `openjdk-17-jdk-headless` 页 | 2026-11-25 | 页面打不开，**未核对**是否更小，所以用了核对得到的 21 |
+| PHP | `apt install php-cli` | https://packages.ubuntu.com/noble/php-cli | 2026-11-25 | 包存在（2:8.3+93ubuntu2，4.5 kB，依赖 php8.3-cli） |
+| PHP 的依赖 | `php8.3-cli` | https://packages.ubuntu.com/noble/php8.3-cli | 2026-11-25 | arm64 包 1,808.1 kB、装好 5,759 kB；再依赖 php8.3-common、php8.3-opcache、php8.3-readline。`php8.3-common` 的页面打不开，**总量未核对**，所以界面上 PHP 不写体积、也不弹确认 |
+| Node.js、Python、Git | 沿用原来的装法，没有改 | 见 [linux-runtime.md](linux-runtime.md) | — | 这次没有重新核对；体积没有数据，界面上不写数字 |
+
+自己定的：
+
+- **要先问一次的门槛：下载量 100 MB**（`kPackConfirmBytes`）。现在只有 JDK 过线。没有体积数据的（Node.js、Python、Git、PHP）不问。
+- Go 选官方包不选 apt：官方包的大小和校验值核对得到，apt 那条路核对不了；而且 Go 向后兼容，1.26 编得了 `go 1.18` 的工程。
+- Go 的版本和校验值写死在代码里（不从下载源取校验值）。以后要升版本：改 `goVersion` 和 `goArchiveSha256`，两个都从 go.dev/dl 抄。
+
+**未实测**（都要等真机）：
+
+- 六项的安装脚本在 PRoot 里能不能跑完；`openjdk-21` 装完时 `ca-certificates-java` 的收尾脚本在 PRoot 里会不会出错；Go 的工具链在 PRoot 里能不能编译。
+- 失败原因的分类（`classifyPackFailure`）认的是 apt、dpkg、curl、tar、sha256sum 报错的原话，是照这些工具的常见输出写的，**没有在真机上一条条触发过**；
+  认不出来时归到“别的原因”，把退出码和最后三行输出原样给她。
+- 取消安装是杀掉 PRoot 进程（带 `--kill-on-exit`）；apt 的子进程是不是都跟着停、被打断后 dpkg 的状态要不要收拾，没实测。
+  脚本开头加了 `dpkg --configure -a`（失败不管）来收拾上次被打断的安装。

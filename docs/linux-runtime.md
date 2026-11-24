@@ -165,7 +165,15 @@ sha256 `a91d5a93010193712d346d761372b7c9db6dfcf093893161c64ca107f05914f2`
 | Python 3.12 | `apt install python3 python3-pip python3-venv` | noble 源里有 python3 3.12.3 |
 | Git | `apt install git` | noble 源里有 git 2.43.0 |
 
-**这三项的安装脚本一次都没有真的执行过**（要在真机上先确认 PRoot 能跑）。
+| Go 1.26.11 | 下载官方 `go1.26.11.linux-arm64.tar.gz`（国内源 `golang.google.cn/dl`，官方源 `go.dev/dl`），用写死在代码里的 sha256 核对后解到 `/usr/local/go`，在 `/usr/local/bin` 放 `go`、`gofmt` 两个链接 | 两个下载页列出的文件、大小（61MB）、sha256 一致（2026-11-25 核对）；文件本身没有下载过 |
+| Java（JDK 21） | `apt install openjdk-21-jdk-headless`（带 javac，不带图形界面部分） | noble 源里有这个包（arm64 79.7MB，依赖 openjdk-21-jre-headless 44.8MB）；总下载量“约 130 MB”是估的 |
+| PHP 8.3 | `apt install php-cli`（noble 里指向 php8.3-cli） | noble 源里有；总下载量没核对，界面上不写数字 |
+
+这六项是同一份清单（`lib/runtime/runtime_sources.dart` 的 `runtimePacks`），安装、取消、失败原因分类在 `lib/runtime/pack_install.dart`。
+后端积木点“运行”时，所选语言对应的那一项没装会自动装好再启动（`lib/state/backend_run.dart`，2026-11-25 真机反馈第三轮）；
+下载量过 100 MB 的（现在只有 JDK）先问一次。来源和核对情况见 [api-notes.md](api-notes.md) 的“语言工具的一键安装”。
+
+**这六项的安装脚本一次都没有真的执行过**（开发机是 x86，没有 PRoot arm64 环境；要在真机上验）。
 
 ## 许可证
 
@@ -174,7 +182,7 @@ sha256 `a91d5a93010193712d346d761372b7c9db6dfcf093893161c64ca107f05914f2`
 | PRoot 5.1.107.102（Termux 版） | GPL-2.0-or-later。依据：二进制和手册里的声明“Copyright (C) 2015 STMicroelectronics, licensed under GPL v2 or later”；Termux 构建脚本写 `TERMUX_PKG_LICENSE="GPL-2.0"` | 随包分发（`libproot.so`、`libproot-loader.so`） |
 | talloc 2.5.0 | LGPL-3.0-or-later。依据：包里 `talloc.h` 开头的声明原文（“version 3 of the License, or (at your option) any later version”，GNU Lesser General Public License）。注意 Termux 的包把版权文件指到了 GPL-3.0，和源码声明不一致，这里按源码，并把 LGPL-3.0 和 GPL-3.0 两份全文都附上（LGPL-3.0 是在 GPL-3.0 上加条款，本来也要两份一起看） | 随包分发（`libtalloc.so`，动态库，没有静态链接进 PRoot） |
 | libandroid-shmem 0.7 | BSD 3 条款。依据：包里自带的版权文件 | 随包分发（`libandroid-shmem.so`） |
-| Ubuntu 基础包、Node.js、Python | 用户自己点了才从上游下载，不在安装包里 | 不随包分发 |
+| Ubuntu 基础包、Node.js、Python、Git、Go、OpenJDK、PHP | 用户自己点了（或点后端“运行”时自动）才从上游下载，不在安装包里 | 不随包分发 |
 | dsh-Go | AGPL-3.0 | 只参考了它的做法，没有复制任何代码 |
 
 已经做到的：

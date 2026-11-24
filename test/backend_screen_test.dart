@@ -556,7 +556,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('PHP：端口写在命令里，用的是文档里的端口；面板如实说“没实际运行过”“要自己装”', (tester) async {
+  testWidgets('PHP：端口写在命令里，用的是文档里的端口；面板如实说“没实际运行过”，工具没装会自动装', (tester) async {
     await boot(tester, ProjectTemplate.backendBlocks, language: 'php');
     final host = be(tester).host!;
     host.edit(() => host.doc.port = 3210);
@@ -565,8 +565,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.descendant(of: k('be-run-command'), matching: find.text('php -S 0.0.0.0:3210 server.php')), findsOneWidget);
     expect(find.textContaining('还没有实际运行过'), findsOneWidget);
-    expect(find.textContaining('自己'), findsWidgets, reason: 'PHP 要自己在终端里装');
-    expect(k('be-run-runtime'), findsNothing, reason: '运行环境里没有 PHP 的一键安装');
+    expect(find.textContaining('会先自动装好 PHP 8.3 再启动'), findsOneWidget, reason: '真机反馈第三轮：不用她自己装了');
+    expect(find.textContaining('自己在终端里装'), findsNothing);
+    expect(k('be-run-runtime'), findsOneWidget, reason: '运行环境里现在有 PHP 的一键安装');
     await shot(tester, 'be-run-php-light');
     await tapKey(tester, 'be-run-start');
     await settle(tester, rounds: 6);
@@ -814,7 +815,8 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(k('be-run'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('自己'), findsWidgets, reason: 'Go 要自己装');
+    expect(find.textContaining('会先自动装好 Go 1.26.11（下载约 61 MB，装好后占约 240 MB）再启动'), findsOneWidget, reason: '真机反馈第三轮：Go 不用自己装了');
+    expect(find.textContaining('自己在终端里装'), findsNothing);
     await shot(tester, 'be-run-dark');
     await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();

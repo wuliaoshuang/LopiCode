@@ -36,6 +36,7 @@ import 'package:lopicode/session/turn_journal.dart';
 import 'package:lopicode/session/turn_runner.dart';
 import 'package:lopicode/ssh/ssh_config.dart';
 import 'package:lopicode/ssh/ssh_connector.dart';
+import 'package:lopicode/state/backend_run.dart';
 import 'package:lopicode/state/workspace_chat.dart';
 import 'package:lopicode/state/workspace_files.dart';
 import 'package:lopicode/state/workspace_preview.dart';
@@ -438,6 +439,7 @@ class ProjectSession {
       app.container.invalidate(filesRevProvider(this));
       app.container.invalidate(terminalsProvider(this)); // 会话的进程在这里收掉
       app.container.invalidate(previewProvider(this)); // 预览服务器在这里停掉
+      app.container.invalidate(backendRunProvider(this)); // 还在等的后端“运行”作废
     }
   }
 }

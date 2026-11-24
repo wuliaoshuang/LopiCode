@@ -4,6 +4,7 @@
 // 终端和 Agent 的命令也直接用它们）。它们每次有变化就说一声，这里拍一张不可变的快照给界面订阅；
 // 界面要做什么（安装、取消、卸载、装运行时、换下载源、开始诊断）就调 Notifier 的方法。
 import 'package:lopicode/runtime/linux_runtime.dart';
+import 'package:lopicode/runtime/pack_install.dart';
 import 'package:lopicode/runtime/runtime_diagnostics.dart';
 import 'package:lopicode/runtime/runtime_snapshot.dart';
 import 'package:lopicode/runtime/runtime_sources.dart';
@@ -32,6 +33,9 @@ class RuntimeNotifier extends Notifier<RuntimeView> {
 
   /// 一键装一个常用运行时；返回装没装成。
   Future<bool> installPack(RuntimePack pack) => _runtime.installPack(pack);
+
+  /// 同上，但返回带失败原因的结果（原因也在快照的 packError 里）。
+  Future<PackInstallResult> installPackDetailed(RuntimePack pack) => _runtime.installPackDetailed(pack);
   void cancelPack() => _runtime.cancelPack();
 
   Future<void> setRootfsSource(String id) => _runtime.setRootfsSource(id);

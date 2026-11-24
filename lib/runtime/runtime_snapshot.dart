@@ -30,6 +30,8 @@ class RuntimeView {
     required List<String> logLines,
     this.localShellAllowed = true,
     this.compatPinned = false,
+    this.packErrorId,
+    this.packError,
   }) : missingLauncherFiles = List.unmodifiable(missingLauncherFiles),
        packs = List.unmodifiable(packs),
        installedPacks = Set.unmodifiable(installedPacks),
@@ -61,6 +63,10 @@ class RuntimeView {
   /// 正在装的运行时（id）和它的输出。
   final String? runningPack;
   final List<String> packOutput;
+
+  /// 上一次没装成的是哪一项（id）和原因（大白话）；装成功、重新开始装或用户取消的都是 null。
+  final String? packErrorId;
+  final String? packError;
 
   final int launchFailures;
   final String? lastLaunchError;
