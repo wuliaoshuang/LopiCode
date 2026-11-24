@@ -1,13 +1,17 @@
 // 设计约束（聊天输入栏 · 390×844）
 // - 输入区常驻底部。没点进去且没有字：收成一行胶囊（附件、提示、用量小环、语音、发送）。
+//   胶囊连边框高 48（字体特别大时跟着长高）；发送圆钮看着是 36，但 ＋、用量小环、语音、发送每个可点区域都不小于 44×44。
 // - 点进去或有草稿：展开成两行，上方多行输入，下方工具栏放附件、权限、模型、用量小环、语音和发送。
-// - 键盘弹出时底部导航让位，输入栏贴着键盘；长按发送仍可选排队、插话或中断。
+// - 软键盘被用户收起（系统手势 / 返回键）后输入框跟着失焦：没草稿收回胶囊，有草稿保持展开。
+//   判断规则在 keyboard_dismiss.dart；只看这块屏幕自己的键盘高度，不依赖输入栏外面怎么摆。语音输入不会因此被打断。
+// - 长按发送仍可选排队、插话或中断。
 // - 语音识别把实时结果接进草稿，不覆盖已有文字；不可用时给出明确原因。
 import 'dart:async';
 
 import 'package:lopicode/agent/agent_tools.dart';
 import 'package:lopicode/session/chat_models.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/keyboard_dismiss.dart';
 import 'package:lopicode/ui/usage_ui.dart';
 import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
@@ -114,7 +118,13 @@ class ChatComposer extends StatefulWidget {
   State<ChatComposer> createState() => _ChatComposerState();
 }
 
-class _ChatComposerState extends State<ChatComposer> {
+/// 收起态胶囊里一行的高度，也是每个可点目标的最小边长。连上下各 1 的内边距和边框，胶囊总高 48。
+const double _kTarget = 44;
+
+/// 发送圆钮看得见的直径（可点区域仍是 [_kTarget]）。
+const double _kSendVisible = 36;
+
+class _ChatComposerState extends State<ChatComposer> with WidgetsBindingObserver {
   late final ChatVoiceInput _voice = widget.voiceInput ?? _deviceVoiceInput;
   String _dictationBase = '';
   bool _startingVoice = false;
@@ -125,10 +135,15 @@ class _ChatComposerState extends State<ChatComposer> {
   final GlobalKey _fieldKey = GlobalKey();
   bool _wasCollapsed = true;
 
+  /// 键盘被用户收起后把焦点摘掉（规则见 keyboard_dismiss.dart）。
+  final KeyboardDismissTracker _keyboard = KeyboardDismissTracker();
+  Timer? _keyboardCheck;
+
   @override
   void initState() {
     super.initState();
     _wasCollapsed = _collapsed;
+    WidgetsBinding.instance.addObserver(this);
     widget.focusNode.addListener(_onInputChanged);
     widget.controller.addListener(_onInputChanged);
   }
@@ -146,9 +161,39 @@ class _ChatComposerState extends State<ChatComposer> {
     }
   }
 
+  /// 这块屏幕上软键盘的高度（物理像素，只用来判断有没有）。
+  /// 不读 MediaQuery：外面的 Scaffold 给键盘让位时会把它清零。
+  double get _keyboardInset => View.of(context).viewInsets.bottom;
+
+  @override
+  void didChangeMetrics() {
+    if (!mounted) return;
+    final view = View.of(context);
+    _afterVerdict(_keyboard.onMetrics(inset: view.viewInsets.bottom, width: view.physicalSize.width));
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (!mounted) return;
+    _afterVerdict(_keyboard.onLifecycle(resumed: state == AppLifecycleState.resumed));
+  }
+
+  void _afterVerdict(KeyboardVerdict verdict) {
+    if (verdict == KeyboardVerdict.none) return;
+    _keyboardCheck?.cancel();
+    _keyboardCheck = Timer(verdict == KeyboardVerdict.checkSoon ? kKeyboardSettle : kKeyboardSettleSlow, () {
+      if (!mounted) return;
+      // 只摘焦点，不碰语音输入；有草稿时展开状态由 _collapsed 自己决定。
+      if (_keyboard.confirm(inset: _keyboardInset) && widget.focusNode.hasFocus) widget.focusNode.unfocus();
+    });
+  }
+
   /// 只在“收起 / 展开”真的变了的时候重画，打字时不跟着每个字重画。
   void _onInputChanged() {
     if (!mounted) return;
+    final focused = widget.focusNode.hasFocus;
+    if (!focused) _keyboardCheck?.cancel();
+    _keyboard.onFocus(focused: focused, inset: _keyboardInset);
     final now = _collapsed;
     if (now == _wasCollapsed) return;
     _wasCollapsed = now;
@@ -157,6 +202,8 @@ class _ChatComposerState extends State<ChatComposer> {
 
   @override
   void dispose() {
+    _keyboardCheck?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     widget.focusNode.removeListener(_onInputChanged);
     widget.controller.removeListener(_onInputChanged);
     _voice.dispose();
@@ -274,7 +321,8 @@ class _ChatComposerState extends State<ChatComposer> {
         hintMaxLines: 1,
         filled: false,
         isDense: true,
-        contentPadding: const EdgeInsets.symmetric(horizontal: Space.x1, vertical: Space.x2),
+        // 收起时上下不留白：一行的高度由 44 的按钮撑着，字居中；字体行高再大胶囊也不跟着变高。
+        contentPadding: EdgeInsets.symmetric(horizontal: Space.x1, vertical: collapsed ? 0 : Space.x2),
         border: noBorder,
         enabledBorder: noBorder,
         focusedBorder: noBorder,
@@ -290,20 +338,27 @@ class _ChatComposerState extends State<ChatComposer> {
       child: _startingVoice ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : null,
     );
     final send = _SendAction(busy: widget.busy, canSend: widget.canSend, onSend: _send, onLongSend: _longSend, onStop: widget.onStop);
-    final ring = widget.context_ != null && widget.onContext != null ? ContextRing(usage: widget.context_!, onTap: widget.onContext!) : null;
+    // 小环自己高 44；宽度跟着百分比文字走，字很短时这里兜住不小于 44。
+    final ring = widget.context_ != null && widget.onContext != null
+        ? ConstrainedBox(
+            constraints: const BoxConstraints(minWidth: _kTarget),
+            child: ContextRing(usage: widget.context_!, onTap: widget.onContext!),
+          )
+        : null;
 
     final Widget body;
     if (collapsed) {
-      body = Row(
-        children: [
-          plus,
-          const SizedBox(width: Space.x1),
-          Expanded(child: field),
-          ?ring,
-          voice,
-          const SizedBox(width: Space.x1),
-          send,
-        ],
+      body = ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: _kTarget),
+        child: Row(
+          children: [
+            plus,
+            Expanded(child: field),
+            ?ring,
+            voice,
+            send,
+          ],
+        ),
       );
     } else {
       body = Column(
@@ -311,7 +366,7 @@ class _ChatComposerState extends State<ChatComposer> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(padding: const EdgeInsets.fromLTRB(Space.x2, Space.x1, Space.x2, 0), child: field),
-          const SizedBox(height: Space.x2),
+          const SizedBox(height: Space.x1),
           Row(
             children: [
               plus,
@@ -332,7 +387,7 @@ class _ChatComposerState extends State<ChatComposer> {
                       onPressed: widget.onModel,
                       style: TextButton.styleFrom(
                         foregroundColor: c.text,
-                        minimumSize: const Size(0, 40),
+                        minimumSize: const Size(0, _kTarget),
                         padding: const EdgeInsets.symmetric(horizontal: Space.x2),
                       ),
                       child: Text(
@@ -347,7 +402,6 @@ class _ChatComposerState extends State<ChatComposer> {
               ),
               ?ring,
               voice,
-              const SizedBox(width: Space.x1),
               send,
             ],
           ),
@@ -358,10 +412,10 @@ class _ChatComposerState extends State<ChatComposer> {
     return Container(
       key: const ValueKey('chat-input'),
       margin: const EdgeInsets.fromLTRB(Space.x3, 0, Space.x3, Space.x2),
-      padding: collapsed ? const EdgeInsets.symmetric(horizontal: Space.x2, vertical: 6) : const EdgeInsets.fromLTRB(Space.x2, Space.x2, Space.x2, Space.x2),
+      padding: collapsed ? const EdgeInsets.symmetric(horizontal: 2, vertical: 1) : const EdgeInsets.fromLTRB(Space.x1, Space.x2, Space.x1, Space.x1),
       decoration: BoxDecoration(
         color: c.surface,
-        borderRadius: BorderRadius.circular(collapsed ? 30 : 28),
+        borderRadius: BorderRadius.circular(collapsed ? 24 : 28),
         border: Border.all(color: c.border),
       ),
       child: AnimatedSize(duration: const Duration(milliseconds: 140), curve: Curves.easeOut, alignment: Alignment.bottomCenter, child: body),
@@ -380,13 +434,13 @@ class _PlainAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => SizedBox(
-    width: 40,
-    height: 40,
+    width: _kTarget,
+    height: _kTarget,
     child: IconButton(
       tooltip: tooltip,
       onPressed: onPressed,
       padding: const EdgeInsets.all(Space.x2),
-      constraints: const BoxConstraints.tightFor(width: 40, height: 40),
+      constraints: const BoxConstraints.tightFor(width: _kTarget, height: _kTarget),
       icon: child ?? Icon(icon, size: 22, color: color),
     ),
   );
@@ -428,13 +482,21 @@ class _SendAction extends StatelessWidget {
         foregroundColor: stopping || canSend ? c.onAccent : c.textFaint,
         disabledBackgroundColor: c.surfaceMuted,
         disabledForegroundColor: c.textFaint,
-        minimumSize: const Size(40, 40),
-        fixedSize: const Size(40, 40),
+        minimumSize: const Size(_kSendVisible, _kSendVisible),
+        fixedSize: const Size(_kSendVisible, _kSendVisible),
         padding: EdgeInsets.zero,
         shape: const CircleBorder(),
+        // 圆钮看着是 36；padded 会在它外面包一圈 48 的点击区，落在这圈里的点击都算按钮的。
+        tapTargetSize: MaterialTapTargetSize.padded,
       ),
-      icon: Icon(stopping ? Icons.stop_rounded : Icons.arrow_upward_rounded, size: 21),
+      icon: Icon(stopping ? Icons.stop_rounded : Icons.arrow_upward_rounded, size: 20),
     );
-    return longPress ? Semantics(label: '排队发送，长按选择方式', child: button) : button;
+    // 那圈 48 的点击区放进 44 的盒子里（多出来的 2 不占地方也不画东西），所以整格 44×44 都点得到。
+    final target = SizedBox(
+      width: _kTarget,
+      height: _kTarget,
+      child: OverflowBox(minWidth: 0, maxWidth: kMinInteractiveDimension, minHeight: 0, maxHeight: kMinInteractiveDimension, child: button),
+    );
+    return longPress ? Semantics(label: '排队发送，长按选择方式', child: target) : target;
   }
 }
