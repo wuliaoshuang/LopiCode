@@ -1,4 +1,6 @@
 // 积木编辑器（BlockEditorView）界面测试共用的台子：一份文档 + 撤销历史 + 前端宿主，外加几个找坐标、做手势的帮手。
+import 'dart:async';
+
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lopicode/blocks/block_canvas_layout.dart';
@@ -6,6 +8,7 @@ import 'package:lopicode/blocks/block_editor_view.dart';
 import 'package:lopicode/blocks/block_geometry.dart';
 import 'package:lopicode/lowcode/logic_block_host.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
+import 'package:lopicode/lowcode/logic_screen.dart';
 import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/theme/app_theme.dart';
 import 'package:material_ui/material_ui.dart';
@@ -49,7 +52,50 @@ class Rig {
     edits++;
   }
 
-  BlockEditorViewState get s => key.currentState!;
+  BlockEditorViewState? _found;
+  BlockEditorViewState get s => key.currentState ?? _found!;
+
+  /// 撤销 / 重做交回来了几次（搭建页这时会落盘）。
+  int restores = 0;
+
+  /// 和搭建页一样打开整页的“积木逻辑”（LogicScreen）：push 进去、把撤销历史交给它。这时编辑器用的是它自己建的宿主（`s.host`）。
+  Future<void> pumpLogic(WidgetTester tester, {String? initialNodeId, ThemeMode mode = ThemeMode.light}) async {
+    usePhoneViewport(tester);
+    final nav = GlobalKey<NavigatorState>();
+    await tester.pumpWidget(
+      RepaintBoundary(
+        key: shotKey,
+        child: MaterialApp(
+          navigatorKey: nav,
+          debugShowCheckedModeBanner: false,
+          theme: buildAppTheme(Brightness.light, fontFamily: fontsLoaded ? kTestFont : null),
+          darkTheme: buildAppTheme(Brightness.dark, fontFamily: fontsLoaded ? kTestFont : null),
+          themeMode: mode,
+          home: const Scaffold(),
+        ),
+      ),
+    );
+    unawaited(
+      nav.currentState!.push(
+        MaterialPageRoute<void>(
+          builder: (_) => LogicScreen(
+            doc: doc,
+            onEdit: apply,
+            initialNodeId: initialNodeId,
+            history: history,
+            onRestore: (d) {
+              if (d == null) return;
+              doc = d;
+              restores++;
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    _found = tester.state<BlockEditorViewState>(find.byType(BlockEditorView));
+  }
+
   List<LcHandler> get handlers => doc.logic.handlers;
   LcHandler h(int i) => handlers[i];
   List<String> ops(int i) => [for (final b in h(i).body) b.op];
@@ -97,6 +143,18 @@ class Rig {
       if (same && test(sl)) return s.globalOf(s.toView(p.origin + sl.rect.center));
     }
     throw StateError('没找到槽');
+  }
+
+  /// 屏幕上：第 i 串里某块积木的某个参数（`ep` 指到参数里更深的表达式字段）。那里是拼好的表达式就给它身上靠左的一点，否则给槽的中心。
+  Offset arg(int i, LcBlockPath path, String name, [BkExprPath ep = const []]) {
+    final p = placed(i);
+    for (final (b, sl) in p.layout.allSlots) {
+      final same = path.isEmpty ? b.isHat : (!b.isHat && bkSameBlockPath(b.path, path));
+      if (!same || sl.arg != name || !bkSameExprPath(sl.exprPath, ep) || sl.look == BkSlotLook.add) continue;
+      final e = sl.expr;
+      return s.globalOf(s.toView(p.origin + (e != null ? e.rect.centerLeft + const Offset(9, 0) : sl.rect.center)));
+    }
+    throw StateError('没找到参数 $name $ep');
   }
 
   /// 正在拖的时候：把手上那一截对到某个拼接点，手指该去屏幕的哪里。

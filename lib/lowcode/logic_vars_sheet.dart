@@ -7,7 +7,6 @@
 import 'package:lopicode/lowcode/edit_types.dart';
 import 'package:lopicode/lowcode/logic_edit.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
-import 'package:lopicode/lowcode/logic_pick_sheet.dart';
 import 'package:lopicode/lowcode/logic_text.dart';
 import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/theme/tokens.dart';
@@ -283,6 +282,91 @@ class _LcVarsSheetState extends State<LcVarsSheet> {
             ),
           ),
       ],
+    );
+  }
+}
+
+/// 底部面板的统一骨架：标题（可带一行说明）+ 可滚动的内容 + 固定在底下的按钮区。
+class LcSheetFrame extends StatelessWidget {
+  const LcSheetFrame({super.key, required this.title, this.note, this.header, required this.children, this.footer});
+  final String title;
+  final String? note;
+
+  /// 标题下面、不跟着滚动的一块（面包屑、分类标签）。
+  final Widget? header;
+  final List<Widget> children;
+  final Widget? footer;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context).textTheme;
+    final media = MediaQuery.of(context);
+    return Padding(
+      padding: EdgeInsets.only(bottom: media.viewInsets.bottom),
+      child: SafeArea(
+        top: false,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: (media.size.height - media.viewInsets.bottom) * 0.85),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x2),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: t.titleLarge),
+                    if (note != null) ...[const SizedBox(height: 2), Text(note!, style: t.bodySmall)],
+                  ],
+                ),
+              ),
+              ?header,
+              Flexible(
+                child: ListView(
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.only(bottom: Space.x2),
+                  children: children,
+                ),
+              ),
+              if (footer != null) Padding(padding: const EdgeInsets.fromLTRB(Space.x4, Space.x2, Space.x4, Space.x3), child: footer),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 把刚填的新变量建出来（已经有同名的就不动）。
+void lcApplyVarDraft(LcLogic logic, LcVarDraft? draft) {
+  if (draft == null || logic.variable(draft.name) != null) return;
+  logic.addVariable(draft.name, type: draft.type, initial: draft.initial);
+}
+
+/// 面板里“几个里选一个”的小标签。选中＝实心强调色 + 白字（不用主题默认的选中色：深色主题下那个颜色配白字看不清）。
+class LcChoiceChip extends StatelessWidget {
+  const LcChoiceChip({super.key, required this.label, required this.selected, required this.onSelected, this.avatar, this.tooltip});
+  final String label;
+  final bool selected;
+  final VoidCallback onSelected;
+  final Widget? avatar;
+  final String? tooltip;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return ChoiceChip(
+      avatar: avatar,
+      tooltip: tooltip,
+      label: Text(label),
+      labelStyle: TextStyle(color: selected ? c.onAccent : c.text, fontSize: FontSize.sm, fontWeight: selected ? FontWeight.w600 : FontWeight.w400),
+      selected: selected,
+      showCheckmark: false,
+      selectedColor: c.accentFill,
+      backgroundColor: c.surface,
+      side: BorderSide(color: selected ? c.accentFill : c.border),
+      onSelected: (_) => onSelected(),
     );
   }
 }

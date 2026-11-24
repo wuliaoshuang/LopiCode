@@ -259,9 +259,11 @@ mixin BkEditorDrag on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Tick
       animation: settleAnim,
       builder: (context, _) {
         var at = _pieceView;
-        var scale = zoom, opacity = 1.0;
+        // 拿在手上放大一点点（4%），落下 / 弹回的过程中慢慢缩回原大。
+        var scale = zoom * 1.04, opacity = 1.0;
         var lifted = true;
         final t = settleAnim.value;
+        if (_settle == _Settle.drop || _settle == _Settle.back) scale = zoom * (1 + 0.04 * (1 - t));
         switch (_settle) {
           case _Settle.none:
             break;

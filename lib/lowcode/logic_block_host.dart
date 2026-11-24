@@ -5,6 +5,7 @@
 /// 改动走搭建页给的 [LcEdit]（一次＝一条撤销记录＝一次落盘），撤销重做也交还给搭建页。
 library;
 
+import 'package:lopicode/blocks/block_geometry.dart';
 import 'package:lopicode/blocks/block_host.dart';
 import 'package:lopicode/lowcode/edit_types.dart';
 import 'package:lopicode/lowcode/logic_blocks.dart' as catalog;
@@ -46,7 +47,8 @@ const Map<String, String> _colorOfCategory = {
 class LogicBlockHost extends BlockHost {
   /// `doc`＝搭建页手里那份活的文档；`onEdit`＝搭建页的统一改动入口。
   /// 撤销重做交给搭建页：`onUndo / onRedo` 做完以后返回换上来的那份文档（没得撤返回 null）。
-  LogicBlockHost({required LcDocument doc, required this.onEdit, this.canUndoOf, this.canRedoOf, this.onUndo, this.onRedo}) : _doc = doc; // ignore: prefer_initializing_formals 对外的参数名要叫 doc，不叫 _doc
+  LogicBlockHost({required LcDocument doc, required this.onEdit, this.canUndoOf, this.canRedoOf, this.onUndo, this.onRedo, this.preferTarget})
+    : _doc = doc; // ignore: prefer_initializing_formals 对外的参数名要叫 doc，不叫 _doc
 
   LcDocument _doc;
   final LcEdit onEdit;
@@ -54,6 +56,9 @@ class LogicBlockHost extends BlockHost {
   final bool Function()? canRedoOf;
   final LcDocument? Function()? onUndo;
   final LcDocument? Function()? onRedo;
+
+  /// 新建事件时优先挂在这个控件上（从某个控件点进逻辑页时给）；它不适合那种事件就照旧挑第一个合适的。
+  final String? preferTarget;
   int _revision = 0;
 
   LcDocument get doc => _doc;
@@ -147,7 +152,9 @@ class LogicBlockHost extends BlockHost {
   LcBlockTree? addScript(String templateId, {double? x, double? y}) {
     final wanted = templateId == 'input' ? const ['input'] : const ['button'];
     final nodes = _nodeOptions(wanted);
-    final h = _doc.logic.addHandler(templateId, target: nodes.isEmpty ? null : nodes.first.value);
+    final prefer = preferTarget;
+    final target = prefer != null && nodes.any((n) => n.value == prefer) ? prefer : (nodes.isEmpty ? null : nodes.first.value);
+    final h = _doc.logic.addHandler(templateId, target: target);
     h?.x = x;
     h?.y = y;
     return h;
@@ -203,6 +210,39 @@ class LogicBlockHost extends BlockHost {
       default:
         return const [];
     }
+  }
+
+  /// 换了控件 / 换了“改什么”以后，把旁边对不上的参数顺手调对（都在同一次改动里）：
+  /// - “把 [控件] 的 [属性] 改成 …”：新控件没有原来那个属性，就换成它有的第一个；属性在“显示 / 隐藏”和别的之间换，值也跟着换成 是否 / 文字。
+  /// - “[控件] 的 [属性]”这种取值：新控件读不到原来那个属性，同样换成第一个读得到的。
+  @override
+  void argChanged(LcBlockTree tree, LcBlock block, String arg, List<Object> exprPath) {
+    if (exprPath.isEmpty) {
+      if (block.op != 'setProp') return;
+      if (arg == 'node') {
+        final node = block.args['node'], prop = block.args['prop'];
+        final type = node is String ? _doc.find(node)?.type : null;
+        if (type != null && prop is String && !propFitsNode(prop, type)) {
+          final fits = writablePropsFor(type);
+          if (fits.isNotEmpty) block.args['prop'] = fits.first;
+        }
+      }
+      if (arg == 'node' || arg == 'prop') {
+        final value = asExpr(block.args['value']);
+        final kind = value == null ? null : exprKind(value);
+        if (block.args['prop'] == 'visible' && (kind == 'text' || kind == 'num')) block.args['value'] = exBool(true);
+        if (block.args['prop'] != 'visible' && kind == 'bool') block.args['value'] = exText('');
+      }
+      return;
+    }
+    if (exprPath.last != 'node') return;
+    final owner = asExpr(bkExprAt(block, arg, exprPath.sublist(0, exprPath.length - 1)));
+    if (owner == null || exprKind(owner) != 'prop') return;
+    final node = owner['node'], prop = owner['prop'];
+    final type = node is String ? _doc.find(node)?.type : null;
+    if (type == null || prop is! String) return;
+    final fits = readablePropsFor(type);
+    if (fits.isNotEmpty && !fits.contains(prop)) owner['prop'] = fits.first;
   }
 
   @override

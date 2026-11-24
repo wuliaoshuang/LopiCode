@@ -317,7 +317,7 @@ mixin BkEditorEdit on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Tick
       constraints: const BoxConstraints(minWidth: 148, maxWidth: 280, maxHeight: 360),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       items: [
-        if (spec != null && spec.optional)
+        if (spec != null && spec.optional && !options.any((o) => o.value.isEmpty))
           PopupMenuItem(
             key: const ValueKey('bk-menu-none'),
             value: '',
@@ -326,7 +326,7 @@ mixin BkEditorEdit on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Tick
           ),
         for (final o in options)
           PopupMenuItem(
-            key: ValueKey('bk-menu-${o.value}'),
+            key: ValueKey(o.value.isEmpty ? 'bk-menu-none' : 'bk-menu-${o.value}'),
             value: o.value,
             height: 44,
             child: Row(

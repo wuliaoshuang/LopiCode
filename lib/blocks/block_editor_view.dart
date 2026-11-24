@@ -33,7 +33,17 @@ typedef BlockMenuExtra = ({String label, Future<({String value, void Function() 
 ///
 /// 这一页自己带 Scaffold 和顶栏；会占用 `host.onChanged`（离开时还回 null）。
 class BlockEditorView extends StatefulWidget {
-  const BlockEditorView({super.key, required this.host, this.title = '积木', this.subtitle, this.extraActions = const [], this.focusScriptId, this.menuExtra, this.paletteHeight = 248});
+  const BlockEditorView({
+    super.key,
+    required this.host,
+    this.title = '积木',
+    this.subtitle,
+    this.extraActions = const [],
+    this.focusScriptId,
+    this.menuExtra,
+    this.onHostChanged,
+    this.paletteHeight = 248,
+  });
 
   final BlockHost host;
   final String title;
@@ -47,6 +57,9 @@ class BlockEditorView extends StatefulWidget {
 
   /// 某种参数的下拉菜单要不要多一项；不要返回 null。
   final BlockMenuExtra? Function(LcArgSpec arg)? menuExtra;
+
+  /// 宿主的内容变了（改动、撤销）以后顺带通知外壳一声（比如顶栏上的数量要跟着变）。
+  final VoidCallback? onHostChanged;
   final double paletteHeight;
 
   @override
@@ -80,6 +93,7 @@ class BlockEditorViewState extends State<BlockEditorView> with TickerProviderSta
     // 正拖着的时候内容被换了（外面撤销了）：手上的东西作废。
     if (drag != null && drag!.revision != host.revision && !busy) dragCancel();
     setState(() {});
+    widget.onHostChanged?.call();
   }
 
   @override

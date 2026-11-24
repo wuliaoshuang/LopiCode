@@ -277,7 +277,7 @@ class _BuilderScreenState extends State<BuilderScreen> {
     await Navigator.push(
       context,
       MaterialPageRoute<void>(
-        builder: (_) => LogicScreen(doc: _doc!, onEdit: _apply, initialNodeId: nodeId),
+        builder: (_) => LogicScreen(doc: _doc!, onEdit: _apply, initialNodeId: nodeId, history: _history, onRestore: _restore),
       ),
     );
     _refresh();
