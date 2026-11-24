@@ -185,10 +185,11 @@ class Rig {
     return s.globalOf(s.toView(p.origin + snap.rect.topLeft + s.grabOffset + const Offset(2, 0)));
   }
 
-  /// 从画布上的一点拖起来（先挪过“算拖”的那一小段）。
+  /// 从画布上的一点拖起来：先按住不动等长按（0.28 秒）把它拿起来，再挪一小段。
   Future<TestGesture> lift(WidgetTester tester, Offset from) async {
     final g = await tester.startGesture(from);
-    await tester.pump(const Duration(milliseconds: 20));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(s.drag, isNotNull, reason: '长按应该已经拿起来了');
     await g.moveBy(const Offset(6, 6));
     await tester.pump(const Duration(milliseconds: 16));
     await g.moveBy(const Offset(6, 6));
