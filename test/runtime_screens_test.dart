@@ -83,7 +83,7 @@ void main() {
       expect(find.textContaining('需要下载 28.5 MB'), findsOneWidget);
       expect(find.textContaining('手机现在剩余 23.0 GB'), findsOneWidget);
       expect(find.text('清华大学镜像'), findsNWidgets(2));
-      expect(find.text('常用运行时'), findsNothing, reason: '没装环境时不显示运行时');
+      expect(find.text('语言与工具'), findsNothing, reason: '没装环境时不显示语言与工具');
       expect(find.byKey(const Key('runtime-uninstall')), findsNothing);
       await shot(tester, '22-runtime-not-installed-$suffix');
     });

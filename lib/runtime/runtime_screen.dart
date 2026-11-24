@@ -1,16 +1,32 @@
-import 'package:flutter/services.dart';
+// 设计约束（“运行环境”页 · 390×844 · 浅色 + 深色）— 2026-11-25 霜霜真机批注“好丑啊”后整页重排
+// 和设置页同一套视觉语言：浅灰底（canvas）+ 白色圆角分组卡片，组和行直接用 lib/ui/settings_widgets.dart，不另造。
+// 层级（先定的这个，再定排版，最后才是颜色）：
+// - 第一：状态卡——Ubuntu 现在怎样（未安装 / 下载·校验·解压中 / 上次没装成 / 已安装 / 进不去）。整页唯一的实心主按钮只在这张卡里，
+//   而且一次只有一个：安装（或继续下载 / 重新安装）、取消、重新尝试进入。已安装且一切正常时没有主按钮，只摆事实（占用空间、项目目录）。
+// - 第二：语言与工具——一行一样（图标 + 名称 + 一句说明 + 右边状态）。右边只会是：对勾（版本号写在说明那一行：“已安装 · 24.9.0”）、或一个 64×32 的描边小按钮（安装 / 重试 / 停止）。
+//   这一组是数据驱动的（遍历快照里的 packs），新增语言不用动布局。没装环境时整组不出现。
+// - 第三：下载源（两行跳转行，值在右，点开底部面板单选）、诊断（一行强调色的入口，不是大按钮；进度和报告展开在同一张卡里）、日志。
+// - 最后：卸载，一行红字的危险行，点了先确认。
+// - 例外的顺序：Ubuntu 连续启动失败时，“诊断”提到状态卡正下面（这时它是最该点的），其余顺序不变。
+// 排版（全部取自 lib/theme/tokens.dart 和 SettingsMetrics，不写表外的数）：
+// - 页边 16；组与组 24；组标题到卡片 8；卡片内边 16；行高至少 56、行内左右 16 上下 12。
+// - 字：卡片标题 16/600；行名 16/400；说明 12 弱色；右侧值 14 弱色；组标题 12/600 弱色。
+// - 语言图标 24（material-icon-theme，原色不着色），和设置行的图标格同宽，名称起点对齐。
+// 颜色：强调蓝只给主按钮、对勾、进度条和“开始诊断”；红色只给失败原因和卸载；其余全是正文色 / 弱色。
+// 一行只做一件事；功能对照清单见 test/runtime_redesign_test.dart 开头。
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:lopicode/runtime/linux_runtime.dart';
-import 'package:lopicode/runtime/runtime_snapshot.dart';
+import 'package:lopicode/runtime/runtime_packs_view.dart';
+import 'package:lopicode/runtime/runtime_screen_widgets.dart';
 import 'package:lopicode/runtime/runtime_sources.dart';
+import 'package:lopicode/runtime/runtime_status_view.dart';
 import 'package:lopicode/state/runtime_state.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/settings_widgets.dart';
 import 'package:lopicode/ui/shell.dart';
 import 'package:lopicode/ui/top_bar.dart';
-import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
 
-/// “运行环境”页：安装 / 卸载 Ubuntu 环境、选下载源、一键装常用运行时、看启动日志。
+/// “运行环境”页：安装 / 卸载 Ubuntu 环境、一键装语言和工具、选下载源、一键诊断、看日志。
 class RuntimeScreen extends ConsumerWidget {
   const RuntimeScreen({super.key, this.projectDir});
 
@@ -21,74 +37,111 @@ class RuntimeScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final runtime = ref.watch(runtimeProvider);
     final ctl = ref.read(runtimeProvider.notifier);
+    final c = context.colors;
+    final t = Theme.of(context).textTheme;
+    // 连续启动失败：诊断是这时候最该点的，提到状态卡正下面
+    final launchFailing = runtime.installed && runtime.usable && !runtime.shouldUseLinux;
+    final diagnostics = RuntimeDiagnosticsGroup(runtimeBusy: runtime.busy, projectDir: projectDir);
+    final removable = !runtime.busy && runtime.runningPack == null;
     return Scaffold(
+      backgroundColor: c.canvas,
       extendBodyBehindAppBar: true,
-      appBar: const ShellAppBar(title: '运行环境'),
+      appBar: ShellAppBar(title: '运行环境', background: c.canvas),
       body: Builder(
-        builder: (context) => ListView(
-          padding: EdgeInsets.only(top: PageBar.insetOf(context), bottom: Space.x12),
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(Space.x4, Space.x4, Space.x4, 0),
-              child: _StatusCard(runtime: runtime, ctl: ctl),
-            ),
-            const SectionLabel('下载源'),
-            _MirrorRow(keyName: 'rootfs-source', label: '系统包', options: rootfsSources, value: runtime.rootfsSourceId, enabled: !runtime.busy, onChanged: ctl.setRootfsSource),
-            _MirrorRow(keyName: 'apt-mirror', label: '装软件（apt）', options: aptMirrors, value: runtime.aptMirrorId, enabled: !runtime.busy, onChanged: ctl.setAptMirror),
-            if (runtime.installed) ...[
-              const SectionLabel('常用运行时'),
-              if (!runtime.usable)
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: Space.x4),
-                  child: InfoBanner('环境进不去的时候装不了运行时。', tone: BannerTone.warning),
-                )
-              else ...[
-                for (final pack in runtime.packs) _PackRow(runtime: runtime, ctl: ctl, pack: pack),
-                if (runtime.packOutput.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(Space.x4, Space.x3, Space.x4, 0),
-                    child: _LogBox(lines: runtime.packOutput, keyName: 'pack-output'),
-                  ),
-              ],
-            ],
-            if (runtime.installed) ...[
-              const SectionLabel('一键诊断'),
+        // 不用懒加载的列表：这一页不长，一次排完，滚到哪儿都不会把诊断报告、日志的滚动位置丢掉
+        builder: (context) => SingleChildScrollView(
+          key: const Key('runtime-page'),
+          padding: EdgeInsets.fromLTRB(Space.x4, PageBar.insetOf(context) + Space.x2, Space.x4, Space.x12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: [
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: Space.x4),
-                child: _DiagnosticsPanel(runtimeBusy: runtime.busy, projectDir: projectDir),
+                padding: const EdgeInsets.only(bottom: SettingsMetrics.groupGap),
+                child: RuntimeStatusCard(runtime: runtime, ctl: ctl),
               ),
-            ],
-            const SectionLabel('日志'),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: Space.x4),
-              child: runtime.logLines.isEmpty
-                  ? Text('还没有记录。安装和每次启动失败的原因会记在这里。', style: Theme.of(context).textTheme.bodySmall)
-                  : _LogBox(lines: runtime.logLines, keyName: 'runtime-log', copyable: true),
-            ),
-            if (runtime.installed || runtime.partialBytes > 0) ...[
-              const SectionLabel('卸载'),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: Space.x4),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
+              if (launchFailing) diagnostics,
+              if (runtime.installed) RuntimePacksGroup(runtime: runtime, ctl: ctl),
+              SettingsGroup(
+                title: '下载源',
+                children: [
+                  _mirrorRow(
+                    context,
+                    keyName: 'rootfs-source',
+                    label: '系统包',
+                    note: '下载 Ubuntu 本体从哪儿下',
+                    options: rootfsSources,
+                    value: runtime.rootfsSourceId,
+                    enabled: !runtime.busy,
+                    onChanged: ctl.setRootfsSource,
+                  ),
+                  _mirrorRow(
+                    context,
+                    keyName: 'apt-mirror',
+                    label: '装软件（apt）',
+                    note: '在 Ubuntu 里装软件从哪儿下',
+                    options: aptMirrors,
+                    value: runtime.aptMirrorId,
+                    enabled: !runtime.busy,
+                    onChanged: ctl.setAptMirror,
+                  ),
+                ],
+              ),
+              if (runtime.installed && !launchFailing) diagnostics,
+              SettingsGroup(
+                title: '日志',
+                padded: true,
+                children: [
+                  if (runtime.logLines.isEmpty)
+                    Text('还没有记录。安装和每次启动失败的原因会记在这里。', style: t.bodySmall?.copyWith(color: c.textFaint, height: 1.5))
+                  else
+                    RuntimeLogBox(lines: runtime.logLines, keyName: 'runtime-log', copyLabel: '复制日志', copiedHint: '日志已复制', copyKey: const Key('runtime-log-copy')),
+                ],
+              ),
+              if (runtime.installed || runtime.partialBytes > 0)
+                SettingsGroup(
                   children: [
-                    Text('删掉整个 Ubuntu 环境和里面装的所有软件。项目文件不受影响。', style: Theme.of(context).textTheme.bodySmall),
-                    const SizedBox(height: Space.x3),
-                    OutlinedButton(
+                    SettingsRow(
                       key: const Key('runtime-uninstall'),
-                      style: OutlinedButton.styleFrom(foregroundColor: context.colors.danger),
-                      onPressed: runtime.busy || runtime.runningPack != null ? null : () => _confirmUninstall(context, ctl),
-                      child: Text(runtime.installed ? '卸载运行环境' : '删除没下完的文件'),
+                      title: runtime.installed ? '卸载运行环境' : '删除没下完的文件',
+                      subtitle: '删掉整个 Ubuntu 环境和里面装的所有软件。项目文件不受影响。',
+                      danger: removable,
+                      enabled: removable,
+                      // 不能点的时候不画箭头
+                      trailing: removable ? null : const SizedBox.shrink(),
+                      onTap: () => _confirmUninstall(context, ctl),
                     ),
                   ],
                 ),
-              ),
             ],
-          ],
+          ),
         ),
       ),
     );
   }
+
+  /// 下载源的一行：名称 + 一句说明，当前值在右，点开底部面板单选。
+  Widget _mirrorRow(
+    BuildContext context, {
+    required String keyName,
+    required String label,
+    required String note,
+    required List<MirrorOption> options,
+    required String value,
+    required bool enabled,
+    required Future<void> Function(String id) onChanged,
+  }) => SettingsRow(
+    key: Key(keyName),
+    title: label,
+    subtitle: note,
+    value: mirrorById(options, value).label,
+    valueKey: Key('$keyName-value'),
+    enabled: enabled,
+    onTap: () async {
+      final picked = await showMirrorSheet(context, title: label, note: note, options: options, current: value);
+      if (picked != null && picked != value) await onChanged(picked);
+    },
+  );
 
   Future<void> _confirmUninstall(BuildContext context, RuntimeNotifier ctl) async {
     final ok = await showDialog<bool>(
@@ -107,271 +160,5 @@ class RuntimeScreen extends ConsumerWidget {
       ),
     );
     if (ok == true) await ctl.uninstall();
-  }
-}
-
-class _StatusCard extends StatelessWidget {
-  const _StatusCard({required this.runtime, required this.ctl});
-  final RuntimeView runtime;
-  final RuntimeNotifier ctl;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.colors;
-    final t = Theme.of(context).textTheme;
-    final (String status, Color tone) = switch (runtime.phase) {
-      RuntimePhase.installed when !runtime.prootBundled => ('已下载，但进不去', c.warning),
-      RuntimePhase.installed when !runtime.shouldUseLinux => (runtime.localShellAllowed ? '启动失败，已退回本机 shell' : '连续启动失败，终端暂时进不去', c.danger),
-      RuntimePhase.installed => ('已安装，新开的终端会直接进 Ubuntu', c.accent),
-      RuntimePhase.downloading => ('正在下载…', c.textMuted),
-      RuntimePhase.verifying => ('正在校验…', c.textMuted),
-      RuntimePhase.extracting => ('正在解压…', c.textMuted),
-      RuntimePhase.notInstalled => ('未安装', c.textMuted),
-    };
-    return Container(
-      padding: const EdgeInsets.all(Space.x4),
-      decoration: BoxDecoration(
-        color: c.surface,
-        borderRadius: BorderRadius.circular(Radii.lg),
-        border: Border.all(color: c.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text('Ubuntu 24.04', style: t.titleLarge),
-          const SizedBox(height: Space.x1),
-          Text(
-            status,
-            key: const Key('runtime-status'),
-            style: t.bodyMedium?.copyWith(color: tone),
-          ),
-          const SizedBox(height: Space.x3),
-          Text(
-            runtime.installed
-                ? '在手机上跑一个不需要 root 的 Ubuntu，终端和 Agent 的命令都在里面执行，项目目录挂在 /workspace。'
-                : runtime.localShellAllowed
-                ? '装好后终端里能直接用 apt、node、python。不装也不影响别的功能。'
-                : '终端和 Agent 执行命令都要用它，装好后能直接用 apt、node、python。不装的话聊天、文件、搭建照常能用。',
-            style: t.bodySmall?.copyWith(height: 1.5),
-          ),
-          if (!runtime.prootBundled) ...[
-            const SizedBox(height: Space.x3),
-            InfoBanner('这个安装包里缺少进入 Ubuntu 要用的文件（${runtime.missingLauncherFiles.join('、')}），环境装了也进不去，所以这里先不提供安装。请重新安装完整的 LopiCode 安装包。', key: const Key('runtime-no-proot'), tone: BannerTone.warning),
-          ],
-          if (runtime.installError != null) ...[const SizedBox(height: Space.x3), InfoBanner(runtime.installError!, key: const Key('runtime-install-error'), tone: BannerTone.danger)],
-          if (runtime.installed && runtime.usable && !runtime.shouldUseLinux) ...[
-            const SizedBox(height: Space.x3),
-            InfoBanner(runtime.lastLaunchError ?? '连续启动失败', tone: BannerTone.danger),
-            const SizedBox(height: Space.x3),
-            FilledButton(key: const Key('runtime-retry-launch'), onPressed: ctl.resetLaunchFailures, child: const Text('重新尝试进入 Ubuntu')),
-          ],
-          if (runtime.busy) ...[
-            const SizedBox(height: Space.x4),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(Radii.sm),
-              child: LinearProgressIndicator(minHeight: 6, value: runtime.progressTotal > 0 ? runtime.progressDone / runtime.progressTotal : null),
-            ),
-            const SizedBox(height: Space.x2),
-            Text(
-              runtime.phase == RuntimePhase.downloading
-                  ? '已下载 ${formatBytes(runtime.progressDone)} / ${formatBytes(runtime.progressTotal)}'
-                  : runtime.phase == RuntimePhase.verifying
-                  ? '下载完成，正在核对文件'
-                  : '解压中，不要退出应用',
-              key: const Key('runtime-progress'),
-              style: t.bodySmall,
-            ),
-            const SizedBox(height: Space.x3),
-            OutlinedButton(key: const Key('runtime-cancel'), onPressed: ctl.cancelInstall, child: const Text('取消（下到一半的会留着）')),
-          ],
-          if (runtime.phase == RuntimePhase.notInstalled && runtime.prootBundled) ...[
-            const SizedBox(height: Space.x3),
-            Text(runtimeSpaceNote(runtime), key: const Key('runtime-space'), style: t.bodySmall?.copyWith(height: 1.5)),
-            const SizedBox(height: Space.x4),
-            FilledButton(key: const Key('runtime-install'), onPressed: ctl.install, child: Text(runtime.partialBytes > 0 ? '继续下载（已有 ${formatBytes(runtime.partialBytes)}）' : '安装运行环境')),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _MirrorRow extends StatelessWidget {
-  const _MirrorRow({required this.keyName, required this.label, required this.options, required this.value, required this.enabled, required this.onChanged});
-  final String keyName;
-  final String label;
-  final List<MirrorOption> options;
-  final String value;
-  final bool enabled;
-  final Future<void> Function(String id) onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = Theme.of(context).textTheme;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x2, 0),
-      child: Row(
-        children: [
-          Expanded(child: Text(label, style: t.bodyMedium)),
-          DropdownButton<String>(
-            key: Key(keyName),
-            value: value,
-            underline: const SizedBox.shrink(),
-            borderRadius: BorderRadius.circular(Radii.md),
-            padding: const EdgeInsets.symmetric(horizontal: Space.x2),
-            style: t.bodyMedium,
-            onChanged: enabled ? (id) => id == null ? null : onChanged(id) : null,
-            items: [for (final o in options) DropdownMenuItem(value: o.id, child: Text(o.label))],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PackRow extends StatelessWidget {
-  const _PackRow({required this.runtime, required this.ctl, required this.pack});
-  final RuntimeView runtime;
-  final RuntimeNotifier ctl;
-  final RuntimePack pack;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.colors;
-    final t = Theme.of(context).textTheme;
-    final installed = runtime.packInstalled(pack);
-    final running = runtime.runningPack == pack.id;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(Space.x4, Space.x2, Space.x4, Space.x2),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(pack.title, style: t.bodyLarge),
-                const SizedBox(height: 2),
-                Text(pack.subtitle, style: t.bodySmall),
-              ],
-            ),
-          ),
-          const SizedBox(width: Space.x3),
-          if (running)
-            OutlinedButton(onPressed: ctl.cancelPack, child: const Text('停止'))
-          else if (installed)
-            Text(
-              '已安装',
-              key: Key('pack-${pack.id}-installed'),
-              style: t.bodySmall?.copyWith(color: c.accent),
-            )
-          else
-            OutlinedButton(key: Key('pack-${pack.id}-install'), onPressed: runtime.runningPack == null && runtime.shouldUseLinux ? () => ctl.installPack(pack) : null, child: const Text('安装')),
-        ],
-      ),
-    );
-  }
-}
-
-/// 一键诊断：一句说明、一个按钮；跑完显示结论和完整报告，可整段复制。
-class _DiagnosticsPanel extends ConsumerWidget {
-  const _DiagnosticsPanel({required this.runtimeBusy, required this.projectDir});
-
-  /// 运行环境正在下载 / 解压：这时不让开始诊断。
-  final bool runtimeBusy;
-  final String? projectDir;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final diag = ref.watch(runtimeDiagnosticsProvider);
-    final t = Theme.of(context).textTheme;
-    return Builder(
-      builder: (context) => Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text('终端进不去或没反应时点这里。会自动跑一遍检查（大约一两分钟），不会改动你的项目。', style: t.bodySmall),
-          const SizedBox(height: Space.x3),
-          FilledButton.tonal(
-            key: const Key('runtime-diagnose'),
-            onPressed: diag.running || runtimeBusy ? null : () => ref.read(runtimeDiagnosticsProvider.notifier).run(projectDir: projectDir),
-            child: Text(diag.running ? '正在检查…' : (diag.hasReport ? '重新诊断' : '开始诊断')),
-          ),
-          if (diag.running) ...[
-            const SizedBox(height: Space.x3),
-            const LinearProgressIndicator(),
-            const SizedBox(height: Space.x2),
-            Text('第 ${diag.stepCount} 项：${diag.progress}', key: const Key('diag-progress'), style: t.bodySmall),
-          ],
-          if (diag.hasReport) ...[
-            const SizedBox(height: Space.x3),
-            for (final line in diag.conclusions)
-              Padding(
-                padding: const EdgeInsets.only(bottom: Space.x1),
-                child: Text('· $line', style: t.bodyMedium),
-              ),
-            const SizedBox(height: Space.x2),
-            _LogBox(lines: diag.report.split('\n'), keyName: 'diag-report', fromTop: true, maxLines: 400, maxHeight: 360),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton(
-                key: const Key('diag-copy'),
-                onPressed: () async {
-                  await Clipboard.setData(ClipboardData(text: diag.report));
-                  if (context.mounted) showSnack(context, '诊断结果已复制，可以直接粘贴发出去');
-                },
-                child: const Text('复制诊断结果'),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _LogBox extends StatelessWidget {
-  const _LogBox({required this.lines, required this.keyName, this.copyable = false, this.fromTop = false, this.maxLines = 60, this.maxHeight = 220});
-  final List<String> lines;
-  final String keyName;
-  final bool copyable;
-
-  /// 日志从最新（底部）看起；诊断报告从头看起。
-  final bool fromTop;
-  final int maxLines;
-  final double maxHeight;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.colors;
-    final shown = lines.length > maxLines ? lines.sublist(lines.length - maxLines) : lines;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Container(
-          key: Key(keyName),
-          constraints: BoxConstraints(maxHeight: maxHeight),
-          padding: const EdgeInsets.all(Space.x3),
-          decoration: BoxDecoration(color: c.codeBg, borderRadius: BorderRadius.circular(Radii.md)),
-          child: SingleChildScrollView(
-            reverse: !fromTop,
-            child: SelectableText(
-              shown.join('\n'),
-              // 等宽字体里没有中文时，退回界面的默认字体。
-              style: TextStyle(fontFamily: 'monospace', fontFamilyFallback: [?Theme.of(context).textTheme.bodySmall?.fontFamily], fontSize: FontSize.xs, height: 1.5, color: c.text),
-            ),
-          ),
-        ),
-        if (copyable)
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton(
-              onPressed: () async {
-                await Clipboard.setData(ClipboardData(text: lines.join('\n')));
-                if (context.mounted) showSnack(context, '日志已复制');
-              },
-              child: const Text('复制日志'),
-            ),
-          ),
-      ],
-    );
   }
 }
