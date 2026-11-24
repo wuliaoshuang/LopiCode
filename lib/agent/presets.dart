@@ -9,6 +9,8 @@ const Map<String, String> kToolLabels = {
   'run_command': '执行命令',
   'lowcode_get_page': '读取低代码页面',
   'lowcode_update_page': '更新低代码页面',
+  'backend_get_blocks': '读取后端积木',
+  'backend_update_blocks': '更新后端积木',
   'ask_user': '向你提问',
   'web_search': '联网搜索',
   'read_skill': '读取技能',

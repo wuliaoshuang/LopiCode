@@ -6,11 +6,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lopicode/agent/automation.dart';
 import 'package:lopicode/agent/model_config.dart';
 import 'package:lopicode/agent/team.dart';
+import 'package:lopicode/backend/backend_project.dart';
 import 'package:lopicode/core/crash_log.dart';
 import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/core/safe_file.dart';
 import 'package:lopicode/core/stores.dart';
 import 'package:lopicode/core/templates.dart';
+import 'package:lopicode/templates/project_templates.dart';
 import 'package:path/path.dart' as p;
 
 List<File> badBackups(File file) => [
@@ -160,6 +162,17 @@ void main() {
         expect(badBackups(meta), hasLength(1));
         // 用户的文件一个没少
         expect(File(p.join(project.dir, 'index.html')).existsSync(), isTrue);
+      });
+
+      test('后端生成记录 backend-gen.json：${entry.key} → 当没有记录，照样重新生成，坏文件留备份', () async {
+        final store = ProjectStore(p.join(tmp.path, 'projects'));
+        final project = await createProjectFromTemplate(store, '后端', ProjectTemplate.backendBlocks, language: 'node');
+        final record = File(p.join(project.dir, '.lopicode', kBackendManifestFile))..writeAsStringSync(entry.value);
+        final result = await regenerateBackend(project.dir);
+        expect(result.error, isNull);
+        expect(result.conflicts, isEmpty, reason: '没动过的生成文件靠开头的标记也认得出来');
+        expect(badBackups(record), hasLength(1));
+        expect(jsonDecode(record.readAsStringSync()), isA<Map<String, dynamic>>());
       });
 
       test('团队任务板：${entry.key} → 当空任务板', () async {

@@ -8,18 +8,24 @@
 // - 没有工作区时给真正的空状态和同一个主操作，不放假数据。
 import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/core/templates.dart';
+import 'package:lopicode/templates/project_templates.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/app_ref.dart';
+import 'package:lopicode/ui/new_project_sheet.dart';
 import 'package:lopicode/ui/push_drawer.dart';
 import 'package:lopicode/ui/settings_screen.dart';
 import 'package:lopicode/ui/shell.dart';
 import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
 
+/// 工作区列表每行开头的图标（单色的 Material 图标；彩色的语言图标只在新建面板里用）。
 IconData templateIcon(ProjectTemplate t) => switch (t) {
   ProjectTemplate.empty => Icons.folder_outlined,
   ProjectTemplate.web => Icons.language,
   ProjectTemplate.lowcode => Icons.dashboard_customize_outlined,
+  ProjectTemplate.backendBlocks => Icons.extension_outlined,
+  ProjectTemplate.backendCode => Icons.dns_outlined,
+  ProjectTemplate.fullstack => Icons.layers_outlined,
 };
 
 class ProjectListScreen extends StatefulWidget {
@@ -94,10 +100,10 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
 
   Future<void> _create() async {
     final store = appOf(context).projects;
-    final result = await showModalBottomSheet<(String, ProjectTemplate)>(context: context, isScrollControlled: true, builder: (_) => const _NewProjectSheet());
+    final result = await showNewProjectSheet(context);
     if (result == null || !mounted) return;
     await _guard(() async {
-      final project = await store.create(result.$1, result.$2);
+      final project = await createProjectFromTemplate(store, result.name, result.template, language: result.language);
       await _reload();
       if (mounted) _open(project);
     });
@@ -366,91 +372,6 @@ class _AddSheet extends StatelessWidget {
           if (hasHidden) option('restore', Icons.restore, '加回已移除的项目', '以前从列表移除、文件还在的项目'),
           const SizedBox(height: Space.x2),
         ],
-      ),
-    );
-  }
-}
-
-class _NewProjectSheet extends StatefulWidget {
-  const _NewProjectSheet();
-
-  @override
-  State<_NewProjectSheet> createState() => _NewProjectSheetState();
-}
-
-class _NewProjectSheetState extends State<_NewProjectSheet> {
-  final _name = TextEditingController();
-  ProjectTemplate _template = ProjectTemplate.web;
-
-  @override
-  void dispose() {
-    _name.dispose();
-    super.dispose();
-  }
-
-  void _submit() {
-    final name = _name.text.trim();
-    Navigator.pop(context, (name.isEmpty ? '我的${_template.label}' : name, _template));
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.colors;
-    final t = Theme.of(context).textTheme;
-    return Padding(
-      padding: EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, MediaQuery.viewInsetsOf(context).bottom + Space.x4),
-      child: SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text('新建项目', style: t.titleLarge),
-            const SizedBox(height: Space.x4),
-            TextField(
-              controller: _name,
-              decoration: const InputDecoration(labelText: '项目名', hintText: '不填会用模板名'),
-              textInputAction: TextInputAction.done,
-              onSubmitted: (_) => _submit(),
-            ),
-            const SizedBox(height: Space.x4),
-            Text('从模板开始', style: t.labelMedium),
-            const SizedBox(height: Space.x2),
-            for (final tpl in ProjectTemplate.values)
-              Padding(
-                padding: const EdgeInsets.only(bottom: Space.x2),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(Radii.md),
-                  onTap: () => setState(() => _template = tpl),
-                  child: Container(
-                    padding: const EdgeInsets.all(Space.x3),
-                    decoration: BoxDecoration(
-                      color: _template == tpl ? c.accentSoft : c.surface,
-                      borderRadius: BorderRadius.circular(Radii.md),
-                      border: Border.all(color: _template == tpl ? c.accentFill : c.border, width: _template == tpl ? 2 : 1),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(templateIcon(tpl), color: _template == tpl ? c.accent : c.textMuted),
-                        const SizedBox(width: Space.x3),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(tpl.label, style: t.titleSmall),
-                              Text(tpl.description, style: t.bodySmall),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            const SizedBox(height: Space.x2),
-            FilledButton(onPressed: _submit, child: const Text('创建')),
-          ],
-        ),
       ),
     );
   }

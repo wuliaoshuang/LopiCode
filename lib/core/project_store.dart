@@ -7,7 +7,7 @@ import 'package:lopicode/core/templates.dart';
 import 'package:path/path.dart' as p;
 
 class Project {
-  Project({required this.id, required this.name, required this.template, required this.createdAt, required this.dir, this.linuxPath, this.pinned = false, this.group = ''});
+  Project({required this.id, required this.name, required this.template, required this.createdAt, required this.dir, this.linuxPath, this.language, this.pinned = false, this.group = ''});
 
   /// 目录名，创建后不变（改名只改显示名）。
   final String id;
@@ -20,6 +20,9 @@ class Project {
   /// 应用目录里的项目为 null。[dir] 始终是手机上的真实路径。
   final String? linuxPath;
 
+  /// 创建时选的语言（只有要选语言的模板才有：node、python…）。只是记一笔，给列表显示图标用；之后项目里换语言不回写这里。
+  final String? language;
+
   /// 置顶、分组：只是列表里的摆法，不动文件。
   bool pinned;
   String group;
@@ -31,7 +34,7 @@ class Project {
 
   PathGuard get guard => PathGuard(dir);
 
-  Map<String, dynamic> toJson() => {'name': name, 'template': template.id, 'createdAt': createdAt.toIso8601String()};
+  Map<String, dynamic> toJson() => {'name': name, 'template': template.id, 'language': ?language, 'createdAt': createdAt.toIso8601String()};
 }
 
 class ProjectException implements Exception {
@@ -220,6 +223,7 @@ class ProjectStore {
         template: ProjectTemplate.byId(json['template'] is String ? json['template'] as String : null),
         createdAt: DateTime.tryParse(json['createdAt'] is String ? json['createdAt'] as String : '') ?? DateTime.fromMillisecondsSinceEpoch(0),
         dir: dir,
+        language: json['language'] is String ? json['language'] as String : null,
       );
     } catch (_) {
       return null;
@@ -233,16 +237,35 @@ class ProjectStore {
     return name;
   }
 
-  Future<Project> create(String rawName, ProjectTemplate template) async {
+  /// 新建项目并写入模板文件。
+  ///
+  /// 内置模板（empty / web / lowcode）不用给 [files]。其余模板的文件要在 core 之外生成好传进来
+  /// （一般不直接调这里，用 lib/templates/project_templates.dart 的 `createProjectFromTemplate`）。
+  /// [files] 的键是项目内的相对路径：越出项目目录、碰内部目录的会被拒绝，一个文件都不写。
+  Future<Project> create(String rawName, ProjectTemplate template, {Map<String, String>? files, String? language}) async {
     final name = validateName(rawName);
+    final content = files ?? templateFiles(template, name);
+    if (content == null) throw ProjectException('“${template.label}”模板的文件没有准备好，项目没有创建');
+    final lang = language != null && RegExp(r'^[A-Za-z0-9_+#.-]{1,32}$').hasMatch(language) ? language : null;
     await Directory(rootDir).create(recursive: true);
     final id = await _freeId(name);
     final dir = p.join(rootDir, id);
+    final guard = PathGuard(dir);
+    final targets = <String, String>{};
+    try {
+      for (final entry in content.entries) {
+        final full = guard.resolve(entry.key);
+        if (full == guard.root) throw PathGuardException('模板里有一个空的文件路径');
+        targets[full] = entry.value;
+      }
+    } on PathGuardException catch (e) {
+      throw ProjectException('模板里的文件路径不对（${e.message}），项目没有创建');
+    }
     await Directory(p.join(dir, PathGuard.reservedDir)).create(recursive: true);
-    final project = Project(id: id, name: name, template: template, createdAt: DateTime.now(), dir: dir);
+    final project = Project(id: id, name: name, template: template, createdAt: DateTime.now(), dir: dir, language: lang);
     await _writeMeta(project);
-    for (final entry in templateFiles(template, name).entries) {
-      final file = File(p.join(dir, entry.key));
+    for (final entry in targets.entries) {
+      final file = File(entry.key);
       await file.parent.create(recursive: true);
       await file.writeAsString(entry.value);
     }
