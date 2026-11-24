@@ -45,11 +45,24 @@ android {
         }
     }
 
+    // 发布签名固定用一把（2026-11-25 霜霜定：以后一直沿用，不许换；换了手机上装不了升级包）。
+    // 密钥文件不进仓库：路径和口令从 Gradle 属性读（放在打包机的 GRADLE_USER_HOME/gradle.properties）。
+    // 没配这些属性的机器退回调试签名——那样打出来的包和正式包签名不同，不能覆盖安装。
+    val lopiKeystore = providers.gradleProperty("lopicode.keystore").orNull
+    signingConfigs {
+        if (lopiKeystore != null) {
+            create("lopicode") {
+                storeFile = file(lopiKeystore)
+                storePassword = providers.gradleProperty("lopicode.storePassword").get()
+                keyAlias = providers.gradleProperty("lopicode.keyAlias").get()
+                keyPassword = providers.gradleProperty("lopicode.keyPassword").get()
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName(if (lopiKeystore != null) "lopicode" else "debug")
         }
     }
 }
