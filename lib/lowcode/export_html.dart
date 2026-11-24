@@ -1,6 +1,10 @@
 import 'dart:convert';
 
 import 'package:lopicode/lowcode/model.dart';
+import 'package:lopicode/lowcode/style_resolve.dart';
+
+// 别的导出（Vue / React）要某个节点的 CSS 时用这几个函数，不要自己再拼一遍。
+export 'package:lopicode/lowcode/style_resolve.dart' show nodeCssDeclarations, nodeCssRule, nodeCssSelector;
 
 class LcHtmlExport {
   const LcHtmlExport(this.html, this.css);
@@ -38,10 +42,9 @@ LcHtmlExport exportHtml(LcDocument doc) {
   void walk(LcNode n, LcNode? parent, int depth) {
     final pad = '  ' * (depth + 1);
     final cls = 'lc-${n.type} n-${n.id}';
-    final rules = _rules(n, parent);
-    if (rules.isNotEmpty) {
-      css.writeln('.n-${n.id} { ${rules.join(' ')} }');
-    }
+    // 每个节点一条规则，内容是它的最终样式（简写属性 + 自己的 style，见 style_resolve.dart）。
+    final rule = nodeCssRule(n, parent);
+    if (rule.isNotEmpty) css.writeln(rule);
     switch (n.type) {
       case 'text':
         body.writeln('$pad<p class="$cls">${_esc.convert(n.strProp('text') ?? '')}</p>');
@@ -88,49 +91,4 @@ $body</body>
 </html>
 ''';
   return LcHtmlExport(html, css.toString());
-}
-
-String _n(num v) => v == v.roundToDouble() ? '${v.round()}' : '$v';
-
-List<String> _rules(LcNode n, LcNode? parent) {
-  final r = <String>[];
-  if (n.type == 'spacer') {
-    final size = _n(n.numProp('size') ?? 16);
-    return ['flex: 0 0 ${size}px;', if (parent?.type == 'row') 'width: ${size}px;' else 'height: ${size}px;'];
-  }
-  final width = n.props['width'];
-  // 行里的容器类组件：没给固定宽度就平分剩余空间（和导出的 Flutter 代码规则一致）。
-  if (width == 'fill' || (parent?.type == 'row' && n.isContainer && width is! num)) {
-    r.add(parent?.type == 'row' ? 'flex: 1; min-width: 0;' : 'align-self: stretch;');
-  } else if (width is num) {
-    r.add('width: ${_n(width)}px;');
-  }
-  final height = n.numProp('height');
-  if (height != null) r.add('height: ${_n(height)}px;');
-  final padding = n.numProp('padding');
-  if (padding != null) r.add('padding: ${_n(padding)}px;');
-  final margin = n.numProp('margin');
-  if (margin != null) r.add('margin: ${_n(margin)}px;');
-  final bg = n.strProp('bg');
-  if (bg != null) r.add('background: ${bg.toLowerCase()};');
-  final color = n.strProp('color');
-  if (color != null) r.add('color: ${color.toLowerCase()};');
-  final radius = n.numProp('radius');
-  if (radius != null) r.add('border-radius: ${_n(radius)}px;');
-  final fontSize = n.numProp('fontSize');
-  if (fontSize != null) r.add('font-size: ${_n(fontSize)}px;');
-  if (n.props['bold'] == true) r.add('font-weight: 600;');
-  final textAlign = n.strProp('textAlign');
-  if (textAlign != null) r.add('text-align: $textAlign;');
-  if (n.isContainer) {
-    final gap = n.numProp('gap');
-    if (gap != null) r.add('gap: ${_n(gap)}px;');
-    const align = {'start': 'flex-start', 'center': 'center', 'end': 'flex-end', 'stretch': 'stretch'};
-    const justify = {'start': 'flex-start', 'center': 'center', 'end': 'flex-end', 'between': 'space-between'};
-    final a = n.strProp('align');
-    if (a != null) r.add('align-items: ${align[a]};');
-    final j = n.strProp('justify');
-    if (j != null) r.add('justify-content: ${justify[j]};');
-  }
-  return r;
 }
