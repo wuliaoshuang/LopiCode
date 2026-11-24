@@ -28,7 +28,14 @@ class RuntimePacksGroup extends ConsumerWidget {
       );
     }
     final versions = ref.watch(runtimePackVersionsProvider).value ?? const <String, String>{};
-    final failed = lastFailedPack(packs: runtime.packs, installed: runtime.installedPacks, runningPack: runtime.runningPack, output: runtime.packOutput);
+    final failed = lastFailedPack(
+      packs: runtime.packs,
+      installed: runtime.installedPacks,
+      runningPack: runtime.runningPack,
+      output: runtime.packOutput,
+      errorId: runtime.packErrorId,
+      errorMessage: runtime.packError,
+    );
     Widget tile(RuntimePack pack) => _PackTile(runtime: runtime, ctl: ctl, pack: pack, version: versions[pack.id], failed: failed?.packId == pack.id ? failed : null);
     return SettingsGroup(
       title: '语言与工具',

@@ -35,11 +35,12 @@ Future<int?> directorySize(String dir) async {
 }
 
 /// 用 apt 装的那几样，版本记在 dpkg 的清单里：语言 id → 包名。
-const Map<String, String> _dpkgPackages = {'python': 'python3', 'git': 'git'};
+const Map<String, String> _dpkgPackages = {'python': 'python3', 'git': 'git', 'java': 'openjdk-21-jdk-headless', 'php': 'php-cli'};
 
 /// 读出已装语言的版本号（只读环境里的文件，不执行任何命令）。读不出来的那一项不在结果里。
 /// - Node.js：官方包自带的 `usr/local/include/node/node_version.h`。
-/// - apt 装的：`var/lib/dpkg/status` 里对应包的 Version。
+/// - Go：官方包自带的 `usr/local/go/VERSION`。
+/// - apt 装的（Python、Git、JDK、PHP）：`var/lib/dpkg/status` 里对应包的 Version。
 Future<Map<String, String>> readPackVersions(String rootfsDir, Iterable<String> packIds) async {
   final out = <String, String>{};
   String? dpkg;
@@ -49,6 +50,14 @@ Future<Map<String, String>> readPackVersions(String rootfsDir, Iterable<String> 
         final header = File(p.join(rootfsDir, 'usr/local/include/node/node_version.h'));
         if (!header.existsSync()) continue;
         final version = nodeVersionFromHeader(await header.readAsString());
+        if (version != null) out[id] = version;
+        continue;
+      }
+      if (id == 'go') {
+        // Go 官方包根目录的 VERSION 文件，第一行形如 “go1.26.11”
+        final file = File(p.join(rootfsDir, 'usr/local/go/VERSION'));
+        if (!file.existsSync()) continue;
+        final version = RegExp(r'^go([0-9][0-9A-Za-z.]*)').firstMatch((await file.readAsString()).trim())?.group(1);
         if (version != null) out[id] = version;
         continue;
       }
@@ -94,40 +103,34 @@ class PackAttempt {
   const PackAttempt({required this.packId, required this.stopped, required this.reason});
   final String packId;
 
-  /// 是用户自己点的“停止”（进程被杀），不算出错。
+  /// 是用户自己点的“停止 / 取消”，不算出错。
   final bool stopped;
 
-  /// 给用户看的原因：输出里最像报错的那一行 + 退出码。
+  /// 给用户看的原因（安装器分好类的那句人话的第一行）。
   final String reason;
 }
 
-final RegExp _errorLine = RegExp(
-  r'^(E:|W:|Err:|curl:|tar:|xz:|dpkg:|sha256sum:|bash:|proot)|error|failed|failure|cannot|could not|unable|not found|no space|denied|timed out|失败|无法|错误|不匹配',
-  caseSensitive: false,
-);
-
-/// 从安装输出里认出“上一次没装成的是哪一项、为什么”。正在装、已经装好、认不出来都返回 null。
-/// 输出的头尾两行是 `LinuxRuntime.installPack` 写的（“开始安装 X…” 和 “X 安装失败（退出码 N）…”）。
-PackAttempt? lastFailedPack({required List<RuntimePack> packs, required Set<String> installed, required String? runningPack, required List<String> output}) {
-  if (runningPack != null || output.length < 2) return null;
-  final first = output.first, last = output.last;
+/// “上一次没装成的是哪一项、为什么”。正在装、已经装好、没有失败都返回 null。
+/// 失败的那一项和原因由安装器（`PackInstaller`）记在快照的 `packErrorId` / `packError` 里，这里不再从输出里猜；
+/// 用户自己停掉的不记成失败，只在输出最后留一行“已取消安装 X。”，据此认出来。
+PackAttempt? lastFailedPack({
+  required List<RuntimePack> packs,
+  required Set<String> installed,
+  required String? runningPack,
+  required List<String> output,
+  required String? errorId,
+  required String? errorMessage,
+}) {
+  if (runningPack != null) return null;
+  if (errorId != null) {
+    if (installed.contains(errorId) || !packs.any((p) => p.id == errorId)) return null;
+    final first = (errorMessage ?? '').split('\n').first.trim();
+    return PackAttempt(packId: errorId, stopped: false, reason: first.isEmpty ? '安装没有成功' : first);
+  }
+  if (output.isEmpty) return null;
   for (final pack in packs) {
-    if (first != '开始安装 ${pack.title}…') continue;
-    if (installed.contains(pack.id) || last.contains('安装完成')) return null;
-    final code = RegExp(r'退出码 (-?\d+)').firstMatch(last)?.group(1);
-    // 进程被信号杀掉时退出码是负数：这页上只有“停止”会杀它
-    final stopped = code != null && code.startsWith('-');
-    final body = [
-      for (final line in output.sublist(1, last.contains('退出码') ? output.length - 1 : output.length))
-        if (line.trim().isNotEmpty) line.trim(),
-    ];
-    final detail = body.lastWhere(_errorLine.hasMatch, orElse: () => body.isEmpty ? '' : body.last);
-    final reason = stopped
-        ? '已停止，没有装完'
-        : detail.isEmpty
-        ? (code == null ? '安装没有成功' : '安装没有成功（退出码 $code）')
-        : (code == null ? detail : '$detail（退出码 $code）');
-    return PackAttempt(packId: pack.id, stopped: stopped, reason: reason);
+    if (output.last != '已取消安装 ${pack.title}。' || installed.contains(pack.id)) continue;
+    return PackAttempt(packId: pack.id, stopped: true, reason: '已停止，没有装完');
   }
   return null;
 }

@@ -180,7 +180,7 @@ go version
   const RuntimePack(
     id: 'java',
     title: 'Java（JDK 21）',
-    subtitle: 'Ubuntu 软件源里的 OpenJDK 21，带 javac，不带图形界面部分',
+    subtitle: 'Ubuntu 软件源里的 OpenJDK 21，带 javac',
     marker: 'usr/bin/javac',
     commands: ['java', 'javac'],
     downloadBytes: 130 * _mib,

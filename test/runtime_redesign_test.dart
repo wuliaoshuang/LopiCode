@@ -152,7 +152,7 @@ void main() {
       expect(await directorySize(p.join(tmp.path, 'nope')), isNull);
     });
 
-    test('版本号：Node 读头文件，apt 装的读 dpkg 清单；读不到就没有这一项', () async {
+    test('版本号：Node 读头文件，Go 读 VERSION，apt 装的读 dpkg 清单；读不到就没有这一项', () async {
       final tmp = Directory.systemTemp.createTempSync('lopi_ver_');
       addTearDown(() => tmp.deleteSync(recursive: true));
       expect(await readPackVersions(tmp.path, ['node', 'python', 'git', 'go']), isEmpty);
@@ -164,36 +164,55 @@ void main() {
         ..writeAsStringSync(
           'Package: python3-pip\nStatus: install ok installed\nVersion: 24.0+dfsg-1ubuntu1\n\n'
           'Package: python3\nStatus: install ok installed\nVersion: 3.12.3-0ubuntu2.1\n\n'
-          'Package: git\nStatus: install ok installed\nVersion: 1:2.43.0-1ubuntu7.3\n',
+          'Package: git\nStatus: install ok installed\nVersion: 1:2.43.0-1ubuntu7.3\n\n'
+          'Package: openjdk-21-jdk-headless\nStatus: install ok installed\nVersion: 21.0.9+10-1~24.04\n\n'
+          'Package: php-cli\nStatus: install ok installed\nVersion: 2:8.3+93ubuntu2\n',
         );
       expect(await readPackVersions(tmp.path, ['node', 'python', 'git', 'go']), {'node': '24.11.1', 'python': '3.12.3', 'git': '2.43.0'});
+      File(p.join(tmp.path, 'usr/local/go/VERSION'))
+        ..parent.createSync(recursive: true)
+        ..writeAsStringSync('go1.26.11\ntime 2026-01-01T00:00:00Z\n');
+      expect(await readPackVersions(tmp.path, ['go', 'java', 'php']), {'go': '1.26.11', 'java': '21.0.9', 'php': '8.3'});
+      File(p.join(tmp.path, 'usr/local/go/VERSION')).writeAsBytesSync([0xff, 0xfe, 0x00]);
+      expect(await readPackVersions(tmp.path, ['go']), isEmpty, reason: 'VERSION 文件坏了不崩');
       // 坏内容不崩
       File(p.join(tmp.path, 'usr/local/include/node/node_version.h')).writeAsBytesSync([0xff, 0xfe, 0x00]);
       File(p.join(tmp.path, 'var/lib/dpkg/status')).writeAsStringSync('Package: git\n');
       expect(await readPackVersions(tmp.path, ['node', 'git']), isEmpty);
     });
 
-    test('上一次没装成的是哪一项、为什么：挑输出里最像报错的一行；用户停止不算出错；装好了 / 正在装不算', () {
+    test('上一次没装成的是哪一项、为什么：用安装器记下的那一项和原因的第一行；用户停止不算出错；装好了 / 正在装不算', () {
       final packs = runtimePacks('tuna');
       final git = packs.firstWhere((x) => x.id == 'git');
-      PackAttempt? of(List<String> output, {Set<String> installed = const {}, String? running}) => lastFailedPack(packs: packs, installed: installed, runningPack: running, output: output);
-      final failed = of(['开始安装 ${git.title}…', 'Reading package lists...', 'E: Unable to locate package git', '', '${git.title} 安装失败（退出码 100）。上面是完整输出。']);
+      PackAttempt? of(List<String> output, {Set<String> installed = const {}, String? running, String? errorId, String? error}) =>
+          lastFailedPack(packs: packs, installed: installed, runningPack: running, output: output, errorId: errorId, errorMessage: error);
+      final failed = of(['开始安装 ${git.title}…', 'E: Unable to locate package git', '${git.title} 没装成：软件源里找不到这个包。'], errorId: 'git', error: '软件源里找不到这个包。\nE: Unable to locate package git');
       expect(failed?.packId, 'git');
       expect(failed?.stopped, isFalse);
-      expect(failed?.reason, 'E: Unable to locate package git（退出码 100）');
-      final stopped = of(['开始安装 ${git.title}…', 'Get:1 http://x', '${git.title} 安装失败（退出码 -9）。上面是完整输出。']);
+      expect(failed?.reason, '软件源里找不到这个包。', reason: '只取原因的第一行，完整输出在下面的框里');
+      final stopped = of(['开始安装 ${git.title}…', 'Get:1 http://x', '已取消安装 ${git.title}。']);
+      expect(stopped?.packId, 'git');
       expect(stopped?.stopped, isTrue);
       expect(stopped?.reason, '已停止，没有装完');
-      expect(of(['开始安装 ${git.title}…', '无法启动 PRoot：No such file'])?.reason, '无法启动 PRoot：No such file');
+      expect(of(const ['x'], errorId: 'git')?.reason, '安装没有成功', reason: '没有原因也不编');
       expect(of(['开始安装 ${git.title}…', 'ok', '${git.title} 安装完成。']), isNull);
-      expect(of(['开始安装 ${git.title}…', 'x', '${git.title} 安装失败（退出码 1）。上面是完整输出。'], installed: {'git'}), isNull);
-      expect(of(['开始安装 ${git.title}…', 'x'], running: 'git'), isNull);
+      expect(
+        of(const ['x'], installed: {'git'}, errorId: 'git', error: 'x'),
+        isNull,
+        reason: '后来装好了就不再挂着',
+      );
+      expect(of(const ['x'], running: 'git', errorId: 'git', error: 'x'), isNull);
+      expect(
+        of(const ['x'], errorId: 'ruby', error: 'x'),
+        isNull,
+        reason: '清单里没有的不显示',
+      );
       expect(of(const []), isNull);
       expect(of(['别的格式', 'x']), isNull, reason: '认不出来就不显示，不乱猜');
     });
 
-    test('语言图标：三样内置的都有对应图标名，没登记的用自己的 id', () {
-      expect([for (final pack in runtimePacks('tuna')) packIconId(pack.id)], ['nodejs', 'python', 'git']);
+    test('语言图标：六样内置的都有对应图标名，没登记的用自己的 id', () {
+      expect([for (final pack in runtimePacks('tuna')) packIconId(pack.id)], ['nodejs', 'python', 'git', 'go', 'java', 'php']);
       expect(packIconId('go'), 'go');
     });
   });
@@ -256,9 +275,8 @@ void main() {
     testWidgets('已安装：占用空间是现数的；语言一行一样——已装的带版本和对勾、正在装的有进度和最新输出、没装的是同一尺寸的小按钮 ($suffix)', (tester) async {
       final env = await boot(tester, installed: true);
       env.fakeNodeAndPython();
-      env.runtime
-        ..runningPack = 'git'
-        ..packOutput.addAll(['开始安装 Git…', 'Get:1 http://mirrors.tuna.tsinghua.edu.cn/ubuntu-ports noble/main arm64 git arm64 [3,412 kB]']);
+      env.runtime.packInstaller.running = 'git';
+      env.runtime.packOutput.addAll(['开始安装 Git…', 'Get:1 http://mirrors.tuna.tsinghua.edu.cn/ubuntu-ports noble/main arm64 git arm64 [3,412 kB]']);
       await tester.pumpWidget(env.app(mode));
       await tester.pump();
       expect(find.byKey(const Key('runtime-usage')), findsNothing, reason: '没数完之前不显示，不编数字');
@@ -286,7 +304,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
       expect(find.text('卸载运行环境？'), findsNothing);
       await shot(tester, 'rt3-installed-bottom-$suffix');
-      env.runtime.runningPack = null;
+      env.runtime.packInstaller.running = null;
     });
 
     testWidgets('语言没装成：原因写在那一行（红字）+ “重试”，完整输出在下面；小按钮全是一个尺寸；点了真的去装 ($suffix)', (tester) async {
@@ -295,11 +313,14 @@ void main() {
         '开始安装 Python 3.12…',
         'Err:1 http://mirrors.tuna.tsinghua.edu.cn/ubuntu-ports noble InRelease',
         'E: Unable to locate package python3-venv',
-        'Python 3.12 安装失败（退出码 100）。上面是完整输出。',
+        'Python 3.12 没装成：软件源里找不到要装的包。',
       ]);
+      env.runtime.packInstaller
+        ..errorPack = 'python'
+        ..error = '软件源里找不到要装的包。\nE: Unable to locate package python3-venv';
       await tester.pumpWidget(env.app(mode));
       await tester.pump();
-      expect(tester.widget<Text>(find.byKey(const Key('pack-python-note'))).data, 'E: Unable to locate package python3-venv（退出码 100）');
+      expect(tester.widget<Text>(find.byKey(const Key('pack-python-note'))).data, '软件源里找不到要装的包。');
       expect(tester.widget<Text>(find.byKey(const Key('pack-python-note'))).style?.color, tester.element(find.byType(RuntimeScreen)).colors.danger);
       expect(find.descendant(of: find.byKey(const Key('pack-python-install')), matching: find.text('重试')), findsOneWidget);
       expect(find.descendant(of: find.byKey(const Key('pack-node-install')), matching: find.text('安装')), findsOneWidget);
