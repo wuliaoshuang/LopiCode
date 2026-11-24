@@ -5,7 +5,7 @@
 
 不许抄第三方代码或素材（dsh-Go 是 AGPL；Blockly 等积木库也不抄），全部自己写。不嵌网页版积木库，运行时不联网。
 
-## 页面文件（`page.lowcode.json`）
+## 页面文件（`page.lc.json`）
 
 ```jsonc
 {
@@ -75,8 +75,19 @@
 | 模型 | `lib/lowcode/model.dart`、`logic_model.dart`、`component_model.dart` | 上面的数据类 |
 | A 样式 | `lib/lowcode/style_model.dart`、`css_codec.dart`、`style_resolve.dart`，改 `export_html.dart` | `parseDeclarations(css)`、`declarationsToCss(map)`、`legacyStyle(node, parent)`、`resolvedStyle(node, parent)`、`LcStyle` 带类型的读写 |
 | C 逻辑 | `lib/lowcode/logic_blocks.dart`（积木目录与校验）、`logic_js.dart`（翻 JavaScript）、`logic_text.dart`（积木的中文读法） | `exportLogicJs(doc)`、`validateLogic(doc)` |
-| F 格式化 | `lib/format/*.dart`，改 `lib/ui/code_editor.dart`、`code_highlight.dart`、`files_tab.dart` | `formatCode(source, language)` |
+| F 格式化 | `lib/format/*.dart`，改 `lib/ui/code_editor.dart`、`code_highlight.dart`、`files_tab.dart` | `formatCode(source, language, {indent})` → `FormatResult{text, changed, problem, note}` |
 | B 画布 | `lib/lowcode/canvas_*.dart`、`style_*_sheet.dart` 等界面文件，把渲染从 `builder_screen.dart` 挪出来 | — |
 | C 界面 | `lib/lowcode/logic_screen.dart` 等 | — |
 | D 框架导出 | `lib/lowcode/export_vue.dart`、`export_react.dart` | `exportVue(doc)`、`exportReact(doc)` |
 | E 组件 | `lib/lowcode/component_ops.dart`、界面文件 | 存成组件、展开实例 |
+
+## 做完之后补记（2026-11-24）
+
+- **逻辑里的数字和文字**：算术一律先转数字（转不了当 0，除以 0 得 0）；拼文字只用“拼接”积木；“等于”两边类型不同时转成文字再比。
+- **没有数据绑定**：变量改了界面不会自己变，要用“改控件”积木。显隐靠 `style.display`。
+- **哪种控件能读写哪些属性**：以 `logic_blocks.dart` 的 `writablePropsFor` / `readablePropsFor` 为准，界面和导出都查它。
+- **原始 CSS**：整条规则只读第一对花括号里面；声明后面夹着 `}` 或别的规则时按声明逐条读，多出来的上报，不静默丢。
+- **网页导出与格式化**：`exportHtml` 的输出不变（没有 style、没有逻辑的旧页面逐字节同以前）；落盘前由 `export_tidy.dart` 过格式化器。Vue / React 导出的每个文件也过格式化器，排不了就原样并带上原因。
+- **Vue / React**：变量和被逻辑用到的控件属性在 Vue 里是 `ref`，在 React 里放进 `useRef` 对象再手动刷新（保证先写后读、异步回调里读到最新值）。没有用真正的编译器编译过。
+- **自定义组件**：定义里的节点不支持逻辑；实例在渲染和导出时展开，展开后的 id 带实例前缀。
+- **截图**：多人同时出图时各用各的文件名前缀，只删自己的，不要动整个 `docs/screenshots/`。
