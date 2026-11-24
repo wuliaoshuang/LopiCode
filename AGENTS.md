@@ -81,6 +81,8 @@ tool/check.sh --fix    # 先自动排版
   - `runtime_state.dart`：`runtimeProvider`、`runtimeDiagnosticsProvider`——运行环境和一键诊断（完整版）。
     干活的还是 `LinuxRuntime` / `RuntimeDiagnostics`（管进程和文件，终端和 Agent 的命令直接用它们），但它们不再是 `ChangeNotifier`：
     每次有变化拍一张不可变快照（`lib/runtime/runtime_snapshot.dart` 的 `RuntimeView` / `DiagnosticsView`）；界面只读快照，要做什么调 Notifier 的方法。
+  - `runtime_extras.dart`：`runtimeDiskUsageProvider`（环境占多大）、`runtimePackVersionsProvider`（已装语言的版本号）——“运行环境”页现算的只读信息，
+    只读文件、不起进程；算不出来就是 null / 空，界面不显示，不编数字。
   - `team_state.dart`：`teamProvider((工作区, 主对话 id))`——团队任务板（完整版）。`TeamTask` / `TeamMember` 不可变，
     `TeamBoard` 每次变化换一份 `TeamView`；校验不过就抛错、什么都不改。
   - 一个工作区的状态（都按 `ProjectSession` 分身，工作区关掉并收完尾后释放）：

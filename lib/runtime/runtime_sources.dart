@@ -83,7 +83,7 @@ List<RuntimePack> runtimePacks(String sourceId) => [
   RuntimePack(
     id: 'node',
     title: 'Node.js 24',
-    subtitle: '官方 arm64 包，自带 npm，装到 /usr/local',
+    subtitle: '官方 arm64 包，自带 npm',
     marker: 'usr/local/bin/node',
     // 版本号从官方的校验清单里读出来，下载后先核对 sha256 再解压。
     script:
@@ -107,7 +107,7 @@ npm --version
   const RuntimePack(
     id: 'python',
     title: 'Python 3.12',
-    subtitle: 'Ubuntu 软件源里的 python3、pip、venv',
+    subtitle: 'Ubuntu 软件源里的，带 pip 和 venv',
     marker: 'usr/bin/python3',
     script: 'set -e\n$_aptInstall python3 python3-pip python3-venv\npython3 --version\n',
   ),
