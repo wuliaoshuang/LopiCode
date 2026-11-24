@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:lopicode/lowcode/component_ops.dart';
 import 'package:lopicode/lowcode/logic_js.dart';
 import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/lowcode/style_resolve.dart';
@@ -75,6 +76,12 @@ LcHtmlExport exportHtml(LcDocument doc) {
         body.writeln('$pad<hr class="$cls">');
       case 'spacer':
         body.writeln('$pad<div class="$cls"></div>');
+      case 'component':
+        // 自定义组件的实例在下面 expandedTree 里已经展开成普通控件了；还能走到这儿的是展开不了的
+        // （定义被删了，或者组件绕回来用到了自己）：留一行注释说明，再留一个空盒子占位（它的样式规则还在）。
+        body.writeln('$pad<!-- 这里是一个自定义组件，内容没有导出：找不到它的定义，或者它绕回来用到了自己 -->');
+        body.writeln('$pad<div class="$cls">');
+        body.writeln('$pad</div>');
       default:
         final tag = n.type == 'page' ? 'main' : 'div';
         body.writeln('$pad<$tag class="$cls">');
@@ -85,7 +92,8 @@ LcHtmlExport exportHtml(LcDocument doc) {
     }
   }
 
-  walk(doc.root, null, 0);
+  // 实例展开后最外层沿用实例的 id、里面是“实例id__内部id”，所以 class 和 CSS 规则全页不重复。
+  walk(expandedTree(doc), null, 0);
   final js = exportLogicJs(doc);
   // 没有逻辑的页面一个字节都不多（和第 1 版导出的一样）。
   final script = js.isEmpty ? '' : '  <script src="$kLowcodeLogicFile" defer></script>\n';

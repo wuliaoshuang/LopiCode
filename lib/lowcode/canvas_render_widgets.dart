@@ -5,8 +5,10 @@
 // - 组件本身不响应点击（按钮、输入框只是样子）：点＝选中，长按＝拖动重排。
 import 'dart:math' as math;
 
+import 'package:lopicode/lowcode/canvas_component_widgets.dart';
 import 'package:lopicode/lowcode/canvas_css.dart';
 import 'package:lopicode/lowcode/canvas_parts_widgets.dart';
+import 'package:lopicode/lowcode/component_ops.dart';
 import 'package:lopicode/lowcode/css_color.dart';
 import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/lowcode/palette_widgets.dart';
@@ -82,6 +84,7 @@ class CanvasPage extends StatelessWidget {
     required this.onDragging,
     required this.boxKey,
     this.preview,
+    this.inert = false,
   });
 
   final LcDocument doc;
@@ -99,6 +102,23 @@ class CanvasPage extends StatelessWidget {
   /// 每个组件“边框盒”的定位用的 key（选中框、拖柄靠它量位置）。
   final GlobalKey Function(String id) boxKey;
   final CanvasResizePreview? preview;
+
+  /// true＝只画样子：不能点、不能拖、没有插入位。自定义组件实例里面的内容用它画（整块只能当一个东西选中）。
+  final bool inert;
+
+  CanvasPage _inertCopy() => CanvasPage(
+    doc: doc,
+    pageWidth: pageWidth,
+    minHeight: minHeight,
+    selected: null,
+    dragging: false,
+    onSelect: (_) {},
+    onDrop: (_, _, _) {},
+    canDrop: (_, _) => false,
+    onDragging: (_) {},
+    boxKey: boxKey,
+    inert: true,
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -224,6 +244,7 @@ class CanvasPage extends StatelessWidget {
     final align = cssAlign(s['align-items']) ?? (n.type == 'row' ? CssAlign.center : CssAlign.start);
     final justify = cssJustify(s['justify-content']) ?? CssJustify.start;
     if (n.children.isEmpty) {
+      if (inert) return const SizedBox.shrink();
       return CanvasSlot(parentId: n.id, index: 0, vertical: flow.row, idle: 0, dragging: dragging, emptyHint: true, onDrop: onDrop, canDrop: canDrop);
     }
     // 插入位只在拖动时放进去：平时子项之间的间距由容器自己留，这样“两端对齐”之类的分布才准。
@@ -297,15 +318,19 @@ class CanvasPage extends StatelessWidget {
     final parent = ctx.parent;
     // 拖柄拖动中：把临时尺寸当成这个组件自己的样式来算，“撑满”之类的规则才会跟着让路。
     final p = preview;
+    // 自定义组件的实例：按展开后的内容画（最外层沿用实例的 id，所以选中框、拖柄照常认得它）。
+    // 展开不了、或者已经在别的实例里面了（inert）就不展开，下面画占位。
+    final instance = node.type == 'component' && !inert;
+    final shown = instance ? expandInstance(doc, node) ?? node : node;
     final n = p != null && p.nodeId == node.id
         ? LcNode(
-            id: node.id,
-            type: node.type,
-            props: node.props,
-            children: node.children,
-            style: {...node.style, if (p.width != null) 'width': '${p.width}px', if (p.height != null) 'height': '${p.height}px'},
+            id: shown.id,
+            type: shown.type,
+            props: shown.props,
+            children: shown.children,
+            style: {...shown.style, if (p.width != null) 'width': '${p.width}px', if (p.height != null) 'height': '${p.height}px'},
           )
-        : node;
+        : shown;
     final s = resolvedStyle(n, parent);
     final scale = ctx.scale.withFont(cssSizePx(s['font-size'], ctx.scale) ?? ctx.scale.fontSize);
     final textColor = _argb(s['color']) ?? ctx.textColor;
@@ -360,7 +385,7 @@ class CanvasPage extends StatelessWidget {
           textColor: textColor,
           buttonText: ctx.buttonText,
         );
-        content = _flex(context, n, s, inner, tightW: tightW, tightH: tightH);
+        content = (instance ? _inertCopy() : this)._flex(context, n, s, inner, tightW: tightW, tightH: tightH);
         final align = _textAlign(s);
         if (own != null || align != null) content = DefaultTextStyle.merge(style: own, textAlign: align, child: content);
       case 'text':
@@ -445,30 +470,7 @@ class CanvasPage extends StatelessWidget {
         content = const SizedBox.shrink();
       case 'component':
         final ref = n.strProp('ref');
-        final name = (ref == null ? null : doc.component(ref)?.name) ?? '组件';
-        content = Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(
-            color: const Color(0x0F2962CB),
-            borderRadius: BorderRadius.circular(Radii.sm),
-            border: Border.all(color: Palette.primary300),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.widgets_outlined, size: 18, color: Palette.primary500),
-              const SizedBox(width: 6),
-              Flexible(
-                child: Text(
-                  name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 14, color: Palette.primary700),
-                ),
-              ),
-            ],
-          ),
-        );
+        content = CanvasComponentPlaceholder(name: ref == null ? null : doc.component(ref)?.name);
       default:
         content = const SizedBox.shrink();
     }
@@ -499,7 +501,8 @@ class CanvasPage extends StatelessWidget {
       maxHeight: h == null ? math.max(size.maxHeight ?? double.infinity, size.minHeight ?? 0) : double.infinity,
     );
     if (limits != const BoxConstraints()) box = ConstrainedBox(constraints: limits, child: box);
-    box = KeyedSubtree(key: boxKey(n.id), child: box);
+    // 实例里面的内容不单独定位（选中框只认实例本身）。
+    if (!inert) box = KeyedSubtree(key: boxKey(n.id), child: box);
 
     // 角标：隐藏的、脱离文档流的组件画布上照样占位（不然选不中），用角标说明。
     final badge = hidden ? '已隐藏' : (position == 'absolute' || position == 'fixed' ? '绝对定位' : (position == 'sticky' ? '粘性定位' : null));
@@ -519,35 +522,22 @@ class CanvasPage extends StatelessWidget {
     if (!margin.isZero) box = Padding(padding: EdgeInsets.fromLTRB(margin.left, margin.top, margin.right, margin.bottom), child: box);
 
     // 选中框和拖柄由画布叠在上面画；这里只管点选和长按拖动。
-    Widget wrapped = GestureDetector(
-      key: ValueKey('lowcode-node-${n.id}'),
-      behavior: HitTestBehavior.opaque,
-      onTap: () => onSelect(n.id),
-      child: Container(
-        foregroundDecoration: dragging && n.isContainer && selected != n.id ? BoxDecoration(border: Border.all(color: Palette.neutral300)) : null,
-        child: n.isContainer ? box : IgnorePointer(child: box),
-      ),
-    );
-    wrapped = LongPressDraggable<LcDrag>(
-      data: LcDrag.move(n.id),
-      delay: const Duration(milliseconds: 350),
-      onDragStarted: () {
-        onSelect(n.id);
-        onDragging(true);
-      },
-      onDragEnd: (_) => onDragging(false),
-      onDraggableCanceled: (_, _) => onDragging(false),
-      feedback: Material(
-        color: Colors.transparent,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(color: Palette.primary700, borderRadius: BorderRadius.circular(Radii.md)),
-          child: Text('移动 ${n.spec.label}', style: const TextStyle(color: Colors.white, fontSize: 14)),
-        ),
-      ),
-      childWhenDragging: Opacity(opacity: 0.35, child: wrapped),
-      child: wrapped,
-    );
+    // 实例整块只当一个东西：里面的内容一律不接手势（点哪儿选中的都是实例）。
+    final droppable = n.isContainer && !instance;
+    Widget wrapped = inert
+        ? box
+        : GestureDetector(
+            key: ValueKey('lowcode-node-${n.id}'),
+            behavior: HitTestBehavior.opaque,
+            onTap: () => onSelect(n.id),
+            child: Container(
+              foregroundDecoration: dragging && droppable && selected != n.id ? BoxDecoration(border: Border.all(color: Palette.neutral300)) : null,
+              child: droppable ? box : IgnorePointer(child: box),
+            ),
+          );
+    if (!inert) {
+      wrapped = _draggable(node, wrapped);
+    }
     if (position == 'relative') {
       final shift = cssRelativeShift(s, scale, availWidth: ctx.availW, availHeight: ctx.availH);
       if (shift.dx != 0 || shift.dy != 0) wrapped = Transform.translate(offset: Offset(shift.dx, shift.dy), child: wrapped);
@@ -569,4 +559,25 @@ class CanvasPage extends StatelessWidget {
     if (flexible) return Flexible(key: key, child: wrapped);
     return KeyedSubtree(key: key, child: wrapped);
   }
+
+  Widget _draggable(LcNode n, Widget child) => LongPressDraggable<LcDrag>(
+    data: LcDrag.move(n.id),
+    delay: const Duration(milliseconds: 350),
+    onDragStarted: () {
+      onSelect(n.id);
+      onDragging(true);
+    },
+    onDragEnd: (_) => onDragging(false),
+    onDraggableCanceled: (_, _) => onDragging(false),
+    feedback: Material(
+      color: Colors.transparent,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(color: Palette.primary700, borderRadius: BorderRadius.circular(Radii.md)),
+        child: Text('移动 ${n.type == 'component' ? componentLabel(doc, n) : n.spec.label}', style: const TextStyle(color: Colors.white, fontSize: 14)),
+      ),
+    ),
+    childWhenDragging: Opacity(opacity: 0.35, child: child),
+    child: child,
+  );
 }

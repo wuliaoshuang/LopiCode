@@ -1,6 +1,9 @@
 // 设计约束（低代码 · 属性面板 · 390×844）
 // - 底部面板，一行一个属性：标签在上（或在左），控件在下（或在右）。
 // - 这里只管“内容属性”和第 1 版的简写属性；细的样式在样式面板（style_editor_sheet.dart）。
+// - 选中的是自定义组件的实例时，最上面先是它的可配置属性（每个一块，见 component_values_widgets.dart），下面才是宽度、外边距。
+import 'package:lopicode/lowcode/component_ops.dart';
+import 'package:lopicode/lowcode/component_values_widgets.dart';
 import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:material_ui/material_ui.dart';
@@ -31,8 +34,11 @@ const Map<String, String> _fieldLabels = {
 const List<String> _swatches = ['#FFFFFF', '#F6FBFD', '#D3DEE4', '#707A8F', '#222435', '#058654', '#29D2B2', '#DC3545', '#D98A0B', '#3B6FE0'];
 
 class PropertySheet extends StatefulWidget {
-  const PropertySheet({super.key, required this.node, required this.onChanged});
+  const PropertySheet({super.key, required this.node, required this.onChanged, this.doc});
   final LcNode node;
+
+  /// 页面文档。选中的是自定义组件的实例时要靠它找到组件定义（有哪些可配置属性）；不给就不显示那一段。
+  final LcDocument? doc;
   final void Function(String key, Object? value) onChanged;
 
   @override
@@ -71,8 +77,13 @@ class PropertySheetState extends State<PropertySheet> {
         controller: scroll,
         padding: EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, MediaQuery.viewInsetsOf(context).bottom + Space.x6),
         children: [
-          Text('${n.spec.label}属性', style: t.titleLarge),
+          Text('${n.type == 'component' && widget.doc != null ? componentLabel(widget.doc!, n) : n.spec.label}属性', style: t.titleLarge, maxLines: 1, overflow: TextOverflow.ellipsis),
           const SizedBox(height: Space.x2),
+          if (n.type == 'component' && widget.doc != null) ...[
+            const SizedBox(height: Space.x2),
+            // 改的是这个实例自己传的值（props.values）；整张表交回去，空了就把 values 去掉。
+            ComponentValuesForm(doc: widget.doc!, node: n, onChanged: (values) => _set('values', values)),
+          ],
           for (final key in n.spec.fields) ...[const SizedBox(height: Space.x3), _field(context, key)],
         ],
       ),

@@ -1,7 +1,8 @@
 // 设计约束（低代码搭建 · 390×844）
 // - 画布是主角：可缩放 / 平移，按组件的最终样式渲染（画布本身在 canvas_view.dart）。
 // - 底部固定一条组件栏：长按拖到画布，或者点一下直接加进当前选中的容器。
-// - 选中组件后，组件栏上方出现一行操作：名字在左；属性 / 样式 / 事件 在右；上移、下移、复制、删除收进“更多操作”。
+// - 选中组件后，组件栏上方出现一行操作：名字在左；属性 / 样式 / 事件 在右；上移、下移、复制、删除收进“更多操作”
+//   （普通控件多一项“存成组件”；自定义组件的实例多“编辑组件”“拆开成普通控件”）。
 // - 属性、样式、图层、自定义组件都放进底部面板，积木逻辑是单独一页，不和画布抢地方。撤销 / 重做在顶栏。
 // - 拖动时才显示插入位置（色条），平时不干扰画面。
 import 'dart:async';
@@ -119,10 +120,11 @@ class _BuilderScreenState extends State<BuilderScreen> {
   }
 
   /// 点组件栏：加进选中的容器；选中的不是容器就加在它后面；没选中加到页面末尾。
-  void _addByTap(String type) {
+  void _addByTap(String type, [String? ref]) {
     final doc = _doc!;
     final sel = _selected == null ? null : doc.find(_selected!);
     final node = doc.newNode(type);
+    if (ref != null) node.props['ref'] = ref; // 自定义组件的实例
     _apply((d) {
       if (sel != null && sel.isContainer) {
         d.insert(sel.id, node);
@@ -139,6 +141,7 @@ class _BuilderScreenState extends State<BuilderScreen> {
   void _drop(LcDrag drag, String parentId, int index) {
     if (drag.type != null) {
       final node = _doc!.newNode(drag.type!);
+      if (drag.ref != null) node.props['ref'] = drag.ref;
       _apply((d) => d.insert(parentId, node, index));
       setState(() => _selected = node.id);
     } else {
@@ -168,6 +171,7 @@ class _BuilderScreenState extends State<BuilderScreen> {
       barrierColor: Colors.black26,
       builder: (_) => PropertySheet(
         node: node,
+        doc: _doc,
         onChanged: (key, value) => _apply((d) {
           final n = d.find(node.id);
           if (n == null) return;
@@ -286,6 +290,21 @@ class _BuilderScreenState extends State<BuilderScreen> {
     _refresh();
   }
 
+  /// 选中操作条里和自定义组件有关的三项：存成组件、编辑组件（改它的内容）、拆开成普通控件。
+  Future<void> _componentAction(String action, LcNode node) async {
+    final doc = _doc!;
+    switch (action) {
+      case 'save':
+        final id = await saveAsComponentFlow(context, doc: doc, onEdit: _apply, nodeId: node.id);
+        if (id != null) _selected = id;
+      case 'edit':
+        await showComponentEditor(context, doc: doc, onEdit: _apply, componentId: node.strProp('ref') ?? '');
+      case 'detach':
+        await detachInstanceFlow(context, doc: doc, onEdit: _apply, instanceId: node.id);
+    }
+    _refresh();
+  }
+
   Future<void> _openFrameworkExport() async {
     await showFrameworkExport(context, doc: _doc!, session: widget.session);
     _refresh();
@@ -373,7 +392,7 @@ class _BuilderScreenState extends State<BuilderScreen> {
                   ),
                 ),
                 if (node != null) _selectionBar(context, node),
-                PaletteBar(onTap: _addByTap, onDragging: _setDragging),
+                PaletteBar(onTap: _addByTap, onDragging: _setDragging, components: doc.components),
               ],
             ),
     );
@@ -398,7 +417,7 @@ class _BuilderScreenState extends State<BuilderScreen> {
           Icon(lcIcon(node.type), size: 18, color: c.accent),
           const SizedBox(width: Space.x2),
           Expanded(
-            child: Text(node.spec.label, style: t.titleSmall, maxLines: 1, overflow: TextOverflow.ellipsis),
+            child: Text(node.type == 'component' ? componentLabel(_doc!, node) : node.spec.label, style: t.titleSmall, maxLines: 1, overflow: TextOverflow.ellipsis),
           ),
           FilledButton(onPressed: _openProps, style: compact, child: const Text('属性')),
           const SizedBox(width: Space.x2),
@@ -421,13 +440,17 @@ class _BuilderScreenState extends State<BuilderScreen> {
                     if (copy != null) setState(() => _selected = copy);
                   case 'delete':
                     unawaited(_delete(node));
+                  default:
+                    unawaited(_componentAction(v, node));
                 }
               },
-              itemBuilder: (_) => const [
-                PopupMenuItem(value: 'up', child: Text('上移')),
-                PopupMenuItem(value: 'down', child: Text('下移')),
-                PopupMenuItem(value: 'copy', child: Text('复制')),
-                PopupMenuItem(value: 'delete', child: Text('删除')),
+              itemBuilder: (_) => [
+                const PopupMenuItem(value: 'up', child: Text('上移')),
+                const PopupMenuItem(value: 'down', child: Text('下移')),
+                const PopupMenuItem(value: 'copy', child: Text('复制')),
+                if (node.type == 'component') ...const [PopupMenuItem(value: 'edit', child: Text('编辑组件')), PopupMenuItem(value: 'detach', child: Text('拆开成普通控件'))] else
+                  const PopupMenuItem(value: 'save', child: Text('存成组件')),
+                const PopupMenuItem(value: 'delete', child: Text('删除')),
               ],
             ),
         ],

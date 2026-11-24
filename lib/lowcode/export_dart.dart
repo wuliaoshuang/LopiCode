@@ -1,9 +1,11 @@
+import 'package:lopicode/lowcode/component_ops.dart';
 import 'package:lopicode/lowcode/model.dart';
 
 /// 把页面导出成一个可直接放进 Flutter 项目的 Dart 文件（一个 StatelessWidget）。
 String exportDart(LcDocument doc, {String? className}) {
   final name = className ?? dartClassName(doc.title);
-  final body = _node(doc.root, null, 3);
+  // 自定义组件的实例先展开成普通控件再生成；展开不了的那个位置是一个空的 SizedBox。
+  final body = _node(expandedTree(doc), null, 3);
   return '''// 由 LopiCode 低代码搭建器生成，重新导出会覆盖本文件。
 import 'package:flutter/material.dart';
 
