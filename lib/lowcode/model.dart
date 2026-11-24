@@ -1,5 +1,8 @@
 import 'dart:convert';
 
+import 'package:lopicode/lowcode/component_model.dart';
+import 'package:lopicode/lowcode/logic_model.dart';
+
 /// 低代码页面的数据模型：一棵组件树，整份存成项目里的 JSON 文件。
 ///
 /// 属性约定（都可省略）：
@@ -11,13 +14,24 @@ import 'dart:convert';
 /// - `justify`：start / center / end / between（主轴）
 /// - `textAlign`：left / center / right
 /// - `text` / `src` / `placeholder`：字符串；`bold`：布尔；`items`：字符串数组
+/// - `ref` / `values`：只有 `component`（自定义组件的实例）用，见 component_model.dart
+///
+/// 第 2 版加的（都可省略，旧文件没有也能打开；约定见 docs/lowcode-v2-design.md）：
+/// - [style]：这个组件自己的 CSS 声明（规范写法：小写连字符的属性名 → 值），盖在上面那些简写属性之上。
+/// - [bind]：只在自定义组件的定义里用，把属性接到组件的 prop 上（属性名 → prop 名）。
 class LcNode {
-  LcNode({required this.id, required this.type, Map<String, dynamic>? props, List<LcNode>? children}) : props = props ?? {}, children = children ?? [];
+  LcNode({required this.id, required this.type, Map<String, dynamic>? props, List<LcNode>? children, Map<String, String>? style, Map<String, String>? bind})
+    : props = props ?? {},
+      children = children ?? [],
+      style = style ?? {},
+      bind = bind ?? {};
 
   String id;
   final String type;
   final Map<String, dynamic> props;
   final List<LcNode> children;
+  final Map<String, String> style;
+  final Map<String, String> bind;
 
   LcSpec get spec => lcSpecs[type]!;
   bool get isContainer => spec.isContainer;
@@ -38,6 +52,8 @@ class LcNode {
     'id': id,
     'type': type,
     if (props.isNotEmpty) 'props': props,
+    if (style.isNotEmpty) 'style': style,
+    if (bind.isNotEmpty) 'bind': bind,
     if (children.isNotEmpty) 'children': [for (final c in children) c.toJson()],
   };
 
@@ -74,7 +90,42 @@ class LcNode {
     if (children.any((c) => c.type == 'page')) {
       throw const FormatException('page 只能作为根组件');
     }
-    return LcNode(id: json['id'] is String ? json['id'] as String : '', type: type, props: _cleanProps(type, (rawProps as Map?)?.cast<String, dynamic>() ?? {}), children: children);
+    return LcNode(
+      id: json['id'] is String ? json['id'] as String : '',
+      type: type,
+      props: _cleanProps(type, (rawProps as Map?)?.cast<String, dynamic>() ?? {}),
+      children: children,
+      style: cleanStyle(json['style']),
+      bind: cleanBind(json['bind']),
+    );
+  }
+
+  static final RegExp _cssName = RegExp(r'^-{0,2}[a-z][a-z0-9-]{0,63}$');
+
+  /// 属性里哪些可以接到组件的 prop 上。
+  static const List<String> bindableProps = ['text', 'src', 'placeholder', 'bg', 'color'];
+
+  /// 容错读 `style`：不是对象就当没有；属性名必须是小写连字符写法；
+  /// 值必须是字符串，而且不许带 `{ } ;` 和换行（免得导出的 CSS 被截断或夹带别的规则）。
+  static Map<String, String> cleanStyle(Object? raw) {
+    final out = <String, String>{};
+    if (raw is! Map) return out;
+    raw.forEach((key, value) {
+      if (key is! String || value is! String) return;
+      final v = value.trim();
+      if (!_cssName.hasMatch(key) || v.isEmpty || v.length > 500 || RegExp(r'[{};\n\r<>]').hasMatch(v)) return;
+      out[key] = v;
+    });
+    return out;
+  }
+
+  static Map<String, String> cleanBind(Object? raw) {
+    final out = <String, String>{};
+    if (raw is! Map) return out;
+    raw.forEach((key, value) {
+      if (key is String && value is String && bindableProps.contains(key) && LcComponentProp.namePattern.hasMatch(value)) out[key] = value;
+    });
+    return out;
   }
 
   static Map<String, dynamic> _cleanProps(String type, Map<String, dynamic> raw) {
@@ -102,6 +153,15 @@ class LcNode {
           if (value is bool) out[key] = value;
         case 'items':
           if (value is List) out[key] = [for (final v in value) '$v'];
+        case 'ref':
+          if (type == 'component' && value is String && LcComponentDef.idPattern.hasMatch(value)) out[key] = value;
+        case 'values':
+          if (type == 'component' && value is Map) {
+            out[key] = <String, dynamic>{
+              for (final e in value.entries)
+                if (e.key is String && (e.value is String || e.value is num || e.value is bool)) e.key as String: e.value,
+            };
+          }
       }
     });
     return out;
@@ -154,20 +214,30 @@ const Map<String, LcSpec> lcSpecs = {
   ),
   'divider': LcSpec('divider', '分割线', defaults: {}, fields: ['margin']),
   'spacer': LcSpec('spacer', '间隔', defaults: {'size': 16}, fields: ['size']),
+  // 自定义组件的实例：props.ref 指向 LcDocument.components 里的定义。不在组件栏的固定清单里。
+  'component': LcSpec('component', '组件', defaults: {}, fields: ['width', 'margin']),
 };
 
 /// 组件面板里可拖出来的类型（page 只能是根）。
 const List<String> lcPaletteTypes = ['container', 'row', 'column', 'card', 'text', 'button', 'image', 'input', 'list', 'divider', 'spacer'];
 
 class LcDocument {
-  LcDocument({required this.title, required this.root}) {
+  LcDocument({required this.title, required this.root, LcLogic? logic, List<LcComponentDef>? components}) : logic = logic ?? LcLogic(), components = components ?? [] {
     _normalizeIds();
+    _normalizeComponents();
   }
 
-  static const int currentVersion = 1;
+  /// 1＝只有组件树；2＝加了 style / logic / components（都可省略，所以第 1 版的文件照样能读）。
+  static const int currentVersion = 2;
 
   String title;
   LcNode root;
+
+  /// 页面逻辑：变量和事件处理。
+  final LcLogic logic;
+
+  /// 自定义组件的定义。
+  final List<LcComponentDef> components;
   int _nextId = 1;
 
   factory LcDocument.starter(String title) => LcDocument(
@@ -201,7 +271,16 @@ class LcDocument {
     if (root.type != 'page') {
       throw const FormatException('根组件必须是 page');
     }
-    return LcDocument(title: json['title'] is String ? json['title'] as String : '未命名页面', root: root);
+    final rawComponents = json['components'];
+    return LcDocument(
+      title: json['title'] is String ? json['title'] as String : '未命名页面',
+      root: root,
+      logic: LcLogic.fromJson(json['logic']),
+      components: [
+        if (rawComponents is List)
+          for (final c in rawComponents) ?LcComponentDef.tryParse(c),
+      ],
+    );
   }
 
   static LcDocument parse(String source) {
@@ -217,7 +296,49 @@ class LcDocument {
     return LcDocument.fromJson(decoded);
   }
 
-  Map<String, dynamic> toJson() => {'version': currentVersion, 'title': title, 'root': root.toJson()};
+  Map<String, dynamic> toJson() => {
+    'version': currentVersion,
+    'title': title,
+    'root': root.toJson(),
+    if (!logic.isEmpty) 'logic': logic.toJson(),
+    if (components.isNotEmpty) 'components': [for (final c in components) c.toJson()],
+  };
+
+  LcComponentDef? component(String id) {
+    for (final c in components) {
+      if (c.id == id) return c;
+    }
+    return null;
+  }
+
+  /// 组件定义：id 缺了 / 重了补成 `c数字`；定义内部的节点 id 各自保证唯一（和页面的节点 id 互不相干）。
+  void _normalizeComponents() {
+    final ids = <String>{};
+    var next = 1;
+    for (final c in components) {
+      if (c.id.isEmpty || !ids.add(c.id)) {
+        while (ids.contains('c$next')) {
+          next++;
+        }
+        c.id = 'c$next';
+        ids.add(c.id);
+      }
+      final seen = <String>{};
+      var n = 1;
+      void fix(LcNode node) {
+        if (node.id.isEmpty || !RegExp(r'^[A-Za-z0-9]+$').hasMatch(node.id) || !seen.add(node.id)) {
+          while (seen.contains('k$n')) {
+            n++;
+          }
+          node.id = 'k$n';
+          seen.add(node.id);
+        }
+        node.children.forEach(fix);
+      }
+
+      fix(c.root);
+    }
+  }
 
   String encode() => const JsonEncoder.withIndent('  ').convert(toJson());
 
