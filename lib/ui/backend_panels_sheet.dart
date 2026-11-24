@@ -8,6 +8,7 @@ import 'package:lopicode/backend/backend_edit.dart';
 import 'package:lopicode/backend/backend_model.dart';
 import 'package:lopicode/backend/backend_project.dart';
 import 'package:lopicode/backend/backend_targets.dart';
+import 'package:lopicode/blocks/block_panels_sheet.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 import 'package:lopicode/lowcode/logic_text.dart';
 import 'package:lopicode/lowcode/logic_vars_sheet.dart';
@@ -409,7 +410,7 @@ Future<bool> showBeRegenSheet(BuildContext context, BackendRegenResult result) a
               ),
         children: [
           if (result.errorCount > 0)
-            InfoBanner('积木里还有 ${result.errorCount} 处错误，有错误的接口没有生成。点顶栏的“问题”逐条看。', tone: BannerTone.warning, margin: const EdgeInsets.fromLTRB(Space.x4, Space.x1, Space.x4, Space.x2)),
+            InfoBanner('${blockErrorsHeadline(result.errorCount)}（上一次生成的文件原样留着）。点顶栏的“问题”逐条看。', tone: BannerTone.warning, margin: const EdgeInsets.fromLTRB(Space.x4, Space.x1, Space.x4, Space.x2)),
           if (conflicts.isNotEmpty)
             Padding(
               padding: const EdgeInsets.fromLTRB(Space.x4, Space.x1, Space.x4, Space.x2),

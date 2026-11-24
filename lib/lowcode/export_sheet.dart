@@ -11,6 +11,7 @@ import 'package:lopicode/core/path_guard.dart';
 import 'package:lopicode/lowcode/code_sheet.dart';
 import 'package:lopicode/lowcode/export_react.dart';
 import 'package:lopicode/lowcode/export_vue.dart';
+import 'package:lopicode/lowcode/logic_gate.dart';
 import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/theme/tokens.dart';
@@ -76,6 +77,15 @@ class _FrameworkExportSheetState extends State<FrameworkExportSheet> {
   String get _dir => _kind == 'vue' ? kVueExportDir : kReactExportDir;
 
   Future<void> _write() async {
+    // 积木逻辑有“错误”：不导出（和 logic.js、后端代码一个规矩），说清楚去哪修。
+    final errors = lcLogicErrorCount(widget.doc);
+    if (errors > 0) {
+      setState(() {
+        _result = lcExportBlockedText(errors);
+        _failed = true;
+      });
+      return;
+    }
     setState(() {
       _busy = true;
       _result = null;

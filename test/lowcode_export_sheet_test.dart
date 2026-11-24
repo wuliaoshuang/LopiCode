@@ -13,6 +13,9 @@ import 'package:lopicode/lowcode/export_framework_common.dart';
 import 'package:lopicode/lowcode/export_react.dart';
 import 'package:lopicode/lowcode/export_sheet.dart';
 import 'package:lopicode/lowcode/export_vue.dart';
+import 'package:lopicode/lowcode/logic_blocks.dart';
+import 'package:lopicode/lowcode/logic_model.dart';
+import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:path/path.dart' as p;
@@ -48,8 +51,8 @@ void main() {
   }
 
   /// 一个空页面 + 一个按钮，点了就打开导出面板（和搭建页菜单里的做法一样）。
-  Future<void> pumpHost(WidgetTester tester, TestEnv env, ProjectSession session, ThemeMode mode) async {
-    final doc = frameworkSample();
+  Future<void> pumpHost(WidgetTester tester, TestEnv env, ProjectSession session, ThemeMode mode, {LcDocument? page}) async {
+    final doc = page ?? frameworkSample();
     await tester.pumpWidget(
       appFor(
         env,
@@ -138,6 +141,40 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   }
+
+  testWidgets('积木逻辑有错误：导出被拦下，说清楚去哪修，一个文件都不写；只有警告照常导出', (tester) async {
+    final (env, project, session) = await open(tester);
+    final bad = frameworkSample();
+    final h = bad.logic.handlers.isEmpty ? bad.logic.addHandler('load')! : bad.logic.handlers.first;
+    h.body.add(LcBlock(op: 'setVar', args: {'name': '没有这个变量', 'value': exNum(1)}));
+    final errors = validateLogic(bad).where((i) => i.isError).length;
+    expect(errors, greaterThan(0));
+    await pumpHost(tester, env, session, ThemeMode.light, page: bad);
+    await tester.tap(k('lc-export-write'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('没有导出：积木逻辑里有 $errors 个错误，代码没有更新'), findsOneWidget);
+    expect(find.textContaining('点右上角的“问题”'), findsOneWidget);
+    expect(Directory(p.join(project.dir, kVueExportDir)).existsSync(), isFalse);
+    await shot(tester, '8-export-blocked-light');
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+
+    // 只有警告：照常导出。
+    final warn = frameworkSample();
+    final wh = warn.logic.handlers.isEmpty ? warn.logic.addHandler('load')! : warn.logic.handlers.first;
+    wh.body.add(LcBlock(op: 'log', args: {'value': exBin('/', exNum(1), exNum(0))}));
+    expect(validateLogic(warn).where((i) => i.isError), isEmpty);
+    expect(validateLogic(warn), isNotEmpty);
+    await pumpHost(tester, env, session, ThemeMode.light, page: warn);
+    await tester.tap(k('lc-export-write'));
+    for (var i = 0; i < 200 && find.textContaining('已导出').evaluate().isEmpty; i++) {
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 10)));
+      await tester.pump(const Duration(milliseconds: 20));
+    }
+    expect(find.textContaining('已导出'), findsOneWidget);
+    expect(Directory(p.join(project.dir, kVueExportDir)).existsSync(), isTrue);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('写不进去：说出真正的原因，按钮恢复可点', (tester) async {
     final (env, project, session) = await open(tester);

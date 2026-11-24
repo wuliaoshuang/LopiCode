@@ -3,10 +3,12 @@
 // - 一块积木从下到上画五层：（被拖着时）投影 → 底下的深色边 → 渐变主体 → 顶部高光 → 字和槽位。
 // - 槽位三种：白底输入框（直接填）、深色胶囊带小三角（挑一个）、空槽（等一个表达式）；要“是 / 否”的是六边形。
 // - 选中＝外面一圈柔和的亮黄描边（细线 + 淡淡的光晕）；落点阴影＝和手上那块同形的剪影：淡淡的本色 + 一圈本色描边，一眼看出“会插到这里”。
+// - 有问题的积木：错误＝沿轮廓一圈细红线 + 右上角红色圆角标，警告＝只有黄色三角角标；出问题的那一格外面一圈同色虚线（画法在 block_issue_view.dart）。
 // - 让位时积木是滑过去的：位置由外面给（`BkPaintState.pose`），这里只管照着画；刚落下的积木轻弹一下（`pulse`）。
 import 'package:lopicode/blocks/block_colors.dart';
 import 'package:lopicode/blocks/block_geometry.dart';
 import 'package:lopicode/blocks/block_host.dart';
+import 'package:lopicode/blocks/block_issue_view.dart';
 import 'package:lopicode/blocks/block_motion.dart';
 import 'package:lopicode/blocks/block_shapes.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
@@ -80,6 +82,7 @@ class BkPaintState {
     this.flash = 0,
     this.errors = const [],
     this.warnings = const [],
+    this.marks,
   });
 
   /// 选中的积木（路径）；`selectedHat`＝选中的是帽子。
@@ -119,9 +122,12 @@ class BkPaintState {
   /// 画成落点阴影：只有半透明的剪影。
   final bool ghost;
 
-  /// 有错误 / 警告的积木（空路径＝帽子）：右上角画小圆点。
+  /// 有错误 / 警告的积木（空路径＝帽子）：只知道“哪一块”时用这两个（只读画布）；编辑器给 [marks]，连哪一格都标。
   final List<LcBlockPath> errors;
   final List<LcBlockPath> warnings;
+
+  /// 这一串上的问题（给了就不看 [errors] / [warnings]）。
+  final BkIssueMarks? marks;
 
   static const BkPaintState none = BkPaintState();
 }
@@ -317,14 +323,10 @@ class BkScriptPainter {
       final r = from != null && to != null ? l.rect.shift(to.topLeft - from.topLeft) : l.rect;
       text.paint(canvas, l.text, r, tone.text.withValues(alpha: 0.92), size: 13);
     }
-    final bad = state.errors.any((p) => bkSameBlockPath(p, b.path) && (p.isEmpty == b.isHat));
-    final warn = !bad && state.warnings.any((p) => bkSameBlockPath(p, b.path) && (p.isEmpty == b.isHat));
-    if (bad || warn) {
-      final top = b.isHat ? b.rect.top + metrics.hatDome : b.rect.top;
-      final c = Offset(b.rect.right - 3, top + 3);
-      canvas.drawCircle(c, 6.5, Paint()..color = palette.canvas);
-      canvas.drawCircle(c, 5, Paint()..color = bad ? palette.error : palette.warning);
-    }
+    final marks = state.marks;
+    bool same(LcBlockPath p) => bkSameBlockPath(p, b.path) && (p.isEmpty == b.isHat);
+    final level = marks != null ? marks.levelOf(b) : (state.errors.any(same) ? true : (state.warnings.any(same) ? false : null));
+    if (level != null) bkPaintBlockMark(canvas, palette, metrics, shape, path, error: level);
   }
 
   /// 槽位凹进去的感觉：上沿一道暗线。
@@ -385,6 +387,8 @@ class BkScriptPainter {
         final own = palette.tone(e.colorKey);
         _expr(canvas, e, e.bare ? tone : (identical(own.fill, tone.fill) || own.fill == tone.fill ? own.nested : own), block, state, parent: tone);
     }
+    final bad = state.marks?.slotLevel(block, s);
+    if (bad != null) bkPaintSlotMark(canvas, palette, metrics, s, error: bad);
     final sel = state.selectedSlot;
     if (sel != null && sel.arg == s.arg && bkSameBlockPath(sel.block, block) && bkSameExprPath(sel.path, s.exprPath) && s.hatSlotId == null && s.look != BkSlotLook.add) {
       _outline(canvas, path, color: state.slotColor);

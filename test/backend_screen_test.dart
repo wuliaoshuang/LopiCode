@@ -23,6 +23,7 @@ import 'package:lopicode/lowcode/logic_model.dart';
 import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/templates/project_templates.dart';
+import 'package:lopicode/ui/backend_run_sheet.dart';
 import 'package:lopicode/ui/backend_screen.dart';
 import 'package:lopicode/ui/chrome.dart';
 import 'package:lopicode/ui/project_shell.dart';
@@ -287,7 +288,31 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('点积木盒也能加；积木有错误：照样保存，副标题和运行面板明说出错的接口没生成', (tester) async {
+  testWidgets('深色：有错误的积木在画布上标红，副标题和底部提示说代码没有更新；启动被拦', (tester) async {
+    await boot(tester, ProjectTemplate.backendBlocks, language: 'node', mode: ThemeMode.dark);
+    final host = be(tester).host!;
+    final hello = routeOf(tester, 'GET', '/hello').id;
+    host.edit(() => host.script(hello)!.body.insert(0, LcBlock(op: 'setVar', args: {'name': '没有这个变量', 'value': exText('')})));
+    await tester.pump();
+    await flushed(tester);
+    await until(tester, () => find.text('1 个错误，没更新').evaluate().isNotEmpty, '副标题说代码没有更新');
+    expect(k('be-blocked-snack'), findsOneWidget);
+    await shot(tester, '8-be-blocked-dark');
+    ScaffoldMessenger.of(tester.element(k('bk-canvas'))).hideCurrentSnackBar();
+    await tester.pumpAndSettle();
+    await tester.tap(k('be-run'));
+    await tester.pumpAndSettle();
+    expect(k('bk-errors-gate'), findsOneWidget);
+    expect(find.byType(BeRunSheet), findsNothing);
+    await shot(tester, '8-be-gate-dark');
+    await tester.tap(k('bk-errors-gate-close'));
+    await tester.pumpAndSettle();
+    expect(k('bk-errors-gate'), findsNothing);
+    expect(find.byType(BeRunSheet), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('点积木盒也能加；积木有错误：模型照样保存，但代码不更新——副标题明说，启动被拦下并指向问题列表；修好以后自动重新生成', (tester) async {
     await boot(tester, ProjectTemplate.backendBlocks, language: 'node');
     await paletteTab(tester, 'event');
     await tapKey(tester, 'bk-palette-item-hat-GET');
@@ -303,12 +328,51 @@ void main() {
     host.edit(() => host.script(hello)!.body.insert(0, LcBlock(op: 'setVar', args: {'name': '没有这个变量', 'value': exText('')})));
     await tester.pump();
     await flushed(tester);
+    final codeBefore = text('server.js');
     await until(tester, () => text(kBackendFileName).contains('没有这个变量'), '有错误也保存模型');
-    expect(find.textContaining('处错误，没生成'), findsOneWidget);
+    await until(tester, () => find.text('1 个错误，没更新').evaluate().isNotEmpty, '副标题说代码没有更新');
+    expect(find.text('有 1 个错误，代码没有更新'), findsOneWidget, reason: '底部的提示是完整的一句');
+    // 刚出错时底部提示一次，带“查看问题”。
+    expect(k('be-blocked-snack'), findsOneWidget);
+    expect(find.text('查看问题'), findsOneWidget);
+    expect(text('server.js'), codeBefore, reason: '有错误不生成新代码：上一次生成的原样留着');
+    // 积木上有标记、顶栏的问题数是红的。
+    expect(find.descendant(of: k('bk-issues'), matching: find.byType(Badge)), findsOneWidget);
+    await shot(tester, '8-be-blocked-light');
+
+    // 启动被拦下：不开运行面板，说明原因，主按钮“查看问题”。
+    ScaffoldMessenger.of(tester.element(k('bk-canvas'))).hideCurrentSnackBar();
+    await tester.pumpAndSettle();
     await tester.tap(k('be-run'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('处错误：出错的接口不在生成的代码里'), findsOneWidget);
-    await shot(tester, 'be-run-errors-light');
+    expect(k('bk-errors-gate'), findsOneWidget);
+    expect(find.text('有 1 个错误，代码没有更新'), findsWidgets);
+    expect(find.textContaining('现在不能启动'), findsOneWidget);
+    expect(find.byType(BeRunSheet), findsNothing);
+    await shot(tester, '8-be-gate-light');
+    await tester.tap(k('bk-errors-gate-open'));
+    await tester.pumpAndSettle();
+    expect(k('bk-errors-gate'), findsNothing);
+    expect(find.text('1 个问题'), findsOneWidget);
+    expect(find.textContaining('没有这个变量'), findsWidgets);
+    await shot(tester, '8-be-issues-light');
+    // 点那一条：跳到那块积木并选中。
+    final idx = host.issues.indexWhere((i) => i.isError);
+    await tester.tap(k('bk-issue-$idx'));
+    await tester.pumpAndSettle();
+    expect(ed(tester).selection!.scriptId, hello);
+    expect(ed(tester).selection!.path.single.index, 0);
+
+    // 修好（删掉那块）：自动重新生成，副标题恢复，启动不再被拦。
+    host.edit(() => host.script(hello)!.body.removeAt(0));
+    await tester.pump();
+    await flushed(tester);
+    await until(tester, () => find.text('1 个错误，没更新').evaluate().isEmpty, '修好以后副标题恢复');
+    await until(tester, () => text('server.js').contains('/new'), '修好以后重新生成');
+    await tester.tap(k('be-run'));
+    await tester.pumpAndSettle();
+    expect(k('bk-errors-gate'), findsNothing);
+    expect(find.byType(BeRunSheet), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

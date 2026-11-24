@@ -17,9 +17,11 @@ import 'package:lopicode/blocks/block_drag.dart';
 import 'package:lopicode/blocks/block_editor_view.dart';
 import 'package:lopicode/blocks/block_geometry.dart';
 import 'package:lopicode/blocks/block_host.dart';
+import 'package:lopicode/blocks/block_issue_view.dart';
 import 'package:lopicode/blocks/block_layout.dart';
 import 'package:lopicode/blocks/block_motion.dart';
 import 'package:lopicode/blocks/block_paint_view.dart';
+import 'package:lopicode/blocks/block_panels_sheet.dart';
 import 'package:lopicode/blocks/block_script_view.dart';
 import 'package:lopicode/blocks/block_shapes.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
@@ -48,6 +50,9 @@ mixin BkEditorCanvas on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Ti
   BkCanvasLayout? _layout;
   int _layoutRev = -1;
   List<BlockIssue> issues = const [];
+
+  /// [issues] 按串分好（画标记、点角标用）。
+  Map<String, BkIssueMarks> issueMarks = const {};
   BlockSelection? selection;
 
   late final AnimationController flashAnim = AnimationController(vsync: this, duration: const Duration(milliseconds: 900));
@@ -143,7 +148,7 @@ mixin BkEditorCanvas on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Ti
     if (_layout == null || _layoutRev != host.revision) {
       _layout = layoutBlockCanvas(host, engine);
       _layoutRev = host.revision;
-      issues = host.issues;
+      _readIssues();
       final sel = selection;
       if (sel != null && _layout!.placed(sel.scriptId)?.layout.blockAt(sel.path) == null) selection = null;
     }
@@ -192,13 +197,49 @@ mixin BkEditorCanvas on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Ti
     setState(() => selection = s);
   }
 
-  /// 跳到某块积木：选中、挪到看得见的地方、闪一下。
+  /// 取校验结果。宿主那边内容没变不会重查；查得慢时它先给旧的，稍后查完会通知重画，那时这里再取一次。
+  void _readIssues() {
+    final next = host.liveIssues;
+    if (identical(next, issues)) return;
+    issues = next;
+    issueMarks = BkIssueMarks.byScript(next);
+  }
+
+  /// 点在角标上：选中那块积木，贴着角标弹出问题小卡。返回点没点中。
+  bool _tapBadge(Offset viewAt) {
+    if (drag != null || issueMarks.isEmpty) return false;
+    final hit = bkIssueBadgeAt(layout, issueMarks, toCanvas(viewAt), kit.metrics, 15 / zoom);
+    if (hit == null) return false;
+    select(BlockSelection(hit.script.id, hit.block.isHat ? const [] : hit.block.path));
+    final at = toView(bkIssueBadgeCenter(hit.block, kit.metrics) + hit.script.origin);
+    final r = 9 * zoom;
+    // 小卡贴着角标、放在这块积木头部的下面（不盖住它自己）；下面放不下时放到角标上面。
+    final foot = toView(hit.block.head.bottomRight + hit.script.origin).dy;
+    unawaited(showBlockIssueCard(context, anchor: Rect.fromPoints(globalOf(at - Offset(r, r)), globalOf(Offset(at.dx + r, math.max(at.dy + r, foot)))), issues: hit.issues));
+    return true;
+  }
+
+  /// 打开问题列表；点了能定位的一条就关掉列表、跳到那块积木。顶栏的“问题”按钮和外面的“查看问题”都走这里。
+  Future<void> openIssues() async {
+    final picked = await showBlockIssues(context, host.issues);
+    if (!mounted || picked == null) return;
+    final id = picked.scriptId;
+    if (id != null) jumpTo(id, picked.path);
+  }
+
+  /// 跳到某块积木：选中、挪到看得见的地方（缩得太小看不清、或大得一屏放不下时顺手调一下缩放）、闪一下。
   void jumpTo(String scriptId, LcBlockPath path) {
     final placed = layout.placed(scriptId);
     final block = placed?.layout.blockAt(path) ?? placed?.layout.hat;
     if (placed == null || block == null) return;
-    final rect = rectToView(block.rect.shift(placed.origin));
+    // 画布露出来的部分：按编辑器此刻真实的大小算（底下被积木盒盖住多少由它说了算）。
     final h = viewSize.height - coveredBottom;
+    final head = block.head.shift(placed.origin);
+    var z = zoom;
+    if (z < 0.75) z = 1;
+    if (viewSize.width > 96 && head.width * z > viewSize.width - 32) z = (viewSize.width - 32) / head.width;
+    if (z != zoom) zoom = z.clamp(minZoom, maxZoom).toDouble();
+    final rect = rectToView(block.rect.shift(placed.origin));
     setState(() {
       selection = BlockSelection(scriptId, block.isHat ? const [] : block.path);
       if (rect.top < 56 || rect.bottom > h - 16 || rect.left < 0 || rect.left > viewSize.width - 80) {
@@ -293,6 +334,7 @@ mixin BkEditorCanvas on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Ti
         final hit = _downHit;
         _touch = _Touch.none;
         if (cancelled) return;
+        if (_tapBadge(_downAt)) return;
         if (hit == null) {
           select(null);
           _blankTap(e);
@@ -336,6 +378,7 @@ mixin BkEditorCanvas on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Ti
   void disposeCanvas() {
     _clearLongPress();
     _blankTap1?.cancel();
+    host.stopIssueTimer();
     flashAnim.dispose();
     roomAnim.dispose();
     pulseAnim.dispose();
@@ -367,7 +410,7 @@ mixin BkEditorCanvas on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Ti
               pan: pan,
               zoom: zoom,
               selection: d == null ? selection : null,
-              issues: d == null ? issues : const [],
+              marks: d == null ? issueMarks : const {},
               flash: flashAnim.isAnimating ? 1 - Curves.easeOut.transform(flashAnim.value) : 0,
               ghost: d?.ghost,
               ghostAlpha: t,
@@ -393,7 +436,7 @@ class BkWorkspacePainter extends CustomPainter {
     required this.pan,
     required this.zoom,
     this.selection,
-    this.issues = const [],
+    this.marks = const {},
     this.flash = 0,
     this.ghost,
     this.ghostAlpha = 1,
@@ -409,7 +452,7 @@ class BkWorkspacePainter extends CustomPainter {
   final Offset pan;
   final double zoom;
   final BlockSelection? selection;
-  final List<BlockIssue> issues;
+  final Map<String, BkIssueMarks> marks;
   final double flash;
   final BkRoom? ghost;
   final double ghostAlpha;
@@ -457,14 +500,7 @@ class BkWorkspacePainter extends CustomPainter {
         pulseSlot: pu?.slot,
         selectedSlot: sl == null ? null : (block: sl.block, arg: sl.arg, path: sl.path),
         slotColor: sl != null && sl.warn ? palette.warning : null,
-        errors: [
-          for (final i in issues)
-            if (i.scriptId == s.id && i.isError) i.path,
-        ],
-        warnings: [
-          for (final i in issues)
-            if (i.scriptId == s.id && !i.isError) i.path,
-        ],
+        marks: marks[s.id],
       );
       canvas.save();
       canvas.translate(s.origin.dx, s.origin.dy);

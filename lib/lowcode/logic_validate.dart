@@ -1,12 +1,16 @@
 /// 逻辑校验：把积木里“导出后会出错 / 不起作用”的地方找出来，用人话说清楚是哪个处理、第几块、什么问题。
 ///
 /// 只读不改。分两级：错误（这一块导出后不会按想的那样工作）和警告（能导出，但多半不是你想要的）。
-/// 翻代码（logic_js.dart）不依赖校验结果——有问题的积木它自己会翻成注释跳过，脚本照样能跑。
+/// 每种问题有一个稳定的规则编号和一句“怎么改”（logic_rules.dart）；类型、次数、除以 0 这些和后端共用的检查在 logic_validate_types.dart。
+/// 有“错误”时 logic.js 不重新导出（保留上一次的，见 logic_gate.dart）；翻代码（logic_js.dart）本身不依赖校验结果。
 library;
 
 import 'package:lopicode/lowcode/logic_blocks.dart';
+import 'package:lopicode/lowcode/logic_js_core.dart' show kRepeatLimit;
 import 'package:lopicode/lowcode/logic_model.dart';
+import 'package:lopicode/lowcode/logic_rules.dart';
 import 'package:lopicode/lowcode/logic_text.dart';
+import 'package:lopicode/lowcode/logic_validate_types.dart';
 import 'package:lopicode/lowcode/model.dart';
 
 enum LcIssueLevel { error, warning }
@@ -57,10 +61,40 @@ abstract final class LcIssueCode {
 
   /// 不能嵌积木的积木里放了积木（警告：导出时里面的被忽略）。
   static const String strayBody = 'strayBody';
+
+  /// 值的类型和这一格要的对不上（数字格里填了不是数字的文字＝错误，其余＝警告）。
+  static const String badType = 'badType';
+
+  /// 事件下面一块积木都没有（警告）。
+  static const String emptyScript = 'emptyScript';
+
+  /// “重复”的次数直接填了负数（错误）、小数或超过上限（警告）。
+  static const String badRepeat = 'badRepeat';
+
+  /// 除以 / 对直接填的 0 取余（警告：运行时得 0）。
+  static const String divByZero = 'divByZero';
+
+  /// 网址没填或明显不是网址。
+  static const String badUrl = 'badUrl';
+
+  /// 同一个控件的同一个事件有两串（警告：两串都会执行）。
+  static const String duplicateEvent = 'duplicateEvent';
 }
 
 class LcLogicIssue {
-  const LcLogicIssue({required this.level, required this.code, required this.problem, required this.where, this.handlerId, this.path = const [], this.arg});
+  const LcLogicIssue({
+    required this.level,
+    required this.code,
+    required this.problem,
+    required this.where,
+    this.handlerId,
+    this.path = const [],
+    this.arg,
+    this.exprPath,
+    this.fix,
+    this.scope = '',
+    this.spot = '',
+  });
 
   final LcIssueLevel level;
 
@@ -79,10 +113,28 @@ class LcLogicIssue {
   /// 哪一块积木（处理本身的问题、变量的问题为空）。
   final LcBlockPath path;
 
-  /// 哪个参数（能定位到时）。
+  /// 哪个参数（能定位到时）；帽子上的问题是帽子的槽（target / method / path）。
   final String? arg;
 
+  /// 参数里的哪个位置（和积木编辑器的槽位路径同一种写法：字段名或列表下标）；null＝定位不到具体哪一格。
+  final List<Object>? exprPath;
+
+  /// 这一条专门的“怎么改”；null＝用规则表里默认的那句（见 [advice]）。
+  final String? fix;
+
+  /// 属于哪一组：事件 / 接口的读法，或“变量”“服务设置”这类（问题列表按它分组）。
+  final String scope;
+
+  /// 组里的哪一处：“第 2 块（把 count 加上 1）”；帽子本身、变量的问题为空。
+  final String spot;
+
   bool get isError => level == LcIssueLevel.error;
+
+  /// 稳定的规则编号（见 logic_rules.dart），如 `G01`。
+  String get rule => lcRuleId(code);
+
+  /// 建议怎么改。
+  String get advice => fix ?? kLcRules[code]?.fix ?? '';
 
   /// 完整的一句话：在哪 + 什么问题。
   String get message => '$where：$problem';
@@ -115,23 +167,48 @@ class _Validator {
   LcBlockPath _path = const [];
   LcBlock? _block;
 
-  void _add(LcIssueLevel level, String code, String problem, {String? arg, String? where}) {
+  /// 正在检查积木的哪个参数、参数里的哪个位置（表达式里面报的问题都记到这一格上，界面才知道圈哪里）。
+  String? _top;
+  List<Object> _xp = const [];
+
+  late final LcValueChecker _values = LcValueChecker(
+    exprSpec: (kind) => lcExprSpecs[kind],
+    typeOf: (e) => exprType(e, (name) => doc.logic.variable(name)?.type),
+    repeatLimit: kRepeatLimit,
+    report: (level, code, problem, {required arg, required exprPath, fix}) => _add(level, code, problem, arg: arg, xp: exprPath, fix: fix),
+  );
+
+  void _add(LcIssueLevel level, String code, String problem, {String? arg, String? where, List<Object>? xp, String? fix}) {
     final h = _handler;
     final b = _block;
-    final place = where ?? (h == null ? '逻辑' : (b == null ? '「${describeHandler(h, doc)}」' : '「${describeHandler(h, doc)}」${describeBlockPath(h, _path)}（${describeBlock(b, doc)}）'));
-    issues.add(LcLogicIssue(level: level, code: code, problem: problem, where: place, handlerId: h?.id, path: _path, arg: arg));
+    final scope = where ?? (h == null ? '逻辑' : describeHandler(h, doc));
+    final spot = where != null || h == null || b == null ? '' : '${describeBlockPath(h, _path)}（${describeBlock(b, doc)}）';
+    final place = where ?? (h == null ? '逻辑' : '「$scope」$spot');
+    final at = _top ?? arg;
+    issues.add(
+      LcLogicIssue(level: level, code: code, problem: problem, where: place, handlerId: h?.id, path: _path, arg: at, exprPath: at == null ? null : (xp ?? _xp), fix: fix, scope: scope, spot: spot),
+    );
   }
 
-  void _error(String code, String problem, {String? arg, String? where}) => _add(LcIssueLevel.error, code, problem, arg: arg, where: where);
-  void _warn(String code, String problem, {String? arg, String? where}) => _add(LcIssueLevel.warning, code, problem, arg: arg, where: where);
+  void _error(String code, String problem, {String? arg, String? where, String? fix}) => _add(LcIssueLevel.error, code, problem, arg: arg, where: where, fix: fix);
+  void _warn(String code, String problem, {String? arg, String? where, String? fix}) => _add(LcIssueLevel.warning, code, problem, arg: arg, where: where, fix: fix);
 
   void run() {
     _variables();
+    final seen = <String>{}; // “事件 控件”
     for (final h in doc.logic.handlers) {
       _handler = h;
       _path = const [];
       _block = null;
+      final before = issues.length;
       _handlerHead(h);
+      final headOk = issues.length == before;
+      final target = h.event == 'load' ? '' : (h.target ?? '');
+      if (LcHandler.events.contains(h.event) && (h.event == 'load' || doc.find(target) != null) && !seen.add('${h.event} $target')) {
+        _warn(LcIssueCode.duplicateEvent, '前面已经有一串一样的事件了：两串都会执行（先前面那串，再这一串）', arg: h.event == 'load' ? null : 'target');
+      }
+      // 帽子自己还有问题（没选控件、控件没了…）时先不提“下面是空的”：一次说一件事。
+      if (h.body.isEmpty && headOk) _warn(LcIssueCode.emptyScript, '下面还没有积木，触发了也什么都不会做');
       _blocks(h.body, const [], false);
     }
     _handler = null;
@@ -160,14 +237,14 @@ class _Validator {
     if (h.event == 'load') return;
     final target = h.target;
     if (target == null || target.isEmpty) {
-      _error(LcIssueCode.missingTarget, '还没选是哪个控件触发的');
+      _error(LcIssueCode.missingTarget, '还没选是哪个控件触发的', arg: 'target');
       return;
     }
     final node = doc.find(target);
     if (node == null) {
-      _error(LcIssueCode.nodeNotFound, '触发它的控件已经不在页面里了');
+      _error(LcIssueCode.nodeNotFound, '触发它的控件已经不在页面里了', arg: 'target', fix: '点帽子上标红的那一格，重新选一个控件；不需要这一串就删掉它。');
     } else if (h.event == 'input' && node.type != 'input') {
-      _warn(LcIssueCode.inputOnNonInput, '“输入内容变化时”只有输入框会触发，${describeNode(doc, target)}不是输入框');
+      _warn(LcIssueCode.inputOnNonInput, '“输入内容变化时”只有输入框会触发，${describeNode(doc, target)}不是输入框', arg: 'target');
     }
   }
 
@@ -196,8 +273,13 @@ class _Validator {
       return;
     }
     for (final a in spec.args) {
+      _top = a.name;
       _arg(a, b.args[a.name], b.args.containsKey(a.name));
     }
+    _top = null;
+    _xp = const [];
+    _values.block(b, spec);
+    if (b.op == 'navigate' || b.op == 'fetch') _url(b);
     if (!spec.hasBody && b.body.isNotEmpty) {
       _warn(LcIssueCode.strayBody, '“${spec.label}”里面不能放积木，里面的 ${b.body.length} 块导出时会被忽略');
     }
@@ -214,8 +296,30 @@ class _Validator {
     if (b.op == 'setProp') _propFit(b.args['node'], b.args['prop'], write: true);
   }
 
-  /// 检查一个参数（积木的或表达式的）。`present`＝JSON 里有没有这个字段。
-  void _arg(LcArgSpec a, Object? value, bool present, [int depth = 0]) {
+  /// 直接填的网址：跳转的空着 / 不像网址＝警告；请求的空着＝错误（一定请求不到），不像网址＝警告。
+  void _url(LcBlock b) {
+    final url = b.args['url'];
+    if (exprKind(url) != 'text') return;
+    final why = lcUrlProblem(exprString(url, 'v') ?? '', httpOnly: false);
+    if (why == null) return;
+    final fetch = b.op == 'fetch';
+    final problem = switch (why) {
+      'empty' => fetch ? '请求的网址还没填，这一块请求不到任何东西' : '跳转的网址还没填，点了会原地刷新',
+      'partial' => '网址只填了开头，还没填完',
+      _ => '这个网址里有空格或格式不对，多半打不开',
+    };
+    _add(fetch && why == 'empty' ? LcIssueLevel.error : LcIssueLevel.warning, LcIssueCode.badUrl, problem, arg: 'url', xp: const []);
+  }
+
+  /// 检查一个参数（积木的或表达式的）。`present`＝JSON 里有没有这个字段；`xp`＝它在积木参数里的位置。
+  void _arg(LcArgSpec a, Object? value, bool present, [int depth = 0, List<Object> xp = const []]) {
+    final was = _xp;
+    _xp = xp;
+    _argAt(a, value, present, depth, xp);
+    _xp = was;
+  }
+
+  void _argAt(LcArgSpec a, Object? value, bool present, int depth, List<Object> xp) {
     final missing = !present || value == null;
     switch (a.kind) {
       case LcArgKind.expr:
@@ -232,7 +336,9 @@ class _Validator {
         } else if (value is! List) {
           _error(LcIssueCode.badArg, '“${a.label}”应该是一串值', arg: a.name);
         } else {
-          for (final item in value) {
+          for (var i = 0; i < value.length; i++) {
+            final item = value[i];
+            _xp = [...xp, i];
             if (isExpr(item)) {
               _expr(item, a.name, depth);
             } else {
@@ -288,14 +394,9 @@ class _Validator {
     if (kind == 'event' && _handler?.event != 'input') {
       _error(LcIssueCode.eventOutsideInput, '“输入的内容”只能用在“输入内容变化时”的处理里', arg: arg);
     }
-    final before = issues.length;
+    final base = _xp;
     for (final a in spec.args) {
-      _arg(a, expr[a.name], expr.containsKey(a.name), depth + 1);
-    }
-    // 上面报的问题定位到的是表达式自己的字段名，换成积木的参数名，界面才知道圈哪一格。
-    for (var i = before; i < issues.length; i++) {
-      final it = issues[i];
-      if (it.arg != arg) issues[i] = LcLogicIssue(level: it.level, code: it.code, problem: it.problem, where: it.where, handlerId: it.handlerId, path: it.path, arg: arg);
+      _arg(a, expr[a.name], expr.containsKey(a.name), depth + 1, [...base, a.name]);
     }
     if (kind == 'prop') _propFit(expr['node'], expr['prop'], write: false, arg: arg);
   }

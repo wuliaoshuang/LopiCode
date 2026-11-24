@@ -207,11 +207,16 @@ class BackendRegenResult {
     this.removed = const [],
     this.conflicts = const [],
     this.errorCount = 0,
+    this.blocked = false,
     this.note,
   });
 
   /// 没做成的原因；null＝生成了（[conflicts] 里的文件除外）。有 error 时一个文件都没动。
   final String? error;
+
+  /// true＝因为积木里有“错误”级的问题被拦下了（[errorCount] 条）：没有生成新代码，上一次生成的文件原样留着。
+  /// 这时 [error] 里是那句说明；它不是“出故障了”，界面不用当故障报。
+  final bool blocked;
   final String file;
   final String dir;
   final String language;
@@ -229,7 +234,7 @@ class BackendRegenResult {
   /// 没有覆盖 / 没有删的：手改过，或者不是我们生成的同名文件。
   final List<BackendConflict> conflicts;
 
-  /// 文档里校验出的“错误”条数（有错误的接口生成器会跳过）。
+  /// 文档里校验出的“错误”条数。大于 0 时一定是 [blocked]（有错误就不生成）。
   final int errorCount;
 
   /// 读文件时的说明（比如跳过了几条读不懂的内容）。
@@ -250,7 +255,6 @@ class BackendRegenResult {
         out.write('\n- $c');
       }
     }
-    if (errorCount > 0) out.write('\n注意：积木里还有 $errorCount 处错误，有错误的接口没有生成。');
     if (note != null) out.write('\n$note');
     return out.toString();
   }
@@ -334,7 +338,13 @@ Future<BackendRegenResult> _regenerate(PathGuard guard, {String? file, BeDocumen
     note = read.note;
   }
 
-  // 3. 生成
+  // 3. 有“错误”级的问题就不生成：上一次生成的文件、登记文件都不动（警告不拦）。
+  final errors = backendErrors(document).length;
+  if (errors > 0) {
+    return BackendRegenResult(error: '积木里有 $errors 个错误，代码没有更新（上一次生成的文件原样留着）。把错误修好以后会自动重新生成', blocked: true, errorCount: errors, file: rel, dir: dir, language: document.language, note: note);
+  }
+
+  // 4. 生成
   final gen = backendProjectFiles(document, dir: dir);
   if (gen == null) {
     return BackendRegenResult(error: '语言“${document.language}”还没有生成器（现在有：${backendTargets.map((t) => t.id).join('、')}）', file: rel, dir: dir, language: document.language);
@@ -351,7 +361,7 @@ Future<BackendRegenResult> _regenerate(PathGuard guard, {String? file, BeDocumen
     targets[key] = full;
   }
 
-  // 4. 哪些能写
+  // 5. 哪些能写
   final (manifest, recorded) = await _loadManifest(guard, dir);
   final written = <String>[];
   final unchanged = <String>[];
@@ -394,7 +404,7 @@ Future<BackendRegenResult> _regenerate(PathGuard guard, {String? file, BeDocumen
     }
   }
 
-  // 5. 上一种语言留下的：登记过的 + 别的生成器会生成的，这次不再生成的那些
+  // 6. 上一种语言留下的：登记过的 + 别的生成器会生成的，这次不再生成的那些
   final stale = <String>{...recorded.keys};
   for (final t in backendTargets) {
     if (t.id != gen.target.id) stale.addAll(t.generate(document).keys);
@@ -418,7 +428,7 @@ Future<BackendRegenResult> _regenerate(PathGuard guard, {String? file, BeDocumen
     }
   }
 
-  // 6. 动手
+  // 7. 动手
   for (final key in toWrite) {
     final f = File(targets[key]!);
     await f.parent.create(recursive: true);
@@ -442,16 +452,5 @@ Future<BackendRegenResult> _regenerate(PathGuard guard, {String? file, BeDocumen
   await mf.parent.create(recursive: true);
   await writeJsonAtomic(mf, manifest);
 
-  return BackendRegenResult(
-    file: rel,
-    dir: dir,
-    language: gen.target.id,
-    languageLabel: gen.target.label,
-    written: written,
-    unchanged: unchanged,
-    removed: removed,
-    conflicts: conflicts,
-    errorCount: backendErrors(document).length,
-    note: note,
-  );
+  return BackendRegenResult(file: rel, dir: dir, language: gen.target.id, languageLabel: gen.target.label, written: written, unchanged: unchanged, removed: removed, conflicts: conflicts, note: note);
 }

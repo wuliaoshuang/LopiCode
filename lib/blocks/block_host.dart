@@ -11,6 +11,8 @@
 /// 3. 宿主的内容变了（改动、撤销、外面改了页面）会调 [BlockHost.onChanged]，并且 [BlockHost.revision] 加一。
 library;
 
+import 'dart:async';
+
 import 'package:lopicode/lowcode/logic_blocks.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 
@@ -104,10 +106,24 @@ class BlockOption {
 
 /// 一条校验结果。
 class BlockIssue {
-  const BlockIssue({required this.message, this.isError = true, this.scriptId, this.path = const [], this.arg});
+  const BlockIssue({
+    required this.message,
+    this.isError = true,
+    this.scriptId,
+    this.path = const [],
+    this.arg,
+    this.exprPath,
+    this.rule = '',
+    this.problem = '',
+    this.fix = '',
+    this.group = '',
+    this.spot = '',
+  });
 
   /// 完整的一句话（在哪 + 什么问题）。
   final String message;
+
+  /// 错误（有它就不生成代码）还是警告（照常生成）。
   final bool isError;
 
   /// 哪一串（null＝不属于某一串，例如变量的问题）。
@@ -116,8 +132,101 @@ class BlockIssue {
   /// 哪一块（空＝这一串本身，也就是帽子）。
   final LcBlockPath path;
 
-  /// 哪个参数（能定位到时）。
+  /// 哪个参数（能定位到时）；帽子上的是帽子槽的 id。
   final String? arg;
+
+  /// 参数里的哪个位置（槽位路径，见 block_geometry.dart 的 BkExprPath）；null＝说不出是哪一格。
+  final List<Object>? exprPath;
+
+  /// 稳定的规则编号（如 G01）；宿主没给是空的。
+  final String rule;
+
+  /// 只说问题本身的那半句（小卡、问题列表用）；宿主没给就用 [message]。
+  final String problem;
+
+  /// 建议怎么改；没有是空的。
+  final String fix;
+
+  /// 属于哪一组（事件 / 接口的读法，或“变量”“服务设置”）：问题列表按它分组。
+  final String group;
+
+  /// 组里的哪一处（“第 2 块（…）”）；帽子本身的问题为空。
+  final String spot;
+
+  /// 给人看的原因：有 [problem] 用它，没有用整句。
+  String get reason => problem.isEmpty ? message : problem;
+}
+
+/// 把校验器给的问题（两套积木共用 [LcLogicIssue]）换成编辑器认的样子。
+BlockIssue blockIssueOf(LcLogicIssue i) => BlockIssue(
+  message: i.message,
+  isError: i.isError,
+  scriptId: i.handlerId,
+  path: i.path,
+  arg: i.arg,
+  exprPath: i.exprPath,
+  rule: i.rule,
+  problem: i.problem,
+  fix: i.advice,
+  group: i.scope,
+  spot: i.spot,
+);
+
+/// 校验结果的缓存（两个宿主共用）：内容没变不重查；连着两遍都超过 [budget] 以后，再有改动 [read] 就不当场查，
+/// 先给上一次的结果，停手 [delay] 后查一遍并调 `onLate`（宿主拿它去通知界面重画）。
+class BlockIssueCache {
+  BlockIssueCache(this._compute, this._revision, [this._onLate, this.budget = const Duration(milliseconds: 8)]);
+
+  /// 查一遍超过这么久就算“慢”。实测数见 docs/blocks-v3-design.md 的“校验规则表”一节；正常大小的页面走不到“停手后再查”这条路。
+  final Duration budget;
+  static const Duration delay = Duration(milliseconds: 180);
+
+  final List<BlockIssue> Function() _compute;
+  final int Function() _revision;
+  final void Function()? _onLate;
+
+  List<BlockIssue> _last = const [];
+  int _rev = -1;
+  Timer? _timer;
+
+  /// 最近一次查用了多久。
+  Duration lastCost = Duration.zero;
+
+  /// 连着几次都超了预算（偶尔慢一次不算：刚启动、系统正忙都会慢一下）。
+  int _slowRuns = 0;
+
+  /// 是不是有一次“停手后再查”在等着。
+  bool get pending => _timer != null;
+
+  List<BlockIssue> read() {
+    if (_rev == _revision()) return _last;
+    if (_rev < 0 || _slowRuns < 2) return fresh();
+    _timer?.cancel();
+    _timer = Timer(delay, () {
+      _timer = null;
+      fresh();
+      _onLate?.call();
+    });
+    return _last;
+  }
+
+  List<BlockIssue> fresh() {
+    _timer?.cancel();
+    _timer = null;
+    final rev = _revision();
+    if (_rev == rev) return _last;
+    final watch = Stopwatch()..start();
+    _last = _compute();
+    lastCost = watch.elapsed;
+    _slowRuns = lastCost > budget ? _slowRuns + 1 : 0;
+    _rev = rev;
+    return _last;
+  }
+
+  void stop() {
+    _timer?.cancel();
+    _timer = null;
+  }
 }
 
 /// 宿主接口。带 `// 可覆盖` 的有默认实现。
@@ -217,8 +326,16 @@ abstract class BlockHost {
 
   // —— 校验与代码 ——
 
-  /// 现在有哪些问题。
+  /// 现在有哪些问题：一定是照现在的内容查出来的（内容没变不重查，结果按 [revision] 记着）。
+  /// 问题列表、“能不能生成 / 启动”都看这个。
   List<BlockIssue> get issues;
+
+  /// 画布上画标记用的：每次改动后自动重查（拖动、平移、缩放不会重查）；积木非常多、查一遍连着都很慢时，
+  /// 连续改动期间先给上一次的结果，停手后再查并通知重画（见 [BlockIssueCache]）。默认同 [issues]。可覆盖。
+  List<BlockIssue> get liveIssues => issues;
+
+  /// 不再显示这个宿主了：有“停手后再查”的定时器就取消。默认什么都不做。可覆盖。
+  void stopIssueTimer() {}
 
   /// “看代码”面板里的字，和它是什么语言（标题用，例如 JavaScript / Python）。
   String get codeText;
