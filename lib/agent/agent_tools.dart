@@ -6,6 +6,7 @@ import 'package:lopicode/core/path_guard.dart';
 import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/core/templates.dart';
 import 'package:lopicode/lowcode/export_html.dart';
+import 'package:lopicode/lowcode/export_tidy.dart';
 import 'package:lopicode/lowcode/model.dart';
 
 /// 需要用户点头的一次操作（显示成对话里的确认卡）。
@@ -401,7 +402,7 @@ class ToolArgError implements Exception {
 
 /// 保存低代码页面并同步导出网页文件（搭建器和 Agent 共用）。
 Future<void> saveLowcodePage(PathGuard guard, LcDocument doc) async {
-  final export = exportHtml(doc);
+  final export = tidyHtmlExport(exportHtml(doc));
   await File(guard.resolve(kLowcodePageFile)).writeAsString(doc.encode());
   await File(guard.resolve('index.html')).writeAsString(export.html);
   await File(guard.resolve('style.css')).writeAsString(export.css);
