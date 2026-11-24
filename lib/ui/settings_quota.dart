@@ -111,9 +111,12 @@ class _QuotaScreenState extends ConsumerState<QuotaScreen> {
     final ch = _channel(app);
     return Scaffold(
       backgroundColor: c.canvas,
+      extendBodyBehindAppBar: true,
       appBar: PageBar(background: c.canvas, titleText: '额度与余额'),
       body: ch == null || !isDeepSeekOfficial(ch.baseUrl)
-          ? const Padding(padding: EdgeInsets.all(Space.x4), child: InfoBanner('这个渠道不是 DeepSeek 官方接口（api.deepseek.com），查不了余额，也就设不了额度上限。'))
+          ? const BelowBar(
+              child: Padding(padding: EdgeInsets.all(Space.x4), child: InfoBanner('这个渠道不是 DeepSeek 官方接口（api.deepseek.com），查不了余额，也就设不了额度上限。')),
+            )
           : QuotaBuilder(
               builder: (context, _) {
                 final state = app.quota.stateOf(ch.id);
@@ -126,7 +129,7 @@ class _QuotaScreenState extends ConsumerState<QuotaScreen> {
                 final dirtyCurrency = q != null && q.currency != currency;
                 return ListView(
                   key: const Key('quota-list'),
-                  padding: const EdgeInsets.fromLTRB(Space.x4, Space.x2, Space.x4, Space.x8),
+                  padding: EdgeInsets.fromLTRB(Space.x4, PageBar.insetOf(context) + Space.x2, Space.x4, Space.x8),
                   children: [
                     SettingsGroup(
                       title: '余额 · ${ch.name}',

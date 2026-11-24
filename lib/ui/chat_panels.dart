@@ -572,6 +572,7 @@ class _SubConversationScreenState extends ConsumerState<SubConversationScreen> {
     final parent = s.conversationById(conv?.parentId);
     final parentName = parent == null ? '上级' : (parent.agentName.isEmpty ? '主智能体' : parent.agentName);
     return Scaffold(
+      extendBodyBehindAppBar: true,
       appBar: PageBar(backTooltip: '返回上级', titleText: conv?.agentName ?? '子代理', subtitle: '子代理 · 上级：$parentName · ${s.modelOf(conv ?? s.activeConversation)?.model.name ?? '未设置模型'}'),
       body: SafeArea(
         top: false,
@@ -583,7 +584,7 @@ class _SubConversationScreenState extends ConsumerState<SubConversationScreen> {
                   : run == null
                   ? const Center(child: CircularProgressIndicator())
                   : ListView(
-                      padding: const EdgeInsets.fromLTRB(Space.x4, Space.x2, Space.x4, Space.x4),
+                      padding: EdgeInsets.fromLTRB(Space.x4, PageBar.insetOf(context) + Space.x2, Space.x4, Space.x4),
                       children: [
                         for (final row in chatRowsOf(ref, run.items, busy: run.busy))
                           ChatRowView(

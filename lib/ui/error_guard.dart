@@ -252,13 +252,16 @@ class _ErrorLogScreenState extends State<ErrorLogScreen> {
     final empty = text != null && text.trim().isEmpty;
     return Scaffold(
       backgroundColor: c.canvas,
+      extendBodyBehindAppBar: true,
       appBar: PageBar(background: c.canvas, title: const Text('错误日志')),
       body: text == null
           ? const Center(child: CircularProgressIndicator())
           : empty
-          ? const EmptyState(icon: Icons.check_circle_outline, title: '没有记录到错误', message: '应用出错时会记在这里，\n可以复制出来发给开发者。')
+          ? const BelowBar(
+              child: EmptyState(icon: Icons.check_circle_outline, title: '没有记录到错误', message: '应用出错时会记在这里，\n可以复制出来发给开发者。'),
+            )
           : ListView(
-              padding: const EdgeInsets.fromLTRB(Space.x4, Space.x2, Space.x4, Space.x8),
+              padding: EdgeInsets.fromLTRB(Space.x4, PageBar.insetOf(context) + Space.x2, Space.x4, Space.x8),
               children: [
                 Padding(
                   padding: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x3),

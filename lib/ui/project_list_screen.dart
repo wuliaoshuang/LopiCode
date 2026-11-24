@@ -15,6 +15,7 @@ import 'package:lopicode/ui/new_project_sheet.dart';
 import 'package:lopicode/ui/push_drawer.dart';
 import 'package:lopicode/ui/settings_screen.dart';
 import 'package:lopicode/ui/shell.dart';
+import 'package:lopicode/ui/top_bar.dart';
 import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -194,23 +195,28 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
       }.toList()..sort(),
     ];
     final page = Scaffold(
+      extendBodyBehindAppBar: true,
       appBar: ShellAppBar(title: '工作区', subtitle: projects == null || projects.isEmpty ? 'LopiCode' : '${projects.length} 个工作区'),
       floatingActionButton: projects != null && projects.isNotEmpty
           ? FloatingActionButton.extended(onPressed: _add, elevation: 2, shape: const StadiumBorder(), icon: const Icon(Icons.add), label: const Text('添加工作区'))
           : null,
       body: _error != null
-          ? EmptyState(icon: Icons.error_outline, title: '读取工作区失败', message: _error!)
+          ? BelowBar(
+              child: EmptyState(icon: Icons.error_outline, title: '读取工作区失败', message: _error!),
+            )
           : projects == null
           ? const Center(child: CircularProgressIndicator())
           : projects.isEmpty
-          ? EmptyState(
-              icon: Icons.rocket_launch_outlined,
-              title: '还没有工作区',
-              message: '工作区就是一个放代码的目录。添加一个，\n然后让 Agent 帮你写代码、拖拽搭页面、实时预览。',
-              action: FilledButton.icon(onPressed: _add, icon: const Icon(Icons.add), label: const Text('添加工作区')),
+          ? BelowBar(
+              child: EmptyState(
+                icon: Icons.rocket_launch_outlined,
+                title: '还没有工作区',
+                message: '工作区就是一个放代码的目录。添加一个，\n然后让 Agent 帮你写代码、拖拽搭页面、实时预览。',
+                action: FilledButton.icon(onPressed: _add, icon: const Icon(Icons.add), label: const Text('添加工作区')),
+              ),
             )
           : ListView(
-              padding: const EdgeInsets.fromLTRB(Space.x4, Space.x2, Space.x4, 96),
+              padding: EdgeInsets.fromLTRB(Space.x4, PageBar.insetOf(context) + Space.x2, Space.x4, 96),
               children: [
                 for (final g in groups) ...[
                   if (g.isNotEmpty)

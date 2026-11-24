@@ -5,7 +5,8 @@
 //   · 两个都有（全栈项目）→ 最上面一条分段按钮“页面 | 后端”，下面是对应的那一页；切走的那一页留着不销毁。
 //   · 都没有 → 一个空状态，两个出路各占一行：主按钮“新建页面”，次按钮“新建后端积木”。
 // - 分段按钮单独占一行（一行只做一件事），不往两个页面各自的顶栏里塞。
-//   它是浮着的（沉浸式，2026-11-24）：没有整条底色，下面的画布一直铺到屏幕最顶；两个页面各自的悬浮顶栏排在它下面一行。
+//   它是浮着的：没有整条底色，下面的画布一直铺到屏幕最顶。它排在两个页面各自的悬浮顶栏**下面**一行（顶栏位置全应用一致），
+//   占的高度经 BarExtra 告诉里面的页面。
 // - 上次选的是页面还是后端，按工作区记着（只记在内存里），从别的页签回来还是它。
 import 'dart:io';
 
@@ -22,6 +23,7 @@ import 'package:lopicode/state/workspace_files.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/backend_screen.dart';
 import 'package:lopicode/ui/shell.dart';
+import 'package:lopicode/ui/top_bar.dart';
 import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -115,25 +117,29 @@ class _BuilderHubScreenState extends ConsumerState<BuilderHubScreen> {
     final backend = _backendFile;
     if (!_probed) {
       return const Scaffold(
+        extendBodyBehindAppBar: true,
         appBar: ShellAppBar(title: '搭建'),
         body: Center(child: CircularProgressIndicator()),
       );
     }
     if (!_hasPage && backend == null) {
       return Scaffold(
+        extendBodyBehindAppBar: true,
         appBar: const ShellAppBar(title: '搭建'),
-        body: EmptyState(
-          key: const ValueKey('hub-empty'),
-          icon: Icons.dashboard_customize_outlined,
-          title: '这个项目还没有可以搭的东西',
-          message: '页面：拖组件搭网页，生成 $kLowcodePageFile，并自动导出 index.html 和 style.css。\n后端：用积木搭接口，生成 $kBackendFileName 和能直接启动的代码。',
-          action: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              FilledButton(key: const ValueKey('hub-new-page'), onPressed: _busy ? null : _newPage, child: const Text('新建页面')),
-              const SizedBox(height: Space.x2),
-              OutlinedButton(key: const ValueKey('hub-new-backend'), onPressed: _busy ? null : _newBackend, child: const Text('新建后端积木')),
-            ],
+        body: BelowBar(
+          child: EmptyState(
+            key: const ValueKey('hub-empty'),
+            icon: Icons.dashboard_customize_outlined,
+            title: '这个项目还没有可以搭的东西',
+            message: '页面：拖组件搭网页，生成 $kLowcodePageFile，并自动导出 index.html 和 style.css。\n后端：用积木搭接口，生成 $kBackendFileName 和能直接启动的代码。',
+            action: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                FilledButton(key: const ValueKey('hub-new-page'), onPressed: _busy ? null : _newPage, child: const Text('新建页面')),
+                const SizedBox(height: Space.x2),
+                OutlinedButton(key: const ValueKey('hub-new-backend'), onPressed: _busy ? null : _newBackend, child: const Text('新建后端积木')),
+              ],
+            ),
           ),
         ),
       );
@@ -145,26 +151,23 @@ class _BuilderHubScreenState extends ConsumerState<BuilderHubScreen> {
 
     final side = _lastSide[_s] == 'backend' ? 'backend' : 'page';
     _built.add(side);
-    // 沉浸式：切换条不再占一整条带底色的栏，而是浮在画布上面；里面的页面从屏幕最顶铺起，
-    // 它们的悬浮顶栏排在切换条下面（把切换条占的高度当成状态栏的一部分告诉它们）。
+    // 切换条浮在画布上面、排在悬浮顶栏的下面（顶栏在全应用同一个位置，不因为多了切换条往下挪）；
+    // 它占的高度经 BarExtra 告诉里面的页面：画布多让出这一段，顶栏的渐隐遮罩也盖到它下面。
     final mq = MediaQuery.of(context);
-    const lift = Space.x2 + kHubSwitchHeight;
+    const lift = kHubSwitchHeight + Space.x2;
     return ColoredBox(
       color: c.bg,
       child: Stack(
         fit: StackFit.expand,
         children: [
-          MediaQuery(
-            data: mq.copyWith(
-              padding: mq.padding.copyWith(top: mq.padding.top + lift),
-              viewPadding: mq.viewPadding.copyWith(top: mq.viewPadding.top + lift),
-            ),
+          BarExtra(
+            extra: lift,
             child: IndexedStack(index: side == 'page' ? 0 : 1, children: [_built.contains('page') ? page() : const SizedBox.shrink(), _built.contains('backend') ? back() : const SizedBox.shrink()]),
           ),
           Positioned(
             left: Space.x4,
             right: Space.x4,
-            top: mq.padding.top + Space.x2,
+            top: mq.viewPadding.top + PageBar.kHeight,
             height: kHubSwitchHeight,
             child: DecoratedBox(
               // 自己带一块卡片色的底：下面有积木 / 控件滑过时字还看得清。

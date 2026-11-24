@@ -11,7 +11,7 @@ import 'package:lopicode/lowcode/logic_blocks.dart';
 import 'package:lopicode/lowcode/logic_js.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 import 'package:lopicode/lowcode/model.dart';
-import 'package:lopicode/ui/immersive_bar.dart';
+import 'package:lopicode/ui/top_bar.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'screens_test.dart' show fontsLoaded, shot;
@@ -498,7 +498,7 @@ void main() {
     final rig = Rig(doc);
     await rig.pumpLogic(tester, initialNodeId: input);
     // 画布现在从屏幕最顶铺起，露出来的那一段从悬浮顶栏的下沿开始。
-    final shownTop = tester.getRect(find.byType(ImmersiveBar)).bottom;
+    final shownTop = tester.getRect(find.byType(PageBar)).bottom;
 
     expect(rig.s.selection!.scriptId, rig.h(1).id, reason: '选中的是输入框那一串的帽子');
     expect(rig.s.selection!.path, isEmpty);

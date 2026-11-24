@@ -137,17 +137,24 @@ class _ProjectShellState extends ConsumerState<ProjectShell> {
     ref.watch(conversationsProvider(session));
     ref.watch(activeChatProvider(session).select((v) => v.busy));
     Widget lazy(ShellDest d, Widget Function() build) => _visited.contains(d) ? build() : const SizedBox.shrink();
+    // 文件、终端、预览的正文不是能滚的一列（页签条 + 编辑器 / 终端 / 网页）：整块摆在悬浮顶栏下沿之下，不钻到按钮下面。
     Widget page(ShellDest d, Widget body) => Scaffold(
+      extendBodyBehindAppBar: true,
       appBar: ShellAppBar(title: d.label),
       body: body,
     );
     Widget build1(ShellDest d) => switch (d) {
       ShellDest.chat => ChatScreen(session: session),
-      ShellDest.files => page(d, FilesTab(session: session)),
-      ShellDest.terminal => page(d, TerminalTab(session: session)),
+      ShellDest.files => page(d, BelowBar(child: FilesTab(session: session))),
+      ShellDest.terminal => page(d, BelowBar(child: TerminalTab(session: session))),
       ShellDest.builder => BuilderHubScreen(key: ValueKey(_builderEpoch), session: session),
       ShellDest.apk => BuildScreen(session: session),
-      ShellDest.preview => page(d, PreviewTab(session: session, active: _dest == ShellDest.preview)),
+      ShellDest.preview => page(
+        d,
+        BelowBar(
+          child: PreviewTab(session: session, active: _dest == ShellDest.preview),
+        ),
+      ),
       ShellDest.runtime => RuntimeScreen(projectDir: session.project.dir),
     };
     return ShellScope(

@@ -390,11 +390,11 @@ class RequestStepPage extends StatelessWidget {
     final r = request;
     final u = r.usage;
     final speed = r.speed;
-    return Scaffold(
-      backgroundColor: c.canvas,
-      appBar: PageBar(background: c.canvas, title: Text('模型请求 $index')),
+    return BarPage(
+      background: c.canvas,
+      title: Text('模型请求 $index'),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(Space.x4, Space.x2, Space.x4, Space.x8),
+        padding: EdgeInsets.fromLTRB(Space.x4, PageBar.insetOf(context) + Space.x2, Space.x4, Space.x8),
         children: [
           if (owner != null)
             Padding(
@@ -467,11 +467,11 @@ class ToolStepPage extends StatelessWidget {
       key: key,
       style: t.bodySmall?.copyWith(fontFamily: 'monospace', height: 1.5),
     );
-    return Scaffold(
-      backgroundColor: c.canvas,
-      appBar: PageBar(background: c.canvas, title: Text(toolLabel(step.name))),
+    return BarPage(
+      background: c.canvas,
+      title: Text(toolLabel(step.name)),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(Space.x4, Space.x2, Space.x4, Space.x8),
+        padding: EdgeInsets.fromLTRB(Space.x4, PageBar.insetOf(context) + Space.x2, Space.x4, Space.x8),
         children: [
           const GroupLabel('计时'),
           GroupCard(

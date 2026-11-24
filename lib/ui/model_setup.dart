@@ -65,10 +65,11 @@ class ProviderPickerScreen extends StatelessWidget {
     final t = Theme.of(context).textTheme;
     return Scaffold(
       backgroundColor: c.canvas,
+      extendBodyBehindAppBar: true,
       appBar: PageBar(background: c.canvas, title: const Text('选择服务商')),
       body: ListView(
         key: const Key('provider-list'),
-        padding: const EdgeInsets.fromLTRB(Space.x4, Space.x2, Space.x4, Space.x8),
+        padding: EdgeInsets.fromLTRB(Space.x4, PageBar.insetOf(context) + Space.x2, Space.x4, Space.x8),
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x3),

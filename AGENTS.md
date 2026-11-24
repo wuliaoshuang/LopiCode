@@ -157,6 +157,9 @@ tool/check.sh --fix    # 先自动排版
   （2026-11-23 错误提示条就是这样把自己弄崩的，测试抓到了。）
 - 界面测试里真实的文件读写要放进 `tester.runAsync`；自定义顶栏没有系统返回按钮，测试里用 `tester.binding.handlePopRoute()`，不要用 `pageBack()`。
 - `ListView` 里靠后的项用 `scrollUntilVisible` 找到后，点之前再 `ensureVisible` 一次（它可能只是进了缓存区，还没真正露出来）。
+- **顶栏全应用只有一套**（`lib/ui/top_bar.dart` 的 `PageBar`，外壳里用 `ShellAppBar`）：高 64、悬浮、没有底色。新页面的 Scaffold 一律
+  `extendBodyBehindAppBar: true`，能滚的内容顶部留 `PageBar.insetOf(context)`，不能滚的正文包一层 `BelowBar`。不许用系统 `AppBar`、
+  不许自己另画顶栏（`test/topbar_unified_test.dart` 守着）。Scaffold 正文里的 `viewPadding.top` 是 0（被 Scaffold 拿掉了），别自己拿它算状态栏。
 - 手机上 `localhost` 指手机自己。
 - 第三方组件（PRoot 等二进制、图标）不许改内容；来源、版本、校验值、许可证记在 `third_party/` 和 `lib/core/third_party.dart`，有测试核对校验值。
 

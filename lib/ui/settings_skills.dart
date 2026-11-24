@@ -49,14 +49,17 @@ class _SkillsScreenState extends ConsumerState<SkillsScreen> {
     if (skills == null || skills.isEmpty) {
       return Scaffold(
         backgroundColor: c.canvas,
+        extendBodyBehindAppBar: true,
         appBar: PageBar(background: c.canvas, titleText: '技能'),
         body: skills == null
             ? const Center(child: CircularProgressIndicator())
-            : EmptyState(
-                icon: Icons.menu_book_outlined,
-                title: '还没有技能',
-                message: '技能是一份写给 Agent 的做事说明书（SKILL.md）。\nAgent 平时只看到名字和描述，用得上时再读全文。',
-                action: FilledButton.icon(onPressed: _create, icon: const Icon(Icons.add), label: const Text('新建技能')),
+            : BelowBar(
+                child: EmptyState(
+                  icon: Icons.menu_book_outlined,
+                  title: '还没有技能',
+                  message: '技能是一份写给 Agent 的做事说明书（SKILL.md）。\nAgent 平时只看到名字和描述，用得上时再读全文。',
+                  action: FilledButton.icon(onPressed: _create, icon: const Icon(Icons.add), label: const Text('新建技能')),
+                ),
               ),
       );
     }

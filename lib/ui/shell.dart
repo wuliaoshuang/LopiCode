@@ -87,13 +87,11 @@ class _MenuButton extends StatelessWidget {
 ///
 /// 在外壳里不传 [subtitle] 时，第二行小字是工作区的名字。
 class ShellAppBar extends StatelessWidget implements PreferredSizeWidget {
-  const ShellAppBar({super.key, required this.title, this.subtitle, this.actions, this.fade = false, this.background});
+  const ShellAppBar({super.key, required this.title, this.subtitle, this.actions, this.background});
   final String title;
   final String? subtitle;
   final List<Widget>? actions;
 
-  /// 内容从顶栏下面滚过去并渐隐（对话页）。
-  final bool fade;
   final Color? background;
 
   @override
@@ -105,7 +103,6 @@ class ShellAppBar extends StatelessWidget implements PreferredSizeWidget {
       leading: Builder(builder: (context) => shellLeading(context) ?? const SizedBox.shrink()),
       title: BarTitle(title: title, subtitle: subtitle ?? ShellScope.maybeOf(context)?.projectName),
       actions: actions,
-      fade: fade,
       background: background,
     );
   }

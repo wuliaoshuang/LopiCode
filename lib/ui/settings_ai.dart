@@ -64,12 +64,15 @@ class _ChannelsScreenState extends ConsumerState<ChannelsScreen> {
     if (channels.isEmpty) {
       return Scaffold(
         backgroundColor: context.colors.canvas,
+        extendBodyBehindAppBar: true,
         appBar: PageBar(background: context.colors.canvas, titleText: '模型与渠道'),
-        body: EmptyState(
-          icon: Icons.hub_outlined,
-          title: '还没有渠道',
-          message: '渠道就是一个模型服务。\n选一个服务商、填上 API Key，再勾选要用的模型。',
-          action: FilledButton.icon(onPressed: _edit, icon: const Icon(Icons.add), label: const Text('添加渠道')),
+        body: BelowBar(
+          child: EmptyState(
+            icon: Icons.hub_outlined,
+            title: '还没有渠道',
+            message: '渠道就是一个模型服务。\n选一个服务商、填上 API Key，再勾选要用的模型。',
+            action: FilledButton.icon(onPressed: _edit, icon: const Icon(Icons.add), label: const Text('添加渠道')),
+          ),
         ),
       );
     }

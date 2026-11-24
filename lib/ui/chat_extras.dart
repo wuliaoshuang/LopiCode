@@ -297,6 +297,7 @@ class CommandOutputPage extends StatelessWidget {
     final t = Theme.of(context).textTheme;
     return Scaffold(
       backgroundColor: c.canvas,
+      extendBodyBehindAppBar: true,
       appBar: PageBar(background: c.canvas, title: const Text('完整输出')),
       body: FutureBuilder<String?>(
         future: load(path),
@@ -305,14 +306,14 @@ class CommandOutputPage extends StatelessWidget {
           final text = snap.data;
           if (text == null) {
             return Padding(
-              padding: const EdgeInsets.all(Space.x6),
+              padding: EdgeInsets.fromLTRB(Space.x6, PageBar.insetOf(context) + Space.x6, Space.x6, Space.x6),
               child: Text('这份完整输出已经不在了（转存的输出只留最近 20 份）。需要的话让 Agent 重新执行一次这条命令。', style: t.bodyMedium?.copyWith(color: c.textMuted, height: 1.6)),
             );
           }
           final shown = text.length <= maxShown ? text : '${text.substring(0, maxShown ~/ 2)}\n\n…（太长，中间 ${text.length - maxShown} 字没显示；文件在 $path）…\n\n${text.substring(text.length - maxShown ~/ 2)}';
           return Scrollbar(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.all(Space.x4),
+              padding: EdgeInsets.fromLTRB(Space.x4, PageBar.insetOf(context) + Space.x4, Space.x4, Space.x4),
               child: SelectableText(
                 shown,
                 key: const ValueKey('output-full-text'),
