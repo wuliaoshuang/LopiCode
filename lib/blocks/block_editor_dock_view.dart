@@ -1,6 +1,6 @@
 // 设计约束（积木编辑器底部那块可以上下拖的面板，390 宽，浅色 + 深色）— 2026-11-24
 // - 面板＝积木盒。按住最上面的手柄条（或分类那一行）上下拖，面板上沿跟着手指走，画布露出来的部分跟着变。
-// - 最矮：只剩手柄条（44 高，屏幕底部有系统手势条时再加上它）。最高：顶到状态栏下沿，盖住页面顶栏——手柄条还在最上面，随时能拖回来。
+// - 最矮：只剩手柄条（44 高，屏幕底部有系统手势条时再加上它）。最高：顶到状态栏下沿，盖住页面的悬浮顶栏——手柄条还在最上面，随时能拖回来。
 // - 松手：甩得快（≥ 700 像素 / 秒）去甩的方向上的下一档（收起 / 默认 / 全展开）；慢慢放下时离某一档不到 28 就吸过去，否则就停在放手的地方。
 //   去某一档是 260 毫秒、带一点点过冲的滑动（滑到一半手指按上手柄＝停在那里，可以接着拖）；系统开了“减弱动态效果”就直接到位。点一下手柄条：收起 ⇄ 默认（比默认高时点一下回默认）。
 // - 手柄条右边一行三样：撤销、重做、缩放比例（点一下回 100%）。画布上不再有常驻的浮条。面板收到只剩手柄条时它们还在。
@@ -155,7 +155,7 @@ mixin BkEditorDock on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Tick
   void disposeDock() => _dockAnim.dispose();
 
   /// 画布露出来的那一段的正中（编辑区坐标）：缩放绕着它。
-  Offset get canvasCenter => Offset(viewSize.width / 2, math.max(0, viewSize.height - dockHeight) / 2);
+  Offset get canvasCenter => Offset(viewSize.width / 2, coveredTop + math.max(0, viewSize.height - coveredTop - dockHeight) / 2);
 
   /// 手柄条右边的三样：撤销、重做、缩放比例。
   Widget buildDockTools(BuildContext context, {required VoidCallback? onUndo, required VoidCallback? onRedo}) {

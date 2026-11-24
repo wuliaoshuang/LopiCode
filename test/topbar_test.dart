@@ -7,6 +7,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/chrome.dart';
+import 'package:lopicode/ui/immersive_bar.dart';
 import 'package:lopicode/ui/preview_tab.dart';
 import 'package:lopicode/ui/project_shell.dart';
 import 'package:lopicode/ui/shell.dart';
@@ -228,22 +229,35 @@ void main() {
       for (final d in [...ShellDest.bottom.skip(1), ShellDest.chat]) {
         await tester.tap(find.byKey(ValueKey('nav-${ShellDest.bottom.indexOf(d)}')));
         await settle(tester, rounds: 8);
-        final bar = find.byType(PageBar).hitTestable();
+        // “搭建”页有画布，顶栏是沉浸式的（没有底色，标题在自己的悬浮小胶囊里）；别的页还是 PageBar、标题只有文字。
+        final immersive = d == ShellDest.builder;
+        if (immersive) expect(find.byType(PageBar).hitTestable(), findsNothing, reason: '“${d.label}”页');
+        final bar = immersive ? find.byType(ImmersiveBar) : find.byType(PageBar).hitTestable();
         expect(bar, findsOneWidget, reason: '“${d.label}”页');
         final block = find.descendant(of: bar, matching: find.byType(BarTitle));
         expect(block, findsOneWidget, reason: '“${d.label}”页的标题用的是统一的 BarTitle');
         final title = find.descendant(of: block, matching: find.byType(Text)).first;
-        expect(decorationsAround(tester, title), isEmpty, reason: '“${d.label}”页');
+        if (immersive) {
+          expect(find.ancestor(of: title, matching: find.byKey(const ValueKey('immersive-title'))), findsOneWidget);
+        } else {
+          expect(decorationsAround(tester, title), isEmpty, reason: '“${d.label}”页');
+        }
         final round = tester.getRect(find.descendant(of: bar, matching: find.byType(RoundIconButton)));
         expect(round.size, const Size(44, 44));
         expect(inkRect(tester, find.descendant(of: bar, matching: find.byType(RoundIconButton))), round);
-        left ??= tester.getRect(title).left;
-        expect(tester.getRect(title).left, left, reason: '“${d.label}”页的标题和别的页左边对齐');
-        expect(tester.getRect(title).left, round.right + Space.x3);
+        if (immersive) {
+          // 标题小胶囊贴着左按钮（隔 8），字离胶囊边 10。
+          expect(tester.getRect(find.byKey(const ValueKey('immersive-title'))).left, round.right + ImmersiveBar.kGap);
+          expect(tester.getRect(title).left, round.right + ImmersiveBar.kGap + ImmersiveBar.kTitleInset);
+        } else {
+          left ??= tester.getRect(title).left;
+          expect(tester.getRect(title).left, left, reason: '“${d.label}”页的标题和别的页左边对齐');
+          expect(tester.getRect(title).left, round.right + Space.x3);
+        }
         final pill = find.descendant(of: bar, matching: find.byType(ActionPill));
         if (pill.evaluate().isNotEmpty) {
           expect(tester.getRect(pill).height, 44);
-          expect(tester.getRect(block).right, lessThanOrEqualTo(tester.getRect(pill).left - Space.x3));
+          expect(tester.getRect(block).right, lessThanOrEqualTo(tester.getRect(pill).left - (immersive ? ImmersiveBar.kGap : Space.x3)));
         }
         expect(tester.takeException(), isNull, reason: '“${d.label}”页');
         if (d == ShellDest.files || d == ShellDest.builder) await shot(tester, 'tb-5-${d.name}-$suffix');

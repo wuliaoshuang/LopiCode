@@ -243,7 +243,8 @@ mixin BkEditorEdit on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Tick
     final width = r.width.clamp(40.0, viewSize.width - 16);
     final height = r.height.clamp(30.0, 56.0);
     final left = (r.center.dx - width / 2).clamp(8.0, (viewSize.width - width - 8).clamp(8.0, double.infinity));
-    final top = (r.center.dy - height / 2).clamp(4.0, (viewSize.height - height - 4).clamp(4.0, double.infinity));
+    // 不放到悬浮顶栏后面去。
+    final top = (r.center.dy - height / 2).clamp(coveredTop + 4.0, (viewSize.height - height - 4).clamp(coveredTop + 4.0, double.infinity));
     // 键盘弹出后槽被挡住了：把画布往上挪。
     final limit = viewSize.height - 52;
     if (r.bottom > limit) {

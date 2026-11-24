@@ -1,9 +1,11 @@
 // 设计约束（低代码搭建 · 390×844）
 // - 画布是主角：可缩放 / 平移，按组件的最终样式渲染（画布本身在 canvas_view.dart）。
+// - 顶栏是沉浸式的（lib/ui/immersive_bar.dart）：没有底色，画布从屏幕最顶铺起，左按钮、标题小胶囊、操作胶囊悬浮在画布上面；
+//   页面的顶边起始时在顶栏下沿，往上滚从按钮下面滑过去。
 // - 底部固定一条组件栏：长按拖到画布，或者点一下直接加进当前选中的容器。
 // - 选中组件后，组件栏上方出现一行操作：名字在左；属性 / 样式 / 事件 在右；上移、下移、复制、删除收进“更多操作”
 //   （普通控件多一项“存成组件”；自定义组件的实例多“编辑组件”“拆开成普通控件”）。
-// - 属性、样式、图层、自定义组件都放进底部面板，积木逻辑是单独一页，不和画布抢地方。撤销 / 重做在顶栏。
+// - 属性、样式、图层、自定义组件都放进底部面板，积木逻辑是单独一页，不和画布抢地方。撤销 / 重做在顶栏的操作胶囊里。
 // - 拖动时才显示插入位置（色条），平时不干扰画面。
 import 'dart:async';
 import 'dart:io';
@@ -25,6 +27,7 @@ import 'package:lopicode/lowcode/style_editor_sheet.dart';
 import 'package:lopicode/lowcode/style_model.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/immersive_bar.dart';
 import 'package:lopicode/ui/shell.dart';
 import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
@@ -338,63 +341,66 @@ class _BuilderScreenState extends State<BuilderScreen> {
     final history = _history;
     final node = doc == null || _selected == null ? null : doc.find(_selected!);
     return Scaffold(
-      appBar: ShellAppBar(
-        title: '低代码搭建',
-        subtitle: doc?.title,
-        actions: doc == null
-            ? null
-            : [
-                IconButton(tooltip: '撤销', icon: const Icon(Icons.undo), onPressed: history!.canUndo ? () => _restore(history.undo()) : null),
-                IconButton(tooltip: '重做', icon: const Icon(Icons.redo), onPressed: history.canRedo ? () => _restore(history.redo()) : null),
-                IconButton(tooltip: '图层', icon: const Icon(Icons.layers_outlined), onPressed: _openLayers),
-                PopupMenuButton<String>(
-                  tooltip: '更多',
-                  onSelected: _onMenu,
-                  itemBuilder: (_) => const [
-                    PopupMenuItem(value: 'preview', child: Text('在预览里打开网页')),
-                    PopupMenuItem(value: 'logic', child: Text('积木逻辑')),
-                    PopupMenuItem(value: 'components', child: Text('自定义组件')),
-                    PopupMenuItem(value: 'dart', child: Text('导出 Flutter 代码')),
-                    PopupMenuItem(value: 'framework', child: Text('导出 Vue / React')),
-                    PopupMenuItem(value: 'title', child: Text('修改页面标题')),
-                  ],
-                ),
-              ],
-      ),
-      body: _loadError != null
-          ? EmptyState(
-              icon: Icons.error_outline,
-              title: '页面文件打不开',
-              message: '$kLowcodePageFile 的内容有问题：$_loadError',
-              action: OutlinedButton(onPressed: _createFresh, child: const Text('用一个新页面覆盖')),
-            )
-          : _missing
-          ? EmptyState(
-              icon: Icons.dashboard_customize_outlined,
-              title: '这个项目还没有低代码页面',
-              message: '新建后会在项目里生成 $kLowcodePageFile，\n并自动导出 index.html 和 style.css。',
-              action: FilledButton(onPressed: _createFresh, child: const Text('新建页面')),
-            )
-          : doc == null
-          ? const Center(child: CircularProgressIndicator())
-          : Column(
-              children: [
-                Expanded(
-                  child: CanvasView(
-                    doc: doc,
-                    selected: _selected,
-                    dragging: _dragging,
-                    onSelect: (id) => setState(() => _selected = id),
-                    onDrop: _drop,
-                    canDrop: _canDrop,
-                    onDragging: _setDragging,
-                    onResize: _resize,
+      body: ImmersiveBody(
+        bar: ImmersiveBar(
+          title: '低代码搭建',
+          subtitle: doc?.title,
+          actions: doc == null
+              ? null
+              : [
+                  IconButton(tooltip: '撤销', icon: const Icon(Icons.undo), onPressed: history!.canUndo ? () => _restore(history.undo()) : null),
+                  IconButton(tooltip: '重做', icon: const Icon(Icons.redo), onPressed: history.canRedo ? () => _restore(history.redo()) : null),
+                  IconButton(tooltip: '图层', icon: const Icon(Icons.layers_outlined), onPressed: _openLayers),
+                  PopupMenuButton<String>(
+                    tooltip: '更多',
+                    onSelected: _onMenu,
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(value: 'preview', child: Text('在预览里打开网页')),
+                      PopupMenuItem(value: 'logic', child: Text('积木逻辑')),
+                      PopupMenuItem(value: 'components', child: Text('自定义组件')),
+                      PopupMenuItem(value: 'dart', child: Text('导出 Flutter 代码')),
+                      PopupMenuItem(value: 'framework', child: Text('导出 Vue / React')),
+                      PopupMenuItem(value: 'title', child: Text('修改页面标题')),
+                    ],
                   ),
-                ),
-                if (node != null) _selectionBar(context, node),
-                PaletteBar(onTap: _addByTap, onDragging: _setDragging, components: doc.components),
-              ],
-            ),
+                ],
+        ),
+        child: _loadError != null
+            ? EmptyState(
+                icon: Icons.error_outline,
+                title: '页面文件打不开',
+                message: '$kLowcodePageFile 的内容有问题：$_loadError',
+                action: OutlinedButton(onPressed: _createFresh, child: const Text('用一个新页面覆盖')),
+              )
+            : _missing
+            ? EmptyState(
+                icon: Icons.dashboard_customize_outlined,
+                title: '这个项目还没有低代码页面',
+                message: '新建后会在项目里生成 $kLowcodePageFile，\n并自动导出 index.html 和 style.css。',
+                action: FilledButton(onPressed: _createFresh, child: const Text('新建页面')),
+              )
+            : doc == null
+            ? const Center(child: CircularProgressIndicator())
+            : Column(
+                children: [
+                  Expanded(
+                    child: CanvasView(
+                      doc: doc,
+                      selected: _selected,
+                      dragging: _dragging,
+                      onSelect: (id) => setState(() => _selected = id),
+                      onDrop: _drop,
+                      canDrop: _canDrop,
+                      onDragging: _setDragging,
+                      onResize: _resize,
+                      topInset: ImmersiveBar.extentOf(context),
+                    ),
+                  ),
+                  if (node != null) _selectionBar(context, node),
+                  PaletteBar(onTap: _addByTap, onDragging: _setDragging, components: doc.components),
+                ],
+              ),
+      ),
     );
   }
 

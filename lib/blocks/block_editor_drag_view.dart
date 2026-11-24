@@ -168,7 +168,8 @@ mixin BkEditorDrag on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Tick
     final p = _fingerAt;
     if (p.dy >= h) return Offset.zero;
     double pull(double d) => d < edgeBand ? (edgeBand - math.max(0, d)) / edgeBand : 0;
-    return Offset(pull(p.dx) - pull(w - p.dx), pull(p.dy) - pull(h - p.dy));
+    // 上边从悬浮顶栏的下沿算起（手指进到顶栏那一段也算“到边了”）。
+    return Offset(pull(p.dx) - pull(w - p.dx), pull(p.dy - coveredTop) - pull(h - p.dy));
   }
 
   void _watchEdge() {
