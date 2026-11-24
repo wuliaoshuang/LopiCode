@@ -1,7 +1,11 @@
 // 设计约束（可编辑的积木画布，390 宽，浅色 + 深色）— 2026-11-24
-// - 整块区域只有画布一样东西：点阵底 + 一串串积木。主操作＝直接用手拖积木，没有“进入编辑模式”这一步。
-// - 手指落在积木上一动就是拖积木（不用长按，过 8 像素就算）；落在空白处是平移画布；两根手指是缩放（50%–200%）。
-// - 手指按住不动约 0.45 秒＝长按（表达式上长按＝“换成…”）。没动就抬起＝点一下。
+// - 整块区域只有画布一样东西：点阵底 + 一串串积木。没有“进入编辑模式”这一步。
+// - 一根手指滑动一律是平移画布，起点落在积木上也一样（积木铺满屏幕时也能放心滑着看）；两根手指是缩放（50%–200%）。
+// - 拖积木要先按住不动 0.28 秒（长按）：震一下、积木被“拿起”（略放大带投影），之后才跟手。
+//   按住的这 0.28 秒里手指动了超过 8 像素＝这次是平移，不再拿起。
+// - 长按落在哪决定做什么：直接填的槽（输入框、空槽，里面没有值积木）＝弹“换成…”小卡；
+//   槽里的值积木＝拿起它（拿起后没挪就松手＝弹“换成…”小卡，挪了＝拖走）；积木身上别的地方＝拿起这块（帽子＝整串）。
+// - 没动就抬起（不到 0.28 秒）＝点一下。
 // - 没摆过位置的脚本自动从上往下排，算出来的位置不写回模型（不进撤销、不落盘）。
 // - 画的时候只画一次排版结果；拖动时画的是“拿走以后 + 让出落点”的预览排版，模型一个字不动。
 // - 让位是滑过去的（约 150 毫秒）：两头的位置由 block_motion.dart 算，这里只出一个 0–1 的进度；系统开了“减弱动态效果”就直接到位。
@@ -35,9 +39,12 @@ enum _Touch { none, pending, pan, drag, pinch, held }
 mixin BkEditorCanvas on State<BlockEditorView>, BkKitHolder<BlockEditorView>, TickerProvider {
   static const double minZoom = 0.5, maxZoom = 2.0;
 
-  /// 手指移动多远算“拖”而不是“点”。
+  /// 手指移动多远算“滑”而不是“点 / 按住”。
   static const double dragSlop = 8;
-  static const Duration longPressAfter = Duration(milliseconds: 450);
+
+  /// 按住不动多久算长按（拿起积木 / 弹“换成…”）。比系统默认的 0.5 秒短：拖积木是常用动作，不能等太久；
+  /// 又比一次轻点（通常不到 0.2 秒）长，点一下不会误拿。
+  static const Duration longPressAfter = Duration(milliseconds: 280);
 
   BlockHost get host => widget.host;
 
@@ -118,6 +125,9 @@ mixin BkEditorCanvas on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Ti
   int _primary = -1;
   Offset _downAt = Offset.zero;
   ({BkPlaced script, BkHit hit})? _downHit;
+
+  /// 长按拿起积木以后，手指有没有挪过（超过 [dragSlop]）。
+  bool _liftMoved = false;
   Timer? _longPress;
   double _pinchDist = 1, _pinchZoom = 1;
   Timer? _blankTap1;
@@ -141,7 +151,9 @@ mixin BkEditorCanvas on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Ti
   void dragEnd();
   void dragCancel();
   void onTapHit(BkPlaced script, BkHit hit);
-  void onLongPressHit(BkPlaced script, BkHit hit);
+
+  /// 长按的地方有没有“换成…”可弹：`open`＝有就弹出来；否则只是问一声。返回有没有。
+  bool onLongPressHit(BkPlaced script, BkHit hit, {bool open = true});
 
   BlockLayoutEngine get engine => _engine ??= kit.engine(host);
 
@@ -284,14 +296,24 @@ mixin BkEditorCanvas on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Ti
     _downHit = layout.hitTest(toCanvas(at));
     _touch = _Touch.pending;
     _clearLongPress();
-    if (_downHit != null) {
-      _longPress = Timer(longPressAfter, () {
-        final hit = _downHit;
-        if (!mounted || _touch != _Touch.pending || hit == null) return;
-        _touch = _Touch.held;
-        onLongPressHit(hit.script, hit.hit);
-      });
+    if (_downHit != null) _longPress = Timer(longPressAfter, _longPressed);
+  }
+
+  /// 按住没动满了 [longPressAfter]：拿起积木，或者弹“换成…”。
+  void _longPressed() {
+    final hit = _downHit;
+    if (!mounted || _touch != _Touch.pending || hit == null) return;
+    _touch = _Touch.held;
+    // 直接填的槽（里面没有值积木可拿）：长按＝换成别的值。
+    if (hit.hit.expr == null && onLongPressHit(hit.script, hit.hit)) return;
+    dragStartFromCanvas(hit.script, hit.hit, _downAt);
+    if (drag == null) {
+      // 拿不起来（这块刚好没了）：退回老的长按。
+      onLongPressHit(hit.script, hit.hit);
+      return;
     }
+    _liftMoved = false;
+    _touch = _Touch.drag;
   }
 
   void pointerMove(PointerMoveEvent e) {
@@ -302,24 +324,16 @@ mixin BkEditorCanvas on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Ti
     switch (_touch) {
       case _Touch.pending:
         if (e.pointer != _primary || (at - _downAt).distance < dragSlop) return;
+        // 还没按够就动了：这次是滑着看画布，起点在不在积木上都一样。
         _clearLongPress();
-        final hit = _downHit;
-        if (hit != null) {
-          _touch = _Touch.drag;
-          dragStartFromCanvas(hit.script, hit.hit, _downAt);
-          if (drag == null) {
-            _touch = _Touch.pan;
-          } else {
-            dragMove(at);
-          }
-        } else {
-          _touch = _Touch.pan;
-          setState(() => setPan(pan + (at - _downAt)));
-        }
+        _touch = _Touch.pan;
+        setState(() => setPan(pan + (at - _downAt)));
       case _Touch.pan:
         if (e.pointer == _primary) setState(() => setPan(pan + (at - before)));
       case _Touch.drag:
-        if (e.pointer == _primary) dragMove(at);
+        if (e.pointer != _primary) return;
+        if ((at - _downAt).distance >= dragSlop) _liftMoved = true;
+        dragMove(at);
       case _Touch.pinch:
         final ps = _pointers.values.toList();
         if (ps.length < 2) return;
@@ -353,7 +367,16 @@ mixin BkEditorCanvas on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Ti
       case _Touch.drag:
         if (e.pointer != _primary) return;
         _touch = _Touch.none;
-        cancelled ? dragCancel() : dragEnd();
+        final hit = _downHit;
+        if (cancelled) {
+          dragCancel();
+        } else if (!_liftMoved && hit != null && hit.hit.expr != null && onLongPressHit(hit.script, hit.hit, open: false)) {
+          // 拿起一个值积木、没挪就松手：放回原处，弹“换成…”。
+          dragCancel();
+          onLongPressHit(hit.script, hit.hit);
+        } else {
+          dragEnd();
+        }
       case _Touch.pinch:
         // 松开一根：剩下那根接着平移。
         if (_pointers.length == 1) {

@@ -1,4 +1,5 @@
 // 设计约束（拖积木这一层，390 宽，浅色 + 深色）— 2026-11-24
+// - 画布上的积木要先长按 0.28 秒才拿得起来（单指滑动一律是平移画布，见 block_editor_canvas_view.dart）；拿起的一瞬间手机震一下。
 // - 手上的积木画在最上面一层（盖过积木盒），跟着手指走，略放大带投影；它原来的位置立刻合拢。
 // - 靠近能拼的地方：那里的积木让开，露出一块落点阴影，手机轻轻“咔”一下；表达式则是目标槽亮起描边。
 // - 拖动时底部的积木盒换成一整条“拖到这里删除”（和面板一样高，面板收起时也不矮于 96），手指进去变红；从积木盒新拿出来的积木拖回去＝不要了。
@@ -129,6 +130,8 @@ mixin BkEditorDrag on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Tick
     });
     _pullFrom = Offset.zero;
     slideTo(session.display);
+    // 拿起来了：震一下（画布上是长按满了的那一刻，积木盒里是按住 / 横着拖出来的那一刻）。
+    unawaited(HapticFeedback.mediumImpact());
     if (reduceMotion) {
       liftAnim.value = 1;
     } else {

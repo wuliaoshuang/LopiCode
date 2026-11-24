@@ -3,9 +3,9 @@
 // - 数字 / 文字槽：那个槽自己变成输入框（数字用数字键盘），正好盖在槽上、不压旁边的槽；边打字积木边跟着变宽，右边的东西被推开而不是被盖住。
 //   回车或点别处就算填好；键盘弹出时画布自动把这个槽挪到看得见的地方。
 // - 下拉类的槽（变量、控件、固定选项…）：贴着槽弹出小菜单，点一项就选好。
-// - 空的值槽、或长按一个值：弹出紧凑的“换成…”小卡片（见 block_replace_view.dart）。
+// - 空的值槽、长按一个直接填的槽、或长按拿起一个值积木后没挪就松手：弹出紧凑的“换成…”小卡片（见 block_replace_view.dart）。
 // - “是 / 否”点一下就翻；一串值末尾的小“＋”点一下加一项。
-// - 选中一块积木后，画布上方出现一条小工具条：这块的问题（如果有）＋ 复制 ＋ 删除。主操作永远是拖，这条只是备用。
+// - 选中一块积木后，画布上方出现一条小工具条：这块的问题（如果有）＋ 复制 ＋ 删除。主操作是长按拿起来拖，这条只是备用。
 import 'dart:async';
 
 import 'package:flutter/services.dart';
@@ -144,18 +144,20 @@ mixin BkEditorEdit on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Tick
   }
 
   @override
-  void onLongPressHit(BkPlaced script, BkHit hit) {
+  bool onLongPressHit(BkPlaced script, BkHit hit, {bool open = true}) {
     final block = hit.block;
-    if (block.isHat) return;
+    if (block.isHat) return false;
     // 最里面那个“能放值”的槽：点在表达式上＝它所在的槽；点在直接填的框上＝装着这个框的槽。
     BkSlot? target;
     for (final (b, s) in script.layout.allSlots) {
       if (identical(b, block) && s.acceptsExpr && s.rect.contains(downCanvas - script.origin)) target = s;
     }
-    if (target == null) return;
+    if (target == null) return false;
+    if (!open) return true;
     unawaited(HapticFeedback.selectionClick());
     select(BlockSelection(script.id, block.path));
     unawaited(openReplace(_ref(script, block, target)));
+    return true;
   }
 
   // —— 输入框 ——

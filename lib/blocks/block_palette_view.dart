@@ -4,7 +4,7 @@
 //   一行分类（彩色圆点 + 名字，横着滑，选中的那个整颗填成它的颜色）；下面是这一类的积木。
 // - 积木不是文字列表：每一样都用和画布上同一套画法画成真的积木外形（帽子 / 语句 / C 形 / 表达式），小块的并排，放不下换行。
 // - 主操作就是“拿一块积木”：按住一块（约 0.18 秒）或直接横着拖，就把它拿出来了（回调交给外面的编辑器接着拖）；
-//   上下滑还是翻这一页。点一下＝快捷添加（回调告诉外面点了哪一样）。
+//   上下滑还是翻这一页（这一页没满、翻不动时竖着滑也不会把积木拿出来）。点一下＝快捷添加（回调告诉外面点了哪一样）。
 // - 手指一按上去，那块样品就微微缩一下（96%）、暗一点：告诉人“按到了，可以拿”。松手 / 拿走就弹回来。
 // - 面板多高由外面说了算（[BlockPaletteView.height]，可以矮到只剩手柄条：里面的东西不挤扁，只是被裁掉）。
 //   按住手柄条、或者分类那一行，上下拖＝改高度（只把手势报给外面）；分类那一行横着滑还是翻分类，积木那一片上下滑还是翻积木，互不抢。
@@ -230,6 +230,8 @@ class _BlockPaletteViewState extends State<BlockPaletteView> with BkKitHolder {
                               ? const SizedBox.shrink()
                               : SingleChildScrollView(
                                   key: ValueKey('bk-palette-page-${current.id}'),
+                                  // 这一页没满也照样接竖着的滑动：不然竖着滑没人接，会落到样品的“横着拖”手里，把积木误拿出来。
+                                  physics: const AlwaysScrollableScrollPhysics(),
                                   padding: EdgeInsets.fromLTRB(16, 14, 16, 20 + safeBottom),
                                   child: Align(
                                     alignment: Alignment.topLeft,
