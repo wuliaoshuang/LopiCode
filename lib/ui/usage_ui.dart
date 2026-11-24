@@ -13,6 +13,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/services.dart';
 import 'package:lopicode/agent/model_config.dart';
+import 'package:lopicode/agent/presets.dart';
 import 'package:lopicode/agent/quota.dart';
 import 'package:lopicode/agent/usage.dart';
 import 'package:lopicode/project_session.dart';
@@ -178,26 +179,8 @@ extension on String {
   String? get nullIfEmpty => isEmpty ? null : this;
 }
 
-/// 工具名 → 简短的人话（不带参数）。
-String toolLabel(String name) => switch (name) {
-  'list_files' => '查看文件列表',
-  'read_file' => '读取文件',
-  'write_file' => '写入文件',
-  'delete_file' => '删除文件',
-  'run_command' => '执行命令',
-  'lowcode_get_page' => '读取低代码页面',
-  'lowcode_update_page' => '更新低代码页面',
-  'ask_user' => '向你提问',
-  'web_search' => '联网搜索',
-  'read_skill' => '读技能',
-  'spawn_agent' => '派子代理',
-  'team_board' => '查看任务板',
-  'team_task' => '更新任务板',
-  'team_message' => '团队留言',
-  'list_scheduled_tasks' => '查看自动化任务',
-  'schedule_task' => '安排自动化任务',
-  _ => name,
-};
+/// 工具名 → 简短的人话（不带参数）。和设置页、对话页用同一张表（lib/agent/presets.dart 的 kToolLabels），新工具只在那里加一次。
+String toolLabel(String name) => kToolLabels[name] ?? name;
 
 class TrajectorySheet extends StatefulWidget {
   const TrajectorySheet({super.key, required this.turn, required this.findTool});

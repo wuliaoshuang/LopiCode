@@ -290,6 +290,24 @@ void main() {
       }
     });
 
+    test('端口写在命令里的语言（PHP）：启动命令、终端命令、README 里用的都是文档里的端口，不是默认的 8080', () async {
+      final doc = backendStarterDocument('样本', language: 'php')..port = 3210;
+      put(p.join('server', kBackendFileName), '${doc.encode()}\n');
+      final b = (await detectBackendProject(ws))!;
+      expect(b.port, 3210);
+      expect(b.startCommand, 'php -S 0.0.0.0:3210 server.php');
+      expect(b.terminalCommand, 'cd server && php -S 0.0.0.0:3210 server.php');
+      final result = await regenerateBackend(ws);
+      expect(result.ok, isTrue);
+      final readme = f('server/README.md').readAsStringSync();
+      expect(readme, contains('启动：`php -S 0.0.0.0:3210 server.php`'), reason: '“在 LopiCode 里启动”那一段');
+      expect(readme, isNot(contains('0.0.0.0:8080')));
+      // 别的语言端口不在命令里：改了端口命令不变。
+      final nodeDoc = backendStarterDocument('样本')..port = 3210;
+      put(kBackendFileName, '${nodeDoc.encode()}\n');
+      expect((await detectBackendProject(ws))!.startCommand, node.startCommand.join(' '));
+    });
+
     test('后端文件坏了：认得出“这里有后端”，但标成读不了，带原因；没有启动命令', () async {
       put(kBackendFileName, '{ 坏的');
       final b = (await detectBackendProject(ws))!;

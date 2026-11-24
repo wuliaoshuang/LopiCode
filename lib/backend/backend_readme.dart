@@ -83,7 +83,7 @@ String? beCurlExample(BeRoute route, int port) {
 /// 接在生成器的 README 后面的内容。`dir`＝后端在工作区里的子目录（空＝根目录）。
 String beReadmeExtras(BeDocument doc, BackendTarget target, {String dir = ''}) {
   final out = StringBuffer();
-  final start = target.startCommand.join(' ');
+  final start = target.startCommandFor(doc.port).join(' ');
   out.writeln();
   out.writeln('## 在 LopiCode 里启动');
   out.writeln();

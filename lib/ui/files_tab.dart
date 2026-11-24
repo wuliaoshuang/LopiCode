@@ -12,6 +12,7 @@ import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/state/workspace_files.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/backend_screen.dart';
 import 'package:lopicode/ui/code_editor.dart';
 import 'package:lopicode/ui/editor_format.dart';
 import 'package:lopicode/ui/file_icon.dart';
@@ -436,6 +437,8 @@ class _FilesTabState extends ConsumerState<FilesTab> {
                       file.controller.undo();
                     case 'redo':
                       file.controller.redo();
+                    case 'blocks':
+                      openBackendBlocks(context, widget.session, file.path);
                   }
                 },
                 itemBuilder: (context) => [
@@ -445,6 +448,7 @@ class _FilesTabState extends ConsumerState<FilesTab> {
                   PopupMenuItem(value: 'wrap', child: Text(_wordWrap ? '关闭自动换行' : '打开自动换行')),
                   PopupMenuItem(value: 'undo', enabled: file.controller.canUndo, child: const Text('撤销')),
                   PopupMenuItem(value: 'redo', enabled: file.controller.canRedo, child: const Text('重做')),
+                  if (isBackendBlocksFile(file.path)) const PopupMenuItem(key: ValueKey('editor-open-blocks'), value: 'blocks', child: Text('用积木打开')),
                 ],
               ),
             ],

@@ -102,8 +102,8 @@ class BackendProjectInfo {
   /// 启动前要先跑的命令（编译等），每条是一整行；在 [dir] 里跑。
   List<String> get buildCommands => [for (final c in target?.buildCommands ?? const <List<String>>[]) _cmd(c)];
 
-  /// 启动命令（在 [dir] 里跑）；没有生成器为 null。
-  String? get startCommand => target == null ? null : _cmd(target!.startCommand);
+  /// 启动命令（在 [dir] 里跑）；没有生成器为 null。端口写在命令里的语言（PHP）用的是文档里的 [port]。
+  String? get startCommand => target == null ? null : _cmd(target!.startCommandFor(port));
 
   /// 可以直接贴进应用终端的一整行：从工作区根目录出发，先进目录、再编译、再启动。没有生成器为 null。
   String? get terminalCommand {

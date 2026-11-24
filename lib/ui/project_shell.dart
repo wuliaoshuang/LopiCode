@@ -9,12 +9,12 @@ import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lopicode/build/build_screen.dart';
 import 'package:lopicode/core/project_store.dart';
-import 'package:lopicode/lowcode/builder_screen.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/runtime/runtime_screen.dart';
 import 'package:lopicode/state/workspace_chat.dart';
 import 'package:lopicode/state/workspace_conversations.dart';
 import 'package:lopicode/ui/app_ref.dart';
+import 'package:lopicode/ui/builder_hub_screen.dart';
 import 'package:lopicode/ui/chat_screen.dart';
 import 'package:lopicode/ui/chrome.dart';
 import 'package:lopicode/ui/files_tab.dart';
@@ -143,7 +143,7 @@ class _ProjectShellState extends ConsumerState<ProjectShell> {
       ShellDest.chat => ChatScreen(session: session),
       ShellDest.files => page(d, FilesTab(session: session)),
       ShellDest.terminal => page(d, TerminalTab(session: session)),
-      ShellDest.builder => BuilderScreen(key: ValueKey(_builderEpoch), session: session),
+      ShellDest.builder => BuilderHubScreen(key: ValueKey(_builderEpoch), session: session),
       ShellDest.apk => BuildScreen(session: session),
       ShellDest.preview => page(d, PreviewTab(session: session, active: _dest == ShellDest.preview)),
       ShellDest.runtime => RuntimeScreen(projectDir: session.project.dir),
