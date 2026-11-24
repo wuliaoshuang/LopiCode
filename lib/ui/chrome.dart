@@ -11,6 +11,7 @@
 // - 底部导航图标配短标签：选中 = 强调色实心图标，未选中 = 弱化描边。没有底色分界线。
 import 'package:flutter/services.dart' show SystemUiOverlayStyle;
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/nav_haptics.dart';
 import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -375,7 +376,10 @@ class IconBottomNav extends StatelessWidget {
                         message: items[i].label,
                         child: InkResponse(
                           radius: 28,
-                          onTap: () => onTap(i),
+                          onTap: () {
+                            navTapHaptic(); // 点哪一项都短震一下，点当前项也震
+                            onTap(i);
+                          },
                           child: SizedBox(
                             height: kHeight,
                             child: Column(
