@@ -177,3 +177,12 @@
 
 `@lobehub/icons-static-svg` 1.106.0（MIT，Copyright (c) 2023 LobeHub）。许可证取自 https://raw.githubusercontent.com/lobehub/lobe-icons/master/LICENSE （2026-11-23）。
 包从 npm 镜像 registry.npmmirror.com 下载，sha512 与 npm 登记的一致。详见 `third_party/lobe-icons/README.md`。
+
+## 聊天语音输入：speech_to_text 7.5.0
+
+核对时间：2026-11-24。来源：https://pub.dev/packages/speech_to_text （官方包文档）。
+
+- `initialize()` 返回设备是否可用；`listen()` 用 `SpeechListenOptions` 开启实时结果、听写模式和 60 秒上限；`stop()` 保留已识别文字，`cancel()` 用于页面销毁。
+- Android 需要 `RECORD_AUDIO`，并在 `queries` 里声明 `android.speech.RecognitionService`；麦克风权限只在用户点语音按钮后请求。
+- iOS / macOS 需要 `NSSpeechRecognitionUsageDescription` 和 `NSMicrophoneUsageDescription`。本仓库目前没有 iOS 目录，新增平台时须同时补这两项。
+- 状态：官方 API 与权限配置已核对；Widget 测试用假识别器覆盖，**尚未在真机验证识别质量、权限弹窗和厂商语音服务**。

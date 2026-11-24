@@ -1,7 +1,6 @@
 // 设计约束（项目外壳 · 390×844）— 2026-11-23 按霜霜的参考图改版
 // - 进项目先看到的是 Agent 聊天；底部导航五项（聊天、文件、终端、搭建、打包，带短标签），预览和运行环境从侧边栏去。
-// - 底部导航挂在最外层 Scaffold 上：键盘弹出时，页面内容缩到键盘上方，导航原地不动（被键盘盖住），
-//   所以贴着键盘的只有输入框 / 终端按键行，导航不会被顶起来。
+// - 底部导航挂在最外层 Scaffold 上：聊天键盘弹出时导航隐藏，输入栏贴着键盘；其他页面保留原避让规则。
 // - 侧边栏是“把主界面向右推开”的形式（push_drawer.dart），从左边缘右滑也能拉出来；终端和低代码画布上自己有横向手势，那两页只能点汉堡按钮。
 // - 切页面不丢状态：各页共用一个 ProjectSession，用 IndexedStack 保活；没去过的页面先不建。
 // - 系统返回键：侧边栏开着先关它；不在聊天页时先回聊天页，在聊天页才退出。
@@ -193,7 +192,9 @@ class _ProjectShellState extends ConsumerState<ProjectShell> {
           ),
           // 底部导航和页面在同一个 Scaffold 里，所以会跟着主界面一起被推走。
           child: Scaffold(
-            bottomNavigationBar: IconBottomNav(items: shellNavItems(), current: _dest.inBottomNav ? _dest.index : -1, onTap: (i) => _go(ShellDest.bottom[i])),
+            bottomNavigationBar: _dest == ShellDest.chat && MediaQuery.viewInsetsOf(context).bottom > 0
+                ? null
+                : IconBottomNav(items: shellNavItems(), current: _dest.inBottomNav ? _dest.index : -1, onTap: (i) => _go(ShellDest.bottom[i])),
             body: IndexedStack(index: _dest.index, children: [for (final d in ShellDest.values) lazy(d, () => build1(d))]),
           ),
         ),

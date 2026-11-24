@@ -146,13 +146,11 @@ class SendModeSheet extends StatelessWidget {
   );
 }
 
-/// 输入胶囊左边“＋”打开的面板：一行只做一件事。
-/// 上半是这段对话的设置（模型、权限、计划模式），下半是往消息里加东西（图片、引用文件）。
-/// 选中后返回：`model` / `permission` / `plan` / `gallery` / `camera` / `file` / `ref`。
+/// 输入栏“＋”打开的面板：一行只做一件事。
+/// 模型与权限在工具栏直接可点，这里只放计划模式和往消息里加东西。
+/// 选中后返回：`plan` / `gallery` / `camera` / `file` / `ref`。
 class PlusSheet extends StatelessWidget {
-  const PlusSheet({super.key, required this.modelName, required this.permission, required this.planMode});
-  final String modelName;
-  final PermissionLevel permission;
+  const PlusSheet({super.key, required this.planMode});
   final bool planMode;
 
   @override
@@ -185,18 +183,6 @@ class PlusSheet extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            row('model', Icons.auto_awesome_outlined, '模型', state: modelName),
-            row(
-              'permission',
-              switch (permission) {
-                PermissionLevel.view => Icons.visibility_outlined,
-                PermissionLevel.workspace => Icons.verified_user_outlined,
-                PermissionLevel.full => Icons.bolt,
-              },
-              '权限',
-              state: permission.label,
-              stateColor: permission == PermissionLevel.full ? c.warning : null,
-            ),
             row('plan', planMode ? Icons.map : Icons.map_outlined, '计划模式', state: planMode ? '已开' : '未开', stateColor: planMode ? c.accent : null),
             Divider(height: Space.x4, indent: Space.x4, endIndent: Space.x4, color: c.border),
             row('gallery', Icons.photo_library_outlined, '相册', subtitle: '从手机相册选图片'),

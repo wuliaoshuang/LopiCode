@@ -2,8 +2,8 @@
 // - 近白底。顶部不是一条栏：左上悬浮白色圆按钮（汉堡），右上悬浮白色圆按钮（···），正中一个白色小胶囊写对话名和“工作区 / 模型名”。
 //   聊天内容从它们下面滚过去，顶部渐隐。有子代理时，右上的圆变成胶囊，多一个子代理计数。
 // - 气泡：Agent 的回复是靠左的大圆角浅灰块（左上角小圆角），右边留出一截；我的消息是靠右的浅蓝块（右上角小圆角）。正文 16 号字。
-// - 输入框是一整条浅灰胶囊，悬浮在底部导航上方：左“＋”、中间输入、右边圆形发送 / 停止（参考图里麦克风的位置）。
-// - 一行只做一件事：模型、权限、计划模式、图片、引用文件都收进“＋”面板，每项一行并写着当前值；
+// - 输入区是贴底的白色圆角面板：上方多行输入，下方附件、权限、模型、语音、发送常驻。
+// - 模型与权限直接可点；计划模式、图片、引用文件仍可进“＋”面板，每项一行并写着当前值；
 //   新对话、Agent 预设、团队、压缩、导出、删除都在右上“···”菜单里。项目规则在“设置”里。
 // - 胶囊上方按需叠几条窄条：自动允许中、计划模式、排队的消息、附件缩略图、/ 指令提示；确认卡和提问卡也钉在这里。
 // - 空对话：没有可用模型时给明确的上手入口；模型可用时默认显示几条弱化的开场建议，可在“设置”里关闭。
@@ -22,6 +22,7 @@ import 'package:lopicode/state/ui_prefs.dart';
 import 'package:lopicode/state/workspace_chat.dart';
 import 'package:lopicode/state/workspace_conversations.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/chat_composer.dart';
 import 'package:lopicode/ui/chat_panels.dart';
 import 'package:lopicode/ui/chrome.dart';
 import 'package:lopicode/ui/file_picker_sheet.dart';
@@ -245,25 +246,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     _focus.requestFocus();
   }
 
-  /// 胶囊左边的“＋”：模型、权限、计划模式、图片、引用文件。
+  /// 输入栏左边的“＋”：计划模式、图片、引用文件。
   Future<void> _openPlus() async {
-    final model = s.currentModel;
     final choice = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
-      builder: (_) => PlusSheet(modelName: model == null ? '未设置' : model.model.name, permission: s.permission, planMode: s.planMode),
+      builder: (_) => PlusSheet(planMode: s.planMode),
     );
     if (choice == null || !mounted) return;
-    switch (choice) {
-      case 'model':
-        return _pickModel();
-      case 'permission':
-        return _pickPermission();
-      case 'plan':
-        return _togglePlan();
-      default:
-        return _attach(choice);
-    }
+    if (choice == 'plan') return _togglePlan();
+    return _attach(choice);
   }
 
   Future<void> _attach(String choice) async {
@@ -419,14 +411,18 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 },
               ),
             if (model != null) LowBalanceStrip(channel: model.channel),
-            _InputCard(
+            ChatComposer(
               context_: s.contextUsage,
               onContext: _showUsage,
               controller: _input,
               focusNode: _focus,
               busy: s.agentBusy,
               canSend: _canSend,
+              modelName: model == null ? '选择模型' : model.model.name,
+              permission: s.permission,
               onPlus: _openPlus,
+              onModel: _pickModel,
+              onPermission: _pickPermission,
               onSend: _send,
               onLongSend: _pickSendMode,
               onStop: s.stopAgent,
@@ -436,132 +432,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       ),
     );
   }
-}
-
-/// 底部的胶囊输入框：左“＋”、中间输入、右边发送 / 停止。
-class _InputCard extends StatelessWidget {
-  const _InputCard({
-    required this.controller,
-    required this.focusNode,
-    required this.busy,
-    required this.canSend,
-    required this.onPlus,
-    required this.onSend,
-    required this.onLongSend,
-    required this.onStop,
-    this.context_,
-    this.onContext,
-  });
-
-  /// 上下文占用（输入框旁的小环）；没配模型是 null，不显示。
-  final ContextUsage? context_;
-  final VoidCallback? onContext;
-  final TextEditingController controller;
-  final FocusNode focusNode;
-  final bool busy;
-  final bool canSend;
-  final VoidCallback onPlus;
-  final VoidCallback onSend;
-  final VoidCallback onLongSend;
-  final VoidCallback onStop;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.colors;
-    final t = Theme.of(context).textTheme;
-    const none = OutlineInputBorder(borderSide: BorderSide.none);
-    return Container(
-      key: const ValueKey('chat-input'),
-      margin: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x2),
-      padding: const EdgeInsets.symmetric(horizontal: Space.x1, vertical: Space.x1),
-      constraints: const BoxConstraints(minHeight: 52),
-      decoration: BoxDecoration(color: c.surfaceMuted, borderRadius: BorderRadius.circular(26)),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          SizedBox(
-            width: 44,
-            height: 44,
-            child: IconButton(
-              key: const ValueKey('plus-button'),
-              tooltip: '模型、权限、图片等',
-              padding: EdgeInsets.zero,
-              onPressed: onPlus,
-              icon: Icon(Icons.add, size: 26, color: c.text),
-            ),
-          ),
-          Expanded(
-            child: TextField(
-              controller: controller,
-              focusNode: focusNode,
-              minLines: 1,
-              maxLines: 6,
-              style: t.bodyLarge,
-              textInputAction: TextInputAction.newline,
-              decoration: InputDecoration(
-                hintText: busy ? '接着说：点发送排队，长按选方式' : '告诉 Agent 你想做什么',
-                hintStyle: t.bodyLarge?.copyWith(color: c.textFaint),
-                hintMaxLines: 1,
-                filled: false,
-                isDense: true,
-                contentPadding: const EdgeInsets.symmetric(horizontal: Space.x1, vertical: 10),
-                border: none,
-                enabledBorder: none,
-                focusedBorder: none,
-              ),
-            ),
-          ),
-          if (context_ != null && onContext != null) ContextRing(usage: context_!, onTap: onContext!),
-          Padding(
-            padding: const EdgeInsets.all(Space.x1),
-            child: busy && !canSend
-                ? _RoundButton(tooltip: '停止', icon: Icons.stop_rounded, bg: c.danger, fg: c.surface, onPressed: onStop)
-                // 生成中：长按选发送方式。这时不能挂 Tooltip——它自己也认长按，会把长按抢走只弹出提示文字。
-                : _RoundButton(
-                    key: const ValueKey('send-button'),
-                    tooltip: busy ? '排队发送（长按选方式）' : '发送',
-                    icon: Icons.arrow_upward_rounded,
-                    bg: canSend ? c.accentFill : c.surface,
-                    fg: canSend ? c.onAccent : c.textFaint,
-                    onPressed: canSend ? onSend : null,
-                    onLongPress: busy && canSend ? onLongSend : null,
-                  ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _RoundButton extends StatelessWidget {
-  const _RoundButton({super.key, required this.tooltip, required this.icon, required this.bg, required this.fg, required this.onPressed, this.onLongPress});
-  final VoidCallback? onLongPress;
-  final String tooltip;
-  final IconData icon;
-  final Color bg;
-  final Color fg;
-  final VoidCallback? onPressed;
-
-  @override
-  Widget build(BuildContext context) => onLongPress == null ? _button(tooltip) : Semantics(label: tooltip, child: _button(null));
-
-  Widget _button(String? tip) => IconButton(
-    tooltip: tip,
-    onPressed: onPressed,
-    onLongPress: onLongPress,
-    style: IconButton.styleFrom(
-      backgroundColor: bg,
-      disabledBackgroundColor: bg,
-      foregroundColor: fg,
-      disabledForegroundColor: fg,
-      minimumSize: const Size(36, 36),
-      fixedSize: const Size(36, 36),
-      padding: EdgeInsets.zero,
-      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      shape: const CircleBorder(),
-    ),
-    icon: Icon(icon, size: 20),
-  );
 }
 
 /// 空对话：模型不可用时显示设置入口；可用时按偏好显示开场建议。

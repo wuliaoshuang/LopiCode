@@ -1,6 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- 调模型接口、GitHub、SSH 都要联网 -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- 聊天输入栏的语音转文字，只在用户点麦克风时请求 -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
     <!-- Ubuntu 环境里有任务在跑时挂前台服务（常驻通知），切后台不被马上回收 -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"/>
@@ -53,6 +55,9 @@
 
          In particular, this is used by the Flutter engine in io.flutter.plugin.text.ProcessTextPlugin. -->
     <queries>
+        <intent>
+            <action android:name="android.speech.RecognitionService"/>
+        </intent>
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>

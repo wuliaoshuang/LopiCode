@@ -222,12 +222,28 @@ void main() {
       expect(find.byType(IconBottomNav), findsOneWidget, reason: '底部导航五项');
       await shot(tester, '04-chat-empty-$suffix');
 
-      // “＋”面板：模型、权限、计划模式、图片、引用文件，一行一件事
+      await tester.enterText(find.byType(TextField), '帮我把首页改成深色模式');
+      tester.view.viewInsets = const FakeViewPadding(bottom: 320);
+      addTearDown(tester.view.resetViewInsets);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.byType(IconBottomNav), findsNothing, reason: '键盘弹出时聊天导航让位');
+      expect(find.byKey(const ValueKey('model-button')), findsOneWidget);
+      expect(find.byKey(const ValueKey('voice-button')), findsOneWidget);
+      await shot(tester, '04b-chat-keyboard-$suffix');
+      tester.view.resetViewInsets();
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.enterText(find.byType(TextField), '');
+      await settle(tester, rounds: 3);
+
+      // “＋”面板：计划模式、图片、引用文件，一行一件事
       await tester.tap(find.byKey(const ValueKey('plus-button')));
       await settle(tester, rounds: 3);
-      for (final k in ['model', 'permission', 'plan', 'gallery', 'camera', 'file', 'ref']) {
+      for (final k in ['plan', 'gallery', 'camera', 'file', 'ref']) {
         expect(find.byKey(ValueKey('plus-$k')), findsOneWidget, reason: '＋面板里应该有 $k');
       }
+      expect(find.byKey(const ValueKey('plus-model')), findsNothing);
+      expect(find.byKey(const ValueKey('plus-permission')), findsNothing);
       await shot(tester, '66-plus-sheet-$suffix');
       await tester.tap(find.byKey(const ValueKey('plus-plan')));
       await settle(tester, rounds: 6);
