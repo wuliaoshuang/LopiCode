@@ -1,8 +1,12 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lopicode/agent/agent_tools.dart';
+import 'package:lopicode/session/chat_models.dart';
 import 'package:lopicode/theme/app_theme.dart';
 import 'package:lopicode/ui/chat_composer.dart';
+import 'package:lopicode/ui/keyboard_dismiss.dart';
 import 'package:material_ui/material_ui.dart';
+
+import 'support/harness.dart';
 
 class _FakeVoice implements ChatVoiceInput {
   bool available = true;
@@ -52,9 +56,18 @@ class _Calls {
   int models = 0;
   int permissions = 0;
   int plus = 0;
+  int stops = 0;
+  int rings = 0;
 }
 
-Future<({TextEditingController controller, _FakeVoice voice, _Calls calls})> _pump(WidgetTester tester, {_FakeVoice? voice, bool busy = false, String draft = ''}) async {
+Future<({TextEditingController controller, FocusNode focus, _FakeVoice voice, _Calls calls})> _pump(
+  WidgetTester tester, {
+  _FakeVoice? voice,
+  bool busy = false,
+  String draft = '',
+  bool ring = false,
+}) async {
+  usePhoneViewport(tester);
   final input = voice ?? _FakeVoice();
   final controller = TextEditingController(text: draft);
   final focus = FocusNode();
@@ -78,12 +91,14 @@ Future<({TextEditingController controller, _FakeVoice voice, _Calls calls})> _pu
                 modelName: 'DeepSeek Chat',
                 permission: PermissionLevel.workspace,
                 voiceInput: input,
+                context_: ring ? const ContextUsage(42000, 128000, estimated: false) : null,
+                onContext: ring ? () => calls.rings++ : null,
                 onPlus: () => calls.plus++,
                 onModel: () => calls.models++,
                 onPermission: () => calls.permissions++,
                 onSend: () => calls.sends++,
                 onLongSend: () => calls.sends++,
-                onStop: () {},
+                onStop: () => calls.stops++,
               ),
             ),
           ],
@@ -91,8 +106,19 @@ Future<({TextEditingController controller, _FakeVoice voice, _Calls calls})> _pu
       ),
     ),
   );
-  return (controller: controller, voice: input, calls: calls);
+  return (controller: controller, focus: focus, voice: input, calls: calls);
 }
+
+/// 模拟软键盘高度（逻辑像素；测试里像素比是 1）。
+void _keyboard(WidgetTester tester, double height) {
+  tester.view.viewInsets = FakeViewPadding(bottom: height);
+}
+
+/// 看得见的胶囊（带边框的那一块，不含外边距）。
+final Finder _capsule = find.descendant(of: find.byKey(const ValueKey('chat-input')), matching: find.byType(DecoratedBox)).first;
+
+/// 展开态才有的“模型”按钮。
+final Finder _expanded = find.byKey(const ValueKey('model-button'));
 
 void main() {
   testWidgets('输入工具栏直接打开模型、权限和附件，文字就绪后可发送', (tester) async {
@@ -193,5 +219,272 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('model-button')), findsNothing);
     expect(find.byKey(const ValueKey('plus-button')), findsOneWidget);
+  });
+  group('软键盘收起后失焦', () {
+    testWidgets('聚焦 → 键盘升起 → 键盘收起：失焦并收回一行；再点还能聚焦弹键盘', (tester) async {
+      final state = await _pump(tester);
+      await tester.tap(find.byType(TextField));
+      await tester.pumpAndSettle();
+      expect(state.focus.hasFocus, isTrue);
+
+      _keyboard(tester, 320);
+      await tester.pumpAndSettle();
+      expect(state.focus.hasFocus, isTrue);
+      expect(_expanded, findsOneWidget);
+
+      _keyboard(tester, 0);
+      await tester.pump();
+      expect(state.focus.hasFocus, isTrue, reason: '先等一小会儿确认，不是高度一到 0 就摘');
+      await tester.pump(kKeyboardSettle + const Duration(milliseconds: 10));
+      await tester.pumpAndSettle();
+      expect(state.focus.hasFocus, isFalse);
+      expect(_expanded, findsNothing, reason: '没草稿：收回一行胶囊');
+      expect(tester.testTextInput.hasAnyClients, isFalse);
+
+      await tester.tap(find.byType(TextField));
+      await tester.pumpAndSettle();
+      expect(state.focus.hasFocus, isTrue);
+      expect(tester.testTextInput.isVisible, isTrue, reason: '重新聚焦会再请求弹键盘');
+      expect(_expanded, findsOneWidget);
+      // 这次还没见过键盘（高度仍是 0）：不能马上又被摘掉
+      await tester.pump(kKeyboardSettleSlow * 2);
+      expect(state.focus.hasFocus, isTrue);
+    });
+
+    testWidgets('有草稿时键盘收起：失焦但保持展开，草稿不丢', (tester) async {
+      final state = await _pump(tester);
+      await tester.tap(find.byType(TextField));
+      await tester.pumpAndSettle();
+      _keyboard(tester, 320);
+      await tester.enterText(find.byType(TextField), '写到一半');
+      await tester.pumpAndSettle();
+
+      _keyboard(tester, 0);
+      await tester.pump(kKeyboardSettle + const Duration(milliseconds: 10));
+      await tester.pumpAndSettle();
+      expect(state.focus.hasFocus, isFalse);
+      expect(_expanded, findsOneWidget);
+      expect(state.controller.text, '写到一半');
+    });
+
+    testWidgets('键盘弹起过程中（0 → 逐渐变高）不失焦', (tester) async {
+      final state = await _pump(tester);
+      await tester.tap(find.byType(TextField));
+      await tester.pump();
+      // 刚聚焦的那几帧高度还是 0，系统也可能再报几次 0
+      for (final h in <double>[0, 0, 12, 80, 200, 320]) {
+        _keyboard(tester, h);
+        await tester.pump(const Duration(milliseconds: 16));
+        expect(state.focus.hasFocus, isTrue, reason: '高度 $h');
+      }
+      await tester.pump(kKeyboardSettleSlow * 2);
+      expect(state.focus.hasFocus, isTrue);
+      expect(_expanded, findsOneWidget);
+    });
+
+    testWidgets('从没出现过软键盘（实体键盘 / 桌面）：聚焦不被摘掉', (tester) async {
+      final state = await _pump(tester);
+      await tester.tap(find.byType(TextField));
+      await tester.pumpAndSettle();
+      // 屏幕尺寸之类的变化也会报一次“键盘高度 0”
+      _keyboard(tester, 0);
+      await tester.pump(kKeyboardSettleSlow * 2);
+      await tester.enterText(find.byType(TextField), 'abc');
+      await tester.pump(kKeyboardSettleSlow * 2);
+      expect(state.focus.hasFocus, isTrue);
+      expect(state.controller.text, 'abc');
+    });
+
+    testWidgets('键盘闪一下（换输入法）马上回来：不失焦', (tester) async {
+      final state = await _pump(tester);
+      await tester.tap(find.byType(TextField));
+      await tester.pumpAndSettle();
+      _keyboard(tester, 320);
+      await tester.pump();
+      _keyboard(tester, 0);
+      await tester.pump(const Duration(milliseconds: 80));
+      _keyboard(tester, 300);
+      await tester.pump(kKeyboardSettleSlow * 2);
+      expect(state.focus.hasFocus, isTrue);
+    });
+
+    testWidgets('语音输入进行中键盘收起：语音不被打断，仍保持展开', (tester) async {
+      final voice = _FakeVoice();
+      final state = await _pump(tester, voice: voice);
+      await tester.tap(find.byKey(const ValueKey('voice-button')));
+      await tester.pumpAndSettle();
+      expect(voice.listening, isTrue);
+      // 听写时又点进输入框，键盘升起后被收起
+      await tester.tap(find.byType(TextField));
+      await tester.pumpAndSettle();
+      _keyboard(tester, 320);
+      await tester.pump();
+      _keyboard(tester, 0);
+      await tester.pump(kKeyboardSettle + const Duration(milliseconds: 10));
+      await tester.pumpAndSettle();
+
+      expect(state.focus.hasFocus, isFalse);
+      expect(voice.listening, isTrue);
+      expect(voice.stopCalls, 0);
+      expect(find.byTooltip('停止语音输入'), findsOneWidget);
+      expect(_expanded, findsOneWidget);
+      voice.emit('继续听写');
+      await tester.pump();
+      expect(state.controller.text, '继续听写');
+    });
+
+    testWidgets('转屏：键盘跟着回来就不失焦；一直没回来才失焦', (tester) async {
+      final state = await _pump(tester);
+      await tester.tap(find.byType(TextField));
+      await tester.pumpAndSettle();
+      _keyboard(tester, 320);
+      await tester.pump();
+
+      // 横过来：键盘先消失一下，再按新尺寸回来
+      tester.view.physicalSize = const Size(844, 390);
+      _keyboard(tester, 0);
+      await tester.pump(kKeyboardSettle + const Duration(milliseconds: 50));
+      expect(state.focus.hasFocus, isTrue, reason: '刚转屏要多等一会儿');
+      _keyboard(tester, 200);
+      await tester.pump(kKeyboardSettleSlow * 2);
+      expect(state.focus.hasFocus, isTrue);
+
+      // 竖回去：键盘这次没回来
+      tester.view.physicalSize = kPhone;
+      _keyboard(tester, 0);
+      await tester.pump(kKeyboardSettleSlow + const Duration(milliseconds: 10));
+      await tester.pumpAndSettle();
+      expect(state.focus.hasFocus, isFalse);
+      expect(_expanded, findsNothing);
+    });
+
+    testWidgets('切到别的应用再回来：键盘回来了保持聚焦，之后收起键盘照样失焦', (tester) async {
+      final state = await _pump(tester);
+      addTearDown(() => tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed));
+      await tester.tap(find.byType(TextField));
+      await tester.pumpAndSettle();
+      _keyboard(tester, 320);
+      await tester.pump();
+
+      for (final s in const [AppLifecycleState.inactive, AppLifecycleState.hidden, AppLifecycleState.paused]) {
+        tester.binding.handleAppLifecycleStateChanged(s);
+      }
+      _keyboard(tester, 0);
+      await tester.pump(kKeyboardSettleSlow * 2);
+      for (final s in const [AppLifecycleState.hidden, AppLifecycleState.inactive, AppLifecycleState.resumed]) {
+        tester.binding.handleAppLifecycleStateChanged(s);
+      }
+      await tester.pump(const Duration(milliseconds: 100));
+      _keyboard(tester, 320);
+      await tester.pump(kKeyboardSettleSlow * 2);
+      expect(state.focus.hasFocus, isTrue, reason: '离开前台期间键盘消失不算用户收起');
+      expect(_expanded, findsOneWidget);
+
+      _keyboard(tester, 0);
+      await tester.pump(kKeyboardSettle + const Duration(milliseconds: 10));
+      await tester.pumpAndSettle();
+      expect(state.focus.hasFocus, isFalse);
+      expect(_expanded, findsNothing);
+    });
+  });
+
+  group('胶囊尺寸', () {
+    testWidgets('收起态连边框高 48，带不带用量小环都一样；各可点目标不小于 44×44', (tester) async {
+      await _pump(tester);
+      expect(tester.getSize(_capsule).height, 48);
+
+      final state = await _pump(tester, ring: true, busy: true);
+      final capsule = tester.getRect(_capsule);
+      expect(capsule.height, 48);
+      expect(_expanded, findsNothing);
+      expect(tester.takeException(), isNull);
+
+      for (final key in const [ValueKey('plus-button'), Key('context-ring'), ValueKey('voice-button')]) {
+        final size = tester.getSize(find.byKey(key));
+        expect(size.width, greaterThanOrEqualTo(44), reason: '$key 宽');
+        expect(size.height, greaterThanOrEqualTo(44), reason: '$key 高');
+        expect(capsule.contains(tester.getRect(find.byKey(key)).topLeft) && capsule.contains(tester.getRect(find.byKey(key)).bottomRight), isTrue, reason: '$key 在胶囊里');
+      }
+      // 提示文字和各图标垂直居中
+      for (final f in [find.byKey(const ValueKey('plus-button')), find.byKey(const ValueKey('send-button')), find.byType(EditableText)]) {
+        expect(tester.getCenter(f).dy, moreOrLessEquals(capsule.center.dy, epsilon: 0.6));
+      }
+
+      // 点每个目标 44×44 范围的角上也算数
+      const corner = Offset(21, 21);
+      await tester.tapAt(tester.getCenter(find.byKey(const ValueKey('plus-button'))) - corner);
+      await tester.tapAt(tester.getCenter(find.byKey(const ValueKey('plus-button'))) + corner);
+      expect(state.calls.plus, 2);
+      await tester.tapAt(tester.getCenter(find.byKey(const Key('context-ring'))) - corner);
+      await tester.tapAt(tester.getCenter(find.byKey(const Key('context-ring'))) + corner);
+      expect(state.calls.rings, 2);
+      // 发送圆钮看着是 36，点它外圈（44 的角上）也要生效；这里是“停止”
+      await tester.tapAt(tester.getCenter(find.byKey(const ValueKey('send-button'))) - corner);
+      await tester.tapAt(tester.getCenter(find.byKey(const ValueKey('send-button'))) + corner);
+      expect(state.calls.stops, 2);
+      await tester.tapAt(tester.getCenter(find.byKey(const ValueKey('voice-button'))) - corner);
+      await tester.pumpAndSettle();
+      expect(state.voice.listening, isTrue);
+    });
+
+    testWidgets('展开态：发送的可点范围同样是 44×44，各按钮不小于 44', (tester) async {
+      final state = await _pump(tester, draft: '改一下首页', ring: true);
+      expect(_expanded, findsOneWidget);
+      const corner = Offset(21, 21);
+      await tester.tapAt(tester.getCenter(find.byKey(const ValueKey('send-button'))) - corner);
+      await tester.tapAt(tester.getCenter(find.byKey(const ValueKey('send-button'))) + corner);
+      expect(state.calls.sends, 2);
+      for (final key in const [ValueKey('plus-button'), ValueKey('permission-button'), ValueKey('model-button'), Key('context-ring'), ValueKey('voice-button')]) {
+        final size = tester.getSize(find.byKey(key));
+        expect(size.height, greaterThanOrEqualTo(44), reason: '$key 高');
+        expect(size.width, greaterThanOrEqualTo(44), reason: '$key 宽');
+      }
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('KeyboardDismissTracker', () {
+    test('见过键盘再回到 0 才要求确认；确认时键盘还没回来才失焦', () {
+      final t = KeyboardDismissTracker()..onFocus(focused: true, inset: 0);
+      expect(t.onMetrics(inset: 0, width: 390), KeyboardVerdict.none);
+      expect(t.sawKeyboard, isFalse);
+      expect(t.onMetrics(inset: 40, width: 390), KeyboardVerdict.none);
+      expect(t.onMetrics(inset: 300, width: 390), KeyboardVerdict.none);
+      expect(t.onMetrics(inset: 0, width: 390), KeyboardVerdict.checkSoon);
+      expect(t.confirm(inset: 120), isFalse, reason: '键盘回来了');
+      expect(t.onMetrics(inset: 0, width: 390), KeyboardVerdict.checkSoon);
+      expect(t.confirm(inset: 0), isTrue);
+    });
+
+    test('没聚焦时不管；重新聚焦要重新见到键盘；接着别的输入框聚焦时键盘本来就开着也算见过', () {
+      final t = KeyboardDismissTracker();
+      expect(t.onMetrics(inset: 300, width: 390), KeyboardVerdict.none);
+      expect(t.onMetrics(inset: 0, width: 390), KeyboardVerdict.none);
+      t.onFocus(focused: true, inset: 0);
+      expect(t.onMetrics(inset: 0, width: 390), KeyboardVerdict.none);
+      expect(t.confirm(inset: 0), isFalse);
+      t
+        ..onFocus(focused: false, inset: 0)
+        ..onFocus(focused: true, inset: 300);
+      expect(t.sawKeyboard, isTrue);
+      expect(t.onMetrics(inset: 0, width: 390), KeyboardVerdict.checkSoon);
+    });
+
+    test('离开前台期间键盘消失不算；回来和转屏都多等一会儿', () {
+      final t = KeyboardDismissTracker()..onFocus(focused: true, inset: 300);
+      expect(t.onLifecycle(resumed: false), KeyboardVerdict.none);
+      expect(t.onMetrics(inset: 0, width: 390), KeyboardVerdict.none);
+      expect(t.confirm(inset: 0), isFalse, reason: '还在后台');
+      expect(t.onLifecycle(resumed: true), KeyboardVerdict.checkLater);
+      expect(t.onMetrics(inset: 0, width: 390), KeyboardVerdict.checkLater);
+      expect(t.confirm(inset: 0), isTrue);
+
+      final r = KeyboardDismissTracker()..onFocus(focused: true, inset: 300);
+      expect(r.onMetrics(inset: 300, width: 390), KeyboardVerdict.none);
+      expect(r.onMetrics(inset: 0, width: 844), KeyboardVerdict.checkLater);
+      expect(r.onMetrics(inset: 0, width: 844), KeyboardVerdict.checkLater);
+      expect(r.confirm(inset: 200), isFalse);
+      expect(r.onMetrics(inset: 0, width: 844), KeyboardVerdict.checkSoon);
+    });
   });
 }
