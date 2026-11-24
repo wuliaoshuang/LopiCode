@@ -4,6 +4,9 @@
 // - 手指按住不动约 0.45 秒＝长按（表达式上长按＝“换成…”）。没动就抬起＝点一下。
 // - 没摆过位置的脚本自动从上往下排，算出来的位置不写回模型（不进撤销、不落盘）。
 // - 画的时候只画一次排版结果；拖动时画的是“拿走以后 + 让出落点”的预览排版，模型一个字不动。
+// - 让位是滑过去的（约 150 毫秒）：两头的位置由 block_motion.dart 算，这里只出一个 0–1 的进度；系统开了“减弱动态效果”就直接到位。
+// - 拖动时，能接的地方亮一个很淡的小点（语句：每个凸起上；表达式：每个能放值的槽一圈细线），教人“可以放这”。
+// - 双击空白处＝回到 100%、回到起始位置。
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -15,8 +18,10 @@ import 'package:lopicode/blocks/block_editor_view.dart';
 import 'package:lopicode/blocks/block_geometry.dart';
 import 'package:lopicode/blocks/block_host.dart';
 import 'package:lopicode/blocks/block_layout.dart';
+import 'package:lopicode/blocks/block_motion.dart';
 import 'package:lopicode/blocks/block_paint_view.dart';
 import 'package:lopicode/blocks/block_script_view.dart';
+import 'package:lopicode/blocks/block_shapes.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -47,6 +52,54 @@ mixin BkEditorCanvas on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Ti
 
   late final AnimationController flashAnim = AnimationController(vsync: this, duration: const Duration(milliseconds: 900));
 
+  // —— 动效 ——
+
+  /// 让位滑动多久；落下以后轻弹多久。
+  static const Duration roomTime = Duration(milliseconds: 150);
+  static const Duration pulseTime = Duration(milliseconds: 100);
+
+  /// 系统开了“减弱动态效果”（`MediaQuery.disableAnimations`）：所有动画直接到终态。每次 build 时更新。
+  bool reduceMotion = false;
+
+  final BkMotion motion = BkMotion();
+  late final AnimationController roomAnim = AnimationController(vsync: this, duration: roomTime, value: 1);
+  late final AnimationController pulseAnim = AnimationController(vsync: this, duration: pulseTime, value: 1);
+  ({String scriptId, BkRoom? range, ({LcBlockPath block, String arg, BkExprPath path})? slot})? _pulse;
+
+  /// 让位滑到哪了（0–1，已经过了缓动）。
+  double get roomT => reduceMotion ? 1 : Curves.easeOutCubic.transform(roomAnim.value);
+
+  /// 画布换成 `next` 这个排布：积木从现在看到的位置滑过去。`room`＝`next` 里让出来 / 新放进去的那一截（它不滑）。
+  /// `always`＝没有积木要滑也把进度从头走一遍（落点换了：手上积木被“吸”过去、落点阴影淡入都跟这个进度）。
+  void slideTo(BkCanvasLayout next, {BkRoom? room, bool always = false}) {
+    if (reduceMotion) {
+      motion.jump(next, room: room);
+      roomAnim.value = 1;
+      return;
+    }
+    motion.retarget(next, room: room, progress: roomT);
+    if (motion.moving || room != null || always) {
+      unawaited(roomAnim.forward(from: 0));
+    } else {
+      roomAnim.value = 1;
+    }
+  }
+
+  /// 刚落下的积木轻弹一下：`range`＝哪一段（null＝整串）；`slot`＝表达式落进的那个槽（只闪描边）。
+  void pulseBlocks(String scriptId, {BkRoom? range, ({LcBlockPath block, String arg, BkExprPath path})? slot}) {
+    if (reduceMotion) return;
+    _pulse = (scriptId: scriptId, range: range, slot: slot);
+    unawaited(pulseAnim.forward(from: 0));
+  }
+
+  /// 某块积木此刻画在画布的哪里（让位动画进行中是中间位置）。`path` 是它在“现在画的排布”里的路径，空＝帽子。测试用。
+  Rect? shownRect(String scriptId, LcBlockPath path) {
+    final placed = (drag?.display ?? previewLayout ?? layout).placed(scriptId);
+    final b = path.isEmpty ? placed?.layout.hat : placed?.layout.blockAt(path);
+    if (placed == null || b == null) return null;
+    return motion.frameOf(b, roomT)?.rect ?? b.rect.shift(placed.origin);
+  }
+
   final Map<int, Offset> _pointers = {};
   _Touch _touch = _Touch.none;
   int _primary = -1;
@@ -54,6 +107,8 @@ mixin BkEditorCanvas on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Ti
   ({BkPlaced script, BkHit hit})? _downHit;
   Timer? _longPress;
   double _pinchDist = 1, _pinchZoom = 1;
+  Timer? _blankTap1;
+  Offset _blankTapPos = Offset.zero;
 
   /// 手指按下的地方（画布坐标）。
   Offset get downCanvas => toCanvas(_downAt);
@@ -62,6 +117,12 @@ mixin BkEditorCanvas on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Ti
 
   BkDragSession? get drag;
   bool get busy;
+
+  /// 松手后的动画还没走完时又有新的操作：立刻走完（该改的模型马上改好）。返回现在能不能接新手势。
+  bool settleNow();
+
+  /// 就地输入时的预览排布（正在改的输入框跟着字变宽）；没在输入为 null。
+  BkCanvasLayout? get previewLayout;
   void dragStartFromCanvas(BkPlaced script, BkHit hit, Offset viewAt);
   void dragMove(Offset viewAt);
   void dragEnd();
@@ -155,7 +216,8 @@ mixin BkEditorCanvas on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Ti
   }
 
   void pointerDown(PointerDownEvent e) {
-    if (busy) return;
+    // 动画不挡手：上一次松手的动画还在走，这一下按下去就让它立刻走完，然后照常接这次手势。
+    if (busy && !settleNow()) return;
     final at = viewOf(e.position);
     _pointers[e.pointer] = at;
     if (_pointers.length >= 2) {
@@ -233,6 +295,7 @@ mixin BkEditorCanvas on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Ti
         if (cancelled) return;
         if (hit == null) {
           select(null);
+          _blankTap(e);
         } else {
           onTapHit(hit.script, hit.hit);
         }
@@ -253,15 +316,37 @@ mixin BkEditorCanvas on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Ti
     }
   }
 
+  /// 空白处连点两下（0.3 秒内、同一个地方）：回到 100%、回到起始位置。
+  /// 用定时器数时间，不看事件自带的时间戳（有的输入设备不给）。
+  void _blankTap(PointerEvent e) {
+    final armed = _blankTap1 != null;
+    _blankTap1?.cancel();
+    _blankTap1 = null;
+    if (armed && (_downAt - _blankTapPos).distance < 32) {
+      setState(() {
+        zoom = 1;
+        setPan(Offset.zero);
+      });
+      return;
+    }
+    _blankTapPos = _downAt;
+    _blankTap1 = Timer(const Duration(milliseconds: 300), () => _blankTap1 = null);
+  }
+
   void disposeCanvas() {
     _clearLongPress();
+    _blankTap1?.cancel();
     flashAnim.dispose();
+    roomAnim.dispose();
+    pulseAnim.dispose();
   }
+
+  late final Listenable _ticks = Listenable.merge([flashAnim, roomAnim, pulseAnim]);
 
   /// 画布本体。`shown`＝现在该画的排布（拖动时是预览）。
   Widget buildCanvas(BuildContext context) {
     final d = drag;
-    final shown = d?.display ?? layout;
+    final shown = d?.display ?? previewLayout ?? layout;
     return Listener(
       behavior: HitTestBehavior.opaque,
       onPointerDown: pointerDown,
@@ -269,31 +354,55 @@ mixin BkEditorCanvas on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Ti
       onPointerUp: pointerUp,
       onPointerCancel: pointerUp,
       child: AnimatedBuilder(
-        animation: flashAnim,
-        builder: (context, _) => CustomPaint(
-          key: const ValueKey('bk-canvas'),
-          size: Size.infinite,
-          painter: BkWorkspacePainter(
-            layout: shown,
-            kit: kit,
-            pan: pan,
-            zoom: zoom,
-            selection: d == null ? selection : null,
-            issues: d == null ? issues : const [],
-            flash: flashAnim.isAnimating ? 1 - Curves.easeOut.transform(flashAnim.value) : 0,
-            ghost: d?.ghost,
-            slot: d == null || d.kind != BkDragKind.expr || d.target == null
-                ? null
-                : (scriptId: d.target!.scriptId, block: d.target!.snap.parent, arg: d.target!.snap.arg ?? '', path: d.target!.snap.exprPath, warn: d.target!.mismatch),
-          ),
-        ),
+        animation: _ticks,
+        builder: (context, _) {
+          final t = roomT;
+          final pulse = _pulse;
+          return CustomPaint(
+            key: const ValueKey('bk-canvas'),
+            size: Size.infinite,
+            painter: BkWorkspacePainter(
+              layout: shown,
+              kit: kit,
+              pan: pan,
+              zoom: zoom,
+              selection: d == null ? selection : null,
+              issues: d == null ? issues : const [],
+              flash: flashAnim.isAnimating ? 1 - Curves.easeOut.transform(flashAnim.value) : 0,
+              ghost: d?.ghost,
+              ghostAlpha: t,
+              motion: t < 1 && motion.moving ? motion : null,
+              motionT: t,
+              pulse: pulse != null && pulseAnim.isAnimating ? (scriptId: pulse.scriptId, range: pulse.range, slot: pulse.slot, t: pulseAnim.value) : null,
+              hints: d == null || busy || d.kind == BkDragKind.hat ? null : (d.kind == BkDragKind.statement ? BkSnapKind.statement : BkSnapKind.expr),
+              slot: d == null || d.kind != BkDragKind.expr || d.target == null
+                  ? null
+                  : (scriptId: d.target!.scriptId, block: d.target!.snap.parent, arg: d.target!.snap.arg ?? '', path: d.target!.snap.exprPath, warn: d.target!.mismatch),
+            ),
+          );
+        },
       ),
     );
   }
 }
 
 class BkWorkspacePainter extends CustomPainter {
-  BkWorkspacePainter({required this.layout, required this.kit, required this.pan, required this.zoom, this.selection, this.issues = const [], this.flash = 0, this.ghost, this.slot});
+  BkWorkspacePainter({
+    required this.layout,
+    required this.kit,
+    required this.pan,
+    required this.zoom,
+    this.selection,
+    this.issues = const [],
+    this.flash = 0,
+    this.ghost,
+    this.ghostAlpha = 1,
+    this.motion,
+    this.motionT = 1,
+    this.pulse,
+    this.hints,
+    this.slot,
+  });
 
   final BkCanvasLayout layout;
   final BkKit kit;
@@ -302,7 +411,18 @@ class BkWorkspacePainter extends CustomPainter {
   final BlockSelection? selection;
   final List<BlockIssue> issues;
   final double flash;
-  final ({String scriptId, LcBlockPath parent, bool inElse, int start, int count})? ghost;
+  final BkRoom? ghost;
+  final double ghostAlpha;
+
+  /// 让位动画：积木此刻的位置从这里查（进度 [motionT]）；null＝都在排版算出来的位置。
+  final BkMotion? motion;
+  final double motionT;
+
+  /// 刚落下的那一段轻弹一下（`t`＝进度）。
+  final ({String scriptId, BkRoom? range, ({LcBlockPath block, String arg, BkExprPath path})? slot, double t})? pulse;
+
+  /// 拖动中：把这一种拼接点都淡淡地标出来。
+  final BkSnapKind? hints;
   final ({String scriptId, LcBlockPath block, String arg, BkExprPath path, bool warn})? slot;
 
   @override
@@ -315,16 +435,26 @@ class BkWorkspacePainter extends CustomPainter {
     canvas.translate(pan.dx, pan.dy);
     canvas.scale(zoom);
     final visible = Rect.fromLTWH(-pan.dx / zoom, -pan.dy / zoom, size.width / zoom, size.height / zoom).inflate(24);
+    final m = motion;
     for (final s in layout.scripts) {
-      if (!s.bounds.overlaps(visible)) continue;
+      // 正在滑的时候不按“终点的范围”裁掉整串（它可能正从看得见的地方滑出去）。
+      if (m == null && !s.bounds.overlaps(visible)) continue;
       final sel = selection != null && selection!.scriptId == s.id ? selection : null;
       final g = ghost != null && ghost!.scriptId == s.id ? ghost : null;
       final sl = slot != null && slot!.scriptId == s.id ? slot : null;
+      final pu = pulse != null && pulse!.scriptId == s.id ? pulse : null;
+      final pr = pu?.range;
       final state = BkPaintState(
         selected: sel != null && sel.path.isNotEmpty ? sel.path : null,
         selectedHat: sel != null && sel.path.isEmpty,
         flash: sel == null ? 0 : flash,
         ghostRange: g == null ? null : (parent: g.parent, inElse: g.inElse, start: g.start, count: g.count),
+        ghostAlpha: ghostAlpha,
+        clip: visible.shift(-s.origin),
+        pose: m == null ? null : (b) => m.frameOf(b, motionT)?.shift(-s.origin),
+        pulse: pu?.t,
+        pulseRange: pr == null ? null : (parent: pr.parent, inElse: pr.inElse, start: pr.start, count: pr.count),
+        pulseSlot: pu?.slot,
         selectedSlot: sl == null ? null : (block: sl.block, arg: sl.arg, path: sl.path),
         slotColor: sl != null && sl.warn ? palette.warning : null,
         errors: [
@@ -339,9 +469,38 @@ class BkWorkspacePainter extends CustomPainter {
       canvas.save();
       canvas.translate(s.origin.dx, s.origin.dy);
       kit.painter.paint(canvas, s.layout, state);
+      if (hints != null) _hints(canvas, s, visible.shift(-s.origin), g);
       canvas.restore();
     }
     canvas.restore();
+  }
+
+  /// 能接的地方：语句＝凸起正中一个小白点；表达式＝槽外面一圈细线。让位滑动的那一小会儿跟着淡入，免得点和积木对不上。
+  void _hints(Canvas canvas, BkPlaced s, Rect visible, BkRoom? room) {
+    final mt = kit.metrics;
+    final a = motion == null ? 1.0 : motionT;
+    if (a <= 0) return;
+    final dot = Paint()..color = const Color(0xFFFFFFFF).withValues(alpha: 0.6 * a);
+    final ring = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2
+      ..color = const Color(0xFFFFFFFF).withValues(alpha: 0.5 * a);
+    for (final snap in s.layout.snaps) {
+      if (snap.kind != hints) continue;
+      if (room != null) {
+        // 落点阴影自己（上下两头）和它里面的位置不标。
+        final sameList = bkSameBlockPath(snap.parent, room.parent) && (room.parent.isEmpty || snap.inElse == room.inElse);
+        if (snap.kind == BkSnapKind.statement && sameList && snap.index >= room.start && snap.index <= room.start + room.count) continue;
+        if (snap.parent.isNotEmpty && bkPathBeforeRoom(snap.parent, room) == null) continue;
+      }
+      if (snap.kind == BkSnapKind.statement) {
+        // 一串最前面的那个位置在帽子 / 口的凸起上；别的都在上一块的凸起上。
+        final c = snap.anchor + Offset(mt.notchX + mt.notchW / 2, mt.notchD / 2);
+        if (visible.contains(c)) canvas.drawCircle(c, 2.2, dot);
+      } else if (snap.rect.overlaps(visible)) {
+        canvas.drawPath(bkSlotPath(snap.rect.inflate(1.5), mt, hex: snap.hex), ring);
+      }
+    }
   }
 
   void _dots(Canvas canvas, Size size, BkPalette palette) {

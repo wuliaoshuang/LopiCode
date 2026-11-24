@@ -100,7 +100,8 @@ class Rig {
   LcHandler h(int i) => handlers[i];
   List<String> ops(int i) => [for (final b in h(i).body) b.op];
 
-  Future<void> pump(WidgetTester tester, {ThemeMode mode = ThemeMode.light, String? focus}) async {
+  /// `reduceMotion`＝系统开了“减弱动态效果”。
+  Future<void> pump(WidgetTester tester, {ThemeMode mode = ThemeMode.light, String? focus, bool reduceMotion = false}) async {
     usePhoneViewport(tester);
     await tester.pumpWidget(
       RepaintBoundary(
@@ -110,6 +111,7 @@ class Rig {
           theme: buildAppTheme(Brightness.light, fontFamily: fontsLoaded ? kTestFont : null),
           darkTheme: buildAppTheme(Brightness.dark, fontFamily: fontsLoaded ? kTestFont : null),
           themeMode: mode,
+          builder: reduceMotion ? (context, child) => MediaQuery(data: MediaQuery.of(context).copyWith(disableAnimations: true), child: child!) : null,
           home: BlockEditorView(key: key, host: host, title: '逻辑', focusScriptId: focus),
         ),
       ),

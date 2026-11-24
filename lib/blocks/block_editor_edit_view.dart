@@ -1,6 +1,7 @@
 // 设计约束（就地改参数这一层，390 宽，浅色 + 深色）— 2026-11-24
 // - 改参数不离开画布：点哪个槽，东西就出现在哪个槽旁边。没有整页面板、没有一层层往里进。
-// - 数字 / 文字槽：槽的位置上直接出现一个输入框（数字用数字键盘），回车或点别处就算填好；键盘弹出时画布自动把这个槽挪到看得见的地方。
+// - 数字 / 文字槽：那个槽自己变成输入框（数字用数字键盘），正好盖在槽上、不压旁边的槽；边打字积木边跟着变宽，右边的东西被推开而不是被盖住。
+//   回车或点别处就算填好；键盘弹出时画布自动把这个槽挪到看得见的地方。
 // - 下拉类的槽（变量、控件、固定选项…）：贴着槽弹出小菜单，点一项就选好。
 // - 空的值槽、或长按一个值：弹出紧凑的“换成…”小卡片（见 block_replace_view.dart）。
 // - “是 / 否”点一下就翻；一串值末尾的小“＋”点一下加一项。
@@ -11,6 +12,7 @@ import 'package:flutter/services.dart';
 import 'package:lopicode/blocks/block_canvas_layout.dart';
 import 'package:lopicode/blocks/block_canvas_view.dart';
 import 'package:lopicode/blocks/block_editor_canvas_view.dart';
+import 'package:lopicode/blocks/block_editor_fx_view.dart';
 import 'package:lopicode/blocks/block_editor_view.dart';
 import 'package:lopicode/blocks/block_geometry.dart';
 import 'package:lopicode/blocks/block_host.dart';
@@ -34,7 +36,36 @@ mixin BkEditorEdit on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Tick
   final TextEditingController editText = TextEditingController();
   final FocusNode editFocus = FocusNode(debugLabel: 'bk-inline-edit');
 
-  void toast(String text);
+  void toast(String text, {String? actionLabel, VoidCallback? onAction});
+
+  /// 输入框最窄多宽（画布尺寸）：空着的时候也点得中、看得见光标。
+  static const double editMinWidth = 44;
+
+  BkCanvasLayout? _preview;
+  String? _previewText;
+  int _previewRev = -1;
+
+  /// 正在输入时画布照这个排：那个输入框按现在打的字算宽度，所在积木跟着变宽；别的串原样不动。
+  @override
+  BkCanvasLayout? get previewLayout {
+    final ref = editing;
+    if (ref == null) return null;
+    final text = editText.text;
+    if (_preview != null && _previewText == text && _previewRev == host.revision) return _preview;
+    final base = layout;
+    final live = kit.engine(host)..fieldOverride = (scriptId: ref.scriptId, path: ref.path, arg: ref.arg, exprPath: ref.exprPath, hatSlotId: ref.hatSlotId, text: text, minWidth: editMinWidth);
+    _previewText = text;
+    _previewRev = host.revision;
+    return _preview = layoutBlockCanvas(
+      host,
+      live,
+      origins: {for (final p in base.scripts) p.id: p.origin},
+      layouts: {
+        for (final p in base.scripts)
+          if (p.id != ref.scriptId) p.id: p.layout,
+      },
+    );
+  }
 
   void disposeEdit() {
     editText.dispose();
@@ -47,7 +78,7 @@ mixin BkEditorEdit on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Tick
 
   /// 按引用在现在的排布里把槽找回来（连同它在编辑区里的位置）。
   ({BkPlaced script, BkBlock block, BkSlot slot, Rect view})? findSlot(BkSlotRef ref) {
-    final placed = layout.placed(ref.scriptId);
+    final placed = (editing == null ? layout : previewLayout ?? layout).placed(ref.scriptId);
     if (placed == null) return null;
     for (final (b, s) in placed.layout.allSlots) {
       final samePlace = ref.hatSlotId != null
@@ -197,6 +228,7 @@ mixin BkEditorEdit on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Tick
     setState(() {
       editing = null;
       editInvalid = false;
+      _preview = null;
     });
   }
 
@@ -207,9 +239,11 @@ mixin BkEditorEdit on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Tick
     if (ref == null || found == null) return const [];
     final c = context.colors;
     final r = found.view;
-    final width = (r.width + 24).clamp(_editNumber ? 96.0 : 168.0, viewSize.width - 16);
-    final left = r.left.clamp(8.0, (viewSize.width - width - 8).clamp(8.0, double.infinity));
-    final top = (r.center.dy - 20).clamp(4.0, (viewSize.height - 44).clamp(4.0, double.infinity));
+    // 输入框正好盖住这个槽（槽在预览排布里已经按现在的字变宽了），不伸到旁边的槽上；缩得很小时也保证点得中。
+    final width = r.width.clamp(40.0, viewSize.width - 16);
+    final height = r.height.clamp(30.0, 56.0);
+    final left = (r.center.dx - width / 2).clamp(8.0, (viewSize.width - width - 8).clamp(8.0, double.infinity));
+    final top = (r.center.dy - height / 2).clamp(4.0, (viewSize.height - height - 4).clamp(4.0, double.infinity));
     // 键盘弹出后槽被挡住了：把画布往上挪。
     final limit = viewSize.height - 52;
     if (r.bottom > limit) {
@@ -222,52 +256,30 @@ mixin BkEditorEdit on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Tick
         child: GestureDetector(key: const ValueKey('bk-inline-barrier'), behavior: HitTestBehavior.opaque, onTap: commitEdit),
       ),
       Positioned(
+        key: const ValueKey('bk-inline-box'),
         left: left.toDouble(),
         top: top.toDouble(),
         width: width.toDouble(),
-        height: 40,
-        child: Material(
-          elevation: 6,
-          color: c.surface,
-          borderRadius: BorderRadius.circular(12),
-          child: TextField(
-            key: const ValueKey('bk-inline-input'),
-            controller: editText,
-            focusNode: editFocus,
-            autofocus: true,
-            keyboardType: _editNumber ? const TextInputType.numberWithOptions(decimal: true, signed: true) : TextInputType.text,
-            textInputAction: TextInputAction.done,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: c.text),
-            decoration: InputDecoration(
-              isDense: true,
-              hintText: _editNumber ? '数字' : '文字',
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: c.border),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: editInvalid ? c.danger : c.accent, width: 2),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: editInvalid ? c.danger : c.accent, width: 2),
-              ),
-            ),
-            onChanged: (_) {
-              if (editInvalid) setState(() => editInvalid = false);
-            },
-            onSubmitted: (_) {
-              if (!commitEdit(strict: true)) editFocus.requestFocus();
-            },
-          ),
+        height: height.toDouble(),
+        child: BkInlineField(
+          kit: kit,
+          tone: kit.palette.tone(found.block.colorKey),
+          controller: editText,
+          focusNode: editFocus,
+          number: _editNumber,
+          invalid: editInvalid,
+          zoom: zoom,
+          // 每打一个字都重排一下这一串：框跟着字变宽。
+          onChanged: (_) => setState(() => editInvalid = false),
+          onSubmitted: (_) {
+            if (!commitEdit(strict: true)) editFocus.requestFocus();
+          },
         ),
       ),
       if (editInvalid)
         Positioned(
           left: left.toDouble(),
-          top: top.toDouble() + 44,
+          top: top.toDouble() + height + 6,
           child: Material(
             color: c.danger,
             borderRadius: BorderRadius.circular(8),
@@ -481,6 +493,7 @@ mixin BkEditorEdit on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Tick
     });
     if (!ok) return toast('积木套得太深了，复制不了。');
     setState(() => selection = BlockSelection(sel.scriptId, [...parent, lcStep(step.index + 1, inElse: step.inElse)]));
+    pulseBlocks(sel.scriptId, range: (scriptId: sel.scriptId, parent: parent, inElse: step.inElse, start: step.index + 1, count: 1));
   }
 
   // —— 点一下积木盒里的积木：快捷添加 ——
@@ -497,6 +510,8 @@ mixin BkEditorEdit on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Tick
         if (made == null) return;
         unawaited(HapticFeedback.lightImpact());
         jumpTo(made, const []);
+        // 新的一串落在画布上：轻弹一下。
+        pulseBlocks(made);
       case BlockPaletteKind.block:
         final sel = selection;
         final scriptId = sel?.scriptId ?? (host.scripts.isEmpty ? null : host.scripts.last.id);
@@ -520,6 +535,8 @@ mixin BkEditorEdit on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Tick
         if (path == null) return toast('积木套得太深了，放不进去。');
         unawaited(HapticFeedback.lightImpact());
         jumpTo(scriptId, path);
+        final last = path.last;
+        pulseBlocks(scriptId, range: (scriptId: scriptId, parent: path.sublist(0, path.length - 1), inElse: last.inElse, start: last.index, count: 1));
     }
   }
 }

@@ -2,10 +2,12 @@
 // - 只管“把排好版的积木画出来”：位置全部来自 block_geometry.dart，轮廓来自 block_shapes.dart，颜色来自 block_colors.dart。
 // - 一块积木从下到上画五层：（被拖着时）投影 → 底下的深色边 → 渐变主体 → 顶部高光 → 字和槽位。
 // - 槽位三种：白底输入框（直接填）、深色胶囊带小三角（挑一个）、空槽（等一个表达式）；要“是 / 否”的是六边形。
-// - 选中＝外面一圈亮黄描边；落点阴影＝只画一个半透明的剪影。
+// - 选中＝外面一圈柔和的亮黄描边（细线 + 淡淡的光晕）；落点阴影＝和手上那块同形的剪影：淡淡的本色 + 一圈本色描边，一眼看出“会插到这里”。
+// - 让位时积木是滑过去的：位置由外面给（`BkPaintState.pose`），这里只管照着画；刚落下的积木轻弹一下（`pulse`）。
 import 'package:lopicode/blocks/block_colors.dart';
 import 'package:lopicode/blocks/block_geometry.dart';
 import 'package:lopicode/blocks/block_host.dart';
+import 'package:lopicode/blocks/block_motion.dart';
 import 'package:lopicode/blocks/block_shapes.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 import 'package:material_ui/material_ui.dart';
@@ -69,6 +71,12 @@ class BkPaintState {
     this.lifted = false,
     this.ghost = false,
     this.ghostRange,
+    this.ghostAlpha = 1,
+    this.clip,
+    this.pose,
+    this.pulse,
+    this.pulseRange,
+    this.pulseSlot,
     this.flash = 0,
     this.errors = const [],
     this.warnings = const [],
@@ -86,6 +94,21 @@ class BkPaintState {
 
   /// 这一段积木画成落点阴影（拖动时“让出来的位置”）：`parent / inElse` 下面从 `start` 起的 `count` 块，连同它们里面的。
   final ({LcBlockPath parent, bool inElse, int start, int count})? ghostRange;
+
+  /// 落点阴影的浓淡（0–1；让位动画里淡入）。
+  final double ghostAlpha;
+
+  /// 只画碰到这块区域的积木（这一串自己的坐标；画布上露出来的那一块）。null＝全画。
+  final Rect? clip;
+
+  /// 让位动画：这块积木此刻该画在哪（这一串自己的坐标）；返回 null＝就在排版算出来的位置。
+  final BkFrame? Function(BkBlock block)? pose;
+
+  /// 刚落下的积木轻弹一下的进度（0–1）；null＝没有。弹的是 [pulseRange] 那一段（null＝整串），
+  /// 或者 [pulseSlot] 那个槽（表达式落进槽里：槽的描边闪一下）。
+  final double? pulse;
+  final ({LcBlockPath parent, bool inElse, int start, int count})? pulseRange;
+  final ({LcBlockPath block, String arg, BkExprPath path})? pulseSlot;
 
   /// 选中的那块闪一下的强度（0–1；跳到某块积木时用）。
   final double flash;
@@ -131,11 +154,49 @@ class BkScriptPainter {
       if (loose != null) canvas.drawPath(bkSlotPath(loose.rect, metrics, hex: loose.hex).shift(const Offset(0, 6)), shadow);
     }
     final range = state.ghostRange;
+    final pulse = state.pulseSlot == null ? state.pulse : null;
+    final pulseRange = state.pulseRange;
+    bool pulsed(BkBlock b) => pulse != null && (pulseRange == null || _inRange(b, pulseRange));
+    Rect? pulseBox;
+    if (pulse != null) {
+      for (final b in layout.blocks) {
+        if (pulsed(b)) pulseBox = pulseBox?.expandToInclude(b.rect) ?? b.rect;
+      }
+    }
+    // 轻弹：整段绕自己的中心缩放。
+    void bounce(void Function() draw) {
+      final c = pulseBox!.center;
+      final k = bkLandScale(pulse!);
+      canvas.save();
+      canvas.translate(c.dx, c.dy);
+      canvas.scale(k);
+      canvas.translate(-c.dx, -c.dy);
+      draw();
+      canvas.restore();
+    }
+
+    final clip = state.clip;
     for (final b in layout.blocks) {
+      final posed = state.pose?.call(b);
+      // 很长的一串只画露出来的那几块（正在滑的按滑到的位置算）。
+      if (clip != null && !(posed?.rect ?? b.rect).inflate(12).overlaps(clip)) continue;
       if (range != null && _inRange(b, range)) {
-        canvas.drawPath(bkBlockPath(b, metrics), Paint()..color = palette.ghost);
+        _ghostBlock(canvas, b, state.ghostAlpha);
+      } else if (pulsed(b)) {
+        bounce(() {
+          _block(canvas, b, state);
+          // 落下的一瞬间亮一圈，马上淡掉。
+          canvas.drawPath(
+            bkBlockPath(b, metrics),
+            Paint()
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 2 + 5 * pulse!
+              ..strokeJoin = StrokeJoin.round
+              ..color = const Color(0xFFFFFFFF).withValues(alpha: 0.75 * (1 - pulse)),
+          );
+        });
       } else {
-        _block(canvas, b, state);
+        _block(canvas, b, state, posed);
       }
     }
     if (loose != null) _expr(canvas, loose, palette.tone(loose.colorKey), const [], state);
@@ -145,18 +206,39 @@ class BkScriptPainter {
       final hit = b.isHat ? state.selectedHat : (sel != null && bkSameBlockPath(sel, b.path));
       if (!hit) continue;
       final path = bkBlockPath(b, metrics);
-      if (state.flash > 0) {
-        canvas.drawPath(
-          path,
-          Paint()
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 5 + 12 * state.flash
-            ..strokeJoin = StrokeJoin.round
-            ..color = palette.selection.withValues(alpha: 0.45 * state.flash),
-        );
+      void outline() {
+        if (state.flash > 0) {
+          canvas.drawPath(
+            path,
+            Paint()
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 5 + 12 * state.flash
+              ..strokeJoin = StrokeJoin.round
+              ..color = palette.selection.withValues(alpha: 0.45 * state.flash),
+          );
+        }
+        _outline(canvas, path, soft: true);
       }
-      _outline(canvas, path);
+
+      pulsed(b) ? bounce(outline) : outline();
     }
+  }
+
+  /// 落点阴影里的一块：和真积木同一个轮廓（凹口、凸起、C 形的口都在），淡淡的本色 + 一圈本色描边。
+  void _ghostBlock(Canvas canvas, BkBlock b, double alpha) {
+    final a = alpha.clamp(0.0, 1.0);
+    final tone = palette.tone(b.colorKey);
+    final path = bkBlockPath(b, metrics);
+    canvas.drawPath(path, Paint()..color = palette.ghost.withValues(alpha: palette.ghost.a * a));
+    canvas.drawPath(path, Paint()..color = tone.fill.withValues(alpha: (palette.dark ? 0.34 : 0.24) * a));
+    canvas.drawPath(
+      path,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.6
+        ..strokeJoin = StrokeJoin.round
+        ..color = (palette.dark ? tone.fillTop : tone.fill).withValues(alpha: 0.8 * a),
+    );
   }
 
   static bool _inRange(BkBlock b, ({LcBlockPath parent, bool inElse, int start, int count}) r) {
@@ -166,23 +248,24 @@ class BkScriptPainter {
     return (n == 0 || step.inElse == r.inElse) && step.index >= r.start && step.index < r.start + r.count;
   }
 
-  void _outline(Canvas canvas, Path path, [Color? color]) {
+  /// 描边。`soft`＝选中积木用的柔和版（细线 + 淡光晕）；拖表达式时目标槽的描边要醒目，用默认的。
+  void _outline(Canvas canvas, Path path, {Color? color, bool soft = false, double alpha = 1}) {
     final c = color ?? palette.selection;
     canvas.drawPath(
       path,
       Paint()
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 5
+        ..strokeWidth = soft ? 6 : 5
         ..strokeJoin = StrokeJoin.round
-        ..color = c.withValues(alpha: 0.35),
+        ..color = c.withValues(alpha: (soft ? 0.22 : 0.35) * alpha),
     );
     canvas.drawPath(
       path,
       Paint()
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 2.2
+        ..strokeWidth = soft ? 1.8 : 2.2
         ..strokeJoin = StrokeJoin.round
-        ..color = c,
+        ..color = c.withValues(alpha: alpha),
     );
   }
 
@@ -202,19 +285,37 @@ class BkScriptPainter {
     canvas.restore();
   }
 
-  void _block(Canvas canvas, BkBlock b, BkPaintState state) {
+  /// `pose`＝让位动画里这块此刻的位置和外形（见 [BkFrame]）：头上的字和槽跟着左上角走，口和横栏照 pose 的大小画。
+  void _block(Canvas canvas, BkBlock b, BkPaintState state, [BkFrame? pose]) {
     final tone = palette.tone(b.colorKey);
-    final path = bkBlockPath(b, metrics);
-    _solid(canvas, path, b.rect, tone, metrics.edgeH);
+    if (pose != null && pose.mouths.length != b.mouths.length) pose = null;
+    final d = pose == null ? Offset.zero : pose.rect.topLeft - b.rect.topLeft;
+    var shape = b;
+    if (pose != null) {
+      shape = BkBlock(path: b.path, block: b.block, shape: b.shape, colorKey: b.colorKey, rect: pose.rect, head: b.head.shift(d));
+      for (var i = 0; i < b.mouths.length; i++) {
+        shape.mouths.add(BkMouth(inElse: b.mouths[i].inElse, rect: pose.mouths[i], bar: pose.bars[i]));
+      }
+    }
+    final path = bkBlockPath(shape, metrics);
+    _solid(canvas, path, shape.rect, tone, metrics.edgeH);
+    if (pose != null) {
+      canvas.save();
+      canvas.translate(d.dx, d.dy);
+    }
     for (final l in b.labels) {
       text.paint(canvas, l.text, l.rect, tone.text);
     }
-    for (final m in b.mouths) {
-      final l = m.label;
-      if (l != null) text.paint(canvas, l.text, l.rect, tone.text.withValues(alpha: 0.92), size: 13);
-    }
     for (final s in b.slots) {
       _slot(canvas, s, tone, b.path, state);
+    }
+    if (pose != null) canvas.restore();
+    for (var i = 0; i < b.mouths.length; i++) {
+      final l = b.mouths[i].label;
+      if (l == null) continue;
+      final from = b.mouths[i].bar, to = pose?.bars[i];
+      final r = from != null && to != null ? l.rect.shift(to.topLeft - from.topLeft) : l.rect;
+      text.paint(canvas, l.text, r, tone.text.withValues(alpha: 0.92), size: 13);
     }
     final bad = state.errors.any((p) => bkSameBlockPath(p, b.path) && (p.isEmpty == b.isHat));
     final warn = !bad && state.warnings.any((p) => bkSameBlockPath(p, b.path) && (p.isEmpty == b.isHat));
@@ -286,7 +387,11 @@ class BkScriptPainter {
     }
     final sel = state.selectedSlot;
     if (sel != null && sel.arg == s.arg && bkSameBlockPath(sel.block, block) && bkSameExprPath(sel.path, s.exprPath) && s.hatSlotId == null && s.look != BkSlotLook.add) {
-      _outline(canvas, path, state.slotColor);
+      _outline(canvas, path, color: state.slotColor);
+    }
+    final ps = state.pulseSlot, pp = state.pulse;
+    if (ps != null && pp != null && ps.arg == s.arg && bkSameBlockPath(ps.block, block) && bkSameExprPath(ps.path, s.exprPath) && s.hatSlotId == null && s.look != BkSlotLook.add) {
+      _outline(canvas, path, color: const Color(0xFFFFFFFF), alpha: 1 - pp);
     }
   }
 

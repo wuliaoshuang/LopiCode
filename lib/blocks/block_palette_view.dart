@@ -3,6 +3,7 @@
 // - 积木不是文字列表：每一样都用和画布上同一套画法画成真的积木外形（帽子 / 语句 / C 形 / 表达式），小块的并排，放不下换行。
 // - 主操作就是“拿一块积木”：按住一块（约 0.18 秒）或直接横着拖，就把它拿出来了（回调交给外面的编辑器接着拖）；
 //   上下滑还是翻这一页。点一下＝快捷添加（回调告诉外面点了哪一样）。
+// - 手指一按上去，那块样品就微微缩一下（96%）、暗一点：告诉人“按到了，可以拿”。松手 / 拿走就弹回来。
 // - 可以收起：点最上面的把手，只留把手 + 分类那一行（66 高），画布地方更大；收起时点分类会自动展开到那一类。
 import 'package:flutter/gestures.dart';
 import 'package:lopicode/blocks/block_geometry.dart';
@@ -231,8 +232,46 @@ class _BlockPaletteViewState extends State<BlockPaletteView> with BkKitHolder {
         // 小的表达式块也要有 40 高的触控范围。
         child: ConstrainedBox(
           constraints: const BoxConstraints(minHeight: 40),
-          child: Align(alignment: Alignment.centerLeft, widthFactor: 1, heightFactor: 1, child: view),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            widthFactor: 1,
+            heightFactor: 1,
+            child: _PressFeel(child: view),
+          ),
         ),
+      ),
+    );
+  }
+}
+
+/// 按下态：手指按着的时候缩到 96%、略暗。只是看的，不拦手势。
+class _PressFeel extends StatefulWidget {
+  const _PressFeel({required this.child});
+  final Widget child;
+
+  @override
+  State<_PressFeel> createState() => _PressFeelState();
+}
+
+class _PressFeelState extends State<_PressFeel> {
+  bool _down = false;
+
+  void _set(bool v) {
+    if (_down != v && mounted) setState(() => _down = v);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final time = MediaQuery.disableAnimationsOf(context) ? Duration.zero : const Duration(milliseconds: 90);
+    return Listener(
+      onPointerDown: (_) => _set(true),
+      onPointerUp: (_) => _set(false),
+      onPointerCancel: (_) => _set(false),
+      child: AnimatedScale(
+        scale: _down ? 0.96 : 1,
+        duration: time,
+        curve: Curves.easeOut,
+        child: AnimatedOpacity(opacity: _down ? 0.82 : 1, duration: time, child: widget.child),
       ),
     );
   }

@@ -23,6 +23,9 @@ typedef BkMeasure = double Function(String text);
 /// 积木套积木最多排这么多层（模型自己最多 13 层；这里留余量，防自己套自己的坏数据把栈撑爆）。
 const int kBkMaxBlockDepth = 40;
 
+/// 就地输入时临时换掉某个输入框里的字（见 [BlockLayoutEngine.fieldOverride]）。帽子上的框给 `hatSlotId`，其余给积木路径 + 参数位置。
+typedef BkFieldOverride = ({String scriptId, LcBlockPath path, String arg, BkExprPath exprPath, String? hatSlotId, String text, double minWidth});
+
 /// 排版时流式摆放的一样东西：一段字或一个槽位。
 class _Item {
   _Item.label(this.label) : slot = null;
@@ -65,16 +68,37 @@ class BlockLayoutEngine {
   final BkMeasure measure;
   final BkMetrics metrics;
 
+  /// 排过几次整串脚本（性能冒烟测试用：拖动时每帧不该重排）。
+  int scriptLayouts = 0;
+
+  /// 就地输入时：正在改的那个输入框按“框里现在的字”排（积木跟着字变宽，输入框正好盖住这个槽，不会压到旁边的槽）。
+  BkFieldOverride? fieldOverride;
+  String _curScript = '';
+  LcBlockPath? _curBlock;
+
+  bool _overridden(String arg, BkExprPath path, String? hatSlotId) {
+    final o = fieldOverride;
+    if (o == null || o.scriptId != _curScript) return false;
+    if (hatSlotId != null || o.hatSlotId != null) return o.hatSlotId == hatSlotId && _curBlock == null;
+    final at = _curBlock;
+    return at != null && o.arg == arg && bkSameBlockPath(o.path, at) && bkSameExprPath(o.exprPath, path);
+  }
+
   // —— 对外 ——
 
   /// 排一整串：帽子 + 下面所有积木。`body` 给了就用它代替 `tree.body`
   /// （拖动时预览“拿走一截 / 让出落点”以后的样子，不用真去改模型）。
   BkScriptLayout layoutScript(LcBlockTree tree, {List<LcBlock>? body}) {
+    scriptLayouts++;
     final blocks = <BkBlock>[];
     final snaps = <BkSnap>[];
+    _curScript = tree.id;
+    _curBlock = null;
     final hat = _hat(host.hatOf(tree));
     blocks.add(hat);
     _list(body ?? tree.body, const [], false, 0, hat.rect.bottom, blocks, snaps, 0, hat.rect.width);
+    _curScript = '';
+    _curBlock = null;
     return _finish(tree.id, blocks, snaps);
   }
 
@@ -141,8 +165,9 @@ class BlockLayoutEngine {
 
   BkSlot _field(String arg, BkExprPath path, LcArgSpec? spec, String text, {String? hatSlotId, bool placeholder = false}) {
     final m = metrics;
-    final shown = text.replaceAll(RegExp(r'[\r\n\t\u2028\u2029]+'), ' ');
-    final w = math.max(m.fieldMinW, math.min(measure(shown), m.fieldMaxTextW) + m.fieldPadH * 2);
+    final live = _overridden(arg, path, hatSlotId);
+    final shown = (live ? fieldOverride!.text : text).replaceAll(RegExp(r'[\r\n\t\u2028\u2029]+'), ' ');
+    final w = math.max(live ? math.max(m.fieldMinW, fieldOverride!.minWidth) : m.fieldMinW, math.min(measure(shown), m.fieldMaxTextW) + m.fieldPadH * 2);
     return BkSlot(arg: arg, exprPath: path, spec: spec, look: BkSlotLook.field, rect: Rect.fromLTWH(0, 0, w, m.fieldH), text: shown, placeholder: placeholder, hatSlotId: hatSlotId);
   }
 
@@ -341,6 +366,7 @@ class BlockLayoutEngine {
 
     final inner = m.maxBlockWidth - m.padH * 2;
     final items = <_Item>[];
+    _curBlock = path;
     if (spec == null) {
       final l = _label('不认识的积木（${_clip(block.op)}）', inner);
       b.labels.add(l);

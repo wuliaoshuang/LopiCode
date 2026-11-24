@@ -1,6 +1,6 @@
 /// 一次拖动：手上拿着什么、从哪拿的、现在能落在哪、松手以后怎么改模型。
 ///
-/// 不带界面（位置都用画布坐标），可以直接单元测试。界面那一层（block_workspace_view.dart）只管把手指的位置喂进来、
+/// 不带界面（位置都用画布坐标），可以直接单元测试。界面那一层（block_editor_drag_view.dart）只管把手指的位置喂进来、
 /// 把 [BkDragSession.display] 画出来。
 ///
 /// 规矩（docs/blocks-v3-design.md “手感”一节）：
@@ -8,6 +8,8 @@
 /// - 拖起来的一瞬间原位置就合拢：[base] 是“拿走以后”的排布，可拼接点都在它上面找，所以不可能拖进自己里面。
 /// - 靠近可拼接点（[snapRadius] 以内）时，[display] 里那个位置让出一块落点阴影；放回原来的位置算“没动”，不产生改动。
 /// - 语句积木、表达式不能散放在空白处（模型里每块积木都得属于某一串）：没有落点就弹回去。
+/// - 表达式拖进已经有值的槽：两个值**交换**（原值回到被拖表达式原来的槽），不丢东西；只有从积木盒拿来的新表达式、
+///   或者把里面的一块拖出来盖住外面整块时，原值没处可去才丢掉（[BkDragSession.droppedExpr]，界面给“撤销”）。
 library;
 
 import 'dart:ui';
@@ -17,6 +19,7 @@ import 'package:lopicode/blocks/block_geometry.dart';
 import 'package:lopicode/blocks/block_host.dart';
 import 'package:lopicode/blocks/block_layout.dart';
 import 'package:lopicode/blocks/block_ops.dart';
+import 'package:lopicode/lowcode/logic_expr.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 
 enum BkDragKind { statement, hat, expr }
@@ -181,6 +184,15 @@ class BkDragSession {
   /// 没放成的原因（给人看的一句话）。
   String rejectReason = '';
 
+  /// [commit] 以后：表达式放进了已经有值的槽，原来那个值有没有换回被拖表达式原来的槽里（交换）。
+  bool swapped = false;
+
+  /// [commit] 以后：被换下来、没处可去而丢掉的值（从积木盒拖来的新表达式盖住了旧值；或者把里面的一块拖出来盖住了外面整块）。
+  /// 原来就是默认值的不算。界面拿它给一条带“撤销”的提示。
+  Map<String, dynamic>? droppedExpr;
+
+  static bool _isPrefix(BkExprPath a, BkExprPath b) => a.length < b.length && bkSameExprPath(a, b.sublist(0, a.length));
+
   bool get isNew => palette != null;
 
   /// 落点阴影在哪一串的哪一段（语句积木才有）。
@@ -217,9 +229,14 @@ class BkDragSession {
   BkCanvasLayout _buildBase() {
     final id = scriptId;
     if (id == null) return normal;
-    if (kind == BkDragKind.hat) return layoutBlockCanvas(host, engine, hide: {id}, origins: _origins);
+    // 没动的那些串沿用拖之前排好的，只重排被拿走东西的那一串。
+    final keep = {
+      for (final p in normal.scripts)
+        if (p.id != id) p.id: p.layout,
+    };
+    if (kind == BkDragKind.hat) return layoutBlockCanvas(host, engine, hide: {id}, origins: _origins, layouts: keep);
     final body = _baseBody(id);
-    return layoutBlockCanvas(host, engine, bodies: {id: ?body}, origins: _origins);
+    return layoutBlockCanvas(host, engine, bodies: {id: ?body}, origins: _origins, layouts: keep);
   }
 
   /// 手指动了：`topLeft` 是手上那一截的左上角现在在画布的哪里。返回落点有没有变。
@@ -263,14 +280,34 @@ class BkDragSession {
       return;
     }
     final shown = bkEditedBody(body, t.snap.parent, t.snap.inElse, (list) => list.insertAll(t.snap.index.clamp(0, list.length), blocks));
-    final height = engine.layoutScript(tree, body: shown).size.height;
-    final bodies = {t.scriptId: shown};
-    final src = scriptId;
-    if (src != null && src != t.scriptId) {
-      final b = _baseBody(src);
-      if (b != null) bodies[src] = b;
+    // 只有落点所在的那一串要重排；别的串沿用“拿走以后”排好的（每换一个落点只排一串，不是整张画布）。
+    final made = engine.layoutScript(tree, body: shown);
+    final layouts = {
+      for (final p in base.scripts)
+        if (p.id != t.scriptId) p.id: p.layout,
+      t.scriptId: made,
+    };
+    display = layoutBlockCanvas(host, engine, layouts: layouts, origins: bkPushedOrigins(normal, t.scriptId, made.size.height));
+  }
+
+  /// 把落点对回原来的位置（弹回去之前调：原位先让出空来，手上那一截飞回去正好落进去）。
+  /// 只有从画布上拿起来的语句积木有“原来的位置”；别的情况等于 [clearTarget]。返回落点有没有变。
+  bool aimHome() {
+    final id = scriptId;
+    if (kind != BkDragKind.statement || isNew || id == null) return clearTarget();
+    final t = target;
+    if (t != null && t.noop) return false;
+    final placed = base.placed(id);
+    if (placed == null) return clearTarget();
+    final parent = path.sublist(0, path.length - 1);
+    for (final snap in placed.layout.snaps) {
+      if (snap.kind != BkSnapKind.statement || snap.index != path.last.index || !bkSameBlockPath(snap.parent, parent)) continue;
+      if (path.length > 1 && snap.inElse != path.last.inElse) continue;
+      target = BkDropTarget(scriptId: id, snap: snap, anchor: placed.origin + snap.anchor, noop: true);
+      _rebuildDisplay();
+      return true;
     }
-    display = layoutBlockCanvas(host, engine, bodies: bodies, origins: bkPushedOrigins(normal, t.scriptId, height));
+    return clearTarget();
   }
 
   bool get _stale => host.revision != revision;
@@ -348,19 +385,53 @@ class BkDragSession {
           );
         case BkDragKind.expr:
           final t = target!;
-          Map<String, dynamic>? moving;
+          final tree = host.script(t.scriptId);
+          final to = tree?.blockAt(t.snap.parent);
+          if (tree == null || to == null) return;
+          final toArg = t.snap.arg!;
           final src = palette;
+          Map<String, dynamic>? moving;
+          LcBlockTree? fromTree;
+          LcBlock? from;
+          var removedAt = -1;
+          List<dynamic>? fromList;
           if (src != null) {
             moving = host.newExpr(src.id);
           } else {
-            final from = host.script(scriptId!)?.blockAt(path);
-            moving = from == null ? null : bkTakeExpr(host, from, arg!, exprPath);
+            fromTree = host.script(scriptId!);
+            from = fromTree?.blockAt(path);
+            if (from == null) return;
+            // 原来是“一串值”里的一项：拿走会少一项，换下来的值放回去时要插回原来的位置。
+            final list = exprPath.isNotEmpty && exprPath.last is int ? bkExprAt(from, arg!, exprPath.sublist(0, exprPath.length - 1)) : null;
+            final before = list is List ? list.length : -1;
+            moving = bkTakeExpr(host, from, arg!, exprPath);
+            if (list is List && list.length < before) {
+              fromList = list;
+              removedAt = exprPath.last as int;
+            }
           }
-          final tree = host.script(t.scriptId);
-          final to = tree?.blockAt(t.snap.parent);
-          if (moving == null || tree == null || to == null) return;
-          if (bkSetExprAt(to, t.snap.arg!, t.snap.exprPath, moving)) host.argChanged(tree, to, t.snap.arg!, t.snap.exprPath);
+          if (moving == null) return;
+          // 落点是原槽的外层（把里面的一块拖出来盖住整块）：换下来的那块里已经没有原槽了，没法交换。
+          final inside = from != null && t.scriptId == scriptId && bkSameBlockPath(t.snap.parent, path) && toArg == arg && _isPrefix(t.snap.exprPath, exprPath);
+          final old = asExpr(bkExprAt(to, toArg, t.snap.exprPath));
+          final wasDefault = old == null || bkSameJson(old, bkDefaultExprAt(host, to, toArg, t.snap.exprPath));
+          if (!bkSetExprAt(to, toArg, t.snap.exprPath, moving)) return;
+          host.argChanged(tree, to, toArg, t.snap.exprPath);
+          if (old != null && from != null && !inside) {
+            // 交换：换下来的值回到被拖的那块原来的槽里。
+            final list = fromList;
+            if (list != null) {
+              list.insert(removedAt.clamp(0, list.length), old);
+              swapped = true;
+            } else {
+              swapped = bkSetExprAt(from, arg!, exprPath, old);
+            }
+            if (swapped) host.argChanged(fromTree!, from, arg!, exprPath);
+          }
+          if (old != null && !swapped && !wasDefault) droppedExpr = old;
           bkPushDown(host, engine, normal, t.scriptId);
+          final other = scriptId;
+          if (swapped && other != null && other != t.scriptId) bkPushDown(host, engine, normal, other);
           result = (scriptId: t.scriptId, path: t.snap.parent);
       }
     });

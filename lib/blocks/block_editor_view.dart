@@ -4,14 +4,15 @@
 // - 画布右下角（积木盒上方）浮着一小条：撤销、重做、缩放比例（点一下回到 100%）。不占画布的地方。
 // - 选中一块积木：画布上方出现一条小工具条（这块的问题、复制、删除）；没选中就没有。
 // - 拖动时：积木盒换成“拖到这里删除”，别的浮动控件都收起来，眼里只有积木。
-// - 提示用画布上方的一句话小条（两秒多自己消失），不弹对话框打断。
-// - 一块积木都没有时，画布中间一句话教第一步：从下面拿一块“事件”。
+// - 提示用一句话小条（两秒多自己消失），贴在积木盒上沿之上：不盖画布顶上那串的帽子；需要时带一个“撤销”。不弹对话框打断。
+// - 一块积木都没有时，画布中间一句话 + 一个往上走的箭头教第一步：从下面拿一块“事件”拖上来。
 import 'dart:async';
 
 import 'package:lopicode/blocks/block_canvas_view.dart';
 import 'package:lopicode/blocks/block_editor_canvas_view.dart';
 import 'package:lopicode/blocks/block_editor_drag_view.dart';
 import 'package:lopicode/blocks/block_editor_edit_view.dart';
+import 'package:lopicode/blocks/block_editor_fx_view.dart';
 import 'package:lopicode/blocks/block_host.dart';
 import 'package:lopicode/blocks/block_palette_view.dart';
 import 'package:lopicode/blocks/block_panels_sheet.dart';
@@ -69,7 +70,10 @@ class BlockEditorView extends StatefulWidget {
 class BlockEditorViewState extends State<BlockEditorView> with TickerProviderStateMixin, BkKitHolder, BkEditorCanvas, BkEditorDrag, BkEditorEdit {
   bool paletteCollapsed = false;
   String? _toast;
+  String? _toastAction;
+  VoidCallback? _onToastAction;
   Timer? _toastTimer;
+  int _nudge = 0;
   bool _focused = false;
 
   @override
@@ -110,12 +114,27 @@ class BlockEditorViewState extends State<BlockEditorView> with TickerProviderSta
   double get dockHeight => editing != null ? 0 : (paletteCollapsed ? (drag != null ? 96 : BlockPaletteView.collapsedHeight) : widget.paletteHeight);
 
   @override
-  void toast(String text) {
+  void toast(String text, {String? actionLabel, VoidCallback? onAction}) {
     if (text.isEmpty) return;
     _toastTimer?.cancel();
-    setState(() => _toast = text);
-    _toastTimer = Timer(const Duration(milliseconds: 2400), () {
-      if (mounted) setState(() => _toast = null);
+    setState(() {
+      _toast = text;
+      _toastAction = onAction == null ? null : actionLabel;
+      _onToastAction = onAction;
+      // 画布还空着的时候被提醒“先拿一块事件”：引导的箭头再动两下。
+      if (host.scripts.isEmpty) _nudge++;
+    });
+    // 带动作的多留一会儿，来得及点。
+    _toastTimer = Timer(Duration(milliseconds: onAction == null ? 2400 : 4000), _hideToast);
+  }
+
+  void _hideToast() {
+    _toastTimer?.cancel();
+    if (!mounted || _toast == null) return;
+    setState(() {
+      _toast = null;
+      _toastAction = null;
+      _onToastAction = null;
     });
   }
 
@@ -145,6 +164,7 @@ class BlockEditorViewState extends State<BlockEditorView> with TickerProviderSta
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
+    reduceMotion = MediaQuery.disableAnimationsOf(context);
     final all = layout; // 先排版：issues、选中都跟着刷新
     final errors = issues.where((i) => i.isError).length;
     return Scaffold(
@@ -196,14 +216,7 @@ class BlockEditorViewState extends State<BlockEditorView> with TickerProviderSta
                   top: 0,
                   bottom: dock,
                   child: IgnorePointer(
-                    child: Center(
-                      child: Text(
-                        '还没有积木。\n从下面的积木盒里拖一块“事件”出来，\n再往它下面拼积木。',
-                        key: const ValueKey('bk-empty'),
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: c.textMuted, height: 1.6),
-                      ),
-                    ),
+                    child: Center(child: BkEmptyGuide(nudge: _nudge)),
                   ),
                 ),
               if (selection != null && !dragging && editing == null) Positioned(key: const ValueKey('bk-selection-bar'), left: 12, right: 12, top: 8, child: _selectionBar(context)),
@@ -234,28 +247,21 @@ class BlockEditorViewState extends State<BlockEditorView> with TickerProviderSta
                 ),
               ...buildInlineEdit(context),
               if (dragging) buildDragPiece(context),
+              // 提示条贴在积木盒上沿之上（右下角那一小条工具的上面）：不盖顶上那串的帽子；键盘弹出时页面整体上移，它还在键盘上面。
               if (_toast != null)
                 Positioned(
+                  key: const ValueKey('bk-toast-layer'),
                   left: 24,
                   right: 24,
-                  top: 12,
-                  child: IgnorePointer(
-                    child: Center(
-                      child: Material(
-                        color: c.text,
-                        elevation: 4,
-                        borderRadius: BorderRadius.circular(20),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
-                          child: Text(
-                            _toast!,
-                            key: const ValueKey('bk-toast'),
-                            textAlign: TextAlign.center,
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: c.surface, fontWeight: FontWeight.w600),
-                          ),
-                        ),
-                      ),
-                    ),
+                  bottom: dock + (dragging || editing != null ? 16 : 68),
+                  child: BkToastBar(
+                    text: _toast!,
+                    actionLabel: _toastAction,
+                    onAction: () {
+                      final f = _onToastAction;
+                      _hideToast();
+                      f?.call();
+                    },
                   ),
                 ),
             ],

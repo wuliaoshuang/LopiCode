@@ -209,8 +209,8 @@ void main() {
     await rig.drop(tester, g);
     final cond = rig.h(0).body[1].args['cond'] as Map<String, dynamic>;
     expect(exprKind(rig.h(0).body[1].body[0].args['message']), 'not');
-    expect(exprKind(cond['r']), isNot('not'), reason: '被拖走的槽恢复成默认值');
-    expect(asExpr(cond['r']), isNotNull);
+    expect(exprKind(cond['r']), isNot('not'));
+    expect(cond['r'], exText('点太多次啦'), reason: '交换：被换下来的文字回到被拖走的那个槽里，不丢');
     expect(rig.edits, 2);
 
     // 数字拖到“如果”的条件（要是 / 否）：照样能放，只是提醒色。

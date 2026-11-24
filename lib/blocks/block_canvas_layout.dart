@@ -73,7 +73,8 @@ class BkCanvasLayout {
 /// 把宿主的所有脚本排到画布上。`margin`＝离画布左上的留白；`spacing`＝自动排时两串之间的间距。
 ///
 /// 拖动时的预览用后面三个参数（都不改模型）：`bodies`＝某几串换一份积木来排（拿走一截 / 让出落点以后的样子）；
-/// `hide`＝不排的那几串（整串被拖在手上）；`origins`＝位置照这张表摆（拖动期间别的脚本不跟着跳）。
+/// `hide`＝不排的那几串（整串被拖在手上）；`origins`＝位置照这张表摆（拖动期间别的脚本不跟着跳）；
+/// `layouts`＝这几串已经排好了，直接用（拖动时落点换一个只有一串会变，别的不用重排）。
 BkCanvasLayout layoutBlockCanvas(
   BlockHost host,
   BlockLayoutEngine engine, {
@@ -82,12 +83,13 @@ BkCanvasLayout layoutBlockCanvas(
   Map<String, List<LcBlock>> bodies = const {},
   Set<String> hide = const {},
   Map<String, Offset> origins = const {},
+  Map<String, BkScriptLayout> layouts = const {},
 }) {
   final trees = [
     for (final t in host.scripts)
       if (!hide.contains(t.id)) t,
   ];
-  final layouts = [for (final t in trees) engine.layoutScript(t, body: bodies[t.id])];
+  final laid = [for (final t in trees) layouts[t.id] ?? engine.layoutScript(t, body: bodies[t.id])];
   final placed = List<BkPlaced?>.filled(trees.length, null);
   var floor = margin;
   for (var i = 0; i < trees.length; i++) {
@@ -95,16 +97,16 @@ BkCanvasLayout layoutBlockCanvas(
     final fixed = x != null && y != null && x.isFinite && y.isFinite;
     final at = origins[trees[i].id] ?? (fixed ? Offset(x, y) : null);
     if (at == null) continue;
-    placed[i] = BkPlaced(id: trees[i].id, origin: at, layout: layouts[i], auto: !fixed);
-    floor = math.max(floor, at.dy + layouts[i].size.height + spacing);
+    placed[i] = BkPlaced(id: trees[i].id, origin: at, layout: laid[i], auto: !fixed);
+    floor = math.max(floor, at.dy + laid[i].size.height + spacing);
   }
   var right = 0.0, bottom = 0.0;
   for (var i = 0; i < trees.length; i++) {
     var p = placed[i];
     if (p == null) {
-      p = BkPlaced(id: trees[i].id, origin: Offset(margin, floor), layout: layouts[i], auto: true);
+      p = BkPlaced(id: trees[i].id, origin: Offset(margin, floor), layout: laid[i], auto: true);
       placed[i] = p;
-      floor += layouts[i].size.height + spacing;
+      floor += laid[i].size.height + spacing;
     }
     right = math.max(right, p.bounds.right);
     bottom = math.max(bottom, p.bounds.bottom);

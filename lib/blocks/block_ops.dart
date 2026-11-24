@@ -88,12 +88,22 @@ Map<String, dynamic>? bkOwnerExpr(LcBlock block, String arg, BkExprPath path) {
 /// 给槽位放一个值（字面量或表达式）。
 bool bkSetSlotValue(LcBlock block, String arg, BkExprPath path, Object? value) => bkSetExprAt(block, arg, path, value);
 
+/// 一个槽“空着”时该放什么：普通槽是宿主给的默认值；“一串值”里的一项是宿主给的新的一项。
+Map<String, dynamic> bkDefaultExprAt(BlockHost host, LcBlock block, String arg, BkExprPath path) {
+  final spec = bkArgSpecAt(host, block, arg, path);
+  if (path.isNotEmpty && path.last is int) {
+    final owner = bkOwnerExpr(block, arg, path);
+    return owner != null && spec != null ? host.newListItem(owner, spec) : defaultExprFor(LcType.any);
+  }
+  return spec == null ? defaultExprFor(LcType.any) : host.defaultExpr(spec);
+}
+
 /// 把一个表达式从它的槽里拿走，返回拿走的那个（不是表达式返回 null，什么都不改）。
 /// 普通槽放回宿主给的默认值；“一串值”里的一项直接去掉（只剩一项时不去掉，换成默认值）。
 Map<String, dynamic>? bkTakeExpr(BlockHost host, LcBlock block, String arg, BkExprPath path) {
   final taken = asExpr(bkExprAt(block, arg, path));
   if (taken == null) return null;
-  final spec = bkArgSpecAt(host, block, arg, path);
+  final empty = bkDefaultExprAt(host, block, arg, path);
   if (path.isNotEmpty && path.last is int) {
     final list = bkExprAt(block, arg, path.sublist(0, path.length - 1));
     final i = path.last as int;
@@ -101,12 +111,30 @@ Map<String, dynamic>? bkTakeExpr(BlockHost host, LcBlock block, String arg, BkEx
     if (list.length > 1) {
       list.removeAt(i);
     } else {
-      final owner = bkOwnerExpr(block, arg, path);
-      list[i] = owner != null && spec != null ? host.newListItem(owner, spec) : defaultExprFor(LcType.any);
+      list[i] = empty;
     }
     return taken;
   }
-  return bkSetExprAt(block, arg, path, spec == null ? defaultExprFor(LcType.any) : host.defaultExpr(spec)) ? taken : null;
+  return bkSetExprAt(block, arg, path, empty) ? taken : null;
+}
+
+/// 两个值是不是一模一样（按 JSON 内容比）。
+bool bkSameJson(Object? a, Object? b) {
+  if (a is Map && b is Map) {
+    if (a.length != b.length) return false;
+    for (final k in a.keys) {
+      if (!b.containsKey(k) || !bkSameJson(a[k], b[k])) return false;
+    }
+    return true;
+  }
+  if (a is List && b is List) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (!bkSameJson(a[i], b[i])) return false;
+    }
+    return true;
+  }
+  return a == b;
 }
 
 /// 往“一串值”的末尾加一项。`path` 指到那个列表（例：`['items']`）。
