@@ -3,13 +3,15 @@ library;
 
 import 'package:lopicode/backend/backend_model.dart';
 import 'package:lopicode/backend/backend_target.dart';
+import 'package:lopicode/backend/target_go.dart';
+import 'package:lopicode/backend/target_java.dart';
 import 'package:lopicode/backend/target_node.dart';
 import 'package:lopicode/backend/target_python.dart';
 
 export 'package:lopicode/backend/backend_target.dart' show BackendTarget;
 
 /// 全部生成器，按界面上的顺序。
-const List<BackendTarget> backendTargets = [NodeBackendTarget(), PythonBackendTarget()];
+const List<BackendTarget> backendTargets = [NodeBackendTarget(), PythonBackendTarget(), GoBackendTarget(), JavaBackendTarget()];
 
 /// 按语言 id 找生成器；没有返回 null。
 BackendTarget? backendTargetFor(String language) {

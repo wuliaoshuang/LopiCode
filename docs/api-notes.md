@@ -187,7 +187,7 @@
 - iOS / macOS 需要 `NSSpeechRecognitionUsageDescription` 和 `NSMicrophoneUsageDescription`。本仓库目前没有 iOS 目录，新增平台时须同时补这两项。
 - 状态：官方 API 与权限配置已核对；Widget 测试用假识别器覆盖，**尚未在真机验证识别质量、权限弹窗和厂商语音服务**。
 
-## 后端积木生成的代码里用到的接口（`lib/backend/runtime_node.dart`、`runtime_python.dart`）
+## 后端积木生成的代码里用到的接口（`lib/backend/runtime_*.dart`）
 
 记录时间：2026-11-24。**这一节都没有对着官方文档逐条核对**（做的时候不许联网），是凭对标准库的了解写的，下面写明各自实际验证到什么程度。
 
@@ -198,10 +198,21 @@
   状态：**未核对官方文档**；在本机 Python 3.12.3 上实际跑过同样几种情况。没有实际验证的同上。
 - Node.js 服务：`node:http` 的 `createServer / listen / writeHead / end`，请求体用 `for await (const chunk of req)` 读；
   `String.prototype.toWellFormed()`（所以写了“需要 Node 20 或更新”）、`TextDecoder("utf-8", { fatal: true, ignoreBOM: true })`、`Number.prototype.toExponential(11)`。
-  状态：**未核对官方文档**；本机一致性测试（121 条请求）通过。更老的 Node 版本没试过。
+  状态：**未核对官方文档**；本机一致性测试（现在 133 条请求）通过。更老的 Node 版本没试过。
 - Python 服务：`http.server.ThreadingHTTPServer` + `BaseHTTPRequestHandler`（`do_GET` 等、`send_response / send_header / end_headers`），
   数字的写法用 `decimal.Context(prec=12, rounding=ROUND_HALF_UP)`，JSON 用 `json.loads(parse_int=float, parse_constant=…)`。
   状态：**未核对官方文档**；本机一致性测试通过。写了“需要 Python 3.8 或更新”是估计的，只在 3.12 上跑过。
   已知差别：`http.server` 不解分块传输（`Transfer-Encoding: chunked`）的请求内容——不带 `Content-Length` 的请求内容会被当成没有；Node 版能读。
+- Go 服务（`runtime_go*.dart`）：`net/http` 的 `http.Server{Handler, ConnContext}`、`net.Listen`、`srv.SetKeepAlivesEnabled(false)`、`r.Host`；
+  JSON 解析用 `encoding/json` 的 `Decoder.UseNumber()`；数字的写法用 `strconv.FormatFloat` 展开后手写进位；
+  “请求别的网址”用 `http.Client{Timeout: 10 * time.Second}`。
+  状态：**未核对官方文档**；本机 Go 1.25 上一致性测试（133 条请求）通过，`go vet` 没有意见。`go.mod` 里写的 `go 1.18` 是估计的最低版本
+  （用了 `any`），**没有在更老的 Go 上试过**。没有实际验证的：真的等满 10 秒超时、https、跳转、Windows 上的 `./server` 写法。
+- Java 服务（`runtime_java*.dart`）：`java.net.ServerSocket / Socket`（自己读 HTTP/1.1 请求）、`java.math.BigDecimal`（`MathContext(12, RoundingMode.HALF_UP)`）、
+  `java.nio.charset.CharsetDecoder`（`CodingErrorAction.REPORT`）、`HttpURLConnection`（`setConnectTimeout / setReadTimeout` 各 10 秒、`setDoOutput`）、
+  `Executors.newCachedThreadPool`。状态：**未核对官方文档**；本机 JDK 21 上一致性测试通过。README 写的“需要 JDK 11 或更新”是估计的
+  （用了 `readNBytes`、`String.repeat` 之类），**只在 JDK 21 上跑过**。
+  已知差别：只认 `Content-Length`，不解分块传输；“请求别的网址”的时限是连接、读各 10 秒；`HttpURLConnection` 默认会跟着跳转、
+  对 `127.*` / `localhost` 不走系统代理（本机设了代理的情况下请求自己成功，算是验证了这一点）。
 - 跨域：所有响应带 `Access-Control-Allow-Origin: *`；`OPTIONS` 回 204 并带 `Access-Control-Allow-Methods`、`Access-Control-Allow-Headers: *`。
   状态：**未核对**（没有用真浏览器试过跨域调用）。

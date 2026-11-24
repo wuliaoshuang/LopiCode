@@ -28,6 +28,17 @@ BeDocument _one(List<LcBlock> body, {String path = '/x'}) {
   return doc;
 }
 
+/// 这种语言的整行注释用什么开头。
+String _mark(BackendTarget t) => const {'python', 'ruby'}.contains(t.id) ? '#' : '//';
+
+/// 每种语言生成的工程里该有哪些文件（多了少了都算错）。
+const Map<String, Set<String>> _expectedFiles = {
+  'node': {'server.js', 'lc_runtime.js', 'README.md'},
+  'python': {'server.py', 'lc_runtime.py', 'README.md'},
+  'go': {'main.go', 'lc/values.go', 'lc/server.go', 'lc/fetch.go', 'go.mod', 'README.md'},
+  'java': {'Main.java', 'Lc.java', 'LcJson.java', 'LcServer.java', 'README.md'},
+};
+
 /// 生成的源码里所有不在字符串和注释里的部分（粗略：去掉双引号字符串和整行注释）。
 String _codeOnly(String source, String commentMark) {
   final out = StringBuffer();
@@ -148,7 +159,7 @@ void main() {
       expect(program.skipped.single, contains('路径'));
       for (final t in backendTargets) {
         final files = t.generate(doc);
-        final code = _codeOnly(files[t.entryFile]!, t.id == 'python' ? '#' : '//');
+        final code = _codeOnly(files[t.entryFile]!, _mark(t));
         for (final bad in ['evil', 'process.exit', 'import os', '__import__', 'a b']) {
           expect(code, isNot(contains(bad)), reason: '${t.id}: $bad');
         }
@@ -198,7 +209,7 @@ void main() {
         for (final doc in [BeDocument(), conformanceDocument()]) {
           final files = t.generate(doc);
           expect(files.keys, containsAll([t.entryFile, 'README.md']));
-          expect(files, hasLength(3), reason: t.id);
+          expect(files.keys.toSet(), _expectedFiles[t.id], reason: '${t.id}：文件清单（加了语言要在 _expectedFiles 里登记）');
           for (final f in files.entries) {
             expect(f.key, isNot(anyOf(startsWith('/'), contains('..'))));
             expect(f.value.endsWith('\n'), isTrue, reason: f.key);
@@ -206,7 +217,11 @@ void main() {
             expect(f.value, isNot(contains('\uFFFD')), reason: '${t.id} ${f.key} 里有坏字符');
             expect(f.value, isNot(contains('\r')));
           }
-          expect(files['README.md'], contains(t.startCommand.join(' ')));
+          expect(files['README.md'], contains(t.startCommandFor(doc.port).join(' ')));
+          for (final c in t.buildCommands) {
+            expect(files['README.md'], contains(c.join(' ')));
+          }
+          expect(files['README.md']!.contains('还没有在真机器上实际运行过'), !t.verified, reason: '${t.id}：没验证过的要在 README 里写明');
           expect(files['README.md'], contains('${doc.port}'));
         }
       }
@@ -216,7 +231,7 @@ void main() {
       final doc = conformanceDocument();
       for (final t in backendTargets) {
         final src = t.generate(doc)[t.entryFile]!;
-        final mark = t.id == 'python' ? '#' : '//';
+        final mark = _mark(t);
         expect(src, contains('$mark 接口：GET /todos/:id'));
         expect(src, contains('$mark 把 todo 设为 集合 todos 里 id 是 路径参数 id 的那条'));
         final code = _codeOnly(src, mark);
@@ -225,7 +240,8 @@ void main() {
         // 每行都没有行尾空格、没有制表符
         for (final line in src.split('\n')) {
           expect(line, isNot(endsWith(' ')), reason: line);
-          expect(line, isNot(contains('\t')));
+          // Go 的规范格式（gofmt）用制表符缩进：只许出现在行首。
+          expect(t.id == 'go' ? line.replaceFirst(RegExp(r'^\t+'), '') : line, isNot(contains('\t')));
         }
       }
     });

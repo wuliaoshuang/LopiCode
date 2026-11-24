@@ -25,6 +25,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 BODY_LIMIT = 1048576  # 请求内容最多 1MB
 REPEAT_LIMIT = 10000  # “重复”最多做这么多遍
 FETCH_TIMEOUT_SECONDS = 10  # “请求别的网址”最多等 10 秒
+JSON_DEPTH_LIMIT = 64  # 请求内容的 JSON 最多套这么多层
 
 # —— 值：空 / 是否 / 数字 / 文字 / 列表 / 对象 ——
 
@@ -135,17 +136,19 @@ def _well_formed(s):
     return _SURROGATES.sub("\ufffd", s)
 
 
-def _norm(v):
-    """把 json.loads 出来的值收拾干净：不成对的代理项换成 U+FFFD，超出范围的数字当 0。"""
+def _norm(v, depth=0):
+    """把 json.loads 出来的值收拾干净：不成对的代理项换成 U+FFFD，超出范围的数字当 0；套得太深就报错（整份当成空）。"""
     kind = _kind(v)
     if kind == "text":
         return _well_formed(v)
     if kind == "num":
         return _fin(float(v))
-    if kind == "list":
-        return [_norm(x) for x in v]
-    if kind == "obj":
-        return {_well_formed(k): _norm(x) for k, x in v.items()}
+    if kind in ("list", "obj"):
+        if depth >= JSON_DEPTH_LIMIT:
+            raise ValueError("JSON 套得太深")
+        if kind == "list":
+            return [_norm(x, depth + 1) for x in v]
+        return {_well_formed(k): _norm(x, depth + 1) for k, x in v.items()}
     return v
 
 
@@ -403,7 +406,8 @@ def body_field(req, name):
 
 def header(req, name):
     values = req.headers.get_all(name)
-    return ", ".join(values) if values else None
+    # http.server 会留着值末尾的空格，别的语言都去掉了
+    return ", ".join(v.strip(" \t") for v in values) if values else None
 
 
 # —— 响应 ——
@@ -429,12 +433,29 @@ def _error(status, message):
 # —— 请求别的网址 ——
 
 
+_URL_KEEP = frozenset(b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~:/?#[]@!$&'()*+,;=")
+_HEX = frozenset(b"0123456789ABCDEFabcdef")
+
+
+def _encode_url(s):
+    """网址里的空格、中文、写法不对的百分号先按 UTF-8 做百分号转义（各语言自己的处理不一样，这里统一）。"""
+    raw = s.encode("utf-8")
+    out = []
+    for i, c in enumerate(raw):
+        escaped = c == 0x25 and i + 2 < len(raw) and raw[i + 1] in _HEX and raw[i + 2] in _HEX
+        out.append(chr(c) if escaped or c in _URL_KEEP else "%%%02X" % c)
+    return "".join(out)
+
+
 def fetch(method, url, data):
     """成功（2xx）返回响应的文字；失败、超时、不是 http(s) 网址一律返回 None。"""
     target = to_text(url)
     if not re.match(r"https?://", target, re.IGNORECASE):
         return None
+    if "@" in re.split("[/?#]", target.split("://", 1)[1], maxsplit=1)[0]:
+        return None  # 主机那一段带 @（用户名密码）的不请求
     try:
+        target = _encode_url(target)
         payload = None
         headers = {}
         if method == "POST" and data is not None:
@@ -486,7 +507,8 @@ class _Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(payload)))
         self.end_headers()
-        self.wfile.write(payload)
+        if self.command != "HEAD":  # HEAD 只要响应头
+            self.wfile.write(payload)
 
     def _handle(self):
         length_text = self.headers.get("Content-Length") or "0"
@@ -521,7 +543,7 @@ class _Handler(BaseHTTPRequestHandler):
             return self._write(out if out is not None else (204, "", b""))
         return self._write(_error(405, "这个地址不支持这种请求方式") if path_matched else _error(404, "没有这个接口"))
 
-    do_GET = do_POST = do_PUT = do_PATCH = do_DELETE = do_OPTIONS = _handle
+    do_GET = do_POST = do_PUT = do_PATCH = do_DELETE = do_OPTIONS = do_HEAD = _handle
 
 
 def start(default_port):

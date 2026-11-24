@@ -35,6 +35,18 @@ abstract class BackendTarget {
   /// 启动前要先跑的命令（编译等）；不需要就是空表。
   List<List<String>> get buildCommands => const [];
 
+  /// 端口写在启动命令里的语言（PHP 的内置服务器）覆盖它；其余就是 [startCommand]。
+  List<String> startCommandFor(int port) => startCommand;
+
+  /// 端口 / 主机能不能用环境变量 `PORT` / `HOST` 改（不能的在 README 里另外说明）。
+  bool get portFromEnv => true;
+
+  /// 数据集合是不是存在内存里（PHP 每个请求一个进程，只能存文件）。
+  bool get dataInMemory => true;
+
+  /// README “要知道的几件事”里这种语言特有的几条（和别的语言不一样的地方、还没验证的地方）。
+  List<String> get notes => const [];
+
   /// 有没有在本机真的启动过、并通过一致性测试（`test/backend_conformance_test.dart`）。没有的要在界面和 README 里说明。
   bool get verified;
 
@@ -64,10 +76,41 @@ String beWellFormed(String s) {
 /// 注意：PHP、Kotlin、Ruby 这类双引号里会展开 `$` / `#{}` 的语言不能直接用它。
 String beQuoted(String s) => jsonEncode(beWellFormed(s)).replaceAll('\x7f', r'\u007f').replaceAll('\u0085', r'\u0085').replaceAll('\u2028', r'\u2028').replaceAll('\u2029', r'\u2029');
 
+/// 双引号字符串字面量，给转义写法和 JSON 不一样的语言用（PHP、Kotlin、Ruby、Rust、C#）：一个字符一个字符地写。
+/// `"`、`\\` 和 [escape] 里的字符前面加反斜杠；换行 / 回车 / 制表写成 `\n` `\r` `\t`；其余控制字符、DEL、U+0085、U+2028、U+2029、U+FEFF
+/// 交给 [unicode]（按码点写成这种语言的 `\uXXXX` / `\u{XXXX}`）。中文、表情等原样保留。
+String beQuotedWith(String s, {String escape = '', required String Function(int codePoint) unicode}) {
+  final out = StringBuffer('"');
+  for (final r in beWellFormed(s).runes) {
+    final ch = String.fromCharCode(r);
+    if (r == 0x22 || r == 0x5c || (escape.isNotEmpty && escape.contains(ch))) {
+      out.write('\\$ch');
+    } else if (r == 0x0a) {
+      out.write(r'\n');
+    } else if (r == 0x0d) {
+      out.write(r'\r');
+    } else if (r == 0x09) {
+      out.write(r'\t');
+    } else if (r < 0x20 || r == 0x7f || r == 0x85 || r == 0x2028 || r == 0x2029 || r == 0xfeff) {
+      out.write(unicode(r));
+    } else {
+      out.write(ch);
+    }
+  }
+  out.write('"');
+  return out.toString();
+}
+
+/// `\u00e9` 这种四位十六进制的写法（Kotlin、C#、Java 都认）。
+String beUnicode4(int codePoint) => '\\u${codePoint.toRadixString(16).padLeft(4, '0')}';
+
+/// `\u{e9}` 这种带花括号的写法（PHP、Ruby、Rust 都认）。
+String beUnicodeBraced(int codePoint) => '\\u{${codePoint.toRadixString(16)}}';
+
 /// 把任意字符串收拾成可以放进一行注释的内容（`// …`、`# …`、`/* … */` 都安全）：
 /// 去掉所有换行类 / 控制字符（否则后半截会变成代码）、拆开 `*/`、过长截断。
 String beComment(String s, [int limit = 160]) {
-  var out = beWellFormed(s).replaceAll(RegExp('[\\x00-\\x1f\\x7f\u0085\u2028\u2029]+'), ' ').replaceAll('*/', '* /').replaceAll('</', '< /').trim();
+  var out = beWellFormed(s).replaceAll(RegExp('[\\x00-\\x1f\\x7f\u0085\u2028\u2029\ufeff]+'), ' ').replaceAll('*/', '* /').replaceAll('</', '< /').trim();
   final runes = out.runes.toList();
   if (runes.length > limit) out = '${String.fromCharCodes(runes.take(limit))}…';
   // 截断可能正好拼出新的 “*/”；再保险一次。
@@ -200,14 +243,20 @@ String beReadme(BeProgram program, BackendTarget target) {
   out.writeln('## 怎么启动');
   out.writeln();
   out.writeln('```');
+  final start = _cmd(target.startCommandFor(program.port));
   for (final c in target.buildCommands) {
     out.writeln(_cmd(c));
   }
-  out.writeln(_cmd(target.startCommand));
+  out.writeln(start);
   out.writeln('```');
   out.writeln();
-  out.writeln('- 端口默认 ${program.port}；想换就先设环境变量 `PORT`，例如 `PORT=3000 ${_cmd(target.startCommand)}`。');
-  out.writeln('- 默认所有网卡都能访问（`0.0.0.0`）；只想本机访问就设 `HOST=127.0.0.1`。');
+  if (target.portFromEnv) {
+    out.writeln('- 端口默认 ${program.port}；想换就先设环境变量 `PORT`，例如 `PORT=3000 $start`。');
+    out.writeln('- 默认所有网卡都能访问（`0.0.0.0`）；只想本机访问就设 `HOST=127.0.0.1`。');
+  } else {
+    out.writeln('- 端口是 ${program.port}，写在启动命令里；想换就改命令里的数字。');
+    out.writeln('- 默认所有网卡都能访问（`0.0.0.0`）；只想本机访问就把命令里的 `0.0.0.0` 换成 `127.0.0.1`。');
+  }
   out.writeln('- 启动后在浏览器或别的程序里访问 `http://localhost:${program.port}` 加下面的路径。');
   out.writeln();
   out.writeln('## 接口');
@@ -233,7 +282,14 @@ String beReadme(BeProgram program, BackendTarget target) {
   out.writeln('## 要知道的几件事');
   out.writeln();
   if (program.collections.isNotEmpty) {
-    out.writeln('- 数据集合（${program.collections.join('、')}）存在内存里：**服务一重启数据就没了**。每条记录自动带数字 `id`，从 1 开始。');
+    if (target.dataInMemory) {
+      out.writeln('- 数据集合（${program.collections.join('、')}）存在内存里：**服务一重启数据就没了**。每条记录自动带数字 `id`，从 1 开始。');
+    } else {
+      out.writeln('- 数据集合（${program.collections.join('、')}）存在工程目录下的 `lc_data.json` 里（**和别的语言不一样**：别的语言存在内存里）。删掉这个文件数据就清空。每条记录自动带数字 `id`，从 1 开始。');
+    }
+  }
+  for (final n in target.notes) {
+    out.writeln('- $n');
   }
   out.writeln('- 路径里的 `:名字` 是路径参数：`/todos/:id` 能匹配 `/todos/5`。接口按上面的顺序从上到下匹配，先对上的先用。');
   out.writeln('- 没有对上的地址回 404，地址对了但方式不对回 405；接口里没有碰到“返回”积木时回 204（空响应）。');

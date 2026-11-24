@@ -436,6 +436,10 @@ BeDocument conformanceDocument() {
       ],
     ),
   ]);
+  // 请求任意网址，成功就把拿到的文字原样返回。
+  route('GET', '/relay-get', [
+    _b('fetch', {'url': beQuery('url'), 'method': 'GET', 'into': 's'}, body: [_text(200, exVar('s'))], orElse: [_text(502, exText('失败'))]),
+  ]);
   route('GET', '/now', [_text(200, beNow())]);
   return doc;
 }
@@ -478,6 +482,12 @@ const String _nastyJson =
     r'''"引号\"'反斜杠\\换行\n制表\t${x}`</script><!--*/ #{y} %s 😀'''
     '\u2028'
     r'''\u0001完"''';
+
+/// 套了 `depth` 层的列表：`[[[]]]`。
+String _nested(int depth) => '${'[' * depth}${']' * depth}';
+
+/// 套了 `depth` 层的对象（列表和对象交替）：`{"a":[{"a":[1]}]}`。
+String _nestedObjects(int depth) => '${[for (var i = 0; i < depth; i++) i.isEven ? '{"a":' : '['].join()}1${[for (var i = depth - 1; i >= 0; i--) i.isEven ? '}' : ']'].join()}';
 
 /// 请求脚本：按顺序发（后面的依赖前面留下的数据）。
 final List<BeCase> conformanceCases = [
@@ -636,6 +646,11 @@ final List<BeCase> conformanceCases = [
         '"a":[1.0,-0.50,1e2,-0,1e400,12345678901234567890,1.5E+300,-1E400,0.1,0.0000001,1.2345678901234567]}',
   ),
   const BeCase('POST', '/echo', 200, '{"body":{"name":"你好😀"},"header":null,"missing":null,"name":"你好😀","nameLen":3,"noBody":false,"noHeader":null,"q":null}', body: '{"name":"你好😀"}'),
+  // 列表 / 对象最多套 64 层：正好 64 层照常，65 层整份当成空
+  BeCase('POST', '/echo', 200, '{"body":${_nested(64)},"header":null,"missing":null,"name":null,"nameLen":0,"noBody":false,"noHeader":null,"q":null}', body: _nested(64)),
+  BeCase('POST', '/echo', 200, '{"body":null,"header":null,"missing":null,"name":null,"nameLen":0,"noBody":true,"noHeader":null,"q":null}', body: _nested(65)),
+  BeCase('POST', '/echo', 200, '{"body":${_nestedObjects(64)},"header":null,"missing":null,"name":null,"nameLen":0,"noBody":false,"noHeader":null,"q":null}', body: _nestedObjects(64)),
+  BeCase('POST', '/echo', 200, '{"body":null,"header":null,"missing":null,"name":null,"nameLen":0,"noBody":true,"noHeader":null,"q":null}', body: _nestedObjects(65)),
   const BeCase('GET', '/status?code=201', 201, '{"ok":true}'),
   const BeCase('GET', '/status?code=404.9', 404, '{"ok":true}'),
   const BeCase('GET', '/status?code=999', 200, '{"ok":true}'),
@@ -672,6 +687,17 @@ final List<BeCase> conformanceCases = [
   _t('GET', '/relay-fail', 502, '失败，s 还是：初始"值\\'),
   // 对方回 404 也算失败（请求自己一个不存在的地址）——用 /relay-fail 的 url 参数指回自己，见 runConformance 里的 {self}。
   _t('GET', '/relay-fail?url={self}/nope', 502, '失败，s 还是：初始"值\\'),
+  // 网址里的空格、中文、写法不对的百分号：发出去之前自动做百分号转义（对方收到 a b中 和 %zz）
+  _t('GET', '/relay-get?url={self}/text/a%20b%E4%B8%AD?q=%25zz%2520', 200, '你好，a b中！3true1.5{"a":1}%zz '),
+  _t('GET', '/relay-get?url={self}/text/x%23frag', 200, '你好，x！3true1.5{"a":1}'),
+  _t('GET', '/relay-get?url=HTTP://127.0.0.1:{port}/text/%E5%A4%A7%E5%86%99?q=%22%3C%3E%5C%5E%60%7B%7C%7D', 200, '你好，大写！3true1.5{"a":1}"<>\\^`{|}'),
+  _t('GET', '/relay-get?url=%20{self}/', 502, '失败'),
+  _t('GET', '/relay-get?url={self}/text/a%5Bb%5D?q=%2540', 200, '你好，a[b]！3true1.5{"a":1}@'),
+  // 网址里带用户名密码的不请求
+  _t('GET', '/relay-get?url=http://user:pw@127.0.0.1:{port}/', 502, '失败'),
+  _t('GET', '/relay-get?url=http://user@127.0.0.1:{port}/', 502, '失败'),
+  // 请求头的值：两头的空格去掉，中间的留着
+  const BeCase('POST', '/echo', 200, '{"body":null,"header":"a  b","missing":null,"name":null,"nameLen":0,"noBody":true,"noHeader":null,"q":null}', headers: {'X-Test': '  a  b  '}),
   const BeCase('GET', '/now', 200, '', type: kText, pattern: r'^20[0-9]{2}-[01][0-9]-[0-3][0-9]T[0-2][0-9]:[0-5][0-9]:[0-6][0-9]Z$'),
 
   // “返回”之后的积木没有执行（/early 里那条没有加进 notes）
@@ -729,13 +755,61 @@ Future<BeResponse> sendRaw(int port, String method, String target, {List<int>? b
 }
 
 /// 找得到这个命令吗（`node`、`python3`…）。找不到的语言跳过一致性测试。
-Future<bool> hasCommand(String exe) async {
+Future<bool> hasCommand(String exe, [List<String> versionArgs = const ['--version']]) async {
   try {
-    final r = await Process.run(exe, const ['--version']).timeout(const Duration(seconds: 20));
+    final r = await Process.run(exe, versionArgs).timeout(const Duration(seconds: 20));
     return r.exitCode == 0;
   } on Exception {
     return false;
   }
+}
+
+/// 一种语言在本机的工具：命令名 → 实际要执行的路径，外加跑它们时要带的环境变量。
+class BeToolchain {
+  const BeToolchain(this.executables, [this.environment = const {}]);
+
+  final Map<String, String> executables;
+  final Map<String, String> environment;
+
+  /// 把命令的第一项换成实际路径；`./server` 这种相对路径换成 `dir` 里的绝对路径。
+  List<String> resolve(List<String> command, Directory dir) {
+    final exe = command.first;
+    final resolved = executables[exe] ?? (exe.startsWith('./') ? '${dir.path}/${exe.substring(2)}' : exe);
+    return [resolved, ...command.sublist(1)];
+  }
+}
+
+/// Go 命令在哪：先看 PATH，再看环境变量 `LOPI_GO`，再看这台机器上装的位置。都没有返回 null。
+Future<String?> findGo() async {
+  final home = Platform.environment['HOME'] ?? '';
+  for (final exe in ['go', ?Platform.environment['LOPI_GO'], if (home.isNotEmpty) '$home/workspace/tools/gosdk/go/bin/go']) {
+    if (await hasCommand(exe, const ['version'])) return exe;
+  }
+  return null;
+}
+
+/// 跑 Go 命令要带的环境变量：缓存放在工程的 `.tmp/` 下（`/tmp` 太小），**不许联网**（只用标准库，本来也不用下载）。
+Map<String, String> goEnvironment() {
+  final base = '${Directory.current.path}/.tmp';
+  return {'GOCACHE': '$base/gocache', 'GOPATH': '$base/gopath', 'GOFLAGS': '-mod=mod', 'GOPROXY': 'off', 'GOSUMDB': 'off', 'GOTOOLCHAIN': 'local', 'GOWORK': 'off', 'CGO_ENABLED': '0'};
+}
+
+/// 这种语言在本机能不能跑：能就返回工具，不能返回 null（调用方跳过并打印原因）。
+Future<BeToolchain?> toolchainFor(String language) async {
+  switch (language) {
+    case 'node':
+      return await hasCommand('node') ? const BeToolchain({}) : null;
+    case 'python':
+      return await hasCommand('python3') ? const BeToolchain({}) : null;
+    case 'go':
+      final go = await findGo();
+      if (go == null) return null;
+      final gofmt = go == 'go' ? 'gofmt' : '${File(go).parent.path}/gofmt';
+      return BeToolchain({'go': go, 'gofmt': gofmt}, goEnvironment());
+    case 'java':
+      return await hasCommand('javac') && await hasCommand('java') ? const BeToolchain({}) : null;
+  }
+  return null;
 }
 
 /// 把生成的工程写进一个临时目录。用完自己删。
@@ -771,8 +845,8 @@ class RunningBackend {
 }
 
 /// 在 `dir` 里用 `command` 起服务（随机端口、只绑 127.0.0.1），等它打印“已启动”那一行。
-Future<RunningBackend> startBackend(Directory dir, List<String> command) async {
-  final process = await Process.start(command.first, command.sublist(1), workingDirectory: dir.path, environment: {'PORT': '0', 'HOST': '127.0.0.1'});
+Future<RunningBackend> startBackend(Directory dir, List<String> command, {Map<String, String> environment = const {}}) async {
+  final process = await Process.start(command.first, command.sublist(1), workingDirectory: dir.path, environment: {...environment, 'PORT': '0', 'HOST': '127.0.0.1'});
   final ready = Completer<int>();
   final lines = <String>[];
   final err = StringBuffer();
@@ -809,7 +883,7 @@ Future<List<BeResponse>> runCases(RunningBackend server, String label) async {
   final out = <BeResponse>[];
   for (var i = 0; i < conformanceCases.length; i++) {
     final c = conformanceCases[i];
-    final target = c.target.replaceAll('{self}', 'http://127.0.0.1:${server.port}');
+    final target = c.target.replaceAll('{self}', 'http://127.0.0.1:${server.port}').replaceAll('{port}', '${server.port}');
     final body = c.bodyBytes ?? (c.body == null ? null : utf8.encode(c.body!));
     final r = await sendRaw(server.port, c.method, target, body: body, headers: c.headers);
     final text = utf8.decode(r.body, allowMalformed: true);
@@ -827,19 +901,25 @@ Future<List<BeResponse>> runCases(RunningBackend server, String label) async {
   return out;
 }
 
+/// 在 `dir` 里把生成器要求的编译命令跑一遍（没有就什么都不做）。
+Future<void> buildProject(BackendTarget target, Directory dir, BeToolchain tools) async {
+  for (final build in target.buildCommands) {
+    final command = tools.resolve(build, dir);
+    final r = await Process.run(command.first, command.sublist(1), workingDirectory: dir.path, environment: tools.environment);
+    expect(r.exitCode, 0, reason: '[${target.id}] ${build.join(' ')} 失败：\n${r.stdout}\n${r.stderr}');
+  }
+}
+
 /// 一种语言的完整一致性检查：生成样本工程 → （编译）→ 起服务 → 跑请求脚本 → 核对日志 → 杀进程、删目录。
-/// 返回每条的响应。`command` 不传就用生成器自己的启动命令。
-Future<List<BeResponse>> runConformance(String language, {List<String>? command, List<List<String>>? buildCommands}) async {
+/// 返回每条的响应。
+Future<List<BeResponse>> runConformance(String language, BeToolchain tools) async {
   final generated = generateBackend(conformanceDocument(), language: language);
   expect(generated, isNotNull, reason: '没有 $language 的生成器');
   final target = generated!.target;
   final dir = writeProject(generated.files, 'be_conf_${language}_');
   try {
-    for (final build in buildCommands ?? target.buildCommands) {
-      final r = await Process.run(build.first, build.sublist(1), workingDirectory: dir.path);
-      expect(r.exitCode, 0, reason: '[$language] ${build.join(' ')} 失败：\n${r.stdout}\n${r.stderr}');
-    }
-    final server = await startBackend(dir, command ?? target.startCommand);
+    await buildProject(target, dir, tools);
+    final server = await startBackend(dir, tools.resolve(target.startCommandFor(0), dir), environment: tools.environment);
     try {
       final responses = await runCases(server, language);
       // 给标准输出一点时间落地

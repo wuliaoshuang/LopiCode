@@ -192,7 +192,13 @@ abstract class BlockHost {
 - **转成文字**：空→空文字，是 / 否→`true` / `false`，列表 / 对象→它的 JSON。“等于”：类型一样直接比（列表 / 对象比 JSON），不一样都转文字再比。
 - **请求**：路径按 `/` 切段再逐段做百分号解码，空段忽略（`/todos/` ＝ `/todos`）；解码失败（`%zz`、不是合法 UTF-8）原样保留；
   网址参数里 `+` 当空格、重名取第一个；请求内容不是合法 UTF-8 / JSON（含带 BOM、`NaN`）当成空；超出范围的数当 0；
-  不成对的代理项换成 U+FFFD；请求内容最多 1MB（超过回 413）。
+  不成对的代理项换成 U+FFFD；请求内容最多 1MB（超过回 413）。请求内容的 JSON 里列表 / 对象最多套 64 层，超过整份当成空
+  （各语言自带的上限差得很远，所以定一个统一的）。请求头的值去掉两头的空格 / 制表，中间的留着。
+- **请求别的网址**：只许 `http://` / `https://` 开头；主机那一段带 `@`（用户名密码）的不请求；发出去之前把网址按 UTF-8 做百分号转义——
+  字母、数字和 ``-._~:/?#[]@!$&'()*+,;=`` 原样，后面跟着两位十六进制的 `%` 原样，其余每个字节写成 `%XX`
+  （各语言自己的处理不一样：有的自动转空格和中文，有的直接报错，所以统一在小库里做）。
+- **不在规矩里的**（各语言的 HTTP 库各管各的，没法统一，一致性测试不测）：`GET / POST / PUT / PATCH / DELETE / OPTIONS / HEAD` 之外的请求方式
+  （Node 回 400、Python 回 501、Go 和 Java 回 405）；`HEAD` 都只回响应头；分块传输的请求内容（Node、Go 能读，Python、Java 当成没有内容）。
 - **响应**：状态码取整后不在 200–599 里当 200；204 / 304 不带内容也不带 Content-Type；JSON 是 `application/json; charset=utf-8`，
   文字是 `text/plain; charset=utf-8`；都带 `Access-Control-Allow-Origin: *`，`OPTIONS` 一律回 204（跨域预检）。
 - **路由**：按声明顺序匹配，先对上的先用（所以 `/todos/count` 要排在 `/todos/:id` 前面，校验会提示）；
@@ -214,18 +220,35 @@ abstract class BlockHost {
 2. 一个 `BeCodeTarget` 子类（约 100 行）：字面量怎么写、变量叫什么、调小库函数怎么写、七种语句怎么写、路由文件怎么拼。
 3. 在 `backend_targets.dart` 的 `backendTargets` 里加一行；在 `test/backend_conformance_test.dart` 的 `_languages` 里加一行。
    同一份样本模型和请求脚本（`test/support/backend_conformance.dart`）就会对着它跑；需要先编译的语言在生成器的 `buildCommands` 里写。
+   工具不在 PATH 里、或者要额外的环境变量（Go 的缓存目录、不许联网）时，在 `toolchainFor` 里加一段。
+4. 在 `test/backend_codegen_test.dart` 的 `_expectedFiles` 里登记文件清单；在 `test/backend_codegen_langs_test.dart` 里加这种语言的结构检查
+   （字面量、转义、小库有没有漏函数）。本机跑不了的语言 `verified` 写 false——README 顶部会自动写明“还没有实际运行过”。
 
-生成的文件：入口（`server.js` / `server.py`，积木翻出来的，每块积木上面一行中文注释）＋小库（`lc_runtime.*`，每份都一样）＋ `README.md`。
+`BackendTarget` 上给“跟别人不一样”的语言留的口子：`startCommandFor(端口)`（端口要写在命令里的，如 `php -S`）、`portFromEnv`、
+`dataInMemory`（集合是不是存在内存里）、`notes`（README 里多写几条说明）。
+
+生成的文件：入口（`server.js` / `server.py` / `main.go` / `Main.java`，积木翻出来的，每块积木上面一行中文注释）＋小库（每份都一样）＋ `README.md`。
 端口读环境变量 `PORT`（没有用文档里的 `port`），`HOST` 默认 `0.0.0.0`；启动后打印一行 `后端已启动：http://主机:端口`（测试靠它知道端口）。
 
 | 语言 | 用什么 | 本机能不能真跑 |
 | --- | --- | --- |
 | Node.js | `node:http` | 能（node 24）——**已做，一致性测试通过** |
 | Python | `http.server` | 能（python 3.12）——**已做，一致性测试通过** |
-| Go | `net/http` | 能（`~/workspace/tools/gosdk/go/bin/go` 1.25） |
-| Java | JDK 自带 `com.sun.net.httpserver`（JSON 自己带一个小实现） | 能（`~/workspace/tools/jdk`，JDK 21） |
+| Go | `net/http`；值是 `any`，数字一律 `float64`；JSON 编码自己写（解析用 `encoding/json` 再按规矩收拾）；生成 `go.mod`（模块名写死 `lcbackend`、`go 1.18`） | 能（`~/workspace/tools/gosdk/go/bin/go` 1.25）——**已做，一致性测试通过**，生成物是 gofmt 规范格式、`go vet` 通过 |
+| Java | `java.net.ServerSocket` 上自己读 HTTP（JSON 也自己带一个小实现）；值是 `Object`，数字一律 `Double`；`javac` 直接编译，不用 Maven / Gradle | 能（`~/workspace/tools/jdk`，JDK 21）——**已做，一致性测试通过** |
 | PHP | 内置服务器 `php -S` 的路由脚本 | 不能（本机没有 php）——只做结构检查，标“未实际运行” |
 | C# / Ruby / Kotlin / Rust | 有余力再加 | 不能，同上 |
+
+实现时定的几件事：
+
+- **Go**：`net/http` 碰到地址里写法不对的百分号（`/a/%zz`）会自己回 400，到不了我们的代码；小库在连接上包了一层，先看请求行、
+  把写法不对的 `%` 换成 `%25` 再交给 `net/http`，原样的地址另外记着（为此关掉了连接复用：一个连接只处理一个请求）。
+  数字字面量都带小数点（`200.0`），不然在 Go 里是整数；变量声明后跟一行 `_ = v_x`（Go 不许有没用到的变量）。
+  编译要缓存目录：测试里把 `GOCACHE`、`GOPATH` 指到工程的 `.tmp` 下，`GOPROXY=off`、`GOFLAGS=-mod=mod`、`GOTOOLCHAIN=local`（不联网）。
+- **Java**：原计划用 JDK 自带的 `com.sun.net.httpserver`，实测它同样拒掉 `%zz`、还把开头的 `//` 当成主机名，所以改成自己在 `ServerSocket` 上读请求
+  （一个连接一个请求，只认 `Content-Length`）。注释里的 `\u` 要拆开（Java 在分词之前就把 `\u000a` 换成换行，注释后半截会变成代码）；
+  太长的文字拆成几段用 `String.join` 拼（单个字符串常量上限 65535 字节）；标准输出 / 错误固定按 UTF-8 写。
+  “请求别的网址”的 10 秒是“连接 10 秒 + 读 10 秒”各算各的，不是总共 10 秒（`HttpURLConnection` 没有总时限）。
 
 测试里起服务只许绑 `127.0.0.1` 的随机端口；本机没有对应工具时该用例跳过并打印原因，不许联网、不许装包。
 

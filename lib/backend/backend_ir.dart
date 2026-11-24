@@ -18,6 +18,10 @@ const int kBeRepeatLimit = 10000;
 /// 请求内容最多这么多字节，超过回 413。
 const int kBeBodyLimit = 1048576;
 
+/// 请求内容的 JSON，列表 / 对象最多套这么多层（`[[1]]` 是两层）；再深的整份当成空。
+/// 定这一条是因为各语言自己的上限差得很远（Python 一千层左右、Go 一万层、Java 看线程的栈有多大），不定死就没法一致。
+const int kBeJsonDepthLimit = 64;
+
 /// “请求别的网址”最多等这么多秒。
 const int kBeFetchTimeoutSeconds = 10;
 
@@ -55,7 +59,7 @@ const Map<String, String> kBeRuntimeFns = {
   'pathParam': '(请求, 名字) → 路径里 :名字 那一段（已做百分号解码）；没有 → 空',
   'query': '(请求, 名字) → 网址参数（+ 当空格、做百分号解码；重名取第一个）；没带 → 空',
   'bodyField': '(请求, 名字) → field(body(请求), 名字)',
-  'body': '(请求) → 请求内容按 JSON 解出来的值；没有内容、不是合法 UTF-8、不是合法 JSON → 空',
+  'body': '(请求) → 请求内容按 JSON 解出来的值；没有内容、不是合法 UTF-8、不是合法 JSON、列表 / 对象套了超过 $kBeJsonDepthLimit 层 → 空',
   'header': '(请求, 名字) → 请求头的值（名字不分大小写）；没带 → 空',
   'dbAll': '(集合名) → 列表：全部记录，按加入的顺序',
   'dbGet': '(集合名, id) → id 数字化后等于它的那条；找不到 → 空',
@@ -70,7 +74,9 @@ const Map<String, String> kBeRuntimeFns = {
   'items': '(x) → 语言自己的列表：x 是列表就是它（循环中途集合变了不影响这一轮），否则空列表',
   'sendJson': '(状态, 值) → 响应：状态数字化取整，不在 200–599 里当 200；内容是值的 JSON，application/json; charset=utf-8；204 / 304 不带内容',
   'sendText': '(状态, 值) → 响应：内容是值的文字化，text/plain; charset=utf-8；其余同 sendJson',
-  'fetch': '(方式, 网址, 数据) → 文字或空：只许 http / https；POST 且数据不是空时把它的 JSON 当请求内容；最多等 $kBeFetchTimeoutSeconds 秒；2xx 返回响应文字，其余一律空',
+  'fetch':
+      '(方式, 网址, 数据) → 文字或空：只许 http / https，主机那一段带 @（用户名密码）的不请求；网址里字母数字和 -._~:/?#[]@!\$&\'()*+,;= 之外的字符、'
+      '后面不是两位十六进制的 % 先按 UTF-8 做百分号转义；POST 且数据不是空时把它的 JSON 当请求内容；最多等 $kBeFetchTimeoutSeconds 秒；2xx 返回响应文字，其余一律空',
 };
 
 /// 返回“语言自己的布尔”或“是否”值的函数：它们的结果可以直接放进 if 的条件，不用再包一层 truthy。

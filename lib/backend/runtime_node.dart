@@ -13,6 +13,7 @@ const http = require("node:http");
 const BODY_LIMIT = 1048576; // 请求内容最多 1MB
 const REPEAT_LIMIT = 10000; // “重复”最多做这么多遍
 const FETCH_TIMEOUT_MS = 10000; // “请求别的网址”最多等 10 秒
+const JSON_DEPTH_LIMIT = 64; // 请求内容的 JSON 最多套这么多层
 
 // —— 值：空 / 是否 / 数字 / 文字 / 列表 / 对象 ——
 
@@ -104,17 +105,16 @@ function eq(a, b) {
 }
 
 // 把 JSON.parse 出来的值收拾干净：对象换成“没有原型”的（免得 __proto__、constructor 这些键捣乱），
-// 文字里不成对的代理项换成 U+FFFD，超出范围的数字当 0。
-function norm(v) {
+// 文字里不成对的代理项换成 U+FFFD，超出范围的数字当 0；列表 / 对象套得太深就报错（整份当成空）。
+function norm(v, depth) {
   if (typeof v === "string") return v.toWellFormed();
   if (typeof v === "number") return fin(v);
-  if (Array.isArray(v)) return v.map(norm);
-  if (v !== null && typeof v === "object") {
-    const o = Object.create(null);
-    for (const k of Object.keys(v)) o[k.toWellFormed()] = norm(v[k]);
-    return o;
-  }
-  return v;
+  if (v === null || typeof v !== "object") return v;
+  if (depth >= JSON_DEPTH_LIMIT) throw new RangeError("JSON 套得太深");
+  if (Array.isArray(v)) return v.map((x) => norm(x, depth + 1));
+  const o = Object.create(null);
+  for (const k of Object.keys(v)) o[k.toWellFormed()] = norm(v[k], depth + 1);
+  return o;
 }
 
 function isObj(v) {
@@ -272,7 +272,7 @@ function parseQuery(raw) {
 function parseBody(bytes) {
   if (bytes.length === 0) return null;
   try {
-    return norm(JSON.parse(new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes)));
+    return norm(JSON.parse(new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes)), 0);
   } catch (e) {
     return null;
   }
@@ -339,10 +339,27 @@ function write(res, out) {
 
 // —— 请求别的网址 ——
 
-// 成功（2xx）返回响应的文字；失败、超时、不是 http(s) 网址一律返回 null。
+// 网址里的空格、中文、写法不对的百分号先按 UTF-8 做百分号转义：各语言自己的处理不一样（有的自动转、有的直接报错），这里统一。
+// 字母、数字和 -._~:/?#[]@!$&'()*+,;= 原样；后面跟着两位十六进制的 % 原样；其余每个字节写成 %XX（大写）。
+function encodeUrl(s) {
+  const bytes = Buffer.from(s, "utf8");
+  let out = "";
+  for (let i = 0; i < bytes.length; i++) {
+    const ch = String.fromCharCode(bytes[i]);
+    const escaped = ch === "%" && i + 2 < bytes.length && /^[0-9A-Fa-f]{2}$/.test(String.fromCharCode(bytes[i + 1], bytes[i + 2]));
+    if (escaped || /^[A-Za-z0-9\-._~:\/?#\[\]@!$&'()*+,;=]$/.test(ch)) out += ch;
+    else out += "%" + bytes[i].toString(16).toUpperCase().padStart(2, "0");
+  }
+  return out;
+}
+
+// 成功（2xx）返回响应的文字；失败、超时、不是 http(s) 网址、网址里带用户名密码一律返回 null。
 async function fetchText(method, url, data) {
-  const target = toText(url);
+  let target = toText(url);
   if (!/^https?:\/\//i.test(target)) return null;
+  // 主机那一段带 @（用户名密码）的不请求
+  if (/^[^\/?#]*@/.test(target.slice(target.indexOf("://") + 3))) return null;
+  target = encodeUrl(target);
   try {
     const init = { method: method === "POST" ? "POST" : "GET", signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) };
     if (init.method === "POST" && !isNull(data)) {
