@@ -80,7 +80,7 @@ void main() {
       final ctl = box.read(terminalsProvider(ui).notifier);
       var n = 0;
       box.listen(terminalsProvider(ui), (_, _) => n++);
-      final second = ctl.addLocal(forceLocal: true);
+      final second = ctl.addLocal(forceLocal: true)!;
       expect(second.title, '本机 2');
       expect(box.read(terminalsProvider(ui)).active, 1);
       expect(box.read(terminalsProvider(ui)).current, same(second));

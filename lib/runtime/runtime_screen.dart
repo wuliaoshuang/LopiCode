@@ -119,7 +119,7 @@ class _StatusCard extends StatelessWidget {
     final t = Theme.of(context).textTheme;
     final (String status, Color tone) = switch (runtime.phase) {
       RuntimePhase.installed when !runtime.prootBundled => ('已下载，但进不去', c.warning),
-      RuntimePhase.installed when !runtime.shouldUseLinux => ('启动失败，已退回本机 shell', c.danger),
+      RuntimePhase.installed when !runtime.shouldUseLinux => (runtime.localShellAllowed ? '启动失败，已退回本机 shell' : '连续启动失败，终端暂时进不去', c.danger),
       RuntimePhase.installed => ('已安装，新开的终端会直接进 Ubuntu', c.accent),
       RuntimePhase.downloading => ('正在下载…', c.textMuted),
       RuntimePhase.verifying => ('正在校验…', c.textMuted),
@@ -144,7 +144,14 @@ class _StatusCard extends StatelessWidget {
             style: t.bodyMedium?.copyWith(color: tone),
           ),
           const SizedBox(height: Space.x3),
-          Text(runtime.installed ? '在手机上跑一个不需要 root 的 Ubuntu，终端和 Agent 的命令都在里面执行，项目目录挂在 /workspace。' : '装好后终端里能直接用 apt、node、python。不装也不影响别的功能。', style: t.bodySmall?.copyWith(height: 1.5)),
+          Text(
+            runtime.installed
+                ? '在手机上跑一个不需要 root 的 Ubuntu，终端和 Agent 的命令都在里面执行，项目目录挂在 /workspace。'
+                : runtime.localShellAllowed
+                ? '装好后终端里能直接用 apt、node、python。不装也不影响别的功能。'
+                : '终端和 Agent 执行命令都要用它，装好后能直接用 apt、node、python。不装的话聊天、文件、搭建照常能用。',
+            style: t.bodySmall?.copyWith(height: 1.5),
+          ),
           if (!runtime.prootBundled) ...[
             const SizedBox(height: Space.x3),
             InfoBanner('这个安装包里缺少进入 Ubuntu 要用的文件（${runtime.missingLauncherFiles.join('、')}），环境装了也进不去，所以这里先不提供安装。请重新安装完整的 LopiCode 安装包。', key: const Key('runtime-no-proot'), tone: BannerTone.warning),
@@ -177,21 +184,13 @@ class _StatusCard extends StatelessWidget {
           ],
           if (runtime.phase == RuntimePhase.notInstalled && runtime.prootBundled) ...[
             const SizedBox(height: Space.x3),
-            Text(_spaceNote(runtime), key: const Key('runtime-space'), style: t.bodySmall?.copyWith(height: 1.5)),
+            Text(runtimeSpaceNote(runtime), key: const Key('runtime-space'), style: t.bodySmall?.copyWith(height: 1.5)),
             const SizedBox(height: Space.x4),
             FilledButton(key: const Key('runtime-install'), onPressed: ctl.install, child: Text(runtime.partialBytes > 0 ? '继续下载（已有 ${formatBytes(runtime.partialBytes)}）' : '安装运行环境')),
           ],
         ],
       ),
     );
-  }
-
-  static String _spaceNote(RuntimeView runtime) {
-    final free = runtime.freeSpace;
-    final need =
-        '需要下载 ${formatBytes(runtime.imageSize)}，解压后占约 ${formatBytes(RootfsImage.extractedBytes)}，'
-        '建议留出 ${formatBytes(RootfsImage.requiredBytes)}。Node.js、Python 另算。';
-    return free == null ? need : '$need\n手机现在剩余 ${formatBytes(free)}。';
   }
 }
 

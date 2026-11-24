@@ -9,6 +9,10 @@ class CommandResult {
   final bool timedOut;
 }
 
+/// 命令根本没有执行（执行环境还不能用）时的退出码。shell 里 126 的意思是“找到了但执行不了”，
+/// 和“命令找不到”的 127、被信号结束的 128+ 都不混；工具结果的正文里会写清原因。
+const int kCommandNotRun = 126;
+
 /// Agent 的 run_command 通过它执行；界面把同一份输出回显到项目终端里。
 abstract class CommandRunner {
   Future<CommandResult> run(String command, {required String workingDirectory, Duration timeout});
@@ -22,7 +26,16 @@ abstract class HasCommandTimeout {
   Duration get commandTimeout;
 }
 
-/// 本机 shell（Android 上是系统自带的 /system/bin/sh，没有编译器）。
+/// 执行环境可能“还不能用”（例如安卓上 Ubuntu 运行环境没装）的实现它：
+/// 工具层在出确认卡之前先问一声，不能用就直接把原因回给模型，不让用户白点一次“允许”。
+abstract class HasCommandAvailability {
+  /// 现在执行不了命令的原因（给模型和用户看的人话）；能执行返回 null。
+  String? get unavailableReason;
+}
+
+/// 本机 shell：桌面平台开发调试、宿主机上跑测试用。
+/// 安卓上不再用它跑 Agent 的命令（手机自带的 /system/bin/sh 没有 git、node、python、编译器）：
+/// 那边一律进 Ubuntu 运行环境，见 lib/runtime/linux_command_runner.dart。
 class LocalShellRunner implements CommandRunner {
   LocalShellRunner({this.onOutput});
 

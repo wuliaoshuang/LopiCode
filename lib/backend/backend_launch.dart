@@ -36,7 +36,10 @@ String? backendLaunchCommand(BeDocument doc, {String dir = ''}) {
 
 /// 把命令打进“后端终端”并回车。第一次新开一个终端；之后复用它——先发一个 Ctrl+C 把上次还在跑的服务停掉，再启动。
 /// 返回用的那个终端（调用方接着切到终端页）。
-TerminalSession launchBackendInTerminal(ProjectSession session, String command) {
+///
+/// 安卓上运行环境还没装好时开不了终端（不再用手机自带的 sh）：什么都不打，返回 null；
+/// 调用方照常切到终端页，那里是安装引导，装好后再点一次“在终端启动”。
+TerminalSession? launchBackendInTerminal(ProjectSession session, String command) {
   final known = _backendTerminal[session];
   final at = known == null ? -1 : session.terminals.indexOf(known);
   if (known != null && at >= 0) {
@@ -45,7 +48,9 @@ TerminalSession launchBackendInTerminal(ProjectSession session, String command) 
     known.run(command);
     return known;
   }
-  final fresh = session.addTerminal()..title = kBackendTerminalTitle;
+  final fresh = session.addTerminal();
+  if (fresh == null) return null;
+  fresh.title = kBackendTerminalTitle;
   _backendTerminal[session] = fresh;
   fresh.run(command);
   return fresh;

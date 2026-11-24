@@ -365,6 +365,10 @@ class AgentToolbox {
   }
 
   Future<ToolOutcome> _run(String command) async {
+    // 执行环境还不能用（安卓上没装运行环境）：不出确认卡、不执行，直接把原因回给模型。只会少执行，不会多执行。
+    final Object env = runner;
+    final unavailable = env is HasCommandAvailability ? env.unavailableReason : null;
+    if (unavailable != null) return ToolOutcome('命令没有执行：$unavailable', ok: false);
     if (!await _approved(ApprovalRequest(tool: 'run_command', title: '执行命令', detail: command))) {
       return ToolOutcome('用户拒绝执行这条命令，命令没有运行。', ok: false, denied: true);
     }

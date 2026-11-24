@@ -257,7 +257,7 @@ void main() {
         };
       });
       // 第一个会话在注入假伪终端之前就建好了，换一个新的来渲染
-      final fresh = session.addTerminal();
+      final fresh = session.addTerminal()!;
       expect(fresh.title, 'Ubuntu 2');
       await tester.pumpWidget(env!.app(ProjectShell(project: project!, session: session, initial: ShellDest.terminal), mode));
       await settle(tester);
@@ -270,7 +270,7 @@ void main() {
       await shot(tester, '28-terminal-ubuntu-$suffix');
 
       // 强制开本机 shell 仍然可以
-      final local = session.addTerminal(forceLocal: true);
+      final local = session.addTerminal(forceLocal: true)!;
       expect(local.title, startsWith('本机'));
 
       await tester.tap(find.byTooltip('打开侧边栏'));
@@ -303,7 +303,7 @@ void main() {
           return pty;
         };
       });
-      final fresh = session.addTerminal();
+      final fresh = session.addTerminal()!;
       await tester.pumpWidget(env!.app(ProjectShell(project: project!, session: session, initial: ShellDest.terminal), mode));
       await settle(tester);
       expect(find.byKey(const Key('terminal-stalled')), findsNothing);

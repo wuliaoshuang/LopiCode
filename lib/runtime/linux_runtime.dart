@@ -88,7 +88,9 @@ class LinuxRuntime {
     http.Client Function()? httpClient,
     this.image = RootfsImage.ubuntu2404Arm64,
     this.makeExecutable = chmodExecutable,
-  }) : _httpClient = httpClient ?? http.Client.new;
+    bool? localShellAllowed,
+  }) : _httpClient = httpClient ?? http.Client.new,
+       localShellAllowed = localShellAllowed ?? !Platform.isAndroid;
 
   final SettingsStore settings;
 
@@ -98,6 +100,21 @@ class LinuxRuntime {
   final RootfsImage image;
   final MakeExecutable makeExecutable;
   final http.Client Function() _httpClient;
+
+  /// 终端和 Agent 的命令能不能用“本机 shell”（不进 Ubuntu，直接用这台机器自带的 sh）。
+  ///
+  /// **平台判断就在这一处**：
+  /// - 安卓（真机）：不能。手机自带的 sh 没有 git、node、python，跑不了项目（霜霜 2026-11-24 定：
+  ///   “默认的终端不用了，强制用户下载”）。没装运行环境时终端页是安装引导、Agent 的 run_command 直接返回
+  ///   “还没安装，没有执行”；装了但启动失败时显示原因和出路，一律不退回本机 shell。
+  /// - 其它平台（Windows / macOS / Linux 桌面调试、宿主机上跑测试）：能。这些平台没有随包的 PRoot，
+  ///   本机 shell 就是开发调试用的那个终端，行为和以前一样。
+  ///
+  /// 默认按平台定；测试要验证安卓上的行为时显式传 false，不用假装自己是安卓。
+  final bool localShellAllowed;
+
+  /// 必须先把运行环境装好（并且进得去）才有终端可用：不许用本机 shell，而环境又还不能用。
+  bool get needsSetup => !localShellAllowed && !usable;
 
   /// 状态变了（状态层据此换快照，见 lib/state/runtime_state.dart）。
   final List<void Function()> changeListeners = [];
@@ -133,9 +150,12 @@ class LinuxRuntime {
     shouldUseLinux: shouldUseLinux,
     compatMode: compatMode,
     logLines: logLines,
+    localShellAllowed: localShellAllowed,
+    compatPinned: compatPinned,
   );
 
-  /// 连续启动失败到这个次数，就不再自动进 Ubuntu，退回本机 shell。
+  /// 连续启动失败到这个次数，就不再自动进 Ubuntu。
+  /// 允许本机 shell 的平台（桌面）会退回本机 shell；安卓上不退，终端页显示失败原因和出路（见 [localShellAllowed]）。
   static const int maxLaunchFailures = 2;
 
   String get rootfsDir => p.join(baseDir, 'rootfs');
@@ -394,6 +414,9 @@ class LinuxRuntime {
   /// 用户在“没有响应”的提示里点了“改用兼容模式重试”：这次运行期间都用兼容模式。
   bool forceCompat = false;
 
+  /// 兼容模式是不是已经定下来了（用户点过，或以前记住了）：这时“重试”本身就是兼容模式，不用再单独给按钮。
+  bool get compatPinned => forceCompat || settings.getBool(SettingKeys.runtimeCompat);
+
   /// 兼容模式确实能用（终端里有了输出，或诊断跑通）：记住，以后默认用它。
   Future<void> rememberCompat(String why) async {
     if (settings.getBool(SettingKeys.runtimeCompat)) return;
@@ -486,7 +509,9 @@ class LinuxRuntime {
     _log('启动失败（第 $launchFailures 次${compatMode && launchFailures > 1 ? '，兼容模式' : ''}）：$reason');
     final trimmed = output.trim();
     if (trimmed.isNotEmpty) _log('PRoot 输出：\n$trimmed');
-    if (launchFailures >= maxLaunchFailures) _log('连续 $launchFailures 次启动失败，新开的终端先退回本机 shell');
+    if (launchFailures >= maxLaunchFailures) {
+      _log(localShellAllowed ? '连续 $launchFailures 次启动失败，新开的终端先退回本机 shell' : '连续 $launchFailures 次启动失败。终端页可以重试、改用兼容模式或做一键诊断');
+    }
     _changed();
   }
 
@@ -543,4 +568,13 @@ String formatBytes(int bytes) {
   if (bytes >= 1024 * 1024) return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
   if (bytes >= 1024) return '${(bytes / 1024).toStringAsFixed(0)} KB';
   return '$bytes B';
+}
+
+/// 安装前告诉用户的那句“要下载多大、占多大”（“运行环境”页和终端的安装引导共用，数字都来自 [RootfsImage]）。
+String runtimeSpaceNote(RuntimeView runtime) {
+  final free = runtime.freeSpace;
+  final need =
+      '需要下载 ${formatBytes(runtime.imageSize)}，解压后占约 ${formatBytes(RootfsImage.extractedBytes)}，'
+      '建议留出 ${formatBytes(RootfsImage.requiredBytes)}。Node.js、Python 另算。';
+  return free == null ? need : '$need\n手机现在剩余 ${formatBytes(free)}。';
 }
