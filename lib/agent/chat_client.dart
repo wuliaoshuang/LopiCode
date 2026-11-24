@@ -2,12 +2,16 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:lopicode/agent/quota.dart';
 import 'package:lopicode/agent/usage.dart';
 
 /// 流式回复里的一小块。字段名与 OpenAI Chat Completions 的
 /// `chat.completion.chunk` 对应，见 docs/api-notes.md。
 class ChatDelta {
-  ChatDelta({this.content, this.toolCalls = const [], this.finishReason, this.raw, this.usage});
+  ChatDelta({this.content, this.reasoning, this.toolCalls = const [], this.finishReason, this.raw, this.usage});
+
+  /// 思考内容的增量（DeepSeek 等的 `reasoning_content`）。不显示，只为之后带回给接口。
+  final String? reasoning;
 
   /// 这次请求的用量（接口在流的最后给；没给就一直是 null）。
   final TokenUsage? usage;
@@ -31,9 +35,12 @@ class ToolCallDelta {
 }
 
 class ChatApiException implements Exception {
-  ChatApiException(this.message, {this.statusCode});
+  ChatApiException(this.message, {this.statusCode, this.transient = false});
   final String message;
   final int? statusCode;
+
+  /// 临时性的失败（连不上、超时）：值得等一下再试。
+  final bool transient;
   @override
   String toString() => message;
 }
@@ -44,8 +51,9 @@ abstract class ChatClient {
 
 /// 任意 OpenAI 兼容的 Chat Completions 接口。
 class OpenAiChatClient implements ChatClient {
-  OpenAiChatClient({required String baseUrl, required this.apiKey, required this.model, this.reasoningEffort, this.maxTokens, http.Client? httpClient})
+  OpenAiChatClient({required String baseUrl, required this.apiKey, required this.model, this.reasoningEffort, this.maxTokens, http.Client? httpClient, bool? deepSeekOfficial})
     : baseUrl = normalizeBaseUrl(baseUrl),
+      deepSeekOfficial = deepSeekOfficial ?? isDeepSeekOfficial(baseUrl),
       _http = httpClient ?? http.Client();
 
   final String baseUrl;
@@ -61,6 +69,15 @@ class OpenAiChatClient implements ChatClient {
 
   /// 要不要带 `stream_options.include_usage`。接口明确不认这个参数时自动关掉。
   bool _askUsage = true;
+
+  /// 接口地址是不是 DeepSeek 官方（测试里可以直接指定）。只有官方地址才发 DeepSeek 专有的参数：
+  /// - 思考默认是开的：用户选了“关”就得明说 `thinking: {type: disabled}`；
+  /// - 思考开着时，没存思考内容的旧 assistant 消息补一个空的 `reasoning_content`（官方文档没写这种情况，未核对）。
+  final bool deepSeekOfficial;
+
+  /// 要不要把存着的思考内容带回去：官方地址，或者模型名里带 deepseek 的中转站。
+  /// 规矩见 docs/api-notes.md「DeepSeek 思考模式」：带了 tools 的对话，之前 assistant 消息的 `reasoning_content` 都要原样带回，否则 400。
+  bool get echoReasoning => deepSeekOfficial || model.toLowerCase().contains('deepseek');
 
   /// 去掉结尾的 `/`；用户如果把完整的 `/chat/completions` 贴进来也接受。
   static String normalizeBaseUrl(String raw) {
@@ -91,11 +108,12 @@ class OpenAiChatClient implements ChatClient {
         ..headers['Accept'] = 'text/event-stream'
         ..body = jsonEncode({
           'model': model.trim(),
-          'messages': stripInternal(messages),
+          'messages': echoReasoning ? withReasoningContent(messages, fillMissing: deepSeekOfficial && reasoningEffort != null) : stripInternal(messages),
           'stream': true,
           // 让接口在流的最后多发一块用量（choices 为空、带 usage）。
           if (_askUsage) 'stream_options': {'include_usage': true},
           if (reasoningEffort != null) 'reasoning_effort': reasoningEffort,
+          if (reasoningEffort == null && deepSeekOfficial) 'thinking': {'type': 'disabled'},
           if (maxTokens != null) 'max_tokens': maxTokens,
           if (tools.isNotEmpty) 'tools': tools,
           if (tools.isNotEmpty) 'tool_choice': 'auto',
@@ -146,8 +164,10 @@ class OpenAiChatClient implements ChatClient {
       final delta = choice['delta'];
       final calls = <ToolCallDelta>[];
       String? content;
+      String? reasoning;
       if (delta is Map) {
         if (delta['content'] is String) content = delta['content'] as String;
+        if (delta['reasoning_content'] is String) reasoning = delta['reasoning_content'] as String;
         final rawCalls = delta['tool_calls'];
         if (rawCalls is List) {
           for (var i = 0; i < rawCalls.length; i++) {
@@ -166,7 +186,7 @@ class OpenAiChatClient implements ChatClient {
         }
       }
       final finish = choice['finish_reason'];
-      yield ChatDelta(content: content, toolCalls: calls, finishReason: finish is String ? finish : null, usage: usage);
+      yield ChatDelta(content: content, reasoning: reasoning, toolCalls: calls, finishReason: finish is String ? finish : null, usage: usage);
     }
   }
 }
@@ -177,6 +197,17 @@ List<Map<String, dynamic>> stripInternal(List<Map<String, dynamic>> messages) =>
     {
       for (final e in m.entries)
         if (!e.key.startsWith('_')) e.key: e.value,
+    },
+];
+
+/// DeepSeek：去掉内部字段，并把存着的思考内容（`_reasoning`）按接口要的名字 `reasoning_content` 带回去。
+/// [fillMissing]（思考开着时）：没存思考内容的 assistant 消息（旧对话、压缩后的摘要）补一个空字符串。
+List<Map<String, dynamic>> withReasoningContent(List<Map<String, dynamic>> messages, {required bool fillMissing}) => [
+  for (final m in messages)
+    {
+      for (final e in m.entries)
+        if (!e.key.startsWith('_')) e.key: e.value,
+      if (m['role'] == 'assistant' && m['_reasoning'] is String) 'reasoning_content': m['_reasoning'] else if (m['role'] == 'assistant' && fillMissing) 'reasoning_content': '',
     },
 ];
 
@@ -192,9 +223,9 @@ Future<http.StreamedResponse> sendChatRequest(http.Client client, http.BaseReque
   try {
     return await client.send(request).timeout(timeout);
   } on TimeoutException {
-    throw ChatApiException('模型接口（$host）${timeout.inSeconds} 秒没有响应。检查网络和接口地址后再试。');
+    throw ChatApiException('模型接口（$host）${timeout.inSeconds} 秒没有响应。检查网络和接口地址后再试。', transient: true);
   } on Exception catch (e) {
-    throw ChatApiException('连不上模型接口（$host）：${shortError(e)}');
+    throw ChatApiException('连不上模型接口（$host）：${shortError(e)}', transient: true);
   }
 }
 

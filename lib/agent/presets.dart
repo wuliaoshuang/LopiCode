@@ -12,6 +12,7 @@ const Map<String, String> kToolLabels = {
   'backend_get_blocks': '读取后端积木',
   'backend_update_blocks': '更新后端积木',
   'ask_user': '向你提问',
+  'update_todos': '列待办清单',
   'web_search': '联网搜索',
   'read_skill': '读取技能',
   'spawn_agent': '派出子代理',

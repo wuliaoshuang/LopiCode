@@ -66,6 +66,7 @@ class TurnRunner {
         }
       },
       maxParallel: core.subagentMaxConcurrent,
+      contextLimit: resolved?.model.contextLength,
     );
     run.runner = runner;
     final turn = TurnUsage();

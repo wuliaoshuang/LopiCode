@@ -30,6 +30,9 @@ class ToolOutcome {
 
   /// 是否改动了项目文件（界面据此刷新文件树和预览）。
   final bool changedFiles;
+
+  /// 换一段文字，别的不变。
+  ToolOutcome withText(String text) => ToolOutcome(text, ok: ok, denied: denied, changedFiles: changedFiles);
 }
 
 /// 权限三档。
@@ -151,7 +154,7 @@ class AgentToolbox {
   /// 这个工具现在为什么不能用；能用返回 null。发工具列表和真正执行都走这里。
   String? blockReason(String name) {
     final kind = kindOf(name);
-    if (kind == null) return '没有名为 $name 的工具';
+    if (kind == null) return '没有名为 $name 的工具。现在能用的工具：${[...coreKinds.keys, ...extras.map((e) => e.name)].where((n) => blockReason(n) == null).join('、')}';
     final allowed = allowedTools;
     if (allowed != null && !allowed.contains(name)) return '当前的 Agent 预设没有开启 $name 这个工具';
     if (kind == ToolKind.write || kind == ToolKind.exec) {
@@ -176,9 +179,11 @@ class AgentToolbox {
     }),
     _fn(
       'read_file',
-      '读取项目里的一个文本文件。',
+      '读取项目里的一个文本文件。文件很长时用 start_line / end_line 只读其中一段（行号从 1 开始）。',
       {
         'path': {'type': 'string', 'description': '项目内的相对路径'},
+        'start_line': {'type': 'integer', 'description': '从第几行开始读（含），省略表示从头'},
+        'end_line': {'type': 'integer', 'description': '读到第几行（含），省略表示到结尾'},
       },
       ['path'],
     ),
@@ -230,7 +235,7 @@ class AgentToolbox {
           final files = await listProjectFiles(guard, sub: argOptString(args, 'path') ?? '');
           return ToolOutcome(files.isEmpty ? '（空目录）' : files.join('\n'));
         case 'read_file':
-          return await _read(argString(args, 'path'));
+          return await _read(argString(args, 'path'), start: _argLine(args, 'start_line'), end: _argLine(args, 'end_line'));
         case 'write_file':
           return await _write(argString(args, 'path'), argString(args, 'content', allowEmpty: true));
         case 'delete_file':
@@ -279,18 +284,40 @@ class AgentToolbox {
     throw ToolArgError('这个任务的写入范围是 ${scope.join('、')}，$rel 不在范围内，没有改动');
   }
 
-  Future<ToolOutcome> _read(String path) async {
+  /// 行号参数：模型有时给成字符串或小数，能认就认；不是正整数就报错让它改。
+  static int? _argLine(Map<String, dynamic> args, String key) {
+    final v = args[key];
+    if (v == null) return null;
+    final n = v is int ? v : (v is double && v == v.roundToDouble() ? v.toInt() : (v is String ? int.tryParse(v.trim()) : null));
+    if (n == null || n < 1) throw ToolArgError('$key 必须是从 1 开始的行号（整数）');
+    return n;
+  }
+
+  Future<ToolOutcome> _read(String path, {int? start, int? end}) async {
     final file = File(guard.resolve(path));
     if (!await file.exists()) return ToolOutcome('错误：文件不存在：$path', ok: false);
     final bytes = await file.readAsBytes();
     if (bytes.take(8000).contains(0)) {
       return ToolOutcome('错误：$path 是二进制文件（${bytes.length} 字节），无法按文本读取', ok: false);
     }
-    final text = utf8.decode(bytes, allowMalformed: true);
-    if (text.length > maxReadChars) {
-      return ToolOutcome('${text.substring(0, maxReadChars)}\n…（文件共 ${text.length} 字符，只显示前 $maxReadChars 字符）');
+    var text = utf8.decode(bytes, allowMalformed: true);
+    var range = '';
+    if (start != null || end != null) {
+      final lines = const LineSplitter().convert(text);
+      final from = start ?? 1;
+      final to = end == null || end > lines.length ? lines.length : end;
+      if (from > lines.length) return ToolOutcome('错误：$path 一共只有 ${lines.length} 行，start_line=$from 超出了范围', ok: false);
+      if (to < from) throw ToolArgError('end_line 不能小于 start_line');
+      text = lines.sublist(from - 1, to).join('\n');
+      range = '（$path 第 $from–$to 行，全文共 ${lines.length} 行）\n';
     }
-    return ToolOutcome(text);
+    if (text.length > maxReadChars) {
+      final shownLines = '\n'.allMatches(text.substring(0, maxReadChars)).length;
+      return ToolOutcome(
+        '$range${text.substring(0, maxReadChars)}\n…（${range.isEmpty ? '文件' : '这一段'}共 ${text.length} 字符，只显示前 $maxReadChars 字符，约到第 ${(start ?? 1) + shownLines} 行。要看后面的内容，用 start_line / end_line 分段读）',
+      );
+    }
+    return ToolOutcome('$range$text');
   }
 
   Future<ToolOutcome> _write(String path, String content) async {

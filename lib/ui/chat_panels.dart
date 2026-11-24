@@ -2,7 +2,7 @@
 // - 每个底部面板只做一件事：选模型、选权限、选发送方式、选附件来源、看子代理。
 // - 模型面板分三步往下排：渠道（横向一行标签）→ 模型（列表）→ 思考深度（一行分段），不把三样摊在一行。
 // - 输入卡片上方的窄条一行一条：左图标 + 一句话 + 右边一个文字按钮。
-// - 确认卡、提问卡是需要她动手的：用暖色 / 强调色底，按钮一行最多两个，多出来的另起一行。
+// - 窄条和确认卡 / 提问卡（chat_cards.dart）是一家：中性底 + 细边，颜色只落在左边那个小图标上。
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -11,14 +11,17 @@ import 'package:image_picker/image_picker.dart';
 import 'package:lopicode/agent/agent_tools.dart';
 import 'package:lopicode/agent/presets.dart';
 import 'package:lopicode/project_session.dart';
+import 'package:lopicode/session/chat_rows.dart';
 import 'package:lopicode/state/workspace_chat.dart';
 import 'package:lopicode/state/workspace_conversations.dart';
 import 'package:lopicode/theme/tokens.dart';
-import 'package:lopicode/ui/chat_screen.dart';
+import 'package:lopicode/ui/chat_cards.dart';
+import 'package:lopicode/ui/chat_row_view.dart';
 import 'package:lopicode/ui/chrome.dart';
 import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
 
+export 'package:lopicode/ui/chat_cards.dart';
 export 'package:lopicode/ui/model_picker_sheet.dart';
 
 // ── 权限 ─────────────────────────────────────────────
@@ -305,11 +308,15 @@ class StatusChipRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.colors;
     final t = Theme.of(context).textTheme;
-    final (bg, fg) = tone == BannerTone.warning ? (c.warningSoft, c.warning) : (c.accentSoft, c.accent);
+    final fg = tone == BannerTone.warning ? c.warning : c.accent;
     return Container(
       margin: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x2),
       padding: const EdgeInsets.only(left: Space.x3),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(Radii.lg)),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(Radii.lg),
+        border: Border.all(color: c.border),
+      ),
       child: Row(
         children: [
           Icon(icon, size: 16, color: fg),
@@ -322,7 +329,11 @@ class StatusChipRow extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          TextButton(onPressed: onTap, child: Text(action)),
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: c.textMuted),
+            onPressed: onTap,
+            child: Text(action),
+          ),
         ],
       ),
     );
@@ -403,7 +414,7 @@ class QueueStrip extends StatelessWidget {
                 children: [
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: Space.x2, vertical: 2),
-                    decoration: BoxDecoration(color: q.steer ? c.accentSoft : c.surfaceMuted, borderRadius: BorderRadius.circular(Radii.sm)),
+                    decoration: BoxDecoration(color: c.surfaceMuted, borderRadius: BorderRadius.circular(Radii.sm)),
                     child: Text(q.steer ? '插话' : '排队', style: t.bodySmall?.copyWith(color: q.steer ? c.accent : c.textMuted)),
                   ),
                   const SizedBox(width: Space.x2),
@@ -433,176 +444,6 @@ class QueueStrip extends StatelessWidget {
               ),
             ),
         ],
-      ),
-    );
-  }
-}
-
-// ── 确认卡 / 提问卡 ──────────────────────────────────
-/// 钉在输入卡片上方：最前面的一张确认卡，或一张提问卡。
-class PendingArea extends StatelessWidget {
-  const PendingArea({super.key, required this.session});
-  final ProjectSession session;
-
-  @override
-  Widget build(BuildContext context) {
-    final approval = session.pendingApproval;
-    if (approval != null) return ApprovalCard(pending: approval, onAnswer: session.resolveApproval);
-    final question = session.pendingQuestion;
-    if (question != null) return QuestionCard(key: ObjectKey(question), question: question, onAnswer: session.answerQuestion);
-    return const SizedBox.shrink();
-  }
-}
-
-class ApprovalCard extends StatelessWidget {
-  const ApprovalCard({super.key, required this.pending, required this.onAnswer});
-  final PendingApproval pending;
-  final void Function(bool allow, {bool always}) onAnswer;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.colors;
-    final t = Theme.of(context).textTheme;
-    final req = pending.request;
-    final isSchedule = req.tool == 'schedule_task';
-    final who = pending.agentName.isEmpty ? 'Agent' : '子代理“${pending.agentName}”';
-    final icon = switch (req.tool) {
-      'delete_file' => Icons.delete_outline,
-      'schedule_task' => Icons.event_repeat,
-      _ => Icons.terminal,
-    };
-    return Container(
-      margin: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x2),
-      padding: const EdgeInsets.all(Space.x4),
-      decoration: BoxDecoration(
-        color: c.warningSoft,
-        borderRadius: BorderRadius.circular(Radii.xl),
-        border: Border.all(color: c.warning.withValues(alpha: 0.4)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Icon(icon, size: 18, color: c.warning),
-              const SizedBox(width: Space.x2),
-              Expanded(
-                child: Text(isSchedule ? '$who 想${req.title}，请核对后再确认' : '$who 想${req.title}，要允许吗？', style: t.titleSmall?.copyWith(color: c.warning)),
-              ),
-            ],
-          ),
-          const SizedBox(height: Space.x2),
-          Container(
-            constraints: BoxConstraints(maxHeight: isSchedule ? 220 : 96),
-            padding: const EdgeInsets.all(Space.x2),
-            decoration: BoxDecoration(color: c.surface, borderRadius: BorderRadius.circular(Radii.sm)),
-            child: SingleChildScrollView(
-              child: SelectableText(
-                req.detail,
-                style: TextStyle(fontFamily: kMonoFont, fontFamilyFallback: kMonoFallback, fontSize: FontSize.sm, height: 1.5, color: c.text),
-              ),
-            ),
-          ),
-          const SizedBox(height: Space.x3),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(onPressed: () => onAnswer(false), child: const Text('拒绝')),
-              ),
-              const SizedBox(width: Space.x2),
-              Expanded(
-                child: FilledButton(onPressed: () => onAnswer(true), child: Text(isSchedule ? '确认保存' : '允许这一次')),
-              ),
-            ],
-          ),
-          if (req.allowAlways) TextButton(onPressed: () => onAnswer(true, always: true), child: const Text('本对话都允许')),
-        ],
-      ),
-    );
-  }
-}
-
-class QuestionCard extends StatefulWidget {
-  const QuestionCard({super.key, required this.question, required this.onAnswer});
-  final PendingQuestion question;
-  final void Function(String answer) onAnswer;
-
-  @override
-  State<QuestionCard> createState() => _QuestionCardState();
-}
-
-class _QuestionCardState extends State<QuestionCard> {
-  final _other = TextEditingController();
-  bool _typing = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _typing = widget.question.options.isEmpty;
-  }
-
-  @override
-  void dispose() {
-    _other.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.colors;
-    final t = Theme.of(context).textTheme;
-    final q = widget.question;
-    return Container(
-      margin: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x2),
-      padding: const EdgeInsets.all(Space.x4),
-      constraints: const BoxConstraints(maxHeight: 380),
-      decoration: BoxDecoration(
-        color: c.accentSoft,
-        borderRadius: BorderRadius.circular(Radii.xl),
-        border: Border.all(color: c.accent.withValues(alpha: 0.4)),
-      ),
-      child: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.help_outline, size: 18, color: c.accent),
-                const SizedBox(width: Space.x2),
-                Expanded(
-                  child: Text(q.agentName.isEmpty ? 'Agent 想问你' : '子代理“${q.agentName}”想问你', style: t.titleSmall?.copyWith(color: c.accent)),
-                ),
-              ],
-            ),
-            const SizedBox(height: Space.x2),
-            Text(q.question, style: t.bodyLarge),
-            const SizedBox(height: Space.x3),
-            for (final o in q.options)
-              Padding(
-                padding: const EdgeInsets.only(bottom: Space.x2),
-                child: OutlinedButton(
-                  style: OutlinedButton.styleFrom(backgroundColor: c.surface, alignment: Alignment.centerLeft),
-                  onPressed: () => widget.onAnswer(o),
-                  child: Text(o),
-                ),
-              ),
-            if (!_typing)
-              TextButton(onPressed: () => setState(() => _typing = true), child: const Text('其他回答'))
-            else ...[
-              TextField(
-                controller: _other,
-                autofocus: q.options.isNotEmpty,
-                minLines: 1,
-                maxLines: 3,
-                decoration: const InputDecoration(hintText: '写下你的回答'),
-                onChanged: (_) => setState(() {}),
-              ),
-              const SizedBox(height: Space.x2),
-              FilledButton(onPressed: _other.text.trim().isEmpty ? null : () => widget.onAnswer(_other.text), child: const Text('回答')),
-            ],
-          ],
-        ),
       ),
     );
   }
@@ -745,9 +586,9 @@ class _SubConversationScreenState extends ConsumerState<SubConversationScreen> {
                   : ListView(
                       padding: const EdgeInsets.fromLTRB(Space.x4, Space.x2, Space.x4, Space.x4),
                       children: [
-                        for (final item in run.items)
-                          ChatItemView(
-                            item: item,
+                        for (final row in deriveChatRows(run.items, busy: run.busy))
+                          ChatRowView(
+                            row: row,
                             onOpenChild: (id) => Navigator.of(context).push(
                               MaterialPageRoute<void>(
                                 builder: (_) => SubConversationScreen(session: s, conversationId: id),
