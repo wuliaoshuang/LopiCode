@@ -4,9 +4,12 @@ class CodeHighlighter {
     final ext = path.contains('.') ? path.split('.').last.toLowerCase() : '';
     return switch (ext) {
       'html' || 'htm' || 'xml' || 'svg' => 'html',
+      'vue' => 'vue',
       'css' => 'css',
-      'js' || 'mjs' || 'jsx' => 'js',
-      'ts' || 'tsx' => 'ts',
+      'scss' => 'scss',
+      'less' => 'less',
+      'js' || 'mjs' || 'cjs' || 'jsx' => 'js',
+      'ts' || 'mts' || 'cts' || 'tsx' => 'ts',
       'json' => 'json',
       'dart' => 'dart',
       'md' => 'md',

@@ -15,8 +15,10 @@ import 'package:re_highlight/languages/dart.dart';
 import 'package:re_highlight/languages/javascript.dart';
 import 'package:re_highlight/languages/json.dart';
 import 'package:re_highlight/languages/kotlin.dart';
+import 'package:re_highlight/languages/less.dart';
 import 'package:re_highlight/languages/markdown.dart';
 import 'package:re_highlight/languages/python.dart';
+import 'package:re_highlight/languages/scss.dart';
 import 'package:re_highlight/languages/typescript.dart';
 import 'package:re_highlight/languages/xml.dart';
 import 'package:re_highlight/languages/yaml.dart';
@@ -27,7 +29,12 @@ import 'package:re_highlight/styles/atom-one-light.dart';
 /// 文件对应的高亮语法；不认识的类型返回 null（不高亮）。
 (String, Mode)? highlightModeFor(String path) => switch (CodeHighlighter.languageFor(path)) {
   'html' => ('xml', langXml),
+  // re_highlight 自带的 vue 规则要同时装上 xml / javascript / typescript / css / scss / stylus 六种语言才生效，
+  // 而编辑器一装多种语言就改成“自动猜是哪种”，会猜错。所以 .vue 直接按 xml 上色（标签、属性、注释都有颜色）。
+  'vue' => ('xml', langXml),
   'css' => ('css', langCss),
+  'scss' => ('scss', langScss),
+  'less' => ('less', langLess),
   'js' => ('javascript', langJavascript),
   'ts' => ('typescript', langTypescript),
   'json' => ('json', langJson),

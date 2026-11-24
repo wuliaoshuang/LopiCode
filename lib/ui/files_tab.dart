@@ -2,7 +2,7 @@
 // - 手机上文件树和编辑器不并排：先看文件列表，点文件进编辑器，编辑器顶上是已打开文件的标签条。
 // - 文件列表一行一个文件：图标 + 名字（目录按层级缩进）；改名 / 删除收进长按菜单。
 // - 编辑器顶栏一行只做“切文件”，保存按钮固定在行尾；未保存用标签上的小圆点表示。
-// - 编辑器顶栏行尾：保存 + ⋮（查找、替换、自动换行、撤销、重做）。编辑区见 code_editor.dart。
+// - 编辑器顶栏行尾：保存 + ⋮（查找、替换、格式化、自动换行、撤销、重做）。编辑区见 code_editor.dart，格式化见 editor_format.dart。
 import 'dart:io';
 
 import 'package:flutter/scheduler.dart';
@@ -14,6 +14,7 @@ import 'package:lopicode/state/workspace_files.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/code_editor.dart';
 import 'package:lopicode/ui/code_highlight.dart';
+import 'package:lopicode/ui/editor_format.dart';
 import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:re_editor/re_editor.dart';
@@ -357,8 +358,8 @@ class _FilesTabState extends ConsumerState<FilesTab> {
   }
 
   static IconData _fileIcon(String path) => switch (CodeHighlighter.languageFor(path)) {
-    'html' => Icons.code,
-    'css' => Icons.palette_outlined,
+    'html' || 'vue' => Icons.code,
+    'css' || 'scss' || 'less' => Icons.palette_outlined,
     'js' || 'dart' || 'sh' => Icons.data_object,
     'json' || 'yaml' => Icons.settings_ethernet,
     'md' => Icons.article_outlined,
@@ -435,6 +436,8 @@ class _FilesTabState extends ConsumerState<FilesTab> {
                       file.findController.findMode();
                     case 'replace':
                       file.findController.replaceMode();
+                    case 'format':
+                      showSnack(context, formatInEditor(file.controller, file.path));
                     case 'wrap':
                       setState(() => _wordWrap = !_wordWrap);
                     case 'undo':
@@ -446,6 +449,7 @@ class _FilesTabState extends ConsumerState<FilesTab> {
                 itemBuilder: (context) => [
                   const PopupMenuItem(value: 'find', child: Text('查找')),
                   const PopupMenuItem(value: 'replace', child: Text('查找并替换')),
+                  PopupMenuItem(value: 'format', enabled: canFormat(file.path), child: const Text('格式化')),
                   PopupMenuItem(value: 'wrap', child: Text(_wordWrap ? '关闭自动换行' : '打开自动换行')),
                   PopupMenuItem(value: 'undo', enabled: file.controller.canUndo, child: const Text('撤销')),
                   PopupMenuItem(value: 'redo', enabled: file.controller.canRedo, child: const Text('重做')),
