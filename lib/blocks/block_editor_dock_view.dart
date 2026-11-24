@@ -4,6 +4,11 @@
 // - 松手：甩得快（≥ 700 像素 / 秒）去甩的方向上的下一档（收起 / 默认 / 全展开）；慢慢放下时离某一档不到 28 就吸过去，否则就停在放手的地方。
 //   去某一档是 260 毫秒、带一点点过冲的滑动（滑到一半手指按上手柄＝停在那里，可以接着拖）；系统开了“减弱动态效果”就直接到位。点一下手柄条：收起 ⇄ 默认（比默认高时点一下回默认）。
 // - 手柄条右边一行三样：撤销、重做、缩放比例（点一下回 100%）。画布上不再有常驻的浮条。面板收到只剩手柄条时它们还在。
+// - 手柄条左边（2026-11-24 真机反馈“这个位置太空了”）。层级：把手（正中，怎么拖）＞ 名字“积木盒”＋箭头（这是什么、点一下收起 / 展开）
+//   ＞ 问题数量（有问题才出现，点了开问题列表）。左右两组都是次要的：名字用正文色 600 字重，箭头、缩放比例用次要色。
+//   取值都来自 tokens：字号 bodyMedium / bodySmall，间距 4 / 8 / 12，颜色 text / textMuted / danger(Soft) / warning(Soft)。
+//   箭头：收起时朝上（点了展开），其余朝下。问题数量不只靠颜色：有错误是 ⓘ 形图标 + 红，只有警告是三角图标 + 黄。
+//   两样都至少 44×44；从它们身上竖着拖还是拖面板。
 // - 要往画布上放东西的时候面板自己让开：开始拖积木（从积木盒拿、或拖画布上的）、点积木盒快捷添加时，面板比默认档高就滑回默认档。
 // - 拖画布上的积木时底部换成垃圾桶条：和面板一样高，但不矮于 96（面板收起时也有地方可扔）。
 import 'dart:async';
@@ -196,6 +201,90 @@ mixin BkEditorDock on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Tick
             ),
           ),
         ),
+      ],
+    );
+  }
+
+  /// 手柄条左边的两样：名字（点一下收起 / 展开）、问题数量（有问题才有，点了开问题列表）。
+  Widget buildDockLead(BuildContext context, {required VoidCallback onIssues}) {
+    final c = context.colors;
+    final text = Theme.of(context).textTheme;
+    final collapsed = paletteCollapsed;
+    final errors = issues.where((i) => i.isError).length;
+    final tone = errors > 0 ? c.danger : c.warning;
+    return Row(
+      key: const ValueKey('bk-dock-lead'),
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Flexible(
+          child: Semantics(
+            button: true,
+            label: collapsed ? '展开积木盒' : '收起积木盒',
+            excludeSemantics: true,
+            child: InkWell(
+              key: const ValueKey('bk-dock-title'),
+              customBorder: const StadiumBorder(),
+              onTap: dockToggle,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minWidth: 44, minHeight: BlockPaletteView.handleHeight),
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 12, right: 8),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      AnimatedRotation(
+                        turns: collapsed ? 0 : 0.5,
+                        duration: reduceMotion ? Duration.zero : const Duration(milliseconds: 160),
+                        child: Icon(Icons.keyboard_arrow_up_rounded, key: ValueKey(collapsed ? 'bk-dock-arrow-up' : 'bk-dock-arrow-down'), size: 20, color: c.textMuted),
+                      ),
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          '积木盒',
+                          maxLines: 1,
+                          softWrap: false,
+                          overflow: TextOverflow.fade,
+                          style: text.bodyMedium?.copyWith(color: c.text, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        if (issues.isNotEmpty)
+          Tooltip(
+            message: '${issues.length} 个问题',
+            child: InkWell(
+              key: const ValueKey('bk-dock-issues'),
+              customBorder: const StadiumBorder(),
+              onTap: onIssues,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minWidth: 44, minHeight: BlockPaletteView.handleHeight),
+                child: Center(
+                  widthFactor: 1,
+                  child: Container(
+                    height: 24,
+                    padding: const EdgeInsets.only(left: 6, right: 8),
+                    decoration: ShapeDecoration(color: errors > 0 ? c.dangerSoft : c.warningSoft, shape: const StadiumBorder()),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(errors > 0 ? Icons.error_outline_rounded : Icons.warning_amber_rounded, size: 14, color: tone),
+                        const SizedBox(width: 4),
+                        Text(
+                          issues.length > 99 ? '99+' : '${issues.length}',
+                          style: text.bodySmall?.copyWith(color: tone, fontWeight: FontWeight.w600),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
       ],
     );
   }

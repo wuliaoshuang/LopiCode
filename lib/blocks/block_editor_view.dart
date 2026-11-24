@@ -3,7 +3,8 @@
 // - 顶栏是沉浸式的（lib/ui/immersive_bar.dart）：没有底色，画布从屏幕最顶铺起，顶栏的三样悬浮在画布上面——
 //   返回、标题小胶囊（标题 + 一行状态小字）、少数入口（宿主给的，例如“变量”）＋“问题”（有问题才带数字）＋“看代码”。
 //   三样之间的空白是画布：可以在那里拖画布、点积木。画布的起始位置、定位都把顶栏那一段当成被盖住的。
-// - 画布上没有常驻的浮条：撤销、重做、缩放比例（点一下回到 100%）在积木盒手柄条的右边（block_editor_dock_view.dart）。
+// - 画布上没有常驻的浮条：撤销、重做、缩放比例（点一下回到 100%）在积木盒手柄条的右边，
+//   左边是“积木盒”名字（点一下收起 / 展开）和问题数量（block_editor_dock_view.dart）。
 // - 积木盒面板可以上下拖：最矮只剩手柄条，最高顶到状态栏下沿（盖住顶栏）。所以它和“手上的积木”不在画布那一层里，
 //   而是盖在整页（顶栏 + 画布）上面的一层；顶栏不放进 Scaffold 的 appBar，自己叠在画布上面、面板下面。
 // - 选中一块积木：顶栏下面出现一条小工具条（这块的问题、复制、删除）；没选中就没有。
@@ -233,6 +234,7 @@ class BlockEditorViewState extends State<BlockEditorView> with TickerProviderSta
                       : BlockPaletteView(
                           host: host,
                           height: panelHeight,
+                          handleLeading: buildDockLead(context, onIssues: _showIssues),
                           handleTrailing: buildDockTools(context, onUndo: host.canUndo ? _undo : null, onRedo: host.canRedo ? _redo : null),
                           onHandleTap: dockToggle,
                           onResizeDown: dockHold,
