@@ -68,6 +68,8 @@ Future<({TextEditingController controller, FocusNode focus, _FakeVoice voice, _C
   bool ring = false,
 }) async {
   usePhoneViewport(tester);
+  debugKeyboardNow = () => Duration(microseconds: tester.binding.clock.now().microsecondsSinceEpoch);
+  addTearDown(() => debugKeyboardNow = null);
   final input = voice ?? _FakeVoice();
   final controller = TextEditingController(text: draft);
   final focus = FocusNode();
@@ -112,6 +114,12 @@ Future<({TextEditingController controller, FocusNode focus, _FakeVoice voice, _C
 /// 模拟软键盘高度（逻辑像素；测试里像素比是 1）。
 void _keyboard(WidgetTester tester, double height) {
   tester.view.viewInsets = FakeViewPadding(bottom: height);
+}
+
+/// 键盘升到 [height] 并停稳（过了“刚聚焦 / 刚升完”那一小段）。
+Future<void> _risen(WidgetTester tester, [double height = 320]) async {
+  _keyboard(tester, height);
+  await tester.pump(const Duration(milliseconds: 500));
 }
 
 /// 看得见的胶囊（带边框的那一块，不含外边距）。
@@ -220,6 +228,7 @@ void main() {
     expect(find.byKey(const ValueKey('model-button')), findsNothing);
     expect(find.byKey(const ValueKey('plus-button')), findsOneWidget);
   });
+  // 判定逻辑的单元测试和“一开始下降就失焦”的逐帧界面测试在 keyboard_dismiss_test.dart。
   group('软键盘收起后失焦', () {
     testWidgets('聚焦 → 键盘升起 → 键盘收起：失焦并收回一行；再点还能聚焦弹键盘', (tester) async {
       final state = await _pump(tester);
@@ -227,15 +236,13 @@ void main() {
       await tester.pumpAndSettle();
       expect(state.focus.hasFocus, isTrue);
 
-      _keyboard(tester, 320);
-      await tester.pumpAndSettle();
+      await _risen(tester);
       expect(state.focus.hasFocus, isTrue);
       expect(_expanded, findsOneWidget);
 
       _keyboard(tester, 0);
       await tester.pump();
-      expect(state.focus.hasFocus, isTrue, reason: '先等一小会儿确认，不是高度一到 0 就摘');
-      await tester.pump(kKeyboardSettle + const Duration(milliseconds: 10));
+      expect(state.focus.hasFocus, isFalse, reason: '键盘直接没了：立刻失焦，不再等');
       await tester.pumpAndSettle();
       expect(state.focus.hasFocus, isFalse);
       expect(_expanded, findsNothing, reason: '没草稿：收回一行胶囊');
@@ -255,12 +262,13 @@ void main() {
       final state = await _pump(tester);
       await tester.tap(find.byType(TextField));
       await tester.pumpAndSettle();
-      _keyboard(tester, 320);
+      await _risen(tester);
       await tester.enterText(find.byType(TextField), '写到一半');
       await tester.pumpAndSettle();
 
       _keyboard(tester, 0);
-      await tester.pump(kKeyboardSettle + const Duration(milliseconds: 10));
+      await tester.pump();
+      expect(state.focus.hasFocus, isFalse);
       await tester.pumpAndSettle();
       expect(state.focus.hasFocus, isFalse);
       expect(_expanded, findsOneWidget);
@@ -295,7 +303,7 @@ void main() {
       expect(state.controller.text, 'abc');
     });
 
-    testWidgets('键盘闪一下（换输入法）马上回来：不失焦', (tester) async {
+    testWidgets('刚升完键盘就闪一下又回来：不失焦；停稳之后键盘没了（包括换另一个输入法）就立刻失焦', (tester) async {
       final state = await _pump(tester);
       await tester.tap(find.byType(TextField));
       await tester.pumpAndSettle();
@@ -306,6 +314,11 @@ void main() {
       _keyboard(tester, 300);
       await tester.pump(kKeyboardSettleSlow * 2);
       expect(state.focus.hasFocus, isTrue);
+
+      // 已知取舍：停稳后键盘高度到 0 分不出是“收起”还是“换输入法闪一下”，一律当收起
+      _keyboard(tester, 0);
+      await tester.pump(const Duration(milliseconds: 80));
+      expect(state.focus.hasFocus, isFalse);
     });
 
     testWidgets('语音输入进行中键盘收起：语音不被打断，仍保持展开', (tester) async {
@@ -317,10 +330,9 @@ void main() {
       // 听写时又点进输入框，键盘升起后被收起
       await tester.tap(find.byType(TextField));
       await tester.pumpAndSettle();
-      _keyboard(tester, 320);
-      await tester.pump();
+      await _risen(tester);
       _keyboard(tester, 0);
-      await tester.pump(kKeyboardSettle + const Duration(milliseconds: 10));
+      await tester.pump();
       await tester.pumpAndSettle();
 
       expect(state.focus.hasFocus, isFalse);
@@ -337,8 +349,7 @@ void main() {
       final state = await _pump(tester);
       await tester.tap(find.byType(TextField));
       await tester.pumpAndSettle();
-      _keyboard(tester, 320);
-      await tester.pump();
+      await _risen(tester);
 
       // 横过来：键盘先消失一下，再按新尺寸回来
       tester.view.physicalSize = const Size(844, 390);
@@ -363,8 +374,7 @@ void main() {
       addTearDown(() => tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed));
       await tester.tap(find.byType(TextField));
       await tester.pumpAndSettle();
-      _keyboard(tester, 320);
-      await tester.pump();
+      await _risen(tester);
 
       for (final s in const [AppLifecycleState.inactive, AppLifecycleState.hidden, AppLifecycleState.paused]) {
         tester.binding.handleAppLifecycleStateChanged(s);
@@ -381,9 +391,9 @@ void main() {
       expect(_expanded, findsOneWidget);
 
       _keyboard(tester, 0);
-      await tester.pump(kKeyboardSettle + const Duration(milliseconds: 10));
+      await tester.pump();
+      expect(state.focus.hasFocus, isFalse, reason: '回到前台并停稳之后，收起键盘立刻失焦');
       await tester.pumpAndSettle();
-      expect(state.focus.hasFocus, isFalse);
       expect(_expanded, findsNothing);
     });
   });
@@ -440,51 +450,6 @@ void main() {
         expect(size.width, greaterThanOrEqualTo(44), reason: '$key 宽');
       }
       expect(tester.takeException(), isNull);
-    });
-  });
-
-  group('KeyboardDismissTracker', () {
-    test('见过键盘再回到 0 才要求确认；确认时键盘还没回来才失焦', () {
-      final t = KeyboardDismissTracker()..onFocus(focused: true, inset: 0);
-      expect(t.onMetrics(inset: 0, width: 390), KeyboardVerdict.none);
-      expect(t.sawKeyboard, isFalse);
-      expect(t.onMetrics(inset: 40, width: 390), KeyboardVerdict.none);
-      expect(t.onMetrics(inset: 300, width: 390), KeyboardVerdict.none);
-      expect(t.onMetrics(inset: 0, width: 390), KeyboardVerdict.checkSoon);
-      expect(t.confirm(inset: 120), isFalse, reason: '键盘回来了');
-      expect(t.onMetrics(inset: 0, width: 390), KeyboardVerdict.checkSoon);
-      expect(t.confirm(inset: 0), isTrue);
-    });
-
-    test('没聚焦时不管；重新聚焦要重新见到键盘；接着别的输入框聚焦时键盘本来就开着也算见过', () {
-      final t = KeyboardDismissTracker();
-      expect(t.onMetrics(inset: 300, width: 390), KeyboardVerdict.none);
-      expect(t.onMetrics(inset: 0, width: 390), KeyboardVerdict.none);
-      t.onFocus(focused: true, inset: 0);
-      expect(t.onMetrics(inset: 0, width: 390), KeyboardVerdict.none);
-      expect(t.confirm(inset: 0), isFalse);
-      t
-        ..onFocus(focused: false, inset: 0)
-        ..onFocus(focused: true, inset: 300);
-      expect(t.sawKeyboard, isTrue);
-      expect(t.onMetrics(inset: 0, width: 390), KeyboardVerdict.checkSoon);
-    });
-
-    test('离开前台期间键盘消失不算；回来和转屏都多等一会儿', () {
-      final t = KeyboardDismissTracker()..onFocus(focused: true, inset: 300);
-      expect(t.onLifecycle(resumed: false), KeyboardVerdict.none);
-      expect(t.onMetrics(inset: 0, width: 390), KeyboardVerdict.none);
-      expect(t.confirm(inset: 0), isFalse, reason: '还在后台');
-      expect(t.onLifecycle(resumed: true), KeyboardVerdict.checkLater);
-      expect(t.onMetrics(inset: 0, width: 390), KeyboardVerdict.checkLater);
-      expect(t.confirm(inset: 0), isTrue);
-
-      final r = KeyboardDismissTracker()..onFocus(focused: true, inset: 300);
-      expect(r.onMetrics(inset: 300, width: 390), KeyboardVerdict.none);
-      expect(r.onMetrics(inset: 0, width: 844), KeyboardVerdict.checkLater);
-      expect(r.onMetrics(inset: 0, width: 844), KeyboardVerdict.checkLater);
-      expect(r.confirm(inset: 200), isFalse);
-      expect(r.onMetrics(inset: 0, width: 844), KeyboardVerdict.checkSoon);
     });
   });
 }

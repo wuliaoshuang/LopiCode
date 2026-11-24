@@ -2,7 +2,7 @@
 // - 输入区常驻底部。没点进去且没有字：收成一行胶囊（附件、提示、用量小环、语音、发送）。
 //   胶囊连边框高 48（字体特别大时跟着长高）；发送圆钮看着是 36，但 ＋、用量小环、语音、发送每个可点区域都不小于 44×44。
 // - 点进去或有草稿：展开成两行，上方多行输入，下方工具栏放附件、权限、模型、用量小环、语音和发送。
-// - 软键盘被用户收起（系统手势 / 返回键）后输入框跟着失焦：没草稿收回胶囊，有草稿保持展开。
+// - 软键盘被用户收起（系统手势 / 返回键）时输入框跟着失焦：键盘一开始往下走就摘，不等它降完。没草稿收回胶囊，有草稿保持展开。
 //   判断规则在 keyboard_dismiss.dart；只看这块屏幕自己的键盘高度，不依赖输入栏外面怎么摆。语音输入不会因此被打断。
 // - 长按发送仍可选排队、插话或中断。
 // - 语音识别把实时结果接进草稿，不覆盖已有文字；不可用时给出明确原因。
@@ -161,29 +161,36 @@ class _ChatComposerState extends State<ChatComposer> with WidgetsBindingObserver
     }
   }
 
-  /// 这块屏幕上软键盘的高度（物理像素，只用来判断有没有）。
+  /// 这块屏幕上软键盘的高度（逻辑像素）。
   /// 不读 MediaQuery：外面的 Scaffold 给键盘让位时会把它清零。
-  double get _keyboardInset => View.of(context).viewInsets.bottom;
+  double get _keyboardInset {
+    final view = View.of(context);
+    return view.viewInsets.bottom / view.devicePixelRatio;
+  }
 
   @override
   void didChangeMetrics() {
     if (!mounted) return;
-    final view = View.of(context);
-    _afterVerdict(_keyboard.onMetrics(inset: view.viewInsets.bottom, width: view.physicalSize.width));
+    _afterVerdict(_keyboard.onMetrics(inset: _keyboardInset, width: View.of(context).physicalSize.width, now: keyboardNow()));
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (!mounted) return;
-    _afterVerdict(_keyboard.onLifecycle(resumed: state == AppLifecycleState.resumed));
+    _afterVerdict(_keyboard.onLifecycle(resumed: state == AppLifecycleState.resumed, now: keyboardNow()));
   }
 
   void _afterVerdict(KeyboardVerdict verdict) {
     if (verdict == KeyboardVerdict.none) return;
     _keyboardCheck?.cancel();
+    // 只摘焦点，不碰语音输入；有草稿时展开状态由 _collapsed 自己决定。
+    // 摘掉之后 _onInputChanged 会告诉 _keyboard“没焦点了”，键盘剩下的下降过程不会再被处理。
+    if (verdict == KeyboardVerdict.dismissNow) {
+      if (widget.focusNode.hasFocus) widget.focusNode.unfocus();
+      return;
+    }
     _keyboardCheck = Timer(verdict == KeyboardVerdict.checkSoon ? kKeyboardSettle : kKeyboardSettleSlow, () {
       if (!mounted) return;
-      // 只摘焦点，不碰语音输入；有草稿时展开状态由 _collapsed 自己决定。
       if (_keyboard.confirm(inset: _keyboardInset) && widget.focusNode.hasFocus) widget.focusNode.unfocus();
     });
   }
@@ -193,7 +200,7 @@ class _ChatComposerState extends State<ChatComposer> with WidgetsBindingObserver
     if (!mounted) return;
     final focused = widget.focusNode.hasFocus;
     if (!focused) _keyboardCheck?.cancel();
-    _keyboard.onFocus(focused: focused, inset: _keyboardInset);
+    _keyboard.onFocus(focused: focused, inset: _keyboardInset, now: keyboardNow());
     final now = _collapsed;
     if (now == _wasCollapsed) return;
     _wasCollapsed = now;
