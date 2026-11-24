@@ -510,13 +510,20 @@ void main() {
 
     test('并发上限：同时在跑的子代理不超过设置的个数', () async {
       await enable(concurrent: 2);
+      // 假模型不靠“睡一会儿”碰运气：每个子代理进来后停在自己的闸门上，由测试看清楚了再放行。
+      // （子代理开跑前要存盘、建工具箱，机器忙时两个之间能差出几十毫秒，定时的写法会漏掉峰值。）
       var running = 0, peak = 0;
+      final started = <String>[];
+      final gates = <Completer<void>>[];
       turn = (m, t) async {
         final task = firstUser(m);
         if (task.startsWith('活')) {
           running++;
           if (running > peak) peak = running;
-          await Future<void>.delayed(const Duration(milliseconds: 40));
+          started.add(task);
+          final gate = Completer<void>();
+          gates.add(gate);
+          await gate.future;
           running--;
           return reply('$task 完成');
         }
@@ -526,9 +533,62 @@ void main() {
           ChatDelta(finishReason: 'tool_calls'),
         ];
       };
-      await session.sendToAgent('开四个');
+      final done = session.sendToAgent('开四个');
+      for (var round = 1; round <= 2; round++) {
+        // 名额用满：两个都确实同时在跑（都停在闸门上）。
+        await waitFor(() => started.length == round * 2, what: '第 $round 拨的两个子代理都开跑');
+        expect(running, 2, reason: '两个名额都要用上');
+        // 名额占满期间多等一会儿：不许有第三个挤进来。
+        await Future<void>.delayed(const Duration(milliseconds: 60));
+        expect(running, 2);
+        expect(started, hasLength(round * 2), reason: '名额满着，后面的要排队');
+        for (final g in gates.where((g) => !g.isCompleted).toList()) {
+          g.complete();
+        }
+      }
+      await done;
+      expect(running, 0);
+      expect(started, unorderedEquals(['活0', '活1', '活2', '活3']));
       expect(session.subAgents, hasLength(4));
       expect(peak, 2);
+    });
+
+    test('并发上限 1 且层数 2：子代理再派一层不会互相卡死', () async {
+      await enable(depth: 2, concurrent: 1);
+      turn = (m, t) {
+        final task = firstUser(m);
+        if (task.contains('孙任务')) return reply('孙做完');
+        if (task.contains('子任务')) return hasToolResult(m) ? reply('子做完') : use('spawn_agent', {'name': '孙', 'task': '孙任务'});
+        return hasToolResult(m) ? reply('完') : use('spawn_agent', {'name': '子', 'task': '子任务'});
+      };
+      await session.sendToAgent('开始').timeout(const Duration(seconds: 20), onTimeout: () => fail('卡死了：子代理占着名额等孙代理，孙代理又在等名额'));
+      expect(session.conversations.map((c) => c.depth), unorderedEquals([0, 1, 2]));
+      expect(toolResults(log.last.messages), contains('子做完'));
+    });
+
+    test('层数 2 时两个子代理各派一个孙代理：都能做完，同时在调模型的子代理不超过上限', () async {
+      await enable(depth: 2, concurrent: 2);
+      var busy = 0, peak = 0;
+      turn = (m, t) async {
+        final task = firstUser(m);
+        if (!task.contains('任务')) {
+          if (hasToolResult(m)) return reply('完');
+          return [
+            for (var i = 0; i < 2; i++) call(i, 'spawn_agent', jsonEncode({'name': '子$i', 'task': '子任务$i'})),
+            ChatDelta(finishReason: 'tool_calls'),
+          ];
+        }
+        // 子代理、孙代理每调一次模型都让出几拍，给别人插进来的机会。
+        busy++;
+        if (busy > peak) peak = busy;
+        await Future<void>.delayed(const Duration(milliseconds: 5));
+        busy--;
+        if (task.contains('孙任务')) return reply('孙做完');
+        return hasToolResult(m) ? reply('子做完') : use('spawn_agent', {'name': '孙', 'task': '孙任务${task.substring(task.length - 1)}'});
+      };
+      await session.sendToAgent('开始').timeout(const Duration(seconds: 20), onTimeout: () => fail('卡死了：两个子代理占满名额，各自的孙代理永远排不上'));
+      expect(session.conversations.map((c) => c.depth), unorderedEquals([0, 1, 1, 2, 2]));
+      expect(peak, lessThanOrEqualTo(2));
     });
 
     test('模型：默认跟随上级；只能换成设置里允许的', () async {
