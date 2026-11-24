@@ -1,10 +1,12 @@
 // 设计约束（后端积木页 · 390×844，浅色 + 深色）— 2026-11-24
 // - 这一页是薄壳：主体是通用的积木编辑器 BlockEditorView（画布 + 底部积木盒），这里只负责读写 backend.lc.json、
 //   重新生成代码、把“语言 / 变量与集合 / 设置 / 运行”几个入口接上去。主操作＝在画布上搭积木。
-// - 顶栏：标题“后端积木”，副标题一行说现在的状态（语言 · 几个接口 / “N 处错误，没生成” / “N 个文件没覆盖”）。
+// - 顶栏：标题“后端积木”，副标题一行说现在的状态（语言 · 几个接口 / “N 个错误，没更新” / “N 个文件没覆盖”）。
 //   右边胶囊里从左到右：运行（▶）、更多（⋯）、问题、看代码。语言、变量与集合、服务设置、生成情况都收在“更多”里——一行放不下四个以上的图标。
 // - 每次改动后约半秒自动保存并重新生成代码；不弹“保存成功”。出了状况才说话：
-//   有文件没覆盖 → 底部一条提示带“查看”，点开列出文件、可以选“用生成的覆盖”；积木有错误 → 副标题变成警示色的一句话。
+//   有文件没覆盖 → 底部一条提示带“查看”，点开列出文件、可以选“用生成的覆盖”；
+//   积木有错误 → 不生成新代码（上一次生成的原样留着）：副标题变成“N 个错误，没更新”（顶栏窄，只放得下短说法），刚出错时底部完整提示一次“有 N 个错误，代码没有更新”并带“查看问题”；
+//   这时点“运行”或“代码生成情况”不往下走，先弹一张说明，主按钮“查看问题”打开问题列表。只有警告时一切照常。
 // - 文件打不开 / 没有：整页一个空状态，说清原因，给两条出路（重置为样本、去文件页修）。
 // - 这一页会留在后台：backend.lc.json 在别处被改了（Agent、文件编辑器），没有未保存改动就重新读；有就以这里为准并说一声。
 import 'dart:async';
@@ -19,6 +21,7 @@ import 'package:lopicode/backend/backend_project.dart';
 import 'package:lopicode/backend/backend_targets.dart';
 import 'package:lopicode/backend/backend_templates.dart';
 import 'package:lopicode/blocks/block_editor_view.dart';
+import 'package:lopicode/blocks/block_panels_sheet.dart';
 import 'package:lopicode/core/path_guard.dart';
 import 'package:lopicode/lowcode/logic_blocks.dart';
 import 'package:lopicode/lowcode/logic_vars_sheet.dart';
@@ -66,6 +69,12 @@ class BackendScreenState extends ConsumerState<BackendScreen> {
   Timer? _debounce;
   Future<void> _io = Future.value();
   BackendRegenResult? _regen;
+
+  /// 积木编辑器（“查看问题”要让它打开问题列表、跳到那块积木）。
+  final GlobalKey<BlockEditorViewState> _editor = GlobalKey<BlockEditorViewState>();
+
+  /// 上一次生成是不是因为有错误被拦下了（刚变成被拦时提示一次，之后不重复弹）。
+  bool _wasBlocked = false;
   int _conflictsShown = 0;
 
   ProjectSession get _s => widget.session;
@@ -245,6 +254,22 @@ class BackendScreenState extends ConsumerState<BackendScreen> {
     _s.filesChanged();
     if (!mounted) return;
     setState(() => _regen = result);
+    final newlyBlocked = result.blocked && !_wasBlocked;
+    _wasBlocked = result.blocked;
+    if (result.blocked) {
+      if (!newlyBlocked) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            key: const ValueKey('be-blocked-snack'),
+            content: Text(blockErrorsHeadline(result.errorCount)),
+            // 深色主题下提示条是浅底，按钮字默认是白的看不清：跟着提示条正文的颜色走。
+            action: SnackBarAction(label: '查看问题', textColor: Theme.of(context).snackBarTheme.contentTextStyle?.color, onPressed: _openIssues),
+          ),
+        );
+      return;
+    }
     if (!result.ok) return _say('代码没有重新生成：${result.error}');
     final conflicts = result.conflicts.length;
     if (conflicts > 0 && conflicts != _conflictsShown) {
@@ -261,7 +286,19 @@ class BackendScreenState extends ConsumerState<BackendScreen> {
     _conflictsShown = conflicts;
   }
 
+  void _openIssues() => unawaited(_editor.currentState?.openIssues());
+
+  /// 积木里有错误：拦下“启动 / 看生成情况”，说清楚代码没有更新，给“查看问题”。返回 true＝被拦下了。
+  Future<bool> _gate(String action) async {
+    final errors = _host?.errorCount ?? 0;
+    if (errors == 0) return false;
+    final look = await showBlockErrorsGate(context, errors: errors, action: action);
+    if (look && mounted) _openIssues();
+    return true;
+  }
+
   Future<void> _openRegen() async {
+    if (await _gate('重新生成') || !mounted) return;
     final result = _regen;
     if (result == null) return _say('还没有重新生成过：改一下积木就会自动保存并生成。');
     final overwrite = await showBeRegenSheet(context, result);
@@ -320,6 +357,7 @@ class BackendScreenState extends ConsumerState<BackendScreen> {
   }
 
   Future<void> _openRun() async {
+    if (await _gate('启动') || !mounted) return;
     final host = _host!;
     final action = await showModalBottomSheet<String>(
       context: context,
@@ -382,8 +420,8 @@ class BackendScreenState extends ConsumerState<BackendScreen> {
   String _status(BeBlockHost host) {
     final errors = host.errorCount;
     final regen = _regen;
+    if (errors > 0) return blockErrorsBrief(errors);
     if (regen != null && !regen.ok) return '代码没有重新生成';
-    if (errors > 0) return '$errors 处错误，没生成';
     if (regen != null && regen.conflicts.isNotEmpty) return '${regen.conflicts.length} 个文件没覆盖';
     final target = host.target;
     final lang = target == null ? '${host.doc.language}（没有生成器）' : beLanguageName(target);
@@ -419,6 +457,7 @@ class BackendScreenState extends ConsumerState<BackendScreen> {
     final target = host.target;
     final attention = _attention(host);
     return BlockEditorView(
+      key: _editor,
       host: host,
       title: '后端积木',
       subtitle: _status(host),

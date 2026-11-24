@@ -7,6 +7,7 @@ import 'package:lopicode/backend/backend_model.dart';
 import 'package:lopicode/backend/backend_project.dart';
 import 'package:lopicode/backend/backend_targets.dart';
 import 'package:lopicode/backend/backend_templates.dart';
+import 'package:lopicode/backend/backend_validate.dart';
 import 'package:lopicode/core/path_guard.dart';
 import 'package:lopicode/core/safe_file.dart';
 import 'package:path/path.dart' as p;
@@ -240,14 +241,39 @@ void main() {
       expect(f(kBackendFileName).readAsStringSync(), isNot(contains('/from-memory')), reason: '这个函数不负责存文档');
     });
 
-    test('有校验错误的文档：照样生成（有错误的接口生成器会跳过），结果里报出错误条数', () async {
+    test('有校验错误的文档：不生成新代码，上一次生成的文件原样留着，结果里说明被拦下和错误条数；修好以后照常生成', () async {
+      // 先正常生成一次。
+      final good = backendStarterDocument('样本', language: 'node');
+      put(kBackendFileName, good.encode());
+      final first = await regenerateBackend(ws);
+      expect((first.ok, first.blocked, first.errorCount), (true, false, 0));
+      final before = f('server.js').readAsStringSync();
+      final stamp = f('server.js').lastModifiedSync();
+
       final doc = backendStarterDocument('样本', language: 'node');
-      doc.addRoute('GET', '/hello'); // 和已有的重复
+      doc.addRoute('GET', '/hello'); // 和已有的重复＝错误
+      doc.addRoute('GET', '/brand-new');
       put(kBackendFileName, doc.encode());
       final r = await regenerateBackend(ws);
-      expect(r.ok, isTrue);
+      expect(r.ok, isFalse);
+      expect(r.blocked, isTrue);
       expect(r.errorCount, greaterThan(0));
-      expect(r.summary, contains('处错误'));
+      expect(r.written, isEmpty);
+      expect(r.removed, isEmpty);
+      expect(r.error, contains('有 ${r.errorCount} 个错误，代码没有更新'));
+      expect(r.summary, contains('代码没有更新'));
+      expect(f('server.js').readAsStringSync(), before, reason: '上一次生成的原样留着');
+      expect(f('server.js').lastModifiedSync(), stamp);
+      expect(before, isNot(contains('/brand-new')));
+
+      // 只有警告（一个空接口）：照常生成。
+      final warn = backendStarterDocument('样本', language: 'node')..addRoute('GET', '/brand-new');
+      expect(validateBackend(warn).where((i) => i.isError), isEmpty);
+      expect(validateBackend(warn), isNotEmpty);
+      put(kBackendFileName, warn.encode());
+      final w = await regenerateBackend(ws);
+      expect((w.ok, w.blocked, w.errorCount), (true, false, 0));
+      expect(f('server.js').readAsStringSync(), contains('/brand-new'));
     });
   });
 

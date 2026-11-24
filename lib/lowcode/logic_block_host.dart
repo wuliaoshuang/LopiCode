@@ -254,17 +254,19 @@ class LogicBlockHost extends BlockHost {
 
   // —— 校验与代码 ——
 
-  List<BlockIssue>? _issues;
-  int _issuesRev = -1;
+  late final BlockIssueCache _issueCache = BlockIssueCache(() => [for (final i in validateLogic(_doc)) blockIssueOf(i)], () => _revision, () => onChanged?.call());
 
   @override
-  List<BlockIssue> get issues {
-    if (_issues == null || _issuesRev != _revision) {
-      _issues = [for (final i in validateLogic(_doc)) BlockIssue(message: i.message, isError: i.isError, scriptId: i.handlerId, path: i.path, arg: i.arg)];
-      _issuesRev = _revision;
-    }
-    return _issues!;
-  }
+  List<BlockIssue> get issues => _issueCache.fresh();
+
+  @override
+  List<BlockIssue> get liveIssues => _issueCache.read();
+
+  @override
+  void stopIssueTimer() => _issueCache.stop();
+
+  /// “错误”级的问题有几条（有错误时 logic.js 不重新导出）。
+  int get errorCount => issues.where((i) => i.isError).length;
 
   @override
   String get codeText => exportLogicJs(_doc);

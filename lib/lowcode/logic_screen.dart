@@ -2,10 +2,12 @@
 // - 这一页只是薄壳：界面全在通用的积木编辑器 BlockEditorView（lib/blocks/block_editor_view.dart）里，
 //   这里只负责三件事：把文档包成 LogicBlockHost、把改动 / 撤销交还给搭建页（落盘在那边）、顶栏多放一个“变量”入口。
 // - 顶栏：返回、标题“积木逻辑”，右边胶囊里是 变量（带数量）、问题（带数量）、看代码。
+//   积木有错误时标题下面多一行“N 个错误，没更新”（logic.js 留着上一次的）；修好就消失。只有警告时没有这一行。
 // - 主体是积木画布，底下是积木盒；没有“添加事件”按钮了——事件是积木盒第一页里的帽子积木，拖出来或点一下就是一串新的。
 // - 从某个控件点进来（initialNodeId）：画布移到它的第一串事件并选中帽子；它还没有事件就提示一句，不再有“只看：…”的筛选标签。
 // - 所有改动都走 onEdit（每次一条撤销记录）；提交后从最近见到的文档重新读，不留着旧对象。
 import 'package:lopicode/blocks/block_editor_view.dart';
+import 'package:lopicode/blocks/block_panels_sheet.dart';
 import 'package:lopicode/lowcode/edit_types.dart';
 import 'package:lopicode/lowcode/logic_block_host.dart';
 import 'package:lopicode/lowcode/logic_blocks.dart';
@@ -101,9 +103,11 @@ class _LogicScreenState extends State<LogicScreen> {
   Widget build(BuildContext context) {
     final c = context.colors;
     final vars = _host.doc.logic.variables.length;
+    final errors = _host.errorCount;
     return BlockEditorView(
       host: _host,
       title: '积木逻辑',
+      subtitle: errors > 0 ? blockErrorsBrief(errors) : null,
       focusScriptId: _focus,
       menuExtra: _menuExtra,
       onHostChanged: () => setState(() {}),

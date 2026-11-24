@@ -117,7 +117,6 @@ class BeBlockHost extends BlockHost {
   void _bump() {
     _revision++;
     _categories = null;
-    _issues = null;
     _code = null;
     onChanged?.call();
   }
@@ -295,14 +294,24 @@ class BeBlockHost extends BlockHost {
 
   // —— 校验与代码 ——
 
-  List<BlockIssue>? _issues;
+  late final BlockIssueCache _issueCache = BlockIssueCache(
+    () => [
+      for (final i in validateBackend(_doc, languages: [for (final t in backendTargets) t.id])) blockIssueOf(i),
+    ],
+    () => _revision,
+    () => onChanged?.call(),
+  );
 
   @override
-  List<BlockIssue> get issues => _issues ??= [
-    for (final i in validateBackend(_doc, languages: [for (final t in backendTargets) t.id])) BlockIssue(message: i.message, isError: i.isError, scriptId: i.handlerId, path: i.path, arg: i.arg),
-  ];
+  List<BlockIssue> get issues => _issueCache.fresh();
 
-  /// “错误”级的问题有几条。
+  @override
+  List<BlockIssue> get liveIssues => _issueCache.read();
+
+  @override
+  void stopIssueTimer() => _issueCache.stop();
+
+  /// “错误”级的问题有几条（有错误时不重新生成代码）。照现在的内容算，不用缓存里可能慢一拍的结果。
   int get errorCount => issues.where((i) => i.isError).length;
 
   BackendTarget? get target => backendTargetFor(_doc.language);

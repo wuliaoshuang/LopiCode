@@ -125,7 +125,8 @@ void main() {
       for (final op in lcBlockSpecs.keys) {
         final d = makeDoc();
         d.logic.addHandler('click', target: 'n2')!.insertBlock([], newBlock(op, doc));
-        expect(validateLogic(d), isEmpty, reason: op);
+        // 刚拿出来的“跳转网址”“请求网址”里是“https://”（等着填完），会有一条“网址没填完”的警告；别的都一条不报。
+        expect([for (final i in validateLogic(d)) (i.code, i.isError)], op == 'navigate' || op == 'fetch' ? [(LcIssueCode.badUrl, false)] : isEmpty, reason: op);
         // 存了再读是一样的。
         expect(LcDocument.parse(d.encode()).logic.handlers.single.body.single.toJson(), newBlock(op, doc).toJson(), reason: op);
       }
@@ -317,7 +318,18 @@ void main() {
     test('click / input 没有 target 是错误；load 不需要', () {
       expect(codesFor([], target: null), [LcIssueCode.missingTarget]);
       expect(codesFor([], event: 'input', target: null), [LcIssueCode.missingTarget]);
-      expect(codesFor([], event: 'load', target: null), isEmpty);
+      // 帽子没问题、下面是空的：只有一条“下面还没有积木”的警告（2026-11-24 加的规则）。
+      expect(codesFor([], event: 'load', target: null), [LcIssueCode.emptyScript]);
+      expect(
+        codesFor(
+          [
+            block('log', {'value': exText('a')}),
+          ],
+          event: 'load',
+          target: null,
+        ),
+        isEmpty,
+      );
     });
 
     test('input 事件挂在不是输入框的控件上：警告', () {
@@ -325,7 +337,17 @@ void main() {
       expect(issues.single.code, LcIssueCode.inputOnNonInput);
       expect(issues.single.level, LcIssueLevel.warning);
       expect(issues.single.message, '「「按钮“提交”」的内容变化时」：“输入内容变化时”只有输入框会触发，「按钮“提交”」不是输入框');
-      expect(codesFor([], event: 'input', target: 'n3'), isEmpty);
+      expect(codesFor([], event: 'input', target: 'n3'), [LcIssueCode.emptyScript]);
+      expect(
+        codesFor(
+          [
+            block('log', {'value': exText('a')}),
+          ],
+          event: 'input',
+          target: 'n3',
+        ),
+        isEmpty,
+      );
     });
 
     test('参数缺失', () {

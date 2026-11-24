@@ -8,6 +8,7 @@ import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/core/templates.dart';
 import 'package:lopicode/lowcode/export_html.dart';
 import 'package:lopicode/lowcode/export_tidy.dart';
+import 'package:lopicode/lowcode/logic_gate.dart';
 import 'package:lopicode/lowcode/model.dart';
 
 /// 需要用户点头的一次操作（显示成对话里的确认卡）。
@@ -415,7 +416,7 @@ class AgentToolbox {
       _checkScope(guard.resolve(f));
     }
     await saveLowcodePage(guard, doc);
-    return ToolOutcome('页面已更新，并重新导出了 index.html 和 style.css。', changedFiles: true);
+    return ToolOutcome('页面已更新，并重新导出了 index.html 和 style.css。${lcLogicToolReport(doc)}', changedFiles: true);
   }
 
   static String argString(Map<String, dynamic> args, String key, {bool allowEmpty = false}) {
@@ -444,7 +445,9 @@ Future<void> saveLowcodePage(PathGuard guard, LcDocument doc) async {
   await File(guard.resolve('index.html')).writeAsString(export.html);
   await File(guard.resolve('style.css')).writeAsString(export.css);
   final logic = File(guard.resolve(kLowcodeLogicFile));
-  if (export.js.isNotEmpty) {
+  if (lcLogicErrorCount(doc) > 0) {
+    // 积木逻辑有“错误”：不导出新的 logic.js，上一次导出的原样留着（见 lib/lowcode/logic_gate.dart）。
+  } else if (export.js.isNotEmpty) {
     await logic.writeAsString(export.js);
   } else if (await logic.exists()) {
     // 逻辑删光了：把上次导出的 logic.js 也删掉。只删我们自己生成的（看开头那行标记），用户自己写的同名文件不碰。

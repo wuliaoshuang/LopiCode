@@ -2,14 +2,17 @@
 ///
 /// 只读不改。问题的结构沿用前端的 [LcLogicIssue]（`handlerId` 这里放接口的 id），这样积木编辑器只认一种问题。
 /// 分两级：错误（这一块不会按想的那样工作）和警告 / 提示（能跑，但多半不是你想要的）。
-/// 翻代码（backend_ir.dart）不依赖校验结果——有问题的积木它自己会翻成注释跳过，生成的工程照样能启动。
+/// 每种问题有稳定的规则编号和一句“怎么改”（lib/lowcode/logic_rules.dart）；类型、次数、除以 0 这些和页面逻辑共用的检查在
+/// lib/lowcode/logic_validate_types.dart。有“错误”时不重新生成代码（backend_project.dart 拦，上一次生成的文件原样留着）。
 library;
 
 import 'package:lopicode/backend/backend_blocks.dart';
+import 'package:lopicode/backend/backend_ir.dart' show kBeRepeatLimit;
 import 'package:lopicode/backend/backend_model.dart';
 import 'package:lopicode/backend/backend_text.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 import 'package:lopicode/lowcode/logic_validate.dart';
+import 'package:lopicode/lowcode/logic_validate_types.dart';
 
 export 'package:lopicode/lowcode/logic_validate.dart' show LcIssueCode, LcIssueLevel, LcLogicIssue;
 
@@ -71,6 +74,18 @@ List<LcLogicIssue> backendErrors(BeDocument doc) => [
 
 const Set<String> _respondOps = {'respondJson', 'respondText'};
 
+/// 静态推断一个后端表达式的类型（“类型对不上”的检查用）。后端的变量什么都能装（记录、列表…），请求里读来的也说不准，
+/// 所以只有直接填的值、运算、拼接、计数这些“一定是什么”的才给出类型，其余一律 [LcType.any]（不报）。
+String beExprType(Object? expr) {
+  if (beExprIsBool(expr)) return LcType.boolean;
+  return switch (exprKind(expr)) {
+    'text' || 'join' || 'now' => LcType.text,
+    'num' || 'len' || 'dbCount' => LcType.number,
+    'bin' => kArithmeticOps.contains(exprString(expr, 'op')) ? LcType.number : LcType.any,
+    _ => LcType.any,
+  };
+}
+
 /// 这一串积木是不是“怎么走都会返回”（最后一定碰到“返回”积木）。
 bool _alwaysResponds(List<LcBlock> list, [int depth = 0]) {
   if (depth > LcBlock.maxDepth) return false;
@@ -100,15 +115,42 @@ class _Validator {
   LcBlockPath _path = const [];
   LcBlock? _block;
 
-  void _add(LcIssueLevel level, String code, String problem, {String? arg, String? where}) {
+  /// 正在检查积木的哪个参数、参数里的哪个位置（表达式里面报的问题都记到这一格上，界面才知道圈哪里）。
+  String? _top;
+  List<Object> _xp = const [];
+
+  late final LcValueChecker _values = LcValueChecker(
+    exprSpec: (kind) => beExprSpecs[kind],
+    typeOf: beExprType,
+    repeatLimit: kBeRepeatLimit,
+    report: (level, code, problem, {required arg, required exprPath, fix}) => _add(level, code, problem, arg: arg, xp: exprPath, fix: fix),
+  );
+
+  void _add(LcIssueLevel level, String code, String problem, {String? arg, String? where, List<Object>? xp, String? fix}) {
     final r = _route;
     final b = _block;
-    final place = where ?? (r == null ? '后端' : (b == null ? '接口「${describeBeRoute(r)}」' : '接口「${describeBeRoute(r)}」${describeBeBlockPath(r, _path)}（${describeBeBlock(b)}）'));
-    issues.add(LcLogicIssue(level: level, code: code, problem: problem, where: place, handlerId: r?.id, path: _path, arg: arg));
+    final scope = where ?? (r == null ? '后端' : '接口「${describeBeRoute(r)}」');
+    final spot = where != null || r == null || b == null ? '' : '${describeBeBlockPath(r, _path)}（${describeBeBlock(b)}）';
+    final at = _top ?? arg;
+    issues.add(
+      LcLogicIssue(
+        level: level,
+        code: code,
+        problem: problem,
+        where: '$scope$spot',
+        handlerId: r?.id,
+        path: _path,
+        arg: at,
+        exprPath: at == null ? null : (xp ?? _xp),
+        fix: fix,
+        scope: scope,
+        spot: spot,
+      ),
+    );
   }
 
-  void _error(String code, String problem, {String? arg, String? where}) => _add(LcIssueLevel.error, code, problem, arg: arg, where: where);
-  void _warn(String code, String problem, {String? arg, String? where}) => _add(LcIssueLevel.warning, code, problem, arg: arg, where: where);
+  void _error(String code, String problem, {String? arg, String? where, String? fix}) => _add(LcIssueLevel.error, code, problem, arg: arg, where: where, fix: fix);
+  void _warn(String code, String problem, {String? arg, String? where, String? fix}) => _add(LcIssueLevel.warning, code, problem, arg: arg, where: where, fix: fix);
 
   void run() {
     _service();
@@ -240,8 +282,13 @@ class _Validator {
       return;
     }
     for (final a in spec.args) {
+      _top = a.name;
       _arg(a, b.args[a.name], b.args.containsKey(a.name), ownerKind: null);
     }
+    _top = null;
+    _xp = const [];
+    _values.block(b, spec);
+    if (b.op == 'fetch') _url(b);
     if (!spec.hasBody && b.body.isNotEmpty) {
       _warn(LcIssueCode.strayBody, '“${spec.label}”里面不能放积木，里面的 ${b.body.length} 块生成代码时会被忽略');
     }
@@ -264,6 +311,20 @@ class _Validator {
     }
   }
 
+  /// 直接填的网址：空着＝错误（一定请求不到）；没填完、不是 http / https 开头的完整网址＝警告（运行时不会去请求，结果是空）。
+  void _url(LcBlock b) {
+    final url = b.args['url'];
+    if (exprKind(url) != 'text') return;
+    final why = lcUrlProblem(exprString(url, 'v') ?? '', httpOnly: true);
+    if (why == null) return;
+    final problem = switch (why) {
+      'empty' => '请求的网址还没填，这一块请求不到任何东西',
+      'partial' => '网址只填了开头，还没填完；现在这样不会去请求，结果是空的',
+      _ => '只能请求 http:// 或 https:// 开头的完整网址；现在这样不会去请求，结果是空的',
+    };
+    _add(why == 'empty' ? LcIssueLevel.error : LcIssueLevel.warning, LcIssueCode.badUrl, problem, arg: 'url', xp: const []);
+  }
+
   static String _typeName(String type) => switch (type) {
     'number' => '数字',
     'bool' => '是 / 否',
@@ -272,7 +333,15 @@ class _Validator {
   };
 
   /// 检查一个参数（积木的或表达式的）。`present`＝JSON 里有没有这个字段；`ownerKind`＝它属于哪种表达式（积木的参数为 null）。
-  void _arg(LcArgSpec a, Object? value, bool present, {required String? ownerKind, int depth = 0}) {
+  /// `xp`＝它在积木参数里的位置。
+  void _arg(LcArgSpec a, Object? value, bool present, {required String? ownerKind, int depth = 0, List<Object> xp = const []}) {
+    final was = _xp;
+    _xp = xp;
+    _argAt(a, value, present, ownerKind, depth, xp);
+    _xp = was;
+  }
+
+  void _argAt(LcArgSpec a, Object? value, bool present, String? ownerKind, int depth, List<Object> xp) {
     final missing = !present || value == null;
     switch (a.kind) {
       case LcArgKind.expr:
@@ -291,7 +360,9 @@ class _Validator {
         } else {
           final inObj = ownerKind == 'obj';
           final keys = <String>{};
-          for (final item in value) {
+          for (var i = 0; i < value.length; i++) {
+            final item = value[i];
+            _xp = [...xp, i];
             if (!isExpr(item)) {
               _error(LcIssueCode.badArg, '“${a.label}”里有一项不是值', arg: a.name);
               continue;
@@ -357,12 +428,12 @@ class _Validator {
       _warn(LcIssueCode.unknownExpr, '不认识的值 ${kind ?? ''}，生成代码时会当成空的', arg: arg);
       return;
     }
-    final before = issues.length;
+    final base = _xp;
     if (kind == 'pair' && !inObj) {
       _error(BeIssueCode.badPair, '“一个字段”只能放在“对象”里', arg: arg);
     }
     for (final a in spec.args) {
-      _arg(a, expr[a.name], expr.containsKey(a.name), ownerKind: kind, depth: depth + 1);
+      _arg(a, expr[a.name], expr.containsKey(a.name), ownerKind: kind, depth: depth + 1, xp: [...base, a.name]);
     }
     if (kind == 'pathParam') {
       final name = expr['name'];
@@ -370,11 +441,6 @@ class _Validator {
         final have = _params.isEmpty ? '这个接口的路径里没有参数' : '路径里有的是 ${_params.join('、')}';
         _error(BeIssueCode.unknownPathParam, '路径里没有叫 $name 的参数（$have）；读到的会是空的', arg: arg);
       }
-    }
-    // 上面报的问题定位到的是表达式自己的字段名，换成积木的参数名，界面才知道圈哪一格。
-    for (var i = before; i < issues.length; i++) {
-      final it = issues[i];
-      if (it.arg != arg) issues[i] = LcLogicIssue(level: it.level, code: it.code, problem: it.problem, where: it.where, handlerId: it.handlerId, path: it.path, arg: arg);
     }
   }
 }
