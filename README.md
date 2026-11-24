@@ -103,6 +103,7 @@ PRoot 启动器已随安装包带上（Termux 官方软件源的现成包，文�
 - dsh-Go（AGPL-3.0）只作为做法参考，没有使用它的代码。
 
 - 服务商图标：`@lobehub/icons-static-svg` 1.106.0（MIT，Copyright (c) 2023 LobeHub），只带预设用到的 18 个 SVG，内容没有改动；来源和校验值见 [third_party/lobe-icons/README.md](third_party/lobe-icons/README.md)。图标里的品牌标志和名称是各家公司的商标，归它们各自所有，这里只用来标明渠道连的是哪家服务。
+- 文件 / 文件夹 / 语言图标：`material-icon-theme` 5.40.0（MIT，Copyright (c) 2025 Material Extensions），只带挑出来的 488 个 SVG（约 275KB），内容没有改动；来源、校验值和怎么重新生成见 [third_party/material-icon-theme/README.md](third_party/material-icon-theme/README.md)。图标里的语言、框架标志是各自所有者的商标，这里只用来标明文件类型。
 
 ## 目录结构
 
@@ -134,6 +135,8 @@ assets/licenses/               随包组件的许可证全文（应用内“第�
 third_party/termux/            PRoot 等随包二进制的来源记录、原始包、校验值、许可证
 third_party/lobe-icons/        服务商图标的来源、版本、校验值、许可证
 assets/provider_icons/         随包的服务商图标（SVG，原样）
+third_party/material-icon-theme/  文件 / 文件夹 / 语言图标的来源、版本、校验值、许可证
+assets/file_icons/             随包的文件图标（SVG，原样）；映射表由 tool/gen_file_icons.py 生成
 ```
 
 ## 怎么构建

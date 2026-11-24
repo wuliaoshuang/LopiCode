@@ -82,6 +82,8 @@ flutter:
     - assets/licenses/
     # 服务商图标（@lobehub/icons-static-svg，MIT；清单见 third_party/lobe-icons/）
     - assets/provider_icons/
+    # 文件 / 文件夹 / 语言图标（material-icon-theme，MIT；清单见 third_party/material-icon-theme/）
+    - assets/file_icons/
 
   # To add assets to your application, add an assets section, like this:
   # assets:

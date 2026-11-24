@@ -13,8 +13,8 @@ import 'package:lopicode/project_session.dart';
 import 'package:lopicode/state/workspace_files.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/code_editor.dart';
-import 'package:lopicode/ui/code_highlight.dart';
 import 'package:lopicode/ui/editor_format.dart';
+import 'package:lopicode/ui/file_icon.dart';
 import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:re_editor/re_editor.dart';
@@ -335,7 +335,7 @@ class _FilesTabState extends ConsumerState<FilesTab> {
                         padding: EdgeInsets.fromLTRB(Space.x4 + (parts.length - 1) * Space.x4, 10, Space.x2, 10),
                         child: Row(
                           children: [
-                            Icon(isDir ? Icons.folder_outlined : _fileIcon(path), size: 20, color: isDir ? c.accent : c.textFaint),
+                            FileIcon(path, isDir: isDir, open: isDir),
                             const SizedBox(width: Space.x3),
                             Expanded(
                               child: Text(parts.last, style: isDir ? t.titleSmall : t.bodyMedium, maxLines: 1, overflow: TextOverflow.ellipsis),
@@ -356,15 +356,6 @@ class _FilesTabState extends ConsumerState<FilesTab> {
       ],
     );
   }
-
-  static IconData _fileIcon(String path) => switch (CodeHighlighter.languageFor(path)) {
-    'html' || 'vue' => Icons.code,
-    'css' || 'scss' || 'less' => Icons.palette_outlined,
-    'js' || 'dart' || 'sh' => Icons.data_object,
-    'json' || 'yaml' => Icons.settings_ethernet,
-    'md' => Icons.article_outlined,
-    _ => Icons.insert_drive_file_outlined,
-  };
 
   Widget _buildEditor(BuildContext context) {
     final c = context.colors;
@@ -403,6 +394,7 @@ class _FilesTabState extends ConsumerState<FilesTab> {
                                 margin: const EdgeInsets.only(right: 6),
                                 decoration: BoxDecoration(color: c.warning, shape: BoxShape.circle),
                               ),
+                            Padding(padding: const EdgeInsets.only(right: 6), child: FileIcon(f.name, size: 16)),
                             Text(f.name, style: active ? t.titleSmall : t.bodyMedium?.copyWith(color: c.textMuted)),
                             IconButton(
                               tooltip: '关闭 ${f.name}',

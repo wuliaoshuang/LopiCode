@@ -105,7 +105,7 @@ const List<ThirdPartyComponent> bundledComponents = [
   ),
 ];
 
-/// 随包的服务商图标（不是二进制，单独记）。清单与校验值在 third_party/lobe-icons/。
+/// 随包的图标（不是二进制，单独记）。清单与校验值在 third_party/lobe-icons/ 和 third_party/material-icon-theme/。
 class BundledIconPack {
   const BundledIconPack({
     required this.name,
@@ -147,6 +147,23 @@ const BundledIconPack providerIconPack = BundledIconPack(
   trademarkNote: '图标里的品牌标志和名称是各家公司的商标，归它们各自所有。这里只用来标明渠道连的是哪家服务，不代表它们与 LopiCode 有合作或认可关系。MIT 许可证只管图标文件本身，不授予商标权利。',
 );
 
+/// 文件树、编辑器标签、语言选择里的文件 / 文件夹 / 语言图标。清单与校验值在 third_party/material-icon-theme/。
+const BundledIconPack fileIconPack = BundledIconPack(
+  name: 'Material Icon Theme（material-icon-theme）',
+  version: '5.40.0',
+  purpose: '文件列表、编辑器标签和语言选择里的文件、文件夹、语言图标。只带了挑出来的一部分 SVG 文件，内容没有改动。',
+  license: 'MIT',
+  licenseAsset: 'assets/licenses/material-icon-theme-MIT.txt',
+  copyright: 'Copyright (c) 2025 Material Extensions',
+  packageUrl: 'https://registry.npmmirror.com/material-icon-theme/-/material-icon-theme-5.40.0.tgz',
+  packageIntegrity: 'sha512-IrvgusbwtqxhUtVgUy0nToJcfN7CYVRdbBxKMfbo0vab9flVBHA5INZ9UiE5SgRj+PM6opCl5nn5TZdpm2UaxA==',
+  sourceUrl: 'https://github.com/material-extensions/vscode-material-icon-theme',
+  trademarkNote: '图标里出现的编程语言、框架和工具的标志与名称是各自所有者的商标。这里只用来标明文件是什么类型，不代表它们与 LopiCode 有合作或认可关系。MIT 许可证只管图标文件本身，不授予商标权利。',
+);
+
+/// 随包的图标包，按“第三方声明”页的显示顺序。
+const List<BundledIconPack> bundledIconPacks = [providerIconPack, fileIconPack];
+
 /// 许可证全文文件的显示名。
 String licenseTitle(String asset) => switch (asset) {
   'assets/licenses/GPL-2.0.txt' => 'GNU 通用公共许可证 第 2 版（GPL-2.0）全文',
@@ -154,5 +171,6 @@ String licenseTitle(String asset) => switch (asset) {
   'assets/licenses/LGPL-3.0.txt' => 'GNU 宽通用公共许可证 第 3 版（LGPL-3.0）全文',
   'assets/licenses/libandroid-shmem.txt' => 'libandroid-shmem 许可证全文',
   'assets/licenses/lobe-icons-MIT.txt' => 'Lobe Icons 许可证（MIT）全文',
+  'assets/licenses/material-icon-theme-MIT.txt' => 'Material Icon Theme 许可证（MIT）全文',
   _ => asset,
 };

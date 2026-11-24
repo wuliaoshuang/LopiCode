@@ -2,6 +2,7 @@
 import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/file_icon.dart';
 import 'package:material_ui/material_ui.dart';
 
 class FilePickerSheet extends StatelessWidget {
@@ -50,7 +51,7 @@ class FilePickerSheet extends StatelessWidget {
                     itemCount: files.length,
                     itemBuilder: (context, i) => ListTile(
                       dense: true,
-                      leading: const Icon(Icons.insert_drive_file_outlined, size: 20),
+                      leading: FileIcon(files[i]),
                       title: Text(files[i], style: t.bodyMedium, maxLines: 1, overflow: TextOverflow.ellipsis),
                       onTap: () => Navigator.pop(context, files[i]),
                     ),
