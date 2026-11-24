@@ -53,6 +53,30 @@ class LcBlock {
     if (orElse.isNotEmpty) 'else': [for (final b in orElse) b.toJson()],
   };
 
+  /// 深拷贝：参数、嵌在里面的积木全都是新对象，改副本不影响原件。
+  LcBlock clone() {
+    final copied = _copyJson(args, 0);
+    return LcBlock(op: op, args: copied is Map<String, dynamic> ? copied : {}, body: [for (final b in body) b.clone()], orElse: [for (final b in orElse) b.clone()]);
+  }
+
+  /// 这块积木往下（含自己）一共有几层。
+  int get height {
+    var h = 0;
+    for (final b in body.followedBy(orElse)) {
+      final bh = b.height;
+      if (bh > h) h = bh;
+    }
+    return h + 1;
+  }
+
+  /// 参数里是 JSON 值（字面量 / Map / List）；超过 64 层的截掉（正常数据到不了，防自己套自己的坏数据）。
+  static Object? _copyJson(Object? v, int depth) {
+    if (depth > 64) return null;
+    if (v is Map) return <String, dynamic>{for (final e in v.entries) '${e.key}': _copyJson(e.value, depth + 1)};
+    if (v is List) return <dynamic>[for (final item in v) _copyJson(item, depth + 1)];
+    return v is String || v is num || v is bool ? v : null;
+  }
+
   static LcBlock? tryParse(Object? json, int depth) {
     if (json is! Map || depth > maxDepth) return null;
     final op = json['op'];
@@ -66,6 +90,16 @@ class LcBlock {
     return [for (final item in json) ?tryParse(item, depth)];
   }
 }
+
+/// 积木在一个处理里的位置：从处理的 `body` 开始一步步往里走。
+/// 每一步是“在第几块”，以及（从第二步起）“是上一块的 body 还是 else 里的”。第一步的 `inElse` 不看。
+///
+/// 例：`[(inElse: false, index: 2), (inElse: true, index: 0)]` ＝ 第 3 块的“否则”里的第 1 块。
+typedef LcBlockStep = ({bool inElse, int index});
+typedef LcBlockPath = List<LcBlockStep>;
+
+/// 造一步路径（少写点字）。
+LcBlockStep lcStep(int index, {bool inElse = false}) => (inElse: inElse, index: index);
 
 /// 一个事件处理：`event` 是 click / input / load；`target` 是触发它的组件 id（load 没有）。
 class LcHandler {
@@ -84,6 +118,101 @@ class LcHandler {
     if (target != null) 'target': target,
     'body': [for (final b in body) b.toJson()],
   };
+
+  LcHandler clone() => LcHandler(id: id, event: event, target: target, body: [for (final b in body) b.clone()]);
+
+  /// 按路径找积木；路径不对（越界、空）返回 null。
+  LcBlock? blockAt(LcBlockPath path) {
+    if (path.isEmpty) return null;
+    var list = body;
+    LcBlock? block;
+    for (var i = 0; i < path.length; i++) {
+      if (i > 0) list = path[i].inElse ? block!.orElse : block!.body;
+      final index = path[i].index;
+      if (index < 0 || index >= list.length) return null;
+      block = list[index];
+    }
+    return block;
+  }
+
+  /// 一串积木所在的那个列表：`parent` 为空＝处理自己的 body；否则是那块积木的 body（或 `inElse` 时的 else）。
+  List<LcBlock>? listAt(LcBlockPath parent, {bool inElse = false}) {
+    if (parent.isEmpty) return body;
+    final block = blockAt(parent);
+    if (block == null) return null;
+    return inElse ? block.orElse : block.body;
+  }
+
+  /// 把积木插进去；`index` 省略＝放最后。位置不存在、或插进去以后嵌套超过 [LcBlock.maxDepth] 层就不插，返回 false
+  /// （超过的层数存盘后再读会被丢掉，所以这里先拦住）。
+  bool insertBlock(LcBlockPath parent, LcBlock block, {bool inElse = false, int? index}) {
+    final list = listAt(parent, inElse: inElse);
+    if (list == null) return false;
+    // parent 有几步，新积木就在第几层（从 0 数）；它自己往下还有 height - 1 层。
+    if (parent.length + block.height - 1 > LcBlock.maxDepth) return false;
+    list.insert((index ?? list.length).clamp(0, list.length), block);
+    return true;
+  }
+
+  /// 删掉一块（连同嵌在里面的）；返回被删的那块，路径不对返回 null。
+  LcBlock? removeBlock(LcBlockPath path) {
+    if (path.isEmpty) return null;
+    final list = listAt(path.sublist(0, path.length - 1), inElse: path.last.inElse);
+    final index = path.last.index;
+    if (list == null || index < 0 || index >= list.length) return null;
+    return list.removeAt(index);
+  }
+
+  /// 把一块积木挪到别处（可以跨层）。不能挪进自己里面；`index` 是“挪走之前”目标列表里的位置。
+  bool moveBlock(LcBlockPath from, LcBlockPath toParent, {bool inElse = false, int? index}) {
+    final block = blockAt(from);
+    final target = listAt(toParent, inElse: inElse);
+    if (block == null || target == null) return false;
+    if (toParent.length >= from.length && _samePrefix(from, toParent)) return false; // 目标在自己里面
+    if (toParent.length + block.height - 1 > LcBlock.maxDepth) return false;
+    final source = listAt(from.sublist(0, from.length - 1), inElse: from.last.inElse);
+    if (source == null) return false;
+    var i = (index ?? target.length).clamp(0, target.length);
+    if (identical(source, target) && from.last.index < i) i -= 1;
+    source.removeAt(from.last.index);
+    target.insert(i.clamp(0, target.length), block);
+    return true;
+  }
+
+  /// 在同一串里上移 / 下移一位。
+  bool shiftBlock(LcBlockPath path, int delta) {
+    if (path.isEmpty) return false;
+    final list = listAt(path.sublist(0, path.length - 1), inElse: path.last.inElse);
+    final i = path.last.index;
+    if (list == null || i < 0 || i >= list.length) return false;
+    final j = i + delta;
+    if (j < 0 || j >= list.length) return false;
+    list.insert(j, list.removeAt(i));
+    return true;
+  }
+
+  /// `inner` 的前 `outer.length` 步是不是正好就是 `outer`（＝inner 在 outer 那块积木里面，或就是它）。
+  static bool _samePrefix(LcBlockPath outer, LcBlockPath inner) {
+    for (var i = 0; i < outer.length; i++) {
+      if (outer[i].index != inner[i].index) return false;
+      if (i > 0 && outer[i].inElse != inner[i].inElse) return false;
+    }
+    return true;
+  }
+
+  /// 从外到里走一遍所有积木（先自己，再 body，再 else），带上各自的路径。
+  void visitBlocks(void Function(LcBlock block, LcBlockPath path) visit) {
+    void walk(List<LcBlock> list, LcBlockPath parent, bool inElse) {
+      for (var i = 0; i < list.length; i++) {
+        final path = [...parent, lcStep(i, inElse: inElse)];
+        visit(list[i], path);
+        walk(list[i].body, path, false);
+        walk(list[i].orElse, path, true);
+      }
+    }
+
+    walk(body, const [], false);
+  }
 
   static LcHandler? tryParse(Object? json) {
     if (json is! Map) return null;
@@ -152,4 +281,43 @@ class LcLogic {
   }
 
   Iterable<LcHandler> handlersFor(String nodeId) => handlers.where((h) => h.target == nodeId);
+
+  LcHandler? handler(String id) {
+    for (final h in handlers) {
+      if (h.id == id) return h;
+    }
+    return null;
+  }
+
+  /// 新建一个处理并加到最后；id 自动取一个没用过的 `h数字`。`event` 不认识返回 null。
+  LcHandler? addHandler(String event, {String? target}) {
+    if (!LcHandler.events.contains(event)) return null;
+    final ids = {for (final h in handlers) h.id};
+    var n = 1;
+    while (ids.contains('h$n')) {
+      n++;
+    }
+    final h = LcHandler(id: 'h$n', event: event, target: event == 'load' ? null : target);
+    handlers.add(h);
+    return h;
+  }
+
+  bool removeHandler(String id) {
+    final before = handlers.length;
+    handlers.removeWhere((h) => h.id == id);
+    return handlers.length != before;
+  }
+
+  /// 加一个变量；名字不合规矩或重名返回 null。
+  LcVariable? addVariable(String name, {String type = 'text', Object? initial}) {
+    if (!LcVariable.namePattern.hasMatch(name) || variable(name) != null || !LcVariable.types.contains(type)) return null;
+    final v = LcVariable(name: name, type: type, initial: initial);
+    variables.add(v);
+    return v;
+  }
+
+  LcLogic clone() => LcLogic(
+    variables: [for (final v in variables) LcVariable(name: v.name, type: v.type, initial: v.initial)],
+    handlers: [for (final h in handlers) h.clone()],
+  );
 }
