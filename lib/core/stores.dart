@@ -114,6 +114,9 @@ class SettingKeys {
   static const teamEnabled = 'team.enabled';
   static const chatSuggestions = 'chat.suggestions'; // 新对话里显示开场建议，默认开
   static const chatUsage = 'chat.usage'; // 在回复下方显示用量，默认开
+  static const chatThinking = 'chat.thinking'; // 在聊天里显示思考过程，默认开
+  static const agentAutoCompact = 'agent.autoCompact'; // 上下文快满时自动把较早的对话压成摘要，默认开
+  static const agentMaxSteps = 'agent.maxSteps'; // 连着执行多少步后停下来问，10–100，默认 30
 }
 
 class SecretKeys {

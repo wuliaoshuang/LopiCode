@@ -6,6 +6,7 @@
 //   · 命令或路径放在等宽小块里（代码底色），最多露几行，多了自己滚。
 // - 按钮一行最多两个：左“拒绝”（描边、中性），右“允许这一次”（实心强调色——整张卡唯一最突出的东西）。
 //   “本对话都允许”是更次要的操作：另起一行，小号灰字，不抢主按钮。
+//   点它不会马上生效：按钮区换成一句说明（“这段对话里同类操作不再问你”）+“取消 / 确认，都允许”，再点确认才算（2026-11-24 加，只变严）。
 // - 提问卡：同一个卡壳；选项一行一个（描边、左对齐），“其他回答”是灰色文字按钮。
 // - 安全规则不在这里：哪些要确认、能不能“都允许”由传进来的请求决定，这里只管画。
 import 'package:lopicode/agent/approval_risk.dart';
@@ -21,7 +22,7 @@ class PendingArea extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final approval = session.pendingApproval;
-    if (approval != null) return ApprovalCard(pending: approval, onAnswer: session.resolveApproval);
+    if (approval != null) return ApprovalCard(key: ObjectKey(approval), pending: approval, onAnswer: session.resolveApproval);
     final question = session.pendingQuestion;
     if (question != null) return QuestionCard(key: ObjectKey(question), question: question, onAnswer: session.answerQuestion);
     return const SizedBox.shrink();
@@ -73,15 +74,25 @@ class ChatCard extends StatelessWidget {
   }
 }
 
-class ApprovalCard extends StatelessWidget {
+class ApprovalCard extends StatefulWidget {
   const ApprovalCard({super.key, required this.pending, required this.onAnswer});
   final PendingApproval pending;
   final void Function(bool allow, {bool always}) onAnswer;
 
   @override
+  State<ApprovalCard> createState() => _ApprovalCardState();
+}
+
+class _ApprovalCardState extends State<ApprovalCard> {
+  /// 点过“本对话都允许”、还没点确认：按钮区换成说明 + 取消 / 确认。
+  bool _confirmingAlways = false;
+
+  @override
   Widget build(BuildContext context) {
     final c = context.colors;
     final t = Theme.of(context).textTheme;
+    final pending = widget.pending;
+    final onAnswer = widget.onAnswer;
     final req = pending.request;
     final isSchedule = req.tool == 'schedule_task';
     final who = pending.agentName.isEmpty ? 'Agent' : '子代理“${pending.agentName}”';
@@ -145,35 +156,64 @@ class ApprovalCard extends StatelessWidget {
           ),
         ),
         const SizedBox(height: Space.x4),
-        Row(
-          children: [
-            Expanded(
-              child: OutlinedButton(
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: c.text,
-                  side: BorderSide(color: c.border),
-                ),
-                onPressed: () => onAnswer(false),
-                child: const Text('拒绝'),
-              ),
-            ),
-            const SizedBox(width: Space.x2),
-            Expanded(
-              child: FilledButton(onPressed: () => onAnswer(true), child: Text(isSchedule ? '确认保存' : '允许这一次')),
-            ),
-          ],
-        ),
-        if (req.allowAlways)
-          Padding(
-            padding: const EdgeInsets.only(top: Space.x1),
-            child: Center(
-              child: TextButton(
-                style: TextButton.styleFrom(foregroundColor: c.textFaint, backgroundColor: Colors.transparent, textStyle: t.bodySmall, visualDensity: VisualDensity.compact),
-                onPressed: () => onAnswer(true, always: true),
-                child: const Text('本对话都允许'),
-              ),
-            ),
+        if (_confirmingAlways && req.allowAlways) ...[
+          Text(
+            '确认后，这段对话里同类操作不再问你：执行命令、删除文件都会直接做，包括它派出的子代理。重开 App 或点顶上的提示可以恢复逐次询问。',
+            key: const Key('always-explain'),
+            style: t.bodySmall?.copyWith(color: c.textMuted, height: 1.5),
           ),
+          const SizedBox(height: Space.x3),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  key: const Key('always-cancel'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: c.text,
+                    side: BorderSide(color: c.border),
+                  ),
+                  onPressed: () => setState(() => _confirmingAlways = false),
+                  child: const Text('取消'),
+                ),
+              ),
+              const SizedBox(width: Space.x2),
+              Expanded(
+                child: FilledButton(key: const Key('always-confirm'), onPressed: () => onAnswer(true, always: true), child: const Text('确认，都允许')),
+              ),
+            ],
+          ),
+        ] else ...[
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: c.text,
+                    side: BorderSide(color: c.border),
+                  ),
+                  onPressed: () => onAnswer(false),
+                  child: const Text('拒绝'),
+                ),
+              ),
+              const SizedBox(width: Space.x2),
+              Expanded(
+                child: FilledButton(onPressed: () => onAnswer(true), child: Text(isSchedule ? '确认保存' : '允许这一次')),
+              ),
+            ],
+          ),
+          if (req.allowAlways)
+            Padding(
+              padding: const EdgeInsets.only(top: Space.x1),
+              child: Center(
+                child: TextButton(
+                  style: TextButton.styleFrom(foregroundColor: c.textFaint, backgroundColor: Colors.transparent, textStyle: t.bodySmall, visualDensity: VisualDensity.compact),
+                  // 不直接生效：先说明后果，再点一次确认。
+                  onPressed: () => setState(() => _confirmingAlways = true),
+                  child: const Text('本对话都允许'),
+                ),
+              ),
+            ),
+        ],
       ],
     );
   }
@@ -211,7 +251,11 @@ class _QuestionCardState extends State<QuestionCard> {
     final q = widget.question;
     return ChatCard(
       icon: Icons.help_outline,
-      title: q.agentName.isEmpty ? 'Agent 想问你' : '子代理“${q.agentName}”想问你',
+      title: q.title != null
+          ? (q.agentName.isEmpty ? q.title! : '子代理“${q.agentName}”：${q.title}')
+          : q.agentName.isEmpty
+          ? 'Agent 想问你'
+          : '子代理“${q.agentName}”想问你',
       maxHeight: 380,
       children: [
         const SizedBox(height: Space.x2),
@@ -230,7 +274,10 @@ class _QuestionCardState extends State<QuestionCard> {
               child: Text(o),
             ),
           ),
-        if (!_typing)
+        // 应用自己问的（“要继续吗”）：只能从选项里选。
+        if (q.choiceOnly)
+          const SizedBox.shrink()
+        else if (!_typing)
           Center(
             child: TextButton(
               style: TextButton.styleFrom(foregroundColor: c.textMuted, backgroundColor: Colors.transparent, textStyle: t.bodySmall, visualDensity: VisualDensity.compact),

@@ -101,7 +101,7 @@ const String kPrunedToolResult = '（这条较早的工具结果已省略，以�
 int pruneOldToolResults(List<Map<String, dynamic>> messages, {int keepRecent = 6, int minChars = 400}) {
   final toolAt = <int>[
     for (var i = 0; i < messages.length; i++)
-      if (messages[i]['role'] == 'tool') i,
+      if (messages[i]['role'] == 'tool' && messages[i]['_archived'] != true) i,
   ];
   var pruned = 0;
   for (var k = 0; k < toolAt.length - keepRecent; k++) {

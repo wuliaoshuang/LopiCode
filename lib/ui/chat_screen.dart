@@ -22,6 +22,7 @@ import 'package:lopicode/state/workspace_chat.dart';
 import 'package:lopicode/state/workspace_conversations.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/chat_composer.dart';
+import 'package:lopicode/ui/chat_extras.dart';
 import 'package:lopicode/ui/chat_panels.dart';
 import 'package:lopicode/ui/chat_row_view.dart';
 import 'package:lopicode/ui/chat_todos.dart';
@@ -337,11 +338,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final text = _input.text;
     final slash = text.startsWith('/') && !text.contains(RegExp(r'\s')) ? kSlashCommands.where((k) => k.$1.startsWith(text.toLowerCase())).toList() : const <(String, String)>[];
     final topInset = MediaQuery.paddingOf(context).top + PageBar.kHeight;
-    final rows = deriveChatRows(s.chat, busy: s.agentBusy);
+    final rows = deriveChatRows(s.chat, busy: s.agentBusy, showThinking: prefs.thinking);
     final todos = latestTodos(s.chat);
     // 最后一行已经是“进行中”的步骤组（它自己在转圈）或正在往外冒的回复时，不再另起一行“处理中”。
     final last = rows.lastOrNull;
-    final showsProgress = (last is StepGroupRow && last.live) || (last is ItemRow && last.item is AssistantItem && (last.item as AssistantItem).streaming);
+    final showsProgress =
+        (last is StepGroupRow && last.live) ||
+        (last is ItemRow && last.item is AssistantItem && (last.item as AssistantItem).streaming) ||
+        (last is ItemRow && last.item is ThinkingItem && (last.item as ThinkingItem).streaming);
     final working = s.agentBusy && pending == null && question == null && !showsProgress;
     return Scaffold(
       extendBodyBehindAppBar: true,
@@ -392,14 +396,19 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       padding: EdgeInsets.only(top: topInset),
                       child: _EmptyChat(configured: model != null, showIdeas: prefs.suggestions, onPick: _send),
                     )
-                  : ListView.builder(
-                      controller: _scroll,
-                      padding: EdgeInsets.fromLTRB(Space.x4, topInset + Space.x2, Space.x4, Space.x4),
-                      itemCount: rows.length + (working ? 1 : 0),
-                      itemBuilder: (context, i) {
-                        if (i >= rows.length) return const _Working();
-                        return ChatRowView(row: rows[i], onOpenChild: _openChild, onOpenQuota: _openQuota, onOpenTurn: _showTurn);
-                      },
+                  : ChatRowActions(
+                      readOutput: s.readCommandOutput,
+                      onResume: s.resumeInterrupted,
+                      onDismissInterrupted: s.dismissInterrupted,
+                      child: ListView.builder(
+                        controller: _scroll,
+                        padding: EdgeInsets.fromLTRB(Space.x4, topInset + Space.x2, Space.x4, Space.x4),
+                        itemCount: rows.length + (working ? 1 : 0),
+                        itemBuilder: (context, i) {
+                          if (i >= rows.length) return const _Working();
+                          return ChatRowView(row: rows[i], onOpenChild: _openChild, onOpenQuota: _openQuota, onOpenTurn: _showTurn);
+                        },
+                      ),
                     ),
             ),
             if (todos != null && todos.isNotEmpty) TodoBar(todos: todos),

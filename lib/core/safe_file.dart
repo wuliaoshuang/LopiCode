@@ -2,6 +2,7 @@
 // 1. 写：先写到同目录的临时文件，写完再改名盖过去。中途断电 / 被杀，原文件还是完整的旧内容，不会剩半截。
 // 2. 读：文件在但读不懂（半截、乱码、不是预期的形状）时，先把它另存一份 `.bad-时间` 再回退默认值，
 //    不让下一次保存把唯一的原件悄悄盖掉。
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -13,20 +14,27 @@ final Map<String, Future<void>> _writeQueue = {};
 /// 等所有排着队的写入做完（成功或失败都算完）。测试收尾删临时目录之前先等它，免得删到一半还有写入在跑。
 Future<void> pendingWrites() async {
   while (_writeQueue.isNotEmpty) {
-    await Future.wait([for (final f in _writeQueue.values.toList()) f.catchError((Object _) {})]);
+    await Future.wait(_writeQueue.values.toList());
   }
 }
 
 /// 原子写：临时文件 → flush → 改名。目录不存在会先建。
 Future<void> writeFileAtomic(File file, List<int> bytes) {
   final key = file.absolute.path;
-  final previous = _writeQueue[key] ?? Future<void>.value();
-  late final Future<void> mine;
-  mine = previous.catchError((Object _) {}).then((_) => _writeNow(file, bytes)).whenComplete(() {
-    if (identical(_writeQueue[key], mine)) _writeQueue.remove(key);
+  // 写入本身放在根 Zone 里跑：写盘做不做得完，不该取决于调用方所在的 Zone 有没有人在推进
+  // （界面测试的假时钟 Zone 里，没人 pump 时回调不会跑——不等结果的写入会永远挂在队列里，收尾等它就卡死）。
+  // 队列里放的是根 Zone 里“这次写完了”的记号，永远不带错误；
+  // 结果（含出错）用 Completer 交回调用方的 Zone——错误不能直接跨 Zone 传，所以在根 Zone 里先接住。
+  final done = Completer<void>();
+  Zone.root.run(() {
+    final previous = _writeQueue[key] ?? Future<void>.value();
+    late final Future<void> tail;
+    tail = previous.then((_) => _writeNow(file, bytes)).then<void>((_) => done.complete(), onError: done.completeError).whenComplete(() {
+      if (identical(_writeQueue[key], tail)) _writeQueue.remove(key);
+    });
+    _writeQueue[key] = tail;
   });
-  _writeQueue[key] = mine;
-  return mine;
+  return done.future;
 }
 
 // Windows 上替换或读取文件的瞬间可能撞上共享锁；原文件仍是完整的，稍后重试即可。

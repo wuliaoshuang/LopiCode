@@ -11,7 +11,12 @@ import 'package:lopicode/session/conversation.dart';
 import 'package:lopicode/session/session_core.dart';
 import 'package:lopicode/session/system_prompt.dart';
 import 'package:lopicode/session/toolbox_builder.dart';
+import 'package:lopicode/session/turn_journal.dart';
 import 'package:lopicode/state/workspace_chat.dart';
+
+/// “要继续吗？”那张卡的两个回答。
+const String kContinueAnswer = '继续';
+const String kStopAnswer = '停止';
 
 /// 一轮跑完的结果：最后一段回答（出错时是错误文字）、是不是没做成。
 typedef TurnOutcome = ({String text, bool failed});
@@ -46,6 +51,9 @@ class TurnRunner {
     final convs = core.convs;
     final queue = core.queue;
     run.setBusy(true);
+    // 又开始新的一轮了：上一轮“没正常结束”的提示不用再挂着。
+    core.clearInterrupted(run);
+    final journal = core.journalOf(run.convId)..begin(text);
     run.add(UserItem(text, images: [for (final i in images) core.hostPathOfAttachment('${i['path']}')]));
     convs?.update(run.convId, (c) => c.copyWith(updatedAt: DateTime.now()));
 
@@ -67,6 +75,10 @@ class TurnRunner {
       },
       maxParallel: core.subagentMaxConcurrent,
       contextLimit: resolved?.model.contextLength,
+      autoCompact: core.autoCompact,
+      maxSteps: core.maxSteps,
+      // 到步数上限：有人在场就问要不要继续；没人在场（自动化任务和它派的子代理）直接停。
+      confirmContinue: run.unattended ? null : (steps) => _askContinue(run, journal, steps),
     );
     run.runner = runner;
     final turn = TurnUsage();
@@ -75,11 +87,26 @@ class TurnRunner {
     final clock = Stopwatch()..start();
     final toolClocks = <String, Stopwatch>{};
     AssistantItem? streaming;
+    ThinkingItem? thinking;
     var last = '';
     var failed = false;
     try {
       await for (final event in runner.send(text, images: images)) {
         switch (event) {
+          case ReasoningDelta(:final text):
+            final soFar = thinking;
+            if (soFar == null) {
+              run.add(thinking = ThinkingItem(text, streaming: true, startedAt: DateTime.now()));
+            } else {
+              thinking = run.replace(soFar, soFar.copyWith(text: soFar.text + text));
+            }
+          case ReasoningDone(:final ms):
+            final done = thinking;
+            if (done != null) run.replace(done, done.copyWith(streaming: false, ms: ms));
+            thinking = null;
+          case ContextCompacted(:final summary):
+            run.add(CompactionItem(summary));
+            core.saveMessagesLater(run);
           case AssistantDelta(:final text):
             final soFar = streaming;
             if (soFar == null) {
@@ -99,6 +126,9 @@ class TurnRunner {
             run.add(ToolItem(callId, name, arguments));
             turn.steps.add(ToolStep(callId, name));
             toolClocks[callId] = Stopwatch()..start();
+            journal.stepStarted(callId, name, arguments);
+            // 这时候记录里已经有“模型要调这些工具”那条消息：先存一次，被关掉也知道做到哪了。
+            core.saveMessagesLater(run);
           case ToolFinished(:final callId, :final outcome):
             final item = run.items.whereType<ToolItem>().lastWhere((t) => t.callId == callId);
             run.replace(item, item.copyWith(result: outcome.text, ok: outcome.ok, denied: outcome.denied));
@@ -106,12 +136,20 @@ class TurnRunner {
             turn.steps.whereType<ToolStep>().where((t) => t.callId == callId).lastOrNull
               ?..ms = toolClocks.remove(callId)?.elapsedMilliseconds
               ..ok = outcome.ok;
-          case RequestFinished(:final usage, :final ms, :final firstMs, :final startedAt):
-            turn.steps.add(RequestStep(RequestUsage(usage: usage, ms: ms, firstMs: firstMs, startedAt: startedAt, cost: usage == null ? null : price?.cost(usage))));
-            if (usage != null) convs?.update(run.convId, (c) => c.copyWith(lastInput: usage.input));
+            journal.stepFinished(callId, ok: outcome.ok, denied: outcome.denied);
+            core.saveMessagesLater(run);
+          case RequestFinished(:final usage, :final ms, :final firstMs, :final startedAt, :final compaction):
+            // 自动压缩那一次请求也如实记进这一轮的用量。
+            turn.steps.add(RequestStep(RequestUsage(usage: usage, ms: ms, firstMs: firstMs, startedAt: startedAt, cost: usage == null ? null : price?.cost(usage), compaction: compaction)));
+            if (usage != null && !compaction) convs?.update(run.convId, (c) => c.copyWith(lastInput: usage.input));
           case AgentNotice(:final text):
             run.add(NoticeItem(text));
             if (text.startsWith('已停止')) failed = true;
+            // 没人在场、到步数上限停下：这一轮算没做完，并把原因记进交回去的结果里（自动化的运行记录、子代理的汇报）。
+            if (text.startsWith(AgentRunner.stepLimitStopPrefix)) {
+              failed = true;
+              last = last.isEmpty ? text : '$last\n\n（$text）';
+            }
           case AgentError(:final text):
             failed = true;
             last = text;
@@ -132,13 +170,17 @@ class TurnRunner {
     } finally {
       final open = streaming;
       if (open != null) run.replace(open, open.copyWith(streaming: false));
+      // 想到一半就断了 / 停了：思考那一行不能一直转。
+      final thought = thinking;
+      if (thought != null) run.replace(thought, thought.copyWith(streaming: false, ms: thought.startedAt == null ? null : DateTime.now().difference(thought.startedAt!).inMilliseconds));
       // 兜底：流意外结束时不能留着没人能点的确认卡、提问卡。
       core.cards.dropOf({run.conv.id});
       run.setBusy(false);
       run.runner = null;
       turn.ms = clock.elapsedMilliseconds;
       _recordTurn(run, turn);
-      await core.saveRun(run);
+      // 存对话记录，同时把进行中记录标成“已结束”（做完 / 出错 / 点了停止都算正常收尾：下次打开不提示）。
+      await Future.wait([core.saveRun(run), journal.finish()]);
       core.releaseWhenIdle();
     }
     // 额度：对话结束后查一次余额（有节流）；到提醒线或到顶时说一声。
@@ -150,10 +192,24 @@ class TurnRunner {
     }
     // 提醒：对话快把上下文占满了。
     final limit = resolved?.model.contextLength;
-    if (limit != null && run.conv.parentId == null && !run.unattended && AgentRunner.estimateTokens(run.messages) > limit * 0.8) {
+    // （开着自动压缩就不用提醒：快满时会自己压。）
+    if (limit != null && !core.autoCompact && run.conv.parentId == null && !run.unattended && AgentRunner.estimateTokens(run.messages) > limit * 0.8) {
       run.add(NoticeItem('这段对话快把模型的上下文（${limit ~/ 1000}K）占满了。发 /compact 可以把前面的内容压缩成摘要再继续。'));
     }
     return (text: last, failed: failed);
+  }
+
+  /// 到步数上限：出一张只能选“继续 / 停止”的卡。卡被收掉（这一轮停了）按停止算。
+  Future<bool> _askContinue(ChatRunNotifier run, TurnJournalStore journal, int steps) async {
+    journal.setAwaitingContinue(true);
+    try {
+      final answer = await core.cards.ask(
+        PendingQuestion('这一轮已经连着执行了 $steps 步，还没做完。要继续吗？', const [kContinueAnswer, kStopAnswer], conversationId: run.convId, agentName: run.conv.agentName, title: '要继续吗？', choiceOnly: true),
+      );
+      return answer == kContinueAnswer;
+    } finally {
+      journal.setAwaitingContinue(false);
+    }
   }
 
   /// 把这一轮的用量记到对话上：累计进对话合计，并挂在这一轮最后一条消息上（跟着对话存盘）。

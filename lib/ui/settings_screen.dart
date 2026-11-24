@@ -33,6 +33,7 @@ import 'package:lopicode/ui/chrome.dart';
 import 'package:lopicode/ui/error_guard.dart';
 import 'package:lopicode/ui/settings_agent.dart';
 import 'package:lopicode/ui/settings_ai.dart';
+import 'package:lopicode/ui/settings_chat.dart';
 import 'package:lopicode/ui/settings_quota.dart';
 import 'package:lopicode/ui/third_party_screen.dart';
 import 'package:material_ui/material_ui.dart';
@@ -194,6 +195,7 @@ class SettingsScreen extends ConsumerWidget {
                 subtitle: '每轮用了多少 tokens、缓存命中率、用时',
                 trailing: Switch(key: const Key('settings-usage'), value: app.settings.getBool(SettingKeys.chatUsage, true), onChanged: (v) => toggle(SettingKeys.chatUsage, v)),
               ),
+              ...agentChatSettingRows(context, app),
             ],
           ),
           const GroupLabel('通用'),

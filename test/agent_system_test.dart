@@ -351,7 +351,7 @@ void main() {
       final body = req.body as Map<String, dynamic>;
       expect(body['instructions'], '系统话');
       expect(body['max_output_tokens'], 8000);
-      expect(body['reasoning'], {'effort': 'high'});
+      expect(body['reasoning'], {'effort': 'high', 'summary': 'auto'}, reason: '2026-11-24 起顺带要一份思考摘要（聊天页显示用）');
       expect(body['store'], isFalse);
       expect((body['tools'] as List).single, containsPair('name', 'read_file'), reason: 'Responses 的工具是平铺的，没有 function 这一层');
       final input = body['input'] as List;
@@ -517,9 +517,12 @@ void main() {
       expect((await b.execute('write_file', {'path': 'srcx/y.txt', 'content': '1'})).ok, isFalse, reason: '前缀相似不算在范围里');
     });
 
-    test('轮次上限没变', () {
+    test('步数上限：默认 30 步，没人在场确认（不给 confirmContinue）时到了就停', () {
+      // 2026-11-24 霜霜要求：上限改成设置里可调、到了先问；原来写死的 12 轮改成默认 30 步。
       final r = AgentRunner(client: ScriptedChatClient([]), toolbox: box());
-      expect(r.maxRounds, 12);
+      expect(r.maxSteps, 30);
+      expect(r.confirmContinue, isNull, reason: '默认没人在场：到上限直接停，不会自己继续');
+      expect(r.autoCompact, isFalse);
     });
   });
 

@@ -292,7 +292,7 @@ class _TrajectorySheetState extends State<TrajectorySheet> {
             line(
               key: Key('traj-request-${owner ?? ''}$index'),
               icon: Icons.auto_awesome_outlined,
-              title: '模型请求 $index',
+              title: request.compaction ? '模型请求 $index（压缩对话）' : '模型请求 $index',
               sub: u == null ? '接口没返回用量' : '输入 ${formatTokens(u.input)} · 输出 ${formatTokens(u.output)}',
               trailing: formatSpan(request.ms),
               onTap: () => _openStep(RequestStepPage(index: index, request: request, owner: owner)),

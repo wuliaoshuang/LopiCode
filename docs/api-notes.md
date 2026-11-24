@@ -223,3 +223,29 @@
 - 值得重试的：连不上、等响应头超时，以及状态码 408、429、500、502、503、504、529。401、403、400、404 这些重试也没用，直接报错。
   （其余是通用的 HTTP 含义；529 凭印象是 Anthropic 的“过载”，**未核对**。各家有没有 `Retry-After` 头没查，我们也不读它——**未核对**。）
 - 最多重试 2 次，间隔 1.5 秒、6 秒；等的时候点停止立刻生效。每次重试在聊天里出一行提示，写明真正的原因。
+
+# 2026-11-24 补充（第二轮）：思考过程显示用到的字段
+
+核对时间：2026-11-24 约 07:38 UTC。
+
+| 来源 | 我们读 / 发的 | 依据 | 状态 |
+| --- | --- | --- | --- |
+| Anthropic | 流里 `content_block_delta`，`delta.type == "thinking_delta"`，文字在 `delta.thinking`；`signature_delta` 在这个块结束前到 | 官方流式文档 `platform.claude.com/docs/en/api/streaming` 原文 | 已核对 |
+| Anthropic | `display: "omitted"` 时会来一个 `thinking` 为空串的 `thinking_delta`（我们遇到空串不显示）；`display: "summarized"` 给的是压缩过的摘要 | 同上 | 已核对 |
+| OpenAI Responses | 返回对象里有 `reasoning: {effort, summary, …}`（说明 `summary` 这个字段存在） | 官方接口参考 `developers.openai.com/api/reference/resources/responses/methods/create` 的返回示例 | 已核对（只核对到字段存在） |
+| OpenAI Responses | 请求里发 `reasoning.summary: "auto"` 来要一份可读的思考摘要 | 只在第三方资料里看到这个取值 | **未核对** |
+| OpenAI Responses | 流事件 `response.reasoning_summary_text.delta`（摘要增量，文字在 `delta`）、`response.reasoning_summary_part.added`（摘要新起一段）、`response.reasoning_text.delta`（有的兼容接口直接给思考原文） | 只在第三方资料里看到 | **未核对** |
+| OpenAI Responses | 没验证过的组织发 `reasoning.summary` 会被拒绝（400） | 第三方说法 | **未核对** |
+| DeepSeek / 兼容接口 | 流里 `delta.reasoning_content` | 见上面「DeepSeek 思考模式与工具调用」 | **未核对**（官方正文没写流式字段名） |
+| 其他兼容接口（OpenRouter 等） | 流里 `delta.reasoning`（没有 `reasoning_content` 时才读它） | 凭印象，没有打开任何文档 | **未核对** |
+
+我们的做法：
+
+- 三种来源都变成同一种“思考增量”，聊天页显示成一行“正在思考… / 思考了 N 秒”，点开看全文；存在 assistant 消息的内部字段
+  `_reasoning`（想了多久存在 `_reasoningMs`）上，发给接口前去掉（DeepSeek 的带回规则不变）。
+- Responses：只有模型设置里开了思考档位才发 `reasoning`，这时顺带发 `summary: "auto"`。**如果接口回 400 且报错里提到 summary**，
+  去掉它重发一次，这个客户端之后都不再带（聊天里就没有思考可显示，其余照常）。这条退路是因为上面两条未核对。
+- 事件名如果不对，后果只是“聊天里不显示思考”，不影响回答和工具调用。
+- 自动压缩那一次请求：只发一条 system + 一条 user 的纯文字，不带 `tools`，三种协议都是最普通的请求形状；用量照常从各自的用量字段读。
+- **都没有用真实接口验证过**（没有 Key，也不许花钱）。
+

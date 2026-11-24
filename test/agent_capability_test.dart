@@ -55,7 +55,7 @@ void main() {
   Future<AgentRunner> runnerFor(
     List<ScriptedReply> script, {
     ScriptedReply? fallback,
-    int maxRounds = 12,
+    int maxSteps = 12,
     List<ExtraTool> extras = const [],
     int? contextLimit,
     String model = 'fake-model',
@@ -67,7 +67,7 @@ void main() {
     return AgentRunner(
       client: OpenAiChatClient(baseUrl: server!.baseUrl, apiKey: 'sk-test-key', model: model, reasoningEffort: reasoningEffort, deepSeekOfficial: deepSeekOfficial),
       toolbox: toolbox(extras: extras),
-      maxRounds: maxRounds,
+      maxSteps: maxSteps,
       contextLimit: contextLimit,
       retryDelayOf: (_) => Duration.zero,
     );

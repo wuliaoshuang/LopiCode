@@ -23,9 +23,12 @@ class ThemeModeNotifier extends Notifier<AppThemeMode> {
 
 final themeModeProvider = NotifierProvider<ThemeModeNotifier, AppThemeMode>(ThemeModeNotifier.new);
 
-/// 聊天页的两个开关。
+/// 聊天页的几个开关。
 class ChatPrefs {
-  const ChatPrefs({required this.suggestions, required this.usage});
+  const ChatPrefs({required this.suggestions, required this.usage, this.thinking = true});
+
+  /// 在聊天里显示思考过程（默认开）。
+  final bool thinking;
 
   /// 新对话里显示开场建议（默认开）。
   final bool suggestions;
@@ -34,10 +37,10 @@ class ChatPrefs {
   final bool usage;
 
   @override
-  bool operator ==(Object other) => other is ChatPrefs && other.suggestions == suggestions && other.usage == usage;
+  bool operator ==(Object other) => other is ChatPrefs && other.suggestions == suggestions && other.usage == usage && other.thinking == thinking;
 
   @override
-  int get hashCode => Object.hash(suggestions, usage);
+  int get hashCode => Object.hash(suggestions, usage, thinking);
 }
 
 class ChatPrefsNotifier extends Notifier<ChatPrefs> {
@@ -45,9 +48,10 @@ class ChatPrefsNotifier extends Notifier<ChatPrefs> {
   ChatPrefs build() {
     ref
       ..watch(settingRevProvider(SettingKeys.chatSuggestions))
-      ..watch(settingRevProvider(SettingKeys.chatUsage));
+      ..watch(settingRevProvider(SettingKeys.chatUsage))
+      ..watch(settingRevProvider(SettingKeys.chatThinking));
     final s = ref.watch(settingsStoreProvider);
-    return ChatPrefs(suggestions: s.getBool(SettingKeys.chatSuggestions, true), usage: s.getBool(SettingKeys.chatUsage, true));
+    return ChatPrefs(suggestions: s.getBool(SettingKeys.chatSuggestions, true), usage: s.getBool(SettingKeys.chatUsage, true), thinking: s.getBool(SettingKeys.chatThinking, true));
   }
 
   Future<void> setSuggestions(bool on) => ref.read(settingsStoreProvider).set(SettingKeys.chatSuggestions, on);

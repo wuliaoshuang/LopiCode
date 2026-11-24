@@ -157,6 +157,9 @@ void main() {
         await tester.scrollUntilVisible(find.text(title), 120, scrollable: list);
         expect(find.text(title), findsOneWidget);
       }
+      // 回到顶上，再按从上到下的顺序一项项找（“对话”那张卡 2026-11-24 多了三行，页面变长了，不能再假设往上滚就找得到）。
+      await tester.drag(list, const Offset(0, 4000));
+      await settle(tester, rounds: 2);
       for (final key in [
         'settings-channels',
         'settings-personalize',
@@ -167,7 +170,7 @@ void main() {
         'settings-skills',
         'settings-third-party',
       ]) {
-        await tester.scrollUntilVisible(find.byKey(Key(key)), -120, scrollable: list);
+        await tester.scrollUntilVisible(find.byKey(Key(key)), 120, scrollable: list);
         expect(find.byKey(Key(key)), findsOneWidget, reason: key);
         expect(
           find.descendant(of: find.byKey(Key(key)), matching: find.byIcon(Icons.chevron_right)),
@@ -288,6 +291,12 @@ void main() {
       expect(find.textContaining('插话'), findsWidgets);
 
       await tester.tap(find.text('本对话都允许'));
+      await settle(tester, rounds: 2);
+      // 二次确认：点了还不生效，先说明后果，再点“确认，都允许”才算。
+      expect(session.pendingApproval, isNotNull, reason: '只点一次不能生效');
+      expect(session.autoAllowActive, isFalse);
+      expect(find.byKey(const Key('always-explain')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('always-confirm')));
       await waitReal(tester, () => !session.agentBusy, what: '这一轮结束');
       expect(shell.commands, ['npm install', 'npm install']);
       expect(find.byKey(const ValueKey('auto-allow-chip')), findsOneWidget);

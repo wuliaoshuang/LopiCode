@@ -10,7 +10,8 @@ import 'package:lopicode/agent/usage.dart';
 class ChatDelta {
   ChatDelta({this.content, this.reasoning, this.toolCalls = const [], this.finishReason, this.raw, this.usage});
 
-  /// 思考内容的增量（DeepSeek 等的 `reasoning_content`）。不显示，只为之后带回给接口。
+  /// 思考内容的增量（DeepSeek 等的 `reasoning_content`、Anthropic 的 thinking、Responses 的 reasoning summary）。
+  /// 聊天页拿它显示“正在思考…”；DeepSeek 还要之后带回给接口。
   final String? reasoning;
 
   /// 这次请求的用量（接口在流的最后给；没给就一直是 null）。
@@ -167,7 +168,12 @@ class OpenAiChatClient implements ChatClient {
       String? reasoning;
       if (delta is Map) {
         if (delta['content'] is String) content = delta['content'] as String;
-        if (delta['reasoning_content'] is String) reasoning = delta['reasoning_content'] as String;
+        // 思考内容：DeepSeek 等叫 reasoning_content；有些兼容接口（OpenRouter 等）叫 reasoning（未核对，见 api-notes）。
+        if (delta['reasoning_content'] is String) {
+          reasoning = delta['reasoning_content'] as String;
+        } else if (delta['reasoning'] is String) {
+          reasoning = delta['reasoning'] as String;
+        }
         final rawCalls = delta['tool_calls'];
         if (rawCalls is List) {
           for (var i = 0; i < rawCalls.length; i++) {
