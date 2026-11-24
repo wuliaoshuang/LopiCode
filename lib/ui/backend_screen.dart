@@ -1,7 +1,7 @@
 // 设计约束（后端积木页 · 390×844，浅色 + 深色）— 2026-11-24
 // - 这一页是薄壳：主体是通用的积木编辑器 BlockEditorView（画布 + 底部积木盒），这里只负责读写 backend.lc.json、
 //   重新生成代码、把“语言 / 变量与集合 / 设置 / 运行”几个入口接上去。主操作＝在画布上搭积木。
-// - 顶栏：标题“后端积木”，副标题一行说现在的状态（语言 · 几个接口 / “N 个错误，没更新” / “N 个文件没覆盖”）。
+// - 顶栏是沉浸式的（悬浮在画布上面、没有底色，见 lib/ui/immersive_bar.dart；空状态时也是同一个顶栏）：标题“后端积木”，副标题一行说现在的状态（语言 · 几个接口 / “N 个错误，没更新” / “N 个文件没覆盖”）。
 //   右边胶囊里从左到右：运行（▶）、更多（⋯）、问题、看代码。语言、变量与集合、服务设置、生成情况都收在“更多”里——一行放不下四个以上的图标。
 // - 每次改动后约半秒自动保存并重新生成代码；不弹“保存成功”。出了状况才说话：
 //   有文件没覆盖 → 底部一条提示带“查看”，点开列出文件、可以选“用生成的覆盖”；
@@ -31,6 +31,7 @@ import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/backend_panels_sheet.dart';
 import 'package:lopicode/ui/backend_run_sheet.dart';
 import 'package:lopicode/ui/file_icon.dart';
+import 'package:lopicode/ui/immersive_bar.dart';
 import 'package:lopicode/ui/shell.dart';
 import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
@@ -436,22 +437,24 @@ class BackendScreenState extends ConsumerState<BackendScreen> {
     final host = _host;
     if (host == null) {
       return Scaffold(
-        appBar: const ShellAppBar(title: '后端积木'),
-        body: _loading
-            ? const Center(child: CircularProgressIndicator())
-            : EmptyState(
-                key: const ValueKey('be-problem'),
-                icon: _missing ? Icons.dns_outlined : Icons.error_outline,
-                title: _missing ? '这里还没有后端积木' : '后端积木文件打不开',
-                message: '${_problem ?? ''}\n${_missing ? '新建一份入门样本，就可以开始搭了。' : '可以去文件页把它修好；或者重置为一份入门样本（原来的内容会被换掉）。'}',
-                action: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    FilledButton(key: const ValueKey('be-reset'), onPressed: _resetToStarter, child: Text(_missing ? '新建入门样本' : '重置为样本')),
-                    if (!_missing) ...[const SizedBox(height: Space.x2), TextButton(key: const ValueKey('be-go-files'), onPressed: () => _goTo(ShellDest.files), child: const Text('去文件页修'))],
-                  ],
+        body: ImmersiveBody(
+          bar: const ImmersiveBar(title: '后端积木'),
+          child: _loading
+              ? const Center(child: CircularProgressIndicator())
+              : EmptyState(
+                  key: const ValueKey('be-problem'),
+                  icon: _missing ? Icons.dns_outlined : Icons.error_outline,
+                  title: _missing ? '这里还没有后端积木' : '后端积木文件打不开',
+                  message: '${_problem ?? ''}\n${_missing ? '新建一份入门样本，就可以开始搭了。' : '可以去文件页把它修好；或者重置为一份入门样本（原来的内容会被换掉）。'}',
+                  action: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      FilledButton(key: const ValueKey('be-reset'), onPressed: _resetToStarter, child: Text(_missing ? '新建入门样本' : '重置为样本')),
+                      if (!_missing) ...[const SizedBox(height: Space.x2), TextButton(key: const ValueKey('be-go-files'), onPressed: () => _goTo(ShellDest.files), child: const Text('去文件页修'))],
+                    ],
+                  ),
                 ),
-              ),
+        ),
       );
     }
     final target = host.target;

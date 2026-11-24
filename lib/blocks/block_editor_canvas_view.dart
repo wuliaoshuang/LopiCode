@@ -7,6 +7,8 @@
 // - 让位是滑过去的（约 150 毫秒）：两头的位置由 block_motion.dart 算，这里只出一个 0–1 的进度；系统开了“减弱动态效果”就直接到位。
 // - 拖动时，能接的地方亮一个很淡的小点（语句：每个凸起上；表达式：每个能放值的槽一圈细线），教人“可以放这”。
 // - 双击空白处＝回到 100%、回到起始位置。
+// - 画布从屏幕最顶铺起，顶栏是浮在它上面的（沉浸式）：顶栏盖住的那一段（coveredTop）和积木盒盖住的那一段一样算“看不见”。
+//   起始位置、双击回 100%、跳到某块积木、缩放的中心都按露出来的那一段算；积木可以从顶栏按钮下面滑过去。
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -41,10 +43,16 @@ mixin BkEditorCanvas on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Ti
 
   final GlobalKey viewKey = GlobalKey(debugLabel: 'bk-editor-view');
 
-  /// 画布上的点 × [zoom] + [pan] ＝ 编辑区里的点。
+  /// 画布上的点 × [zoom] + [pan] + [viewOrigin] ＝ 编辑区里的点。`pan` 为零＝起始位置（画布原点正好在悬浮顶栏的下沿）。
   Offset pan = Offset.zero;
   double zoom = 1;
   Size viewSize = Size.zero;
+
+  /// 编辑区最上面被悬浮顶栏（连同状态栏）盖住多高。整页每次搭界面时告诉这里。
+  double coveredTop = 0;
+
+  /// 起始位置时画布原点在编辑区的哪里：悬浮顶栏的下沿。
+  Offset get viewOrigin => Offset(0, coveredTop);
 
   BlockLayoutEngine? _engine;
   BkCanvasLayout? _layout;
@@ -160,8 +168,8 @@ mixin BkEditorCanvas on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Ti
     _layout = null;
   }
 
-  Offset toCanvas(Offset view) => (view - pan) / zoom;
-  Offset toView(Offset canvas) => canvas * zoom + pan;
+  Offset toCanvas(Offset view) => (view - viewOrigin - pan) / zoom;
+  Offset toView(Offset canvas) => canvas * zoom + pan + viewOrigin;
   Rect rectToView(Rect canvas) => Rect.fromPoints(toView(canvas.topLeft), toView(canvas.bottomRight));
 
   /// 屏幕上的点换成编辑区里的点。
@@ -181,7 +189,8 @@ mixin BkEditorCanvas on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Ti
   void setPan(Offset next) {
     final ext = (drag?.display ?? layout).extent * zoom;
     const keep = 72.0;
-    final w = viewSize.width, h = math.max(keep * 2, viewSize.height - coveredBottom);
+    // 露出来的那一段（顶栏下沿到积木盒上沿）有多高：内容至少留 keep 在这一段里。
+    final w = viewSize.width, h = math.max(keep * 2, viewSize.height - coveredTop - coveredBottom);
     pan = Offset(next.dx.clamp(math.min(keep - ext.width, 0), math.max(w - keep, 0)).toDouble(), next.dy.clamp(math.min(keep - ext.height, 0), math.max(h - keep, 0)).toDouble());
   }
 
@@ -189,7 +198,7 @@ mixin BkEditorCanvas on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Ti
     final z = next.clamp(minZoom, maxZoom).toDouble();
     final at = toCanvas(focalView);
     zoom = z;
-    setPan(focalView - at * z);
+    setPan(focalView - viewOrigin - at * z);
   }
 
   void select(BlockSelection? s) {
@@ -232,8 +241,8 @@ mixin BkEditorCanvas on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Ti
     final placed = layout.placed(scriptId);
     final block = placed?.layout.blockAt(path) ?? placed?.layout.hat;
     if (placed == null || block == null) return;
-    // 画布露出来的部分：按编辑器此刻真实的大小算（底下被积木盒盖住多少由它说了算）。
-    final h = viewSize.height - coveredBottom;
+    // 画布露出来的部分：按编辑器此刻真实的大小算（上面被悬浮顶栏盖住、底下被积木盒盖住多少都算进去）。
+    final top = coveredTop, h = viewSize.height - coveredBottom;
     final head = block.head.shift(placed.origin);
     var z = zoom;
     if (z < 0.75) z = 1;
@@ -242,8 +251,8 @@ mixin BkEditorCanvas on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Ti
     final rect = rectToView(block.rect.shift(placed.origin));
     setState(() {
       selection = BlockSelection(scriptId, block.isHat ? const [] : block.path);
-      if (rect.top < 56 || rect.bottom > h - 16 || rect.left < 0 || rect.left > viewSize.width - 80) {
-        setPan(pan + Offset(16 - rect.left, math.max(64, h * 0.3) - rect.top));
+      if (rect.top < top + 56 || rect.bottom > h - 16 || rect.left < 0 || rect.left > viewSize.width - 80) {
+        setPan(pan + Offset(16 - rect.left, top + math.max(64, (h - top) * 0.3) - rect.top));
       }
     });
     unawaited(flashAnim.forward(from: 0));
@@ -407,7 +416,7 @@ mixin BkEditorCanvas on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Ti
             painter: BkWorkspacePainter(
               layout: shown,
               kit: kit,
-              pan: pan,
+              pan: pan + viewOrigin,
               zoom: zoom,
               selection: d == null ? selection : null,
               marks: d == null ? issueMarks : const {},

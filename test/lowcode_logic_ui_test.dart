@@ -11,6 +11,7 @@ import 'package:lopicode/lowcode/logic_blocks.dart';
 import 'package:lopicode/lowcode/logic_js.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 import 'package:lopicode/lowcode/model.dart';
+import 'package:lopicode/ui/immersive_bar.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'screens_test.dart' show fontsLoaded, shot;
@@ -496,11 +497,12 @@ void main() {
     doc.logic.addHandler('input', target: input)!.body.add(say('输入'));
     final rig = Rig(doc);
     await rig.pumpLogic(tester, initialNodeId: input);
-    final canvas = tester.getRect(k('bk-canvas'));
+    // 画布现在从屏幕最顶铺起，露出来的那一段从悬浮顶栏的下沿开始。
+    final shownTop = tester.getRect(find.byType(ImmersiveBar)).bottom;
 
     expect(rig.s.selection!.scriptId, rig.h(1).id, reason: '选中的是输入框那一串的帽子');
     expect(rig.s.selection!.path, isEmpty);
-    expect(rig.grip(1, const []).dy, inInclusiveRange(canvas.top, canvas.top + 160), reason: '它在画布顶上，不用自己找');
+    expect(rig.grip(1, const []).dy, inInclusiveRange(shownTop, shownTop + 160), reason: '它在画布顶上，不用自己找');
 
     // 新加“内容变化”事件：挂在点进来的这个输入框上。
     await pick(tester, 'event', 'hat-input');

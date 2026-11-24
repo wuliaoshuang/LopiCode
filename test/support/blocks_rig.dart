@@ -59,7 +59,8 @@ class Rig {
   int restores = 0;
 
   /// 和搭建页一样打开整页的“积木逻辑”（LogicScreen）：push 进去、把撤销历史交给它。这时编辑器用的是它自己建的宿主（`s.host`）。
-  Future<void> pumpLogic(WidgetTester tester, {String? initialNodeId, ThemeMode mode = ThemeMode.light}) async {
+  /// `safe`＝假装屏幕上下有状态栏 / 系统手势条。
+  Future<void> pumpLogic(WidgetTester tester, {String? initialNodeId, ThemeMode mode = ThemeMode.light, EdgeInsets? safe}) async {
     usePhoneViewport(tester);
     final nav = GlobalKey<NavigatorState>();
     await tester.pumpWidget(
@@ -71,6 +72,12 @@ class Rig {
           theme: buildAppTheme(Brightness.light, fontFamily: fontsLoaded ? kTestFont : null),
           darkTheme: buildAppTheme(Brightness.dark, fontFamily: fontsLoaded ? kTestFont : null),
           themeMode: mode,
+          builder: safe == null
+              ? null
+              : (context, child) => MediaQuery(
+                  data: MediaQuery.of(context).copyWith(padding: safe, viewPadding: safe),
+                  child: child!,
+                ),
           home: const Scaffold(),
         ),
       ),

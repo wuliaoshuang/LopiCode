@@ -14,6 +14,7 @@ import 'package:lopicode/lowcode/logic_edit.dart';
 import 'package:lopicode/lowcode/logic_screen.dart';
 import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/project_session.dart';
+import 'package:lopicode/ui/immersive_bar.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'support/harness.dart';
@@ -646,14 +647,14 @@ void main() {
         await tester.pump(const Duration(seconds: 3));
       }
       final page = tester.getRect(find.byKey(const ValueKey('lowcode-page')));
-      expect(page.bottom, closeTo(view.bottom, 0.01), reason: '滚到底就停，页面底边贴着可视区底边');
-      expect(tester.getRect(node('n40')).bottom, lessThanOrEqualTo(view.bottom));
+      expect(page.bottom, closeTo(view.bottom - kCanvasToolsInset, 0.01), reason: '滚到底就停，页面底边停在底部那两个悬浮小胶囊的上沿（不被它们压住）');
+      expect(tester.getRect(node('n40')).bottom, lessThanOrEqualTo(view.bottom - kCanvasToolsInset));
       // 往回拖过头：停在顶部；横向拖不动
       for (var i = 0; i < 8; i++) {
         await tester.dragFrom(view.center, const Offset(120, 400));
         await tester.pump(const Duration(seconds: 3));
       }
-      expect(tester.getRect(find.byKey(const ValueKey('lowcode-page'))).topLeft, view.topLeft);
+      expect(tester.getRect(find.byKey(const ValueKey('lowcode-page'))).topLeft, view.topLeft + const Offset(0, ImmersiveBar.kHeight), reason: '顶边停在悬浮顶栏的下沿');
       expect(tester.takeException(), isNull);
     });
 

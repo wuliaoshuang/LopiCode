@@ -1,10 +1,12 @@
 // 设计约束（积木编辑器整页，390 宽，浅色 + 深色）— 2026-11-24
 // - 这一页就是一张桌子：整屏是点阵画布，积木摆在上面；底部是积木盒（可收起）。主操作＝用手把积木拖来拖去拼起来。
-// - 顶栏只放三样：返回、标题、少数入口（宿主给的，例如“变量”）＋“问题”（有问题才带数字）＋“看代码”。
+// - 顶栏是沉浸式的（lib/ui/immersive_bar.dart）：没有底色，画布从屏幕最顶铺起，顶栏的三样悬浮在画布上面——
+//   返回、标题小胶囊（标题 + 一行状态小字）、少数入口（宿主给的，例如“变量”）＋“问题”（有问题才带数字）＋“看代码”。
+//   三样之间的空白是画布：可以在那里拖画布、点积木。画布的起始位置、定位都把顶栏那一段当成被盖住的。
 // - 画布上没有常驻的浮条：撤销、重做、缩放比例（点一下回到 100%）在积木盒手柄条的右边（block_editor_dock_view.dart）。
 // - 积木盒面板可以上下拖：最矮只剩手柄条，最高顶到状态栏下沿（盖住顶栏）。所以它和“手上的积木”不在画布那一层里，
-//   而是盖在整页（顶栏 + 画布）上面的一层；顶栏不放进 Scaffold 的 appBar，自己摆在最上面。
-// - 选中一块积木：画布上方出现一条小工具条（这块的问题、复制、删除）；没选中就没有。
+//   而是盖在整页（顶栏 + 画布）上面的一层；顶栏不放进 Scaffold 的 appBar，自己叠在画布上面、面板下面。
+// - 选中一块积木：顶栏下面出现一条小工具条（这块的问题、复制、删除）；没选中就没有。
 // - 拖动时：积木盒换成“拖到这里删除”，别的浮动控件都收起来，眼里只有积木。
 // - 提示用一句话小条（两秒多自己消失），贴在积木盒上沿之上：不盖画布顶上那串的帽子；需要时带一个“撤销”。不弹对话框打断。
 //   面板高到画布放不下提示条时，提示条改放在面板里分类那一行的下面（不被面板盖住，也不挡手柄）。
@@ -24,7 +26,7 @@ import 'package:lopicode/blocks/block_panels_sheet.dart';
 import 'package:lopicode/blocks/block_script_view.dart';
 import 'package:lopicode/lowcode/logic_blocks.dart';
 import 'package:lopicode/theme/tokens.dart';
-import 'package:lopicode/ui/shell.dart';
+import 'package:lopicode/ui/immersive_bar.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// 下拉小菜单最底下额外的一项（例如“新建变量…”）。`run` 里宿主自己问用户要什么；
@@ -175,7 +177,8 @@ class BlockEditorViewState extends State<BlockEditorView> with TickerProviderSta
     reduceMotion = MediaQuery.disableAnimationsOf(context);
     final all = layout; // 先排版：issues、选中都跟着刷新
     final errors = issues.where((i) => i.isError).length;
-    final bar = ShellAppBar(
+    final bar = ImmersiveBar(
+      key: const ValueKey('bk-bar'),
       title: widget.title,
       subtitle: widget.subtitle,
       actions: [
@@ -199,8 +202,9 @@ class BlockEditorViewState extends State<BlockEditorView> with TickerProviderSta
       body: LayoutBuilder(
         builder: (context, page) {
           final safe = MediaQuery.paddingOf(context);
-          // 顶栏连同状态栏一共多高；下面就是编辑区（画布那一层）。
-          final barHeight = bar.preferredSize.height + safe.top;
+          // 悬浮顶栏连同状态栏一共多高：画布铺满整页，这一段算被盖住的。
+          final barHeight = ImmersiveBar.kHeight + safe.top;
+          coveredTop = barHeight;
           layoutDock(area: page.maxHeight - safe.top, safeBottom: safe.bottom);
           final dragging = drag != null;
           final dock = dockHeight;
@@ -210,18 +214,13 @@ class BlockEditorViewState extends State<BlockEditorView> with TickerProviderSta
           return Stack(
             fit: StackFit.expand,
             children: [
-              Column(
-                children: [
-                  SizedBox(height: barHeight, child: bar),
-                  Expanded(
-                    child: MediaQuery.removePadding(
-                      context: context,
-                      removeTop: true,
-                      child: _area(context, all, showToast: !toastInPanel),
-                    ),
-                  ),
-                ],
+              MediaQuery.removePadding(
+                context: context,
+                removeTop: true,
+                child: _area(context, all, showToast: !toastInPanel),
               ),
+              // 悬浮顶栏：在画布上面、积木盒面板下面（面板全展开时盖住它）。空白处不接手指，落到画布上。
+              Positioned(left: 0, right: 0, top: 0, child: bar),
               // 带 key：别的浮动控件出现 / 消失时，积木盒不能被当成新的重建（手指正按在它上面拖）。
               if (editing == null)
                 Positioned(
@@ -256,13 +255,9 @@ class BlockEditorViewState extends State<BlockEditorView> with TickerProviderSta
                         ),
                 ),
               if (toastInPanel) Positioned(key: const ValueKey('bk-toast-layer'), left: 24, right: 24, top: page.maxHeight - dock + BlockPaletteView.headHeight + 8, child: _toastBar()),
-              // 手上的积木：最上面一层，只画在编辑区的范围里（和以前一样不盖顶栏）。
+              // 手上的积木：最上面一层（拖到顶上时从悬浮按钮上面过）。
               if (dragging)
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  top: barHeight,
-                  bottom: 0,
+                Positioned.fill(
                   child: Stack(clipBehavior: Clip.hardEdge, children: [buildDragPiece(context)]),
                 ),
             ],
@@ -304,18 +299,18 @@ class BlockEditorViewState extends State<BlockEditorView> with TickerProviderSta
           clipBehavior: Clip.hardEdge,
           children: [
             Positioned.fill(key: const ValueKey('bk-canvas-layer'), child: buildCanvas(context)),
-            if (all.scripts.isEmpty && !dragging && box.maxHeight - dock >= BkEditorDock.guideRoom)
+            if (all.scripts.isEmpty && !dragging && box.maxHeight - coveredTop - dock >= BkEditorDock.guideRoom)
               Positioned(
                 key: const ValueKey('bk-empty-layer'),
                 left: 32,
                 right: 32,
-                top: 0,
+                top: coveredTop,
                 bottom: dock,
                 child: IgnorePointer(
                   child: Center(child: BkEmptyGuide(nudge: _nudge)),
                 ),
               ),
-            if (selection != null && !dragging && editing == null) Positioned(key: const ValueKey('bk-selection-bar'), left: 12, right: 12, top: 8, child: _selectionBar(context)),
+            if (selection != null && !dragging && editing == null) Positioned(key: const ValueKey('bk-selection-bar'), left: 12, right: 12, top: coveredTop + 8, child: _selectionBar(context)),
             ...buildInlineEdit(context),
             // 提示条贴在积木盒上沿之上：不盖顶上那串的帽子；键盘弹出时页面整体上移，它还在键盘上面。
             if (_toast != null && showToast) Positioned(key: const ValueKey('bk-toast-layer'), left: 24, right: 24, bottom: dock + 16, child: _toastBar()),

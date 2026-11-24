@@ -1,6 +1,9 @@
 // 设计约束（低代码 · 画布 · 390×844）
-// - 最上面一行小工具条，只管“怎么看”：页面宽度（自适应 / 360 / 390 / 768）在左；间距示意开关、缩小、比例、放大、适应屏幕在右。
-// - 下面是画布：灰底上放一块“页面”。手势分工——
+// - 整块都是画布（沉浸式，2026-11-24）：灰底从屏幕最顶铺起，上面放一块“页面”；页面的顶边起始时正好在悬浮顶栏的下沿（topInset），
+//   往上滚时页面从顶栏按钮下面滑过去。
+// - “怎么看”的小工具不再占一整条：变成浮在画布左下、右下的两个小胶囊——页面宽度（自适应 / 360 / 390 / 768）在左；
+//   间距示意开关、缩小、比例、放大、适应屏幕在右。拖组件时它们收起来（不挡落点）。页面滚到底时，底边停在这两个胶囊的上面。
+// - 手势分工——
 //     点一下＝选中（点空白处＝取消选中）；单指拖＝平移 / 上下滚动；双指＝缩放（25%–300%）；
 //     长按组件＝拖动重排；按住选中框上的拖柄拖＝改宽高。
 // - 页面比可视区小的方向不许拖走（横向居中、纵向贴顶），大的方向拖到边就停：不会把页面拖丢。
@@ -14,6 +17,7 @@ import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/lowcode/palette_widgets.dart';
 import 'package:lopicode/lowcode/style_resolve.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/chrome.dart';
 import 'package:material_ui/material_ui.dart';
 
 const double kCanvasMinScale = 0.25;
@@ -22,6 +26,9 @@ const List<double> _zoomSteps = [0.25, 0.5, 0.75, 1, 1.5, 2, 3];
 
 /// 页面宽度的预设；0＝自适应（跟可视区一样宽）。
 const List<int> kCanvasWidthPresets = [0, 360, 390, 768];
+
+/// 画布底部给两个悬浮小胶囊留的高度（胶囊 40 + 上下各 8）。
+const double kCanvasToolsInset = 56;
 
 class CanvasView extends StatefulWidget {
   const CanvasView({
@@ -34,6 +41,7 @@ class CanvasView extends StatefulWidget {
     required this.canDrop,
     required this.onDragging,
     required this.onResize,
+    this.topInset = 0,
   });
 
   final LcDocument doc;
@@ -49,6 +57,9 @@ class CanvasView extends StatefulWidget {
   /// 拖柄松手：把新的宽 / 高（像素，取整）写进组件。哪一项是 null 就是那个方向没动。只在松手时调一次。
   final void Function(String id, int? width, int? height) onResize;
 
+  /// 画布最上面被悬浮顶栏（连同状态栏）盖住多高：页面的顶边从这下面开始，定位和缩放中心也让开它。
+  final double topInset;
+
   @override
   State<CanvasView> createState() => CanvasViewState();
 }
@@ -62,6 +73,12 @@ class CanvasViewState extends State<CanvasView> with SingleTickerProviderStateMi
   bool _showBoxModel = true;
   Size _viewport = Size.zero;
   Size _pageSize = Size.zero;
+
+  /// 露出来的那一段（悬浮顶栏下沿到底部小胶囊上沿）多高。
+  double get _room => (_viewport.height - widget.topInset - kCanvasToolsInset).clamp(0.0, double.infinity).toDouble();
+
+  /// 页面此刻在可视区里占的那一块（屏幕像素；测试用）。
+  Rect get pageRect => _offset & (_pageSize * _scale);
 
   final Map<String, GlobalKey> _keys = {};
   final ValueNotifier<CanvasSelection?> _selection = ValueNotifier(null);
@@ -85,6 +102,13 @@ class CanvasViewState extends State<CanvasView> with SingleTickerProviderStateMi
   double get pageWidth => _presetWidth == 0 ? _viewport.width : _presetWidth.toDouble();
 
   @override
+  void didUpdateWidget(CanvasView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 顶栏那一段变高 / 变矮了（比如状态栏高度变了）：页面跟着挪，不被盖住。
+    if (oldWidget.topInset != widget.topInset) _offset = _clamp(_offset + Offset(0, widget.topInset - oldWidget.topInset), _scale);
+  }
+
+  @override
   void dispose() {
     _ticker.dispose();
     _selection.dispose();
@@ -95,12 +119,14 @@ class CanvasViewState extends State<CanvasView> with SingleTickerProviderStateMi
 
   // ───────────── 缩放与平移 ─────────────
 
-  /// 把位置收回允许的范围：页面比可视区小的方向固定（横向居中、纵向贴顶），大的方向不许露出页面外面。
+  /// 把位置收回允许的范围：页面比露出来的那一段小的方向固定（横向居中、纵向贴着悬浮顶栏的下沿），大的方向不许露出页面外面
+  /// （顶边最低到顶栏下沿，底边最高到底部小胶囊的上沿）。
   Offset _clamp(Offset o, double scale) {
     // 宽度直接用设定的页面宽度（刚换预设、还没量到新尺寸时也是准的）；高度没量到之前按“正好一屏”算。
-    final w = pageWidth * scale, h = (_pageSize.height > 0 ? _pageSize.height : _viewport.height) * scale;
+    final top = widget.topInset, room = _room;
+    final w = pageWidth * scale, h = (_pageSize.height > 0 ? _pageSize.height : room) * scale;
     final x = w <= _viewport.width ? (_viewport.width - w) / 2 : o.dx.clamp(_viewport.width - w, 0.0).toDouble();
-    final y = h <= _viewport.height ? 0.0 : o.dy.clamp(_viewport.height - h, 0.0).toDouble();
+    final y = h <= room ? top : o.dy.clamp(top + room - h, top).toDouble();
     return Offset(x, y);
   }
 
@@ -117,7 +143,7 @@ class CanvasViewState extends State<CanvasView> with SingleTickerProviderStateMi
   /// 缩放到指定比例；[focal] 是可视区里保持不动的那个点（不给就是正中间）。
   void zoomTo(double scale, {Offset? focal}) {
     _ticker.stop();
-    final f = focal ?? _viewport.center(Offset.zero);
+    final f = focal ?? Offset(_viewport.width / 2, widget.topInset + _room / 2);
     final s = scale.clamp(kCanvasMinScale, kCanvasMaxScale).toDouble();
     final pagePoint = (f - _offset) / _scale;
     _moveTo(s, f - pagePoint * s);
@@ -127,7 +153,7 @@ class CanvasViewState extends State<CanvasView> with SingleTickerProviderStateMi
   void fitToScreen() {
     _ticker.stop();
     final w = pageWidth;
-    _moveTo(w > _viewport.width && w > 0 ? _viewport.width / w : 1, Offset.zero);
+    _moveTo(w > _viewport.width && w > 0 ? _viewport.width / w : 1, Offset(0, widget.topInset));
   }
 
   void _zoomStep(int dir) {
@@ -244,81 +270,85 @@ class CanvasViewState extends State<CanvasView> with SingleTickerProviderStateMi
     final c = context.colors;
     _keys.removeWhere((id, _) => widget.doc.find(id) == null);
     SchedulerBinding.instance.addPostFrameCallback((_) => _measure());
-    return Column(
-      children: [
-        _toolbar(context),
-        Expanded(
-          child: LayoutBuilder(
-            builder: (context, box) {
-              final viewport = box.biggest;
-              if (viewport != _viewport) {
-                _viewport = viewport;
-                _offset = _clamp(_offset, _scale);
-              }
-              return ClipRect(
-                child: ColoredBox(
-                  color: c.surfaceMuted,
-                  child: GestureDetector(
-                    key: const ValueKey('lowcode-canvas'),
-                    behavior: HitTestBehavior.opaque,
-                    onTap: () => widget.onSelect(null),
-                    onScaleStart: _onScaleStart,
-                    onScaleUpdate: _onScaleUpdate,
-                    onScaleEnd: _onScaleEnd,
-                    child: OverflowBox(
-                      alignment: Alignment.topLeft,
-                      minWidth: 0,
-                      maxWidth: double.infinity,
-                      minHeight: 0,
-                      maxHeight: double.infinity,
-                      child: Transform(
-                        transform: Matrix4.identity()
-                          ..translateByDouble(_offset.dx, _offset.dy, 0, 1)
-                          ..scaleByDouble(_scale, _scale, 1, 1),
-                        child: Stack(
-                          clipBehavior: Clip.none,
-                          children: [
-                            CanvasPage(
-                              doc: widget.doc,
-                              pageWidth: pageWidth,
-                              minHeight: viewport.height,
-                              selected: widget.selected,
-                              dragging: widget.dragging,
-                              onSelect: widget.onSelect,
-                              onDrop: widget.onDrop,
-                              canDrop: widget.canDrop,
-                              onDragging: widget.onDragging,
-                              boxKey: _keyFor,
-                              preview: _preview,
+    return LayoutBuilder(
+      builder: (context, box) {
+        final viewport = box.biggest;
+        if (viewport != _viewport) {
+          // 第一次量到大小：页面的顶边放在悬浮顶栏的下沿。
+          final first = _viewport == Size.zero;
+          _viewport = viewport;
+          _offset = _clamp(first ? Offset(0, widget.topInset) : _offset, _scale);
+        }
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            ClipRect(
+              child: ColoredBox(
+                color: c.surfaceMuted,
+                child: GestureDetector(
+                  key: const ValueKey('lowcode-canvas'),
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => widget.onSelect(null),
+                  onScaleStart: _onScaleStart,
+                  onScaleUpdate: _onScaleUpdate,
+                  onScaleEnd: _onScaleEnd,
+                  child: OverflowBox(
+                    alignment: Alignment.topLeft,
+                    minWidth: 0,
+                    maxWidth: double.infinity,
+                    minHeight: 0,
+                    maxHeight: double.infinity,
+                    child: Transform(
+                      transform: Matrix4.identity()
+                        ..translateByDouble(_offset.dx, _offset.dy, 0, 1)
+                        ..scaleByDouble(_scale, _scale, 1, 1),
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          CanvasPage(
+                            doc: widget.doc,
+                            pageWidth: pageWidth,
+                            minHeight: _room,
+                            selected: widget.selected,
+                            dragging: widget.dragging,
+                            onSelect: widget.onSelect,
+                            onDrop: widget.onDrop,
+                            canDrop: widget.canDrop,
+                            onDragging: widget.onDragging,
+                            boxKey: _keyFor,
+                            preview: _preview,
+                          ),
+                          Positioned.fill(
+                            child: ValueListenableBuilder<CanvasSelection?>(
+                              valueListenable: _selection,
+                              builder: (context, sel, _) => sel == null
+                                  ? const SizedBox.shrink()
+                                  : CanvasSelectionOverlay(
+                                      selection: sel,
+                                      scale: _scale,
+                                      showBoxModel: _showBoxModel,
+                                      onResizeStart: _resizeStart,
+                                      onResizeUpdate: _resizeUpdate,
+                                      onResizeEnd: _resizeEnd,
+                                    ),
                             ),
-                            Positioned.fill(
-                              child: ValueListenableBuilder<CanvasSelection?>(
-                                valueListenable: _selection,
-                                builder: (context, sel, _) => sel == null
-                                    ? const SizedBox.shrink()
-                                    : CanvasSelectionOverlay(
-                                        selection: sel,
-                                        scale: _scale,
-                                        showBoxModel: _showBoxModel,
-                                        onResizeStart: _resizeStart,
-                                        onResizeUpdate: _resizeUpdate,
-                                        onResizeEnd: _resizeEnd,
-                                      ),
-                              ),
-                            ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
                 ),
-              );
-            },
-          ),
-        ),
-      ],
+              ),
+            ),
+            // 拖组件时收起来：不挡插入位置。
+            if (!widget.dragging) Positioned(left: Space.x3, right: Space.x3, bottom: (kCanvasToolsInset - _toolsHeight) / 2, child: _toolbar(context)),
+          ],
+        );
+      },
     );
   }
+
+  static const double _toolsHeight = 40;
 
   Widget _toolbar(BuildContext context) {
     final c = context.colors;
@@ -332,15 +362,23 @@ class CanvasViewState extends State<CanvasView> with SingleTickerProviderStateMi
       onPressed: onTap,
     );
     String label(int w) => w == 0 ? '自适应' : '$w';
-    return Container(
-      height: 40,
-      decoration: BoxDecoration(
-        color: c.surface,
-        border: Border(bottom: BorderSide(color: c.border)),
+    const radius = BorderRadius.all(Radius.circular(_toolsHeight / 2));
+    Widget pill(String key, Widget child) => SizedBox(
+      key: ValueKey(key),
+      height: _toolsHeight,
+      child: DecoratedBox(
+        decoration: floatingDecoration(c, radius: radius),
+        child: ClipRRect(
+          borderRadius: radius,
+          child: Material(type: MaterialType.transparency, child: child),
+        ),
       ),
-      padding: const EdgeInsets.only(left: Space.x2, right: Space.x1),
-      child: Row(
-        children: [
+    );
+    // 两个小胶囊之间是透明的：手指落在那里等于落在画布上。
+    return Row(
+      children: [
+        pill(
+          'lowcode-width-pill',
           PopupMenuButton<int>(
             tooltip: '页面宽度',
             initialValue: _presetWidth,
@@ -350,7 +388,7 @@ class CanvasViewState extends State<CanvasView> with SingleTickerProviderStateMi
             },
             itemBuilder: (_) => [for (final w in kCanvasWidthPresets) PopupMenuItem(value: w, child: Text(w == 0 ? '自适应（跟屏幕一样宽）' : '$w 像素'))],
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: Space.x2, vertical: 6),
+              padding: const EdgeInsets.only(left: Space.x3, right: Space.x2),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -362,17 +400,28 @@ class CanvasViewState extends State<CanvasView> with SingleTickerProviderStateMi
               ),
             ),
           ),
-          const Spacer(),
-          icon(Icons.border_outer, _showBoxModel ? '间距示意：开' : '间距示意：关', () => setState(() => _showBoxModel = !_showBoxModel), active: _showBoxModel),
-          icon(Icons.remove, '缩小', _scale > kCanvasMinScale + 0.001 ? () => _zoomStep(-1) : null),
-          SizedBox(
-            width: 44,
-            child: Text('${(_scale * 100).round()}%', key: const ValueKey('lowcode-zoom-label'), textAlign: TextAlign.center, style: t.labelMedium),
+        ),
+        const Spacer(),
+        pill(
+          'lowcode-zoom-pill',
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 2),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                icon(Icons.border_outer, _showBoxModel ? '间距示意：开' : '间距示意：关', () => setState(() => _showBoxModel = !_showBoxModel), active: _showBoxModel),
+                icon(Icons.remove, '缩小', _scale > kCanvasMinScale + 0.001 ? () => _zoomStep(-1) : null),
+                SizedBox(
+                  width: 44,
+                  child: Text('${(_scale * 100).round()}%', key: const ValueKey('lowcode-zoom-label'), textAlign: TextAlign.center, style: t.labelMedium),
+                ),
+                icon(Icons.add, '放大', _scale < kCanvasMaxScale - 0.001 ? () => _zoomStep(1) : null),
+                icon(Icons.fit_screen_outlined, '适应屏幕', fitToScreen),
+              ],
+            ),
           ),
-          icon(Icons.add, '放大', _scale < kCanvasMaxScale - 0.001 ? () => _zoomStep(1) : null),
-          icon(Icons.fit_screen_outlined, '适应屏幕', fitToScreen),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

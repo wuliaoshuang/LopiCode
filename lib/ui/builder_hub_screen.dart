@@ -5,6 +5,7 @@
 //   · 两个都有（全栈项目）→ 最上面一条分段按钮“页面 | 后端”，下面是对应的那一页；切走的那一页留着不销毁。
 //   · 都没有 → 一个空状态，两个出路各占一行：主按钮“新建页面”，次按钮“新建后端积木”。
 // - 分段按钮单独占一行（一行只做一件事），不往两个页面各自的顶栏里塞。
+//   它是浮着的（沉浸式，2026-11-24）：没有整条底色，下面的画布一直铺到屏幕最顶；两个页面各自的悬浮顶栏排在它下面一行。
 // - 上次选的是页面还是后端，按工作区记着（只记在内存里），从别的页签回来还是它。
 import 'dart:io';
 
@@ -144,36 +145,42 @@ class _BuilderHubScreenState extends ConsumerState<BuilderHubScreen> {
 
     final side = _lastSide[_s] == 'backend' ? 'backend' : 'page';
     _built.add(side);
+    // 沉浸式：切换条不再占一整条带底色的栏，而是浮在画布上面；里面的页面从屏幕最顶铺起，
+    // 它们的悬浮顶栏排在切换条下面（把切换条占的高度当成状态栏的一部分告诉它们）。
+    final mq = MediaQuery.of(context);
+    const lift = Space.x2 + kHubSwitchHeight;
     return ColoredBox(
       color: c.bg,
-      child: Column(
+      child: Stack(
+        fit: StackFit.expand,
         children: [
-          SafeArea(
-            bottom: false,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(Space.x4, Space.x2, Space.x4, 0),
-              child: SizedBox(
-                width: double.infinity,
-                child: SegmentedButton<String>(
-                  key: const ValueKey('hub-switch'),
-                  showSelectedIcon: false,
-                  style: const ButtonStyle(visualDensity: VisualDensity.compact, tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-                  segments: const [
-                    ButtonSegment(value: 'page', label: Text('页面'), icon: Icon(Icons.dashboard_customize_outlined, size: 18)),
-                    ButtonSegment(value: 'backend', label: Text('后端'), icon: Icon(Icons.dns_outlined, size: 18)),
-                  ],
-                  selected: {side},
-                  onSelectionChanged: (v) => setState(() => _lastSide[_s] = v.first),
-                ),
-              ),
+          MediaQuery(
+            data: mq.copyWith(
+              padding: mq.padding.copyWith(top: mq.padding.top + lift),
+              viewPadding: mq.viewPadding.copyWith(top: mq.viewPadding.top + lift),
             ),
+            child: IndexedStack(index: side == 'page' ? 0 : 1, children: [_built.contains('page') ? page() : const SizedBox.shrink(), _built.contains('backend') ? back() : const SizedBox.shrink()]),
           ),
-          Expanded(
-            // 上面那条已经让开了状态栏，里面的页面不用再让一次。
-            child: MediaQuery.removePadding(
-              context: context,
-              removeTop: true,
-              child: IndexedStack(index: side == 'page' ? 0 : 1, children: [_built.contains('page') ? page() : const SizedBox.shrink(), _built.contains('backend') ? back() : const SizedBox.shrink()]),
+          Positioned(
+            left: Space.x4,
+            right: Space.x4,
+            top: mq.padding.top + Space.x2,
+            height: kHubSwitchHeight,
+            child: DecoratedBox(
+              // 自己带一块卡片色的底：下面有积木 / 控件滑过时字还看得清。
+              decoration: BoxDecoration(color: c.surface, borderRadius: BorderRadius.circular(kHubSwitchHeight / 2)),
+              child: SegmentedButton<String>(
+                key: const ValueKey('hub-switch'),
+                showSelectedIcon: false,
+                // 和外面那块底一样高，选中的那一半才填得满。
+                style: const ButtonStyle(visualDensity: VisualDensity.standard, tapTargetSize: MaterialTapTargetSize.shrinkWrap, minimumSize: WidgetStatePropertyAll(Size(0, kHubSwitchHeight))),
+                segments: const [
+                  ButtonSegment(value: 'page', label: Text('页面'), icon: Icon(Icons.dashboard_customize_outlined, size: 18)),
+                  ButtonSegment(value: 'backend', label: Text('后端'), icon: Icon(Icons.dns_outlined, size: 18)),
+                ],
+                selected: {side},
+                onSelectionChanged: (v) => setState(() => _lastSide[_s] = v.first),
+              ),
             ),
           ),
         ],
@@ -181,3 +188,6 @@ class _BuilderHubScreenState extends ConsumerState<BuilderHubScreen> {
     );
   }
 }
+
+/// “页面 / 后端”切换条多高。
+const double kHubSwitchHeight = 40;
