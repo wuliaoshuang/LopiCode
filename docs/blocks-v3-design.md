@@ -32,18 +32,81 @@
 
 ## 积木编辑器（lib/blocks）
 
-### 对外接口：`BlockHost`
+### 对外接口：`BlockHost`（已定，`lib/blocks/block_host.dart`）
 
-编辑器不直接碰 `LcDocument`。前端、后端各实现一个 host（接口的最终签名由做编辑器的人定，写回这一节）：
+编辑器不直接碰 `LcDocument`。前端、后端各 `extends BlockHost`。前端的实现是 `lib/lowcode/logic_block_host.dart` 的
+`LogicBlockHost`，后端照着它写。带“可覆盖”的有默认实现。
 
-- 目录：有哪些积木 / 表达式、分类与顺序、每类的颜色。
-- 脚本：`List<LcBlockTree>`；每串的“帽子”显示什么（一段段文字 + 可点的槽位，例如“当 [按钮 提交] 被点击”“GET [/todos/:id]”），
-  帽子的槽位怎么改；积木盒里有哪些帽子可以拖出来（＝新建一串）；删一串。
-- 造新积木 / 新表达式（带默认参数）。
-- 某种参数有哪些可选项（变量、控件、集合）。
-- 校验结果（哪一串、哪条路径、哪个参数、说什么）。
-- “看代码”的文字。
-- 改动前后各通知一次（宿主负责撤销快照和落盘）；撤销 / 重做。
+```dart
+abstract class BlockHost {
+  // 目录
+  List<BlockCategory> get categories;        // 积木盒的分页：id / label / colorKey / hats / blocks(op) / exprs(e)
+  LcBlockSpec? blockSpec(String op);          // 不认识返回 null（画成“不认识的积木”）
+  LcExprSpec? exprSpec(String kind);
+  String blockColorKey(String op);            // 可覆盖：默认＝它在哪一页就用哪页的颜色
+  String exprColorKey(String kind);           // 可覆盖
+  String? blockSentence(String op);           // 可覆盖：积木上的话，`把 {name} 设为 {value}`；null＝通用排法
+  String? exprSentence(String kind);          // 可覆盖：`{l} {op} {r}`
+  bool isBooleanExpr(Map<String, dynamic> e); // 可覆盖：是 / 否类 → 六边形
+
+  // 脚本
+  List<LcBlockTree> get scripts;              // 每次重新取，不要留着
+  LcBlockTree? script(String id);
+  BlockHat hatOf(LcBlockTree tree);           // 帽子：BlockHatPart.text('当') / BlockHatPart.slot('target', '按钮“提交”')
+  String hatSlotValue(LcBlockTree tree, String slotId);
+  List<BlockOption> hatSlotOptions(LcBlockTree tree, String slotId);
+  bool setHatSlot(LcBlockTree tree, String slotId, String value);          // 在 edit 里调
+  LcBlockTree? addScript(String templateId, {double? x, double? y});       // 在 edit 里调；templateId＝BlockHatTemplate.id
+  bool removeScript(String id);                                            // 在 edit 里调
+
+  // 造新的
+  LcBlock newBlock(String op);
+  Map<String, dynamic> newExpr(String kind);
+  Map<String, dynamic> defaultExpr(LcArgSpec arg);   // 可覆盖：表达式槽被拖空后放回什么
+
+  // 参数
+  List<BlockOption> options(LcArgSpec arg, {LcBlockTree? tree, LcBlock? block, Map<String, dynamic>? expr});
+  String optionLabel(LcArgSpec arg, String value);   // 可覆盖：值显示成什么字
+
+  // 校验与代码
+  List<BlockIssue> get issues;               // message / isError / scriptId / path（空＝帽子）/ arg
+  String get codeText;
+  String get codeLanguage;                   // “JavaScript”“Python”…
+
+  // 改动、撤销、通知
+  void edit(void Function() change);         // 一次＝一条撤销记录＝一次落盘；宿主先记快照、跑 change、落盘、revision+1、调 onChanged
+  bool get canUndo; bool get canRedo; void undo(); void redo();
+  int get revision;                          // 内容每变一次加一，编辑器据此重排
+  void Function()? onChanged;                // 只有一个位置，谁显示宿主谁占，离开时置 null
+}
+```
+
+三条用法规矩：
+
+1. **不要跨一次改动留着 `LcBlockTree` / `LcBlock` 对象**（撤销重做后宿主可能整份换对象）。记“脚本 id + 路径”，用时从 `host.script(id)` 重新找。
+2. **所有改动都包在 `host.edit(() { … })` 里**；`change` 里用 `host.scripts / script` 拿到的就是可以直接改的对象。自动排布的位置不是改动，不许写回。
+3. 颜色只给“哪一类”（`BlockColorKey`：event / variable / widget / control / action / network / value / operator / data / request / response / unknown），
+   具体颜色、明暗两套在 `lib/blocks/block_colors.dart`。后端要新的类别先在那里加键。
+
+积木上的话用模板（`{参数名}`）：模板里没提到的参数会自动接在后面；有 body 的积木，第一个口的叫法写在模板末尾（“如果 {cond} 那么”），
+第二个口的叫法（`elseLabel`）画在两个口之间的横栏上。表达式只有一个直接填的参数（文字 / 数字 / 是否）时画成“光杆”输入框，不包彩色外壳。
+
+### 几何与拼接（给做拖拽的人，`lib/blocks/block_geometry.dart`、`block_layout.dart`、`block_canvas_layout.dart`）
+
+- `BlockLayoutEngine(host, measure)`：`layoutScript(tree)`（帽子 + 整串）、`layoutStack(blocks, parent:, inElse:, startIndex:)`（拖在手上的一截 / 样品，
+  路径照原位置算）、`layoutExpr(expr)`（单独一个表达式，结果在 `loose`）、`layoutHat(hat)`。界面里用 `BkKit.of(context).engine(host)`。
+- `BkScriptLayout`：`blocks`（帽子在前，先外后里）、`snaps`、`size`、`blockAt(path)`、`hitTest(点) → BkHit(block, slot, expr)`、
+  `nearestSnap(点, kind:, maxDistance: 36, exclude: 被拖积木的路径)`、`allSlots`。坐标是这一串自己的（左上为原点）。
+- `BkSnap`：语句（`parent / inElse / index / anchor / width`，正好是 `tree.insertBlock(parent, b, inElse:, index:)` 的参数；
+  `anchor`＝被拖块的左上角该去的地方）；表达式（`parent`＝积木路径、`arg`、`exprPath`、`rect`、`hex`，配 `bkExprAt / bkSetExprAt(block, arg, exprPath, 值)`）。
+  `exprPath` 每一步是字段名或列表下标：`['l']`、`['items', 1]`；空表＝参数本身。
+- `layoutBlockCanvas(host, engine) → BkCanvasLayout`：`scripts`（`BkPlaced`: id / origin / layout / auto）、`extent`、`hitTest(画布点)`、
+  `nearestSnap(画布点, kind:, excludeScript:, exclude:)`（返回的 `anchor` 是画布坐标）。
+- 画：`BkScriptPainter.paint(canvas, layout, BkPaintState(selected:, selectedHat:, selectedSlot:, lifted:, ghost:, errors:, warnings:))`；
+  控件 `BkLayoutView`（任意排版结果）、`BlockScriptView`（一串）、`BlockCanvasView`（只读画布，`BlockCanvasViewState.layout / selection / select`）、
+  `BlockPaletteView`（积木盒，`onPick(BlockPaletteItem)`，样品自带排版可直接当拖影）。
+- 尺寸都在 `BkMetrics`：单块最宽 320、最矮 40；凹口离左 14、宽 24、深 5；C 形胳膊宽 14、空口高 30、横栏 26、底条 16；帽子圆顶 13。
+- 还没做（留给交互那一步）：拖拽与吸附、就地编辑、`join` 这类列表参数的“加一项 / 删一项”、放回原处等于没动的判断、画布位置写回 x / y。
 
 ### 外形（自己用 CustomPainter 画）
 
