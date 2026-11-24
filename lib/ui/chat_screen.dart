@@ -1,8 +1,13 @@
-// 设计约束（Agent 聊天 · 390×844）
-// - 左对齐顶栏；消息按对话气泡排列，工具执行折叠成低强调的一行，不抢正文。
-// - 输入区是贴着底部的圆角面板：左“＋”、中间输入、右边发送 / 停止；模型、权限、图片和引用收进“＋”。
-// - 自动允许、计划模式、队列和附件只在出现时显示；开场建议用短标签，不做大段说明。
-// - 主操作只有发送；生成时长按发送键选排队、插话或中断。
+// 设计约束（Agent 聊天 · 390×844）— 2026-11-23 按霜霜的参考图（workspace/user/files/88187_0_7hlw.jpg）改版
+// - 近白底。顶部不是一条栏：左上悬浮白色圆按钮（汉堡），右上悬浮白色圆按钮（···），正中一个白色小胶囊写对话名和“工作区 / 模型名”。
+//   聊天内容从它们下面滚过去，顶部渐隐。有子代理时，右上的圆变成胶囊，多一个子代理计数。
+// - 气泡：Agent 的回复是靠左的大圆角浅灰块（左上角小圆角），右边留出一截；我的消息是靠右的浅蓝块（右上角小圆角）。正文 16 号字。
+// - 输入框是一整条浅灰胶囊，悬浮在底部导航上方：左“＋”、中间输入、右边圆形发送 / 停止（参考图里麦克风的位置）。
+// - 一行只做一件事：模型、权限、计划模式、图片、引用文件都收进“＋”面板，每项一行并写着当前值；
+//   新对话、Agent 预设、团队、压缩、导出、删除都在右上“···”菜单里。项目规则在“设置”里。
+// - 胶囊上方按需叠几条窄条：自动允许中、计划模式、排队的消息、附件缩略图、/ 指令提示；确认卡和提问卡也钉在这里。
+// - 空对话：没有可用模型时给明确的上手入口；模型可用时默认显示几条弱化的开场建议，可在“设置”里关闭。
+// - 主操作只有一个：发送。AI 生成时长按发送键选“排队 / 插话 / 中断并发送”。
 import 'dart:async';
 import 'dart:convert';
 
@@ -343,8 +348,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       extendBodyBehindAppBar: true,
       appBar: ShellAppBar(
         fade: true,
+        pill: true,
         title: s.conversationTitle,
-        subtitle: '${s.project.name} · ${model == null ? '未设置模型' : model.model.name}',
+        subtitle: '${s.project.name} / ${model == null ? '未设置模型' : model.model.name}',
         actions: [
           if (subs.isNotEmpty) SubAgentCapsule(total: subs.length, running: running, onTap: _openSubAgents),
           PopupMenuButton<String>(
@@ -432,7 +438,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 }
 
-/// 底部输入面板：左“＋”、中间输入、右边发送 / 停止。
+/// 底部的胶囊输入框：左“＋”、中间输入、右边发送 / 停止。
 class _InputCard extends StatelessWidget {
   const _InputCard({
     required this.controller,
@@ -467,25 +473,21 @@ class _InputCard extends StatelessWidget {
     return Container(
       key: const ValueKey('chat-input'),
       margin: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x2),
-      padding: const EdgeInsets.all(Space.x1),
+      padding: const EdgeInsets.symmetric(horizontal: Space.x1, vertical: Space.x1),
       constraints: const BoxConstraints(minHeight: 52),
-      decoration: BoxDecoration(
-        color: c.surface,
-        borderRadius: BorderRadius.circular(Radii.xl),
-        border: Border.all(color: c.border),
-      ),
+      decoration: BoxDecoration(color: c.surfaceMuted, borderRadius: BorderRadius.circular(26)),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           SizedBox(
-            width: 40,
-            height: 40,
+            width: 44,
+            height: 44,
             child: IconButton(
               key: const ValueKey('plus-button'),
               tooltip: '模型、权限、图片等',
               padding: EdgeInsets.zero,
               onPressed: onPlus,
-              icon: Icon(Icons.add, size: 22, color: c.textMuted),
+              icon: Icon(Icons.add, size: 26, color: c.text),
             ),
           ),
           Expanded(
@@ -497,7 +499,7 @@ class _InputCard extends StatelessWidget {
               style: t.bodyLarge,
               textInputAction: TextInputAction.newline,
               decoration: InputDecoration(
-                hintText: busy ? '输入下一句话' : '描述你想完成的事',
+                hintText: busy ? '接着说：点发送排队，长按选方式' : '告诉 Agent 你想做什么',
                 hintStyle: t.bodyLarge?.copyWith(color: c.textFaint),
                 hintMaxLines: 1,
                 filled: false,
@@ -556,7 +558,7 @@ class _RoundButton extends StatelessWidget {
       fixedSize: const Size(36, 36),
       padding: EdgeInsets.zero,
       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Radii.md)),
+      shape: const CircleBorder(),
     ),
     icon: Icon(icon, size: 20),
   );
@@ -569,10 +571,11 @@ class _EmptyChat extends StatelessWidget {
   final bool showIdeas;
   final void Function(String) onPick;
 
-  static const _ideas = [('梳理项目', '看一下项目里有哪些文件，告诉我它是做什么的'), ('做个主页', '做一个个人主页：头像、简介、三个作品卡片'), ('加深色模式', '给页面加一个深色模式切换按钮')];
+  static const _ideas = ['看一下项目里有哪些文件，告诉我它是做什么的', '做一个个人主页：头像、简介、三个作品卡片', '给页面加一个深色模式切换按钮'];
 
   @override
   Widget build(BuildContext context) {
+    final c = context.colors;
     final t = Theme.of(context).textTheme;
     return Column(
       children: [
@@ -584,13 +587,23 @@ class _EmptyChat extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('从一句需求开始', style: t.labelMedium?.copyWith(color: context.colors.textMuted)),
-                const SizedBox(height: Space.x2),
-                Wrap(
-                  spacing: Space.x2,
-                  runSpacing: Space.x1,
-                  children: [for (final (label, prompt) in _ideas) ActionChip(label: Text(label), onPressed: () => onPick(prompt))],
-                ),
+                for (final idea in _ideas)
+                  InkWell(
+                    borderRadius: BorderRadius.circular(Radii.md),
+                    onTap: () => onPick(idea),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: Space.x2, vertical: Space.x2),
+                      child: Row(
+                        children: [
+                          Icon(Icons.north_east, size: 14, color: c.textFaint),
+                          const SizedBox(width: Space.x2),
+                          Expanded(
+                            child: Text(idea, style: t.bodyMedium?.copyWith(color: c.textMuted)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -605,8 +618,8 @@ class _NeedsSetup extends StatelessWidget {
   @override
   Widget build(BuildContext context) => EmptyState(
     icon: Icons.key_outlined,
-    title: '先连接模型',
-    message: '添加接口和 API Key，再勾选要用的模型。',
+    title: '先连上一个模型',
+    message: '添加一个渠道（接口地址和 API Key），\n再勾上要用的模型，Agent 才能开始干活。',
     action: FilledButton(
       onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const ChannelsScreen())),
       child: const Text('添加模型'),
@@ -783,12 +796,16 @@ class _ToolCardState extends State<_ToolCard> {
     final mono = TextStyle(fontFamily: kMonoFont, fontFamilyFallback: kMonoFallback, fontSize: FontSize.xs, height: 1.5, color: c.textMuted);
     return Container(
       margin: const EdgeInsets.symmetric(vertical: Space.x1),
-      decoration: BoxDecoration(color: tool.running ? c.surfaceMuted : Colors.transparent, borderRadius: BorderRadius.circular(Radii.md)),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(Radii.lg),
+        border: Border.all(color: c.border),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           InkWell(
-            borderRadius: BorderRadius.circular(Radii.md),
+            borderRadius: BorderRadius.circular(Radii.lg),
             onTap: () => setState(() => _expanded = !_expanded),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: Space.x3, vertical: Space.x2),

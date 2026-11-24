@@ -130,18 +130,18 @@ void main() {
       await settle(tester, rounds: rounds);
     }
 
-    testWidgets('设置目录页：概况卡 + 分组列表，一行一件事 ($suffix)', (tester) async {
+    testWidgets('设置目录页：概况卡 + AI / 能力 / 通用 / 关于四组卡片，一行一件事 ($suffix)', (tester) async {
       await boot(tester);
       await addChannels(tester);
       await show(tester, SettingsScreen(workspace: project), push: true);
-      // 顶部：返回按钮 + 左对齐标题
+      // 顶部：圆形返回按钮 + 居中标题
       expect(find.byTooltip('返回'), findsOneWidget);
-      expect(tester.getCenter(find.text('设置')).dx, lessThan(195), reason: '标题左对齐');
+      expect(tester.getCenter(find.text('设置')).dx, closeTo(195, 1), reason: '标题居中');
       // 概况卡：新对话用的模型 + 运行环境，都是真实状态
       final overview = find.byKey(const Key('settings-overview'));
       expect(find.descendant(of: overview, matching: find.text('主力模型')), findsOneWidget);
       // 不是 DeepSeek 官方渠道：只有模型名和渠道名，没有进度条和百分比（运行环境那一块仍有自己的进度条）
-      expect(find.descendant(of: overview, matching: find.textContaining('我的中转站 · 新对话默认模型')), findsOneWidget);
+      expect(find.descendant(of: overview, matching: find.textContaining('新对话用的模型 · 我的中转站')), findsOneWidget);
       expect(find.descendant(of: overview, matching: find.textContaining('%')), findsNothing);
       expect(
         find.descendant(of: overview, matching: find.byKey(const Key('overview-bar'))),
@@ -384,8 +384,8 @@ void main() {
       await shot(tester, '49-workspaces-$suffix');
       await tester.tap(find.text('添加工作区'));
       await settle(tester, rounds: 3);
-      expect(find.text('新建工作区'), findsOneWidget);
-      expect(find.text('添加 Ubuntu 目录'), findsOneWidget);
+      expect(find.text('新建项目'), findsOneWidget);
+      expect(find.text('Ubuntu 里的目录'), findsOneWidget);
       await shot(tester, '50-workspace-add-$suffix');
     });
 

@@ -110,7 +110,7 @@ class LocalShellBackend implements TerminalBackend {
   Future<void> _startPipe({bool announce = false}) async {
     mode = LocalShellMode.pipe;
     if (announce) {
-      _emit('\x1b[33m基础模式：一次一条命令。\n不支持 vi、top。\x1b[0m\r\n');
+      _emit('\x1b[33m已退回基础模式：一次一条命令。\nvi、top 等全屏程序不可用。\x1b[0m\r\n');
     }
     try {
       final process = await Process.start(shellPath, const [], workingDirectory: workingDirectory, environment: {'TERM': 'dumb', 'HOME': workingDirectory});

@@ -1,9 +1,14 @@
-// 设计约束（移动工作台 · 390×844）
-// - 顶部标题左对齐，主操作靠右；用细分隔线和留白分组，不靠悬浮圆按钮和居中胶囊制造层级。
-// - 底色两种：bg（主页面近白）和 canvas（设置类页面浅灰）；卡片只承载一组相关内容，圆角保持在 16–20。
+// 设计约束（Refactoring UI · Workflow A）— 2026-11-23 按霜霜给的两张参考图改版
+// - 只有手机一个目标：390×844，浅色 + 深色。
+// - 色板：品牌蓝（primary，基色取自参考图二进度条的 #2962CB）、中性灰（neutral）、危险红、警告橙，
+//   由 refactoring-ui 的 generate_palette.py 生成，界面里不出现表外的颜色；
+//   正文 / 次要文字 / 强调色在各自底色上都用 check_contrast.py 验过 ≥ 4.5:1。
+// - 底色两种：bg（对话等主页面，近白 #FCFCFC，参考图一）和 canvas（设置这类“卡片分组”页面，浅灰 #F3F4F6，参考图二）。
+//   白卡片（surface）只放在 canvas 上；浅灰块（surfaceMuted，#E9EAEC）用于气泡和胶囊输入框。
 // - 字号阶：12 / 14 / 16 / 18 / 20 / 24 / 30；字重只用 400 和 600。
-// - 间距阶：4 / 8 / 12 / 16 / 24 / 32 / 48；一屏只突出一个主操作。
-// - 正文 / 次要文字 / 强调色在各自底色上都保持足够对比度；次要信息用 muted 色。
+// - 间距阶：4 / 8 / 12 / 16 / 24 / 32 / 48。
+// - 圆角：6（小控件）/ 10（按钮、输入框）/ 16（底部面板）/ 20（气泡）/ 24（旧卡片）/ 28（分组大卡片）；胶囊和圆按钮是全圆。
+// - 层级靠字重和颜色深浅拉开，不靠加大字号；次要信息用 muted 色。
 import 'package:material_ui/material_ui.dart';
 
 abstract final class Palette {
@@ -58,11 +63,11 @@ abstract final class Radii {
   static const double sm = 6;
   static const double md = 10;
   static const double lg = 16;
-  static const double bubble = 16;
+  static const double bubble = 20;
   static const double xl = 24;
 
-  /// 分组卡片（设置页那种）。
-  static const double card = 20;
+  /// 分组大卡片（设置页那种）。
+  static const double card = 28;
 }
 
 abstract final class FontSize {

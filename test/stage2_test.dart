@@ -429,7 +429,7 @@ void main() {
       backend.output.listen(seen.write);
       await backend.start(columns: 80, rows: 24);
       expect(backend.mode, LocalShellMode.pipe);
-      expect(seen.toString(), contains('基础模式'));
+      expect(seen.toString(), contains('已退回基础模式'));
       backend.write('lx\x7fs\r'); // 打错一个字、退格、再回车
       await Future<void>.delayed(const Duration(milliseconds: 500));
       expect(seen.toString(), contains('hello.txt'));

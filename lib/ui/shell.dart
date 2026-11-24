@@ -82,9 +82,9 @@ class _MenuButton extends StatelessWidget {
   Widget build(BuildContext context) => RoundIconButton(tooltip: '打开侧边栏', icon: Icons.drag_handle_rounded, onPressed: onPressed);
 }
 
-/// 统一的顶部：左对齐标题 + 右侧操作。
+/// 统一的顶部：左圆按钮（汉堡 / 返回）+ 居中的两行标题 + 这一页的操作。
 class ShellAppBar extends StatelessWidget implements PreferredSizeWidget {
-  const ShellAppBar({super.key, required this.title, this.subtitle, this.actions, this.fade = false, this.background});
+  const ShellAppBar({super.key, required this.title, this.subtitle, this.actions, this.fade = false, this.background, this.pill = false});
   final String title;
   final String? subtitle;
   final List<Widget>? actions;
@@ -93,18 +93,51 @@ class ShellAppBar extends StatelessWidget implements PreferredSizeWidget {
   final bool fade;
   final Color? background;
 
+  /// 标题装进一个白色小胶囊（对话页，对应参考图顶部正中的名字胶囊）。
+  final bool pill;
+
   @override
   Size get preferredSize => const Size.fromHeight(PageBar.kHeight);
 
   @override
-  Widget build(BuildContext context) => PageBar(
-    leading: Builder(builder: (context) => shellLeading(context) ?? const SizedBox.shrink()),
-    titleText: title,
-    subtitle: subtitle ?? ShellScope.maybeOf(context)?.projectName,
-    actions: actions,
-    fade: fade,
-    background: background,
-  );
+  Widget build(BuildContext context) {
+    final t = Theme.of(context).textTheme;
+    final c = context.colors;
+    final sub = subtitle ?? ShellScope.maybeOf(context)?.projectName;
+    Widget middle = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          title,
+          style: (pill ? t.titleSmall : t.titleLarge)?.copyWith(fontWeight: pill ? FontWeight.w600 : FontWeight.w400),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        if (sub != null && sub.isNotEmpty)
+          Text(
+            sub,
+            style: t.bodySmall?.copyWith(color: c.textFaint, height: 1.25),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+      ],
+    );
+    if (pill) {
+      middle = Container(
+        height: RoundIconButton.kSize,
+        padding: const EdgeInsets.symmetric(horizontal: Space.x4),
+        decoration: floatingDecoration(c, radius: BorderRadius.circular(RoundIconButton.kSize / 2)),
+        child: Center(widthFactor: 1, child: middle),
+      );
+    }
+    return PageBar(
+      leading: Builder(builder: (context) => shellLeading(context) ?? const SizedBox.shrink()),
+      title: middle,
+      actions: actions,
+      fade: fade,
+      background: background,
+    );
+  }
 }
 
 /// 侧边栏。没打开项目时（[session] 为空）只有“项目”和“设置”。

@@ -1,8 +1,8 @@
 // 设计约束（低代码搭建 · 390×844）
 // - 画布是主角，占满屏幕宽度，所见即所得（和导出的 Flutter 代码用同一套排版规则）。
 // - 底部固定一条组件栏：长按拖到画布，或者点一下直接加进当前选中的容器。
-// - 选中组件后只显示名字和“属性”；上移、下移、复制、删除收进行尾菜单。
-// - 属性、图层树放进底部面板；顶栏保留撤销、图层和更多操作。
+// - 选中组件后，组件栏上方出现一行操作：名字在左，上移 / 下移 / 复制 / 删除 / 属性在右。
+// - 属性、图层树都放进底部面板，不和画布抢地方。撤销 / 重做在顶栏。
 // - 拖动时才显示插入位置（绿色横条 / 竖条），平时不干扰画面。
 import 'dart:async';
 import 'dart:io';
@@ -14,7 +14,6 @@ import 'package:lopicode/lowcode/export_dart.dart';
 import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/theme/tokens.dart';
-import 'package:lopicode/ui/builder_selection_bar.dart';
 import 'package:lopicode/ui/shell.dart';
 import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
@@ -239,7 +238,6 @@ class _BuilderScreenState extends State<BuilderScreen> {
   Widget build(BuildContext context) {
     final doc = _doc;
     final history = _history;
-    final selectedNode = _selected == null ? null : doc?.find(_selected!);
     return Scaffold(
       appBar: ShellAppBar(
         title: '低代码搭建',
@@ -248,11 +246,11 @@ class _BuilderScreenState extends State<BuilderScreen> {
             ? null
             : [
                 IconButton(tooltip: '撤销', icon: const Icon(Icons.undo), onPressed: history!.canUndo ? () => _restore(history.undo()) : null),
+                IconButton(tooltip: '重做', icon: const Icon(Icons.redo), onPressed: history.canRedo ? () => _restore(history.redo()) : null),
                 IconButton(tooltip: '图层', icon: const Icon(Icons.layers_outlined), onPressed: _openLayers),
                 PopupMenuButton<String>(
                   tooltip: '更多',
                   onSelected: (v) {
-                    if (v == 'redo') _restore(history.redo());
                     if (v == 'dart') _exportDart();
                     if (v == 'preview') {
                       final shell = ShellScope.maybeOf(context);
@@ -264,11 +262,10 @@ class _BuilderScreenState extends State<BuilderScreen> {
                     }
                     if (v == 'title') _renamePage();
                   },
-                  itemBuilder: (_) => [
-                    PopupMenuItem(value: 'redo', enabled: history.canRedo, child: const Text('重做')),
-                    const PopupMenuItem(value: 'preview', child: Text('在预览里打开')),
-                    const PopupMenuItem(value: 'dart', child: Text('导出 Flutter 代码')),
-                    const PopupMenuItem(value: 'title', child: Text('修改页面标题')),
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(value: 'preview', child: Text('在预览里打开网页')),
+                    PopupMenuItem(value: 'dart', child: Text('导出 Flutter 代码')),
+                    PopupMenuItem(value: 'title', child: Text('修改页面标题')),
                   ],
                 ),
               ],
@@ -284,7 +281,7 @@ class _BuilderScreenState extends State<BuilderScreen> {
           ? EmptyState(
               icon: Icons.dashboard_customize_outlined,
               title: '这个项目还没有低代码页面',
-              message: '创建页面后会自动导出网页，方便预览和打包。',
+              message: '新建后会在项目里生成 $kLowcodePageFile，\n并自动导出 index.html 和 style.css。',
               action: FilledButton(onPressed: _createFresh, child: const Text('新建页面')),
             )
           : doc == null
@@ -310,27 +307,56 @@ class _BuilderScreenState extends State<BuilderScreen> {
                     ),
                   ),
                 ),
-                if (selectedNode != null)
-                  BuilderSelectionBar(
-                    icon: lcIcon(selectedNode.type),
-                    label: selectedNode.spec.label,
-                    isRoot: selectedNode.type == 'page',
-                    onProperties: _openProps,
-                    onUp: () => _apply((d) => d.shift(selectedNode.id, -1)),
-                    onDown: () => _apply((d) => d.shift(selectedNode.id, 1)),
-                    onCopy: () {
-                      String? copy;
-                      _apply((d) => copy = d.duplicate(selectedNode.id));
-                      if (copy != null) setState(() => _selected = copy);
-                    },
-                    onDelete: () {
-                      _apply((d) => d.remove(selectedNode.id));
-                      setState(() => _selected = null);
-                    },
-                  ),
+                if (_selected != null && doc.find(_selected!) != null) _selectionBar(context, doc.find(_selected!)!),
                 _Palette(onTap: _addByTap, onDragging: _setDragging),
               ],
             ),
+    );
+  }
+
+  Widget _selectionBar(BuildContext context, LcNode node) {
+    final c = context.colors;
+    final t = Theme.of(context).textTheme;
+    final isRoot = node.type == 'page';
+    Widget action(IconData icon, String tip, VoidCallback? onTap) => IconButton(tooltip: tip, visualDensity: VisualDensity.compact, icon: Icon(icon, size: 20), onPressed: onTap);
+    return Container(
+      decoration: BoxDecoration(
+        color: c.surface,
+        border: Border(top: BorderSide(color: c.border)),
+      ),
+      padding: const EdgeInsets.only(left: Space.x4, right: Space.x2),
+      height: 48,
+      child: Row(
+        children: [
+          Icon(lcIcon(node.type), size: 18, color: c.accent),
+          const SizedBox(width: Space.x2),
+          Expanded(
+            child: Text(node.spec.label, style: t.titleSmall, maxLines: 1, overflow: TextOverflow.ellipsis),
+          ),
+          if (!isRoot) ...[
+            action(Icons.arrow_upward, '上移', () => _apply((d) => d.shift(node.id, -1))),
+            action(Icons.arrow_downward, '下移', () => _apply((d) => d.shift(node.id, 1))),
+            action(Icons.copy_outlined, '复制', () {
+              String? copy;
+              _apply((d) => copy = d.duplicate(node.id));
+              if (copy != null) setState(() => _selected = copy);
+            }),
+            action(Icons.delete_outline, '删除', () {
+              _apply((d) => d.remove(node.id));
+              setState(() => _selected = null);
+            }),
+          ],
+          const SizedBox(width: Space.x1),
+          FilledButton(
+            onPressed: _openProps,
+            style: FilledButton.styleFrom(
+              minimumSize: const Size(0, 36),
+              padding: const EdgeInsets.symmetric(horizontal: Space.x3),
+            ),
+            child: const Text('属性'),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -359,7 +385,7 @@ class _Palette extends StatelessWidget {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(Space.x4, Space.x2, Space.x4, Space.x1),
-              child: Text('组件 · 点按添加，长按拖动', style: t.labelSmall),
+              child: Text('组件 · 点一下添加，长按拖到画布', style: t.labelSmall),
             ),
             SizedBox(
               height: 64,

@@ -1,7 +1,11 @@
-// 设计约束（设置 · 390×844）
-// - 浅灰底、左对齐顶栏；顶部只展示当前模型和运行环境，状态另起一行，避免长文本挤压。
-// - 下面按 AI / 能力 / 对话 / 通用 / 关于 分组，每行一件事；当前值弱化，操作收进二级页面。
-// - 这一页不放输入框；外观是唯一就地切换的项。
+// 设计约束（设置 · 390×844）— 2026-11-23 按霜霜的参考图（workspace/user/files/88185_1_u07b.jpg）改版
+// - 浅灰底（canvas）。顶部：左上悬浮的白色圆形返回按钮，标题“设置”居中。
+// - 内容是一张张白色大圆角卡片（28），卡片左右各留 16。
+// - 第一张是概况卡，版式照参考图：左边大字 + 一行小字，右边一句状态，下面一根进度条；两段之后一条分隔线和一个蓝色文字入口。
+//   我们放的是真实状态：①新对话用的模型——只有渠道是 DeepSeek 官方、且设了额度上限时才有进度条（已用 ÷ 上限）和“已使用 x%（剩余 ¥y）”；
+//     DeepSeek 没设上限只写余额；其他渠道只写模型名和渠道名，没有进度条和百分比。②运行环境 Ubuntu（装好 = 满，下载中 = 真实进度）。
+// - 其余卡片按 AI / 能力 / 通用 / 关于 分组，每行一件事：左线性图标 + 名称 + 右侧弱化的当前值 + 右箭头；行间缩进的细分隔线。
+// - 这一页只是目录，不放输入框；外观是唯一就地切换的项（三段选择）。
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lopicode/agent/agent_tools.dart';
 import 'package:lopicode/agent/model_config.dart';
@@ -92,7 +96,7 @@ class SettingsScreen extends ConsumerWidget {
                 key: const Key('settings-personalize'),
                 icon: Icons.face_outlined,
                 title: '个性化',
-                subtitle: '${ref.watch(presetsProvider).defaultPreset.name} · 个人偏好',
+                subtitle: '个人偏好 · Agent 预设（默认：${ref.watch(presetsProvider).defaultPreset.name}）',
                 onTap: () => go(const PersonalizeScreen()),
               ),
               for (final ch in deepseek)
@@ -117,7 +121,7 @@ class SettingsScreen extends ConsumerWidget {
                     key: const Key('settings-rules'),
                     icon: Icons.rule,
                     title: '项目规则',
-                    subtitle: '适用于“${session!.project.name}”',
+                    subtitle: '只对工作区“${session!.project.name}”生效',
                     value: ref.watch(conversationsProvider(session!).select((v) => v.projectRules)).isEmpty ? '未设置' : '已设置',
                     onTap: () => go(ProjectRulesScreen(session: session!)),
                   ),
@@ -163,7 +167,7 @@ class SettingsScreen extends ConsumerWidget {
                   icon: Icons.travel_explore,
                   title: '联网搜索',
                   value: snap.data == null ? '未配置' : '已配置',
-                  subtitle: snap.data == null ? '尚未配置搜索工具' : null,
+                  subtitle: snap.data == null ? 'Agent 现在没有搜索工具' : null,
                   onTap: () => go(const WebSearchSettingsScreen()),
                 ),
               ),
@@ -171,7 +175,7 @@ class SettingsScreen extends ConsumerWidget {
                 key: const Key('settings-skills'),
                 icon: Icons.menu_book_outlined,
                 title: '技能',
-                subtitle: 'Agent 的做事说明书',
+                subtitle: '写给 Agent 的做事说明书',
                 onTap: () => go(SkillsScreen(workspace: workspace)),
               ),
             ],
@@ -187,7 +191,7 @@ class SettingsScreen extends ConsumerWidget {
               GroupRow(
                 icon: Icons.data_usage,
                 title: '在回复下方显示用量',
-                subtitle: 'Tokens、缓存命中率和用时',
+                subtitle: '每轮用了多少 tokens、缓存命中率、用时',
                 trailing: Switch(key: const Key('settings-usage'), value: app.settings.getBool(SettingKeys.chatUsage, true), onChanged: (v) => toggle(SettingKeys.chatUsage, v)),
               ),
             ],
@@ -229,10 +233,10 @@ class SettingsScreen extends ConsumerWidget {
             children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(Space.x4, Space.x4, Space.x4, Space.x4),
-                child: Text('LopiCode 1.0.0\n写代码、终端、预览、低代码和远程 APK 打包。', style: t.bodySmall?.copyWith(color: c.textMuted, height: 1.6)),
+                child: Text('LopiCode 1.0.0\n在手机上通过 Agent 完成代码项目：写代码、终端、网页预览、低代码搭建、远程打包 APK。', style: t.bodySmall?.copyWith(color: c.textMuted, height: 1.6)),
               ),
-              GroupRow(key: const Key('settings-third-party'), icon: Icons.gavel_outlined, title: '第三方声明', subtitle: '开源组件与许可证', onTap: () => go(const ThirdPartyScreen())),
-              GroupRow(key: const Key('settings-error-log'), icon: Icons.bug_report_outlined, title: '错误日志', subtitle: '本机错误记录，可复制', onTap: () => go(const ErrorLogScreen())),
+              GroupRow(key: const Key('settings-third-party'), icon: Icons.gavel_outlined, title: '第三方声明', subtitle: '随安装包带的开源组件和许可证', onTap: () => go(const ThirdPartyScreen())),
+              GroupRow(key: const Key('settings-error-log'), icon: Icons.bug_report_outlined, title: '错误日志', subtitle: '应用出错时记在这台手机上，可以复制', onTap: () => go(const ErrorLogScreen())),
             ],
           ),
         ],
@@ -241,7 +245,7 @@ class SettingsScreen extends ConsumerWidget {
   }
 }
 
-/// 顶部概况：默认模型和运行环境的真实状态。
+/// 概况卡：新对话用的模型 + 运行环境。版式照参考图的“套餐 / 用量”卡，内容是真实状态。
 class _OverviewCard extends ConsumerStatefulWidget {
   const _OverviewCard({required this.onModels, required this.onRuntime, required this.onQuota});
   final VoidCallback onModels;
@@ -288,27 +292,39 @@ class _OverviewCardState extends ConsumerState<_OverviewCard> {
     Widget block({required String title, required String sub, String? state, double? value, bool bar = true, Color? color, Key? stateKey}) => Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(title, style: t.titleMedium, maxLines: 1, overflow: TextOverflow.ellipsis),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(
+              child: Text(
+                title,
+                style: t.titleLarge?.copyWith(fontWeight: FontWeight.w400, fontSize: FontSize.xl),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            if (state != null) ...[
+              const SizedBox(width: Space.x3),
+              Text(
+                state,
+                key: stateKey,
+                style: t.bodyMedium?.copyWith(color: color ?? c.textMuted),
+              ),
+            ],
+          ],
+        ),
         const SizedBox(height: 2),
         Text(
           sub,
-          style: t.bodySmall?.copyWith(color: c.textMuted),
+          style: t.bodyMedium?.copyWith(color: c.textFaint),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
-        if (state != null) ...[
-          const SizedBox(height: Space.x1),
-          Text(
-            state,
-            key: stateKey,
-            style: t.bodySmall?.copyWith(color: color ?? c.textMuted),
-          ),
-        ],
         if (bar) ...[
-          const SizedBox(height: Space.x2),
+          const SizedBox(height: Space.x3),
           ClipRRect(
             borderRadius: BorderRadius.circular(3),
-            child: LinearProgressIndicator(key: const Key('overview-bar'), value: value, minHeight: 4, color: color ?? c.accentFill, backgroundColor: c.border),
+            child: LinearProgressIndicator(key: const Key('overview-bar'), value: value, minHeight: 6, color: color ?? c.accentFill, backgroundColor: c.border),
           ),
         ],
       ],
@@ -316,7 +332,7 @@ class _OverviewCardState extends ConsumerState<_OverviewCard> {
 
     Widget modelBlock() {
       if (model == null) return block(title: '还没有可用的模型', sub: '添加渠道和模型后才能和 Agent 对话', state: '未配置', bar: false);
-      final sub = '${model.channel.name} · 新对话默认模型';
+      final sub = '新对话用的模型 · ${model.channel.name}';
       // 不是 DeepSeek 官方：只有模型名和渠道名。
       if (!isDeepSeekOfficial(model.channel.baseUrl)) return block(title: model.model.name, sub: sub, bar: false);
       return QuotaBuilder(
@@ -363,14 +379,14 @@ class _OverviewCardState extends ConsumerState<_OverviewCard> {
               RuntimePhase.extracting => ('正在解压', null),
               RuntimePhase.notInstalled => ('未安装', 0.0),
             };
-            return block(title: '运行环境', sub: 'Ubuntu 24.04', state: state, value: value);
+            return block(title: '运行环境', sub: 'Ubuntu 24.04 · 终端和 Agent 的命令在里面跑', state: state, value: value);
           },
         ),
         const SizedBox(height: Space.x4),
         Divider(height: 1, color: c.border),
         // 入口一行放不下三个时自动换行，每个入口仍是一整块可点区域。
         Wrap(
-          spacing: Space.x4,
+          spacing: Space.x6,
           children: [
             TextButton(key: const Key('overview-models'), style: link, onPressed: widget.onModels, child: Text(model == null ? '添加模型' : '管理模型')),
             if (deepseek)

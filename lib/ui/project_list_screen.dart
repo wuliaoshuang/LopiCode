@@ -189,7 +189,9 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
     ];
     final page = Scaffold(
       appBar: ShellAppBar(title: '工作区', subtitle: projects == null || projects.isEmpty ? 'LopiCode' : '${projects.length} 个工作区'),
-      floatingActionButton: projects != null && projects.isNotEmpty ? FloatingActionButton.extended(onPressed: _add, elevation: 0, icon: const Icon(Icons.add), label: const Text('添加工作区')) : null,
+      floatingActionButton: projects != null && projects.isNotEmpty
+          ? FloatingActionButton.extended(onPressed: _add, elevation: 2, shape: const StadiumBorder(), icon: const Icon(Icons.add), label: const Text('添加工作区'))
+          : null,
       body: _error != null
           ? EmptyState(icon: Icons.error_outline, title: '读取工作区失败', message: _error!)
           : projects == null
@@ -198,7 +200,7 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
           ? EmptyState(
               icon: Icons.rocket_launch_outlined,
               title: '还没有工作区',
-              message: '工作区就是一个代码目录。新建或添加一个，开始写代码和预览。',
+              message: '工作区就是一个放代码的目录。添加一个，\n然后让 Agent 帮你写代码、拖拽搭页面、实时预览。',
               action: FilledButton.icon(onPressed: _add, icon: const Icon(Icons.add), label: const Text('添加工作区')),
             )
           : ListView(
@@ -269,12 +271,7 @@ class _ProjectCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.colors;
     final t = Theme.of(context).textTheme;
-    return Container(
-      decoration: BoxDecoration(
-        color: c.surface,
-        borderRadius: BorderRadius.circular(Radii.bubble),
-        border: Border.all(color: current ? c.accentFill : c.border),
-      ),
+    return Card(
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onOpen,
@@ -303,17 +300,13 @@ class _ProjectCard extends StatelessWidget {
                             padding: const EdgeInsets.only(left: Space.x1),
                             child: Icon(Icons.push_pin, size: 14, color: c.accent, semanticLabel: '已置顶'),
                           ),
-                        if (current)
-                          Padding(
-                            padding: const EdgeInsets.only(left: Space.x2),
-                            child: Text('当前', style: t.labelSmall?.copyWith(color: c.accent)),
-                          ),
                       ],
                     ),
                     const SizedBox(height: 2),
+                    Text(project.displayDir, style: t.bodySmall, maxLines: 1, overflow: TextOverflow.ellipsis),
                     Text(
-                      '${project.isLinux ? (project.linuxPath ?? project.displayDir) : project.template.label} · ${count == 0 ? '还没有对话' : '$count 段对话'}',
-                      style: t.bodySmall?.copyWith(color: c.textMuted),
+                      '${current ? '当前工作区 · ' : ''}${project.isLinux ? 'Ubuntu 目录' : project.template.label} · ${count == 0 ? '还没有对话' : '$count 段对话'}',
+                      style: t.bodySmall?.copyWith(color: current ? c.accent : null),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -368,9 +361,9 @@ class _AddSheet extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x2),
             child: Text('添加工作区', style: t.titleLarge),
           ),
-          option('new', Icons.create_new_folder_outlined, '新建工作区', '从空白、网页或低代码模板开始'),
-          option('linux', Icons.terminal, '添加 Ubuntu 目录', '例如 /root/myapp'),
-          if (hasHidden) option('restore', Icons.restore, '恢复已移除的工作区', '文件还在，可以加回列表'),
+          option('new', Icons.create_new_folder_outlined, '新建项目', '在应用目录里建一个新项目，可以从模板开始'),
+          option('linux', Icons.terminal, 'Ubuntu 里的目录', '把运行环境里的某个目录当工作区，如 /root/myapp'),
+          if (hasHidden) option('restore', Icons.restore, '加回已移除的项目', '以前从列表移除、文件还在的项目'),
           const SizedBox(height: Space.x2),
         ],
       ),
@@ -412,11 +405,11 @@ class _NewProjectSheetState extends State<_NewProjectSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('新建工作区', style: t.titleLarge),
+            Text('新建项目', style: t.titleLarge),
             const SizedBox(height: Space.x4),
             TextField(
               controller: _name,
-              decoration: const InputDecoration(labelText: '工作区名称', hintText: '不填会用模板名'),
+              decoration: const InputDecoration(labelText: '项目名', hintText: '不填会用模板名'),
               textInputAction: TextInputAction.done,
               onSubmitted: (_) => _submit(),
             ),
@@ -455,7 +448,7 @@ class _NewProjectSheetState extends State<_NewProjectSheet> {
                 ),
               ),
             const SizedBox(height: Space.x2),
-            FilledButton(onPressed: _submit, child: const Text('创建工作区')),
+            FilledButton(onPressed: _submit, child: const Text('创建')),
           ],
         ),
       ),
