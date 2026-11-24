@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
@@ -7,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:lopicode/core/safe_file.dart';
 import 'package:lopicode/core/stores.dart';
 import 'package:lopicode/runtime/guest_groups.dart';
+import 'package:lopicode/runtime/pack_install.dart';
 import 'package:lopicode/runtime/proot_command.dart';
 import 'package:lopicode/runtime/resumable_download.dart';
 import 'package:lopicode/runtime/runtime_diagnostics.dart';
@@ -91,6 +91,7 @@ class LinuxRuntime {
     this.makeExecutable = chmodExecutable,
     bool? localShellAllowed,
     this.processGroups,
+    this.startProcess,
   }) : _httpClient = httpClient ?? http.Client.new,
        localShellAllowed = localShellAllowed ?? !Platform.isAndroid;
 
@@ -102,6 +103,9 @@ class LinuxRuntime {
   final RootfsImage image;
   final MakeExecutable makeExecutable;
   final http.Client Function() _httpClient;
+
+  /// 装语言 / 工具时怎么起进程；不给就是真的进 PRoot（测试里换成假的）。
+  final GuestProcessStarter? startProcess;
 
   /// 怎么拿当前进程的组；不给就读 /proc/self/status（测试里换成固定的）。
   final List<int>? Function()? processGroups;
@@ -154,6 +158,8 @@ class LinuxRuntime {
     },
     runningPack: runningPack,
     packOutput: packOutput,
+    packErrorId: packInstaller.errorPack,
+    packError: packInstaller.error,
     launchFailures: launchFailures,
     lastLaunchError: lastLaunchError,
     shouldUseLinux: shouldUseLinux,
@@ -356,57 +362,29 @@ class LinuxRuntime {
     await file.writeAsString(content);
   }
 
-  // ── 常用运行时 ───────────────────────────────────────
+  // ── 语言和工具（清单在 runtime_sources.dart，安装在 pack_install.dart） ──
   List<RuntimePack> get packs => runtimePacks(rootfsSource.id);
 
   bool packInstalled(RuntimePack pack) => installed && FileSystemEntity.typeSync(p.join(rootfsDir, pack.marker), followLinks: false) != FileSystemEntityType.notFound;
 
-  String? runningPack;
-  final List<String> packOutput = [];
-  Process? _packProcess;
+  late final PackInstaller packInstaller = PackInstaller(this, start: startProcess);
+  String? get runningPack => packInstaller.running;
+  List<String> get packOutput => packInstaller.output;
 
-  /// 在环境里执行某个运行时的安装脚本，输出实时进 [packOutput]。返回是否成功。
-  Future<bool> installPack(RuntimePack pack) async {
-    if (runningPack != null || !usable) return false;
-    runningPack = pack.id;
-    packOutput
-      ..clear()
-      ..add('开始安装 ${pack.title}…');
+  /// 在环境里装一项，输出实时进 [packOutput]。返回是否成功；要失败原因用 [installPackDetailed]。
+  Future<bool> installPack(RuntimePack pack) async => (await installPackDetailed(pack)).ok;
+
+  /// 同上，返回带原因的结果；[onLine] 收到每一行输出（后端“运行”把它们抄进终端）。
+  Future<PackInstallResult> installPackDetailed(RuntimePack pack, {void Function(String line)? onLine}) async {
+    final result = await packInstaller.install(pack, onLine: onLine);
     _changed();
-    await acquireKeepAlive();
-    var ok = false;
-    try {
-      final command = prootCommand(guestCommand: guestRun(pack.script), term: 'dumb');
-      final process = _packProcess = await Process.start(command.executable, command.arguments, environment: command.environment, includeParentEnvironment: false);
-      void collect(String line) {
-        packOutput.add(line);
-        if (packOutput.length > 400) packOutput.removeRange(0, packOutput.length - 400);
-        _changed();
-      }
-
-      const decoder = Utf8Decoder(allowMalformed: true);
-      final out = process.stdout.transform(decoder).transform(const LineSplitter()).listen(collect, onError: (_) {});
-      final err = process.stderr.transform(decoder).transform(const LineSplitter()).listen(collect, onError: (_) {});
-      final code = await process.exitCode;
-      await Future.wait([out.asFuture<void>(), err.asFuture<void>()]).timeout(const Duration(seconds: 2), onTimeout: () => const []);
-      await out.cancel();
-      await err.cancel();
-      ok = code == 0;
-      collect(ok ? '${pack.title} 安装完成。' : '${pack.title} 安装失败（退出码 $code）。上面是完整输出。');
-      _log('安装 ${pack.title}：${ok ? '成功' : '失败，退出码 $code'}');
-    } on ProcessException catch (e) {
-      packOutput.add('无法启动 PRoot：${e.message}');
-      _log('安装 ${pack.title}：无法启动 PRoot：${e.message}');
-    } finally {
-      _packProcess = null;
-      runningPack = null;
-      await releaseKeepAlive();
-      _changed();
-    }
-    return ok;
+    return result;
   }
 
-  void cancelPack() => _packProcess?.kill(ProcessSignal.sigkill);
+  void cancelPack() => packInstaller.cancel();
+
+  /// 给同一层的帮手用：状态变了，换快照。
+  void notifyChanged() => _changed();
 
   // ── 启动 ─────────────────────────────────────────────
   int launchFailures = 0;

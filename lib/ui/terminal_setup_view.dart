@@ -4,7 +4,7 @@
 //
 // 一、运行环境还没装（[TerminalSetupView]）——整页就是一件事：把它装上。从上到下一行一件事：
 //   1. 标题：先装运行环境。
-//   2. 一句人话：为什么要装。
+//   2. 一句人话：为什么要装。是从后端“运行”过来的，多一句“装好后会接着启动后端”。
 //   3. 要下载多大、占多大（数字和“运行环境”页同一个来源，不另写）。
 //   4. 上次失败的原因（有才显示，原话照登）。
 //   5. 主按钮“安装运行环境”（下到一半的写“继续下载（已有 …）”）；安装中换成进度条 + 一行进度 + “取消”。
@@ -28,7 +28,10 @@ import 'package:material_ui/material_ui.dart';
 
 /// 终端页的安装引导：运行环境没装好（或这个安装包进不去）时，占满终端页。
 class TerminalSetupView extends ConsumerWidget {
-  const TerminalSetupView({super.key, required this.onConnectSsh});
+  const TerminalSetupView({super.key, required this.onConnectSsh, this.notice});
+
+  /// 装好以后还会接着做的事（比如“接着启动后端”）；没有就不显示。
+  final String? notice;
 
   /// 点“连接 SSH 远程主机”。
   final VoidCallback onConnectSsh;
@@ -48,6 +51,7 @@ class TerminalSetupView extends ConsumerWidget {
         Text(runtime.busy ? '正在安装运行环境' : '先装运行环境，终端才能用', style: t.titleLarge),
         const SizedBox(height: Space.x2),
         Text('手机自带的命令行没有 git、node、python，跑不了项目。装一个 Ubuntu 环境，终端和 Agent 执行命令都在它里面。', style: t.bodyMedium?.copyWith(color: c.textMuted, height: 1.5)),
+        if (notice != null && runtime.prootBundled) ...[const SizedBox(height: Space.x3), InfoBanner(notice!, key: const Key('terminal-setup-notice'))],
         if (!runtime.prootBundled) ...[
           const SizedBox(height: Space.x4),
           InfoBanner(

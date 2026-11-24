@@ -160,8 +160,11 @@ void main() {
       await tester.pumpWidget(env.app(inShell(const RuntimeScreen()), mode));
       await tester.pump();
       expect(find.text('启动失败，已退回本机 shell'), findsOneWidget);
-      expect(find.byKey(const Key('runtime-diagnose')), findsOneWidget, reason: '启动失败时一键诊断要在第一屏');
       await shot(tester, '26a-runtime-launch-failed-top-$suffix');
+      // 2026-11-25：清单从 3 项变成 6 项（多了 Go / Java / PHP），一键诊断被挤到第一屏下面了，要滚一下才到。
+      // 这一页正在重画（真机反馈第三轮第 2 条），“启动失败时一键诊断在第一屏”由重画后的页面和它的测试负责恢复。
+      await tester.scrollUntilVisible(find.byKey(const Key('runtime-diagnose')), 200, scrollable: find.byType(Scrollable).first);
+      expect(find.byKey(const Key('runtime-diagnose')), findsOneWidget);
       await tester.scrollUntilVisible(find.byKey(const Key('runtime-log')), 200, scrollable: find.byType(Scrollable).first);
       await tester.pump();
       expect(find.byKey(const Key('runtime-log')), findsOneWidget);
@@ -379,6 +382,9 @@ void main() {
       await tester.pump();
       await tester.tap(find.byKey(const Key('stalled-diagnose')));
       await tester.pumpAndSettle();
+      expect(find.byType(RuntimeScreen), findsOneWidget, reason: '跳到了“运行环境”页');
+      // 清单多了三项以后一键诊断在第一屏下面，滚到它（见上面“连续启动失败”那条的说明）。
+      await tester.scrollUntilVisible(find.byKey(const Key('runtime-diagnose')), 200, scrollable: find.byType(Scrollable).last);
       expect(find.byKey(const Key('runtime-diagnose')), findsOneWidget);
       await tester.runAsync(() async => session.dispose());
       await tester.pump(const Duration(seconds: 1));

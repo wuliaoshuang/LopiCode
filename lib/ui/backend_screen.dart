@@ -26,6 +26,7 @@ import 'package:lopicode/core/path_guard.dart';
 import 'package:lopicode/lowcode/logic_blocks.dart';
 import 'package:lopicode/lowcode/logic_vars_sheet.dart';
 import 'package:lopicode/project_session.dart';
+import 'package:lopicode/state/backend_run.dart';
 import 'package:lopicode/state/workspace_files.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/backend_panels_sheet.dart';
@@ -373,7 +374,8 @@ class BackendScreenState extends ConsumerState<BackendScreen> {
     _flush();
     await _io;
     if (!mounted || _s.disposed) return;
-    launchBackendInTerminal(_s, command);
+    // 工具没装就先装好再启动（没装 Ubuntu 环境的先装环境）；进度、取消、失败原因都在终端页。
+    _s.app.container.read(backendRunProvider(_s).notifier).start(language: host.doc.language, command: command);
     _goTo(ShellDest.terminal);
   }
 

@@ -87,6 +87,8 @@ tool/check.sh --fix    # 先自动排版
     - `workspace_files.dart`：`filesRevProvider`——工作区文件变了。
     - `workspace_terminals.dart`：`terminalsProvider`——开了哪些终端、当前哪个。
     - `workspace_preview.dart`：`previewProvider`——预览服务器起没起来、日志。
+    - `backend_run.dart`：`backendRunProvider`——后端点“运行”以后替她配工具的那一段（等环境 / 核对 / 等她点头 / 正在装 / 没装成）。
+      带代次：取消、工作区关掉以后回来的结果一律丢掉，不启动、不写状态。同一时间只受理一次。
     - `workspace_conversations.dart`：`conversationsProvider`——对话目录（`Conversation` 不可变）、当前是哪段、项目规则。
     - `workspace_chat.dart`：`chatRunProvider((工作区, 对话 id))`——一段对话的条目（`ChatItem` 全部不可变）、忙不忙、这一轮用量；
       `activeChatProvider`——当前那段；`pendingCardsProvider`——确认卡 / 提问卡 / “本对话都允许”；`sendQueueProvider`——排队和插话的消息、交还输入框的草稿。

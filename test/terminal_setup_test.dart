@@ -24,6 +24,7 @@ import 'package:lopicode/runtime/linux_command_runner.dart';
 import 'package:lopicode/runtime/linux_runtime.dart';
 import 'package:lopicode/runtime/linux_shell_backend.dart';
 import 'package:lopicode/runtime/runtime_diagnostics.dart';
+import 'package:lopicode/runtime/runtime_screen.dart';
 import 'package:lopicode/ssh/ssh_config.dart';
 import 'package:lopicode/ssh/ssh_connect_screen.dart';
 import 'package:lopicode/ui/project_shell.dart';
@@ -693,6 +694,9 @@ void main() {
       await tester.pump();
       await tester.tap(find.byKey(const Key('terminal-failure-report')));
       await tester.pumpAndSettle();
+      expect(find.byType(RuntimeScreen), findsOneWidget, reason: '跳到了“运行环境”页');
+      // 2026-11-25：语言清单多了 Go / Java / PHP 三项，完整报告在第一屏下面，滚到它再核对。
+      await tester.scrollUntilVisible(find.byKey(const Key('diag-report')), 200, scrollable: find.byType(Scrollable).last);
       expect(find.byKey(const Key('diag-report')), findsOneWidget);
       await close(tester, session);
     });

@@ -10,6 +10,8 @@
 //   “中文”也在这排：默认每按一个键立刻进终端；点亮后才让输入法攒拼音选字。
 // - Ubuntu 进去后一直没输出：终端下方出一条提示，三个出路各占一个按钮，不让人对着空屏
 //   （兼容模式重试、去做一键诊断，第三个在安卓上是“连接 SSH”，桌面上是“先用本机 shell”）。
+// - 点了后端“运行”而工具还没装：会话行下面多一条“正在检查 / 正在安装 … · 取消”（lib/ui/backend_run_bar.dart），
+//   安装的输出就在下面的终端里；没事的时候这条不出现。
 // - 没有单独的输入行：真正的终端里输入就在光标处。
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lopicode/core/stores.dart';
@@ -17,12 +19,14 @@ import 'package:lopicode/project_session.dart';
 import 'package:lopicode/runtime/linux_shell_backend.dart';
 import 'package:lopicode/ssh/ssh_config.dart';
 import 'package:lopicode/ssh/ssh_connect_screen.dart';
+import 'package:lopicode/state/backend_run.dart';
 import 'package:lopicode/state/runtime_state.dart';
 import 'package:lopicode/state/workspace_terminals.dart';
 import 'package:lopicode/terminal/terminal_input.dart';
 import 'package:lopicode/terminal/terminal_session.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/app_ref.dart';
+import 'package:lopicode/ui/backend_run_bar.dart';
 import 'package:lopicode/ui/shell.dart';
 import 'package:lopicode/ui/terminal_setup_view.dart';
 import 'package:material_ui/material_ui.dart';
@@ -169,7 +173,7 @@ class _TerminalTabState extends ConsumerState<TerminalTab> {
     // 运行环境装没装好：决定显示安装引导还是终端
     final runtime = ref.watch(runtimeProvider);
     final term = _term;
-    if (term == null) return runtime.needsSetup ? TerminalSetupView(onConnectSsh: _newSsh) : const SizedBox.expand();
+    if (term == null) return runtime.needsSetup ? TerminalSetupView(onConnectSsh: _newSsh, notice: backendRunSetupNotice(ref.watch(backendRunProvider(s)))) : const SizedBox.expand();
     final c = context.colors;
     final t = Theme.of(context).textTheme;
     final dark = Theme.of(context).brightness == Brightness.dark;
@@ -240,6 +244,8 @@ class _TerminalTabState extends ConsumerState<TerminalTab> {
             ],
           ),
         ),
+        // 点了后端“运行”、正在替她配工具时的一条：现在在干什么 + 取消 / 确认 / 重试（见 backend_run_bar.dart）
+        BackendRunBar(session: s),
         if (failedBackend != null)
           Expanded(
             child: TerminalFailureView(backend: failedBackend, reason: failedBackend.failure!, onConnectSsh: _newSsh, projectDir: s.project.dir),
