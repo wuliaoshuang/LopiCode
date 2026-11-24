@@ -291,7 +291,13 @@ void main() {
     await rig.pump(tester);
     final issues = rig.host.issues;
     expect(issues, isNotEmpty);
-    expect(find.text('${issues.length}'), findsOneWidget, reason: '顶栏的问题数');
+    // 问题数现在有两处：顶栏的入口和积木盒手柄条左边；这里只看顶栏那一个。
+    expect(
+      find.descendant(of: find.byKey(const ValueKey('bk-issues')), matching: find.text('${issues.length}')),
+      findsOneWidget,
+      reason: '顶栏的问题数',
+    );
+    expect(find.text('${issues.length}'), findsNWidgets(2), reason: '顶栏和手柄条各一个');
     await tester.tap(find.byKey(const ValueKey('bk-issues')));
     await tester.pumpAndSettle();
     expect(find.text('${issues.length} 个问题'), findsOneWidget);
