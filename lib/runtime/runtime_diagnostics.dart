@@ -185,6 +185,7 @@ class RuntimeDiagnostics {
   }
 
   ProotCommand _proot(List<String> guest, {required bool compat, bool verbose = false, String? projectDir}) {
+    runtime.syncGuestGroups();
     final base = buildProotCommand(
       nativeLibDir: runtime.nativeLibDir ?? '',
       libDir: runtime.hostLibDir,

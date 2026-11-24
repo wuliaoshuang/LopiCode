@@ -112,33 +112,24 @@ class TerminalsNotifier extends Notifier<TerminalsState> {
     if (!runtime.localShellAllowed && !runtime.usable) return null;
     // 不许用本机 shell 的平台：只要环境能用就进 Ubuntu，之前连续失败过也照样试（失败了显示原因和出路，不退回本机）。
     if (!runtime.localShellAllowed || (!forceLocal && runtime.shouldUseLinux)) {
-      final t = TerminalSession(
+      // 不打欢迎语：打开就是 Ubuntu 自己的提示符（霜霜 2026-11-24：提示符前面的字“莫名其妙”）。
+      return TerminalSession(
         title: 'Ubuntu ${++_linuxCounter}',
         backend: LinuxShellBackend(runtime: runtime, projectDir: project.dir, guestCwd: project.linuxPath, spawner: session.linuxPtySpawner, fallbackSpawner: session.ptySpawner),
       );
-      t.append(
-        '\x1b[2mLopiCode 终端 · Ubuntu 24.04\n'
-        '${project.isLinux ? '工作区目录是 ${project.linuxPath}' : '项目目录挂在 /workspace'}。装软件用 apt，常用运行时可以在侧边栏“运行环境”里一键安装。\x1b[0m\n\n',
-      );
-      return t;
-    }
-    final String hint;
-    if (runtime.usable) {
-      hint = 'Ubuntu 环境连续启动失败，这里先用手机自带的 sh。到侧边栏“运行环境”看日志、重新尝试。';
-    } else if (runtime.installed) {
-      hint = 'Ubuntu 环境已下载，但这个安装包缺少进入 Ubuntu 要用的文件，进不去。';
-    } else {
-      hint = '需要 node、python：安装 Ubuntu 环境，或点右上角 ＋ 连接 SSH。';
     }
     final t = TerminalSession(
       title: '本机 ${++_localCounter}',
       backend: LocalShellBackend(project.dir, spawner: session.ptySpawner),
     );
-    t.append(
-      '\x1b[2mLopiCode 终端 · 本机 shell\n'
-      '可用 ls、cat、cp、mkdir；没有 git、node、python。\n'
-      '$hint\x1b[0m\n\n',
-    );
+    // 本机 shell（只在桌面调试、宿主机测试里有）同样不打欢迎语；只有“本该进 Ubuntu 却进不去”才说一句原因。
+    // 用户自己点“本机 shell”开的（forceLocal）不算进不去，什么都不说。
+    if (forceLocal) return t;
+    if (runtime.usable) {
+      t.append('\x1b[2mUbuntu 环境连续启动失败，这里先用本机的 sh。到侧边栏“运行环境”看日志、重新尝试。\x1b[0m\n\n');
+    } else if (runtime.installed) {
+      t.append('\x1b[2mUbuntu 环境已下载，但这个安装包缺少进入 Ubuntu 要用的文件，进不去；这里先用本机的 sh。\x1b[0m\n\n');
+    }
     return t;
   }
 
