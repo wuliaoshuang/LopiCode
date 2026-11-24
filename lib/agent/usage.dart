@@ -113,7 +113,10 @@ class ModelPrice {
 
 /// 一次模型请求。
 class RequestUsage {
-  RequestUsage({this.usage, required this.ms, this.firstMs, this.startedAt, this.cost});
+  RequestUsage({this.usage, required this.ms, this.firstMs, this.startedAt, this.cost, this.compaction = false});
+
+  /// 这次请求是“自动压缩对话”那一次（不是在回答用户）。
+  final bool compaction;
 
   /// 接口没返回用量是 null。
   final TokenUsage? usage;
@@ -139,7 +142,7 @@ class RequestUsage {
     return gen == null || gen <= 0 || out == null || out <= 0 ? null : out / (gen / 1000);
   }
 
-  Map<String, dynamic> toJson() => {'u': ?usage?.toJson(), 'ms': ms, 'first': ?firstMs, 'at': ?startedAt?.millisecondsSinceEpoch, 'cost': ?cost};
+  Map<String, dynamic> toJson() => {'u': ?usage?.toJson(), 'ms': ms, 'first': ?firstMs, 'at': ?startedAt?.millisecondsSinceEpoch, 'cost': ?cost, if (compaction) 'k': 'compact'};
 
   static RequestUsage fromJson(Map<dynamic, dynamic> j) {
     final cost = j['cost'], at = _int(j['at']);
@@ -149,6 +152,7 @@ class RequestUsage {
       firstMs: _int(j['first']),
       startedAt: at == null ? null : DateTime.fromMillisecondsSinceEpoch(at),
       cost: cost is num ? cost.toDouble() : null,
+      compaction: j['k'] == 'compact',
     );
   }
 }

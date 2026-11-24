@@ -225,6 +225,19 @@ void main() {
       await tester.tap(find.text('允许这一次'));
       await tester.tap(find.text('拒绝'));
       await tester.tap(find.text('本对话都允许'));
+      await tester.pump();
+      // 二次确认：第一下只换出说明，不回答；取消能退回去；确认才算。
+      expect(answers, ['true/false', 'false/false'], reason: '只点一次“本对话都允许”不能生效');
+      expect(find.textContaining('同类操作不再问你'), findsOneWidget);
+      expect(find.text('允许这一次'), findsNothing);
+      await shot(tester, '75b-approval-always-confirm-$suffix');
+      await tester.tap(find.byKey(const Key('always-cancel')));
+      await tester.pump();
+      expect(answers, ['true/false', 'false/false']);
+      expect(find.text('允许这一次'), findsOneWidget);
+      await tester.tap(find.text('本对话都允许'));
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('always-confirm')));
       expect(answers, ['true/false', 'false/false', 'true/true']);
       // 换一张卡之前先清空界面：刚才点过的按钮状态（按下 / 聚焦的底色）不带到下一张截图里。
       await tester.pumpWidget(const SizedBox());

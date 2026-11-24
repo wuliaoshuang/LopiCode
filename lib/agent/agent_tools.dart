@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:lopicode/agent/command_output_store.dart';
 import 'package:lopicode/agent/command_runner.dart';
 import 'package:lopicode/core/path_guard.dart';
 import 'package:lopicode/core/project_store.dart';
@@ -206,7 +207,7 @@ class AgentToolbox {
     ),
     _fn(
       'run_command',
-      '在项目目录里用 shell 执行一条命令并返回输出。需要用户确认。',
+      '在项目目录里用 shell 执行一条命令并返回输出。需要用户确认。输出太长时只返回开头和结尾，完整输出会存成文件并告诉你路径，用 read_file 分段读。',
       {
         'command': {'type': 'string', 'description': '要执行的命令'},
       },
@@ -293,8 +294,16 @@ class AgentToolbox {
     return n;
   }
 
+  /// 读文件用的路径解析：应用内部目录里只放行“转存的命令输出”（只读；写和删仍然一律拒绝）。
+  String _resolveForRead(String path) {
+    final full = guard.resolve(path, allowReserved: true);
+    final rel = guard.relative(full);
+    if (full == guard.root || isCommandOutputPath(rel)) return full;
+    return guard.resolve(path); // 其余照旧：碰到内部目录在这里报错
+  }
+
   Future<ToolOutcome> _read(String path, {int? start, int? end}) async {
-    final file = File(guard.resolve(path));
+    final file = File(_resolveForRead(path));
     if (!await file.exists()) return ToolOutcome('错误：文件不存在：$path', ok: false);
     final bytes = await file.readAsBytes();
     if (bytes.take(8000).contains(0)) {
@@ -364,7 +373,8 @@ class AgentToolbox {
     final result = await runner.run(command, workingDirectory: guard.root, timeout: timeout);
     var output = result.output;
     if (output.length > maxOutputChars) {
-      output = '…（前面省略 ${output.length - maxOutputChars} 字符）\n${output.substring(output.length - maxOutputChars)}';
+      // 太长：完整的转存成文件，回给模型开头 + 结尾 + 文件路径（它可以用 read_file 按行分段读）。
+      output = spilledOutputText(output, await CommandOutputStore(guard).save(command, output));
     }
     final status = result.timedOut ? '超过 ${timeout.inSeconds} 秒，已强制结束' : '退出码 ${result.exitCode}';
     return ToolOutcome('$status\n${output.isEmpty ? '（没有输出）' : output}', ok: !result.timedOut && result.exitCode == 0, changedFiles: true);

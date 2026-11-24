@@ -11,6 +11,7 @@ import 'dart:io';
 import 'package:lopicode/agent/agent_runner.dart';
 import 'package:lopicode/agent/agent_tools.dart';
 import 'package:lopicode/agent/automation.dart';
+import 'package:lopicode/agent/command_output_store.dart';
 import 'package:lopicode/agent/command_runner.dart';
 import 'package:lopicode/agent/model_config.dart';
 import 'package:lopicode/agent/presets.dart';
@@ -31,6 +32,7 @@ import 'package:lopicode/session/session_core.dart';
 import 'package:lopicode/session/subagents.dart';
 import 'package:lopicode/session/system_prompt.dart';
 import 'package:lopicode/session/toolbox_builder.dart';
+import 'package:lopicode/session/turn_journal.dart';
 import 'package:lopicode/session/turn_runner.dart';
 import 'package:lopicode/ssh/ssh_config.dart';
 import 'package:lopicode/ssh/ssh_connector.dart';
@@ -233,7 +235,7 @@ class ProjectSession {
     final doomed = [id, for (final c in descendantsOf(id)) c.id];
     for (final d in doomed) {
       _core.runs.remove(d)?.runner?.cancel();
-      for (final file in [_core.chatFileOf(d), _core.reserved('team-$d.json')]) {
+      for (final file in [_core.chatFileOf(d), _core.reserved('team-$d.json'), _core.dropJournal(d)]) {
         try {
           if (await file.exists()) await file.delete();
         } on FileSystemException {
@@ -375,6 +377,24 @@ class ProjectSession {
   /// 引用工作区里已有的图片文件当附件。
   Map<String, dynamic> attachWorkspaceFile(String rel) => attachments.attachWorkspaceFile(guard, rel);
 
+  // ── 上一轮没正常结束（App 被关掉）之后 ─────────────────
+  /// 点“继续”：让 Agent 从中断的地方接着做。不会自动重跑任何一步——做什么由模型看着记录重新决定，该确认的照样确认。
+  Future<void> resumeInterrupted() async {
+    if (agentBusy) return;
+    _core.clearInterrupted(_active);
+    await _core.journalOf(_active.convId).dismiss();
+    await sendToAgent(kResumeText);
+  }
+
+  /// 点“不用了”：收掉提示，停在这里。
+  Future<void> dismissInterrupted() async {
+    _core.clearInterrupted(_active);
+    await _core.journalOf(_active.convId).dismiss();
+  }
+
+  /// 读一份转存的命令输出（“查看完整输出”用）；被清理掉了返回 null。
+  Future<String?> readCommandOutput(String rel) => CommandOutputStore(guard).read(rel);
+
   // ── / 指令背后的动作 ─────────────────────────────────
   /// /compact：把当前对话压缩成摘要。返回给用户看的一句话。
   Future<String> compactConversation() async {
@@ -388,7 +408,7 @@ class ProjectSession {
       final before = AgentRunner.estimateTokens(run.messages);
       error = await compactHistory(await app.createChatClient(modelOf(run.conv)), run.messages);
       if (error == null) {
-        _core.rebuildItems(run);
+        _core.rebuildItems(run); // 摘要那条会显示成“已压缩较早的对话”，点开能看
         run.add(NoticeItem('已把之前的对话压缩成摘要（估算从 ${before ~/ 1000}K 降到 ${AgentRunner.estimateTokens(run.messages) ~/ 1000}K）。原来的逐条记录不再保留。'));
       }
     } finally {

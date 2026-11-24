@@ -1,6 +1,6 @@
 // 设计约束（聊天里的一行 · 390×844）
 // - 一行只放一样东西：我的消息（靠右浅蓝块）、Agent 的正式回复（靠左浅灰块）、一组步骤（一行摘要，见 chat_steps.dart）、
-//   这一轮的用量脚注、应用自己的提示。
+//   这一轮的用量脚注、应用自己的提示、一段思考（一行）、“已压缩较早的对话”（一行）、“上一轮没正常结束”（一张卡）。
 // - 正式回复最重（16 号字、有底色）；步骤组和脚注是次要内容（小一号、灰色、无底）。
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lopicode/agent/quota.dart';
@@ -9,6 +9,7 @@ import 'package:lopicode/session/chat_models.dart';
 import 'package:lopicode/session/chat_rows.dart';
 import 'package:lopicode/state/ui_prefs.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/chat_extras.dart';
 import 'package:lopicode/ui/chat_panels.dart';
 import 'package:lopicode/ui/chat_steps.dart';
 import 'package:lopicode/ui/usage_ui.dart';
@@ -16,6 +17,9 @@ import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
 
 export 'package:lopicode/session/chat_rows.dart' show describeTool;
+
+/// 把聊天项排成行；设置里关了“显示思考过程”就不带思考。
+List<ChatRow> chatRowsOf(WidgetRef ref, List<ChatItem> items, {required bool busy}) => deriveChatRows(items, busy: busy, showThinking: ref.watch(chatPrefsProvider).thinking);
 
 /// 聊天页的一行：一组步骤，或者原样的一项。
 class ChatRowView extends StatelessWidget {
@@ -108,6 +112,12 @@ class ChatItemView extends ConsumerWidget {
           padding: const EdgeInsets.symmetric(vertical: Space.x1),
           child: StepRow(tool: tool, onOpenChild: onOpenChild),
         );
+      case final ThinkingItem thinking:
+        return ThinkingRow(item: thinking);
+      case final CompactionItem compaction:
+        return CompactionRow(item: compaction);
+      case final InterruptedItem cut:
+        return InterruptedCard(item: cut);
       case UsageItem(:final turn):
         if (!showUsage) return const SizedBox.shrink();
         return TurnFootnote(turn: turn, onTap: onOpenTurn == null ? null : () => onOpenTurn!(turn));

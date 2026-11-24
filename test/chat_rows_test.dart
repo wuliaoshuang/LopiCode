@@ -13,13 +13,21 @@ ToolItem tool(String id, String name, String args, {String? result = 'ok', bool 
 String shape(List<ChatRow> rows) => rows
     .map(
       (r) => switch (r) {
-        StepGroupRow(:final steps, :final live) => '${live ? '*' : ''}G(${steps.map((s) => s is ToolItem ? 't' : 'a').join()})',
+        StepGroupRow(:final steps, :final live) =>
+          '${live ? '*' : ''}G(${steps.map((s) => s is ToolItem
+              ? 't'
+              : s is ThinkingItem
+              ? 'k'
+              : 'a').join()})',
         ItemRow(:final item) => switch (item) {
           UserItem() => 'U',
           AssistantItem() => 'A',
           ToolItem() => 'T',
           UsageItem() => r'$',
           NoticeItem() => 'N',
+          ThinkingItem() => 'K',
+          CompactionItem() => 'C',
+          InterruptedItem() => 'I',
         },
       },
     )

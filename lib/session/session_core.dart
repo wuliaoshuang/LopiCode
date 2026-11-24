@@ -3,9 +3,12 @@
 // 派子代理（subagents.dart）、发送与排队（send_flow.dart）都拿着同一个 SessionCore 干活。
 //
 // 这里不发请求、不调工具，只管“东西在哪、怎么存”。界面不直接用它，界面走 ProjectSession 的方法和 lib/state 的 provider。
+import 'dart:async';
 import 'dart:io';
 
+import 'package:lopicode/agent/agent_runner.dart';
 import 'package:lopicode/agent/agent_tools.dart';
+import 'package:lopicode/agent/auto_compact.dart';
 import 'package:lopicode/agent/model_config.dart';
 import 'package:lopicode/agent/presets.dart';
 import 'package:lopicode/agent/team.dart';
@@ -16,6 +19,7 @@ import 'package:lopicode/core/safe_file.dart';
 import 'package:lopicode/core/stores.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/session/chat_items.dart';
+import 'package:lopicode/session/turn_journal.dart';
 import 'package:lopicode/state/team_state.dart';
 import 'package:lopicode/state/workspace_chat.dart';
 import 'package:lopicode/state/workspace_conversations.dart';
@@ -127,8 +131,46 @@ class SessionCore {
     if (run.loaded) return;
     run.markLoaded();
     run.messages = await _readMessages(run.convId);
+    // 上一轮要是没正常收尾，记录里可能有“调了工具却没有结果”的消息：补上说明，免得下一次请求被接口拒绝。
+    repairDanglingCalls(run.messages);
     rebuildItems(run);
+    // 上一轮进行中 App 被关掉 / 被回收：在对话末尾说清楚停在哪，等用户选“继续 / 不用了”。绝不自动重跑。
+    final cut = await journalOf(run.convId).interrupted();
+    if (cut != null && !run.busy) run.add(cut.describe());
   }
+
+  // ── 进行中记录（App 被关掉后的恢复提示）─────────────────
+  final Map<String, TurnJournalStore> _journals = {};
+
+  TurnJournalStore journalOf(String convId) => _journals.putIfAbsent(convId, () => TurnJournalStore(reserved(convId == 'main' ? 'turn.json' : 'turn-$convId.json')));
+
+  /// 对话删掉了：交出它的进行中记录文件（调用方一起删）。
+  File dropJournal(String convId) => (_journals.remove(convId) ?? journalOf(convId)).file;
+
+  /// 把对话末尾的“上一轮没正常结束”提示收掉（用户选过了，或者又发了新消息）。
+  void clearInterrupted(ChatRunNotifier run) {
+    if (run.items.any((i) => i is InterruptedItem)) run.setItems([...run.items.where((i) => i is! InterruptedItem)]);
+  }
+
+  /// 一轮进行中途存一次消息记录（不等写完、不动对话目录）：App 这时候被关掉，已经做完的步骤不会丢。
+  /// 上一次还没写完就只记“有新内容”，写完后补写一次最新的；一轮收尾时 [saveRun] 会写最终的，那之后不再补。
+  void saveMessagesLater(ChatRunNotifier run) {
+    final id = run.conv.id;
+    if (_savingLater.contains(id)) {
+      _dirtyLater.add(id);
+      return;
+    }
+    _savingLater.add(id);
+    unawaited(
+      writeJsonAtomic(chatFileOf(id), run.messages).catchError((Object _) {}).whenComplete(() {
+        _savingLater.remove(id);
+        if (_dirtyLater.remove(id) && run.busy) saveMessagesLater(run);
+      }),
+    );
+  }
+
+  final Set<String> _savingLater = {};
+  final Set<String> _dirtyLater = {};
 
   /// 附件在手机上的真实路径。
   String hostPathOfAttachment(String rel) => p.join(project.dir, rel);
@@ -147,6 +189,13 @@ class SessionCore {
     }
     await saveIndex();
   }
+
+  // ── Agent 的几项设置 ─────────────────────────────────
+  /// 上下文快满时自动把较早的对话压成摘要（默认开）。
+  bool get autoCompact => app.settings.getBool(SettingKeys.agentAutoCompact, true);
+
+  /// 连着执行多少步后停下来问（默认 30，范围 10–100）。
+  int get maxSteps => (app.settings.get<int>(SettingKeys.agentMaxSteps) ?? AgentRunner.defaultMaxSteps).clamp(AgentRunner.minMaxSteps, AgentRunner.maxMaxSteps);
 
   // ── 子代理、团队的设置 ───────────────────────────────
   bool get teamEnabled => app.settings.getBool(SettingKeys.teamEnabled);

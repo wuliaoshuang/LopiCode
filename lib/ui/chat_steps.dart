@@ -5,15 +5,19 @@
 //   · 进行中：转圈 + 现在在做什么 + “第 N 步”，就一行；
 //   · 做完：一行摘要“执行了 5 步 · 读 3 个文件 · 改 1 个文件 · 1 条命令”，有失败时行尾一个红色小标记；
 //   · 折叠时失败 / 被拒绝的那几步单独露在摘要下面（看得见停在哪），其余收起；
-//   · 点摘要展开清单（左边一条细线串起来），再点某一步看参数和结果；长结果先截一段，点“显示全部”。
+//   · 点摘要展开清单（左边一条细线串起来），再点某一步看参数和结果；长结果先截一段，点“显示全部”；
+//     命令输出太长被转存成文件的，结果下面多一个“查看完整输出”（另开一页）。
+//   · 某一步之前模型的思考也是清单里的一行（“思考了 N 秒”，见 chat_extras.dart），折叠时不露出来。
 // - 只有一步、中间也没说话的，不套组，直接是一行。
 // - 颜色只出现在状态上：失败红、被拒绝橙、子代理的“查看”用强调色；其余全是中性灰。
 // - 主操作没有：这里全是“想看再点”的次要内容。
 import 'dart:convert';
 
+import 'package:lopicode/agent/command_output_store.dart';
 import 'package:lopicode/session/chat_models.dart';
 import 'package:lopicode/session/chat_rows.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/chat_extras.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// 结果先显示这么多字，多的点“显示全部”。
@@ -66,7 +70,7 @@ class _StepGroupViewState extends State<StepGroupView> with AutomaticKeepAliveCl
     super.build(context);
     final row = widget.row;
     final tools = row.tools;
-    // 只有一步、中间也没说话：不套组。
+    // 只有一步、中间也没说话（也没有要显示的思考）：不套组。
     if (row.steps.length == 1) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: Space.x1),
@@ -89,7 +93,12 @@ class _StepGroupViewState extends State<StepGroupView> with AutomaticKeepAliveCl
                 ? _Thread(
                     children: [
                       for (final step in row.steps)
-                        if (step is ToolItem) StepRow(tool: step, onOpenChild: widget.onOpenChild) else if (step is AssistantItem) _Note(step.text),
+                        if (step is ToolItem)
+                          StepRow(tool: step, onOpenChild: widget.onOpenChild)
+                        else if (step is AssistantItem)
+                          _Note(step.text)
+                        else if (step is ThinkingItem)
+                          ThinkingRow(item: step),
                     ],
                   )
                 : shown.isEmpty
@@ -374,34 +383,62 @@ class _StepDetailState extends State<_StepDetail> {
     final sections = stepDetailSections(widget.tool);
     final limit = _full ? kStepResultMax : kStepResultPreview;
     final clipped = sections.any((s) => s.$2.length > kStepResultPreview);
+    // 命令输出太长、完整的转存成了文件：给一个整页查看的入口。
+    final spilled = spilledOutputPathOf(widget.tool.result);
+    final readOutput = ChatRowActions.maybeOf(context)?.readOutput;
     return Container(
       margin: const EdgeInsets.only(left: Space.x8, bottom: Space.x2),
       constraints: BoxConstraints(maxHeight: _full ? 420 : 240),
       decoration: BoxDecoration(color: c.codeBg, borderRadius: BorderRadius.circular(Radii.md)),
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(Space.x3),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            for (final (i, (title, body)) in sections.indexed) ...[
-              if (i > 0) const SizedBox(height: Space.x3),
-              Text(title, style: t.bodySmall?.copyWith(color: c.textFaint)),
-              const SizedBox(height: Space.x1),
-              SelectableText(body.length > limit ? '${body.substring(0, limit)}\n…（共 ${body.length} 字，${_full ? '太长，只显示前 $limit 字' : '还有 ${body.length - limit} 字没显示'}）' : body, style: mono),
-            ],
-            if (clipped && !_full)
-              Padding(
-                padding: const EdgeInsets.only(top: Space.x2),
-                child: InkWell(
-                  onTap: () => setState(() => _full = true),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: Space.x1),
-                    child: Text('显示全部', style: t.bodySmall?.copyWith(color: c.accent)),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Flexible(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(Space.x3),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (final (i, (title, body)) in sections.indexed) ...[
+                    if (i > 0) const SizedBox(height: Space.x3),
+                    Text(title, style: t.bodySmall?.copyWith(color: c.textFaint)),
+                    const SizedBox(height: Space.x1),
+                    SelectableText(body.length > limit ? '${body.substring(0, limit)}\n…（共 ${body.length} 字，${_full ? '太长，只显示前 $limit 字' : '还有 ${body.length - limit} 字没显示'}）' : body, style: mono),
+                  ],
+                  if (clipped && !_full)
+                    Padding(
+                      padding: const EdgeInsets.only(top: Space.x2),
+                      child: InkWell(
+                        onTap: () => setState(() => _full = true),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: Space.x1),
+                          child: Text('显示全部', style: t.bodySmall?.copyWith(color: c.accent)),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          // 完整输出的入口钉在框底，不跟着内容滚走：输出很长时不用先滑到底才看得见。
+          if (spilled != null && readOutput != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(Space.x3, 0, Space.x3, Space.x2),
+              child: InkWell(
+                key: const ValueKey('open-full-output'),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => CommandOutputPage(path: spilled, load: readOutput),
                   ),
                 ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: Space.x1),
+                  child: Text('查看完整输出', style: t.bodySmall?.copyWith(color: c.accent)),
+                ),
               ),
-          ],
-        ),
+            ),
+        ],
       ),
     );
   }

@@ -11,7 +11,6 @@ import 'package:image_picker/image_picker.dart';
 import 'package:lopicode/agent/agent_tools.dart';
 import 'package:lopicode/agent/presets.dart';
 import 'package:lopicode/project_session.dart';
-import 'package:lopicode/session/chat_rows.dart';
 import 'package:lopicode/state/workspace_chat.dart';
 import 'package:lopicode/state/workspace_conversations.dart';
 import 'package:lopicode/theme/tokens.dart';
@@ -586,7 +585,7 @@ class _SubConversationScreenState extends ConsumerState<SubConversationScreen> {
                   : ListView(
                       padding: const EdgeInsets.fromLTRB(Space.x4, Space.x2, Space.x4, Space.x4),
                       children: [
-                        for (final row in deriveChatRows(run.items, busy: run.busy))
+                        for (final row in chatRowsOf(ref, run.items, busy: run.busy))
                           ChatRowView(
                             row: row,
                             onOpenChild: (id) => Navigator.of(context).push(

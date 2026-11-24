@@ -42,6 +42,39 @@ class ToolItem extends ChatItem {
       ToolItem(callId, name, arguments, result: result ?? this.result, ok: ok ?? this.ok, denied: denied ?? this.denied, childConversationId: childConversationId ?? this.childConversationId);
 }
 
+/// 模型的一段思考。[streaming]＝还在想；想完后 [ms] 是想了多久（旧记录里没存就是 null）。
+class ThinkingItem extends ChatItem {
+  const ThinkingItem(this.text, {this.streaming = false, this.ms, this.startedAt});
+  final String text;
+  final bool streaming;
+  final int? ms;
+
+  /// 从什么时候开始想的（只在还在想的时候有，界面拿它算“已经想了几秒”）。
+  final DateTime? startedAt;
+
+  ThinkingItem copyWith({String? text, bool? streaming, int? ms}) => ThinkingItem(text ?? this.text, streaming: streaming ?? this.streaming, ms: ms ?? this.ms, startedAt: startedAt);
+}
+
+/// “已压缩较早的对话”：[summary] 是顶替它们的那份摘要。
+class CompactionItem extends ChatItem {
+  const CompactionItem(this.summary);
+  final String summary;
+}
+
+/// 上一轮没正常结束（App 被关掉 / 被系统回收）：下次打开这段对话时的提示。
+class InterruptedItem extends ChatItem {
+  const InterruptedItem({required this.headline, required this.lines, required this.risky});
+
+  /// 一句话：上次停在哪。
+  final String headline;
+
+  /// 细节：哪些步骤已经执行、哪一步可能只做了一半……一行一条。
+  final List<String> lines;
+
+  /// 有没有“可能只执行了一半”的步骤（有的话提示要醒目一点）。
+  final bool risky;
+}
+
 /// 上下文占用。
 class ContextUsage {
   const ContextUsage(this.used, this.limit, {required this.estimated});
@@ -78,7 +111,13 @@ class PendingApproval {
 
 /// AI 向用户提的问题（选择卡）。
 class PendingQuestion {
-  PendingQuestion(this.question, this.options, {this.conversationId = '', this.agentName = ''});
+  PendingQuestion(this.question, this.options, {this.conversationId = '', this.agentName = '', this.title, this.choiceOnly = false});
+
+  /// 卡片标题；null 用默认的“Agent 想问你”。
+  final String? title;
+
+  /// 只能从选项里选（应用自己问的“要不要继续”）：不给“其他回答”。
+  final bool choiceOnly;
   final String question;
   final List<String> options;
   final String conversationId;

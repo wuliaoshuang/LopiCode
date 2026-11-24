@@ -21,7 +21,8 @@ class ItemRow extends ChatRow {
   final ChatItem item;
 }
 
-/// 一组步骤：[steps] 里是 [ToolItem]（一次工具调用）和 [AssistantItem]（工具之间模型说的话），按发生顺序。
+/// 一组步骤：[steps] 里是 [ToolItem]（一次工具调用）、[AssistantItem]（工具之间模型说的话）、
+/// [ThinkingItem]（某一步之前的思考），按发生顺序。
 class StepGroupRow extends ChatRow {
   const StepGroupRow(this.steps, {required this.live});
   final List<ChatItem> steps;
@@ -35,8 +36,9 @@ class StepGroupRow extends ChatRow {
   String get id => tools.first.callId;
 }
 
-/// [busy]：这段对话是不是正在跑。
-List<ChatRow> deriveChatRows(List<ChatItem> items, {required bool busy}) {
+/// [busy]：这段对话是不是正在跑。[showThinking]＝false 时思考过程一律不出现（设置里关了）。
+List<ChatRow> deriveChatRows(List<ChatItem> all, {required bool busy, bool showThinking = true}) {
+  final items = showThinking ? all : [...all.where((i) => i is! ThinkingItem)];
   final rows = <ChatRow>[];
   var start = 0;
   for (var i = 0; i <= items.length; i++) {
@@ -74,7 +76,7 @@ void _segment(List<ChatItem> items, int from, int to, List<ChatRow> rows, {requi
     if (i > lastTool) {
       flush(isLast: true);
       rows.add(ItemRow(item));
-    } else if (item is ToolItem || item is AssistantItem) {
+    } else if (item is ToolItem || item is AssistantItem || item is ThinkingItem) {
       group.add(item);
     } else {
       // 提示、用量脚注夹在中间：前面的先收成一组，顺序不动。

@@ -271,7 +271,10 @@ class AnthropicChatClient implements ChatClient {
                 toolCalls: [ToolCallDelta(index: index, arguments: part)],
               );
             case 'thinking_delta':
-              block['thinking'] = '${block['thinking'] ?? ''}${delta['thinking'] ?? ''}';
+              // 官方文档：thinking_delta 的 thinking 字段是这一小段思考文字；display 设成 omitted 时是空串（什么都不显示）。
+              final t = '${delta['thinking'] ?? ''}';
+              block['thinking'] = '${block['thinking'] ?? ''}$t';
+              if (t.isNotEmpty) yield ChatDelta(reasoning: t);
             case 'signature_delta':
               block['signature'] = '${block['signature'] ?? ''}${delta['signature'] ?? ''}';
           }
@@ -378,12 +381,15 @@ class OpenAiResponsesClient implements ChatClient {
   final String? reasoningEffort;
   final http.Client _http;
 
+  /// 要不要请接口给思考摘要；被接口拒绝过一次就不再要。
+  bool _askSummary = true;
+
   @override
   Stream<ChatDelta> streamChat({required List<Map<String, dynamic>> messages, List<Map<String, dynamic>> tools = const []}) async* {
     if (model.trim().isEmpty) throw ChatApiException('还没选模型');
     final uri = _endpoint(baseUrl, '/responses');
     final converted = responsesInput(messages);
-    final response = await _post(
+    Future<http.StreamedResponse> post() => _post(
       _http,
       uri,
       {if (apiKey.isNotEmpty) 'Authorization': 'Bearer $apiKey'},
@@ -394,13 +400,24 @@ class OpenAiResponsesClient implements ChatClient {
         'stream': true,
         'store': false,
         if (maxOutputTokens != null) 'max_output_tokens': maxOutputTokens,
-        if (reasoningEffort != null) 'reasoning': {'effort': reasoningEffort},
+        // summary: auto＝请接口给一份能看的思考摘要（不要就只有加密的思考，聊天页没东西可显示）。未核对，见 api-notes。
+        if (reasoningEffort != null) 'reasoning': {'effort': reasoningEffort, if (_askSummary) 'summary': 'auto'},
         if (tools.isNotEmpty) 'tools': responsesTools(tools),
       },
     );
+    http.StreamedResponse response;
+    try {
+      response = await post();
+    } on ChatApiException catch (e) {
+      // 有的账号 / 兼容接口不认 summary（据说 OpenAI 只给验证过的组织）：去掉它再试一次，之后不再带。
+      if (!_askSummary || reasoningEffort == null || e.statusCode != 400 || !e.message.toLowerCase().contains('summar')) rethrow;
+      _askSummary = false;
+      response = await post();
+    }
 
     final gotArgs = <int>{}; // 收到过参数增量的输出项
     var sawCall = false;
+    var sawThought = false;
     await for (final ev in sseEvents(guardChatStream(response.stream, response.request?.url.host ?? ''))) {
       if (ev.data == '[DONE]') break; // 官方不发，有些兼容接口会发
       final Object? json;
@@ -415,6 +432,17 @@ class OpenAiResponsesClient implements ChatClient {
         case 'response.output_text.delta':
           final t = json['delta'];
           if (t is String && t.isNotEmpty) yield ChatDelta(content: t);
+        // 思考摘要（要了 summary 才有）；有些兼容接口直接给思考原文（reasoning_text）。事件名未核对，见 api-notes。
+        case 'response.reasoning_summary_text.delta':
+        case 'response.reasoning_text.delta':
+          final t = json['delta'];
+          if (t is String && t.isNotEmpty) {
+            sawThought = true;
+            yield ChatDelta(reasoning: t);
+          }
+        case 'response.reasoning_summary_part.added':
+          // 摘要分成几段给：段和段之间空一行。
+          if (sawThought) yield ChatDelta(reasoning: '\n\n');
         case 'response.output_item.added':
           final item = json['item'];
           if (item is Map && item['type'] == 'function_call') {

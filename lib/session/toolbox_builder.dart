@@ -31,7 +31,9 @@ class ToolboxBuilder {
   /// 出一张确认卡。没人在场：一律按拒绝。
   Future<bool> requestApproval(ChatRunNotifier run, ApprovalRequest request) {
     if (run.unattended) return Future.value(false);
-    return core.cards.requestApproval(PendingApproval(request, conversationId: run.convId, agentName: run.conv.agentName));
+    // 记一笔“正在等确认”：这时候 App 被关掉，下次能说清楚这一步没有执行。
+    final journal = core.journalOf(run.convId)..setAwaitingApproval(true);
+    return core.cards.requestApproval(PendingApproval(request, conversationId: run.convId, agentName: run.conv.agentName)).whenComplete(() => journal.setAwaitingApproval(false));
   }
 
   Future<String> _askUser(ChatRunNotifier run, String question, List<String> options) {

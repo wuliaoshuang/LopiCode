@@ -12,6 +12,7 @@ import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/core/safe_file.dart';
 import 'package:lopicode/core/stores.dart';
 import 'package:lopicode/core/templates.dart';
+import 'package:lopicode/session/turn_journal.dart';
 import 'package:lopicode/templates/project_templates.dart';
 import 'package:path/path.dart' as p;
 
@@ -181,7 +182,39 @@ void main() {
         await board.load();
         expect(board.tasks, isEmpty);
       });
+
+      test('进行中记录 turn.json：${entry.key} → 当没有记录（不提示、不崩），之后还能正常记', () async {
+        final file = File(p.join(tmp.path, 'turn.json'))..writeAsStringSync(entry.value);
+        final store = TurnJournalStore(file);
+        expect(await store.interrupted(), isNull);
+        store.begin('做个页面');
+        await store.finish();
+        expect((jsonDecode(file.readAsStringSync()) as Map)['finished'], isTrue);
+      });
     }
+
+    test('进行中记录：字段类型不对（步骤不是列表、步骤里混着别的东西）→ 读到哪算哪', () async {
+      final file = File(p.join(tmp.path, 'turn.json'))
+        ..writeAsStringSync(
+          jsonEncode({
+            'token': 'old',
+            'at': 1,
+            'text': 42,
+            'finished': 'no',
+            'steps': [
+              7,
+              {'id': 'c1'},
+              {'id': 'c2', 'name': 'run_command', 'args': 9},
+            ],
+          }),
+        );
+      final cut = await TurnJournalStore(file).interrupted();
+      expect(cut, isNotNull);
+      expect(cut!.steps.single.callId, 'c2');
+      expect(cut.describe().lines, isNotEmpty);
+      File(p.join(tmp.path, 'turn2.json')).writeAsStringSync(jsonEncode({'token': 'old', 'at': 1, 'steps': 'nope'}));
+      expect((await TurnJournalStore(File(p.join(tmp.path, 'turn2.json'))).interrupted())!.steps, isEmpty);
+    });
 
     test('旧版本 / 字段类型不对的内容：读到哪算哪，不抛异常', () async {
       // 设置：值的类型不对 → 取的时候回退默认

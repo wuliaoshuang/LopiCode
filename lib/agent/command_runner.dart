@@ -58,6 +58,9 @@ class LocalShellRunner implements CommandRunner {
   }
 }
 
+/// 一条命令的输出最多收集这么多字符（约 2 MB）；再多的只回显到终端，不留。
+const int kMaxCollectedOutputChars = 2000000;
+
 /// 启动一个进程，收集并回显它的输出，超时就结束它。
 Future<CommandResult> runAndCollect(Future<Process> Function() start, {required Duration timeout, void Function(String text)? onOutput, String startError = '无法启动'}) async {
   final Process process;
@@ -68,7 +71,7 @@ Future<CommandResult> runAndCollect(Future<Process> Function() start, {required 
   }
   final buffer = StringBuffer();
   void collect(String chunk) {
-    if (buffer.length < 200000) buffer.write(chunk);
+    if (buffer.length < kMaxCollectedOutputChars) buffer.write(chunk);
     onOutput?.call(chunk.replaceAll('\n', '\r\n'));
   }
 

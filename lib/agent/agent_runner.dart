@@ -2,9 +2,12 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:lopicode/agent/agent_tools.dart';
+import 'package:lopicode/agent/auto_compact.dart';
 import 'package:lopicode/agent/chat_client.dart';
 import 'package:lopicode/agent/loop_guard.dart';
 import 'package:lopicode/agent/usage.dart';
+
+export 'package:lopicode/agent/auto_compact.dart' show compactHistory;
 
 sealed class AgentEvent {}
 
@@ -12,6 +15,27 @@ sealed class AgentEvent {}
 class AssistantDelta extends AgentEvent {
   AssistantDelta(this.text);
   final String text;
+}
+
+/// 模型正在思考（增量）。只用来显示，不算回复。
+class ReasoningDelta extends AgentEvent {
+  ReasoningDelta(this.text);
+  final String text;
+}
+
+/// 这一段思考结束了（开始说话 / 调工具，或者这次回复结束）。[ms] 是想了多久。
+class ReasoningDone extends AgentEvent {
+  ReasoningDone(this.ms);
+  final int ms;
+}
+
+/// 上下文快满，较早的对话已经压成摘要（这一轮接着跑）。
+class ContextCompacted extends AgentEvent {
+  ContextCompacted(this.summary, this.replaced);
+  final String summary;
+
+  /// 被摘要顶替的消息条数。
+  final int replaced;
 }
 
 /// 一轮模型回复结束（[text] 是这一轮的完整文字，可能为空）。
@@ -48,8 +72,11 @@ class AgentNotice extends AgentEvent {
 
 /// 一次模型请求结束（成功、被打断、或者中途断了）。[usage] 是接口给的用量，没给是 null。
 class RequestFinished extends AgentEvent {
-  RequestFinished(this.usage, this.ms, {this.firstMs, this.startedAt});
+  RequestFinished(this.usage, this.ms, {this.firstMs, this.startedAt, this.compaction = false});
   final TokenUsage? usage;
+
+  /// 这次请求是“自动压缩对话”那一次（照样算进这一轮的用量）。
+  final bool compaction;
   final int ms;
 
   /// 从发出到收到第一块内容（文字或工具调用）的用时；一块都没收到是 null。
@@ -70,13 +97,16 @@ class _PendingCall {
 
 /// 对话 + 工具调用循环。
 ///
-/// 一“轮”＝调用一次模型。模型每轮可以要求调用若干工具，结果回填后进入下一轮；
-/// 最多 [maxRounds] 轮，到了上限由代码强行停下，不管模型还想不想继续。
+/// 一“轮”＝调用一次模型。模型每轮可以要求调用若干工具（每次工具调用算一“步”），结果回填后进入下一轮。
+/// 连着执行满 [maxSteps] 步就由代码停下来：有人在场（给了 [confirmContinue]）就问要不要继续，
+/// 没人在场（自动化任务）直接停下并留一句说明——不管模型还想不想继续。
 class AgentRunner {
   AgentRunner({
     required this.client,
     required this.toolbox,
-    this.maxRounds = defaultMaxRounds,
+    this.maxSteps = defaultMaxSteps,
+    this.confirmContinue,
+    this.autoCompact = false,
     String? systemPrompt,
     List<Map<String, dynamic>>? history,
     this.vision = false,
@@ -89,7 +119,13 @@ class AgentRunner {
   }) : systemPrompt = systemPrompt ?? defaultSystemPrompt,
        messages = history ?? [];
 
-  static const int defaultMaxRounds = 12;
+  /// 连着执行多少步后停下来问（设置里可调，范围 [minMaxSteps]–[maxMaxSteps]）。
+  static const int defaultMaxSteps = 30;
+  static const int minMaxSteps = 10;
+  static const int maxMaxSteps = 100;
+
+  /// 没人在场、到步数上限停下时那句提示的开头（收尾的地方据此把这一轮记成“没做完”）。
+  static const String stepLimitStopPrefix = '已达到步数上限';
 
   static const String defaultSystemPrompt =
       '你是 LopiCode 里的编程助手，在用户手机上帮他完成一个代码项目。\n'
@@ -104,7 +140,14 @@ class AgentRunner {
 
   final ChatClient client;
   final AgentToolbox toolbox;
-  final int maxRounds;
+  final int maxSteps;
+
+  /// 到步数上限时问用户要不要继续（参数是这一轮已经执行的步数）。null＝没人在场，直接停。
+  final Future<bool> Function(int steps)? confirmContinue;
+
+  /// 裁掉较早的工具结果以后还是快满：自动把较早的对话压成摘要再继续（会多调用一次模型）。
+  final bool autoCompact;
+  bool _compactGaveUp = false;
   final String systemPrompt;
 
   /// 当前模型能不能看图。不能看时，图片附件只把文件路径告诉它。
@@ -159,6 +202,8 @@ class AgentRunner {
   static int estimateTokens(List<Map<String, dynamic>> messages) {
     var chars = 0;
     for (final m in messages) {
+      if (isArchived(m)) continue; // 已经被摘要顶替：不再发给模型
+
       chars += '${m['content'] ?? ''}'.length;
       for (final c in (m['tool_calls'] as List?) ?? const []) {
         chars += '$c'.length;
@@ -174,6 +219,7 @@ class AgentRunner {
       {'role': 'system', 'content': systemPrompt},
     ];
     for (final m in messages) {
+      if (isArchived(m)) continue; // 已经被摘要顶替，只留着给聊天页看
       final images = m['_images'];
       if (m['role'] != 'user' || images is! List || images.isEmpty) {
         out.add(m);
@@ -215,14 +261,29 @@ class AgentRunner {
     _cancelled = false;
     messages.add({'role': 'user', 'content': userText, if (images.isNotEmpty) '_images': images});
 
+    var steps = 0; // 这一轮一共执行了几步
+    var sinceAsk = 0; // 上次问过“要不要继续”之后又执行了几步
     for (var round = 1; ; round++) {
       if (_cancelled) {
         yield AgentNotice('已停止。');
         return;
       }
-      if (round > maxRounds) {
-        yield AgentNotice('已连续调用工具 $maxRounds 轮，达到上限，已自动停下。可以发“继续”让它接着做。');
-        return;
+      if (sinceAsk >= maxSteps) {
+        final ask = confirmContinue;
+        if (ask == null) {
+          yield AgentNotice('$stepLimitStopPrefix：这一轮已执行 $steps 步（上限 $maxSteps 步），没有人在场确认要不要继续，已自动停下。');
+          return;
+        }
+        final go = await ask(steps);
+        if (_cancelled) {
+          yield AgentNotice('已停止。');
+          return;
+        }
+        if (!go) {
+          yield AgentNotice('已执行 $steps 步，按你的选择停在这里。发“继续”可以让它接着做。');
+          return;
+        }
+        sinceAsk = 0;
       }
       // 插话在这里交给模型：这一步起它就能看到。
       while (_steer.isNotEmpty) {
@@ -236,6 +297,22 @@ class AgentRunner {
       if (limit != null && estimateTokens(messages) > limit * pruneAt) {
         final pruned = pruneOldToolResults(messages);
         if (pruned > 0) yield AgentNotice('对话快把模型的上下文占满了，已省略 $pruned 条较早的工具结果（需要时 Agent 会重新读取）。');
+        // 第二道：裁完还是超过这条线，就把较早的对话压成摘要（多调用一次模型），这一轮不中断。
+        if (autoCompact && !_compactGaveUp && estimateTokens(messages) > limit * pruneAt) {
+          final r = await compactOlder(client, messages, keepRecent: kCompactKeepRecent, archive: true, keepLastRequest: true, contextLimit: limit);
+          if (r.requested) yield RequestFinished(r.usage, r.ms, startedAt: r.startedAt, compaction: true);
+          if (r.ok) {
+            yield ContextCompacted(r.summary, r.replaced);
+          } else if (!r.skipped) {
+            // 失败：记录一个字没动。这一轮里不再试（免得每一步都白花一次请求）。
+            _compactGaveUp = true;
+            yield AgentNotice('想把较早的对话自动压缩成摘要，但没成功（${r.error}）。对话记录没有丢，先只省略较早的工具结果继续。');
+          }
+          if (_cancelled) {
+            yield AgentNotice('已停止。');
+            return;
+          }
+        }
       }
 
       final text = StringBuffer();
@@ -248,6 +325,8 @@ class AgentRunner {
       DateTime? startedAt;
       String? finishReason;
       final clock = Stopwatch();
+      int? thinkFrom; // 这一段思考从第几毫秒开始；null＝现在没在思考
+      var thinkMs = 0;
       for (var attempt = 0; ; attempt++) {
         try {
           final request = await buildRequest();
@@ -262,7 +341,17 @@ class AgentRunner {
             if (delta.finishReason != null) finishReason = delta.finishReason;
             if (firstMs == null && ((delta.content?.isNotEmpty ?? false) || delta.toolCalls.isNotEmpty)) firstMs = clock.elapsedMilliseconds;
             if (_cancelled) break;
-            if (delta.reasoning != null) reasoning.write(delta.reasoning);
+            if (delta.reasoning != null && delta.reasoning!.isNotEmpty) {
+              thinkFrom ??= clock.elapsedMilliseconds;
+              reasoning.write(delta.reasoning);
+              yield ReasoningDelta(delta.reasoning!);
+            }
+            // 开始说话 / 调工具：这一段思考结束。
+            if (thinkFrom != null && ((delta.content?.isNotEmpty ?? false) || delta.toolCalls.isNotEmpty)) {
+              thinkMs += clock.elapsedMilliseconds - thinkFrom;
+              thinkFrom = null;
+              yield ReasoningDone(thinkMs);
+            }
             if (delta.content != null && delta.content!.isNotEmpty) {
               text.write(delta.content);
               yield AssistantDelta(delta.content!);
@@ -274,6 +363,11 @@ class AgentRunner {
               if (c.arguments != null) call.arguments.write(c.arguments);
             }
             if (delta.raw != null) raw = delta.raw;
+          }
+          if (thinkFrom != null) {
+            thinkMs += clock.elapsedMilliseconds - thinkFrom;
+            thinkFrom = null;
+            yield ReasoningDone(thinkMs);
           }
           break;
         } on ChatApiException catch (e) {
@@ -301,7 +395,9 @@ class AgentRunner {
 
       if (_cancelled) {
         // 被打断的这一轮不留工具调用（没执行，留下会让下一次请求对不上）。
-        if (text.isNotEmpty) messages.add({'role': 'assistant', 'content': text.toString(), if (reasoning.isNotEmpty) '_reasoning': reasoning.toString()});
+        if (text.isNotEmpty) {
+          messages.add({'role': 'assistant', 'content': text.toString(), if (reasoning.isNotEmpty) '_reasoning': reasoning.toString(), if (reasoning.isNotEmpty) '_reasoningMs': thinkMs});
+        }
         yield AssistantMessage(text.toString());
         yield AgentNotice('已停止。');
         return;
@@ -327,7 +423,9 @@ class AgentRunner {
           ],
         '_raw': ?raw,
         // 思考内容（DeepSeek 的 reasoning_content）：带工具的对话里之后每次请求都要原样带回，见 docs/api-notes.md。
+        // 聊天页也拿它显示“思考了 N 秒”（`_reasoningMs` 是想了多久）。
         if (reasoning.isNotEmpty) '_reasoning': reasoning.toString(),
+        if (reasoning.isNotEmpty) '_reasoningMs': thinkMs,
       });
       yield AssistantMessage(text.toString());
 
@@ -362,6 +460,8 @@ class AgentRunner {
         for (final call in batch) {
           yield ToolStarted(call.id, call.name, call.arguments.toString());
         }
+        steps += batch.length;
+        sinceAsk += batch.length;
         final outcomes = await Future.wait([
           for (var k = 0; k < batch.length; k++)
             verdicts[k] == LoopVerdict.run ? _runCall(batch[k], truncated: cutOff && identical(batch[k], ordered.last)) : Future.value(ToolOutcome(LoopGuard.refusal(batch[k].name), ok: false)),
@@ -434,39 +534,4 @@ class AgentRunner {
       messages.removeLast();
     }
   }
-}
-
-/// /compact：让模型把到目前为止的对话压成一段摘要，然后用摘要顶替原来的记录。
-/// 成功返回 null 并就地改写 [messages]；失败返回原因，记录不动。
-Future<String?> compactHistory(ChatClient client, List<Map<String, dynamic>> messages) async {
-  if (messages.length < 2) return '对话还很短，不需要压缩';
-  final request = <Map<String, dynamic>>[
-    {'role': 'system', 'content': '你是对话记录整理员。'},
-    ...messages,
-    {
-      'role': 'user',
-      'content':
-          '请把上面到目前为止的对话压缩成一份摘要，之后会用它顶替原来的记录接着干活。写清楚：用户的目标和要求、已经做完的事（改了哪些文件）、'
-          '还没做完的事、要注意的约定。只输出摘要本身，用简体中文。',
-    },
-  ];
-  final text = StringBuffer();
-  try {
-    await for (final d in client.streamChat(messages: request)) {
-      if (d.content != null) text.write(d.content);
-    }
-  } on ChatApiException catch (e) {
-    return e.message;
-  } on Exception catch (e) {
-    return '和模型的连接中断了：${shortError(e)}';
-  }
-  final summary = text.toString().trim();
-  if (summary.isEmpty) return '模型没有给出摘要，对话记录没有动';
-  messages
-    ..clear()
-    ..addAll([
-      {'role': 'user', 'content': '（之前的对话已压缩，以下是摘要）\n$summary'},
-      {'role': 'assistant', 'content': '好的，我已经了解之前的进展，可以接着做。'},
-    ]);
-  return null;
 }

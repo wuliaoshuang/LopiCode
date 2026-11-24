@@ -61,13 +61,13 @@ void main() {
     autoApprove: () => autoApprove,
   );
 
-  Future<AgentRunner> runnerFor(List<ScriptedReply> script, {ScriptedReply? fallback, int maxRounds = 12}) async {
+  Future<AgentRunner> runnerFor(List<ScriptedReply> script, {ScriptedReply? fallback, int maxSteps = 12}) async {
     server = FakeModelServer(script, fallback: fallback);
     await server!.start();
     return AgentRunner(
       client: OpenAiChatClient(baseUrl: server!.baseUrl, apiKey: 'sk-test-key', model: 'fake-model'),
       toolbox: toolbox(),
-      maxRounds: maxRounds,
+      maxSteps: maxSteps,
     );
   }
 
@@ -149,7 +149,7 @@ void main() {
   });
 
   test('强制场景：模型停不下来 → 到轮次上限由代码停下', () async {
-    final runner = await runnerFor([], fallback: ScriptedReply(calls: [ScriptedCall('list_files', '{}')]), maxRounds: 4);
+    final runner = await runnerFor([], fallback: ScriptedReply(calls: [ScriptedCall('list_files', '{}')]), maxSteps: 4);
     final events = await runner.send('一直干').toList();
     expect(server!.requests.length, 4, reason: '最多调 4 次模型');
     expect(finished(events).length, 4);
