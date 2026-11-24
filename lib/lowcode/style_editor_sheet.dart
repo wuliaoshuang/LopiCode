@@ -8,6 +8,7 @@
 //   按钮组、开关、换单位、清除、取色、应用 CSS、重置是一下一条。
 import 'dart:async';
 
+import 'package:lopicode/lowcode/css_codec.dart';
 import 'package:lopicode/lowcode/edit_types.dart';
 import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/lowcode/style_controls_widgets.dart';
@@ -140,7 +141,7 @@ class _StyleEditorSheetState extends State<_StyleEditorSheet> {
     _flush();
     final css = await showStyleCssEditor(context, initialCss: LcStyle(_draft).toCss(), legacy: legacyStyle(node, _doc.parentOf(node.id)));
     if (css == null || !mounted) return;
-    final parsed = parseStyleInput(css);
+    final parsed = parseCss(css);
     _apply(
       (s) => s.map
         ..clear()

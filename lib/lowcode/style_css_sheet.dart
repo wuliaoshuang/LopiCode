@@ -4,7 +4,6 @@
 // - 主操作只有“应用”。预览是随输入实时算的，不用再点按钮。
 // - 输入框用代码底色和等宽字，和面板其它输入框区分开。
 import 'package:lopicode/lowcode/css_codec.dart';
-import 'package:lopicode/lowcode/css_scan.dart';
 import 'package:lopicode/lowcode/style_model.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/widgets.dart';
@@ -29,7 +28,7 @@ class _CssSheet extends StatefulWidget {
 
 class _CssSheetState extends State<_CssSheet> {
   late final TextEditingController _text = TextEditingController(text: widget.initialCss);
-  late CssParseResult _parsed = parseStyleInput(widget.initialCss);
+  late CssParseResult _parsed = parseCss(widget.initialCss);
 
   @override
   void dispose() {
@@ -84,7 +83,7 @@ class _CssSheetState extends State<_CssSheet> {
                     fillColor: c.codeBg,
                     contentPadding: const EdgeInsets.all(Space.x3),
                   ),
-                  onChanged: (v) => setState(() => _parsed = parseStyleInput(v)),
+                  onChanged: (v) => setState(() => _parsed = parseCss(v)),
                 ),
                 const SizedBox(height: Space.x2),
                 Text(summary, key: const Key('lc-css-preview'), style: t.bodySmall),
@@ -129,29 +128,3 @@ class _CssSheetState extends State<_CssSheet> {
 
 /// 没收下的条目，写成给人看的一段话。
 String droppedText(List<String> dropped) => '有 ${dropped.length} 条不会收下（其余照常应用）：\n${dropped.map((d) => '· $d').join('\n')}';
-
-/// 把用户在框里写的东西解析成样式表。大部分情况就是 [parseCss]；多做的一件事是拦住“声明后面夹着别的规则”：
-/// `color: red; } body{display:none` 这种文本，[parseCss] 会把第一个 `{` 前面的全部当成选择器，
-/// 结果只剩 `display: none`、前面真正的声明全丢而且不提示。这里只在“看着像一整条规则”
-/// （第一个 `{` 前面没有分号、也没有 `}`）时才交给它按规则读；否则按分号一条条读，带花括号的那条拒收并说明。
-CssParseResult parseStyleInput(String css) {
-  final text = stripCssComments(css);
-  final open = text.indexOf('{');
-  if (open < 0 && !text.contains('}')) return parseCss(text);
-  final head = open < 0 ? text : text.substring(0, open);
-  if (open >= 0 && !head.contains(';') && !head.contains('}')) return parseCss(text);
-  var out = <String, String>{};
-  final dropped = <String>[];
-  for (final piece in splitTopLevel(text, ';')) {
-    if (piece.trim().isEmpty) continue;
-    if (piece.contains('{') || piece.contains('}')) {
-      final short = piece.trim().replaceAll(RegExp(r'\s+'), ' ');
-      dropped.add('${short.length > 80 ? '${short.substring(0, 80)}…' : short}（带花括号：这里只收“属性: 值”，不收别的规则）');
-      continue;
-    }
-    final r = parseCss(piece);
-    out = mergeDeclarations(out, r.declarations);
-    dropped.addAll(r.dropped);
-  }
-  return CssParseResult(out, dropped);
-}
