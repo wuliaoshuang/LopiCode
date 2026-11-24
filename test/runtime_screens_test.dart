@@ -264,7 +264,9 @@ void main() {
       expect(ptys, isNotEmpty);
       ptys.last.emit('root@localhost:/workspace# node -v\r\nv24.9.0\r\nroot@localhost:/workspace# ');
       await settle(tester);
-      expect(fresh.text, contains('Ubuntu 24.04'));
+      // 2026-11-24 第二轮真机反馈：不再打欢迎语（“LopiCode 终端 · Ubuntu 24.04 …”），屏幕从 shell 自己的提示符开始
+      expect(fresh.text, isNot(contains('Ubuntu 24.04')));
+      expect(fresh.text, startsWith('root@localhost:/workspace# node -v'));
       expect(fresh.text, contains('v24.9.0'));
       expect(env.host.keepAlive, isTrue, reason: 'Ubuntu 会话开着时要挂保活');
       await shot(tester, '28-terminal-ubuntu-$suffix');

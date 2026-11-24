@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:lopicode/core/safe_file.dart';
 import 'package:lopicode/core/stores.dart';
+import 'package:lopicode/runtime/guest_groups.dart';
 import 'package:lopicode/runtime/proot_command.dart';
 import 'package:lopicode/runtime/resumable_download.dart';
 import 'package:lopicode/runtime/runtime_diagnostics.dart';
@@ -89,6 +90,7 @@ class LinuxRuntime {
     this.image = RootfsImage.ubuntu2404Arm64,
     this.makeExecutable = chmodExecutable,
     bool? localShellAllowed,
+    this.processGroups,
   }) : _httpClient = httpClient ?? http.Client.new,
        localShellAllowed = localShellAllowed ?? !Platform.isAndroid;
 
@@ -100,6 +102,13 @@ class LinuxRuntime {
   final RootfsImage image;
   final MakeExecutable makeExecutable;
   final http.Client Function() _httpClient;
+
+  /// 怎么拿当前进程的组；不给就读 /proc/self/status（测试里换成固定的）。
+  final List<int>? Function()? processGroups;
+
+  /// 给环境的 /etc/group 补上安卓那几个组的名字（见 guest_groups.dart）。每次启动 PRoot 前都调：旧环境也能补上。
+  late final GuestGroupsKeeper _guestGroups = GuestGroupsKeeper(read: processGroups, log: _log);
+  void syncGuestGroups() => _guestGroups.sync(rootfsDir);
 
   /// 终端和 Agent 的命令能不能用“本机 shell”（不进 Ubuntu，直接用这台机器自带的 sh）。
   ///
@@ -334,6 +343,7 @@ class LinuxRuntime {
     // 环境里没有真正的多用户，apt 默认要切到 _apt 用户下载，会失败；让它直接用 root。
     await _writeReplacing(p.join(etc, 'apt', 'apt.conf.d', '99lopicode'), 'APT::Sandbox::User "root";\n');
     await _writeAptSources();
+    syncGuestGroups();
   }
 
   Future<void> _writeAptSources() => _writeReplacing(p.join(rootfsDir, 'etc', 'apt', 'sources.list.d', 'ubuntu.sources'), aptSourcesFor(aptMirror));
@@ -475,6 +485,7 @@ class LinuxRuntime {
 
   ProotCommand prootCommand({required List<String> guestCommand, String? projectDir, String? guestCwd, String term = 'xterm-256color'}) {
     prepareLauncherLibs();
+    syncGuestGroups();
     return buildProotCommand(
       nativeLibDir: nativeLibDir ?? '',
       libDir: hostLibDir,
