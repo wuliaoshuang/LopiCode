@@ -498,7 +498,16 @@ class RemoteModel {
   final String? displayName;
 }
 
-/// 读渠道的模型列表。只发一个 GET，不产生对话费用；“测试连接”也是它。
+/// 读模型列表为什么没成：界面按它分开说（Key 不对 / 没有这个接口 / 超时 / 连不上 / 返回的不是列表 / 别的错）。
+enum ModelListFailure { badKey, noListEndpoint, timeout, unreachable, notAList, other }
+
+class ModelListException extends ChatApiException {
+  ModelListException(this.kind, super.message, {super.statusCode});
+  final ModelListFailure kind;
+}
+
+/// 读渠道的模型列表。只发一个 GET，不产生对话费用；能读到就说明地址和 Key 都能用。
+/// 失败一律抛 [ModelListException]（地址本身不合法时是 [ChatApiException]）。
 Future<List<RemoteModel>> listRemoteModels({required ChatProtocol protocol, required String baseUrl, required String apiKey, http.Client? httpClient}) async {
   final client = httpClient ?? http.Client();
   final base = _trimBase(baseUrl, const ['/chat/completions', '/responses', '/messages', '/models']);
@@ -510,14 +519,16 @@ Future<List<RemoteModel>> listRemoteModels({required ChatProtocol protocol, requ
         .get(uri, headers: anthropic ? {'x-api-key': apiKey, 'anthropic-version': AnthropicChatClient.apiVersion} : {if (apiKey.isNotEmpty) 'Authorization': 'Bearer $apiKey'})
         .timeout(const Duration(seconds: 20));
   } on TimeoutException {
-    throw ChatApiException('连接超时（${uri.host}）：20 秒没有回应');
+    throw ModelListException(ModelListFailure.timeout, '连接超时（${uri.host}）：20 秒没有回应');
   } on Exception catch (e) {
-    throw ChatApiException('连不上接口（${uri.host}）：${shortError(e)}');
+    throw ModelListException(ModelListFailure.unreachable, '连不上接口（${uri.host}）：${shortError(e)}');
   } finally {
     if (httpClient == null) client.close();
   }
   if (response.statusCode != 200) {
-    throw ChatApiException(
+    final code = response.statusCode;
+    throw ModelListException(
+      code == 401 || code == 403 ? ModelListFailure.badKey : (code == 404 || code == 405 ? ModelListFailure.noListEndpoint : ModelListFailure.other),
       chatErrorMessage(response.statusCode, utf8.decode(response.bodyBytes, allowMalformed: true)).replaceFirst('接口地址或模型名不对', '接口地址不对，或者这个服务不提供模型列表'),
       statusCode: response.statusCode,
     );
@@ -526,10 +537,10 @@ Future<List<RemoteModel>> listRemoteModels({required ChatProtocol protocol, requ
   try {
     json = jsonDecode(utf8.decode(response.bodyBytes, allowMalformed: true));
   } on FormatException {
-    throw ChatApiException('接口返回的不是模型列表（不是 JSON），请检查接口地址');
+    throw ModelListException(ModelListFailure.notAList, '接口返回的不是模型列表（不是 JSON），请检查接口地址');
   }
   final data = json is Map ? json['data'] : json;
-  if (data is! List) throw ChatApiException('接口返回的内容里没有模型列表，请检查接口地址');
+  if (data is! List) throw ModelListException(ModelListFailure.notAList, '接口返回的内容里没有模型列表，请检查接口地址');
   final out = <RemoteModel>[];
   for (final m in data) {
     if (m is Map && m['id'] is String) out.add(RemoteModel(m['id'] as String, m['display_name'] is String ? m['display_name'] as String : null));
