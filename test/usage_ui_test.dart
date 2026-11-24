@@ -369,11 +369,12 @@ void main() {
         findsOneWidget,
         reason: '只有运行环境那一根',
       );
-      expect(find.text('设置额度上限'), findsOneWidget);
+      expect(find.byKey(const Key('overview-set-quota')), findsNothing, reason: '概况卡里不再有入口，额度只在“额度与余额”一处');
+      expect(find.descendant(of: find.byKey(const Key('settings-quota')), matching: find.text('未设上限')), findsOneWidget);
       await shot(tester, '82-settings-deepseek-nolimit-$suffix');
 
       // 进额度上限页，设 20 元
-      await tester.tap(find.byKey(const Key('overview-set-quota')));
+      await tester.tap(find.byKey(const Key('settings-quota')));
       await settle(tester, rounds: 4);
       await settle(tester, rounds: 6);
       expect(find.byType(QuotaScreen), findsOneWidget);
@@ -430,7 +431,12 @@ void main() {
       );
       await settle(tester, rounds: 3);
       final list = find.byType(Scrollable).first;
-      await tester.scrollUntilVisible(find.byKey(const Key('settings-usage')), 120, scrollable: list);
+      // 两个开关在 设置 › 界面 › 对话显示 里
+      await tester.scrollUntilVisible(find.byKey(const Key('settings-chat')), 120, scrollable: list);
+      await tester.ensureVisible(find.byKey(const Key('settings-chat')));
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(find.byKey(const Key('settings-chat')));
+      await settle(tester, rounds: 6);
       expect(find.text('在新对话里显示开场建议'), findsOneWidget);
       expect(find.text('在回复下方显示用量'), findsOneWidget);
       expect(tester.widget<Switch>(find.byKey(const Key('settings-suggestions'))).value, isTrue, reason: '默认开');
@@ -439,8 +445,12 @@ void main() {
       await tester.tap(find.byKey(const Key('settings-suggestions')));
       await settle(tester, rounds: 3);
       expect(env.services.settings.get<bool>(SettingKeys.chatSuggestions), isFalse);
+      await tester.tap(find.byTooltip('返回').last);
+      await settle(tester, rounds: 8);
 
-      await tester.scrollUntilVisible(find.byKey(const Key('settings-rules')), -120, scrollable: list);
+      await tester.scrollUntilVisible(find.byKey(const Key('settings-rules')), 120, scrollable: list);
+      await tester.ensureVisible(find.byKey(const Key('settings-rules')));
+      await tester.pump(const Duration(milliseconds: 300));
       await tester.tap(find.byKey(const Key('settings-rules')));
       await settle(tester, rounds: 4);
       await settle(tester, rounds: 6);
@@ -453,10 +463,17 @@ void main() {
       await tester.tap(find.byTooltip('返回').last);
       await settle(tester, rounds: 8);
       // 开关打开后，新对话里出现开场建议
-      await tester.scrollUntilVisible(find.byKey(const Key('settings-suggestions')), 120, scrollable: list);
+      await tester.scrollUntilVisible(find.byKey(const Key('settings-chat')), -120, scrollable: list);
+      await tester.ensureVisible(find.byKey(const Key('settings-chat')));
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(find.byKey(const Key('settings-chat')));
+      await settle(tester, rounds: 6);
       await tester.tap(find.byKey(const Key('settings-suggestions')));
       await settle(tester, rounds: 3);
       expect(env.services.settings.get<bool>(SettingKeys.chatSuggestions), isTrue);
+      // 先退回一级页：不然“对话显示”这一页还盖在最上面，换成对话页也看不到
+      await tester.tap(find.byTooltip('返回').last);
+      await settle(tester, rounds: 8);
       await showChat(tester);
       expect(find.byKey(const Key('chat-ideas')), findsOneWidget);
       await shot(tester, '89-chat-ideas-on-$suffix');

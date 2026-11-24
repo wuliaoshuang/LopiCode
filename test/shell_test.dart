@@ -474,8 +474,12 @@ void main() {
     await tester.tap(find.descendant(of: find.byType(AppDrawer), matching: find.text('设置')));
     await settle(tester, rounds: 4);
     final row = find.byKey(const Key('settings-rules'));
+    final settingsList = find.descendant(of: find.byKey(const Key('settings-list')), matching: find.byType(Scrollable)).first;
+    await tester.scrollUntilVisible(row, 120, scrollable: settingsList);
+    await tester.ensureVisible(row);
+    await tester.pump(const Duration(milliseconds: 300));
     expect(find.descendant(of: row, matching: find.text('未设置')), findsOneWidget);
-    expect(find.descendant(of: row, matching: find.textContaining('只对工作区“我的小站”生效')), findsOneWidget);
+    expect(find.text('当前工作区 · 我的小站'), findsOneWidget, reason: '组标题写明是哪个工作区');
     await tester.tap(row);
     await settle(tester, rounds: 4);
     expect(find.textContaining('只对这个工作区生效'), findsOneWidget);

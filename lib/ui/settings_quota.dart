@@ -1,7 +1,8 @@
 // 设计约束（额度上限 / 项目规则 · 390×844）
-// - 沿用设置页的卡片分组：浅灰底，白色大圆角卡片，一行只做一件事。
-// - 额度上限页从上到下：余额卡（大字余额、明细、更新时间、刷新）→ 已用卡（设了上限才有：进度条 + “已使用 x%（剩余 ¥y）”）
-//   → 上限表单（金额、币种、提醒阈值、保存）→ 危险操作（从现在重新算、取消上限）→ 说明。
+// - 用设置统一的组和行（settings_widgets.dart）：组有小标题，一行只做一件事。入口：设置 › 模型 › 额度与余额；设置 › 当前工作区 › 项目规则。
+// - 额度上限页从上到下五组：〔余额〕大字余额、明细、更新时间、刷新 →〔已用〕（设了上限才有）进度条 + “已使用 x%（剩余 ¥y）”
+//   →〔设置 / 修改上限〕金额、币种、提醒阈值、保存 →〔重来 / 取消〕从现在重新算、取消上限（红字），点了先确认 →〔怎么算的〕说明。
+// - 项目规则页一组：组标题写明是哪个工作区，一个多行输入框 + 保存；“只对这个工作区生效”写在脚注。
 // - 数字全部来自 DeepSeek 余额接口；查不到就写“余额没查到”和原因，不显示任何估的数。
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lopicode/agent/model_config.dart';
@@ -12,6 +13,7 @@ import 'package:lopicode/state/models_state.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/app_ref.dart';
 import 'package:lopicode/ui/chrome.dart';
+import 'package:lopicode/ui/settings_widgets.dart';
 import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -109,7 +111,7 @@ class _QuotaScreenState extends ConsumerState<QuotaScreen> {
     final ch = _channel(app);
     return Scaffold(
       backgroundColor: c.canvas,
-      appBar: PageBar(background: c.canvas, title: const Text('额度上限')),
+      appBar: PageBar(background: c.canvas, titleText: '额度与余额'),
       body: ch == null || !isDeepSeekOfficial(ch.baseUrl)
           ? const Padding(padding: EdgeInsets.all(Space.x4), child: InfoBanner('这个渠道不是 DeepSeek 官方接口（api.deepseek.com），查不了余额，也就设不了额度上限。'))
           : QuotaBuilder(
@@ -126,10 +128,9 @@ class _QuotaScreenState extends ConsumerState<QuotaScreen> {
                   key: const Key('quota-list'),
                   padding: const EdgeInsets.fromLTRB(Space.x4, Space.x2, Space.x4, Space.x8),
                   children: [
-                    GroupLabel('余额 · ${ch.name}'),
-                    GroupCard(
-                      dividers: false,
-                      padding: const EdgeInsets.all(Space.x4),
+                    SettingsGroup(
+                      title: '余额 · ${ch.name}',
+                      padded: true,
                       children: [
                         if (infos.isEmpty)
                           Text(
@@ -184,10 +185,9 @@ class _QuotaScreenState extends ConsumerState<QuotaScreen> {
                       ],
                     ),
                     if (q != null) ...[
-                      const GroupLabel('已用'),
-                      GroupCard(
-                        dividers: false,
-                        padding: const EdgeInsets.all(Space.x4),
+                      SettingsGroup(
+                        title: '已用',
+                        padded: true,
                         children: [
                           Text(
                             '已使用 ${q.percent}%（剩余 ${formatMoney(q.currency, q.remaining)}）',
@@ -222,10 +222,9 @@ class _QuotaScreenState extends ConsumerState<QuotaScreen> {
                         ],
                       ),
                     ],
-                    GroupLabel(q == null ? '设置额度上限' : '修改上限'),
-                    GroupCard(
-                      dividers: false,
-                      padding: const EdgeInsets.all(Space.x4),
+                    SettingsGroup(
+                      title: q == null ? '设置额度上限' : '修改上限',
+                      padded: true,
                       children: [
                         TextField(
                           key: const Key('quota-limit'),
@@ -266,16 +265,17 @@ class _QuotaScreenState extends ConsumerState<QuotaScreen> {
                       ],
                     ),
                     if (q != null)
-                      GroupCard(
+                      SettingsGroup(
+                        title: '重来 / 取消',
+                        footer: '这两项点了都会先问一遍。',
                         children: [
-                          GroupRow(key: const Key('quota-restart'), icon: Icons.restart_alt, title: '从现在重新算', subtitle: '已用清零，以现在的余额为起点', onTap: () => _restart(app, ch)),
-                          GroupRow(key: const Key('quota-clear'), icon: Icons.block, title: '取消上限', subtitle: '不再拦截，也不再提醒', danger: true, onTap: () => _clear(app)),
+                          SettingsRow(key: const Key('quota-restart'), icon: Icons.restart_alt, title: '从现在重新算', subtitle: '已用清零，以现在的余额为起点', onTap: () => _restart(app, ch)),
+                          SettingsRow(key: const Key('quota-clear'), icon: Icons.block, title: '取消上限', subtitle: '不再拦截，也不再提醒', danger: true, onTap: () => _clear(app)),
                         ],
                       ),
-                    const GroupLabel('怎么算的'),
-                    GroupCard(
-                      dividers: false,
-                      padding: const EdgeInsets.all(Space.x4),
+                    SettingsGroup(
+                      title: '怎么算的',
+                      padded: true,
                       children: [
                         Text(
                           '· DeepSeek 的接口只告诉我们“还剩多少余额”，没有“限额”这个概念。上限是你自己在这里定的，只在 LopiCode 里生效。\n'
@@ -335,19 +335,14 @@ class _ProjectRulesScreenState extends State<ProjectRulesScreen> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    final c = context.colors;
-    final t = Theme.of(context).textTheme;
-    return Scaffold(
-      backgroundColor: c.canvas,
-      appBar: PageBar(background: c.canvas, title: const Text('项目规则')),
-      body: SectionedList(
-        inner: const EdgeInsets.all(Space.x4),
+  Widget build(BuildContext context) => SettingsPage(
+    title: '项目规则',
+    children: [
+      SettingsGroup(
+        title: '工作区：${widget.session.project.name}',
+        footer: '写在这里的规则只对这个工作区生效，Agent 在这个工作区里的每段对话都必须遵守；换一个工作区要另外写。存在工作区的 .lopicode/rules.md 里。',
+        padded: true,
         children: [
-          Text('工作区：${widget.session.project.name}', style: t.bodyLarge?.copyWith(fontSize: FontSize.lg)),
-          const SizedBox(height: Space.x1),
-          Text('写在这里的规则只对这个工作区生效，Agent 在这个工作区里的每段对话都必须遵守。换一个工作区要另外写。', style: t.bodySmall?.copyWith(color: c.textMuted)),
-          const SizedBox(height: Space.x4),
           TextField(
             key: const Key('rules-field'),
             controller: _text,
@@ -356,12 +351,10 @@ class _ProjectRulesScreenState extends State<ProjectRulesScreen> {
             maxLines: 16,
             decoration: const InputDecoration(hintText: '例如：\n用中文写注释\n不要改 lib/legacy 目录\n改完代码先跑测试', alignLabelWithHint: true),
           ),
-          const SizedBox(height: Space.x2),
-          Text('存在工作区的 .lopicode/rules.md 里。', style: t.bodySmall?.copyWith(color: c.textFaint)),
           const SizedBox(height: Space.x4),
           FilledButton(key: const Key('rules-save'), onPressed: _ready ? _save : null, child: const Text('保存')),
         ],
       ),
-    );
-  }
+    ],
+  );
 }
