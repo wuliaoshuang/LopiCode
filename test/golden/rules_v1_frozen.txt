@@ -1,0 +1,184 @@
+文档 入门样本 存盘 12137 -39846d1651929f45
+文档 入门样本 node README.md 822 -1673cf5a5a0ff4a0
+文档 入门样本 node lc_runtime.js 13877 -57bcdce7602f01b4
+文档 入门样本 node server.js 3121 713b0f35c98e834d
+文档 入门样本 python README.md 827 41a274fcb0153258
+文档 入门样本 python lc_runtime.py 14773 -33d3a2df063d1cfd
+文档 入门样本 python server.py 3161 4fe02568f08a1197
+文档 入门样本 go README.md 922 38b8546ad9b34ee2
+文档 入门样本 go go.mod 26 -5b81c9b367d6fa0
+文档 入门样本 go lc/fetch.go 2816 011b0264dae92a39
+文档 入门样本 go lc/server.go 9986 -2ce0beb4381c5199
+文档 入门样本 go lc/values.go 10215 40723728a29844e8
+文档 入门样本 go main.go 3257 41dcaf67910c3ac4
+文档 入门样本 java Lc.java 17785 6fc579fbd646bfbd
+文档 入门样本 java LcJson.java 11292 -6a93dd1a5b729891
+文档 入门样本 java LcServer.java 11324 -27ddb35652d22b31
+文档 入门样本 java Main.java 3952 7f2e90e2bb0f8050
+文档 入门样本 java README.md 1212 4df45a4c62116a4e
+文档 入门样本 php README.md 1428 6f5c96b8f36e5694
+文档 入门样本 php lc_data.php 4199 2d025c8027e6d68d
+文档 入门样本 php lc_json.php 7494 354c8e01775f3e6e
+文档 入门样本 php lc_runtime.php 8193 -455a80cd15d432a7
+文档 入门样本 php lc_server.php 9561 20fb8d61b9135f58
+文档 入门样本 php server.php 3463 -3a3192cfc4f45f14
+文档 一致性样本 存盘 75468 709053836160e06a
+文档 一致性样本 校验 warning noRespond 接口「DELETE /todos/:id」｜有的走法没有碰到“返回”积木，那时会回 204 空响应｜null｜null｜null
+文档 一致性样本 校验 warning divByZero 接口「GET /numbers」第 1 块（返回 200 和数据 {third: 1 ÷ 3, pointThree: 0.1 + 0.2, whole: 6 ÷ 2, half: 1 ÷ 2, negRem: -7 除以后余 3, fracRem: 5.5 除以后余 2, divZero: 5 ÷ 0, remZero: 5 除以后余 0, negZero: 0 × -1, overflow: 1e+308 × 10, big: 1e+21, e15: 1000000000000000.0, justUnder: 999999999999999, nines: 999999999999999.9, small: 2.5e-10, tiny: 1.2e-7, tinier: 1.2e-8, tie: 12345678901.25, negTie: -12345678901.25, frac: 123456.789, neg: -42, negFrac: -0.5, long: 1234567890.1234567, bigInt: 123456789012345678}）｜除以 0 算不出来，运行时结果会是 0｜value｜[fields, 6, value, r]｜null
+文档 一致性样本 校验 warning divByZero 接口「GET /numbers」第 1 块（返回 200 和数据 {third: 1 ÷ 3, pointThree: 0.1 + 0.2, whole: 6 ÷ 2, half: 1 ÷ 2, negRem: -7 除以后余 3, fracRem: 5.5 除以后余 2, divZero: 5 ÷ 0, remZero: 5 除以后余 0, negZero: 0 × -1, overflow: 1e+308 × 10, big: 1e+21, e15: 1000000000000000.0, justUnder: 999999999999999, nines: 999999999999999.9, small: 2.5e-10, tiny: 1.2e-7, tinier: 1.2e-8, tie: 12345678901.25, negTie: -12345678901.25, frac: 123456.789, neg: -42, negFrac: -0.5, long: 1234567890.1234567, bigInt: 123456789012345678}）｜对 0 取余算不出来，运行时结果会是 0｜value｜[fields, 7, value, r]｜null
+文档 一致性样本 校验 warning badType 接口「GET /equal」第 1 块（返回 200 和数据 {numText: 5 = “5”, numTextDot: 5 = “5.0”, nullEmpty: 空对象 {} 的 x = “”, nullNull: 空对象 {} 的 x = 空对象 {} 的 x, nullZero: 空对象 {} 的 x = 0, zeroEmpty: 0 = “”, boolText: 是 = “true”, oneTrue: 1 = 是, objOrder: {a: 1, b: 2} = {b: 2, a: 1}, objDiff: {a: 1} = {a: 2}, objText: {a: 1} = “{"a":1}”, listSame: 集合 todos 的全部 = 集合 todos 的全部, floatSum: （0.1 + 0.2） = 0.3, neText: “a” ≠ “b”}）｜比较的两边一个是“是 / 否”、一个是文字，会先都变成文字再比，多半永远不相等｜value｜[fields, 6, value]｜把两边换成同一种类型的值再比。
+文档 一致性样本 校验 warning badType 接口「GET /equal」第 1 块（返回 200 和数据 {numText: 5 = “5”, numTextDot: 5 = “5.0”, nullEmpty: 空对象 {} 的 x = “”, nullNull: 空对象 {} 的 x = 空对象 {} 的 x, nullZero: 空对象 {} 的 x = 0, zeroEmpty: 0 = “”, boolText: 是 = “true”, oneTrue: 1 = 是, objOrder: {a: 1, b: 2} = {b: 2, a: 1}, objDiff: {a: 1} = {a: 2}, objText: {a: 1} = “{"a":1}”, listSame: 集合 todos 的全部 = 集合 todos 的全部, floatSum: （0.1 + 0.2） = 0.3, neText: “a” ≠ “b”}）｜比较的两边一个是数字、一个是“是 / 否”，会先都变成文字再比，多半永远不相等｜value｜[fields, 7, value]｜把两边换成同一种类型的值再比。
+文档 一致性样本 校验 warning badType 接口「GET /truthy」第 1 块（返回 200 和数据 {null: 不是（不是（空对象 {} 的 x））, false: 不是（不是（否））, zero: 不是（不是（0））, empty: 不是（不是（“”））, textZero: 不是（不是（“0”））, space: 不是（不是（“ ”））, emptyObj: 不是（不是（空对象 {}））, emptyList: 不是（不是（集合 notes 的全部））, one: 不是（不是（1））, true: 不是（不是（是））}）｜这里要一个条件，填的是固定的数字，结果每次都一样｜value｜[fields, 2, value, x, x]｜长按这个值，换成比较（等于、大于…）或“是 / 否”。
+文档 一致性样本 校验 warning badType 接口「GET /truthy」第 1 块（返回 200 和数据 {null: 不是（不是（空对象 {} 的 x））, false: 不是（不是（否））, zero: 不是（不是（0））, empty: 不是（不是（“”））, textZero: 不是（不是（“0”））, space: 不是（不是（“ ”））, emptyObj: 不是（不是（空对象 {}））, emptyList: 不是（不是（集合 notes 的全部））, one: 不是（不是（1））, true: 不是（不是（是））}）｜这里要一个条件，填的是固定的文字，结果每次都一样｜value｜[fields, 3, value, x, x]｜长按这个值，换成比较（等于、大于…）或“是 / 否”。
+文档 一致性样本 校验 warning badType 接口「GET /truthy」第 1 块（返回 200 和数据 {null: 不是（不是（空对象 {} 的 x））, false: 不是（不是（否））, zero: 不是（不是（0））, empty: 不是（不是（“”））, textZero: 不是（不是（“0”））, space: 不是（不是（“ ”））, emptyObj: 不是（不是（空对象 {}））, emptyList: 不是（不是（集合 notes 的全部））, one: 不是（不是（1））, true: 不是（不是（是））}）｜这里要一个条件，填的是固定的文字，结果每次都一样｜value｜[fields, 4, value, x, x]｜长按这个值，换成比较（等于、大于…）或“是 / 否”。
+文档 一致性样本 校验 warning badType 接口「GET /truthy」第 1 块（返回 200 和数据 {null: 不是（不是（空对象 {} 的 x））, false: 不是（不是（否））, zero: 不是（不是（0））, empty: 不是（不是（“”））, textZero: 不是（不是（“0”））, space: 不是（不是（“ ”））, emptyObj: 不是（不是（空对象 {}））, emptyList: 不是（不是（集合 notes 的全部））, one: 不是（不是（1））, true: 不是（不是（是））}）｜这里要一个条件，填的是固定的文字，结果每次都一样｜value｜[fields, 5, value, x, x]｜长按这个值，换成比较（等于、大于…）或“是 / 否”。
+文档 一致性样本 校验 warning badType 接口「GET /truthy」第 1 块（返回 200 和数据 {null: 不是（不是（空对象 {} 的 x））, false: 不是（不是（否））, zero: 不是（不是（0））, empty: 不是（不是（“”））, textZero: 不是（不是（“0”））, space: 不是（不是（“ ”））, emptyObj: 不是（不是（空对象 {}））, emptyList: 不是（不是（集合 notes 的全部））, one: 不是（不是（1））, true: 不是（不是（是））}）｜这里要一个条件，填的是固定的数字，结果每次都一样｜value｜[fields, 8, value, x, x]｜长按这个值，换成比较（等于、大于…）或“是 / 否”。
+文档 一致性样本 校验 warning unreachable 接口「GET /early」第 2 块（往 集合 notes 里加一条 {bad: “返回之后不该执行”}）｜前面已经“返回”了，从这一块起后面的 2 块都不会执行｜null｜null｜null
+文档 一致性样本 校验 warning changeVarNotNumber 接口「GET /bump」第 2 块（把 s 加上 2）｜变量 s 声明的是文字，不是数字；“加上”会先把它当数字（转不了当 0）｜name｜[]｜null
+文档 一致性样本 校验 warning unknownOp 接口「GET /holes」第 1 块（不认识的积木（没有这种积木））｜不认识的积木 没有这种积木，生成代码时会跳过它（数据会留着）｜null｜null｜null
+文档 一致性样本 校验 error unknownVar 接口「GET /holes」第 2 块（把 没声明 设为 1）｜变量 没声明 还没有声明（先到“变量”里加一个）｜name｜[]｜null
+文档 一致性样本 校验 error unknownCollection 接口「GET /holes」第 3 块（往 集合 nope 里加一条 整个请求内容）｜集合 nope 还没有（先到“数据集合”里加一个）｜collection｜[]｜null
+文档 一致性样本 校验 error unknownVar 接口「GET /holes」第 4 块（对 集合 todos 的全部 里的每一项（放进 nope）依次做…）｜变量 nope 还没有声明（先到“变量”里加一个）｜item｜[]｜null
+文档 一致性样本 校验 warning unknownExpr 接口「GET /holes」第 5 块（返回 200 和数据 {unknown: 不认识的值（wat）, undeclared: nope, badParam: 路径参数 nope, badCollection: 集合 nope 的全部, missing: （空） + （空）, badOp: 1 ? 2, ok: 1}）｜不认识的值 wat，生成代码时会当成空的｜value｜[fields, 0, value]｜null
+文档 一致性样本 校验 error unknownVar 接口「GET /holes」第 5 块（返回 200 和数据 {unknown: 不认识的值（wat）, undeclared: nope, badParam: 路径参数 nope, badCollection: 集合 nope 的全部, missing: （空） + （空）, badOp: 1 ? 2, ok: 1}）｜变量 nope 还没有声明（先到“变量”里加一个）｜value｜[fields, 1, value, name]｜null
+文档 一致性样本 校验 error unknownPathParam 接口「GET /holes」第 5 块（返回 200 和数据 {unknown: 不认识的值（wat）, undeclared: nope, badParam: 路径参数 nope, badCollection: 集合 nope 的全部, missing: （空） + （空）, badOp: 1 ? 2, ok: 1}）｜路径里没有叫 nope 的参数（这个接口的路径里没有参数）；读到的会是空的｜value｜[fields, 2, value]｜null
+文档 一致性样本 校验 error unknownCollection 接口「GET /holes」第 5 块（返回 200 和数据 {unknown: 不认识的值（wat）, undeclared: nope, badParam: 路径参数 nope, badCollection: 集合 nope 的全部, missing: （空） + （空）, badOp: 1 ? 2, ok: 1}）｜集合 nope 还没有（先到“数据集合”里加一个）｜value｜[fields, 3, value, collection]｜null
+文档 一致性样本 校验 error missingArg 接口「GET /holes」第 5 块（返回 200 和数据 {unknown: 不认识的值（wat）, undeclared: nope, badParam: 路径参数 nope, badCollection: 集合 nope 的全部, missing: （空） + （空）, badOp: 1 ? 2, ok: 1}）｜“左边”还没填｜value｜[fields, 4, value, l]｜null
+文档 一致性样本 校验 error missingArg 接口「GET /holes」第 5 块（返回 200 和数据 {unknown: 不认识的值（wat）, undeclared: nope, badParam: 路径参数 nope, badCollection: 集合 nope 的全部, missing: （空） + （空）, badOp: 1 ? 2, ok: 1}）｜“右边”还没填｜value｜[fields, 4, value, r]｜null
+文档 一致性样本 校验 error badArg 接口「GET /holes」第 5 块（返回 200 和数据 {unknown: 不认识的值（wat）, undeclared: nope, badParam: 路径参数 nope, badCollection: 集合 nope 的全部, missing: （空） + （空）, badOp: 1 ? 2, ok: 1}）｜“运算”只能是 + / - / * / / / % / == / != / < / <= / > / >= / and / or｜value｜[fields, 5, value, op]｜null
+文档 一致性样本 校验 warning noRespond 接口「GET /relay」｜有的走法没有碰到“返回”积木，那时会回 204 空响应｜null｜null｜null
+文档 一致性样本 校验 warning noRespond 接口「GET /relay-post」｜有的走法没有碰到“返回”积木，那时会回 204 空响应｜null｜null｜null
+文档 一致性样本 校验 warning noRespond 接口「GET /relay-fail」｜有的走法没有碰到“返回”积木，那时会回 204 空响应｜null｜null｜null
+文档 一致性样本 校验 warning noRespond 接口「GET /relay-get」｜有的走法没有碰到“返回”积木，那时会回 204 空响应｜null｜null｜null
+文档 一致性样本 node README.md 1425 3a03671bd1d6fab0
+文档 一致性样本 node lc_runtime.js 13877 -57bcdce7602f01b4
+文档 一致性样本 node server.js 15348 -51f2f19f17871995
+文档 一致性样本 python README.md 1430 -6f6d0a89737e02ac
+文档 一致性样本 python lc_runtime.py 14773 -33d3a2df063d1cfd
+文档 一致性样本 python server.py 15348 7e5e5c02231a350e
+文档 一致性样本 go README.md 1525 -3378a13b88fb150a
+文档 一致性样本 go go.mod 26 -5b81c9b367d6fa0
+文档 一致性样本 go lc/fetch.go 2816 011b0264dae92a39
+文档 一致性样本 go lc/server.go 9986 -2ce0beb4381c5199
+文档 一致性样本 go lc/values.go 10215 40723728a29844e8
+文档 一致性样本 go main.go 16306 0bb666f398bc3448
+文档 一致性样本 java Lc.java 17785 6fc579fbd646bfbd
+文档 一致性样本 java LcJson.java 11292 -6a93dd1a5b729891
+文档 一致性样本 java LcServer.java 11324 -27ddb35652d22b31
+文档 一致性样本 java Main.java 19192 -6bed8c2c31a79808
+文档 一致性样本 java README.md 1815 4aea1fc86736d8be
+文档 一致性样本 php README.md 2031 -133afc53d54fb678
+文档 一致性样本 php lc_data.php 4199 2d025c8027e6d68d
+文档 一致性样本 php lc_json.php 7494 354c8e01775f3e6e
+文档 一致性样本 php lc_runtime.php 8193 -455a80cd15d432a7
+文档 一致性样本 php lc_server.php 9561 20fb8d61b9135f58
+文档 一致性样本 php server.php 16649 -7e282a0f101ca7a0
+文档 第4版新积木 存盘 82165 -254a60d73c5d8070
+文档 第4版新积木 node README.md 843 -15990291141fbd62
+文档 第4版新积木 node lc_lang.js 9751 26bbae64a1054b06
+文档 第4版新积木 node lc_runtime.js 13877 -57bcdce7602f01b4
+文档 第4版新积木 node server.js 14118 31785a8ea6f93efc
+文档 第4版新积木 python README.md 848 316a8d282c7c7948
+文档 第4版新积木 python lc_lang.py 8785 -32ca73f9ad381f99
+文档 第4版新积木 python lc_runtime.py 14773 -33d3a2df063d1cfd
+文档 第4版新积木 python server.py 14158 -39bbdaba1d3cc1a9
+文档 第4版新积木 go README.md 943 1b22d63c6b889596
+文档 第4版新积木 go go.mod 26 -5b81c9b367d6fa0
+文档 第4版新积木 go lc/fetch.go 2816 011b0264dae92a39
+文档 第4版新积木 go lc/lang.go 13749 -6dd45ba2e5d94549
+文档 第4版新积木 go lc/server.go 9986 -2ce0beb4381c5199
+文档 第4版新积木 go lc/values.go 10215 40723728a29844e8
+文档 第4版新积木 go main.go 14360 -6a0efe3b91865ff0
+文档 第4版新积木 java Lc.java 17785 6fc579fbd646bfbd
+文档 第4版新积木 java LcJson.java 11292 -6a93dd1a5b729891
+文档 第4版新积木 java LcLang.java 18294 -66190a4d9f64ca86
+文档 第4版新积木 java LcServer.java 11324 -27ddb35652d22b31
+文档 第4版新积木 java Main.java 18519 0ddebccc98a2cc42
+文档 第4版新积木 java README.md 1233 -e7f8a47cedbcf0c
+文档 第4版新积木 php README.md 1449 000f0ad5cb8a8fd2
+文档 第4版新积木 php lc_data.php 4199 2d025c8027e6d68d
+文档 第4版新积木 php lc_json.php 7494 354c8e01775f3e6e
+文档 第4版新积木 php lc_lang.php 14151 -6c2701471ac8355e
+文档 第4版新积木 php lc_runtime.php 8193 -455a80cd15d432a7
+文档 第4版新积木 php lc_server.php 9561 20fb8d61b9135f58
+文档 第4版新积木 php server.php 15588 -19b564c01062f75a
+文档 函数和我的积木 存盘 53297 -6b1a31ff26323d31
+文档 函数和我的积木 校验 warning badReturn 接口「GET /call」第 2 块（返回 200 和数据 {double: 「加倍」（x: 把 网址参数 n 变成数字）的结果, even: 「是偶数」（n: 把 网址参数 n 变成数字）的结果, fact: 「阶乘」（n: 把 网址参数 n 变成数字）的结果, nothing: 「什么都不交回」的结果, if: 如果 「是偶数」（n: 把 网址参数 n 变成数字）的结果 就是 “双” 否则是 “单”}）｜「什么都不交回」不交回结果（它的定义里没有“返回 (值)”），拿它当值用会得到空｜value｜[fields, 3, value]｜在它的定义里加一块“返回 (值)”；或者把它单独当一句用。
+文档 函数和我的积木 node README.md 853 -30346e17921770aa
+文档 函数和我的积木 node lc_lang.js 9751 26bbae64a1054b06
+文档 函数和我的积木 node lc_runtime.js 13877 -57bcdce7602f01b4
+文档 函数和我的积木 node server.js 8852 -161e7c1d7311684a
+文档 函数和我的积木 python README.md 858 -229001b42afd6604
+文档 函数和我的积木 python lc_lang.py 8785 -32ca73f9ad381f99
+文档 函数和我的积木 python lc_runtime.py 14773 -33d3a2df063d1cfd
+文档 函数和我的积木 python server.py 8959 36b5bf9370a245f2
+文档 函数和我的积木 go README.md 953 22a5b6819c48da5e
+文档 函数和我的积木 go go.mod 26 -5b81c9b367d6fa0
+文档 函数和我的积木 go lc/fetch.go 2816 011b0264dae92a39
+文档 函数和我的积木 go lc/lang.go 13749 -6dd45ba2e5d94549
+文档 函数和我的积木 go lc/server.go 9986 -2ce0beb4381c5199
+文档 函数和我的积木 go lc/values.go 10215 40723728a29844e8
+文档 函数和我的积木 go main.go 10519 -7a31fd4ce89fde2e
+文档 函数和我的积木 java Lc.java 17785 6fc579fbd646bfbd
+文档 函数和我的积木 java LcJson.java 11292 -6a93dd1a5b729891
+文档 函数和我的积木 java LcLang.java 18294 -66190a4d9f64ca86
+文档 函数和我的积木 java LcServer.java 11324 -27ddb35652d22b31
+文档 函数和我的积木 java Main.java 12683 -3f60eeb1163212de
+文档 函数和我的积木 java README.md 1243 2c1f3fd65d9a3a1e
+文档 函数和我的积木 php README.md 1459 -550d73207cf900ce
+文档 函数和我的积木 php lc_data.php 4199 2d025c8027e6d68d
+文档 函数和我的积木 php lc_json.php 7494 354c8e01775f3e6e
+文档 函数和我的积木 php lc_lang.php 14151 -6c2701471ac8355e
+文档 函数和我的积木 php lc_runtime.php 8193 -455a80cd15d432a7
+文档 函数和我的积木 php lc_server.php 9561 20fb8d61b9135f58
+文档 函数和我的积木 php server.php 10129 -4c65f8ddddfbb333
+程序 flow 检查 G03 错误：变量 i7 在这里看不见（还没有新建，或者是别的循环里的）
+程序 flow 检查 S10 警告：前面已经返回 / 跳出了，从这里往后的不会执行
+程序 flow 检查 L03 错误：“返回”要放在函数里面
+程序 flow 检查 S10 警告：前面已经返回 / 跳出了，从这里往后的不会执行
+程序 flow node 15994 2f21baf49976a1d7
+程序 flow python 15249 39f03bf7f0eb4b17
+程序 flow go 15537 48fd301709db1160
+程序 flow java 22410 352fb9b8025f3b63
+程序 flow php 17786 0223792dcacd24cc
+程序 func 检查 L14 警告：参数 q 没有用到
+程序 func 检查 L14 警告：参数 a 没有用到
+程序 func 检查 S10 警告：前面已经返回 / 跳出了，从这里往后的不会执行
+程序 func 检查 S10 警告：前面已经返回 / 跳出了，从这里往后的不会执行
+程序 func 检查 S10 警告：前面已经返回 / 跳出了，从这里往后的不会执行
+程序 func 检查 L03 警告：函数 shout 没有返回值，拿它当值用会得到空
+程序 func 检查 L03 警告：函数 guard 没有返回值，拿它当值用会得到空
+程序 func 检查 S10 警告：前面已经返回 / 跳出了，从这里往后的不会执行
+程序 func node 13509 -2fa55f1dc3fa92da
+程序 func python 13612 -6bd2bc59a60c1cca
+程序 func go 15763 -452ee688c7564a6b
+程序 func java 20829 288da7b9c8a2502d
+程序 func php 15886 -177b45dfec08d8b4
+程序 funcMore node 4494 278ec1e9e4337369
+程序 funcMore python 4514 -d9f73265ec9491c
+程序 funcMore go 5131 4aa625f46d77ea27
+程序 funcMore java 7314 -7ed4ba9ee2c65ff3
+程序 funcMore php 5404 587bd4a249d5820f
+程序 hof 检查 L14 警告：参数 x 没有用到
+程序 hof 检查 L14 警告：参数 q 没有用到
+程序 hof 检查 L14 警告：参数 x 没有用到
+程序 hof node 7845 -57beeb5716fda399
+程序 hof python 8354 -6a9026c8408410a1
+程序 hof go 10997 -3727762820ecec8
+程序 hof java 11946 4156968b19a11fd4
+程序 hof php 9845 -1a533c78d4e360e6
+程序 rt node 10708 3193fda78e240051
+程序 rt python 11037 3124b57cb132f75d
+程序 rt go 11001 05a6296e2c274113
+程序 rt java 14299 290338067cd991d5
+程序 rt php 11597 226e34fcb213419f
+程序 rtBasic node 5049 -3a88c257107d1da8
+程序 rtBasic python 5127 13ae6a96620392b3
+程序 rtBasic go 5133 154c6337c0921ba3
+程序 rtBasic java 6563 2f16baf8c5489776
+程序 rtBasic php 5431 1caafc1a1c217ddd
+程序 rtData node 4842 -6273d09e6a5c0950
+程序 rtData python 5023 -17825c1128c245d0
+程序 rtData go 5112 154d1e7988bdbacf
+程序 rtData java 6744 -601b64ed3f90df74
+程序 rtData php 5420 1c81ffd9ca6120f8
