@@ -173,10 +173,7 @@ Future<BkCustomAction?> showBkStarMenu(BuildContext box, {required bool starred,
     position: RelativeRect.fromRect(at.translate(8, custom ? -196 : -52), Offset.zero & overlay.size),
     shape: custom ? RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)) : null,
     items: [
-      if (custom) ...[
-        item(BkCustomAction.edit, 'bk-palette-custom-edit', Icons.edit_outlined, '编辑这块积木'),
-        item(BkCustomAction.define, 'bk-palette-custom-define', Icons.my_location_rounded, '看它的定义'),
-      ],
+      if (custom) ...[item(BkCustomAction.edit, 'bk-palette-custom-edit', Icons.edit_outlined, '编辑这块积木'), item(BkCustomAction.define, 'bk-palette-custom-define', Icons.my_location_rounded, '看它的定义')],
       item(BkCustomAction.star, 'bk-palette-star-toggle', starred ? Icons.star_outline_rounded : Icons.star_rounded, starred ? '从常用拿掉' : '加到常用'),
       if (custom) item(BkCustomAction.remove, 'bk-palette-custom-remove', Icons.delete_outline_rounded, '删除', danger: true),
     ],
@@ -207,7 +204,11 @@ class BkPaletteCustomHead extends StatelessWidget {
         if (empty)
           Padding(
             padding: const EdgeInsets.only(top: 12),
-            child: Text('把常用的几块包成一块自己的积木：起个名字、写一句文案，以后拖出来就能用。', key: const ValueKey('bk-palette-custom-empty'), style: t.bodySmall?.copyWith(color: c.textMuted, height: 1.5)),
+            child: Text(
+              '把常用的几块包成一块自己的积木：起个名字、写一句文案，以后拖出来就能用。',
+              key: const ValueKey('bk-palette-custom-empty'),
+              style: t.bodySmall?.copyWith(color: c.textMuted, height: 1.5),
+            ),
           ),
       ],
     );

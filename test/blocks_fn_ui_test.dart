@@ -123,10 +123,15 @@ void main() {
     testWidgets('删参数：别处有调用在用就先问“有 N 处在用，槽里的东西会丢掉”；取消＝不删；确认＝删掉，调用处的槽跟着少一个', (tester) async {
       final rig = FnRig([
         fxGreetDef(),
-        FakeScript('s2', body: [
-          LcBlock(op: 'greet', args: {'名字': fxText('小明'), '次数': fxNum(3)}),
-          LcBlock(op: 'greet', args: {'名字': fxText('小红'), '次数': fxNum(2)}),
-        ], x: 0, y: 260),
+        FakeScript(
+          's2',
+          body: [
+            LcBlock(op: 'greet', args: {'名字': fxText('小明'), '次数': fxNum(3)}),
+            LcBlock(op: 'greet', args: {'名字': fxText('小红'), '次数': fxNum(2)}),
+          ],
+          x: 0,
+          y: 260,
+        ),
       ]);
       await rig.pump(tester);
       final start = rig.host.encode();
@@ -179,8 +184,52 @@ void main() {
       expect(rig.host.encode(), start);
     });
 
+    testWidgets('把参数放到已经是它的槽上：什么都没变，也不说“原来的值被换掉了”；盖住别的值才说、能撤销', (tester) async {
+      final rig = FnRig([fxGreetDef()]);
+      await rig.pump(tester);
+      final start = rig.host.encode();
+      final say = [lcStep(0), lcStep(0)];
+      var from = rig.chip('s1', 0);
+      var g = await rig.lift(tester, from);
+      await rig.glide(tester, g, from, rig.exprSnap('s1', say, 'text'));
+      await rig.drop(tester, g);
+      expect(rig.host.encode(), start);
+      expect(find.text('原来的值被换掉了。'), findsNothing);
+
+      from = rig.chip('s1', 1);
+      g = await rig.lift(tester, from);
+      await rig.glide(tester, g, from, rig.exprSnap('s1', say, 'text'));
+      await rig.drop(tester, g);
+      expect(rig.tree.blockAt(say)!.args['text'], fxParam('次数'));
+      expect(find.text('原来的值被换掉了。'), findsOneWidget);
+      await tester.tap(find.text('撤销'));
+      await tester.pumpAndSettle();
+      expect(rig.host.encode(), start);
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('键盘弹起时参数小卡整个在键盘上面（小块下面放不下时往上挪）', (tester) async {
+      final rig = FnRig([fxGreetDef(y: 300)]);
+      await rig.pump(tester);
+      await tester.tapAt(rig.chip('s1', 0));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('bk-param-card')), findsOneWidget, reason: '小块在 ${rig.chip('s1', 0)}');
+      tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+      addTearDown(tester.view.resetViewInsets);
+      await tester.pumpAndSettle();
+      final card = tester.getRect(find.byKey(const ValueKey('bk-param-card')));
+
+      expect(card.bottom, lessThanOrEqualTo(844 - 300));
+      expect(card.top, greaterThanOrEqualTo(0));
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('参数小块只能放进它自己这一串：拖到别的串的槽上不吸附，松手弹回去、什么都没改；长按没挪就松手＝弹小卡', (tester) async {
-      final rig = FnRig([fxGreetDef(), FakeScript('s2', body: [fxSay('别的串')], x: 0, y: 260)]);
+      final rig = FnRig([
+        fxGreetDef(),
+        FakeScript('s2', body: [fxSay('别的串')], x: 0, y: 260),
+      ]);
       await rig.pump(tester);
       final start = rig.host.encode();
       final from = rig.chip('s1', 1);
@@ -218,7 +267,9 @@ void main() {
 
   group('带口的值', () {
     testWidgets('匿名函数上的参数小块：加、改名（口里用到的跟着改）、删；拖出来放进口里的槽', (tester) async {
-      final rig = FnRig([FakeScript('s1', body: [fxMapBlock()], x: 0, y: 0)]);
+      final rig = FnRig([
+        FakeScript('s1', body: [fxMapBlock()], x: 0, y: 0),
+      ]);
       await rig.pump(tester);
       final start = rig.host.encode();
       final owner = [lcStep(0)];
@@ -265,7 +316,9 @@ void main() {
     });
 
     testWidgets('把外面的语句拖进口里：口让出位置、画出落点剪影；松手落进去；再从口里拖出来接回外面；撤销重做', (tester) async {
-      final rig = FnRig([FakeScript('s1', body: [fxMapBlock(), fxSay('外面的')], x: 0, y: 0)]);
+      final rig = FnRig([
+        FakeScript('s1', body: [fxMapBlock(), fxSay('外面的')], x: 0, y: 0),
+      ]);
       await rig.pump(tester);
       final start = rig.host.encode();
       final owner = [lcStep(0)];
@@ -312,7 +365,9 @@ void main() {
     });
 
     testWidgets('口里拖到口里的原处＝没动；拖到空白处松手＝弹回去；口里的积木上下换位置', (tester) async {
-      final rig = FnRig([FakeScript('s1', body: [fxMapBlock()], x: 0, y: 0)]);
+      final rig = FnRig([
+        FakeScript('s1', body: [fxMapBlock()], x: 0, y: 0),
+      ]);
       await rig.pump(tester);
       final start = rig.host.encode();
       final owner = [lcStep(0)];
@@ -342,7 +397,15 @@ void main() {
 
     testWidgets('整个带口的值连里面的语句一起拖走：手上那块带着口里的积木；放进别的槽，里面的原样跟着；原槽回到默认值', (tester) async {
       final rig = FnRig([
-        FakeScript('s1', body: [fxMapBlock(), LcBlock(op: 'run', args: {'fn': fxFn(const [])})], x: 0, y: 0),
+        FakeScript(
+          's1',
+          body: [
+            fxMapBlock(),
+            LcBlock(op: 'run', args: {'fn': fxFn(const [])}),
+          ],
+          x: 0,
+          y: 0,
+        ),
       ]);
       await rig.pump(tester);
       final start = rig.host.encode();
@@ -376,10 +439,28 @@ void main() {
     });
 
     testWidgets('嵌套：匿名函数里的匿名函数、放在“对每一项”口里的——往最里面的口拖、从里面拖到最外面，路径都对', (tester) async {
-      final inner = LcBlock(op: 'run', args: {'fn': fxFn(['y'], [fxSay('最里面')])});
-      final outer = LcBlock(op: 'run', args: {'fn': fxFn(['x'], [fxSay('外面'), inner])});
+      final inner = LcBlock(
+        op: 'run',
+        args: {
+          'fn': fxFn(['y'], [fxSay('最里面')]),
+        },
+      );
+      final outer = LcBlock(
+        op: 'run',
+        args: {
+          'fn': fxFn(['x'], [fxSay('外面'), inner]),
+        },
+      );
       final rig = FnRig([
-        FakeScript('s1', body: [LcBlock(op: 'forEach', args: {'list': fxExpr('listNew')}, body: [outer]), fxSay('尾巴')], x: 0, y: 0),
+        FakeScript(
+          's1',
+          body: [
+            LcBlock(op: 'forEach', args: {'list': fxExpr('listNew')}, body: [outer]),
+            fxSay('尾巴'),
+          ],
+          x: 0,
+          y: 0,
+        ),
       ]);
       await rig.pump(tester);
       final start = rig.host.encode();
@@ -407,7 +488,9 @@ void main() {
     });
 
     testWidgets('单指在带口的值上滑＝平移画布，不会把积木拖走；点口里的积木＝选中它；删掉它＝一条撤销记录', (tester) async {
-      final rig = FnRig([FakeScript('s1', body: [fxMapBlock()], x: 0, y: 0)]);
+      final rig = FnRig([
+        FakeScript('s1', body: [fxMapBlock()], x: 0, y: 0),
+      ]);
       await rig.pump(tester);
       final start = rig.host.encode();
       final at = rig.grip(inMouth([lcStep(0)], 0));
@@ -421,12 +504,26 @@ void main() {
       await tester.tapAt(rig.grip(inMouth([lcStep(0)], 1)));
       await tester.pumpAndSettle();
       expect(rig.s.selection?.path.map((s) => (s.index, s.arm)), [(0, -1), (1, -2)]);
+
+      // 删掉选中的那块：口里少一块；撤销一步就回来（一条撤销记录）。
+      final before = rig.first.exprMouths.single.length;
+      await tester.tap(find.byKey(const ValueKey('bk-action-delete')));
+      await tester.pumpAndSettle();
+      expect(rig.first.exprMouths.single, hasLength(before - 1));
+      rig.host.undo();
+      await tester.pumpAndSettle();
+      expect(rig.host.encode(), start);
+      expect(rig.host.canUndo, isFalse);
       expect(tester.takeException(), isNull);
     });
 
     testWidgets('校验标记：口里的积木有问题，标在那块积木上（路径走得进口里）；点它能看到原因', (tester) async {
-      final body = [LcBlock(op: 'say', args: {'text': fxParam('没有这个参数')})];
-      final rig = FnRig([FakeScript('s1', body: [fxMapBlock(body: body)], x: 0, y: 0)]);
+      final body = [
+        LcBlock(op: 'say', args: {'text': fxParam('没有这个参数')}),
+      ];
+      final rig = FnRig([
+        FakeScript('s1', body: [fxMapBlock(body: body)], x: 0, y: 0),
+      ]);
       await rig.pump(tester);
       final issue = rig.host.issues.single;
       expect(issue.rule, 'F03');
@@ -442,7 +539,17 @@ void main() {
     });
 
     testWidgets('从积木盒拖一个“函数”进槽，再拖一块语句进它的口；短写法也能拖进槽', (tester) async {
-      final rig = FnRig([FakeScript('s1', body: [LcBlock(op: 'run', args: {'fn': fxText('')}), LcBlock(op: 'run', args: {'fn': fxText('')})], x: 0, y: 0)]);
+      final rig = FnRig([
+        FakeScript(
+          's1',
+          body: [
+            LcBlock(op: 'run', args: {'fn': fxText('')}),
+            LcBlock(op: 'run', args: {'fn': fxText('')}),
+          ],
+          x: 0,
+          y: 0,
+        ),
+      ]);
       await rig.pump(tester);
       await rig.openTab(tester, 'function');
       await tester.ensureVisible(rig.item('expr-fn'));
@@ -464,6 +571,21 @@ void main() {
       await rig.drop(tester, g);
       expect(rig.tree.body, hasLength(1));
       expect(rig.first.exprMouths.single.single.op, 'run');
+
+      // 短写法（一个式子槽、没有口）：也能从积木盒拖进口里那块的槽。
+      await tester.ensureVisible(rig.item('expr-fnShort'));
+      await tester.pumpAndSettle();
+      from = tester.getTopLeft(rig.item('expr-fnShort')) + const Offset(10, 14);
+      g = await tester.startGesture(from);
+      await tester.pump(const Duration(milliseconds: 220));
+      await rig.glide(tester, g, from, from + const Offset(0, -40), steps: 4);
+      expect(rig.s.drag!.piece.loose!.mouth, isNull);
+      final inner = inMouth([lcStep(0)], 0);
+      await rig.glide(tester, g, from + const Offset(0, -40), rig.exprSnap('s1', inner, 'fn'), steps: 10);
+      await rig.drop(tester, g);
+      final short = asExpr(rig.tree.blockAt(inner)!.args['fn'])!;
+      expect(exprKind(short), 'fnShort');
+      expect(short['params'], ['x']);
       expect(tester.takeException(), isNull);
     });
   });

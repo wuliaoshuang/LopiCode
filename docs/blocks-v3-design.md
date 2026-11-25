@@ -121,6 +121,37 @@ BlockEditorView(host: ..., stars: BlockStars?)     // 加星存哪：应用里�
 
 颜色键补了 8 个：function / text / list / dict / classes / error / async / custom（共 20 个）。
 
+**阶段 2（函数和“我的积木”）又加的**——完整语义、存盘例子、接法见 [blocks-v4-language-design.md](blocks-v4-language-design.md) 的“实施记录·阶段 2·编辑器”。全部有默认实现，现有两个宿主一行没动。
+
+```dart
+// 规格（lib/lowcode/logic_blocks.dart）
+LcExprSpec(..., paramsArg: 'params', hasMouth: true)   // 带参数小块的值 / 带口的值；句子里用 {@params} 定小块的位置
+// 模型（lib/lowcode/logic_model.dart、logic_expr.dart）
+kLcExprBody = '@body'            // 带口的值里的那串积木，存在表达式对象里
+LcBlock.exprMouths               // 这块积木的参数里所有“值上的口”，按出现的先后
+lcExprMouthArm(k) / lcExprMouthIndex(arm)   // 路径一步的 arm <= -2 ＝ 第 k 个值上的口
+
+// 宿主（lib/blocks/block_host.dart）
+BlockHatParams? hatParams(LcBlockTree tree);            // 这串的帽子是“定义”帽子：参数表
+bool setHatParams(tree, List<BlockParam> params, {renamed});
+int hatParamUses(tree, String name);                    // 删参数前“有 N 处在用”
+Map<String, dynamic>? paramExpr(String name);           // 参数小块拖出来变成的值
+void exprParamRenamed(tree, expr, from, to);            // 匿名函数的参数改名
+BlockCustomHost? get custom;                            // “我的积木”；null＝没有这一页
+
+// 我的积木（lib/blocks/block_look.dart；外观类型直接用 lib/lang/custom_block.dart 的 CustomBlockLook）
+abstract class BlockCustomHost {
+  List<BlockCustom> get customs;
+  String? create(CustomBlockLook look, List<String> params);
+  bool update(String id, CustomBlockLook look, List<String> params, List<int?> origin);
+  Object? slotValue(CustomBlockSlot slot);
+  int usesOf(String id);  bool remove(String id);  String? definitionOf(String id);
+  bool get canWrap;  List<String> outerNames(tree, from);  String? wrap(tree, from, look, params);
+  List<BlockLookProblem> check(look, params, {editing});
+}
+bkLookSentence / bkLookArgs / bkLookBlockSpec / bkLookExprSpec   // 宿主把一块自定义积木交给编辑器画时直接用
+```
+
 ### 几何与拼接（给做拖拽的人，`lib/blocks/block_geometry.dart`、`block_layout.dart`、`block_canvas_layout.dart`）
 
 - `BlockLayoutEngine(host, measure)`：`layoutScript(tree)`（帽子 + 整串）、`layoutStack(blocks, parent:, inElse:, startIndex:)`（拖在手上的一截 / 样品，

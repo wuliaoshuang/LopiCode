@@ -186,7 +186,11 @@ mixin BkEditorFn on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Ticker
     if (placed == null) return;
     final head = rectToView(block.head.shift(placed.origin));
     final at = Rect.fromPoints(globalOf(head.topLeft), globalOf(head.bottomRight));
-    final what = await showBkMenu<String>(context, at: at, items: [const BkMenuEntry('wrap', Icons.widgets_outlined, '从这块往下包成积木', key: 'bk-block-menu-wrap')]);
+    final what = await showBkMenu<String>(
+      context,
+      at: at,
+      items: [const BkMenuEntry('wrap', Icons.widgets_outlined, '从这块往下包成积木', key: 'bk-block-menu-wrap')],
+    );
     if (!mounted || what != 'wrap') return;
     await wrapFrom(scriptId, block.path);
   }
@@ -251,13 +255,7 @@ mixin BkEditorFn on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Ticker
     if (custom == null || old == null) return;
     final name = old.look.name;
     final uses = custom.usesOf(id);
-    final ok = await confirmDialog(
-      context,
-      title: '删掉“$name”？',
-      message: uses > 0 ? '有 $uses 处在用，删掉以后那些地方的这块积木也会一起拿掉。' : '没有地方在用它。它的定义那一串会一起删掉。',
-      confirmLabel: '删除',
-      danger: true,
-    );
+    final ok = await confirmDialog(context, title: '删掉“$name”？', message: uses > 0 ? '有 $uses 处在用，删掉以后那些地方的这块积木也会一起拿掉。' : '没有地方在用它。它的定义那一串会一起删掉。', confirmLabel: '删除', danger: true);
     if (!ok || !mounted) return;
     var done = false;
     select(null);
@@ -318,7 +316,12 @@ Future<T?> showBkMenu<T>(BuildContext context, {required Rect at, required List<
               Icon(e.icon, size: 18, color: e.danger ? c.danger : c.textMuted),
               const SizedBox(width: 8),
               Flexible(
-                child: Text(e.text, maxLines: 1, overflow: TextOverflow.ellipsis, style: t.bodyMedium?.copyWith(color: e.danger ? c.danger : null)),
+                child: Text(
+                  e.text,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: t.bodyMedium?.copyWith(color: e.danger ? c.danger : null),
+                ),
               ),
             ],
           ),

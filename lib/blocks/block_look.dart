@@ -68,7 +68,12 @@ String bkFreshParamName(Iterable<String> taken, {String base = '参数'}) {
 /// 带参数表的值（[LcExprSpec.paramsArg]）现在的参数名；字段不对＝空表（不改模型）。
 List<String> bkExprParams(Map<String, dynamic> expr, LcExprSpec spec) {
   final v = spec.paramsArg == null ? null : expr[spec.paramsArg];
-  return v is List ? [for (final x in v) if (x is String && x.isNotEmpty) x] : const [];
+  return v is List
+      ? [
+          for (final x in v)
+            if (x is String && x.isNotEmpty) x,
+        ]
+      : const [];
 }
 
 // ———————————————————————— 自定义积木 ————————————————————————

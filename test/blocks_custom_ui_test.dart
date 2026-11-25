@@ -72,7 +72,9 @@ void main() {
   tearDown(BkDockMemory.clear);
 
   testWidgets('完整流程：新建 → 出现在积木盒 → 拖出来用 → 编辑改参数 → 各处跟着变 → 删除先说有几处在用', (tester) async {
-    final rig = FnRig([FakeScript('s1', body: [fxSay('开始')], x: 0, y: 0)]);
+    final rig = FnRig([
+      FakeScript('s1', body: [fxSay('开始')], x: 0, y: 0),
+    ]);
     await rig.pump(tester);
     final start = rig.host.encode();
     await rig.openTab(tester, bkCustomCategoryId);
@@ -236,7 +238,9 @@ void main() {
   });
 
   testWidgets('形状：选“值”→ 积木盒里是胶囊、能拖进槽；选“是否”→ 六边形；预览跟着变；键盘弹起时预览还在键盘上面', (tester) async {
-    final rig = FnRig([FakeScript('s1', body: [fxSay('开始')], x: 0, y: 0)]);
+    final rig = FnRig([
+      FakeScript('s1', body: [fxSay('开始')], x: 0, y: 0),
+    ]);
     await rig.pump(tester);
     await rig.openTab(tester, bkCustomCategoryId);
     await tester.tap(k('bk-palette-custom-new'));
@@ -285,7 +289,17 @@ void main() {
   });
 
   testWidgets('看它的定义：画布滑到定义那一串（原来在屏幕外面）并选中它', (tester) async {
-    final rig = FnRig([FakeScript('s2', body: [LcBlock(op: 'greet', args: {'名字': fxText('小明'), '次数': fxNum(2)})], x: 0, y: 0), fxGreetDef(y: 1400)]);
+    final rig = FnRig([
+      FakeScript(
+        's2',
+        body: [
+          LcBlock(op: 'greet', args: {'名字': fxText('小明'), '次数': fxNum(2)}),
+        ],
+        x: 0,
+        y: 0,
+      ),
+      fxGreetDef(y: 1400),
+    ]);
     await rig.pump(tester);
     Rect hatOnScreen() {
       final p = rig.s.layout.placed('s1')!;
@@ -308,11 +322,22 @@ void main() {
 
   testWidgets('包成积木：长按一块语句没挪就松手 → 菜单 → 起名字 → 这块和下面的包成新定义，原处换成一次调用；用到的外面的变量成了参数；一条撤销记录', (tester) async {
     final rig = FnRig([
-      FakeScript('s1', body: [
-        fxSay('前面'),
-        LcBlock(op: 'set', args: {'name': '分数', 'value': fxExpr('arith', {'l': fxVar('次数'), 'op': '+', 'r': fxNum(1)})}),
-        LcBlock(op: 'say', args: {'text': fxVar('分数')}),
-      ], x: 0, y: 0),
+      FakeScript(
+        's1',
+        body: [
+          fxSay('前面'),
+          LcBlock(
+            op: 'set',
+            args: {
+              'name': '分数',
+              'value': fxExpr('arith', {'l': fxVar('次数'), 'op': '+', 'r': fxNum(1)}),
+            },
+          ),
+          LcBlock(op: 'say', args: {'text': fxVar('分数')}),
+        ],
+        x: 0,
+        y: 0,
+      ),
     ]);
     await rig.pump(tester);
     final start = rig.host.encode();
@@ -325,6 +350,7 @@ void main() {
     expect(rig.host.encode(), start);
     expect(k('bk-block-menu-wrap'), findsOneWidget);
     expect(find.text('从这块往下包成积木'), findsOneWidget);
+    expect(find.byIcon(Icons.arrow_back_ios_new_rounded), findsNothing, reason: '弹菜单不该让底下那一页的顶栏冒出返回箭头');
     await tester.tap(k('bk-block-menu-wrap'));
     await tester.pumpAndSettle();
     expect(find.text('包成积木'), findsOneWidget);
@@ -353,7 +379,9 @@ void main() {
   });
 
   testWidgets('包成积木：返回＝不包；长按后挪了＝照常拖走、不弹菜单；宿主不支持包（或没有“我的积木”）＝长按松手什么都不弹', (tester) async {
-    var rig = FnRig([FakeScript('s1', body: [fxSay('一'), fxSay('二')], x: 0, y: 0)]);
+    var rig = FnRig([
+      FakeScript('s1', body: [fxSay('一'), fxSay('二')], x: 0, y: 0),
+    ]);
     await rig.pump(tester);
     final start = rig.host.encode();
     var g = await tester.startGesture(rig.grip([lcStep(0)]));
@@ -373,7 +401,9 @@ void main() {
     expect(k('bk-block-menu-wrap'), findsNothing);
     expect(rig.tree.body.map((b) => (b.args['text'] as Map)['v']), ['二', '一']);
 
-    rig = FnRig([FakeScript('s1', body: [fxSay('一')], x: 0, y: 0)], wrappable: false);
+    rig = FnRig([
+      FakeScript('s1', body: [fxSay('一')], x: 0, y: 0),
+    ], wrappable: false);
     await rig.pump(tester);
     g = await tester.startGesture(rig.grip([lcStep(0)]));
     await tester.pump(const Duration(milliseconds: 300));

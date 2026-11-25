@@ -27,8 +27,14 @@ const Map<String, LcExprSpec> _fnExprSpecs = {
 const Map<String, String> _fnSentences = {'return': '返回 {value}', 'run': '执行 {fn}', 'fn': '函数 {@params}', 'fnShort': '{@params} → {body}', 'listMap': '把 {list} 的每一项变一下 {fn}'};
 
 Map<String, dynamic> fxParam(String name) => fxExpr('param', {'name': name});
-Map<String, dynamic> fxFn(List<String> params, [List<LcBlock> body = const []]) => fxExpr('fn', {'params': [...params], kLcExprBody: [...body]});
-Map<String, dynamic> fxFnShort(List<String> params, Object body) => fxExpr('fnShort', {'params': [...params], 'body': body});
+Map<String, dynamic> fxFn(List<String> params, [List<LcBlock> body = const []]) => fxExpr('fn', {
+  'params': [...params],
+  kLcExprBody: [...body],
+});
+Map<String, dynamic> fxFnShort(List<String> params, Object body) => fxExpr('fnShort', {
+  'params': [...params],
+  'body': body,
+});
 Map<String, dynamic> fxListMap(Object list, Object fn) => fxExpr('listMap', {'list': list, 'fn': fn});
 
 /// 造一串“定义”。
@@ -83,7 +89,16 @@ class FakeFnHost extends FakeHost implements BlockCustomHost {
   @override
   List<BlockCategory> get categories => [
     ...super.categories,
-    const BlockCategory(id: 'function', label: '函数', colorKey: BlockColorKey.function, hats: [BlockHatTemplate('define', BlockHat([BlockHatPart.text('定义'), BlockHatPart.slot('name', '新函数', kind: LcArgKind.literalText)], colorKey: BlockColorKey.function))], blocks: ['return', 'run'], exprs: ['fn', 'fnShort', 'listMap']),
+    const BlockCategory(
+      id: 'function',
+      label: '函数',
+      colorKey: BlockColorKey.function,
+      hats: [
+        BlockHatTemplate('define', BlockHat([BlockHatPart.text('定义'), BlockHatPart.slot('name', '新函数', kind: LcArgKind.literalText)], colorKey: BlockColorKey.function)),
+      ],
+      blocks: ['return', 'run'],
+      exprs: ['fn', 'fnShort', 'listMap'],
+    ),
   ];
 
   @override
@@ -123,7 +138,10 @@ class FakeFnHost extends FakeHost implements BlockCustomHost {
   @override
   List<BlockOption> options(LcArgSpec arg, {LcBlockTree? tree, LcBlock? block, Map<String, dynamic>? expr}) {
     if (arg.kind != LcArgKind.variable) return super.options(arg, tree: tree, block: block, expr: expr);
-    final names = <String>{if (tree is FakeScript) ...[for (final p in paramsOf(tree)) p.name], if (tree is FakeScript) ..._lambdaParams(tree)};
+    final names = <String>{
+      if (tree is FakeScript) ...[for (final p in paramsOf(tree)) p.name],
+      if (tree is FakeScript) ..._lambdaParams(tree),
+    };
     return [for (final n in names) BlockOption(n, n)];
   }
 
@@ -263,13 +281,19 @@ class FakeFnHost extends FakeHost implements BlockCustomHost {
     final s = _defScript(id);
     if (s == null) return false;
     final old = paramsOf(s);
-    _reshape(s, look, [
-      for (final (i, p) in params.indexed)
-        () {
-          final o = i < origin.length ? origin[i] : null;
-          return o != null && o >= 0 && o < old.length ? old[o].copyWith(name: p) : BlockParam(p);
-        }(),
-    ], origin, lookIsNew: true);
+    _reshape(
+      s,
+      look,
+      [
+        for (final (i, p) in params.indexed)
+          () {
+            final o = i < origin.length ? origin[i] : null;
+            return o != null && o >= 0 && o < old.length ? old[o].copyWith(name: p) : BlockParam(p);
+          }(),
+      ],
+      origin,
+      lookIsNew: true,
+    );
     return true;
   }
 
@@ -288,13 +312,25 @@ class FakeFnHost extends FakeHost implements BlockCustomHost {
         if (i < origin.length && origin[i] != null && old[origin[i]!].name != p.name) old[origin[i]!].name: p.name,
     };
     if (renames.isNotEmpty) {
-      _eachBlock(s.body, (b) => _rewriteBlock(b, (e) {
-        if (e['e'] == 'param' && renames.containsKey(e['name'])) e['name'] = renames[e['name']];
-        return e;
-      }));
+      _eachBlock(
+        s.body,
+        (b) => _rewriteBlock(b, (e) {
+          if (e['e'] == 'param' && renames.containsKey(e['name'])) e['name'] = renames[e['name']];
+          return e;
+        }),
+      );
     }
     Map<String, dynamic> remap(Map<String, dynamic> args) {
-      final r = remapCallArgsByName<Object?>(oldParams: oldL, newParams: newL, origin: origin, args: {for (final p in old) if (args.containsKey(p.name)) p.name: args[p.name]}, fill: (p) => slotValue(nextLook.slotFor(p.name)));
+      final r = remapCallArgsByName<Object?>(
+        oldParams: oldL,
+        newParams: newL,
+        origin: origin,
+        args: {
+          for (final p in old)
+            if (args.containsKey(p.name)) p.name: args[p.name],
+        },
+        fill: (p) => slotValue(nextLook.slotFor(p.name)),
+      );
       return {for (final e in r.args) e.key: e.value};
     }
 
@@ -364,10 +400,13 @@ class FakeFnHost extends FakeHost implements BlockCustomHost {
   @override
   List<String> outerNames(LcBlockTree tree, LcBlockPath from) {
     final names = <String>[];
-    _eachBlock(_tail(tree, from) ?? const [], (b) => _rewriteBlock(b, (e) {
-      if (e['e'] == 'var' && !names.contains(e['name'])) names.add('${e['name']}');
-      return e;
-    }));
+    _eachBlock(
+      _tail(tree, from) ?? const [],
+      (b) => _rewriteBlock(b, (e) {
+        if (e['e'] == 'var' && !names.contains(e['name'])) names.add('${e['name']}');
+        return e;
+      }),
+    );
     return names;
   }
 
@@ -422,10 +461,13 @@ class FakeFnHost extends FakeHost implements BlockCustomHost {
     }
   }
 
-  void _eachExpr(FakeScript s, void Function(Map<String, dynamic> e) f) => _eachBlock(s.body, (b) => _rewriteBlock(b, (e) {
-    f(e);
-    return e;
-  }));
+  void _eachExpr(FakeScript s, void Function(Map<String, dynamic> e) f) => _eachBlock(
+    s.body,
+    (b) => _rewriteBlock(b, (e) {
+      f(e);
+      return e;
+    }),
+  );
 
   /// 把这块积木自己的参数（含各段的）里的每个值过一遍 `f`，返回什么就换成什么。不进口里的积木（它们由 [_eachBlock] 单独走）。
   void _rewriteBlock(LcBlock b, Object? Function(Map<String, dynamic> e) f) {

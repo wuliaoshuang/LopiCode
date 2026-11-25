@@ -14,14 +14,7 @@ import 'package:material_ui/material_ui.dart';
 /// 小卡的结果：`param == null`＝删掉这个参数；否则是改好的参数。
 typedef BkParamChoice = ({BlockParam? param});
 
-Future<BkParamChoice?> showBlockParamCard(
-  BuildContext context, {
-  required Rect anchor,
-  required BlockParam param,
-  required List<String> others,
-  bool canDefault = false,
-  bool canRest = false,
-}) {
+Future<BkParamChoice?> showBlockParamCard(BuildContext context, {required Rect anchor, required BlockParam param, required List<String> others, bool canDefault = false, bool canRest = false}) {
   return showGeneralDialog<BkParamChoice>(
     context: context,
     barrierDismissible: true,
@@ -107,7 +100,10 @@ class _BlockParamCardViewState extends State<BlockParamCardView> {
     );
     Widget caption(String s) => Padding(
       padding: const EdgeInsets.only(bottom: 6),
-      child: Text(s, style: t.labelMedium?.copyWith(color: c.textMuted, fontWeight: FontWeight.w600)),
+      child: Text(
+        s,
+        style: t.labelMedium?.copyWith(color: c.textMuted, fontWeight: FontWeight.w600),
+      ),
     );
     final card = Material(
       key: const ValueKey('bk-param-card'),
@@ -134,7 +130,11 @@ class _BlockParamCardViewState extends State<BlockParamCardView> {
             if (problem != null)
               Padding(
                 padding: const EdgeInsets.only(top: 6),
-                child: Text(problem, key: const ValueKey('bk-param-problem'), style: t.bodySmall?.copyWith(color: c.danger)),
+                child: Text(
+                  problem,
+                  key: const ValueKey('bk-param-problem'),
+                  style: t.bodySmall?.copyWith(color: c.danger),
+                ),
               ),
             if (showDefault) ...[
               const SizedBox(height: 14),
@@ -161,7 +161,9 @@ class _BlockParamCardViewState extends State<BlockParamCardView> {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      IgnorePointer(child: Switch(value: _rest, onChanged: (_) {})),
+                      IgnorePointer(
+                        child: Switch(value: _rest, onChanged: (_) {}),
+                      ),
                     ],
                   ),
                 ),

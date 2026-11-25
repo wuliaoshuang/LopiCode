@@ -22,8 +22,14 @@ class BkLookParamDraft {
       on = defaultValue == true,
       keptChoice = defaultValue is String ? defaultValue : null;
 
-  factory BkLookParamDraft.of(CustomBlockSlot s, {int? origin, bool locked = false}) =>
-      BkLookParamDraft(name: s.name, kind: s.kind == CustomSlotKind.boolean || s.kind == CustomSlotKind.choice ? s.kind : CustomSlotKind.value, defaultValue: s.defaultValue, options: s.options, origin: origin, locked: locked);
+  factory BkLookParamDraft.of(CustomBlockSlot s, {int? origin, bool locked = false}) => BkLookParamDraft(
+    name: s.name,
+    kind: s.kind == CustomSlotKind.boolean || s.kind == CustomSlotKind.choice ? s.kind : CustomSlotKind.value,
+    defaultValue: s.defaultValue,
+    options: s.options,
+    origin: origin,
+    locked: locked,
+  );
 
   final TextEditingController name;
   final TextEditingController value;
@@ -123,7 +129,12 @@ class BkLookCaption extends StatelessWidget {
           if (note != null) ...[
             const SizedBox(width: Space.x2),
             Expanded(
-              child: Text(note!, style: t.bodySmall?.copyWith(color: c.textMuted), maxLines: 1, overflow: TextOverflow.ellipsis),
+              child: Text(
+                note!,
+                style: t.bodySmall?.copyWith(color: c.textMuted),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
           ],
         ],
@@ -207,7 +218,12 @@ class BkLookParamCard extends StatelessWidget {
                 ),
               ),
               if (onDelete != null)
-                IconButton(key: ValueKey('bk-look-param-delete-$index'), tooltip: '删掉这个参数', onPressed: onDelete, icon: Icon(Icons.close_rounded, size: 20, color: c.textMuted)),
+                IconButton(
+                  key: ValueKey('bk-look-param-delete-$index'),
+                  tooltip: '删掉这个参数',
+                  onPressed: onDelete,
+                  icon: Icon(Icons.close_rounded, size: 20, color: c.textMuted),
+                ),
             ],
           ),
           const SizedBox(height: Space.x3),
@@ -240,7 +256,9 @@ class BkLookParamCard extends StatelessWidget {
                 child: Row(
                   children: [
                     Expanded(child: Text('拿出来时先是“是”', style: t.bodyMedium)),
-                    IgnorePointer(child: Switch(value: draft.on, onChanged: (_) {})),
+                    IgnorePointer(
+                      child: Switch(value: draft.on, onChanged: (_) {}),
+                    ),
                   ],
                 ),
               ),
@@ -326,7 +344,11 @@ class BkLookColorRow extends StatelessWidget {
         ),
         Padding(
           padding: const EdgeInsets.only(top: 6, left: Space.x1),
-          child: Text('和“$label”一个颜色', key: const ValueKey('bk-look-color-label'), style: t.bodySmall?.copyWith(color: c.textMuted)),
+          child: Text(
+            '和“$label”一个颜色',
+            key: const ValueKey('bk-look-color-label'),
+            style: t.bodySmall?.copyWith(color: c.textMuted),
+          ),
         ),
       ],
     );

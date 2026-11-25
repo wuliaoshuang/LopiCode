@@ -65,7 +65,19 @@ extension _FnLayout on BlockLayoutEngine {
     final x = _mouthPad + _mouthInset, y = top + _mouthInset;
     final blocks = <BkBlock>[];
     final snaps = <BkSnap>[];
-    final bottom = _list(body ?? const [], ownerPath ?? const [], false, x, y, blocks, snaps, ownerDepth + 1, _mouthMinW - _mouthInset * 2, edgeSnaps: body != null && ownerPath != null, arm: lcExprMouthArm(k));
+    final bottom = _list(
+      body ?? const [],
+      ownerPath ?? const [],
+      false,
+      x,
+      y,
+      blocks,
+      snaps,
+      ownerDepth + 1,
+      _mouthMinW - _mouthInset * 2,
+      edgeSnaps: body != null && ownerPath != null,
+      arm: lcExprMouthArm(k),
+    );
     _curBlock = ownerPath;
     _curOwner = owner;
     _curDepth = ownerDepth;

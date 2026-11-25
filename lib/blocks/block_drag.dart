@@ -37,6 +37,7 @@ class BkPaletteSource {
   final Map<String, String> preset;
 
   LcBlock newBlock(BlockHost host) => host.newBlock(id)..args.addAll(preset);
+
   /// 现成的一个值（参数小块拖出来的那一份）：放下去的是它的副本，不问宿主要新的。
   final Map<String, dynamic>? expr;
 
@@ -461,7 +462,8 @@ class BkDragSession {
             }
             if (swapped) host.argChanged(fromTree!, from, arg!, exprPath);
           }
-          if (old != null && !swapped && !wasDefault) droppedExpr = old;
+          // 盖上去的和原来的一模一样（把同一个参数再放一次）：没丢东西，不用说“被换掉了”。
+          if (old != null && !swapped && !wasDefault && !bkSameJson(old, moving)) droppedExpr = old;
           bkPushDown(host, engine, normal, t.scriptId);
           final other = scriptId;
           if (swapped && other != null && other != t.scriptId) bkPushDown(host, engine, normal, other);

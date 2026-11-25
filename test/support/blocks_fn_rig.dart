@@ -18,7 +18,13 @@ FakeScript fxGreetDef({double x = 0, double y = 0}) => fakeDef(
   const CustomBlockLook('问好', template: '向 {名字} 问好 {次数} 次', slots: [CustomBlockSlot('名字'), CustomBlockSlot('次数', defaultValue: 1)]),
   const [BlockParam('名字'), BlockParam('次数', defaultValue: 1)],
   body: [
-    LcBlock(op: 'repeat', args: {'times': fxParam('次数')}, body: [LcBlock(op: 'say', args: {'text': fxParam('名字')})]),
+    LcBlock(
+      op: 'repeat',
+      args: {'times': fxParam('次数')},
+      body: [
+        LcBlock(op: 'say', args: {'text': fxParam('名字')}),
+      ],
+    ),
   ],
   x: x,
   y: y,
@@ -36,7 +42,12 @@ LcBlock fxMapBlock({List<LcBlock>? body, List<String> params = const ['x']}) => 
         body ??
             [
               fxSay('一项'),
-              LcBlock(op: 'return', args: {'value': fxExpr('arith', {'l': fxParam('x'), 'op': '*', 'r': fxNum(2)})}),
+              LcBlock(
+                op: 'return',
+                args: {
+                  'value': fxExpr('arith', {'l': fxParam('x'), 'op': '*', 'r': fxNum(2)}),
+                },
+              ),
             ],
       ),
     ),
@@ -52,13 +63,32 @@ List<FakeScript> fxThreeLooks() => [
     'use',
     body: [
       LcBlock(op: 'del', args: {'集合': fxVar('分数'), 'id': fxNum(7)}),
-      LcBlock(op: 'say', args: {'text': fxExpr('twice', {'数': fxNum(21)})}),
-      LcBlock(op: 'if', args: {'cond': fxExpr('big', {'a': fxVar('分数'), 'b': fxNum(60)})}, body: [fxSay('及格')], noElse: true),
+      LcBlock(
+        op: 'say',
+        args: {
+          'text': fxExpr('twice', {'数': fxNum(21)}),
+        },
+      ),
+      LcBlock(
+        op: 'if',
+        args: {
+          'cond': fxExpr('big', {'a': fxVar('分数'), 'b': fxNum(60)}),
+        },
+        body: [fxSay('及格')],
+        noElse: true,
+      ),
     ],
     x: 0,
     y: 0,
   ),
-  fakeDef('d1', 'del', const CustomBlockLook('删一条', shape: CustomBlockShape.statement, template: '把 {集合} 里编号是 {id} 的那条删掉', colorKey: BlockColorKey.list, hint: '按编号删掉一条记录'), const [BlockParam('集合'), BlockParam('id')], x: 0, y: 420),
+  fakeDef(
+    'd1',
+    'del',
+    const CustomBlockLook('删一条', shape: CustomBlockShape.statement, template: '把 {集合} 里编号是 {id} 的那条删掉', colorKey: BlockColorKey.list, hint: '按编号删掉一条记录'),
+    const [BlockParam('集合'), BlockParam('id')],
+    x: 0,
+    y: 420,
+  ),
   fakeDef('d2', 'twice', const CustomBlockLook('两倍', shape: CustomBlockShape.value, template: '{数} 的两倍', colorKey: BlockColorKey.operator), const [BlockParam('数')], x: 0, y: 520),
   fakeDef('d3', 'big', const CustomBlockLook('比它大', shape: CustomBlockShape.boolean, template: '{a} 比 {b} 大'), const [BlockParam('a'), BlockParam('b')], x: 0, y: 620),
 ];

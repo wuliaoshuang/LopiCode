@@ -40,10 +40,13 @@ void main() {
       // 参数小块拖出中：从帽子上拿出“名字”，对着“说”的槽。
       final from = rig.chip('s1', 0);
       final g = await rig.lift(tester, from);
-      await rig.glide(tester, g, from, rig.exprSnap('s1', [lcStep(0), lcStep(0)], 'text') + const Offset(14, 10));
+      // 半路上（还没吸到槽上）：看得见帽子上那块还在、手上是一份副本、这一串里能放的槽都描了一圈。
+      await rig.glide(tester, g, from, const Offset(250, 150));
       await tester.pump(const Duration(milliseconds: 300));
       await shot(tester, 'bk7-chip-drag-$suffix');
-      await rig.glide(tester, g, from, const Offset(340, 420));
+      await rig.glide(tester, g, from, rig.exprSnap('s1', [lcStep(0), lcStep(0)], 'text'));
+      await tester.pump(const Duration(milliseconds: 300));
+      await shot(tester, 'bk7-chip-snap-$suffix');
       await rig.drop(tester, g);
 
       // 把语句拖进匿名函数的口：让位 + 剪影。
@@ -92,7 +95,9 @@ void main() {
         debugDisableShadows = true;
       }
       // 空的“我的积木”页。
-      final empty = FnRig([FakeScript('s1', body: [fxSay('开始')], x: 0, y: 0)]);
+      final empty = FnRig([
+        FakeScript('s1', body: [fxSay('开始')], x: 0, y: 0),
+      ]);
       await empty.pump(tester, mode: mode);
       await empty.openTab(tester, '@custom');
       await shot(tester, 'bk7-custom-empty-$suffix');
@@ -140,11 +145,22 @@ void main() {
 
     testWidgets('截图：包成积木前后、长按语句的菜单（$suffix）', (tester) async {
       final rig = FnRig([
-        FakeScript('s1', body: [
-          fxSay('前面'),
-          LcBlock(op: 'set', args: {'name': '分数', 'value': fxExpr('arith', {'l': fxVar('次数'), 'op': '+', 'r': fxNum(1)})}),
-          LcBlock(op: 'say', args: {'text': fxVar('分数')}),
-        ], x: 0, y: 0),
+        FakeScript(
+          's1',
+          body: [
+            fxSay('前面'),
+            LcBlock(
+              op: 'set',
+              args: {
+                'name': '分数',
+                'value': fxExpr('arith', {'l': fxVar('次数'), 'op': '+', 'r': fxNum(1)}),
+              },
+            ),
+            LcBlock(op: 'say', args: {'text': fxVar('分数')}),
+          ],
+          x: 0,
+          y: 0,
+        ),
       ]);
       await rig.pump(tester, mode: mode);
       await dockDown(tester);
@@ -157,17 +173,17 @@ void main() {
         await shot(tester, 'bk7-wrap-before-$suffix');
         await tester.tap(k('bk-block-menu-wrap'));
         await tester.pumpAndSettle();
+        await tester.enterText(k('bk-look-name'), '算分数');
+        await tester.pumpAndSettle();
+        await shot(tester, 'bk7-wrap-page-$suffix');
+        await tester.tap(k('bk-look-done'));
+        await tester.pumpAndSettle();
+        await tester.pump(const Duration(seconds: 5));
+        await tester.pumpAndSettle();
+        await shot(tester, 'bk7-wrap-after-$suffix');
       } finally {
         debugDisableShadows = true;
       }
-      await tester.enterText(k('bk-look-name'), '算分数');
-      await tester.pumpAndSettle();
-      await shot(tester, 'bk7-wrap-page-$suffix');
-      await tester.tap(k('bk-look-done'));
-      await tester.pumpAndSettle();
-      await tester.pump(const Duration(seconds: 5));
-      await tester.pumpAndSettle();
-      await shot(tester, 'bk7-wrap-after-$suffix');
     });
   }
 }

@@ -23,7 +23,11 @@ BlockLayoutEngine engineOf(BlockHost host) => BlockLayoutEngine(host, measure);
 void main() {
   group('模型', () {
     test('带口的值：存出来再读回来一模一样；口里是真的积木对象', () {
-      final host = FakeFnHost(scripts: [FakeScript('s1', body: [fxMapBlock()], x: 0, y: 0)]);
+      final host = FakeFnHost(
+        scripts: [
+          FakeScript('s1', body: [fxMapBlock()], x: 0, y: 0),
+        ],
+      );
       final text = host.encode();
       final back = FakeScript.parse((jsonDecode(text) as List).first as Map<String, dynamic>);
       expect(jsonEncode([back.toJson()]), text);
@@ -35,7 +39,11 @@ void main() {
     });
 
     test('旧文档（没有带口的值）：读进来再存出去一个字不差，参数对象原样不动', () {
-      final host = FakeHost(scripts: [FakeScript('s1', body: [fxSampleIf(), fxSampleSwitch(), fxSay('好')], x: 3, y: 4)]);
+      final host = FakeHost(
+        scripts: [
+          FakeScript('s1', body: [fxSampleIf(), fxSampleSwitch(), fxSay('好')], x: 3, y: 4),
+        ],
+      );
       final text = host.encode();
       final list = jsonDecode(text) as List;
       final back = FakeScript.parse(list.first as Map<String, dynamic>);
@@ -47,10 +55,50 @@ void main() {
 
     test('坏数据不崩：@body 不是表、里面混了不是积木的东西、没有 e 的对象带 @body、嵌得太深', () {
       final weird = [
-        {'op': 'say', 'args': {'text': {'e': 'fn', 'params': 'x', '@body': 'oops'}}},
-        {'op': 'say', 'args': {'text': {'e': 'fn', '@body': [1, null, 'x', {'op': 'say', 'args': <String, dynamic>{}}, {'nope': 1}]}}},
-        {'op': 'say', 'args': {'text': {'@body': [{'op': 'say'}]}}},
-        {'op': 'say', 'args': {'text': [{'e': 'fn', '@body': [{'op': 'break'}]}]}},
+        {
+          'op': 'say',
+          'args': {
+            'text': {'e': 'fn', 'params': 'x', '@body': 'oops'},
+          },
+        },
+        {
+          'op': 'say',
+          'args': {
+            'text': {
+              'e': 'fn',
+              '@body': [
+                1,
+                null,
+                'x',
+                {'op': 'say', 'args': <String, dynamic>{}},
+                {'nope': 1},
+              ],
+            },
+          },
+        },
+        {
+          'op': 'say',
+          'args': {
+            'text': {
+              '@body': [
+                {'op': 'say'},
+              ],
+            },
+          },
+        },
+        {
+          'op': 'say',
+          'args': {
+            'text': [
+              {
+                'e': 'fn',
+                '@body': [
+                  {'op': 'break'},
+                ],
+              },
+            ],
+          },
+        },
       ];
       final blocks = LcBlock.parseList(weird, 0);
       expect(blocks, hasLength(4));
@@ -61,16 +109,40 @@ void main() {
       // 一层套一层套很深：不抛异常。
       Object deep = {'e': 'num', 'v': 1};
       for (var i = 0; i < 40; i++) {
-        deep = {'e': 'fn', 'params': <String>[], '@body': [{'op': 'return', 'args': {'value': deep}}]};
+        deep = {
+          'e': 'fn',
+          'params': <String>[],
+          '@body': [
+            {
+              'op': 'return',
+              'args': {'value': deep},
+            },
+          ],
+        };
       }
-      expect(() => LcBlock.parseList([{'op': 'run', 'args': {'fn': deep}}], 0), returnsNormally);
+      expect(
+        () => LcBlock.parseList([
+          {
+            'op': 'run',
+            'args': {'fn': deep},
+          },
+        ], 0),
+        returnsNormally,
+      );
       final host = FakeFnHost(scripts: [FakeScript('s1', body: blocks, x: 0, y: 0)]);
       expect(() => engineOf(host).layoutScript(host.script('s1')!), returnsNormally);
       expect(() => jsonEncode(host.script('s1')!.body.map((b) => b.toJson()).toList()), returnsNormally);
     });
 
     test('口的编号：一块积木上有几个带口的值，按参数的先后数；路径能走进去、插入、删除、移动', () {
-      final b = LcBlock(op: 'dictSet', args: {'dict': fxFn(['a'], [fxSay('一')]), 'key': fxText('k'), 'value': fxListMap(fxExpr('listNew'), fxFn(['b'], [fxSay('二'), fxSay('三')]))});
+      final b = LcBlock(
+        op: 'dictSet',
+        args: {
+          'dict': fxFn(['a'], [fxSay('一')]),
+          'key': fxText('k'),
+          'value': fxListMap(fxExpr('listNew'), fxFn(['b'], [fxSay('二'), fxSay('三')])),
+        },
+      );
       final tree = FakeScript('s1', body: [b]);
       expect(b.exprMouths.map((m) => m.length), [1, 2]);
       expect(lcExprMouthArm(0), -2);
@@ -128,7 +200,9 @@ void main() {
       final hit = layout.hitTest(chips[1].rect.center)!;
       expect(hit.slot, same(chips[1]));
       // 满了（6 个）就没有“＋”。
-      def.def!['params'] = [for (var i = 0; i < 6; i++) {'name': 'p$i'}];
+      def.def!['params'] = [
+        for (var i = 0; i < 6; i++) {'name': 'p$i'},
+      ];
       final full = engineOf(host).layoutScript(def).hat!;
       expect(full.slots.where((s) => s.look == BkSlotLook.add), isEmpty);
       expect(full.slots.where((s) => s.look == BkSlotLook.param), hasLength(6));
@@ -143,7 +217,11 @@ void main() {
     });
 
     test('带口的值：口在那句话下面，口里的积木在口里面、在所属积木后面（画在上面、先被点到），拼接点带着口的编号', () {
-      final host = FakeFnHost(scripts: [FakeScript('s1', body: [fxMapBlock(), fxSay('好了')], x: 0, y: 0)]);
+      final host = FakeFnHost(
+        scripts: [
+          FakeScript('s1', body: [fxMapBlock(), fxSay('好了')], x: 0, y: 0),
+        ],
+      );
       final layout = engineOf(host).layoutScript(host.script('s1')!);
       final owner = layout.blockAt([lcStep(0)])!;
       final map = owner.slots.firstWhere((s) => s.arg == 'value').expr!;
@@ -182,7 +260,24 @@ void main() {
     });
 
     test('空的口：有最小的大小，里面有一个拼接点；短写法没有口，只有参数小块和一个式子槽', () {
-      final host = FakeFnHost(scripts: [FakeScript('s1', body: [LcBlock(op: 'run', args: {'fn': fxFn(const [])}), LcBlock(op: 'run', args: {'fn': fxFnShort(['a', 'b'], fxParam('a'))})], x: 0, y: 0)]);
+      final host = FakeFnHost(
+        scripts: [
+          FakeScript(
+            's1',
+            body: [
+              LcBlock(op: 'run', args: {'fn': fxFn(const [])}),
+              LcBlock(
+                op: 'run',
+                args: {
+                  'fn': fxFnShort(['a', 'b'], fxParam('a')),
+                },
+              ),
+            ],
+            x: 0,
+            y: 0,
+          ),
+        ],
+      );
       final layout = engineOf(host).layoutScript(host.script('s1')!);
       final fn = layout.blockAt([lcStep(0)])!.slots.single.expr!;
       expect(fn.mouth!.height, greaterThanOrEqualTo(28));
@@ -199,14 +294,31 @@ void main() {
     });
 
     test('嵌套：匿名函数里再放匿名函数、放在“对每一项”和“如果”的口里；每一层的口各走各的路径', () {
-      final inner = LcBlock(op: 'run', args: {'fn': fxFn(['y'], [fxSay('最里面')])});
-      final outer = LcBlock(op: 'run', args: {'fn': fxFn(['x'], [fxSay('外面'), inner])});
-      final host = FakeFnHost(scripts: [
-        FakeScript('s1', body: [
-          LcBlock(op: 'forEach', args: {'list': fxExpr('listNew')}, body: [outer]),
-          LcBlock(op: 'if', args: {'cond': fxBool(true)}, body: [fxMapBlock()], noElse: true),
-        ], x: 0, y: 0),
-      ]);
+      final inner = LcBlock(
+        op: 'run',
+        args: {
+          'fn': fxFn(['y'], [fxSay('最里面')]),
+        },
+      );
+      final outer = LcBlock(
+        op: 'run',
+        args: {
+          'fn': fxFn(['x'], [fxSay('外面'), inner]),
+        },
+      );
+      final host = FakeFnHost(
+        scripts: [
+          FakeScript(
+            's1',
+            body: [
+              LcBlock(op: 'forEach', args: {'list': fxExpr('listNew')}, body: [outer]),
+              LcBlock(op: 'if', args: {'cond': fxBool(true)}, body: [fxMapBlock()], noElse: true),
+            ],
+            x: 0,
+            y: 0,
+          ),
+        ],
+      );
       final tree = host.script('s1')!;
       final layout = engineOf(host).layoutScript(tree);
       final deep = [lcStep(0), lcStep(0), lcStep(1, arm: -2), lcStep(0, arm: -2)];
@@ -218,7 +330,10 @@ void main() {
       expect(layout.hitTest(deepBlock.head.centerLeft + const Offset(6, 0))!.block, same(deepBlock));
       expect(layout.blockAt([lcStep(1), lcStep(0), lcStep(1, arm: -2)])!.block!.op, 'return');
       // 没有两块积木的头互相压着。
-      final heads = [for (final b in layout.blocks) if (!b.isHat) b];
+      final heads = [
+        for (final b in layout.blocks)
+          if (!b.isHat) b,
+      ];
       for (final a in heads) {
         for (final b in heads) {
           if (identical(a, b) || bkPathWithin(a.path, b.path) || bkPathWithin(b.path, a.path)) continue;
@@ -233,12 +348,20 @@ void main() {
       final long = LcBlock(
         op: 'dictSet',
         args: {
-          'dict': fxExpr('arith', {'l': fxExpr('textLen', {'x': fxText('一段比较长的文字用来把这一行撑满')}), 'op': '+', 'r': fxNum(1)}),
+          'dict': fxExpr('arith', {
+            'l': fxExpr('textLen', {'x': fxText('一段比较长的文字用来把这一行撑满')}),
+            'op': '+',
+            'r': fxNum(1),
+          }),
           'key': fxFn(['第一个参数', '第二个参数', '第三个'], [fxSay('口里的一块')]),
           'value': fxText('后面的值'),
         },
       );
-      final host = FakeFnHost(scripts: [FakeScript('s1', body: [long, fxSay('下一块')], x: 0, y: 0)]);
+      final host = FakeFnHost(
+        scripts: [
+          FakeScript('s1', body: [long, fxSay('下一块')], x: 0, y: 0),
+        ],
+      );
       final layout = engineOf(host).layoutScript(host.script('s1')!);
       final b = layout.blockAt([lcStep(0)])!;
       final rects = [for (final s in b.slots) s.rect, for (final l in b.labels) l.rect];
@@ -318,7 +441,9 @@ void main() {
       final l = lay(const CustomBlockLook('长', shape: CustomBlockShape.statement, template: '把 {集合} 里面所有满足条件 {条件} 的记录按照 {字段} 从小到大排好以后取出最前面的 {数量} 条再交给后面的积木接着用'), ['集合', '条件', '字段', '数量']);
       final b = l.blocks.single;
       expect(b.rect.width, lessThanOrEqualTo(320));
-      final rows = {for (final r in [...b.labels.map((l) => l.rect), ...b.slots.map((s) => s.rect)]) r.center.dy.round()};
+      final rows = {
+        for (final r in [...b.labels.map((l) => l.rect), ...b.slots.map((s) => s.rect)]) r.center.dy.round(),
+      };
       expect(rows.length, greaterThan(2));
       for (final r in [...b.labels.map((l) => l.rect), ...b.slots.map((s) => s.rect)]) {
         expect(r.right, lessThanOrEqualTo(b.rect.right));
@@ -342,11 +467,16 @@ void main() {
 
     test('槽的种类：值槽放默认值、是否槽是六边形、固定选项是下拉；先放的东西照外观', () {
       final l = lay(
-        const CustomBlockLook('问好', shape: CustomBlockShape.statement, template: '向 {名字} 问好 {次数} 次 大声 {大声} 语气 {语气}', slots: [
-          CustomBlockSlot('次数', defaultValue: 3),
-          CustomBlockSlot('大声', kind: CustomSlotKind.boolean, defaultValue: true),
-          CustomBlockSlot('语气', kind: CustomSlotKind.choice, options: ['客气', '随便'], defaultValue: '随便'),
-        ]),
+        const CustomBlockLook(
+          '问好',
+          shape: CustomBlockShape.statement,
+          template: '向 {名字} 问好 {次数} 次 大声 {大声} 语气 {语气}',
+          slots: [
+            CustomBlockSlot('次数', defaultValue: 3),
+            CustomBlockSlot('大声', kind: CustomSlotKind.boolean, defaultValue: true),
+            CustomBlockSlot('语气', kind: CustomSlotKind.choice, options: ['客气', '随便'], defaultValue: '随便'),
+          ],
+        ),
         ['名字', '次数', '大声', '语气'],
       );
       final b = l.blocks.single;

@@ -31,7 +31,11 @@ class BkLookResult {
 
 /// 打开“新建积木”页。`editing`＝改已有的一块（`uses`＝它在别处用了几次）；`wrapParams`＝“包成积木”（参数是算出来的）。
 Future<BkLookResult?> showBlockLookPage(BuildContext context, {required BlockHost host, BlockCustom? editing, int uses = 0, List<String>? wrapParams}) {
-  return Navigator.of(context).push<BkLookResult>(MaterialPageRoute(builder: (_) => BlockLookScreen(host: host, editing: editing, uses: uses, wrapParams: wrapParams)));
+  return Navigator.of(context).push<BkLookResult>(
+    MaterialPageRoute(
+      builder: (_) => BlockLookScreen(host: host, editing: editing, uses: uses, wrapParams: wrapParams),
+    ),
+  );
 }
 
 class BlockLookScreen extends StatefulWidget {
@@ -112,7 +116,10 @@ class _BlockLookScreenState extends State<BlockLookScreen> with BkKitHolder {
   void _retemplate(List<LookSegment> Function(List<LookSegment> segments) change) {
     if (_template.text.trim().isEmpty) return;
     final next = formatLookTemplate(change(parseLookTemplate(_template.text))).replaceAll(RegExp(' {2,}'), ' ').trim();
-    _template.value = TextEditingValue(text: next, selection: TextSelection.collapsed(offset: next.length));
+    _template.value = TextEditingValue(
+      text: next,
+      selection: TextSelection.collapsed(offset: next.length),
+    );
   }
 
   void _renamed(BkLookParamDraft p) {
@@ -122,13 +129,12 @@ class _BlockLookScreenState extends State<BlockLookScreen> with BkKitHolder {
       if (from != to && from.isNotEmpty) {
         // 文案里已经写了 {新名字}：它就是这个参数的槽，旧的那个拿掉；不然把旧槽改名。
         final has = lookTemplateSlots(_template.text).contains(to);
-        _retemplate((segs) => [
-          for (final s in segs)
-            if (!(s.isSlot && s.text == from))
-              s
-            else if (!has)
-              LookSegment.slot(to),
-        ]);
+        _retemplate(
+          (segs) => [
+            for (final s in segs)
+              if (!(s.isSlot && s.text == from)) s else if (!has) LookSegment.slot(to),
+          ],
+        );
       }
       p.lastName = to;
     }
@@ -157,7 +163,12 @@ class _BlockLookScreenState extends State<BlockLookScreen> with BkKitHolder {
       if (!ok || !mounted) return;
     }
     final name = p.lastName;
-    _retemplate((segs) => [for (final s in segs) if (!(s.isSlot && s.text == name)) s]);
+    _retemplate(
+      (segs) => [
+        for (final s in segs)
+          if (!(s.isSlot && s.text == name)) s,
+      ],
+    );
     _params.remove(p);
     _changed();
     // 输入框可能还握着焦点：等这一帧画完再收。
@@ -172,7 +183,10 @@ class _BlockLookScreenState extends State<BlockLookScreen> with BkKitHolder {
     final piece = '{$name}';
     final lead = at > 0 && !text.substring(0, at).endsWith(' ') ? ' ' : '';
     final next = text.substring(0, at) + lead + piece + text.substring(at);
-    _template.value = TextEditingValue(text: next, selection: TextSelection.collapsed(offset: at + lead.length + piece.length));
+    _template.value = TextEditingValue(
+      text: next,
+      selection: TextSelection.collapsed(offset: at + lead.length + piece.length),
+    );
     _changed();
   }
 
@@ -203,7 +217,12 @@ class _BlockLookScreenState extends State<BlockLookScreen> with BkKitHolder {
     final previewHost = BkLookPreviewHost(widget.host, _look(valid, name: _name.text.trim().isEmpty ? '积木名字' : null), validNames);
     final preview = previewHost.layout(kit.engine(previewHost));
     final inTemplate = lookTemplateSlots(_template.text).toSet();
-    final missing = _template.text.trim().isEmpty ? const <String>[] : [for (final n in validNames) if (!inTemplate.contains(n)) n];
+    final missing = _template.text.trim().isEmpty
+        ? const <String>[]
+        : [
+            for (final n in validNames)
+              if (!inTemplate.contains(n)) n,
+          ];
     final title = _wrapping ? '包成积木' : (widget.editing == null ? '新建积木' : '编辑积木');
     return Scaffold(
       backgroundColor: c.canvas,
@@ -216,7 +235,11 @@ class _BlockLookScreenState extends State<BlockLookScreen> with BkKitHolder {
           TextButton(
             key: const ValueKey('bk-look-done'),
             onPressed: _done,
-            style: TextButton.styleFrom(minimumSize: const Size(72, RoundIconButton.kSize), padding: const EdgeInsets.symmetric(horizontal: Space.x4), shape: const StadiumBorder()),
+            style: TextButton.styleFrom(
+              minimumSize: const Size(72, RoundIconButton.kSize),
+              padding: const EdgeInsets.symmetric(horizontal: Space.x4),
+              shape: const StadiumBorder(),
+            ),
             child: const Text('完成'),
           ),
         ],
@@ -260,7 +283,13 @@ class _BlockLookScreenState extends State<BlockLookScreen> with BkKitHolder {
                         runSpacing: Space.x1,
                         children: [
                           for (final n in missing)
-                            ActionChip(key: ValueKey('bk-look-insert-$n'), visualDensity: VisualDensity.compact, avatar: const Icon(Icons.add_rounded, size: 16), label: Text('{$n}'), onPressed: () => _insertSlot(n)),
+                            ActionChip(
+                              key: ValueKey('bk-look-insert-$n'),
+                              visualDensity: VisualDensity.compact,
+                              avatar: const Icon(Icons.add_rounded, size: 16),
+                              label: Text('{$n}'),
+                              onPressed: () => _insertSlot(n),
+                            ),
                         ],
                       ),
                     ),
@@ -271,7 +300,11 @@ class _BlockLookScreenState extends State<BlockLookScreen> with BkKitHolder {
                       key: ObjectKey(p),
                       index: i,
                       draft: p,
-                      errors: [if (nameBad[i] != null) nameBad[i]!, if (nameBad[i] == null) ...of(BlockLookField.options, slot: p.trimmed), if (nameBad[i] == null) ...of(BlockLookField.slot, slot: p.trimmed)],
+                      errors: [
+                        if (nameBad[i] != null) nameBad[i]!,
+                        if (nameBad[i] == null) ...of(BlockLookField.options, slot: p.trimmed),
+                        if (nameBad[i] == null) ...of(BlockLookField.slot, slot: p.trimmed),
+                      ],
                       onChanged: _changed,
                       onRename: () => _renamed(p),
                       onDelete: p.locked ? null : () => unawaited(_deleteParam(i)),
@@ -299,12 +332,16 @@ class _BlockLookScreenState extends State<BlockLookScreen> with BkKitHolder {
                   ),
                   Padding(
                     padding: const EdgeInsets.only(top: 6, left: Space.x1),
-                    child: Text(switch (_shape) {
-                      CustomBlockShape.statement => _wrapping ? '包起来的是一段语句，所以是语句积木' : '一块能上下拼的语句积木',
-                      CustomBlockShape.value => '一个能放进槽里的值（它的定义里要有“返回”）',
-                      CustomBlockShape.boolean => '一个“是 / 否”的值，能放进条件槽',
-                      _ => '定义里有“返回”就是值，没有就是语句',
-                    }, key: const ValueKey('bk-look-shape-note'), style: t.bodySmall?.copyWith(color: c.textMuted)),
+                    child: Text(
+                      switch (_shape) {
+                        CustomBlockShape.statement => _wrapping ? '包起来的是一段语句，所以是语句积木' : '一块能上下拼的语句积木',
+                        CustomBlockShape.value => '一个能放进槽里的值（它的定义里要有“返回”）',
+                        CustomBlockShape.boolean => '一个“是 / 否”的值，能放进条件槽',
+                        _ => '定义里有“返回”就是值，没有就是语句',
+                      },
+                      key: const ValueKey('bk-look-shape-note'),
+                      style: t.bodySmall?.copyWith(color: c.textMuted),
+                    ),
                   ),
                   const BkLookCaption('颜色'),
                   BkLookColorRow(

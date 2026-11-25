@@ -24,9 +24,7 @@ class BkLookPreviewHost extends BlockHost {
   /// 预览那一块的排版。参数名不合适（空的、重名）时那几个槽先不画，其余照常。
   BkScriptLayout layout(BlockLayoutEngine engine) {
     final custom = base.custom;
-    final args = <String, dynamic>{
-      for (final s in draft.slots) s.name: custom?.slotValue(s) ?? (s.kind == CustomSlotKind.choice ? (s.options.isEmpty ? '' : s.options.first) : null),
-    };
+    final args = <String, dynamic>{for (final s in draft.slots) s.name: custom?.slotValue(s) ?? (s.kind == CustomSlotKind.choice ? (s.options.isEmpty ? '' : s.options.first) : null)};
     if (draft.isValue) return engine.layoutExpr({'e': kBlockLookPreviewId, ...args}, controls: false);
     return engine.layoutStack([LcBlock(op: kBlockLookPreviewId, args: args)], controls: false);
   }
