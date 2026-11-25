@@ -36,8 +36,9 @@ void main() {
   List<String> filesOnDisk() => dir.existsSync() ? ([for (final e in dir.listSync()) p.basename(e.path)]..sort()) : [];
 
   group('一开始', () {
-    test('只有两套内置的；两个槽都是默认；不建目录', () {
-      expect(view().builtin.map((t) => t.id), [kDefaultLightThemeId, kDefaultDarkThemeId]);
+    test('只有内置的（两套默认排最前）；两个槽都是默认；不建目录', () {
+      expect(view().builtin.map((t) => t.id), kBuiltinThemes.map((t) => t.id));
+      expect(view().builtin.take(2).map((t) => t.id), [kDefaultLightThemeId, kDefaultDarkThemeId]);
       expect(view().user, isEmpty);
       expect(view().lightId, kDefaultLightThemeId);
       expect(view().darkId, kDefaultDarkThemeId);
@@ -51,8 +52,12 @@ void main() {
     test('list：按明暗分开列，内置的在前', () async {
       await n.create(dark: false, name: '甲');
       await n.create(dark: true, name: '乙');
-      expect(n.list(dark: false).map((t) => t.name), ['默认浅色', '甲']);
-      expect(n.list(dark: true).map((t) => t.name), ['默认深色', '乙']);
+      // 内置的不止两套了：这一种明暗的内置主题全在前面（默认那套打头），自己的排在后面。
+      Iterable<String> builtinNames(bool dark) => kBuiltinThemes.where((t) => t.dark == dark).map((t) => t.name);
+      expect(n.list(dark: false).map((t) => t.name), [...builtinNames(false), '甲']);
+      expect(n.list(dark: true).map((t) => t.name), [...builtinNames(true), '乙']);
+      expect(n.list(dark: false).first.name, '默认浅色');
+      expect(n.list(dark: true).first.name, '默认深色');
     });
   });
 
@@ -237,7 +242,7 @@ void main() {
     test('内置的、不存在的：删不了', () async {
       expect(await n.delete(kDefaultLightThemeId), contains('内置'));
       expect(await n.delete('nope'), isNotNull);
-      expect(view().builtin, hasLength(2));
+      expect(view().builtin, hasLength(kBuiltinThemes.length));
     });
   });
 

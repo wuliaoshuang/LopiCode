@@ -151,12 +151,16 @@ void main() {
         expect(k('theme-pick-${mine.id}'), findsOneWidget);
         expect(k('theme-pick-${other.id}'), findsNothing, reason: '另一种明暗的主题不该出现在这个列表里');
         expect(k('theme-pick-${dark ? kDefaultLightThemeId : kDefaultDarkThemeId}'), findsNothing);
-        expect(find.text('内置'), findsOneWidget);
+        // 内置主题不止一套了：这一种明暗的内置主题每套一行，都标“内置”。
+        expect(find.text('内置'), findsNWidgets(kBuiltinThemes.where((t) => t.dark == dark).length));
         expect(find.text('自己的'), findsOneWidget);
         expect(k('theme-swatches'), findsOneWidget);
 
         Color canvasNow() => tester.widget<Scaffold>(find.byType(Scaffold).last).backgroundColor!;
         final before = canvasNow();
+        // 自己的主题排在内置的后面，内置多了以后可能在屏幕下方：先滚到看得见。
+        await tester.ensureVisible(k('theme-pick-${mine.id}'));
+        await tester.pumpAndSettle();
         await tester.tap(k('theme-pick-${mine.id}'));
         await settle(tester, rounds: 2);
         await tester.pumpAndSettle();
@@ -173,6 +177,8 @@ void main() {
 
         // 选回默认：颜色回到原样。
         await tester.tap(k(dark ? 'appearance-theme-dark' : 'appearance-theme-light'));
+        await tester.pumpAndSettle();
+        await tester.ensureVisible(k('theme-pick-${dark ? kDefaultDarkThemeId : kDefaultLightThemeId}'));
         await tester.pumpAndSettle();
         await tester.tap(k('theme-pick-${dark ? kDefaultDarkThemeId : kDefaultLightThemeId}'));
         await settle(tester, rounds: 2);

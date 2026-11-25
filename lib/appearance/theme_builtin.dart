@@ -1,13 +1,18 @@
-/// 内置主题（只读）。现在只有“默认浅色”“默认深色”两套——它们就是加主题系统之前应用的样子，
+/// 内置主题（只读）。这个文件里是“默认浅色”“默认深色”两套——它们就是加主题系统之前应用的样子，
 /// 每个值都有测试钉着（test/theme_defaults_pin_test.dart），**不许改**；要新样子就加一套新主题。
+/// 另外八套在 `theme_builtin_light_a/b.dart`、`theme_builtin_dark_a/b.dart` 里，清单见 docs/themes-design.md。
 ///
 /// 怎么加一套内置主题：
-/// 1. 在这个目录下新建一个文件（比如 `theme_builtin_more.dart`），用 [kDefaultLightTheme] / [kDefaultDarkTheme]
-///    的 `copyWith` / `withColors` 改出一份新的 [ThemeSpec]：id 以 `builtin-` 开头，`builtin: true`。
-/// 2. 把它加进下面的 [kBuiltinThemes]。
-/// 3. 跑 test/theme_contrast_test.dart：对比度不达标的项要么改色，要么登记成已知例外并写原因。
+/// 1. 在这个目录下新建一个文件（或加进 `theme_builtin_light_*.dart` / `theme_builtin_dark_*.dart`，每个文件别超过 600 行），
+///    写一份完整的 [ThemeSpec]：id 以 `builtin-` 开头，`builtin: true`，每一节的键都要齐。
+/// 2. 把它加进下面的 [kBuiltinThemes]；新文件还要登记进 test/theme_guard_test.dart 的“定义颜色的文件”。
+/// 3. 跑 test/theme_contrast_test.dart 和 test/theme_builtin_test.dart：不达标就改颜色，新主题不登记例外。
 library;
 
+import 'package:lopicode/appearance/theme_builtin_dark_a.dart';
+import 'package:lopicode/appearance/theme_builtin_dark_b.dart';
+import 'package:lopicode/appearance/theme_builtin_light_a.dart';
+import 'package:lopicode/appearance/theme_builtin_light_b.dart';
 import 'package:lopicode/appearance/theme_fields.dart';
 import 'package:lopicode/appearance/theme_spec.dart';
 
@@ -368,8 +373,19 @@ final ThemeSpec kDefaultDarkTheme = ThemeSpec(
   metrics: _metrics,
 );
 
-/// 内置主题的注册表：加新的内置主题就往这里加一项。顺序就是列表里显示的顺序。
-final List<ThemeSpec> kBuiltinThemes = List.unmodifiable([kDefaultLightTheme, kDefaultDarkTheme]);
+/// 内置主题的注册表：加新的内置主题就往这里加一项。顺序就是列表里显示的顺序（两套默认在最前，然后浅色、深色）。
+final List<ThemeSpec> kBuiltinThemes = List.unmodifiable([
+  kDefaultLightTheme,
+  kDefaultDarkTheme,
+  kPaperTheme,
+  kMintTheme,
+  kSakuraTheme,
+  kContrastLightTheme,
+  kMidnightTheme,
+  kEmberTheme,
+  kGrapeTheme,
+  kBlackTheme,
+]);
 
 /// 同明暗的默认主题：读文件时缺的字段从它补，选中的主题找不到时也退回它。
 ThemeSpec defaultThemeFor({required bool dark}) => dark ? kDefaultDarkTheme : kDefaultLightTheme;

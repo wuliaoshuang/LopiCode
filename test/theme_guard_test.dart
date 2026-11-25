@@ -10,6 +10,10 @@ import 'package:flutter_test/flutter_test.dart';
 /// 整份放行的文件：它们就是“定义颜色的地方”。
 const _definitionFiles = {
   'lib/appearance/theme_builtin.dart': '内置主题的颜色表',
+  'lib/appearance/theme_builtin_light_a.dart': '内置主题的颜色表（暖纸、薄荷）',
+  'lib/appearance/theme_builtin_light_b.dart': '内置主题的颜色表（高对比浅色、樱花）',
+  'lib/appearance/theme_builtin_dark_a.dart': '内置主题的颜色表（午夜蓝、暖炭）',
+  'lib/appearance/theme_builtin_dark_b.dart': '内置主题的颜色表（纯黑、葡萄紫）',
   'lib/appearance/theme_fields.dart': '字段目录（注释里有颜色写法的例子）',
   'lib/appearance/theme_spec.dart': '主题数据模型',
   'lib/appearance/theme_json.dart': '主题文件的读写（文档里有颜色写法的例子）',
