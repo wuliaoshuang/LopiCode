@@ -24,6 +24,7 @@ import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/preview/preview_server.dart';
 import 'package:lopicode/runtime/linux_shell_backend.dart';
 import 'package:lopicode/session/attachments.dart' as attachments;
+import 'package:lopicode/session/background_flow.dart';
 import 'package:lopicode/session/chat_export.dart';
 import 'package:lopicode/session/chat_models.dart';
 import 'package:lopicode/session/conversation.dart';
@@ -37,6 +38,7 @@ import 'package:lopicode/session/turn_runner.dart';
 import 'package:lopicode/ssh/ssh_config.dart';
 import 'package:lopicode/ssh/ssh_connector.dart';
 import 'package:lopicode/state/backend_run.dart';
+import 'package:lopicode/state/workspace_background.dart';
 import 'package:lopicode/state/workspace_chat.dart';
 import 'package:lopicode/state/workspace_files.dart';
 import 'package:lopicode/state/workspace_preview.dart';
@@ -64,7 +66,8 @@ class ProjectSession {
 
   // ── 引擎的几块（用到才建；互相要用的地方用函数接，免得谁拿着谁）────────
   late final SessionCore _core = SessionCore(this);
-  late final ToolboxBuilder _toolbox = ToolboxBuilder(_core, spawnTool: (parent, root, skills) => _subagents.tool(parent, root, skills));
+  late final BackgroundFlow _background = BackgroundFlow(_core);
+  late final ToolboxBuilder _toolbox = ToolboxBuilder(_core, spawnTool: (parent, root, skills) => _subagents.tool(parent, root, skills), background: _background);
   late final TurnRunner _turns = TurnRunner(_core, toolbox: _toolbox);
   late final Subagents _subagents = Subagents(_core, execute: _turns.execute);
   late final SendFlow _sending = SendFlow(_core, execute: _turns.execute, loadChat: loadChat);
@@ -185,6 +188,7 @@ class ProjectSession {
     await app.ready();
     await _core.convs?.load();
     await _core.ensureLoaded(_active);
+    await _background.load(); // 上次留下的后台命令：标成“已中断”，在聊天里提示一行
     // 老版本只有一个 chat.json、没有标题：从第一句话补一个。
     if (activeConversation.title.isEmpty) {
       final first = _messages.where((m) => m['role'] == 'user').firstOrNull;
@@ -211,6 +215,7 @@ class ProjectSession {
     _core.convs?.activate(id);
     _core.queue.clear();
     await _core.ensureLoaded(_active);
+    _background.announce(_active);
   }
 
   /// 子代理谱系：[rootId] 这段对话派出的全部子代理（含子代理再派出的），按派出顺序。
@@ -244,6 +249,7 @@ class ProjectSession {
         }
       }
       _core.dropBoard(d);
+      await _background.dropConversation(d);
       _core.cards.clearAutoAllow(d);
       if (!app.disposed) app.container.invalidate(chatRunProvider((this, d)));
     }
@@ -440,6 +446,7 @@ class ProjectSession {
       app.container.invalidate(terminalsProvider(this)); // 会话的进程在这里收掉
       app.container.invalidate(previewProvider(this)); // 预览服务器在这里停掉
       app.container.invalidate(backendRunProvider(this)); // 还在等的后端“运行”作废
+      app.container.invalidate(backgroundTasksProvider(this)); // 后台命令在这里全部停掉
     }
   }
 }

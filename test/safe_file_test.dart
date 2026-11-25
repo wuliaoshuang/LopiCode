@@ -4,12 +4,14 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lopicode/agent/automation.dart';
+import 'package:lopicode/agent/background_commands.dart';
 import 'package:lopicode/agent/model_config.dart';
 import 'package:lopicode/agent/team.dart';
 import 'package:lopicode/backend/backend_model.dart';
 import 'package:lopicode/backend/backend_project.dart';
 import 'package:lopicode/backend/backend_validate.dart';
 import 'package:lopicode/core/crash_log.dart';
+import 'package:lopicode/core/path_guard.dart';
 import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/core/safe_file.dart';
 import 'package:lopicode/core/stores.dart';
@@ -192,6 +194,18 @@ void main() {
         store.begin('做个页面');
         await store.finish();
         expect((jsonDecode(file.readAsStringSync()) as Map)['finished'], isTrue);
+      });
+
+      test('后台命令记录 background.json：${entry.key} → 当没有任务，之后还能正常记', () async {
+        File(p.join(tmp.path, kBackgroundFile))
+          ..parent.createSync(recursive: true)
+          ..writeAsStringSync(entry.value);
+        final manager = BackgroundCommands(PathGuard(tmp.path));
+        await manager.load();
+        expect(manager.tasks, isEmpty);
+        expect(manager.unnotified('c1'), isEmpty);
+        manager.dispose();
+        await pendingWrites();
       });
     }
 

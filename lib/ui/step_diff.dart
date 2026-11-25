@@ -20,7 +20,7 @@ const double kApprovalPreviewMaxHeight = 160;
 /// 步骤那一行的“动作 + 对象”：这一步有改动记录就按改动说（改 / 新建 / 删除 + 路径），否则照原来的。
 (String verb, String target) stepLabelOf(ToolItem tool) {
   final change = tool.change;
-  if (change == null || !tool.ok || tool.denied) return stepLabel(tool.name, tool.arguments);
+  if (change == null || !tool.ok || tool.denied) return stepLabel(tool.name, tool.arguments, result: tool.result);
   return (
     switch (change.kind) {
       ChangeKind.created => '新建',

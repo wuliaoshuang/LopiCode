@@ -1,4 +1,5 @@
 // 从接口格式的消息记录重建聊天页显示的条目。纯计算：不读盘、不碰状态。
+import 'package:lopicode/agent/agent_runner.dart' show kAppNoticeMark;
 import 'package:lopicode/agent/auto_compact.dart';
 import 'package:lopicode/agent/line_diff.dart';
 import 'package:lopicode/agent/usage.dart';
@@ -15,6 +16,9 @@ List<ChatItem> chatItemsFromMessages(List<Map<String, dynamic>> messages, {requi
       case 'user' when m[kCompactMark] == true:
         // 自动 / 手动压缩留下的摘要：显示成一行“已压缩较早的对话”，点开看摘要。
         items.add(CompactionItem(compactSummaryOf(m)));
+      case 'user' when m[kAppNoticeMark] is String:
+        // 应用自己告诉模型的事（后台命令结束了……）：显示成一行提示，不是用户说的话。
+        items.add(NoticeItem(m[kAppNoticeMark] as String));
       case 'user':
         final images = m['_images'];
         items.add(

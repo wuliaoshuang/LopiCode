@@ -95,7 +95,7 @@ StepKind stepKindOf(String name) => switch (name) {
   'list_files' || 'read_skill' || 'team_board' || 'list_scheduled_tasks' => StepKind.look,
   'write_file' || 'edit_file' || 'lowcode_update_page' || 'backend_update_blocks' => StepKind.edit,
   'delete_file' => StepKind.delete,
-  'run_command' => StepKind.command,
+  'run_command' || 'start_background_command' => StepKind.command,
   'web_search' => StepKind.search,
   'spawn_agent' => StepKind.agent,
   'ask_user' => StepKind.ask,
@@ -114,9 +114,11 @@ Map<String, dynamic> _argsOf(String rawArgs) {
 }
 
 /// 一次工具调用拆成“动作 + 对象”，例如（读取，lib/main.dart）。对象可能为空。
-(String verb, String target) stepLabel(String name, String rawArgs) {
+/// [result]（工具的结果，可不给）只用来给“后台启动”补上任务号。
+(String verb, String target) stepLabel(String name, String rawArgs, {String? result}) {
   final args = _argsOf(rawArgs);
   String a(String key) => '${args[key] ?? ''}'.trim();
+  final taskNo = RegExp(r'^后台命令 #(\d+)').firstMatch(result ?? '')?.group(1);
   return switch (name) {
     'list_files' => ('查看文件列表', a('path')),
     'read_file' => ('读取', a('path')),
@@ -124,6 +126,10 @@ Map<String, dynamic> _argsOf(String rawArgs) {
     'edit_file' => ('修改', a('path')),
     'delete_file' => ('删除', a('path')),
     'run_command' => ('执行', a('command')),
+    'start_background_command' => ('后台启动', taskNo == null ? a('command') : '${a('command')} · #$taskNo'),
+    'read_background_output' => ('查看后台命令输出', a('id').isEmpty ? '' : '#${a('id')}'),
+    'stop_background_command' => ('停止后台命令', a('id').isEmpty ? '' : '#${a('id')}'),
+    'list_background_commands' => ('查看后台命令', ''),
     'lowcode_get_page' => ('读取低代码页面', ''),
     'lowcode_update_page' => ('更新低代码页面', ''),
     'backend_get_blocks' => ('读取后端积木', ''),

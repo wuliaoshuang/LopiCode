@@ -14,6 +14,7 @@ import 'package:lopicode/agent/web_search.dart';
 import 'package:lopicode/backend/backend_agent_tools.dart';
 import 'package:lopicode/runtime/linux_command_runner.dart';
 import 'package:lopicode/session/automation_tools.dart';
+import 'package:lopicode/session/background_flow.dart';
 import 'package:lopicode/session/chat_models.dart';
 import 'package:lopicode/session/conversation.dart';
 import 'package:lopicode/session/session_core.dart';
@@ -25,7 +26,10 @@ import 'package:lopicode/terminal/terminal_session.dart';
 typedef SpawnToolFactory = ExtraTool Function(ChatRunNotifier parent, Conversation root, List<Skill> skills);
 
 class ToolboxBuilder {
-  ToolboxBuilder(this.core, {required this.spawnTool});
+  ToolboxBuilder(this.core, {required this.spawnTool, this.background});
+
+  /// 后台命令的接线（工具、结束通知）。
+  final BackgroundFlow? background;
 
   final SessionCore core;
   final SpawnToolFactory spawnTool;
@@ -89,9 +93,13 @@ class ToolboxBuilder {
     if (core.subagentsEnabled && conv.depth < core.subagentMaxDepth) extras.add(spawnTool(run, root, skills));
     if (core.teamEnabled) extras.addAll((await core.boardOf(root)).tools(conv.parentId == null ? TeamBoard.lead : conv.agentName));
     if (!run.unattended) extras.addAll(automationTools(store: app.automations, project: core.project, approve: (request) => requestApproval(run, request)));
-    return AgentToolbox(
+    final runner = session.commandRunnerFactory?.call() ?? LinuxCommandRunner(app.runtime, guestCwd: core.project.linuxPath, onOutput: (t) => _echoTerminal()?.append(t));
+    // 后台命令：启动的确认接的是工具箱里 run_command 用的同一个判断（工具箱在下面才建，所以用 late）。
+    late final AgentToolbox box;
+    extras.addAll(background?.tools(run, root, runner, approve: (r) => box.approveCommand(r), stopSignal: () => box.stopSignal?.call()) ?? const []);
+    return box = AgentToolbox(
       guard: core.guard,
-      runner: session.commandRunnerFactory?.call() ?? LinuxCommandRunner(app.runtime, guestCwd: core.project.linuxPath, onOutput: (t) => _echoTerminal()?.append(t)),
+      runner: runner,
       requestApproval: (r) => requestApproval(run, r),
       autoApprove: () => core.cards.autoAllowed(root.id),
       // 权限和计划模式每次都现查目录里的最新值：跑到一半改了档位、开了计划模式，下一步就生效

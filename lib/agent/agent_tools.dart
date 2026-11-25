@@ -139,6 +139,12 @@ class AgentToolbox {
 
   final List<ExtraTool> extras;
 
+  /// 这一轮被用户叫停时完成的信号（执行器接上来的）：正在跑的命令据此中途结束。
+  Future<void> Function()? stopSignal;
+
+  /// 和 run_command 同一套确认规矩（完全权限 / “本对话都允许”不问，其余出确认卡）。给“后台执行命令”用。
+  Future<bool> approveCommand(ApprovalRequest request) => _approved(request);
+
   static const Set<String> approvalRequired = {'run_command', 'delete_file'};
   static const int maxReadChars = 60000;
   static const int maxWriteChars = 1000000;
@@ -389,14 +395,21 @@ class AgentToolbox {
     }
     final Object r = runner;
     final timeout = r is HasCommandTimeout ? r.commandTimeout : commandTimeout;
-    final result = await runner.run(command, workingDirectory: guard.root, timeout: timeout);
+    final stop = stopSignal?.call();
+    final result = r is HasCommandStop && stop != null
+        ? await r.runStoppable(command, workingDirectory: guard.root, timeout: timeout, stop: stop)
+        : await runner.run(command, workingDirectory: guard.root, timeout: timeout);
     var output = result.output;
     if (output.length > maxOutputChars) {
       // 太长：完整的转存成文件，回给模型开头 + 结尾 + 文件路径（它可以用 read_file 按行分段读）。
       output = spilledOutputText(output, await CommandOutputStore(guard).save(command, output));
     }
-    final status = result.timedOut ? '超过 ${timeout.inSeconds} 秒，已强制结束' : '退出码 ${result.exitCode}';
-    return ToolOutcome('$status\n${output.isEmpty ? '（没有输出）' : output}', ok: !result.timedOut && result.exitCode == 0, changedFiles: true);
+    final status = result.stopped
+        ? '用户点了停止，命令已中途结束（它起的进程也一起结束了）'
+        : result.timedOut
+        ? '超过 ${timeout.inSeconds} 秒，已强制结束'
+        : '退出码 ${result.exitCode}';
+    return ToolOutcome('$status\n${output.isEmpty ? '（没有输出）' : output}', ok: !result.stopped && !result.timedOut && result.exitCode == 0, changedFiles: true);
   }
 
   Future<ToolOutcome> _updatePage(Object? page) async {
