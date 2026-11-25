@@ -341,15 +341,27 @@ class TerminalInputViewState extends State<TerminalInputView> with TextInputClie
                 if (moved <= kTouchSlop && held < kLongPressTimeout) requestKeyboard();
               },
               onPointerCancel: (_) => _downAt = null,
-              child: TerminalView(
-                widget.session.terminal,
-                key: _viewKey,
-                focusNode: widget.focusNode,
-                theme: widget.theme,
-                textStyle: widget.textStyle,
-                padding: widget.padding,
-                // 软键盘由我们自己接；xterm 只管实体键盘和画面。
-                hardwareKeyboardOnly: true,
+              // xterm 的 TerminalView 会把 MediaQuery.padding 当成自己的内边距再留一遍。终端页在“内容铺到顶栏后面”的
+              // Scaffold 里，那里的 padding.top = 状态栏 + 顶栏；外面的 BelowBar 已经让过一次，这里再留一次，
+              // 第一行就被推下去一大截（2026-11-25 霜霜真机反馈：终端顶部总有一大片空白）。
+              // 让开系统栏归摆放它的页面管，这里四边都拿掉。（左右那份 xterm 本来就不画进去，只拿去换算“点在第几列”，
+              // 留着只会让横屏有刘海时点选的位置和看到的字错开。）
+              child: MediaQuery.removePadding(
+                context: context,
+                removeTop: true,
+                removeBottom: true,
+                removeLeft: true,
+                removeRight: true,
+                child: TerminalView(
+                  widget.session.terminal,
+                  key: _viewKey,
+                  focusNode: widget.focusNode,
+                  theme: widget.theme,
+                  textStyle: widget.textStyle,
+                  padding: widget.padding,
+                  // 软键盘由我们自己接；xterm 只管实体键盘和画面。
+                  hardwareKeyboardOnly: true,
+                ),
               ),
             ),
           ),

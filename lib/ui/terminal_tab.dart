@@ -1,5 +1,7 @@
 // 设计约束（终端 · 390×844）
 // - 屏幕几乎全留给终端：xterm 仿真，等宽 13px，深浅色都用 codeBg。点一下屏幕弹键盘，直接打字。
+// - 终端第一行紧贴会话行下沿（只留 4 的内边距）：新开的终端第一行就是提示符，上面不留空
+//   （test/terminal_top_gap_test.dart 守着；xterm 自己多留系统边距的事在 lib/terminal/terminal_input.dart 里处理）。
 // - 顶上一行只管“会话”：会话标签 + 新建（Ubuntu 环境 / SSH 远程主机；桌面调试时还有本机 shell）。
 // - 安卓上不用手机自带的命令行（没有 git、node、python）。平台判断只在 LinuxRuntime.localShellAllowed 一处：
 //   · 运行环境没装好、也没有别的会话：整页换成安装引导（lib/ui/terminal_setup_view.dart），会话行和按键行都不出现；
@@ -187,6 +189,7 @@ class _TerminalTabState extends ConsumerState<TerminalTab> {
     return Column(
       children: [
         SizedBox(
+          key: const Key('terminal-sessions'),
           height: 52,
           child: Row(
             children: [
