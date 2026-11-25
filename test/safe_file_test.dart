@@ -4,12 +4,17 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lopicode/agent/automation.dart';
+import 'package:lopicode/agent/background_commands.dart';
+import 'package:lopicode/agent/mcp/mcp_config.dart';
+import 'package:lopicode/agent/mcp/mcp_models.dart';
+import 'package:lopicode/agent/memory_store.dart';
 import 'package:lopicode/agent/model_config.dart';
 import 'package:lopicode/agent/team.dart';
 import 'package:lopicode/backend/backend_model.dart';
 import 'package:lopicode/backend/backend_project.dart';
 import 'package:lopicode/backend/backend_validate.dart';
 import 'package:lopicode/core/crash_log.dart';
+import 'package:lopicode/core/path_guard.dart';
 import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/core/safe_file.dart';
 import 'package:lopicode/core/stores.dart';
@@ -185,6 +190,15 @@ void main() {
         expect(board.tasks, isEmpty);
       });
 
+      test('MCP 服务器配置 mcp_servers.json：${entry.key} → 当一个服务器都没有，照样能再加、再存', () async {
+        final file = File(p.join(tmp.path, 'mcp_servers.json'))..writeAsStringSync(entry.value);
+        final store = McpStore(file, MemorySecretStore());
+        await store.load();
+        expect(store.servers, isEmpty);
+        await store.save([McpServerConfig(id: 'a', name: '资料库', url: 'https://example.com/mcp')]);
+        expect(((jsonDecode(file.readAsStringSync()) as Map)['servers'] as List).length, 1);
+      });
+
       test('进行中记录 turn.json：${entry.key} → 当没有记录（不提示、不崩），之后还能正常记', () async {
         final file = File(p.join(tmp.path, 'turn.json'))..writeAsStringSync(entry.value);
         final store = TurnJournalStore(file);
@@ -192,6 +206,18 @@ void main() {
         store.begin('做个页面');
         await store.finish();
         expect((jsonDecode(file.readAsStringSync()) as Map)['finished'], isTrue);
+      });
+
+      test('后台命令记录 background.json：${entry.key} → 当没有任务，之后还能正常记', () async {
+        File(p.join(tmp.path, kBackgroundFile))
+          ..parent.createSync(recursive: true)
+          ..writeAsStringSync(entry.value);
+        final manager = BackgroundCommands(PathGuard(tmp.path));
+        await manager.load();
+        expect(manager.tasks, isEmpty);
+        expect(manager.unnotified('c1'), isEmpty);
+        manager.dispose();
+        await pendingWrites();
       });
     }
 
@@ -216,6 +242,49 @@ void main() {
       expect(cut.describe().lines, isNotEmpty);
       File(p.join(tmp.path, 'turn2.json')).writeAsStringSync(jsonEncode({'token': 'old', 'at': 1, 'steps': 'nope'}));
       expect((await TurnJournalStore(File(p.join(tmp.path, 'turn2.json'))).interrupted())!.steps, isEmpty);
+    });
+
+    test('MCP 服务器配置：字段类型全错、混着别的东西、地址不合规矩 → 读到哪算哪，坏的条目跳过，不抛异常', () async {
+      final file = File(p.join(tmp.path, 'mcp_servers.json'))
+        ..writeAsStringSync(
+          jsonEncode({
+            'version': 'x',
+            'servers': [
+              42,
+              null,
+              {'id': 7, 'name': '没有编号'},
+              {
+                'id': 'ok',
+                'name': '还行',
+                'url': 'https://example.com/mcp',
+                'transport': 'telepathy',
+                'enabled': 'yes',
+                'headerNames': ['Authorization', 5, 'bad name'],
+                'disabledTools': 'all',
+                'tools': [
+                  1,
+                  {'name': 'good', 'description': 9, 'inputSchema': 'nope'},
+                  {'name': ''},
+                ],
+                'toolsAt': 'yesterday',
+                'mode': 12,
+              },
+            ],
+          }),
+        );
+      final store = McpStore(file, MemorySecretStore());
+      await store.load();
+      final ok = store.servers.where((s) => s.id == 'ok').single;
+      expect(ok.url, 'https://example.com/mcp');
+      expect(ok.transport, McpTransportChoice.auto);
+      expect(ok.tools.map((t) => t.name), ['good']);
+      expect(ok.headerNames, ['Authorization']);
+      expect(store.servers, hasLength(1));
+      expect(ok.enabled, isTrue);
+      expect(ok.disabledTools, isEmpty);
+      expect(ok.toolsAt, isNull);
+      expect(ok.mode, isNull);
+      expect(badBackups(file), isEmpty, reason: '是合法 JSON，不算坏文件');
     });
 
     test('旧版本 / 字段类型不对的内容：读到哪算哪，不抛异常', () async {
@@ -430,6 +499,54 @@ void main() {
         final again = (await loadBackendFile(file))!;
         expect(again.doc.encode(), parsed.doc.encode());
       }
+    });
+  });
+
+  group('文件记忆的两个存盘文件', () {
+    for (final entry in corruptSamples.entries) {
+      test('记忆的撤销记录 undo.json：${entry.key} → 当没有可撤销的，记忆本身照常读写', () async {
+        final dir = Directory(p.join(tmp.path, 'memory'))..createSync();
+        File(p.join(dir.path, '甲.md')).writeAsStringSync('# 甲\n\n一\n');
+        final undo = File(p.join(dir.path, 'undo.json'))..writeAsStringSync(entry.value);
+        final store = MemoryStore(dir.path, MemoryScope.global);
+        expect((await store.load()).single.title, '甲');
+        expect(store.changes, isEmpty);
+        await store.write('乙', '二');
+        expect(store.entries, hasLength(2));
+        expect(store.changes, hasLength(1), reason: '坏文件回退以后撤销记录照常能用');
+        expect(jsonDecode(undo.readAsStringSync()), isA<List<dynamic>>());
+        await pendingWrites();
+      });
+    }
+
+    test('undo.json 形状对、里面的条目类型全错：读到哪算哪，不抛异常、不算坏文件', () async {
+      final dir = Directory(p.join(tmp.path, 'memory'))..createSync();
+      final undo = File(p.join(dir.path, 'undo.json'))
+        ..writeAsStringSync(
+          jsonEncode([
+            1,
+            'x',
+            null,
+            {'id': 5},
+            {'id': '甲', 'before': 3, 'after': <String>[]},
+            {'id': '../外面', 'after': 'x'},
+            {'id': '乙', 'title': 9, 'before': null, 'after': '# 乙\n\n二\n', 'at': '不是数字', 'by': 1},
+          ]),
+        );
+      final store = MemoryStore(dir.path, MemoryScope.project);
+      await store.load();
+      expect(store.changes.single.id, '乙');
+      expect(store.changes.single.title, '乙');
+      expect(store.changes.single.by, 'agent');
+      expect(badBackups(undo), isEmpty, reason: '文件本身是合法 JSON，不算坏文件');
+    });
+
+    test('记忆文件本身不是文本（二进制垃圾）：跳过那一条，别的照常', () async {
+      final dir = Directory(p.join(tmp.path, 'memory'))..createSync();
+      File(p.join(dir.path, '坏的.md')).writeAsBytesSync([0xff, 0xfe, 0x00, 0xc3, 0x28]);
+      File(p.join(dir.path, '好的.md')).writeAsStringSync('# 好的\n\n正常\n');
+      final store = MemoryStore(dir.path, MemoryScope.global);
+      expect((await store.load()).map((e) => e.title), ['好的']);
     });
   });
 }

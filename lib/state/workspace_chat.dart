@@ -136,7 +136,10 @@ final activeChatProvider = Provider.family<ChatRunState, ProjectSession>((ref, s
 // ── 确认卡 / 提问卡 ────────────────────────────────────
 
 class PendingCardsState {
-  const PendingCardsState({this.approvals = const [], this.questions = const [], this.autoAllow = const {}});
+  const PendingCardsState({this.approvals = const [], this.questions = const [], this.autoAllow = const {}, this.allowKeys = const {}});
+
+  /// 主对话 id → 点过“本对话都允许”的单项（[ApprovalRequest.alwaysKey]，比如某个 MCP 服务器的某个工具）。只在内存里。
+  final Map<String, Set<String>> allowKeys;
 
   /// 等用户点的确认卡（可能同时来自主智能体和几个子代理），排队一张一张出。
   final List<PendingApproval> approvals;
@@ -148,10 +151,11 @@ class PendingCardsState {
   PendingApproval? get approval => approvals.isEmpty ? null : approvals.first;
   PendingQuestion? get question => questions.isEmpty ? null : questions.first;
 
-  PendingCardsState copyWith({List<PendingApproval>? approvals, List<PendingQuestion>? questions, Set<String>? autoAllow}) => PendingCardsState(
+  PendingCardsState copyWith({List<PendingApproval>? approvals, List<PendingQuestion>? questions, Set<String>? autoAllow, Map<String, Set<String>>? allowKeys}) => PendingCardsState(
     approvals: approvals == null ? this.approvals : List.unmodifiable(approvals),
     questions: questions == null ? this.questions : List.unmodifiable(questions),
     autoAllow: autoAllow == null ? this.autoAllow : Set.unmodifiable(autoAllow),
+    allowKeys: allowKeys == null ? this.allowKeys : Map.unmodifiable({for (final e in allowKeys.entries) e.key: Set<String>.unmodifiable(e.value)}),
   );
 }
 
@@ -177,9 +181,28 @@ class PendingCardsNotifier extends Notifier<PendingCardsState> with _Snapshot<Pe
     final pending = rest.removeAt(0);
     var auto = _snap.autoAllow;
     final released = <PendingApproval>[];
+    final key = pending.request.alwaysKey;
+    if (allow && always && pending.request.allowAlways && key != null) {
+      // 带键的卡（MCP 工具）：只放开这一项，命令、删除照样逐次问。
+      final root = rootOf(pending.conversationId) ?? fallbackRoot;
+      final keys = {
+        ..._snap.allowKeys,
+        root: {...?_snap.allowKeys[root], key},
+      };
+      for (final other in rest.where((a) => a.request.alwaysKey == key && (rootOf(a.conversationId) ?? fallbackRoot) == root).toList()) {
+        rest.remove(other);
+        released.add(other);
+      }
+      _set(_snap.copyWith(approvals: rest, allowKeys: keys));
+      for (final other in released) {
+        other.completer.complete(true);
+      }
+      pending.completer.complete(true);
+      return;
+    }
     if (allow && always && pending.request.allowAlways) {
       auto = {...auto, rootOf(pending.conversationId) ?? fallbackRoot};
-      for (final other in rest.where((a) => a.request.allowAlways).toList()) {
+      for (final other in rest.where((a) => a.request.allowAlways && a.request.alwaysKey == null).toList()) {
         final root = rootOf(other.conversationId);
         if (root != null && auto.contains(root)) {
           rest.remove(other);
@@ -229,6 +252,18 @@ class PendingCardsNotifier extends Notifier<PendingCardsState> with _Snapshot<Pe
     if (!_snap.autoAllow.contains(rootId)) return;
     _set(_snap.copyWith(autoAllow: {..._snap.autoAllow}..remove(rootId)));
   }
+
+  /// 这段主对话里，这一项（[ApprovalRequest.alwaysKey]）是不是点过“本对话都允许”。
+  bool keyAllowed(String rootId, String key) => _snap.allowKeys[rootId]?.contains(key) ?? false;
+
+  /// 这段主对话里放开了几项。
+  int allowedKeyCount(String rootId) => _snap.allowKeys[rootId]?.length ?? 0;
+
+  /// 把按项放开的全部收回：恢复逐次询问。
+  void clearAllowKeys(String rootId) {
+    if (!_snap.allowKeys.containsKey(rootId)) return;
+    _set(_snap.copyWith(allowKeys: {..._snap.allowKeys}..remove(rootId)));
+  }
 }
 
 /// 某个工作区里等用户点的卡（按工作区分身）。
@@ -237,7 +272,7 @@ final pendingCardsProvider = NotifierProvider.family<PendingCardsNotifier, Pendi
 // ── 排队 / 插话 ───────────────────────────────────────
 
 class SendQueueState {
-  const SendQueueState({this.queue = const [], this.restoredDraft});
+  const SendQueueState({this.queue = const [], this.restoredDraft, this.paused = false});
 
   /// AI 生成时又发的消息（显示在输入框上方）。
   final List<QueuedMessage> queue;
@@ -245,8 +280,13 @@ class SendQueueState {
   /// 请求失败、用户消息被撤回时，要交还给输入框的文字。
   final String? restoredDraft;
 
-  SendQueueState copyWith({List<QueuedMessage>? queue, String? restoredDraft, bool clearDraft = false}) =>
-      SendQueueState(queue: queue == null ? this.queue : List.unmodifiable(queue), restoredDraft: clearDraft ? null : restoredDraft ?? this.restoredDraft);
+  /// 上一轮出错或被点了停止：排着的消息先不自动发，等用户点“继续发送”。队列空了就不算暂停。
+  final bool paused;
+
+  SendQueueState copyWith({List<QueuedMessage>? queue, String? restoredDraft, bool clearDraft = false, bool? paused}) {
+    final next = queue == null ? this.queue : List<QueuedMessage>.unmodifiable(queue);
+    return SendQueueState(queue: next, restoredDraft: clearDraft ? null : restoredDraft ?? this.restoredDraft, paused: next.isNotEmpty && (paused ?? this.paused));
+  }
 }
 
 class SendQueueNotifier extends Notifier<SendQueueState> with _Snapshot<SendQueueState> {
@@ -276,6 +316,18 @@ class SendQueueNotifier extends Notifier<SendQueueState> with _Snapshot<SendQueu
 
   void clear() {
     if (_snap.queue.isNotEmpty) _set(_snap.copyWith(queue: const []));
+  }
+
+  /// 暂停 / 恢复自动发送（队列是空的时候暂停不起来）。
+  void setPaused(bool value) {
+    if (_snap.paused != (value && _snap.queue.isNotEmpty)) _set(_snap.copyWith(paused: value));
+  }
+
+  /// 把 [msg] 换成 [next]（位置不变）。不在队里返回 false。
+  bool replace(QueuedMessage msg, QueuedMessage next) {
+    if (!_snap.queue.any((q) => identical(q, msg))) return false;
+    _set(_snap.copyWith(queue: [for (final q in _snap.queue) identical(q, msg) ? next : q]));
+    return true;
   }
 
   /// 把 [msg] 改成插话 / 改回排队。不在队里返回 null。

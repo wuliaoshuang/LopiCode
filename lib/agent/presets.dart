@@ -4,9 +4,15 @@ import 'package:lopicode/core/stores.dart';
 const Map<String, String> kToolLabels = {
   'list_files': '查看文件列表',
   'read_file': '读取文件',
+  'view_image': '查看图片',
   'write_file': '写入文件',
+  'edit_file': '局部修改文件',
   'delete_file': '删除文件',
   'run_command': '执行命令',
+  'start_background_command': '后台执行命令',
+  'read_background_output': '查看后台命令的输出',
+  'stop_background_command': '停止后台命令',
+  'list_background_commands': '查看后台命令清单',
   'lowcode_get_page': '读取低代码页面',
   'lowcode_update_page': '更新低代码页面',
   'backend_get_blocks': '读取后端积木',
@@ -21,6 +27,11 @@ const Map<String, String> kToolLabels = {
   'team_message': '给团队留言',
   'list_scheduled_tasks': '查看自动化任务',
   'schedule_task': '新建 / 修改自动化任务',
+  'memory_read': '读记忆',
+  'memory_search': '查记忆',
+  'memory_write': '记下 / 改写记忆',
+  'memory_delete': '删除记忆',
+  'conversation_search': '查历史对话',
 };
 
 /// Agent 预设：一套系统提示词 + 可用工具。

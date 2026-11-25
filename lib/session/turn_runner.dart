@@ -3,15 +3,19 @@
 import 'dart:io';
 
 import 'package:lopicode/agent/agent_runner.dart';
+import 'package:lopicode/agent/line_diff.dart';
 import 'package:lopicode/agent/quota.dart';
 import 'package:lopicode/agent/skills.dart';
 import 'package:lopicode/agent/usage.dart';
 import 'package:lopicode/session/chat_models.dart';
 import 'package:lopicode/session/conversation.dart';
+import 'package:lopicode/session/memory_consolidation.dart';
 import 'package:lopicode/session/session_core.dart';
 import 'package:lopicode/session/system_prompt.dart';
 import 'package:lopicode/session/toolbox_builder.dart';
+import 'package:lopicode/session/turn_changes.dart';
 import 'package:lopicode/session/turn_journal.dart';
+import 'package:lopicode/session/turn_keep_alive.dart';
 import 'package:lopicode/state/workspace_chat.dart';
 
 /// “要继续吗？”那张卡的两个回答。
@@ -38,6 +42,12 @@ class TurnRunner {
   final SessionCore core;
   final ToolboxBuilder toolbox;
 
+  /// 一轮结束后的记忆整理（设置里开了才做）。
+  late final MemoryConsolidator memory = MemoryConsolidator(core);
+
+  /// 每段正在跑的对话这一轮改过哪些文件（子代理改的也记进上级那一轮）。
+  final TurnChangeBook changes = TurnChangeBook();
+
   Future<TurnOutcome> execute(
     ChatRunNotifier run,
     String text, {
@@ -54,10 +64,13 @@ class TurnRunner {
     // 又开始新的一轮了：上一轮“没正常结束”的提示不用再挂着。
     core.clearInterrupted(run);
     final journal = core.journalOf(run.convId)..begin(text);
+    changes.begin(run.convId, parentId: run.conv.parentId);
     run.add(UserItem(text, images: [for (final i in images) core.hostPathOfAttachment('${i['path']}')]));
     convs?.update(run.convId, (c) => c.copyWith(updatedAt: DateTime.now()));
 
     final resolved = core.modelOf(run.conv);
+    // 记忆文件可能被她手改过：这一轮开始前重新读一遍，系统提示词里带的是最新的。
+    if (app.memory.enabled) await app.memory.refresh(core.project);
     // 额度到顶的拦截在 createChatClient 里（主对话、子代理、自动化都走这一个口子）
     final client = await app.createChatClient(resolved);
     final runner = AgentRunner(
@@ -79,6 +92,9 @@ class TurnRunner {
       maxSteps: core.maxSteps,
       // 到步数上限：有人在场就问要不要继续；没人在场（自动化任务和它派的子代理）直接停。
       confirmContinue: run.unattended ? null : (steps) => _askContinue(run, journal, steps),
+      // 后台命令结束了：只在本来就要调用模型的时候顺带告诉它（见 background_flow.dart）。
+      takeNotices: () => toolbox.background?.takeNotices(run, root) ?? const [],
+      returnNotices: (notices) => toolbox.background?.returnNotices(notices),
     );
     run.runner = runner;
     final turn = TurnUsage();
@@ -90,6 +106,7 @@ class TurnRunner {
     ThinkingItem? thinking;
     var last = '';
     var failed = false;
+    final keepAlive = TurnKeepAlive.start(core, run); // 后台保活 + 通知栏进度
     try {
       await for (final event in runner.send(text, images: images)) {
         switch (event) {
@@ -119,19 +136,22 @@ class TurnRunner {
             if (done != null) run.replace(done, done.copyWith(streaming: false));
             streaming = null;
             if (text.trim().isNotEmpty) last = text;
+          case NoticeInjected(:final notice):
+            run.add(NoticeItem(notice.label));
           case UserInjected(:final text):
             run.add(UserItem(text));
             if (identical(run, core.active)) queue.dropSteered(text);
           case ToolStarted(:final callId, :final name, :final arguments):
-            run.add(ToolItem(callId, name, arguments));
+            run.add(ToolItem(callId, name, arguments, startedAt: DateTime.now()));
             turn.steps.add(ToolStep(callId, name));
             toolClocks[callId] = Stopwatch()..start();
             journal.stepStarted(callId, name, arguments);
             // 这时候记录里已经有“模型要调这些工具”那条消息：先存一次，被关掉也知道做到哪了。
             core.saveMessagesLater(run);
-          case ToolFinished(:final callId, :final outcome):
+          case ToolFinished(:final callId, :final outcome, :final ms):
             final item = run.items.whereType<ToolItem>().lastWhere((t) => t.callId == callId);
-            run.replace(item, item.copyWith(result: outcome.text, ok: outcome.ok, denied: outcome.denied));
+            run.replace(item, item.copyWith(result: outcome.text, ok: outcome.ok, denied: outcome.denied, change: outcome.change?.slim, ms: ms));
+            changes.record(run.convId, outcome.change);
             if (outcome.changedFiles) core.filesChanged();
             turn.steps.whereType<ToolStep>().where((t) => t.callId == callId).lastOrNull
               ?..ms = toolClocks.remove(callId)?.elapsedMilliseconds
@@ -177,12 +197,18 @@ class TurnRunner {
       core.cards.dropOf({run.conv.id});
       run.setBusy(false);
       run.runner = null;
+      keepAlive.finish(failed: failed);
       turn.ms = clock.elapsedMilliseconds;
+      _recordFiles(run, changes.end(run.convId));
       _recordTurn(run, turn);
       // 存对话记录，同时把进行中记录标成“已结束”（做完 / 出错 / 点了停止都算正常收尾：下次打开不提示）。
       await Future.wait([core.saveRun(run), journal.finish()]);
+      // 这一轮里结束、却没赶上交给模型的后台命令：在聊天里提示一行，下次发消息时带上。
+      toolbox.background?.announce(run);
       core.releaseWhenIdle();
     }
+    // 记忆整理（默认关）：不等它，在后台另发一次请求；做不做、成不成都不影响这一轮。
+    memory.afterTurn(run, failed: failed, turn: turn, resolved: resolved);
     // 额度：对话结束后查一次余额（有节流）；到提醒线或到顶时说一声。
     if (resolved != null) {
       final note = await app.quota.afterRun(resolved.channel);
@@ -210,6 +236,13 @@ class TurnRunner {
     } finally {
       journal.setAwaitingContinue(false);
     }
+  }
+
+  /// 这一轮改过的文件：挂在这一轮最后一条消息上（跟着对话存盘），并在回复下方加一行。
+  void _recordFiles(ChatRunNotifier run, List<FileChange> files) {
+    if (files.isEmpty || run.messages.isEmpty || run.messages.last.containsKey('_files')) return;
+    run.messages.last['_files'] = [for (final f in files) f.toJson()];
+    run.add(ChangedFilesItem(files));
   }
 
   /// 把这一轮的用量记到对话上：累计进对话合计，并挂在这一轮最后一条消息上（跟着对话存盘）。

@@ -1,12 +1,17 @@
 import 'dart:io';
 
 import 'package:lopicode/agent/agent_tools.dart';
+import 'package:lopicode/agent/skill_scripts.dart';
 import 'package:lopicode/core/path_guard.dart';
 import 'package:lopicode/core/stores.dart';
 import 'package:path/path.dart' as p;
 
 class Skill {
-  Skill({required this.name, required this.description, required this.dir, required this.global, required this.enabled});
+  Skill({required this.name, required this.description, required this.dir, required this.global, required this.enabled, this.files = SkillFiles.none});
+
+  /// 技能目录里除了 SKILL.md 以外附带的文件（脚本和别的）。
+  final SkillFiles files;
+  List<String> get scripts => files.scripts;
 
   /// 文件夹名，也是 Agent 读取时用的名字。
   final String name;
@@ -105,7 +110,7 @@ class SkillStore {
       }
       final name = p.basename(e.path);
       final key = '${global ? 'g' : 'w'}:$name';
-      out.add(Skill(name: name, description: parse(text).description, dir: e.path, global: global, enabled: !disabled.contains(key)));
+      out.add(Skill(name: name, description: parse(text).description, dir: e.path, global: global, enabled: !disabled.contains(key), files: scanSkillFilesSync(e.path)));
     }
     return out;
   }
@@ -169,11 +174,13 @@ class SkillStore {
     return text.length > maxSkillChars ? '${text.substring(0, maxSkillChars)}\n…（太长，只显示前 $maxSkillChars 字符）' : text;
   }
 
-  /// 拼进系统提示词的技能清单（只有名字和描述）。
-  static String promptSection(List<Skill> skills) => skills.isEmpty ? '' : '可用的技能（需要时先用 read_skill 读全文，再照着做）：\n${skills.map((s) => '- ${s.name}：${s.description}').join('\n')}';
+  /// 拼进系统提示词的技能清单（只有名字和描述；带脚本的多一句“带 N 个脚本”，脚本在哪读全文时才说）。
+  static String promptSection(List<Skill> skills) =>
+      skills.isEmpty ? '' : '可用的技能（需要时先用 read_skill 读全文，再照着做）：\n${skills.map((s) => '- ${s.name}：${s.description}${s.scripts.isEmpty ? '' : '（带 ${s.scripts.length} 个脚本）'}').join('\n')}';
 
   /// `read_skill` 工具。没有开着的技能时返回 null（工具不出现）。
-  ExtraTool? tool(List<Skill> skills) => skills.isEmpty
+  /// [scriptEnv]：现在脚本能在哪跑（每次读的时候现问）；不给就不提脚本。
+  ExtraTool? tool(List<Skill> skills, {SkillScriptEnv Function()? scriptEnv}) => skills.isEmpty
       ? null
       : ExtraTool(
           spec: toolSpec(
@@ -189,7 +196,10 @@ class SkillStore {
             final name = AgentToolbox.argString(args, 'name').trim();
             final skill = skills.where((s) => s.name == name).firstOrNull;
             if (skill == null) return ToolOutcome('错误：没有叫 $name 的技能。可用的有：${skills.map((s) => s.name).join('、')}', ok: false);
-            return ToolOutcome(await readFull(skill));
+            final text = await readFull(skill);
+            // 附带的脚本现扫一遍（技能文件可能刚被改过），说明接在全文后面。
+            final note = scriptEnv == null ? '' : skillScriptNote(name: skill.name, hostDir: skill.dir, files: scanSkillFilesSync(skill.dir), env: scriptEnv());
+            return ToolOutcome('$text$note');
           },
         );
 }

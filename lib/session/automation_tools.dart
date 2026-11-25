@@ -65,15 +65,13 @@ List<ExtraTool> automationTools({required AutomationStore store, required Projec
       final next = rule.next(DateTime.now());
       if (next == null) return ToolOutcome('错误：这个时间已经过去了，不会再触发', ok: false);
       // 单独的确认卡：不走权限档位，也不吃“本对话都允许”——完全权限也代替不了。
-      final ok = await approve(
-        ApprovalRequest(
-          tool: 'schedule_task',
-          title: existing == null ? '新建自动化任务' : '修改自动化任务',
-          detail: automationCardText(title: title, instruction: instruction, rule: rule, next: next, workspace: project.name, permission: PermissionLevel.workspace),
-          allowAlways: false,
-        ),
+      final request = ApprovalRequest(
+        tool: 'schedule_task',
+        title: existing == null ? '新建自动化任务' : '修改自动化任务',
+        detail: automationCardText(title: title, instruction: instruction, rule: rule, next: next, workspace: project.name, permission: PermissionLevel.workspace),
+        allowAlways: false,
       );
-      if (!ok) return ToolOutcome('用户拒绝了这个自动化任务，没有保存。', ok: false, denied: true);
+      if (!await approve(request)) return ToolOutcome('用户拒绝了这个自动化任务，没有保存。${request.denyNote}', ok: false, denied: true);
       final saved = await store.upsert(id: existing?.id, title: title, instruction: instruction, workspaceId: project.id, rule: rule);
       return ToolOutcome('已${existing == null ? '新建' : '修改'}自动化任务 ${saved.id}「${saved.title}」：${rule.describe()}。下一次触发：${formatLocalTime(next, rule.tzOffsetMinutes)}。只有 App 正在运行时才会触发。');
     },

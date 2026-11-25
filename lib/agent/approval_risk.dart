@@ -102,6 +102,7 @@ ApprovalRisk approvalRisk(ApprovalRequest request) {
     case 'run_command':
       return commandRisk(request.detail);
     default:
+      if (request.alwaysKey?.startsWith('mcp:') ?? false) return const ApprovalRisk(RiskLevel.caution, '会把下面的参数发给外部服务器，由它来执行');
       return const ApprovalRisk(RiskLevel.caution, '执行前请核对内容');
   }
 }

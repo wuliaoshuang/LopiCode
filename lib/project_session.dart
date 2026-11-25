@@ -13,6 +13,7 @@ import 'package:lopicode/agent/agent_tools.dart';
 import 'package:lopicode/agent/automation.dart';
 import 'package:lopicode/agent/command_output_store.dart';
 import 'package:lopicode/agent/command_runner.dart';
+import 'package:lopicode/agent/context_segments.dart';
 import 'package:lopicode/agent/model_config.dart';
 import 'package:lopicode/agent/presets.dart';
 import 'package:lopicode/agent/team.dart';
@@ -24,8 +25,10 @@ import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/preview/preview_server.dart';
 import 'package:lopicode/runtime/linux_shell_backend.dart';
 import 'package:lopicode/session/attachments.dart' as attachments;
+import 'package:lopicode/session/background_flow.dart';
 import 'package:lopicode/session/chat_export.dart';
 import 'package:lopicode/session/chat_models.dart';
+import 'package:lopicode/session/compact_flow.dart';
 import 'package:lopicode/session/conversation.dart';
 import 'package:lopicode/session/send_flow.dart';
 import 'package:lopicode/session/session_core.dart';
@@ -37,6 +40,7 @@ import 'package:lopicode/session/turn_runner.dart';
 import 'package:lopicode/ssh/ssh_config.dart';
 import 'package:lopicode/ssh/ssh_connector.dart';
 import 'package:lopicode/state/backend_run.dart';
+import 'package:lopicode/state/workspace_background.dart';
 import 'package:lopicode/state/workspace_chat.dart';
 import 'package:lopicode/state/workspace_files.dart';
 import 'package:lopicode/state/workspace_preview.dart';
@@ -64,7 +68,8 @@ class ProjectSession {
 
   // ── 引擎的几块（用到才建；互相要用的地方用函数接，免得谁拿着谁）────────
   late final SessionCore _core = SessionCore(this);
-  late final ToolboxBuilder _toolbox = ToolboxBuilder(_core, spawnTool: (parent, root, skills) => _subagents.tool(parent, root, skills));
+  late final BackgroundFlow _background = BackgroundFlow(_core);
+  late final ToolboxBuilder _toolbox = ToolboxBuilder(_core, spawnTool: (parent, root, skills) => _subagents.tool(parent, root, skills), background: _background);
   late final TurnRunner _turns = TurnRunner(_core, toolbox: _toolbox);
   late final Subagents _subagents = Subagents(_core, execute: _turns.execute);
   late final SendFlow _sending = SendFlow(_core, execute: _turns.execute, loadChat: loadChat);
@@ -175,6 +180,10 @@ class ProjectSession {
 
   void clearAutoAllow() => _core.cards.clearAutoAllow(activeConversationId);
 
+  /// 当前对话里有几个 MCP 工具点过“本对话都允许”；[clearMcpAllow] 全部收回。
+  int get mcpAllowCount => _core.cards.allowedKeyCount(rootOf(activeConversation).id);
+  void clearMcpAllow() => _core.cards.clearAllowKeys(rootOf(activeConversation).id);
+
   // ── 读对话、开新对话、切换、删除 ──────────────────────
   Future<void>? _loading;
 
@@ -185,6 +194,7 @@ class ProjectSession {
     await app.ready();
     await _core.convs?.load();
     await _core.ensureLoaded(_active);
+    await _background.load(); // 上次留下的后台命令：标成“已中断”，在聊天里提示一行
     // 老版本只有一个 chat.json、没有标题：从第一句话补一个。
     if (activeConversation.title.isEmpty) {
       final first = _messages.where((m) => m['role'] == 'user').firstOrNull;
@@ -211,6 +221,7 @@ class ProjectSession {
     _core.convs?.activate(id);
     _core.queue.clear();
     await _core.ensureLoaded(_active);
+    _background.announce(_active);
   }
 
   /// 子代理谱系：[rootId] 这段对话派出的全部子代理（含子代理再派出的），按派出顺序。
@@ -244,7 +255,9 @@ class ProjectSession {
         }
       }
       _core.dropBoard(d);
+      await _background.dropConversation(d);
       _core.cards.clearAutoAllow(d);
+      _core.cards.clearAllowKeys(d);
       if (!app.disposed) app.container.invalidate(chatRunProvider((this, d)));
     }
     _core.convs?.removeAll(doomed.toSet());
@@ -267,6 +280,12 @@ class ProjectSession {
     },
     fallbackRoot: activeConversationId,
   );
+
+  /// 拒绝最前面那张确认卡，并带一句原因（原因会跟在“用户拒绝……”后面告诉模型）。和点“拒绝”一样：不执行。
+  void rejectApproval(String reason) {
+    pendingApproval?.request.denyReason = reason;
+    resolveApproval(false);
+  }
 
   void answerQuestion(String answer) => _core.cards.answerQuestion(answer);
 
@@ -341,6 +360,14 @@ class ProjectSession {
     return (system: estimateTextTokens(systemPromptFor(_core, conv, root, skills)), tools: estimateTextTokens(jsonEncode(box.specs)), messages: AgentRunner.estimateTokens(_messages));
   }
 
+  /// 上下文占用分段（估算）：系统提示词 / 工具定义 / 对话消息 / 工具结果 / 剩余。没选模型（不知道上下文多长）是 null。
+  Future<ContextSegments?> contextSegments() async {
+    final limit = contextUsage?.limit;
+    if (limit == null) return null;
+    final b = await contextBreakdown();
+    return ContextSegments.of(system: b.system, tools: b.tools, messages: _messages, limit: limit);
+  }
+
   // ── 发送、插话、排队 ─────────────────────────────────
   /// AI 生成时又发的消息（显示在输入框上方）。
   List<QueuedMessage> get queue => _core.queue.current.queue;
@@ -362,6 +389,15 @@ class ProjectSession {
 
   /// 排队里的一条：撤回（文字交还输入框）。
   void withdrawQueued(QueuedMessage msg) => _sending.withdrawQueued(msg);
+
+  /// 上一轮出错或被停止后，排着的消息先不自动发（等她点“继续发送”）。
+  bool get queuePaused => _core.queue.current.paused;
+
+  /// 排队消息的编辑 / 删除 / 继续发送 / 清空（规矩在 lib/session/send_flow.dart）。
+  void editQueued(QueuedMessage msg, String text) => _sending.editQueued(msg, text);
+  void deleteQueued(QueuedMessage msg) => _sending.deleteQueued(msg);
+  void resumeQueue() => _sending.resumeQueue();
+  void clearQueue() => _sending.clearQueue();
 
   void stopAgent() => _sending.stop();
 
@@ -407,7 +443,7 @@ class ProjectSession {
     String? error;
     try {
       final before = AgentRunner.estimateTokens(run.messages);
-      error = await compactHistory(await app.createChatClient(modelOf(run.conv)), run.messages);
+      error = await compactRun(_core, _toolbox, run);
       if (error == null) {
         _core.rebuildItems(run); // 摘要那条会显示成“已压缩较早的对话”，点开能看
         run.add(NoticeItem('已把之前的对话压缩成摘要（估算从 ${before ~/ 1000}K 降到 ${AgentRunner.estimateTokens(run.messages) ~/ 1000}K）。原来的逐条记录不再保留。'));
@@ -440,6 +476,7 @@ class ProjectSession {
       app.container.invalidate(terminalsProvider(this)); // 会话的进程在这里收掉
       app.container.invalidate(previewProvider(this)); // 预览服务器在这里停掉
       app.container.invalidate(backendRunProvider(this)); // 还在等的后端“运行”作废
+      app.container.invalidate(backgroundTasksProvider(this)); // 后台命令在这里全部停掉
     }
   }
 }

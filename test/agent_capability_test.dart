@@ -9,6 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lopicode/agent/agent_runner.dart';
 import 'package:lopicode/agent/agent_tools.dart';
 import 'package:lopicode/agent/chat_client.dart';
+import 'package:lopicode/agent/command_output_store.dart';
 import 'package:lopicode/agent/loop_guard.dart';
 import 'package:lopicode/agent/todos.dart';
 import 'package:lopicode/core/path_guard.dart';
@@ -252,8 +253,12 @@ void main() {
       );
       final out = finished(await runner.send('来').toList()).single.outcome;
       expect(out.ok, isTrue);
-      expect(out.text.length, lessThan(kMaxToolResultChars + 200));
+      // 2026-11-25：超长结果现在全文转存成文件，回给模型的多了“存在哪、怎么接着看”那段话，所以余量从 200 放到 400。
+      expect(out.text.length, lessThan(kMaxToolResultChars + 400));
       expect(out.text, allOf(startsWith('BEGIN'), endsWith('END'), contains('中间省略')));
+      final rel = spilledOutputPathOf(out.text);
+      expect(rel, isNotNull, reason: '全文存成了文件，路径写在结果里');
+      expect(File(p.join(tmp.path, 'proj', rel)).readAsStringSync(), 'BEGIN${'x' * (kMaxToolResultChars * 2)}END');
     });
 
     test('read_file 按行号读一段；越界、行号不合法都给明确的错', () async {

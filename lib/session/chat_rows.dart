@@ -8,6 +8,7 @@
 import 'dart:convert';
 
 import 'package:lopicode/agent/todos.dart';
+import 'package:lopicode/session/ask_user.dart';
 import 'package:lopicode/session/chat_models.dart';
 
 /// 聊天页的一行。
@@ -91,11 +92,12 @@ void _segment(List<ChatItem> items, int from, int to, List<ChatRow> rows, {requi
 enum StepKind { read, look, edit, delete, command, search, agent, ask, plan, other }
 
 StepKind stepKindOf(String name) => switch (name) {
-  'read_file' || 'lowcode_get_page' || 'backend_get_blocks' => StepKind.read,
+  'read_file' || 'view_image' || 'lowcode_get_page' || 'backend_get_blocks' => StepKind.read,
+  'memory_read' || 'memory_search' || 'conversation_search' => StepKind.look,
   'list_files' || 'read_skill' || 'team_board' || 'list_scheduled_tasks' => StepKind.look,
-  'write_file' || 'lowcode_update_page' || 'backend_update_blocks' => StepKind.edit,
+  'write_file' || 'edit_file' || 'lowcode_update_page' || 'backend_update_blocks' => StepKind.edit,
   'delete_file' => StepKind.delete,
-  'run_command' => StepKind.command,
+  'run_command' || 'start_background_command' => StepKind.command,
   'web_search' => StepKind.search,
   'spawn_agent' => StepKind.agent,
   'ask_user' => StepKind.ask,
@@ -114,20 +116,28 @@ Map<String, dynamic> _argsOf(String rawArgs) {
 }
 
 /// 一次工具调用拆成“动作 + 对象”，例如（读取，lib/main.dart）。对象可能为空。
-(String verb, String target) stepLabel(String name, String rawArgs) {
+/// [result]（工具的结果，可不给）只用来给“后台启动”补上任务号。
+(String verb, String target) stepLabel(String name, String rawArgs, {String? result}) {
   final args = _argsOf(rawArgs);
   String a(String key) => '${args[key] ?? ''}'.trim();
+  final taskNo = RegExp(r'^后台命令 #(\d+)').firstMatch(result ?? '')?.group(1);
   return switch (name) {
     'list_files' => ('查看文件列表', a('path')),
     'read_file' => ('读取', a('path')),
+    'view_image' => ('查看图片', a('path')),
     'write_file' => ('写入', a('path')),
+    'edit_file' => ('修改', a('path')),
     'delete_file' => ('删除', a('path')),
     'run_command' => ('执行', a('command')),
+    'start_background_command' => ('后台启动', taskNo == null ? a('command') : '${a('command')} · #$taskNo'),
+    'read_background_output' => ('查看后台命令输出', a('id').isEmpty ? '' : '#${a('id')}'),
+    'stop_background_command' => ('停止后台命令', a('id').isEmpty ? '' : '#${a('id')}'),
+    'list_background_commands' => ('查看后台命令', ''),
     'lowcode_get_page' => ('读取低代码页面', ''),
     'lowcode_update_page' => ('更新低代码页面', ''),
     'backend_get_blocks' => ('读取后端积木', ''),
     'backend_update_blocks' => ('更新后端积木', ''),
-    'ask_user' => ('向你提问', a('question')),
+    'ask_user' => ('向你提问', askSummary(args)),
     'web_search' => ('联网搜索', a('query')),
     'read_skill' => ('读技能', a('name')),
     'spawn_agent' => (a('name').isEmpty ? '派子代理' : '派子代理“${a('name')}”', a('task')),
@@ -137,6 +147,12 @@ Map<String, dynamic> _argsOf(String rawArgs) {
     'list_scheduled_tasks' => ('查看自动化任务', ''),
     'schedule_task' => ('安排自动化任务', a('title')),
     'update_todos' => ('更新待办清单', ''),
+    'memory_read' => (a('title').isEmpty ? '查看记忆清单' : '读记忆', a('title')),
+    'memory_search' => ('查记忆', a('query')),
+    'memory_write' => ('记住了', a('title')),
+    'memory_delete' => ('从记忆里删掉', a('title')),
+    'conversation_search' => ('查历史对话', a('query')),
+    _ when name.startsWith('mcp__') => ('调用 MCP 工具', name.substring(5).replaceFirst('__', ' › ')),
     _ => (name, ''),
   };
 }
@@ -160,6 +176,7 @@ class StepSummary {
     required this.failed,
     required this.denied,
     required this.running,
+    this.remembered = 0,
   });
 
   final int total;
@@ -173,8 +190,18 @@ class StepSummary {
   final int denied;
   final int running;
 
+  /// 记进记忆的条数（成功的 memory_write）。
+  final int remembered;
+
   /// “读 3 个文件 · 改 1 个文件 · 1 条命令”这样的几段；一段都没有时为空。
-  List<String> get parts => [if (read > 0) '读 $read 个文件', if (edited > 0) '改 $edited 个文件', if (commands > 0) '$commands 条命令', if (searches > 0) '搜索 $searches 次', if (agents > 0) '$agents 个子代理'];
+  List<String> get parts => [
+    if (read > 0) '读 $read 个文件',
+    if (edited > 0) '改 $edited 个文件',
+    if (commands > 0) '$commands 条命令',
+    if (searches > 0) '搜索 $searches 次',
+    if (agents > 0) '$agents 个子代理',
+    if (remembered > 0) '记住 $remembered 条',
+  ];
 
   /// 折叠时那一行：`执行了 5 步 · 读 3 个文件 · 改 1 个文件 · 1 条命令`。
   String get line => ['执行了 $total 步', ...parts].join(' · ');
@@ -183,7 +210,7 @@ class StepSummary {
 StepSummary summarizeSteps(List<ToolItem> tools) {
   final read = <String>{};
   final edited = <String>{};
-  var commands = 0, searches = 0, agents = 0, other = 0, failed = 0, denied = 0, running = 0;
+  var commands = 0, searches = 0, agents = 0, other = 0, failed = 0, denied = 0, running = 0, remembered = 0;
   for (final t in tools) {
     if (t.running) running++;
     if (t.denied) {
@@ -192,6 +219,7 @@ StepSummary summarizeSteps(List<ToolItem> tools) {
       failed++;
     }
     final good = t.running || (t.ok && !t.denied);
+    if (t.name == 'memory_write' && !t.running && t.ok && !t.denied) remembered++;
     final args = _argsOf(t.arguments);
     // 没写路径的（低代码页面、文件列表）按“工具名”算一个，免得同一个东西数好几次。
     final path = '${args['path'] ?? ''}'.trim().isEmpty ? '\u0000${t.name}' : '${args['path']}'.trim();
@@ -221,6 +249,7 @@ StepSummary summarizeSteps(List<ToolItem> tools) {
     failed: failed,
     denied: denied,
     running: running,
+    remembered: remembered,
   );
 }
 

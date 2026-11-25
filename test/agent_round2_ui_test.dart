@@ -190,7 +190,7 @@ void main() {
       await session.sendToAgent('再做一件事');
       expect(log.length, 2, reason: '一次压缩 + 一次正常回复');
       expect(log.first.tools, isEmpty);
-      expect(session.chat.whereType<CompactionItem>().single.summary, '摘要：前面聊了六轮');
+      expect(session.chat.whereType<CompactionItem>().single.summary, startsWith('摘要：前面聊了六轮'), reason: '模型写的原样在前，漏写的栏目由代码接在后面');
       expect(session.chat.whereType<AssistantItem>().last.text, '接着做完了。', reason: '这一轮没中断');
       // 用量：这一轮两次请求，其中一次标着“压缩”，都算进合计
       final usage = session.chat.whereType<UsageItem>().last.turn;

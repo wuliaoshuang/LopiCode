@@ -1,5 +1,7 @@
 // 从接口格式的消息记录重建聊天页显示的条目。纯计算：不读盘、不碰状态。
+import 'package:lopicode/agent/agent_runner.dart' show kAppNoticeMark;
 import 'package:lopicode/agent/auto_compact.dart';
+import 'package:lopicode/agent/line_diff.dart';
 import 'package:lopicode/agent/usage.dart';
 import 'package:lopicode/session/chat_models.dart';
 
@@ -14,6 +16,9 @@ List<ChatItem> chatItemsFromMessages(List<Map<String, dynamic>> messages, {requi
       case 'user' when m[kCompactMark] == true:
         // 自动 / 手动压缩留下的摘要：显示成一行“已压缩较早的对话”，点开看摘要。
         items.add(CompactionItem(compactSummaryOf(m)));
+      case 'user' when m[kAppNoticeMark] is String:
+        // 应用自己告诉模型的事（后台命令结束了……）：显示成一行提示，不是用户说的话。
+        items.add(NoticeItem(m[kAppNoticeMark] as String));
       case 'user':
         final images = m['_images'];
         items.add(
@@ -53,9 +58,20 @@ List<ChatItem> chatItemsFromMessages(List<Map<String, dynamic>> messages, {requi
         final at = toolAt['${m['tool_call_id']}'];
         if (at != null) {
           final result = '${m['content'] ?? ''}';
-          items[at] = (items[at] as ToolItem).copyWith(result: result, ok: !result.startsWith('错误') && !result.startsWith('用户拒绝'), denied: result.startsWith('用户拒绝'));
+          // `_diff`：这一步的改动对比；`_ms`：这一步用了多久（旧记录都没有；类型不对就当没有）。
+          final ms = m['_ms'];
+          items[at] = (items[at] as ToolItem).copyWith(
+            result: result,
+            ok: !result.startsWith('错误') && !result.startsWith('用户拒绝'),
+            denied: result.startsWith('用户拒绝'),
+            change: FileChange.tryParse(m['_diff']),
+            ms: ms is int && ms >= 0 ? ms : null,
+          );
         }
     }
+    // `_files`：这一轮改过的文件（旧记录没有）。排在用量脚注前面。
+    final files = parseFileChanges(m['_files']);
+    if (files.isNotEmpty) items.add(ChangedFilesItem(files));
     final turn = TurnUsage.fromJson(m['_usage']);
     if (turn != null) items.add(UsageItem(turn));
   }

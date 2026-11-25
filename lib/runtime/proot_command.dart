@@ -38,6 +38,7 @@ const String guestPath = '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbi
 ///
 /// 参数都对照 PRoot 源码里的选项表核对过（termux/proot，src/cli/proot.h）：
 /// - `-r` 指定根目录；`-b 主机路径:环境里的路径` 把手机上的目录挂进去；`-w` 是进去后的当前目录；
+///   （`-b` 没有“只读”的写法——2026-11-25 对照安装包里这一版 PRoot 自带的帮助核对过——所以技能目录挂的是副本，见 lib/agent/skill_mirror.dart）
 /// - `-0` 让当前用户看起来是 root（apt 需要）；
 /// - `--link2symlink` 用符号链接顶替硬链接（应用目录里建不了硬链接，dpkg 会用到）；
 /// - `--kill-on-exit` 主命令退出时把它留下的子进程一起结束。
@@ -65,6 +66,7 @@ ProotCommand buildProotCommand({
   String term = 'xterm-256color',
   bool noSeccomp = false,
   Map<String, String> guestEnv = const {},
+  List<(String host, String guest)> extraBinds = const [],
 }) {
   final env = <String, String>{'HOME': '/root', 'USER': 'root', 'LOGNAME': 'root', 'SHELL': '/bin/bash', 'TERM': term, 'LANG': 'C.UTF-8', 'PATH': guestPath, 'TMPDIR': '/tmp', ...guestEnv};
   return ProotCommand(
@@ -81,6 +83,8 @@ ProotCommand buildProotCommand({
       '-b', '$rootfs/tmp:/dev/shm',
       // [guestCwd]：工作区本来就是环境里的目录，不用挂载，直接进去。
       if (projectDir != null && guestCwd == null) ...['-b', '$projectDir:$guestWorkspace'],
+      // 额外挂进去的目录（技能镜像挂在 /skills）。每个 `主机路径:环境路径` 是单独一个参数，不经过 shell，路径里有空格、中文都没关系。
+      for (final (host, guest) in extraBinds) ...['-b', '$host:$guest'],
       '-w', guestCwd ?? (projectDir != null ? guestWorkspace : '/root'),
       '/usr/bin/env', '-i',
       for (final e in env.entries) '${e.key}=${e.value}',

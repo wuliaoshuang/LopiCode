@@ -9,6 +9,7 @@ import 'dart:io';
 import 'package:lopicode/agent/agent_runner.dart';
 import 'package:lopicode/agent/agent_tools.dart';
 import 'package:lopicode/agent/auto_compact.dart';
+import 'package:lopicode/agent/memory_store.dart';
 import 'package:lopicode/agent/model_config.dart';
 import 'package:lopicode/agent/presets.dart';
 import 'package:lopicode/agent/team.dart';
@@ -188,6 +189,16 @@ class SessionCore {
       // 存不了就算了：不影响当前对话
     }
     await saveIndex();
+  }
+
+  // ── 记忆 ─────────────────────────────────────────────
+  /// 这个工作区的项目记忆；.lopicode/memory 被换成指到外面的符号链接时是 null（不读不写）。
+  MemoryStore? get projectMemory {
+    try {
+      return app.memory.project(project);
+    } on PathGuardException {
+      return null;
+    }
   }
 
   // ── Agent 的几项设置 ─────────────────────────────────

@@ -3,6 +3,8 @@ import 'dart:io';
 
 import 'package:lopicode/agent/command_output_store.dart';
 import 'package:lopicode/agent/command_runner.dart';
+import 'package:lopicode/agent/edit_file_tool.dart';
+import 'package:lopicode/agent/line_diff.dart';
 import 'package:lopicode/core/path_guard.dart';
 import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/core/templates.dart';
@@ -13,19 +15,44 @@ import 'package:lopicode/lowcode/model.dart';
 
 /// 需要用户点头的一次操作（显示成对话里的确认卡）。
 class ApprovalRequest {
-  ApprovalRequest({required this.tool, required this.title, required this.detail, this.allowAlways = true});
+  ApprovalRequest({required this.tool, required this.title, required this.detail, this.allowAlways = true, this.preview, this.alwaysKey, this.alwaysNote});
+
+  /// 这次操作会把文件改成什么样（确认卡上可以先看对比）；没有就是 null。
+  final FileChange? preview;
+
+  /// 不为空时，“本对话都允许”只记这一个键（比如某个 MCP 服务器的某个工具），不会把命令、删除也一起放开。
+  final String? alwaysKey;
+
+  /// 点“本对话都允许”后、二次确认前显示的说明；为空用默认那句。
+  final String? alwaysNote;
 
   /// 这类确认能不能用“本对话都允许”带过。自动化任务的确认卡不能。
   final bool allowAlways;
   final String tool;
   final String title;
   final String detail;
+
+  /// 用户点“拒绝”时顺手写的一句原因（没写是 null）。只在拒绝时有意义：不影响“执行还是不执行”。
+  String? denyReason;
+
+  /// 拼在“用户拒绝……”后面告诉模型的那一句；没写原因是空串（和以前一样）。
+  String get denyNote {
+    final reason = (denyReason ?? '').replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (reason.isEmpty) return '';
+    return '用户写的原因：${reason.length > kDenyReasonMaxChars ? '${reason.substring(0, kDenyReasonMaxChars)}…' : reason}';
+  }
 }
+
+/// 拒绝原因最多带给模型多少个字。
+const int kDenyReasonMaxChars = 200;
 
 typedef ApprovalRequester = Future<bool> Function(ApprovalRequest request);
 
 class ToolOutcome {
-  ToolOutcome(this.text, {this.ok = true, this.denied = false, this.changedFiles = false});
+  ToolOutcome(this.text, {this.ok = true, this.denied = false, this.changedFiles = false, this.change, this.images = const []});
+
+  /// 这一步把哪个文件改成了什么样（给界面画对比、记“这次改过的文件”；不发给模型）。
+  final FileChange? change;
   final String text;
   final bool ok;
   final bool denied;
@@ -33,8 +60,11 @@ class ToolOutcome {
   /// 是否改动了项目文件（界面据此刷新文件树和预览）。
   final bool changedFiles;
 
+  /// 要交给模型看的图片（view_image）：每项 `{path, mime, bytes}`，只有路径和大小，不带图片内容。
+  final List<Map<String, dynamic>> images;
+
   /// 换一段文字，别的不变。
-  ToolOutcome withText(String text) => ToolOutcome(text, ok: ok, denied: denied, changedFiles: changedFiles);
+  ToolOutcome withText(String text) => ToolOutcome(text, ok: ok, denied: denied, changedFiles: changedFiles, change: change, images: images);
 }
 
 /// 权限三档。
@@ -131,6 +161,12 @@ class AgentToolbox {
 
   final List<ExtraTool> extras;
 
+  /// 这一轮被用户叫停时完成的信号（执行器接上来的）：正在跑的命令据此中途结束。
+  Future<void> Function()? stopSignal;
+
+  /// 和 run_command 同一套确认规矩（完全权限 / “本对话都允许”不问，其余出确认卡）。给“后台执行命令”用。
+  Future<bool> approveCommand(ApprovalRequest request) => _approved(request);
+
   static const Set<String> approvalRequired = {'run_command', 'delete_file'};
   static const int maxReadChars = 60000;
   static const int maxWriteChars = 1000000;
@@ -141,6 +177,7 @@ class AgentToolbox {
     'list_files': ToolKind.read,
     'read_file': ToolKind.read,
     'write_file': ToolKind.write,
+    kEditFileTool: ToolKind.write,
     'delete_file': ToolKind.write,
     'run_command': ToolKind.exec,
     'lowcode_get_page': ToolKind.read,
@@ -198,6 +235,7 @@ class AgentToolbox {
       },
       ['path', 'content'],
     ),
+    editFileSpec,
     _fn(
       'delete_file',
       '删除项目里的一个文件或目录。需要用户确认。',
@@ -240,6 +278,8 @@ class AgentToolbox {
           return await _read(argString(args, 'path'), start: _argLine(args, 'start_line'), end: _argLine(args, 'end_line'));
         case 'write_file':
           return await _write(argString(args, 'path'), argString(args, 'content', allowEmpty: true));
+        case kEditFileTool:
+          return await runEditFile(guard, args, checkScope: _checkScope);
         case 'delete_file':
           return await _delete(argString(args, 'path'));
         case 'run_command':
@@ -339,9 +379,10 @@ class AgentToolbox {
     }
     if (await Directory(full).exists()) throw ToolArgError('$path 是一个目录');
     final file = File(full);
+    final before = await FileSnapshot.of(file);
     await file.parent.create(recursive: true);
     await file.writeAsString(content);
-    return ToolOutcome('已写入 ${guard.relative(full)}（${content.length} 字符）', changedFiles: true);
+    return ToolOutcome('已写入 ${guard.relative(full)}（${content.length} 字符）', changedFiles: true, change: before.changeTo(guard.relative(full), content));
   }
 
   Future<ToolOutcome> _delete(String path) async {
@@ -354,15 +395,17 @@ class AgentToolbox {
     }
     final rel = guard.relative(full);
     final isDir = type == FileSystemEntityType.directory;
-    if (!await _approved(ApprovalRequest(tool: 'delete_file', title: isDir ? '删除目录' : '删除文件', detail: rel))) {
-      return ToolOutcome('用户拒绝了这次删除，文件没有被改动。', ok: false, denied: true);
+    final gone = isDir ? dirDeleted(rel) : (await FileSnapshot.of(File(full))).changeTo(rel, null);
+    final request = ApprovalRequest(tool: 'delete_file', title: isDir ? '删除目录' : '删除文件', detail: rel, preview: gone.slim);
+    if (!await _approved(request)) {
+      return ToolOutcome('用户拒绝了这次删除，文件没有被改动。${request.denyNote}', ok: false, denied: true);
     }
     if (isDir) {
       await Directory(full).delete(recursive: true);
     } else {
       await File(full).delete();
     }
-    return ToolOutcome('已删除 $rel', changedFiles: true);
+    return ToolOutcome('已删除 $rel', changedFiles: true, change: gone);
   }
 
   Future<ToolOutcome> _run(String command) async {
@@ -370,19 +413,27 @@ class AgentToolbox {
     final Object env = runner;
     final unavailable = env is HasCommandAvailability ? env.unavailableReason : null;
     if (unavailable != null) return ToolOutcome('命令没有执行：$unavailable', ok: false);
-    if (!await _approved(ApprovalRequest(tool: 'run_command', title: '执行命令', detail: command))) {
-      return ToolOutcome('用户拒绝执行这条命令，命令没有运行。', ok: false, denied: true);
+    final request = ApprovalRequest(tool: 'run_command', title: '执行命令', detail: command);
+    if (!await _approved(request)) {
+      return ToolOutcome('用户拒绝执行这条命令，命令没有运行。${request.denyNote}', ok: false, denied: true);
     }
     final Object r = runner;
     final timeout = r is HasCommandTimeout ? r.commandTimeout : commandTimeout;
-    final result = await runner.run(command, workingDirectory: guard.root, timeout: timeout);
+    final stop = stopSignal?.call();
+    final result = r is HasCommandStop && stop != null
+        ? await r.runStoppable(command, workingDirectory: guard.root, timeout: timeout, stop: stop)
+        : await runner.run(command, workingDirectory: guard.root, timeout: timeout);
     var output = result.output;
     if (output.length > maxOutputChars) {
       // 太长：完整的转存成文件，回给模型开头 + 结尾 + 文件路径（它可以用 read_file 按行分段读）。
       output = spilledOutputText(output, await CommandOutputStore(guard).save(command, output));
     }
-    final status = result.timedOut ? '超过 ${timeout.inSeconds} 秒，已强制结束' : '退出码 ${result.exitCode}';
-    return ToolOutcome('$status\n${output.isEmpty ? '（没有输出）' : output}', ok: !result.timedOut && result.exitCode == 0, changedFiles: true);
+    final status = result.stopped
+        ? '用户点了停止，命令已中途结束（它起的进程也一起结束了）'
+        : result.timedOut
+        ? '超过 ${timeout.inSeconds} 秒，已强制结束'
+        : '退出码 ${result.exitCode}';
+    return ToolOutcome('$status\n${output.isEmpty ? '（没有输出）' : output}', ok: !result.stopped && !result.timedOut && result.exitCode == 0, changedFiles: true);
   }
 
   Future<ToolOutcome> _updatePage(Object? page) async {

@@ -1,6 +1,8 @@
 import 'dart:io';
 
 import 'package:lopicode/agent/command_runner.dart';
+import 'package:lopicode/agent/process_tree.dart';
+import 'package:lopicode/agent/skill_scripts.dart';
 import 'package:lopicode/runtime/linux_runtime.dart';
 import 'package:lopicode/runtime/proot_command.dart';
 
@@ -12,7 +14,7 @@ import 'package:lopicode/runtime/proot_command.dart';
 /// - 桌面 / 宿主机测试：和以前一样用本机 shell（开发调试用）。
 ///
 /// 要不要先问用户，由调用它的工具层决定，这里不管。
-class LinuxCommandRunner implements CommandRunner, HasCommandTimeout, HasCommandAvailability {
+class LinuxCommandRunner implements CommandRunner, HasCommandTimeout, HasCommandAvailability, HasCommandStop, HasBackgroundStart, HasSkillMount {
   LinuxCommandRunner(this.runtime, {this.onOutput, this.guestCwd}) : _local = LocalShellRunner(onOutput: onOutput);
 
   final LinuxRuntime runtime;
@@ -25,6 +27,14 @@ class LinuxCommandRunner implements CommandRunner, HasCommandTimeout, HasCommand
   /// 不许用本机 shell 的平台上，命令是不是只能进 Ubuntu。
   bool get _linuxOnly => !runtime.localShellAllowed;
   bool get _useLinux => _linuxOnly ? runtime.usable : runtime.shouldUseLinux;
+
+  /// 命令进 Ubuntu 跑时，这个工作区的技能镜像挂在环境里的哪（没有技能 / 没挂上是 null）。
+  @override
+  String? skillsGuestDirFor(String workingDirectory) => _useLinux && runtime.skillsHostDirFor(workingDirectory) != null ? kGuestSkillsDir : null;
+
+  /// 命令现在是进 Ubuntu 跑的：技能脚本只能从 /skills 跑，没挂上就是跑不了。
+  @override
+  bool get skillMountRequired => _useLinux;
 
   /// 环境不能用时给模型（也会原样显示给用户）的说明；能用返回 null。
   @override
@@ -48,17 +58,48 @@ class LinuxCommandRunner implements CommandRunner, HasCommandTimeout, HasCommand
   @override
   Duration get commandTimeout => _useLinux ? const Duration(minutes: 5) : const Duration(seconds: 60);
 
+  /// Ubuntu 里执行 [command] 的完整命令行。命令前面套一层 `env 记号=…`：记号跟着命令起的所有进程走，
+  /// 停止、应用重开后清理都凭它认（见 lib/agent/process_tree.dart）。
+  ProotCommand _proot(String command, String workingDirectory, String tag) =>
+      runtime.prootCommand(guestCommand: ['/usr/bin/env', '$kCommandTagEnv=$tag', ...guestRun(command)], projectDir: workingDirectory, guestCwd: guestCwd, term: 'dumb');
+
   @override
-  Future<CommandResult> run(String command, {required String workingDirectory, Duration timeout = const Duration(seconds: 60)}) async {
+  Future<CommandResult> run(String command, {required String workingDirectory, Duration timeout = const Duration(seconds: 60)}) => _run(command, workingDirectory, timeout, null);
+
+  @override
+  Future<CommandResult> runStoppable(String command, {required String workingDirectory, required Duration timeout, required Future<void> stop}) => _run(command, workingDirectory, timeout, stop);
+
+  /// 放到后台跑：进程起来就返回。运行期间占着后台保活，结束后（[StartedCommand.onExit]）放掉。
+  @override
+  Future<StartedCommand> startBackground(String command, {required String workingDirectory, required String tag}) async {
+    final blocked = unavailableReason;
+    if (blocked != null) throw ProcessException('', const [], blocked);
+    if (!_useLinux) return _local.startBackground(command, workingDirectory: workingDirectory, tag: tag);
+    final proot = _proot(command, workingDirectory, tag);
+    await runtime.acquireKeepAlive();
+    try {
+      final process = await Process.start(proot.executable, proot.arguments, environment: proot.environment, includeParentEnvironment: false);
+      return StartedCommand(process, CommandProcessTree(process.pid, tag: tag, rootIsTracer: true), onExit: runtime.releaseKeepAlive);
+    } on ProcessException catch (e) {
+      await runtime.releaseKeepAlive();
+      runtime.recordLaunchFailure('Agent 启动后台命令时 PRoot 启动不了', output: e.message);
+      rethrow;
+    }
+  }
+
+  Future<CommandResult> _run(String command, String workingDirectory, Duration timeout, Future<void>? stop) async {
     final blocked = unavailableReason;
     if (blocked != null) {
       onOutput?.call('\r\n\x1b[2m[Agent] \$ $command\x1b[0m\r\n\x1b[33m$blocked\x1b[0m\r\n');
       runtime.log('Agent 的命令没有执行：运行环境还不能用');
       return CommandResult(exitCode: kCommandNotRun, output: blocked);
     }
-    if (!_useLinux) return _local.run(command, workingDirectory: workingDirectory, timeout: timeout);
+    if (!_useLinux) {
+      return stop == null ? _local.run(command, workingDirectory: workingDirectory, timeout: timeout) : _local.runStoppable(command, workingDirectory: workingDirectory, timeout: timeout, stop: stop);
+    }
     onOutput?.call('\r\n\x1b[2m[Agent · Ubuntu] \$ $command\x1b[0m\r\n');
-    final proot = runtime.prootCommand(guestCommand: guestRun(command), projectDir: workingDirectory, guestCwd: guestCwd, term: 'dumb');
+    final tag = newCommandTag();
+    final proot = _proot(command, workingDirectory, tag);
     await runtime.acquireKeepAlive();
     try {
       var started = true;
@@ -74,6 +115,9 @@ class LinuxCommandRunner implements CommandRunner, HasCommandTimeout, HasCommand
         timeout: timeout,
         onOutput: onOutput,
         startError: '无法启动 Ubuntu 环境',
+        stop: stop,
+        tag: tag,
+        rootIsTracer: true,
       );
       if (!started) {
         runtime.recordLaunchFailure('Agent 执行命令时 PRoot 启动不了', output: result.output);

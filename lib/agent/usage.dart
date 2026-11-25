@@ -113,7 +113,13 @@ class ModelPrice {
 
 /// 一次模型请求。
 class RequestUsage {
-  RequestUsage({this.usage, required this.ms, this.firstMs, this.startedAt, this.cost, this.compaction = false});
+  RequestUsage({this.usage, required this.ms, this.firstMs, this.startedAt, this.cost, this.compaction = false, this.memory = false});
+
+  /// 这次请求是“一轮结束后整理记忆”那一次（不是在回答用户）。
+  final bool memory;
+
+  /// 轨迹里标在“模型请求 N”后面的说明；普通请求是空的。
+  String get kindNote => compaction ? '（压缩对话）' : (memory ? '（整理记忆）' : '');
 
   /// 这次请求是“自动压缩对话”那一次（不是在回答用户）。
   final bool compaction;
@@ -142,7 +148,15 @@ class RequestUsage {
     return gen == null || gen <= 0 || out == null || out <= 0 ? null : out / (gen / 1000);
   }
 
-  Map<String, dynamic> toJson() => {'u': ?usage?.toJson(), 'ms': ms, 'first': ?firstMs, 'at': ?startedAt?.millisecondsSinceEpoch, 'cost': ?cost, if (compaction) 'k': 'compact'};
+  Map<String, dynamic> toJson() => {
+    'u': ?usage?.toJson(),
+    'ms': ms,
+    'first': ?firstMs,
+    'at': ?startedAt?.millisecondsSinceEpoch,
+    'cost': ?cost,
+    if (compaction) 'k': 'compact',
+    if (memory) 'k': 'memory',
+  };
 
   static RequestUsage fromJson(Map<dynamic, dynamic> j) {
     final cost = j['cost'], at = _int(j['at']);
@@ -153,6 +167,7 @@ class RequestUsage {
       startedAt: at == null ? null : DateTime.fromMillisecondsSinceEpoch(at),
       cost: cost is num ? cost.toDouble() : null,
       compaction: j['k'] == 'compact',
+      memory: j['k'] == 'memory',
     );
   }
 }

@@ -12,6 +12,7 @@ import 'package:lopicode/agent/auto_compact.dart';
 import 'package:lopicode/agent/chat_client.dart';
 import 'package:lopicode/agent/command_output_store.dart';
 import 'package:lopicode/agent/command_runner.dart';
+import 'package:lopicode/agent/compact_summary.dart';
 import 'package:lopicode/agent/protocols.dart';
 import 'package:lopicode/agent/usage.dart';
 import 'package:lopicode/core/path_guard.dart';
@@ -418,7 +419,8 @@ void main() {
       final client = FnClient((m, t) => [say('摘要：做了很多事'), ChatDelta(usage: const TokenUsage(uncached: 900, output: 30)), ChatDelta(finishReason: 'stop')]);
       final r = await compactOlder(client, messages, keepRecent: 6, archive: true, keepLastRequest: true);
       expect(r.ok, isTrue);
-      expect(r.summary, '摘要：做了很多事');
+      expect(r.summary, startsWith('摘要：做了很多事'), reason: '模型写的原样在前，漏写的栏目由代码接在后面');
+      expect(missingSections(r.summary), isEmpty);
       expect(r.usage!.input, 900);
       expect(r.replaced, 18);
       // 发给模型做摘要的是一段纯文字（两条消息、不带工具）
@@ -533,7 +535,7 @@ void main() {
       expect(AgentRunner.estimateTokens(history), greaterThan(2500 * 0.85));
       final events = await runner.send('继续做第 12 件事').toList();
       final compacted = events.whereType<ContextCompacted>().single;
-      expect(compacted.summary, '摘要：前面聊了 9 轮');
+      expect(compacted.summary, startsWith('摘要：前面聊了 9 轮'));
       final requests = events.whereType<RequestFinished>().toList();
       expect(requests.where((r) => r.compaction).single.usage!.input, 2500, reason: '压缩那次请求算进这一轮');
       expect(requests.where((r) => !r.compaction).length, 2);

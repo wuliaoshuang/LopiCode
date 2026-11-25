@@ -1,6 +1,7 @@
 // 设计约束（技能 / 新建技能 / 技能全文 · 390×844）— 2026-11-24 从 settings_agent.dart 拆出来并按设置的统一样式重排
 // - 技能页分两组，组标题写明归属：〔这个工作区：X〕只对当前工作区生效；〔全局〕所有工作区都能用。
 //   一行一个技能：名字 + 描述，右边是开关；点行看全文（删除在全文页右上角菜单里）。主操作只有右下角“新建技能”。
+//   技能文件夹里带脚本的，描述下面多一行“带 N 个脚本”（2026-11-25；脚本怎么放、在哪跑写在全文页，见 skill_scripts_view.dart）。
 // - 新建技能：〔内容〕技能名 → 一句话描述 → 正文（表单组）；〔放在哪〕两行单选（只给这个工作区 / 全局），从工作区进来才有；最底下一个实心“创建”。
 // - 全文页：归属和怎么改写在上面一组，正文是等宽字的代码块。
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,6 +12,7 @@ import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/app_ref.dart';
 import 'package:lopicode/ui/chrome.dart';
 import 'package:lopicode/ui/settings_widgets.dart';
+import 'package:lopicode/ui/skill_scripts_view.dart';
 import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -39,7 +41,7 @@ class _SkillsScreenState extends ConsumerState<SkillsScreen> {
     Widget row(Skill s) => SettingsRow(
       key: Key('skill-${s.key}'),
       title: s.name,
-      subtitle: s.description.isEmpty ? '（没有写描述）' : s.description,
+      subtitle: '${s.description.isEmpty ? '（没有写描述）' : s.description}${skillScriptsBadge(s)}',
       trailing: SizedBox(
         height: 32,
         child: Switch(value: s.enabled, onChanged: (v) => edit.setEnabled(s, v), materialTapTargetSize: MaterialTapTargetSize.shrinkWrap),
@@ -220,6 +222,7 @@ class SkillViewScreen extends StatelessWidget {
             ),
           ],
         ),
+        SkillScriptsGroup(skill: skill),
       ],
     );
   }

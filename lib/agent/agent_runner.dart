@@ -1,93 +1,18 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:lopicode/agent/agent_events.dart';
 import 'package:lopicode/agent/agent_tools.dart';
 import 'package:lopicode/agent/auto_compact.dart';
 import 'package:lopicode/agent/chat_client.dart';
+import 'package:lopicode/agent/context_relief.dart';
 import 'package:lopicode/agent/loop_guard.dart';
+import 'package:lopicode/agent/tool_images.dart';
+import 'package:lopicode/agent/tool_output_spill.dart';
 import 'package:lopicode/agent/usage.dart';
 
+export 'package:lopicode/agent/agent_events.dart';
 export 'package:lopicode/agent/auto_compact.dart' show compactHistory;
-
-sealed class AgentEvent {}
-
-/// 模型正在输出的文字（增量）。
-class AssistantDelta extends AgentEvent {
-  AssistantDelta(this.text);
-  final String text;
-}
-
-/// 模型正在思考（增量）。只用来显示，不算回复。
-class ReasoningDelta extends AgentEvent {
-  ReasoningDelta(this.text);
-  final String text;
-}
-
-/// 这一段思考结束了（开始说话 / 调工具，或者这次回复结束）。[ms] 是想了多久。
-class ReasoningDone extends AgentEvent {
-  ReasoningDone(this.ms);
-  final int ms;
-}
-
-/// 上下文快满，较早的对话已经压成摘要（这一轮接着跑）。
-class ContextCompacted extends AgentEvent {
-  ContextCompacted(this.summary, this.replaced);
-  final String summary;
-
-  /// 被摘要顶替的消息条数。
-  final int replaced;
-}
-
-/// 一轮模型回复结束（[text] 是这一轮的完整文字，可能为空）。
-class AssistantMessage extends AgentEvent {
-  AssistantMessage(this.text);
-  final String text;
-}
-
-class ToolStarted extends AgentEvent {
-  ToolStarted(this.callId, this.name, this.arguments);
-  final String callId;
-  final String name;
-  final String arguments;
-}
-
-class ToolFinished extends AgentEvent {
-  ToolFinished(this.callId, this.name, this.outcome);
-  final String callId;
-  final String name;
-  final ToolOutcome outcome;
-}
-
-/// 生成过程中用户插的话，已经交给模型（从这一步起它能看到）。
-class UserInjected extends AgentEvent {
-  UserInjected(this.text);
-  final String text;
-}
-
-/// 应用自己的提示（例如达到轮次上限）。
-class AgentNotice extends AgentEvent {
-  AgentNotice(this.text);
-  final String text;
-}
-
-/// 一次模型请求结束（成功、被打断、或者中途断了）。[usage] 是接口给的用量，没给是 null。
-class RequestFinished extends AgentEvent {
-  RequestFinished(this.usage, this.ms, {this.firstMs, this.startedAt, this.compaction = false});
-  final TokenUsage? usage;
-
-  /// 这次请求是“自动压缩对话”那一次（照样算进这一轮的用量）。
-  final bool compaction;
-  final int ms;
-
-  /// 从发出到收到第一块内容（文字或工具调用）的用时；一块都没收到是 null。
-  final int? firstMs;
-  final DateTime? startedAt;
-}
-
-class AgentError extends AgentEvent {
-  AgentError(this.text);
-  final String text;
-}
 
 class _PendingCall {
   String id = '';
@@ -116,8 +41,20 @@ class AgentRunner {
     this.contextLimit,
     this.maxRetries = 2,
     this.retryDelayOf = retryDelay,
+    this.takeNotices,
+    this.returnNotices,
   }) : systemPrompt = systemPrompt ?? defaultSystemPrompt,
-       messages = history ?? [];
+       messages = history ?? [] {
+    // 用户点停止时，正在跑的命令要跟着中途结束（见 AgentToolbox.stopSignal）。
+    toolbox.stopSignal = () => _stopped.future;
+  }
+
+  /// 应用自己要告诉模型的事（例如“后台命令结束了”）：每次调用模型之前取一次，取到的当成一条说明交给模型。
+  /// 没有新的返回空。只在本来就要调用模型的时候带上，不会为了它多调用一次。
+  final List<AppNotice> Function()? takeNotices;
+
+  /// 通知交出去了但那次请求一个字没回（消息被撤回）：把通知还回去，下次再带。
+  final void Function(List<AppNotice> notices)? returnNotices;
 
   /// 连着执行多少步后停下来问（设置里可调，范围 [minMaxSteps]–[maxMaxSteps]）。
   static const int defaultMaxSteps = 30;
@@ -130,9 +67,9 @@ class AgentRunner {
   static const String defaultSystemPrompt =
       '你是 LopiCode 里的编程助手，在用户手机上帮他完成一个代码项目。\n'
       '- 用提供的工具查看和修改项目文件；所有路径都是项目内的相对路径。\n'
-      '- 改文件前先读一下相关文件；写文件时给出完整内容。\n'
+      '- 改文件前先读一下相关文件。改已有文件优先用 edit_file（只换要改的那一段）；新建文件或整份重写才用 write_file，这时给出完整内容。\n'
       '- 执行命令和删除文件需要用户确认，被拒绝后不要重复请求，换个办法或说明情况。\n'
-      '- 手机自带的 shell 没有编译器和包管理器，不要假设能运行 npm、flutter、gradle。\n'
+      '- 命令在什么环境里跑、装了哪些工具，以下面“命令执行环境”那一段为准，不要凭印象假设。\n'
       '- 用户消息里的 @路径 指项目里的那个文件，回答前先读它。\n'
       '- 要分 3 步以上的任务，先用 update_todos 列出待办，每做完一项就更新；一两步的小事不用。\n'
       '- 工具报错时先看清报错原因再改，不要用同样的参数重复同一个失败的调用。\n'
@@ -182,8 +119,13 @@ class AgentRunner {
   bool _cancelled = false;
   bool get isCancelled => _cancelled;
 
-  /// 让当前这次 [send] 尽快停下（在下一个检查点生效）。
-  void cancel() => _cancelled = true;
+  Completer<void> _stopped = Completer<void>();
+
+  /// 让当前这次 [send] 尽快停下（在下一个检查点生效）；正在跑的命令立刻中途结束。
+  void cancel() {
+    _cancelled = true;
+    if (!_stopped.isCompleted) _stopped.complete();
+  }
 
   final List<String> _steer = [];
 
@@ -213,14 +155,24 @@ class AgentRunner {
     return chars ~/ 3;
   }
 
-  /// 把存盘格式的消息变成这一次请求要发的样子：图片附件按模型能力展开。
-  Future<List<Map<String, dynamic>>> buildRequest() async {
+  /// 把存盘格式的消息（默认是 [messages]）变成这一次请求要发的样子：图片附件按模型能力展开。
+  Future<List<Map<String, dynamic>>> buildRequest([List<Map<String, dynamic>>? from]) async {
     final out = <Map<String, dynamic>>[
       {'role': 'system', 'content': systemPrompt},
     ];
-    for (final m in messages) {
+    // 工具结果带的图片（view_image）：攒着，等这一批 tool 消息过去后，作为紧跟其后的一条 user 消息发（规矩见 tool_images.dart）。
+    final source = from ?? messages;
+    final sendToolImages = toolImageMessagesToSend(source);
+    final toolImages = <Object?>[];
+    for (var i = 0; i < source.length; i++) {
+      final m = source[i];
       if (isArchived(m)) continue; // 已经被摘要顶替，只留着给聊天页看
+      if (m['role'] != 'tool' && toolImages.isNotEmpty) {
+        out.add(await toolImagesMessage(toolImages, vision: vision, loadImage: loadImage));
+        toolImages.clear();
+      }
       final images = m['_images'];
+      if (m['role'] == 'tool' && sendToolImages.contains(i)) toolImages.addAll(images as List);
       if (m['role'] != 'user' || images is! List || images.isEmpty) {
         out.add(m);
         continue;
@@ -254,11 +206,13 @@ class AgentRunner {
         });
       }
     }
+    if (toolImages.isNotEmpty) out.add(await toolImagesMessage(toolImages, vision: vision, loadImage: loadImage));
     return out;
   }
 
   Stream<AgentEvent> send(String userText, {List<Map<String, dynamic>> images = const []}) async* {
     _cancelled = false;
+    if (_stopped.isCompleted) _stopped = Completer<void>();
     messages.add({'role': 'user', 'content': userText, if (images.isNotEmpty) '_images': images});
 
     var steps = 0; // 这一轮一共执行了几步
@@ -291,28 +245,26 @@ class AgentRunner {
         messages.add({'role': 'user', 'content': text});
         yield UserInjected(text);
       }
+      // 应用的通知（后台命令结束了……）也在这里交给模型。
+      for (final note in takeNotices?.call() ?? const <AppNotice>[]) {
+        messages.add({'role': 'user', 'content': note.text, kAppNoticeMark: note.label});
+        yield NoticeInjected(note);
+      }
 
-      // 上下文快满了：先把较早的工具结果换成一句占位（不删消息，接口要求的配对不受影响）。
-      final limit = contextLimit;
-      if (limit != null && estimateTokens(messages) > limit * pruneAt) {
-        final pruned = pruneOldToolResults(messages);
-        if (pruned > 0) yield AgentNotice('对话快把模型的上下文占满了，已省略 $pruned 条较早的工具结果（需要时 Agent 会重新读取）。');
-        // 第二道：裁完还是超过这条线，就把较早的对话压成摘要（多调用一次模型），这一轮不中断。
-        if (autoCompact && !_compactGaveUp && estimateTokens(messages) > limit * pruneAt) {
-          final r = await compactOlder(client, messages, keepRecent: kCompactKeepRecent, archive: true, keepLastRequest: true, contextLimit: limit);
-          if (r.requested) yield RequestFinished(r.usage, r.ms, startedAt: r.startedAt, compaction: true);
-          if (r.ok) {
-            yield ContextCompacted(r.summary, r.replaced);
-          } else if (!r.skipped) {
-            // 失败：记录一个字没动。这一轮里不再试（免得每一步都白花一次请求）。
-            _compactGaveUp = true;
-            yield AgentNotice('想把较早的对话自动压缩成摘要，但没成功（${r.error}）。对话记录没有丢，先只省略较早的工具结果继续。');
-          }
-          if (_cancelled) {
-            yield AgentNotice('已停止。');
-            return;
-          }
-        }
+      // 上下文快满了：省略较早的工具结果，不够再把较早的对话压成摘要（多调用一次模型），这一轮不中断。见 context_relief.dart。
+      final relief = await relieveContext(this, compact: autoCompact && !_compactGaveUp);
+      final r = relief.compact;
+      if (r != null && r.requested) yield RequestFinished(r.usage, r.ms, startedAt: r.startedAt, compaction: true);
+      if (r != null && r.ok) yield ContextCompacted(r.summary, r.replaced);
+      if (relief.pruned > 0) yield AgentNotice('对话快把模型的上下文占满了，已省略 ${relief.pruned} 条较早的工具结果（需要时 Agent 会重新读取）。');
+      if (r != null && !r.ok && !r.skipped) {
+        // 失败：记录一个字没动。这一轮里不再试（免得每一步都白花一次请求）。
+        _compactGaveUp = true;
+        yield AgentNotice('想把较早的对话自动压缩成摘要，但没成功（${r.error}）。对话记录没有丢，先只省略较早的工具结果继续。');
+      }
+      if (r != null && _cancelled) {
+        yield AgentNotice('已停止。');
+        return;
       }
 
       final text = StringBuffer();
@@ -462,9 +414,20 @@ class AgentRunner {
         }
         steps += batch.length;
         sinceAsk += batch.length;
+        // 每一步各自计时（同一批并行的互不影响）；存进记录里，重新打开对话还能看到用了多久。
+        final spent = List<int?>.filled(batch.length, null);
         final outcomes = await Future.wait([
           for (var k = 0; k < batch.length; k++)
-            verdicts[k] == LoopVerdict.run ? _runCall(batch[k], truncated: cutOff && identical(batch[k], ordered.last)) : Future.value(ToolOutcome(LoopGuard.refusal(batch[k].name), ok: false)),
+            verdicts[k] == LoopVerdict.run
+                ? () async {
+                    final clock = Stopwatch()..start();
+                    try {
+                      return await _runCall(batch[k], truncated: cutOff && identical(batch[k], ordered.last));
+                    } finally {
+                      spent[k] = clock.elapsedMilliseconds;
+                    }
+                  }()
+                : Future.value(ToolOutcome(LoopGuard.refusal(batch[k].name), ok: false)),
         ]);
         for (var k = 0; k < batch.length; k++) {
           var outcome = outcomes[k];
@@ -473,8 +436,15 @@ class AgentRunner {
             if (nudge != null) outcome = outcome.withText('${outcome.text}$nudge');
           }
           // 每个 tool_call 都必须有对应的 tool 消息，否则下一次请求会被接口拒绝。
-          messages.add({'role': 'tool', 'tool_call_id': batch[k].id, 'content': outcome.text});
-          yield ToolFinished(batch[k].id, batch[k].name, outcome);
+          messages.add({
+            'role': 'tool',
+            'tool_call_id': batch[k].id,
+            'content': outcome.text,
+            '_diff': ?outcome.change?.slim.toJson(),
+            if (outcome.images.isNotEmpty) '_images': outcome.images,
+            '_ms': ?spent[k],
+          });
+          yield ToolFinished(batch[k].id, batch[k].name, outcome, ms: spent[k]);
         }
         if (verdicts.contains(LoopVerdict.stop)) {
           // 剩下没跑的调用也要有对应的 tool 消息。
@@ -519,15 +489,22 @@ class AgentRunner {
     }
     // 参数解析不了：把错在哪、该怎么改说清楚回给模型，让它自己重来，不让整轮失败。
     if (args is! Map<String, dynamic>) return ToolOutcome(badArgumentsMessage(call.name, rawArgs, error: error), ok: false);
-    final outcome = await toolbox.execute(call.name, args);
-    // 兜底：任何工具的结果都不许无限长（各工具自己还有更小的上限）。
-    final clipped = clipToolResult(outcome.text);
-    return identical(clipped, outcome.text) ? outcome : outcome.withText(clipped);
+    // 兜底：任何工具的结果都不许无限长（各工具自己还有更小的上限）；超了全文存成文件，只回头尾和路径。
+    return spillLongResult(toolbox.guard, call.name, args, await toolbox.execute(call.name, args));
   }
 
   /// 请求失败时：模型已经说了一些就留下这半截；一个字都没回且上一条是用户消息，
   /// 就把那条用户消息撤回（界面会把文字放回输入框，重发不会重复）。
   void _rollbackIfEmpty(StringBuffer text) {
+    if (text.isEmpty) {
+      // 末尾还没被模型看到的应用通知：先拿下来还回去（下次请求再带），再按原来的规矩处理用户消息。
+      final back = <AppNotice>[];
+      while (messages.isNotEmpty && messages.last[kAppNoticeMark] is String) {
+        final m = messages.removeLast();
+        back.insert(0, AppNotice('${m['content']}', m[kAppNoticeMark] as String));
+      }
+      if (back.isNotEmpty) returnNotices?.call(back);
+    }
     if (text.isNotEmpty) {
       messages.add({'role': 'assistant', 'content': text.toString()});
     } else if (messages.isNotEmpty && messages.last['role'] == 'user') {

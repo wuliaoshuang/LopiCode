@@ -5,8 +5,8 @@
 // - 最弱：版本说明 → “关于”组的脚注。
 // 分类（一类东西只在一处）：
 //   模型　　　　模型与渠道 · 额度与余额（只有 DeepSeek 官方渠道才有）
-//   Agent 　　　权限与执行 · 个性化 · 子代理与团队
-//   能力　　　　联网搜索 · 技能 · 自动化任务
+//   Agent 　　　权限与执行 · 个性化 · 子代理与团队 · 后台与通知
+//   能力　　　　联网搜索 · MCP 服务器 · 技能 · 记忆 · 自动化任务
 //   界面　　　　对话显示 · 外观
 //   运行与打包　运行环境 · SSH 构建机
 //   当前工作区　项目规则（只对这个工作区生效；组标题写明是哪个工作区。没打开工作区时这一行灰掉并说明）
@@ -25,6 +25,7 @@ import 'package:lopicode/ssh/ssh_connect_screen.dart';
 import 'package:lopicode/state/app_providers.dart';
 import 'package:lopicode/state/automations_state.dart';
 import 'package:lopicode/state/config_providers.dart';
+import 'package:lopicode/state/mcp_state.dart';
 import 'package:lopicode/state/models_state.dart';
 import 'package:lopicode/state/presets_state.dart';
 import 'package:lopicode/state/runtime_state.dart';
@@ -35,6 +36,9 @@ import 'package:lopicode/ui/automation_screen.dart';
 import 'package:lopicode/ui/error_guard.dart';
 import 'package:lopicode/ui/settings_agent.dart';
 import 'package:lopicode/ui/settings_ai.dart';
+import 'package:lopicode/ui/settings_background.dart';
+import 'package:lopicode/ui/settings_mcp.dart';
+import 'package:lopicode/ui/settings_memory.dart';
 import 'package:lopicode/ui/settings_overview.dart';
 import 'package:lopicode/ui/settings_pages.dart';
 import 'package:lopicode/ui/settings_quota.dart';
@@ -126,6 +130,13 @@ class SettingsScreen extends ConsumerWidget {
               value: '子代理${subOn ? '开' : '关'} · 团队${teamOn ? '开' : '关'}',
               onTap: () => go(const SubagentSettingsScreen()),
             ),
+            SettingsRow(
+              key: const Key('settings-background'),
+              icon: Icons.notifications_active_outlined,
+              title: '后台与通知',
+              value: backgroundSettingsLabel(app.settings),
+              onTap: () => go(const BackgroundSettingsScreen()),
+            ),
           ],
         ),
         SettingsGroup(
@@ -137,11 +148,19 @@ class SettingsScreen extends ConsumerWidget {
               builder: (context, snap) =>
                   SettingsRow(key: const Key('settings-search'), icon: Icons.travel_explore, title: '联网搜索', value: snap.data == null ? '未配置' : '已配置', onTap: () => go(const WebSearchSettingsScreen())),
             ),
+            SettingsRow(key: const Key('settings-mcp'), icon: Icons.extension_outlined, title: 'MCP 服务器', value: mcpSummary(ref.watch(mcpProvider)), onTap: () => go(const McpServersScreen())),
             SettingsRow(
               key: const Key('settings-skills'),
               icon: Icons.menu_book_outlined,
               title: '技能',
               onTap: () => go(SkillsScreen(workspace: workspace)),
+            ),
+            SettingsRow(
+              key: const Key('settings-memory'),
+              icon: Icons.psychology_outlined,
+              title: '记忆',
+              value: memorySettingsLabel(app),
+              onTap: () => go(MemorySettingsScreen(session: session)),
             ),
             SettingsRow(
               key: const Key('settings-automations'),

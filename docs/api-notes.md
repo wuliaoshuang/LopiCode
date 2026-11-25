@@ -331,3 +331,90 @@ PHP 估计 7.4+（PHP 那份代码从没运行过）。下面选的版本都够�
   认不出来时归到“别的原因”，把退出码和最后三行输出原样给她。
 - 取消安装是杀掉 PRoot 进程（带 `--kill-on-exit`）；apt 的子进程是不是都跟着停、被打断后 dpkg 的状态要不要收拾，没实测。
   脚本开头加了 `dpkg --configure -a`（失败不管）来收拾上次被打断的安装。
+
+## 工具结果带图片（`view_image`；`lib/agent/tool_images.dart`）
+
+核对日期：2026-11-25。三家的写法不一样，下面是各家官方文档怎么说、我们最后怎么做。
+
+| 协议 | 官方怎么说 | 出处 | 状态 |
+| --- | --- | --- | --- |
+| OpenAI Chat Completions | `tool` 消息的 `content` 是字符串，或内容块数组；内容块“对 tool 消息只支持 `text` 类型”——也就是 **tool 消息里不能放图片** | developers.openai.com 的 API 参考（chat.completions › chat_completion_message_param 的 schema 页；搜索结果里的官方原文摘录，页面本身没能直接打开） | 已核对（间接：官方页的搜索摘录） |
+| Anthropic Messages | `tool_result` 的 `content` 可以是字符串，或内容块列表；内容块可以是 `text`、`image`、`document`、`search_result`——**可以带图片** | platform.claude.com/docs/en/agents-and-tools/tool-use/handle-tool-calls（直接打开官方页读到） | 已核对 |
+| Anthropic Messages | 同一条 `user` 消息里 `tool_result` 块要排在最前面，文字、图片排在后面 | 较早的官方页面存档（见上面“Anthropic Messages”一节同一条） | 间接 |
+| OpenAI Responses | `function_call_output` 的 `output` 通常是字符串；“返回图片或文件的函数，可以传一个图片或文件对象的数组来代替字符串” | OpenAI 官方 function calling 指南“Formatting results”一段（直接打开读到；这一句链到 API 参考 `responses/create` 里 `function_tool_call_output.output` 的定义） | 已核对（有这个能力）；数组里每一项的确切字段（第三方资料写的是 `input_text` / `input_image` / `input_file`）在 API 参考里没读到原文：**未核对** |
+
+**我们的做法（三家都用同一种，最保守）**：工具结果只回文字（“已读取图片 路径（类型，大小）”），图片放在**紧跟在这一批工具结果后面的一条 `user` 消息**里，
+走的是用户发图片附件的那条已有的路（内部是 `image_url` 的 data URL；Anthropic 转成 `{type:"image", source:{type:"base64"…}}`，Responses 转成 `input_image`）。
+
+- 为什么不用各家自己的写法：Chat Completions 明文不许；Responses 的数组项字段没核对到原文；我们的历史统一存成 Chat Completions 的样子，三家用同一种写法最不容易出错。
+- Anthropic 那边相邻的 `user` 消息会被我们合并成一条：结果是 `[tool_result…, text, image]`，`tool_result` 仍在最前面，符合上面的顺序要求。
+- 代价（已知）：模型看到的图片名义上在一条 user 消息里，所以那条消息的文字开头写明“这不是用户说的话，是你刚才用 view_image 查看的图片”。
+- 聊天记录里只存路径、类型、大小（`_images`），不存图片内容；每次请求现读文件。只带最近 3 次看图的图片（`kToolImagesKept`），更早的不再带。
+- 没在任何一家的真实接口上发过带图的请求：**真实接口未验证**（测试用的是本地假服务器，只核对了我们发出去的请求体）。
+
+## 各家的提示词缓存规则（压缩请求“同前缀”依据的就是这些；`lib/agent/context_relief.dart`、`lib/agent/auto_compact.dart`）
+
+2026-11-25 核对。压缩对话的那一次请求现在和正常对话发的一模一样（同样的系统提示词、工具定义、历史消息顺序），只在末尾多一条“按栏目写摘要”的指令，
+为的是让下面这些缓存能命中。**这一轮没有往请求里加任何缓存参数**（没有 `cache_control`、没有 `prompt_cache_key`），只保证前缀一致。
+
+| 哪家 | 规则（只记和我们有关的） | 来源网址 | 核对日期 | 状态 |
+| --- | --- | --- | --- | --- |
+| DeepSeek | 磁盘缓存默认对所有人开着，不用改代码。命中的条件：请求的开头要和已经存下来的“缓存前缀单元”**完全一样**。单元在这些位置存：一次请求的边界（用户输入结束、模型输出结束）、检测到多次请求的公共前缀、长内容里每隔固定 token 数。文档的例子：先发 A+B，再发 A+B+C，第二次能命中 A+B。用量里 `prompt_cache_hit_tokens` / `prompt_cache_miss_tokens` 分别是命中 / 没命中的输入。缓存是“尽力而为”，不保证命中；建好要几秒，不用了几小时到几天后清掉 | https://api-docs.deepseek.com/guides/kv_cache/ | 2026-11-25 | 已核对 |
+| OpenAI（Chat Completions / Responses） | 支持的模型自动缓存，不用加参数。要求整段渲染出来的前缀一致——**工具定义、系统 / 开发者消息、历史消息都算在前缀里**。有最小长度（文档写较新的模型是 1,024 token，早先的模型各不相同）。命中数在用量的 `cached_tokens` 里。`prompt_cache_key` 是可选参数，我们没用 | https://developers.openai.com/api/docs/guides/prompt-caching?site_locale=en | 2026-11-25 | 已核对 |
+| OpenAI Responses 的 `instructions` | 文档写：较新的模型上，顶层的 `instructions` 会被接在 `input` 后面并且按没缓存计费。我们的 `OpenAiResponsesClient` 是用 `instructions` 发系统提示词的——这一轮**没有改**，只记下来 | 同上 | 2026-11-25 | 已核对文档；对我们实际命中率的影响**未实测** |
+| Anthropic | **要显式加 `cache_control` 才缓存**（顶层自动式，或者在内容块上逐块标）。前缀的顺序是 tools → system → messages；默认存 5 分钟；回看最多 20 个块；改工具定义会让全部缓存失效，改 `tool_choice` 会让消息部分的缓存失效；最小可缓存长度随模型不同（512 或 1,024 token 起） | https://platform.claude.com/docs/en/build-with-claude/prompt-caching | 2026-11-25 | 已核对 |
+| 别家的 OpenAI 兼容接口、中转站 | 有没有前缀缓存、规则是什么 | — | — | **未核对**（各家不一样；前缀一致对它们没有坏处） |
+
+对我们意味着什么：
+
+- DeepSeek、OpenAI：压缩请求的前缀和上一条正常请求逐字节一致（`test/context_compact_test.dart` 用假模型服务器守着：消息数组前 N 项、`tools`、system、其余参数），
+  所以按文档这次请求的大部分输入应当按“缓存命中”计。**真实接口上命中了多少没有实测**（要真 Key、要花钱）。
+- Anthropic：这一轮**没有加 `cache_control`**，所以在 Anthropic 上压缩请求（和正常请求一样）**不会被缓存**；我们只做到了“以后加上 `cache_control` 时前缀已经是一致的”。
+  压缩请求特意不改 `tool_choice`、不去掉工具定义（去掉会让前缀变样）；模型要是在压缩请求里调了工具，由代码按失败处理、不执行。
+- 上下文快满时“省略较早的工具结果”会改动前面的消息，前缀从第一处被改的地方断开。所以现在的顺序是：省略就够用时只省略（不发请求）；
+  要压缩时用**没省略过**的原样历史发；原样的加上余量放不进上下文才退到省略过的，再放不下退到纯文字记录的老办法（那种没有前缀可言）。三种都只发一次请求。
+- DeepSeek 思考模式的规矩不变：`reasoning_content` 照旧随 assistant 消息带回（压缩请求走的是同一个客户端、同一个 `withReasoningContent`）。
+
+## MCP（Model Context Protocol）远程连接（`lib/agent/mcp/`）
+
+2026-11-25 新增。只做“远程”的两种连接方式（Streamable HTTP、旧的 HTTP+SSE），只用工具这一块（`tools/list`、`tools/call`）。
+来源全部是官方站 modelcontextprotocol.io，核对日期都是 **2026-11-25**。**没有连过任何真实的 MCP 服务器**，只用本机假服务器（`test/support/fake_mcp_server.dart`）测过；
+假服务器是照下面核对到的条文写的，所以“我们对规范的理解错了”这类问题测试抓不到。
+
+**先说一件和原计划不一样的事**：官方现在的最新版规范是 `2026-07-28`，它把连接改成了“无状态”——**没有** `initialize` 握手、**没有** `notifications/initialized`、
+**没有** `Mcp-Session-Id`、**没有** `ping`、没有 GET 长连接、没有 `Last-Event-ID` 续传。这些只存在于老版本（`2025-11-25` 及更早）。
+所以客户端做成“新老都认”：先按新版问，服务器不认再退到握手版，再不行退到最老的 HTTP+SSE（规范的向后兼容一节就是这么要求的）。
+
+| 项 | 核对到的事实 | 来源网址 | 状态 |
+| --- | --- | --- | --- |
+| 新版 `2026-07-28` 总览 | 无状态；每个请求自带协议版本和客户端能力 | https://modelcontextprotocol.io/specification/2026-07-28 | 已核对（页面更新于 2026-11-24） |
+| 新版的传输 | 只用 POST；`Accept: application/json, text/event-stream`；通知回 202；回答是一段 JSON 或一条 SSE 流；流里服务器只许发通知，不许发请求；不能续传 | https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/streamable-http | 已核对（2026-11-18 版） |
+| 新版的请求头 | `MCP-Protocol-Version`（要和正文 `_meta` 里的版本一致）、`Mcp-Method`、`Mcp-Name`（`tools/call` 时是工具名）；值里有非 ASCII 等字符时包成 `=?base64?…?=` | 同上 | 已核对 |
+| 新版 `x-mcp-header` | 工具参数说明里标了 `x-mcp-header` 的，参数值要同时放进 `Mcp-Param-{名字}` 头；只许字符串 / 整数 / 布尔；标得不合规矩的工具要从清单里去掉 | 同上 | 已核对；已实现 |
+| 新版的错误 | 头和正文对不上 → 400 + `-32020`；版本不支持 → 400；方法不认识 → 404 + `-32601` | 同上 | 已核对 |
+| 向后兼容（怎么探测） | 新版请求得到 400 且正文不是新版的错误 → 改发 `initialize`；POST 得到 400 / 404 / 405 → 改用 GET 等 `endpoint` 事件（最老的 HTTP+SSE） | 同上 | 已核对；已实现 |
+| 版本怎么分 | “新”＝`2026-07-28` 及以后；“老”＝`2025-11-25` 及以前；版本不支持的错误会列出服务器支持哪些 | https://modelcontextprotocol.io/specification/2026-07-28/basic/versioning | 已核对。错误里那个清单的字段名（我们读 `data.supported`）**未核对** |
+| 新版的消息格式 | id 是字符串或整数；结果里 `resultType` 是 `complete` 或 `input_required`（不写＝complete）；`_meta` 里必带 `io.modelcontextprotocol/protocolVersion`、`io.modelcontextprotocol/clientCapabilities`，可带 `io.modelcontextprotocol/clientInfo`；错误码 `-32020` `-32021` `-32022` 和标准的 `-32700`、`-32600`～`-32603` | https://modelcontextprotocol.io/specification/2026-07-28/basic/index | 已核对。`input_required` 结果的具体形状**未核对**（我们遇到就报“不支持”） |
+| `server/discover` | 新版服务器必须有；返回 `supportedVersions`、`capabilities`、`_meta` 里的服务器名字和版本、`instructions` | https://modelcontextprotocol.io/specification/2026-07-28/server/discover | 已核对；新版下用它当“连接测试”和 ping |
+| 工具 | `tools/list` 分页（`cursor` / `nextCursor`）；`tools/call` 参数 `name`、`arguments`；结果 `content`（一组内容块）、`structuredContent`、`isError`；工具名建议 1–128 个字符、只用字母数字和 `_-.` | https://modelcontextprotocol.io/specification/2026-07-28/server/tools | 已核对 |
+| 握手版的传输（`2025-06-18`） | POST + 可选 GET；回答是 JSON 或 SSE；SSE 里在回答之前可以夹带服务器的通知和请求；`Mcp-Session-Id` 在握手的回答头里给，之后每个请求都带；带着会话号得到 404 → 重新握手；结束时客户端应发 DELETE（服务器可以回 405）；之后的请求带 `MCP-Protocol-Version` 头；`Last-Event-ID` 续传是可选的 | https://modelcontextprotocol.io/specification/2025-06-18/basic/transports | 已核对 |
+| 握手流程（`2025-06-18`） | `initialize` → 回答 → 发 `notifications/initialized`；服务器回的版本客户端不支持就断开；请求应该有超时 | https://modelcontextprotocol.io/specification/2025-06-18/basic/lifecycle | 已核对 |
+| 握手版的字段 | `initialize` 参数 `protocolVersion`、`capabilities`、`clientInfo`；回答 `protocolVersion`、`capabilities`、`serverInfo{name, title?, version}`、`instructions?`；`ping` 方法名；`Tool{name, title?, description?, inputSchema, …}`；内容块 `text` / `image` / `audio` / `resource_link` / `resource` | https://modelcontextprotocol.io/specification/2025-06-18/schema | 已核对。`ping` 回答的形状**未核对**（我们只看有没有回答） |
+| 最老的 HTTP+SSE（`2024-11-05`） | GET 开一条 SSE 流；服务器先发 `endpoint` 事件，内容是之后 POST 用的地址；服务器的消息是 `message` 事件 | https://modelcontextprotocol.io/specification/2024-11-05/basic/transports | 已核对传输这一页；这一版的握手页、工具页**未核对**（按 `2025-06-18` 的写法处理） |
+| `2025-11-25` 这一版自己的页面 | — | — | **未核对**。握手时我们报 `2025-06-18`；服务器回 `2025-06-18` / `2025-03-26` / `2024-11-05` 之一才接受，回别的（包括 `2025-11-25`）会报“版本对不上” |
+| SSE 的格式细节 | 事件用空行分开、多行 `data:` 用换行拼起来、`:` 开头是注释、三种换行都认 | WHATWG HTML 标准的 server-sent events 一节 | **未核对**（照通用知识实现，`test/mcp_client_test.dart` 的“SSE 解析”一组守着行为） |
+| 会话号的字符范围 | — | — | **未核对**。自己定的：只接受看得见的 ASCII 字符、最长 512 |
+| 鉴权 / OAuth 那几页 | — | — | **未核对**，也没做 |
+
+这一轮**没做、也没向服务器声明**的：resources、prompts、sampling、elicitation、roots、logging（握手和每个请求里的客户端能力都是空的 `{}`）。
+服务器在流里夹带的通知一律忽略；夹带的请求：`ping` 回空结果，其余回 `-32601`（不支持）。`Last-Event-ID` 断线续传没做：流断了就报“连接中断”，不自动重发（重发可能让工具执行两遍）。
+本机 stdio 方式没做（手机上没有通用的本机进程环境）。OAuth 没做（只支持用户自己填请求头）。
+
+自己定的数值（`McpTimeouts`、`mcp_http.dart`、`mcp_client.dart`、`mcp_tools.dart`）：
+
+- 超时：建立连接 10 秒；等响应头 20 秒（握手、列工具、ping）；调用工具等响应头 120 秒；流里连续 60 秒没有新内容算断；收尾 5 秒。
+  对话开头自动刷新工具清单时用短的：6 秒 / 8 秒 / 8 秒。（RikkaHub 是连接 20 秒、读 10 分钟，我们收得更紧。）
+- 上限：一次回答或一个 SSE 事件最多 4 MB；工具清单最多翻 20 页、200 个工具；最多配 20 个服务器；请求头的值最长 4096 个字符；
+  工具说明给模型最多 600 字；工具名最长 64；确认卡上的参数最多显示 6000 字；结果超过 8000 字走“超长结果另存”。
+- 重定向：不自动跟。同一个主机（协议、主机、端口都一样）的 307 / 308 最多跟 2 次；302 / 303 不跟（会把 POST 变成 GET）；转去别的主机一律不跟——请求头里带着令牌。
+- 地址：外网必须 https；http 只能是本机或局域网（用现成的 `isLocalBaseUrl`）；地址里不许带账号密码。

@@ -24,6 +24,7 @@ String shape(List<ChatRow> rows) => rows
           AssistantItem() => 'A',
           ToolItem() => 'T',
           UsageItem() => r'$',
+          ChangedFilesItem() => 'F',
           NoticeItem() => 'N',
           ThinkingItem() => 'K',
           CompactionItem() => 'C',
