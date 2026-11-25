@@ -10,10 +10,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lopicode/agent/agent_tools.dart';
 import 'package:lopicode/agent/quota.dart';
 import 'package:lopicode/core/stores.dart';
+import 'package:lopicode/project_session.dart';
 import 'package:lopicode/state/app_providers.dart';
 import 'package:lopicode/state/models_state.dart';
 import 'package:lopicode/state/ui_prefs.dart';
 import 'package:lopicode/ui/app_ref.dart';
+import 'package:lopicode/ui/appearance_background_entry.dart';
 import 'package:lopicode/ui/chat_panels.dart';
 import 'package:lopicode/ui/provider_icon.dart';
 import 'package:lopicode/ui/settings_chat.dart';
@@ -151,8 +153,13 @@ class ChatDisplayScreen extends ConsumerWidget {
 }
 
 /// 设置 › 界面 › 外观。
+///
+/// 从上到下：颜色模式 → 主题（浅色用哪套、深色用哪套、管理主题）→ 背景图（那部分接上了才有，见 appearance_background_entry.dart）→ 代码字号。
 class AppearanceScreen extends ConsumerWidget {
-  const AppearanceScreen({super.key});
+  const AppearanceScreen({super.key, this.session});
+
+  /// 现在开着的工作区（主题导出存文件、导入选文件用）；没有也行。
+  final ProjectSession? session;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -168,7 +175,8 @@ class AppearanceScreen extends ConsumerWidget {
               SettingsChoiceRow(key: Key('appearance-${m.name}'), title: themeModeLabel(m), selected: m == mode, onTap: () => ref.read(themeModeProvider.notifier).set(m)),
           ],
         ),
-        const ThemeSlotsGroup(),
+        ThemeSlotsGroup(session: session),
+        ?buildAppearanceBackgroundEntry(context),
         const CodeFontGroup(),
       ],
     );
