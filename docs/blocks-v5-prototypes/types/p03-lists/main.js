@@ -1,0 +1,21 @@
+const lc = require("../_prelude/lc.js");
+lc.run(() => {
+  const 数 = [1, 2, 3, 4, 5, 6];
+  const 平方 = 数.map((n) => lc.imul(n, n));
+  const 偶 = 平方.filter((n) => lc.imod(n, 2) === 0);
+  const 和 = 偶.reduce((acc, n) => lc.iadd(acc, n), 0);
+  const 半 = 数.map((n) => lc.fdiv(n, 2));
+  const 均 = 半.reduce((acc, h) => acc + h, 0);
+  const 词 = 数.map((n) => "#" + n);
+  const 空的 = [];
+  空的.push(2.5);
+  空的.push(1);
+  lc.log("平方 " + 平方.map((n) => String(n)).join(","));
+  lc.log("偶 " + 偶.map((n) => String(n)).join(","));
+  lc.log("和 " + 和);
+  lc.log("半 " + 半.map((h) => lc.fmtNum(h)).join(","));
+  lc.log("均 " + lc.fmtNum(均));
+  lc.log("词 " + 词.join(","));
+  lc.log("空的 " + 空的.map((h) => lc.fmtNum(h)).join(",") + " 长 " + 空的.length);
+  lc.log("第7项 " + lc.at(数, 6));
+});

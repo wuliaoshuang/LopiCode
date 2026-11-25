@@ -1,0 +1,18 @@
+{
+  "format": 1,
+  "rules": [
+    {"id": "R01", "level": "error", "kind": "slot", "block": "onRoute", "slot": "路径",
+     "pattern": "^/([A-Za-z0-9_.~-]+|:[A-Za-z_][A-Za-z0-9_]*)?(/([A-Za-z0-9_.~-]+|:[A-Za-z_][A-Za-z0-9_]*))*$",
+     "message": "路径要以 / 开头，参数写成 :名字", "fix": "点帽子上的路径重新填。"},
+    {"id": "R02", "level": "error", "kind": "unique", "block": "onRoute", "slots": ["方式", "路径"],
+     "normalize": [{"slot": "路径", "replace": ":[A-Za-z_][A-Za-z0-9_]*", "with": ":"}],
+     "message": "两个接口是同一个地址", "fix": "改掉其中一个的路径或方式，或者删掉一个。"},
+    {"id": "R03", "level": "error", "kind": "place", "block": "pathParam", "under": ["onRoute"],
+     "message": "“路径参数”只能放在“当收到…”下面", "fix": "把它拖到某个“当收到…”下面。"},
+    {"id": "R04", "level": "error", "kind": "place", "block": "reply", "under": ["onRoute"], "notInside": ["callback", "lambda"],
+     "message": "“回应”只能直接放在“当收到…”这一串里", "fix": "把它从里面那层函数拿出来。"},
+    {"id": "R05", "level": "warning", "kind": "checker", "checker": "routeShadow", "block": "onRoute",
+     "with": {"method": "方式", "path": "路径"},
+     "message": "这个接口被前面的挡住了", "fix": "把它拖到挡住它的那个前面。"}
+  ]
+}

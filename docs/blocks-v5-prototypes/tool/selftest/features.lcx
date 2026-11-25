@@ -1,0 +1,147 @@
+; 翻译脚本的自测：把两个原型没用到的节点和写法也走一遍。Node 和 Python 的输出要逐字节相同，并且等于 features.expected.txt（手写的）。
+(module 自测
+  (native time.sleep (毫秒))
+
+  (const 圆周率 3.14)
+  (var 计数 0)
+
+  ; —— 参数：默认值、剩下的全收 ——
+  (func 问好 (名字 (称呼 "同学") (rest 别的))
+    (return (rt join 名字 称呼 "+" (rt size 别的))))
+
+  ; —— 闭包：计数器 ——
+  (func 做计数器 (起点)
+    (let n 起点)
+    (return (fn () (set n (+ n 1)) (return n))))
+
+  ; —— 递归 ——
+  (func 阶乘 (n)
+    (if (when (<= n 1) (return 1)))
+    (return (* n (call 阶乘 (- n 1)))))
+
+  ; —— 接口、抽象方法、继承、改写、调父类、静态 ——
+  (interface 会叫 (sig 叫 ()))
+  (class 动物 (implements 会叫)
+    (field 名字 "")
+    (private-field 秘密 "嘘")
+    (static-field 总数 0)
+    (ctor (名字)
+      (set (. (this) 名字) 名字)
+      (set (. 动物 总数) (+ (. 动物 总数) 1)))
+    (abstract-method 叫 ())
+    (method 介绍 ()
+      (return (rt join (. (this) 名字) "说：" (send (this) 叫))))
+    (method 说秘密 ()
+      (return (. (this) 秘密)))
+    (static-method 有几只 ()
+      (return (. 动物 总数))))
+  (class 狗 (extends 动物)
+    (method 叫 () (return "汪")))
+  (class 小狗 (extends 狗)
+    (field 岁数 0)
+    (ctor (名字 岁数)
+      (super-init 名字)
+      (set (. (this) 岁数) 岁数))
+    (method 叫 () (return (rt join (super 叫) "呜")))
+    (method 介绍 () (return (rt join (super 介绍) "（" (. (this) 岁数) " 岁）"))))
+
+  (class 我的错误 (extends 错误)
+    (field 代号 0)
+    (ctor (消息 代号)
+      (super-init 消息)
+      (set (. (this) 代号) 代号)))
+
+  (func 试试 (做什么)
+    (let 记录 (list))
+    (try
+      (body
+        (do (call 做什么))
+        (do (rt listPush 记录 "没出错")))
+      (catch e
+        (do (rt listPush 记录 (rt join "接到：" (. e 消息))))
+        (if (when (is-a e 我的错误) (do (rt listPush 记录 (rt join "代号 " (. e 代号)))))))
+      (finally
+        (do (rt listPush 记录 "收尾"))))
+    (return (rt listJoin 记录 "｜")))
+
+  (func 只接我的 (做什么)
+    (try
+      (body (do (call 做什么)) (return "没出错"))
+      (catch e (only 我的错误) (return (rt join "我的：" (. e 消息))))))
+
+  (main
+    (do (rt log (call 问好 "小明")))
+    (do (rt log (call 问好 "小红" "老师" 1 2 3)))
+
+    (let 甲 (call 做计数器 10))
+    (let 乙 (call 做计数器 100))
+    (do (call 甲)) (do (call 甲))
+    (do (rt log (rt join (call 甲) " " (call 乙))))
+    (do (rt log (call 阶乘 10)))
+
+    ; 循环
+    (let 和 0)
+    (for-count i 1 10 3 (set 和 (+ 和 i)))
+    (do (rt log (rt join "数到：" 和)))
+    (for-count i 3 1 -1 (set 和 (+ 和 i)))
+    (do (rt log (rt join "倒着数：" 和)))
+    (let 圈 0)
+    (forever
+      (set 圈 (+ 圈 1))
+      (if (when (< 圈 3) (continue)))
+      (if (when (>= 圈 5) (break))))
+    (do (rt log (rt join "一直转：" 圈)))
+    (while (> 圈 0) (set 圈 (- 圈 2)))
+    (do (rt log (rt join "当：" 圈)))
+    (let 串 "")
+    (for-pairs (k v) (dict ("b" 2) ("a" 1) ("10" 3) ("9" 4))
+      (set 串 (rt join 串 k "=" v ";")))
+    (do (rt log 串))
+    (for-each (x i) (list "甲" "乙")
+      (do (rt log (rt join i ":" x))))
+    (repeat 2 (set 计数 (+ 计数 1)))
+    (do (rt log (rt join "重复：" 计数)))
+
+    ; 循环里做的闭包：记住的是变量本身，不是那一圈的值（两种语言一样）
+    (let 函数们 (list))
+    (for-each x (list 1 2 3)
+      (do (rt listPush 函数们 (fn () (return x)))))
+    (do (rt log (rt listJoin (rt listMap 函数们 (-> (f) (call f))) ",")))
+
+    ; 式子
+    (do (rt log (rt join (cond (> 3 2) "大" "小") " " (neg 5) " " (** 2 10) " " (and 1 "") " " (or 0 "x") " " (not null))))
+    (do (rt log (rt join (index (list 7 8 9) 1) " " (index (dict ("k" "v")) "k") " " 圆周率)))
+    (let 表 (dict))
+    (set (index 表 "a") (list 1))
+    (set (index (index 表 "a") 0) 5)
+    (do (rt log 表))
+
+    ; 类
+    (let 旺财 (new 狗 "旺财"))
+    (let 豆豆 (new 小狗 "豆豆" 1))
+    (do (rt log (send 旺财 介绍)))
+    (do (rt log (send 豆豆 介绍)))
+    (do (rt log (rt join (is-a 豆豆 动物) " " (is-a 旺财 小狗) " " (is-a 5 动物) " " (send 动物 有几只))))
+    (do (rt log (send 豆豆 说秘密)))
+    (set (. 旺财 名字) "大旺")
+    (do (rt log (. 旺财 名字)))
+
+    ; 错误
+    (do (rt log (call 试试 (fn () (return 1)))))
+    (do (rt log (call 试试 (fn () (throw "文字也能抛")))))
+    (do (rt log (call 试试 (fn () (throw (new 我的错误 "坏了" 7))))))
+    (do (rt log (call 试试 (fn () (do (rt listSet (list) 3 1))))))
+    (do (rt log (call 试试 (fn () (do (send 5 叫))))))
+    (do (rt log (call 试试 (fn () (do (. 旺财 没有的))))))
+    (do (rt log (call 试试 (fn () (do (call (index (list 阶乘) 0)))))))
+    (do (rt log (call 只接我的 (fn () (throw (new 我的错误 "对上了" 1))))))
+    (do (rt log (call 试试 (fn () (do (call 只接我的 (fn () (throw "别的"))))))))
+
+    ; 开始做 / 等
+    (let 慢 (spawn (do (native time.sleep 150)) (do (rt log "慢的做完")) (return "慢")))
+    (let 快 (spawn (do (native time.sleep 60)) (do (rt log "快的做完")) (return "快")))
+    (do (rt log "都开始了"))
+    (do (rt log (rt join (await 慢) (await 快) (await 3))))
+    (let 会错 (spawn (throw (new 我的错误 "里面错了" 9))))
+    (do (rt log (call 试试 (fn () (do (await 会错))))))
+    (do (rt log "完"))))

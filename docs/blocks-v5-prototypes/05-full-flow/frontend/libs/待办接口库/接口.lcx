@@ -1,0 +1,44 @@
+; 库“待办接口库”·第 2 轮：前端这一头的“发请求”。用 D 的“网络.请求”（宿主接口 net.request）：
+; 不管状态码是多少都能拿到回应（状态码、正文），所以能把服务器说的原因原样显示出来；只有网络层失败才出错。
+; 每个函数交回一个字典：{成功, …, 错误}。
+(module 接口
+  (native net.request (请求))
+
+  (var 地址 "")
+  (public (func 设地址 (新地址) (set 地址 新地址)))
+
+  (func 请求 (方法 路径 数据)
+    (let 请 (dict ("方法" 方法) ("网址" (rt join 地址 路径)) ("超时毫秒" 5000)
+      ("头" (dict ("Content-Type" "application/json; charset=utf-8")))))
+    (if (when (not (rt isNull 数据)) (set (index 请 "正文") (rt toJson 数据))))
+    (try
+      (body (return (native net.request 请)))
+      (catch e (return (dict ("状态码" 0) ("成功" false) ("正文" "") ("出错" (. e 消息)))))))
+
+  ; 把不成功的回应变成一句给人看的话。
+  (func 原因 (回应)
+    (if (when (== (rt dictGet 回应 "状态码") 0)
+          (return (cond (== (rt dictGet 回应 "出错") "超时") "服务器太久没回应" "连不上服务器"))))
+    (let 内容 null)
+    (try
+      (body (set 内容 (rt fromJson (rt dictGet 回应 "正文"))))
+      (catch e (set 内容 null)))
+    (if (when (rt isType 内容 "dict")
+          (if (when (rt isType (rt dictGet 内容 "details") "list") (return (rt listJoin (rt dictGet 内容 "details") "；")))
+              (when (rt isType (rt dictGet 内容 "error") "text") (return (rt dictGet 内容 "error"))))))
+    (return (rt join "服务器出错了（" (rt dictGet 回应 "状态码") "）")))
+
+  (public (func 取全部 ()
+    (let 回应 (call 请求 "GET" "/api/todos" null))
+    (if (when (rt dictGet 回应 "成功") (return (dict ("成功" true) ("条目们" (rt fromJson (rt dictGet 回应 "正文")))))))
+    (return (dict ("成功" false) ("错误" (call 原因 回应))))))
+
+  (public (func 添加 (标题 级别)
+    (let 回应 (call 请求 "POST" "/api/todos" (dict ("title" 标题) ("level" 级别))))
+    (if (when (rt dictGet 回应 "成功") (return (dict ("成功" true) ("条目" (rt fromJson (rt dictGet 回应 "正文")))))))
+    (return (dict ("成功" false) ("错误" (call 原因 回应))))))
+
+  (public (func 删除 (号)
+    (let 回应 (call 请求 "DELETE" (rt join "/api/todos/" 号) null))
+    (if (when (rt dictGet 回应 "成功") (return (dict ("成功" true)))))
+    (return (dict ("成功" false) ("错误" (call 原因 回应)))))))

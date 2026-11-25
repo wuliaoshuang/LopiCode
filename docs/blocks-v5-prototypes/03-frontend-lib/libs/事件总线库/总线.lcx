@@ -1,0 +1,62 @@
+; 库“事件总线库”·第 2 轮：订阅、退订、只听一次、发出。处理函数用 call! 调（不用等的函数，GAP-F2-01）；要等的事请在处理里用“开始做”。
+;全部用语言核心写，只碰一个宿主接口 log.error（没人管的错写到那里）。
+(module 总线
+  (native log.error (值))
+
+  (public (class 事件总线
+    (field 听的 (dict))        ; 事件名 → 列表，每项是字典 {号, 回调, 一次, 停了}
+    (field 下一个号 1)
+    (field 出错时 null)        ; 处理函数出了错交给谁：回调(消息, 事件名)；空＝写到错误输出
+    (ctor ()
+      (set (. (this) 听的) (dict)))
+
+    (method 登记 (事件名 回调 一次)
+      (let 号 (. (this) 下一个号))
+      (set (. (this) 下一个号) (+ 号 1))
+      (if (when (not (rt dictHas (. (this) 听的) 事件名))
+            (set (index (. (this) 听的) 事件名) (list))))
+      (do (rt listPush (rt dictGet (. (this) 听的) 事件名)
+            (dict ("号" 号) ("回调" 回调) ("一次" 一次) ("停了" false))))
+      (let 自己 (this))
+      (return (fn () (return (send 自己 退订 事件名 号)))))
+
+    ; 订阅：返回“退订函数”。
+    (method 订阅 (事件名 回调)
+      (return (send (this) 登记 事件名 回调 false)))
+    (method 只听一次 (事件名 回调)
+      (return (send (this) 登记 事件名 回调 true)))
+
+    ; 退订立刻生效：哪怕正在发出，排在后面还没叫到的也不叫了。
+    (method 退订 (事件名 号)
+      (let 表 (rt orElse (rt dictGet (. (this) 听的) 事件名) (list)))
+      (for-each (条 i) 表
+        (if (when (== (rt dictGet 条 "号") 号)
+              (set (index 条 "停了") true)
+              (do (rt listRemove 表 i))
+              (return true))))
+      (return false))
+
+    (method 有几个在听 (事件名)
+      (return (rt size (rt orElse (rt dictGet (. (this) 听的) 事件名) (list)))))
+
+    ; 发出：按订阅的先后一个个叫；发出过程中新订阅的这一次不叫。一个出错不影响别的。返回叫到了几个。
+    (method 发出 (事件名 (数据 null))
+      (let 表 (rt dictGet (. (this) 听的) 事件名))
+      (if (when (rt isNull 表) (return 0)))
+      (let 这次 (rt listSlice 表 0 (rt size 表)))
+      (let 叫了 0)
+      (for-each 条 这次
+        (if (when (rt dictGet 条 "停了") (continue)))
+        (if (when (rt dictGet 条 "一次")
+              (do (send (this) 退订 事件名 (rt dictGet 条 "号")))))
+        (set 叫了 (+ 叫了 1))
+        (try
+          (body (do (call! (rt dictGet 条 "回调") 数据)))
+          (catch e
+            (if (when (rt isNull (. (this) 出错时))
+                  (do (native log.error (rt join "事件“" 事件名 "”的处理出错：" (. e 消息)))))
+                (else (do (call! (. (this) 出错时) (. e 消息) 事件名)))))))
+      (return 叫了))
+
+    (method 设出错时 (回调)
+      (set (. (this) 出错时) 回调)))))

@@ -1,0 +1,15 @@
+[1] 打开页面、加载完（空的）：div.app[form.add[input.title〔〕 input.level〔中〕 button.submit“添加”] ul.todo[p.none“还没有待办，加一条吧”]]
+[2] 填“买菜”点添加（合法）：列表多一条、输入框清空：div.app[form.add[input.title〔〕 input.level〔中〕 button.submit“添加”] ul.todo[li.item[div.row[span.pri“中” span.name“买菜”] button.del“删”]]]
+[3] 到这里宿主一共发了几个请求：2
+[4] 标题空着点添加（非法）：显示服务器说的原因、列表不变：div.app[form.add[input.title〔〕 input.level〔中〕 button.submit“添加” p.err“提交失败”] ul.todo[li.item[div.row[span.pri“中” span.name“买菜”] button.del“删”]]]
+[5] 标题太长、级别乱填（非法）：两条原因都显示、填的东西还在、列表不变：div.app[form.add[input.title〔这是一条特别特别特别特别特别特别长的待办事项〕 input.level〔特急〕 button.submit“添加” p.err“提交失败”] ul.todo[li.item[div.row[span.pri“中” span.name“买菜”] button.del“删”]]]
+[6] 改对了再交：错误没了、列表两条：div.app[form.add[input.title〔〕 input.level〔高〕 button.submit“添加”] ul.todo[li.item[div.row[span.pri“中” span.name“买菜”] button.del“删”] li.item[div.row[span.pri“高” span.name“写作业”] button.del“删”]]]
+[7] 第一条还是原来那个元素：true
+[8] 再交一次“买菜”（重复）：服务器不收、列表还是两条：div.app[form.add[input.title〔买菜〕 input.level〔高〕 button.submit“添加” p.err“提交失败”] ul.todo[li.item[div.row[span.pri“中” span.name“买菜”] button.del“删”] li.item[div.row[span.pri“高” span.name“写作业”] button.del“删”]]]
+[9] 填“复习”连点两下添加：只多一条：div.app[form.add[input.title〔〕 input.level〔高〕 button.submit“添加”] ul.todo[li.item[div.row[span.pri“中” span.name“买菜”] button.del“删”] li.item[div.row[span.pri“高” span.name“写作业”] button.del“删”] li.item[div.row[span.pri“高” span.name“复习”] button.del“删”]]]
+[10] 到这里宿主一共发了几个请求（连点的两下只发了一个）：7
+[11] “提交中”的变化（6 次提交，每次先是后否）：[true,false,true,false,true,false,true,false,true,false,true,false]
+[12] 点第 1 条的“删”：div.app[form.add[input.title〔〕 input.level〔高〕 button.submit“添加”] ul.todo[li.item[div.row[span.pri“高” span.name“写作业”] button.del“删”] li.item[div.row[span.pri“高” span.name“复习”] button.del“删”]]]
+[13] 重新从服务器拿一遍，和页面上的一样：div.app[form.add[input.title〔〕 input.level〔高〕 button.submit“添加”] ul.todo[li.item[div.row[span.pri“高” span.name“写作业”] button.del“删”] li.item[div.row[span.pri“高” span.name“复习”] button.del“删”]]]｜剩下的还是原来的元素：true，true
+[14] 服务器连不上的时候点添加：显示连不上、列表不变：div.app[form.add[input.title〔测试〕 input.level〔高〕 button.submit“添加” p.err“提交失败”] ul.todo[li.item[div.row[span.pri“高” span.name“写作业”] button.del“删”] li.item[div.row[span.pri“高” span.name“复习”] button.del“删”]]]
+[15] 一共发了几个请求：10

@@ -1,0 +1,204 @@
+{
+ "tick.defer": {
+  "params": [
+   "函数"
+  ],
+  "node": "host.tickDefer",
+  "python": "host.没有",
+  "async": false,
+  "doc": "这一段跑完以后做一次 函数()。函数不许等。",
+  "sync_params": [
+   "函数"
+  ]
+ },
+ "tick.wait": {
+  "params": [],
+  "node": "host.tickWait",
+  "python": "host.没有",
+  "async": true,
+  "doc": "让攒着的事先跑完（D 的“让界面先更新一下”）。"
+ },
+ "log.error": {
+  "params": [
+   "值"
+  ],
+  "node": "host.logError",
+  "python": "host.没有",
+  "async": false,
+  "doc": "文字化后写一行到错误输出。"
+ },
+ "ui.get": {
+  "params": [
+   "控件",
+   "属性名"
+  ],
+  "node": "host.uiGet",
+  "python": "host.没有",
+  "async": false,
+  "doc": "D 的“界面.读”：读控件的 文字 / 类名 / 显示 / 值 / 别的属性。控件＝元素，或者（第 1 轮）页面上事先摆好的控件的名字。"
+ },
+ "ui.set": {
+  "params": [
+   "控件",
+   "属性名",
+   "值"
+  ],
+  "node": "host.uiSet",
+  "python": "host.没有",
+  "async": false,
+  "doc": "D 的“界面.写”。"
+ },
+ "ui.on": {
+  "params": [
+   "控件",
+   "事件名",
+   "回调"
+  ],
+  "node": "host.uiOn",
+  "python": "host.没有",
+  "async": false,
+  "doc": "D 的“界面.当事件”：回调(事件)。事件是字典 {值, 目标, 别再往上传, 阻止默认行为}。事件从目标往上传。宿主不等回调（回调要等的事自己在后面做完）。返回取消函数。"
+ },
+ "ui.root": {
+  "params": [],
+  "node": "host.uiRoot",
+  "python": "host.没有",
+  "async": false,
+  "doc": "F2 第 2 轮加的（GAP-F2-05）：页面的根元素。",
+  "round": 3
+ },
+ "ui.create": {
+  "params": [
+   "标签"
+  ],
+  "node": "host.uiCreate",
+  "python": "host.没有",
+  "async": false,
+  "doc": "F2 第 2 轮加的（GAP-F2-05）：造一个元素（还没放上页面）。标签“#锚”＝看不见的占位。",
+  "round": 3
+ },
+ "ui.insert": {
+  "params": [
+   "父",
+   "子",
+   "前面的"
+  ],
+  "node": "host.uiInsert",
+  "python": "host.没有",
+  "async": false,
+  "doc": "F2 第 2 轮加的（GAP-F2-05）：把 子 放进 父、排在 前面的 之前（空＝最后）。子 已经在别处＝挪动。",
+  "round": 3
+ },
+ "ui.remove": {
+  "params": [
+   "子"
+  ],
+  "node": "host.uiRemove",
+  "python": "host.没有",
+  "async": false,
+  "doc": "F2 第 2 轮加的（GAP-F2-05）：把元素从页面上拿下来。",
+  "round": 3
+ },
+ "net.fetch": {
+  "params": [
+   "方式",
+   "网址",
+   "数据"
+  ],
+  "node": "host.netFetch",
+  "python": "host.没有",
+  "async": true,
+  "doc": "F1 的 net.fetch：成功（2xx）得到响应的文字，其余一律得空；最多等 10 秒。"
+ },
+ "net.request": {
+  "params": [
+   "请求"
+  ],
+  "node": "host.netRequest",
+  "python": "host.没有",
+  "async": true,
+  "doc": "F2 第 2 轮换用（GAP-F2-09）：D 的“网络.请求”。请求 {方法, 网址, 头, 正文, 超时毫秒} → 回应 {状态码, 成功, 头, 正文}。只有网络层失败才出错（“超时”/“网络错误”）。",
+  "round": 3
+ },
+ "env.get": {
+  "params": [
+   "名字"
+  ],
+  "node": "host.envGet",
+  "python": "host.没有",
+  "async": false,
+  "doc": "读一个环境变量（检查程序用它拿后端的地址）；没有得空。"
+ },
+ "test.page": {
+  "params": [
+   "JSON"
+  ],
+  "node": "host.testPage",
+  "python": "host.没有",
+  "async": false,
+  "doc": "只给检查程序用（第 1 轮）：按一份 JSON 把页面上的控件事先摆好。"
+ },
+ "test.tree": {
+  "params": [
+   "从哪",
+   "带号"
+  ],
+  "node": "host.testTree",
+  "python": "host.没有",
+  "async": false,
+  "doc": "只给检查程序用：把看得见的树写成一行文字。"
+ },
+ "test.find": {
+  "params": [
+   "范围",
+   "选择",
+   "第几个"
+  ],
+  "node": "host.testFind",
+  "python": "host.没有",
+  "async": false,
+  "doc": "只给检查程序用：找第 n 个看得见的“标签.类名”元素。"
+ },
+ "test.click": {
+  "params": [
+   "控件"
+  ],
+  "node": "host.testClick",
+  "python": "host.没有",
+  "async": true,
+  "doc": "只给检查程序用：点一下，等处理函数做完、攒着的更新跑完。"
+ },
+ "test.input": {
+  "params": [
+   "控件",
+   "文字"
+  ],
+  "node": "host.testInput",
+  "python": "host.没有",
+  "async": true,
+  "doc": "只给检查程序用：往输入框里打字。"
+ },
+ "test.clickNoWait": {
+  "params": [
+   "控件"
+  ],
+  "node": "host.testClickNoWait",
+  "python": "host.没有",
+  "async": false,
+  "doc": "只给检查程序用：点一下但不等（返回“稍后的结果”），用来模拟连点。"
+ },
+ "test.ops": {
+  "params": [],
+  "node": "host.testOps",
+  "python": "host.没有",
+  "async": false,
+  "doc": "只给检查程序用：从上次问到现在宿主做了几件事（新建 / 写 / 插入 / 拿走），问完清零。"
+ },
+ "test.netCount": {
+  "params": [],
+  "node": "host.testNetCount",
+  "python": "host.没有",
+  "async": false,
+  "doc": "只给检查程序用：宿主到现在真的发出去了几个请求。"
+ }
+}

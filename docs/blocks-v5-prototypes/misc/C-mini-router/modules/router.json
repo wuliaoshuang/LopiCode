@@ -1,0 +1,104 @@
+{
+  "format": 1,
+  "name": "router",
+  "title": "路由",
+  "uses": [],
+  "decls": [
+    {"kind": "var", "id": "routes", "name": "路由表", "visibility": "module", "value": {"e": "listLit", "items": []}},
+
+    {"kind": "func", "id": "add", "name": "登记", "visibility": "module",
+     "params": [{"name": "方式", "type": "文字"}, {"name": "路径", "type": "文字"}, {"name": "处理", "type": "函数"}],
+     "body": [
+       {"op": "listPush", "args": {"list": {"e": "var", "name": "路由表"},
+         "value": {"e": "dictLit", "pairs": [["方式", {"e": "param", "name": "方式"}], ["路径", {"e": "param", "name": "路径"}], ["处理", {"e": "param", "name": "处理"}]]}}}
+     ]},
+
+    {"kind": "func", "id": "match", "name": "对得上", "visibility": "module",
+     "params": [{"name": "模式", "type": "文字"}, {"name": "路径", "type": "文字"}],
+     "returns": "可空<字典>",
+     "body": [
+       {"op": "let", "args": {"name": "a", "value": {"e": "split", "args": [{"e": "param", "name": "模式"}, {"e": "text", "v": "/"}]}}},
+       {"op": "let", "args": {"name": "b", "value": {"e": "split", "args": [{"e": "param", "name": "路径"}, {"e": "text", "v": "/"}]}}},
+       {"op": "if", "args": {"cond": {"e": "bin", "op": "!=", "l": {"e": "size", "args": [{"e": "var", "name": "a"}]}, "r": {"e": "size", "args": [{"e": "var", "name": "b"}]}}},
+        "body": [{"op": "return", "args": {"value": {"e": "null"}}}]},
+       {"op": "let", "args": {"name": "out", "value": {"e": "dictLit", "pairs": []}}},
+       {"op": "forEach", "args": {"list": {"e": "var", "name": "a"}, "name": "p", "index": "i"},
+        "body": [
+          {"op": "let", "args": {"name": "s", "value": {"e": "listGet", "args": [{"e": "var", "name": "b"}, {"e": "var", "name": "i"}]}}},
+          {"op": "if", "args": {"cond": {"e": "startsWith", "args": [{"e": "var", "name": "p"}, {"e": "text", "v": ":"}]},
+             "elseIfs": [{"cond": {"e": "bin", "op": "!=", "l": {"e": "var", "name": "p"}, "r": {"e": "var", "name": "s"}},
+                          "body": [{"op": "return", "args": {"value": {"e": "null"}}}]}]},
+           "body": [{"op": "dictSet", "args": {"dict": {"e": "var", "name": "out"},
+                     "key": {"e": "substring", "args": [{"e": "var", "name": "p"}, {"e": "num", "v": 1}, {"e": "size", "args": [{"e": "var", "name": "p"}]}]},
+                     "value": {"e": "var", "name": "s"}}}]}
+        ]},
+       {"op": "return", "args": {"value": {"e": "var", "name": "out"}}}
+     ]},
+
+    {"kind": "func", "id": "dispatch", "name": "分发", "visibility": "module",
+     "params": [{"name": "请求", "type": "字典"}],
+     "returns": "字典",
+     "body": [
+       {"op": "forEach", "args": {"list": {"e": "var", "name": "路由表"}, "name": "r"},
+        "body": [
+          {"op": "let", "args": {"name": "参数", "value": {"e": "call", "of": "match", "args": {
+              "模式": {"e": "index", "of": {"e": "var", "name": "r"}, "key": {"e": "text", "v": "路径"}},
+              "路径": {"e": "index", "of": {"e": "param", "name": "请求"}, "key": {"e": "text", "v": "path"}}}}}},
+          {"op": "if", "args": {"cond": {"e": "and",
+              "l": {"e": "bin", "op": "==", "l": {"e": "index", "of": {"e": "var", "name": "r"}, "key": {"e": "text", "v": "方式"}},
+                                        "r": {"e": "index", "of": {"e": "param", "name": "请求"}, "key": {"e": "text", "v": "method"}}},
+              "r": {"e": "not", "x": {"e": "isNull", "args": [{"e": "var", "name": "参数"}]}}}},
+           "body": [
+             {"op": "setItem", "args": {"of": {"e": "param", "name": "请求"}, "key": {"e": "text", "v": "params"}, "value": {"e": "var", "name": "参数"}}},
+             {"op": "return", "args": {"value": {"e": "callValue", "fn": {"e": "index", "of": {"e": "var", "name": "r"}, "key": {"e": "text", "v": "处理"}},
+                                                   "args": [{"e": "param", "name": "请求"}]}}}
+           ]}
+        ]},
+       {"op": "return", "args": {"value": {"e": "call", "of": "reply", "args": {
+           "状态": {"e": "num", "v": 404},
+           "内容": {"e": "dictLit", "pairs": [["error", {"e": "text", "v": "没有这个接口"}]]}}}}}
+     ]},
+
+    {"kind": "func", "id": "reply", "name": "回应", "visibility": "public",
+     "params": [{"name": "状态", "type": "数字", "default": 200}, {"name": "内容"}],
+     "returns": "字典",
+     "doc": "拼出一个响应：状态码、JSON 的响应头、内容转成 JSON 文字。",
+     "body": [
+       {"op": "return", "args": {"value": {"e": "dictLit", "pairs": [
+         ["status", {"e": "param", "name": "状态"}],
+         ["headers", {"e": "dictLit", "pairs": [["content-type", {"e": "text", "v": "application/json; charset=utf-8"}]]}],
+         ["body", {"e": "toJson", "args": [{"e": "param", "name": "内容"}]}]]}}}
+     ]},
+
+    {"kind": "native", "id": "newId", "name": "生成编号", "visibility": "public",
+     "params": [], "returns": "文字", "waits": false, "fails": false, "pure": false,
+     "doc": "一个随机的 36 个字符的编号（UUID 第 4 版）。",
+     "impl": {
+       "node":   {"head": ["const crypto = require(\"node:crypto\");"], "body": "native/newId.node.js"},
+       "python": {"head": ["import uuid"], "body": "native/newId.python.py"},
+       "java":   {"head": [], "body": "native/newId.java.java"}
+     }}
+  ],
+  "blocks": [
+    {"id": "onRoute", "of": "add", "category": "route", "visibility": "public",
+     "look": {"name": "当收到", "shape": "hat", "template": "当收到 {方式} {路径} {处理}", "colorKey": "network", "hint": "有人按这个方式访问这个路径时，做下面这一串",
+       "slots": [
+         {"name": "方式", "kind": "choice", "options": ["GET", "POST", "PUT", "PATCH", "DELETE"], "defaultValue": "GET"},
+         {"name": "路径", "kind": "value", "literalOnly": true, "defaultValue": "/hello"},
+         {"name": "处理", "kind": "callbackMouth", "params": ["请求"]}
+       ]}},
+    {"id": "reply", "of": "reply", "category": "reply", "visibility": "public",
+     "look": {"name": "回应", "shape": "cap", "template": "回应 {状态} {内容}", "colorKey": "network", "hint": "把内容按 JSON 发回去，这一串到此结束",
+       "slots": [{"name": "状态", "kind": "value", "defaultValue": 200}, {"name": "内容", "kind": "value"}]}},
+    {"id": "pathParam", "of": "@index", "category": "route", "visibility": "public",
+     "look": {"name": "路径参数", "shape": "value", "template": "路径参数 {名字}", "colorKey": "network", "hint": "路径里 :名字 那一段实际填的内容",
+       "slots": [{"name": "名字", "kind": "picker", "picker": "pathParams"}]},
+     "expand": {"e": "index", "of": {"e": "index", "of": {"e": "context", "hat": "onRoute", "param": "请求"}, "key": {"e": "text", "v": "params"}}, "key": {"e": "slot", "name": "名字"}}},
+    {"id": "newId", "of": "newId", "category": "tool", "visibility": "public",
+     "look": {"name": "生成编号", "shape": "value", "template": "新的编号", "colorKey": "network", "hint": "每次都不一样的一串字符", "slots": []}}
+  ],
+  "init": [],
+  "start": [
+    {"op": "do", "args": {"value": {"e": "host", "name": "http.serve", "args": [{"e": "setting", "id": "port"}, {"e": "funcRef", "id": "dispatch"}]}}}
+  ]
+}

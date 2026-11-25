@@ -1,0 +1,239 @@
+; 库“状态库”·第 2 轮：细粒度响应式（D 第 4.2 节的三条语义）全部用语言核心写。
+;   ① 改状态立刻生效  ② 派生值读的时候才算、算过记住  ③ “跟着做”和“当…变了”攒着，这一段跑完再统一跑一次
+; 和第 1 轮（round1/）比，改了两处：
+;   · 算法、取值、做法、回调这些函数值一律用 call! 调——“不用等的函数”（GAP-F2-01）。整个库没有一处要等，
+;     所以读派生值不会在半路被攒着的事插进来。只有“一起改”的口里许等。
+;   · “和旧值一样”改用 isSame（GAP-F2-02）：数字 1 和文字“1”不一样；内容一样的两个列表不是同一个。
+; 只碰两个宿主接口：tick.defer（这一段跑完以后做）、tick.wait（让攒着的先跑完）。出错默认写到 log.error。
+(module 反应
+  (native tick.defer (函数))
+  (native tick.wait ())
+  (native log.error (值))
+
+  (var 正在跑的 null)        ; 现在是谁在“记依赖”（一个派生或一个跟随）；没有就是空
+  (var 当前归属 null)        ; 现在新建的跟随归谁管（归属收的时候一起停）
+  (var 下一个号 100000)      ; 六位数：当字典的键时按文字排也就是按新建的先后排
+  (var 等着跑的 (list))
+  (var 排上了 false)
+  (var 一起改层数 0)
+  (var 出错时 null)          ; 攒着跑的事出了错交给谁；空＝写到错误输出
+
+  (func 新号 ()
+    (set 下一个号 (+ 下一个号 1))
+    (return 下一个号))
+
+  ; 谁在读我，就互相记一笔。
+  (func 记依赖 (源)
+    (if (when (not (rt isNull 正在跑的))
+          (set (index (. 源 订阅) (. 正在跑的 号)) 正在跑的)
+          (set (index (. 正在跑的 依赖) (. 源 号)) 源))))
+
+  (func 断开 (谁)
+    (for-pairs (键 源) (. 谁 依赖)
+      (do (rt dictRemove (. 源 订阅) (. 谁 号))))
+    (set (. 谁 依赖) (dict)))
+
+  (func 通知 (源)
+    (for-pairs (键 谁) (. 源 订阅)
+      (do (send 谁 标旧))))
+
+  (func 报错 (消息)
+    (if (when (rt isNull 出错时) (do (native log.error (rt join "跟着做的事出错：" 消息))))
+        (else (do (call! 出错时 消息)))))
+
+  (func 排一下 ()
+    (if (when (or 排上了 (> 一起改层数 0)) (return null)))
+    (set 排上了 true)
+    (do (native tick.defer (fn () (do (call 冲刷))))))
+
+  ; 把攒着的跟随都跑掉；它们又触发了新的就接着跑，超过 100 轮报错停下。
+  (func 冲刷 ()
+    (set 排上了 false)
+    (let 轮 0)
+    (while (> (rt size 等着跑的) 0)
+      (set 轮 (+ 轮 1))
+      (if (when (> 轮 100)
+            (for-each 丢 等着跑的 (set (. 丢 排着) false))
+            (set 等着跑的 (list))
+            (do (call 报错 "跟着变的积木互相触发超过 100 轮"))
+            (return null)))
+      (let 这批 等着跑的)
+      (set 等着跑的 (list))
+      (for-each 一个 这批
+        (set (. 一个 排着) false)
+        (try
+          (body (do (send 一个 跑)))
+          (catch e (do (call 报错 (. e 消息))))))))
+
+  ; —— 状态 ——
+  (public (class 状态
+    (field 号 0)
+    (field 值 null)
+    (field 订阅 (dict))
+    (ctor (初值)
+      (set (. (this) 号) (call 新号))
+      (set (. (this) 值) 初值)
+      (set (. (this) 订阅) (dict)))
+    (method 读 ()
+      (do (call 记依赖 (this)))
+      (return (. (this) 值)))
+    (method 偷看 ()
+      (return (. (this) 值)))
+    (method 写 (新值)
+      (if (when (and (not (rt isNull 正在跑的)) (is-a 正在跑的 派生))
+            (throw "派生值的算法里不能改状态")))
+      (if (when (rt isSame 新值 (. (this) 值)) (return null)))
+      (set (. (this) 值) 新值)
+      (do (call 通知 (this))))))
+
+  ; —— 派生 ——
+  (public (class 派生
+    (field 号 0)
+    (field 算法 null)
+    (field 值 null)
+    (field 旧了 true)
+    (field 正在算 false)
+    (field 订阅 (dict))
+    (field 依赖 (dict))
+    (field 算了几次 0)
+    (ctor (算法)
+      (set (. (this) 号) (call 新号))
+      (set (. (this) 算法) 算法)
+      (set (. (this) 订阅) (dict))
+      (set (. (this) 依赖) (dict)))
+    (method 标旧 ()
+      (if (when (not (. (this) 旧了))
+            (set (. (this) 旧了) true)
+            (do (call 通知 (this))))))
+    (method 读 ()
+      (do (call 记依赖 (this)))
+      (if (when (. (this) 旧了)
+            (if (when (. (this) 正在算) (throw "派生值绕回了自己")))
+            (set (. (this) 正在算) true)
+            (do (call 断开 (this)))
+            (let 之前 正在跑的)
+            (set 正在跑的 (this))
+            (try
+              (body
+                (set (. (this) 值) (call! (. (this) 算法)))
+                (set (. (this) 算了几次) (+ (. (this) 算了几次) 1)))
+              (finally
+                (set 正在跑的 之前)
+                (set (. (this) 正在算) false)))
+            (set (. (this) 旧了) false)))
+      (return (. (this) 值)))))
+
+  ; —— 跟随（“跟着做”的一件事：它读过的东西变了，就攒着再做一次）——
+  (public (class 跟随
+    (field 号 0)
+    (field 做法 null)
+    (field 依赖 (dict))
+    (field 停了 false)
+    (field 排着 false)
+    (field 收尾 null)
+    (ctor (做法)
+      (set (. (this) 号) (call 新号))
+      (set (. (this) 做法) 做法)
+      (set (. (this) 依赖) (dict)))
+    (method 标旧 ()
+      (if (when (or (. (this) 停了) (. (this) 排着)) (return null)))
+      (set (. (this) 排着) true)
+      (do (rt listPush 等着跑的 (this)))
+      (do (call 排一下)))
+    (method 做收尾 ()
+      (if (when (not (rt isNull (. (this) 收尾)))
+            (let 收 (. (this) 收尾))
+            (set (. (this) 收尾) null)
+            (do (call! 收)))))
+    (method 跑 ()
+      (if (when (. (this) 停了) (return null)))
+      (do (send (this) 做收尾))
+      (do (call 断开 (this)))
+      (let 之前 正在跑的)
+      (set 正在跑的 (this))
+      (try
+        (body
+          (let 结果 (call! (. (this) 做法)))
+          (if (when (rt isType 结果 "function") (set (. (this) 收尾) 结果))))
+        (finally (set 正在跑的 之前))))
+    (method 停 ()
+      (if (when (. (this) 停了) (return null)))
+      (set (. (this) 停了) true)
+      (do (send (this) 做收尾))
+      (do (call 断开 (this))))))
+
+  ; —— 归属：在它“里面”新建的跟随都归它；收的时候一起停（组件拿走、列表去掉一项时用）——
+  (public (class 归属
+    (field 要收的 (list))
+    (field 收了 false)
+    (ctor ()
+      (set (. (this) 要收的) (list)))
+    (method 记 (收法)
+      (do (rt listPush (. (this) 要收的) 收法)))
+    (method 里面做 (做)
+      (let 之前 当前归属)
+      (set 当前归属 (this))
+      (try
+        (body (return (call! 做)))
+        (finally (set 当前归属 之前))))
+    (method 收 ()
+      (if (when (. (this) 收了) (return null)))
+      (set (. (this) 收了) true)
+      (let 表 (rt listReverse (. (this) 要收的)))
+      (set (. (this) 要收的) (list))
+      (for-each 收法 表 (do (call! 收法))))))
+
+  ; —— 公开的函数（积木外观调的就是这些）——
+  (public (func 新状态 (初值) (return (new 状态 初值))))
+  (public (func 新派生 (算法) (return (new 派生 算法))))
+
+  ; 马上做一次，以后它读过的东西变了就攒着再做。返回“取消函数”。做法可以返回一个收尾函数（重做之前、停掉时叫）。
+  (public (func 跟着做 (做法)
+    (let 一个 (new 跟随 做法))
+    (let 取消 (fn () (do (send 一个 停))))
+    (if (when (not (rt isNull 当前归属)) (do (send 当前归属 记 取消))))
+    (do (send 一个 跑))
+    (return 取消)))
+
+  (public (func 不记依赖地做 (做)
+    (let 之前 正在跑的)
+    (set 正在跑的 null)
+    (try
+      (body (return (call! 做)))
+      (finally (set 正在跑的 之前)))))
+
+  ; 当 取值() 的结果变了，叫 回调(新值, 旧值)。登记时不先叫（马上＝是 才先叫一次，旧值给空）。返回取消函数。
+  (public (func 当变了 (取值 回调 (马上 false))
+    (let 旧 null)
+    (let 第一次 true)
+    (return (call 跟着做 (fn ()
+      (let 新 (call! 取值))
+      (if (when 第一次
+            (set 第一次 false)
+            (set 旧 新)
+            (if (when 马上 (do (call 不记依赖地做 (fn () (do (call! 回调 新 null)))))))
+            (return null)))
+      (if (when (not (rt isSame 新 旧))
+            (let 原来 旧)
+            (set 旧 新)
+            (do (call 不记依赖地做 (fn () (do (call! 回调 新 原来)))))))
+      (return null))))))
+
+  ; 口里的改动（哪怕中间等过）都做完了，跟着做的事才跑。这是库里唯一“许等”的地方：做 用普通的 call（会等它）。
+  (public (func 一起改 (做)
+    (set 一起改层数 (+ 一起改层数 1))
+    (try
+      (body (do (call 做)))
+      (finally
+        (set 一起改层数 (- 一起改层数 1))
+        (if (when (and (== 一起改层数 0) (> (rt size 等着跑的) 0)) (do (call 排一下))))))))
+
+  ; 04 用到才加的：在当前的归属上记一件“收的时候要做的事”（没有归属就不记）。
+  (public (func 收尾时 (收法)
+    (if (when (not (rt isNull 当前归属)) (do (send 当前归属 记 收法))))))
+
+  (public (func 等更新 ()
+    (do (native tick.wait))))
+
+  (public (func 设出错时 (回调)
+    (set 出错时 回调))))

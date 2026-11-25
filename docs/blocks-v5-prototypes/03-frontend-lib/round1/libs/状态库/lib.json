@@ -1,0 +1,37 @@
+{
+ "format": 1,
+ "name": "状态库",
+ "id": "lib.lopicode.reactive",
+ "version": "0.1.0",
+ "author": "LopiCode 原型（F2）",
+ "description": "状态、派生值、“当…变了”、一起改。D 第 4.2 节的三条语义，全部用语言核心写成（第 1 轮：只用 F1 第 2 轮的核心）。",
+ "requires": {
+  "core": "F1 第 2 轮的核心",
+  "natives": ["tick.defer", "tick.wait", "log.error"],
+  "libs": []
+ },
+ "languages": ["node", "python"],
+ "modules": ["反应"],
+ "exports": {
+  "classes": ["状态", "派生", "跟随", "归属"],
+  "functions": ["新状态", "新派生", "跟着做", "不记依赖地做", "当变了", "一起改", "等更新", "设出错时"]
+ },
+ "blocks": [
+  {"id": "newState", "name": "新状态", "shape": "值型", "text": "新状态 初值 {初值}",
+   "slots": [{"name": "初值", "kind": "值"}],
+   "def": {"fn": "新状态", "args": ["$初值"]}},
+  {"id": "read", "name": "状态的值", "shape": "值型", "text": "{状态} 的值",
+   "slots": [{"name": "状态", "kind": "值"}],
+   "def": {"method": "读", "on": "$状态", "args": []}},
+  {"id": "write", "name": "设为", "shape": "语句型", "text": "把 {状态} 设为 {值}",
+   "slots": [{"name": "状态", "kind": "值"}, {"name": "值", "kind": "值"}],
+   "def": {"method": "写", "on": "$状态", "args": ["$值"]}},
+  {"id": "watch", "name": "当变了", "shape": "帽子型", "text": "当 {取值} 变了（新值）（旧值）",
+   "slots": [{"name": "取值", "kind": "值"}, {"name": "body", "kind": "回调口", "params": ["新值", "旧值"]}],
+   "def": {"fn": "当变了", "args": ["$取值", "$body"]},
+   "doc": "第 1 轮：槽“取值”里只能自己放一个匿名函数——清单格式里没有“这个槽填的式子先不算、包成函数”的写法。"},
+  {"id": "batch", "name": "一起改", "shape": "语句型", "text": "一起改",
+   "slots": [{"name": "body", "kind": "回调口", "params": []}],
+   "def": {"fn": "一起改", "args": ["$body"]}}
+ ]
+}

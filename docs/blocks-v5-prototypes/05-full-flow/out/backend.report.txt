@@ -1,0 +1,6 @@
+用到的语法树节点（31 种）：Assign×42、Binary×24、Call×18、ClassDecl×14、Continue×3、DictLit×20、ExprStmt×20、Field×41、ForEach×9、FuncDecl×60、If×32、InterfaceDecl×1、IsA×3、Lambda×19、Let×34、ListLit×24、Lit×172、Logic×2、Name×273、Native×7、NativeDecl×5、New×16、Return×78、Rt×120、Send×47、This×81、Throw×7、Try×2、Unary×13、VarDecl×2、While×1
+用到的标准库函数（27 个）：dictGet×35、dictHas×1、dictMerge×3、fromJson×1、indexOf×1、isNull×12、isNumeric×1、isType×5、join×9、listConcat×4、listContains×2、listFilter×1、listFind×2、listGet×2、listJoin×2、listPush×10、listSet×1、lower×1、orElse×3、replace×2、size×11、split×3、startsWith×1、substring×3、toJson×1、toNumber×1、toText×2
+用到的宿主原生接口（5 个）：http.serve×1、log.error×1、store.get×1、store.update×1、url.decode×3
+展开的库积木（0 种）：无
+核心表以外、被迫加的：isNumeric（GAP-F1-07，第 2 轮）、orElse（GAP-F1-08，第 2 轮）
+要“等”的函数单位（Node 里生成成 async）：10 / 87

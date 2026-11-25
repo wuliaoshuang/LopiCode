@@ -1,0 +1,35 @@
+; 05 的后端“待办服务”：用 F1 的库“小框架”（02-web-framework/libs，原样引用、没有改）写的带校验的接口。
+;   GET    /api/todos        全部待办
+;   POST   /api/todos        新建：title 必填、1–20 个字；level 只能是 高/中/低（不填＝中）；同名的不收（409）
+;   DELETE /api/todos/:id    删掉；没有这条 → 404
+; 用 F1 的翻译脚本（tool/lcx.py，原样）翻成 Node 和 Python 各一份。
+(module 待办服务
+  (uses 小框架)
+
+  (var app (new 应用))
+  (var 待办们 (new 仓库 "todos"))
+
+  (class 已经有了 (extends HTTP错误)
+    (ctor ()
+      (super-init 409 "已经有这一条了")))
+
+  (main
+    (do (send app 用 (new 错误处理)))
+
+    (do (send app GET "/api/todos" (fn (上下文) (return (send 待办们 全部)))))
+
+    (do (send app POST "/api/todos" (fn (上下文)
+      (let 数据 (send (send (send (send (new 校验器) 必填 "title") 文字 "title" 1 20) 其中之一 "level" (list "高" "中" "低")) 检查 (send 上下文 内容)))
+      (let 标题 (rt dictGet 数据 "title"))
+      (if (when (not (rt isNull (rt listFind (send 待办们 全部) (-> (行) (== (rt dictGet 行 "title") 标题)))))
+            (throw (new 已经有了))))
+      (return (send 响应 JSON 201 (send 待办们 加 (dict
+        ("title" 标题)
+        ("level" (rt orElse (rt dictGet 数据 "level") "中"))))))))) 
+
+    (do (send app DELETE "/api/todos/:id" (fn (上下文)
+      (let 号 (call 要数字 (send 上下文 路径参数 "id") "id"))
+      (if (when (not (send 待办们 删 号)) (throw (new 没有这个 "没有这条待办"))))
+      (return null))))
+
+    (do (send app 开始服务 8300))))

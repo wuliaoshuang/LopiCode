@@ -1,0 +1,511 @@
+[
+{
+"method": "GET",
+"target": "/",
+"status": 200,
+"expect": "小书店",
+"type": "text/plain; charset=utf-8",
+"resHeaders": {
+"X-Request-Id": "1"
+},
+"note": "正常：文字"
+},
+{
+"method": "GET",
+"target": "/health",
+"status": 200,
+"expect": "{\"books\":0,\"ok\":true}",
+"type": "application/json; charset=utf-8",
+"resHeaders": {
+"X-Request-Id": "2"
+},
+"note": "正常：JSON"
+},
+{
+"method": "GET",
+"target": "/hello/%E9%9C%9C",
+"status": 200,
+"expect": "{\"hello\":\"霜\"}",
+"type": "application/json; charset=utf-8",
+"resHeaders": {
+"X-Request-Id": "3"
+},
+"note": "用积木外观写的接口；路径参数解码"
+},
+{
+"method": "OPTIONS",
+"target": "/api/books",
+"status": 204,
+"expect": "",
+"type": null,
+"resHeaders": {
+"Allow": "GET, POST, PUT, DELETE",
+"X-Request-Id": "4"
+},
+"note": "中间件提前返回"
+},
+{
+"method": "GET",
+"target": "/api/books",
+"status": 401,
+"expect": "{\"error\":\"请先登录\"}",
+"type": "application/json; charset=utf-8",
+"resHeaders": {
+"X-Request-Id": "5"
+},
+"note": "未授权：没带钥匙"
+},
+{
+"method": "GET",
+"target": "/api/books",
+"status": 401,
+"expect": "{\"error\":\"请先登录\"}",
+"type": "application/json; charset=utf-8",
+"headers": {
+"Authorization": "Basic abc"
+},
+"resHeaders": {
+"X-Request-Id": "6"
+},
+"note": "未授权：写法不对"
+},
+{
+"method": "GET",
+"target": "/api/books",
+"status": 401,
+"expect": "{\"error\":\"钥匙不对\"}",
+"type": "application/json; charset=utf-8",
+"headers": {
+"Authorization": "Bearer nope"
+},
+"resHeaders": {
+"X-Request-Id": "7"
+},
+"note": "未授权：钥匙不认识"
+},
+{
+"method": "GET",
+"target": "/api/me",
+"status": 200,
+"expect": "{\"name\":\"小明\",\"role\":\"admin\"}",
+"type": "application/json; charset=utf-8",
+"headers": {
+"Authorization": "Bearer k-ming"
+},
+"resHeaders": {
+"X-Request-Id": "8"
+},
+"note": "中间件改请求：把用户放进上下文"
+},
+{
+"method": "GET",
+"target": "/api/books",
+"status": 200,
+"expect": "[]",
+"type": "application/json; charset=utf-8",
+"headers": {
+"Authorization": "Bearer k-ming"
+},
+"resHeaders": {
+"X-Request-Id": "9"
+}
+},
+{
+"method": "POST",
+"target": "/api/books",
+"status": 201,
+"expect": "{\"by\":\"小明\",\"id\":1,\"tag\":\"科幻\",\"title\":\"三体\",\"year\":2008}",
+"type": "application/json; charset=utf-8",
+"body": "{\"title\":\"三体\",\"year\":2008,\"tag\":\"科幻\"}",
+"headers": {
+"Authorization": "Bearer k-ming"
+},
+"resHeaders": {
+"Location": "/api/books/1",
+"X-Request-Id": "10"
+},
+"note": "新建；处理函数自己加响应头"
+},
+{
+"method": "POST",
+"target": "/api/books",
+"status": 201,
+"expect": "{\"by\":\"小红\",\"id\":2,\"tag\":\"未分类\",\"title\":\"活着\",\"year\":1993}",
+"type": "application/json; charset=utf-8",
+"body": "{\"title\":\"活着\",\"year\":1993}",
+"headers": {
+"Authorization": "Bearer k-hong"
+},
+"resHeaders": {
+"X-Request-Id": "11"
+}
+},
+{
+"method": "POST",
+"target": "/api/books",
+"status": 422,
+"expect": "{\"details\":[\"title 必须填\",\"year 要是数字\",\"tag 只能是 科幻、文学、未分类 里的一个\"],\"error\":\"提交的内容不对\"}",
+"type": "application/json; charset=utf-8",
+"body": "{\"year\":\"旧\",\"tag\":\"诗\"}",
+"headers": {
+"Authorization": "Bearer k-ming"
+},
+"resHeaders": {
+"X-Request-Id": "12"
+},
+"note": "校验失败：三个问题一起报"
+},
+{
+"method": "POST",
+"target": "/api/books",
+"status": 422,
+"expect": "{\"details\":[\"提交的内容要是一个 JSON 对象\"],\"error\":\"提交的内容不对\"}",
+"type": "application/json; charset=utf-8",
+"body": "[1,2]",
+"headers": {
+"Authorization": "Bearer k-ming"
+},
+"resHeaders": {
+"X-Request-Id": "13"
+},
+"note": "校验失败：不是对象"
+},
+{
+"method": "POST",
+"target": "/api/books",
+"status": 422,
+"expect": "{\"details\":[\"提交的内容要是一个 JSON 对象\"],\"error\":\"提交的内容不对\"}",
+"type": "application/json; charset=utf-8",
+"headers": {
+"Authorization": "Bearer k-ming"
+},
+"resHeaders": {
+"X-Request-Id": "14"
+},
+"note": "校验失败：没提交内容"
+},
+{
+"method": "POST",
+"target": "/api/books",
+"status": 422,
+"expect": "{\"details\":[\"title 的长度要在 1 到 40 之间\",\"year 要在 1000 到 2100 之间\"],\"error\":\"提交的内容不对\"}",
+"type": "application/json; charset=utf-8",
+"body": "{\"title\":\"\",\"year\":999}",
+"headers": {
+"Authorization": "Bearer k-ming"
+},
+"resHeaders": {
+"X-Request-Id": "15"
+},
+"note": "校验失败：范围"
+},
+{
+"method": "GET",
+"target": "/api/books/1",
+"status": 200,
+"expect": "{\"by\":\"小明\",\"id\":1,\"tag\":\"科幻\",\"title\":\"三体\",\"year\":2008}",
+"type": "application/json; charset=utf-8",
+"headers": {
+"Authorization": "Bearer k-ming"
+},
+"resHeaders": {
+"X-Request-Id": "16"
+}
+},
+{
+"method": "GET",
+"target": "/api/books/1.0",
+"status": 200,
+"expect": "{\"by\":\"小明\",\"id\":1,\"tag\":\"科幻\",\"title\":\"三体\",\"year\":2008}",
+"type": "application/json; charset=utf-8",
+"headers": {
+"Authorization": "Bearer k-ming"
+},
+"resHeaders": {
+"X-Request-Id": "17"
+},
+"note": "编号写成 1.0 也是数字 1"
+},
+{
+"method": "GET",
+"target": "/api/books/abc",
+"status": 400,
+"expect": "{\"error\":\"id 要是数字\"}",
+"type": "application/json; charset=utf-8",
+"headers": {
+"Authorization": "Bearer k-ming"
+},
+"resHeaders": {
+"X-Request-Id": "18"
+},
+"note": "编号不是数字"
+},
+{
+"method": "GET",
+"target": "/api/books/99",
+"status": 404,
+"expect": "{\"error\":\"没有这本书\"}",
+"type": "application/json; charset=utf-8",
+"headers": {
+"Authorization": "Bearer k-ming"
+},
+"resHeaders": {
+"X-Request-Id": "19"
+},
+"note": "处理函数抛 404"
+},
+{
+"method": "PUT",
+"target": "/api/books/2",
+"status": 200,
+"expect": "{\"by\":\"小红\",\"id\":2,\"tag\":\"未分类\",\"title\":\"活着\",\"year\":1992}",
+"type": "application/json; charset=utf-8",
+"body": "{\"year\":1992}",
+"headers": {
+"Authorization": "Bearer k-hong"
+},
+"resHeaders": {
+"X-Request-Id": "20"
+}
+},
+{
+"method": "PUT",
+"target": "/api/books/2",
+"status": 422,
+"expect": "{\"details\":[\"year 要是数字\"],\"error\":\"提交的内容不对\"}",
+"type": "application/json; charset=utf-8",
+"body": "{\"year\":\"x\"}",
+"headers": {
+"Authorization": "Bearer k-hong"
+},
+"resHeaders": {
+"X-Request-Id": "21"
+}
+},
+{
+"method": "GET",
+"target": "/api/books?tag=%E7%A7%91%E5%B9%BB",
+"status": 200,
+"expect": "[{\"by\":\"小明\",\"id\":1,\"tag\":\"科幻\",\"title\":\"三体\",\"year\":2008}]",
+"type": "application/json; charset=utf-8",
+"headers": {
+"Authorization": "Bearer k-ming"
+},
+"resHeaders": {
+"X-Request-Id": "22"
+},
+"note": "网址参数"
+},
+{
+"method": "DELETE",
+"target": "/api/books/1",
+"status": 403,
+"expect": "{\"error\":\"这件事只有管理员能做\",\"need\":\"admin\"}",
+"type": "application/json; charset=utf-8",
+"headers": {
+"Authorization": "Bearer k-hong"
+},
+"resHeaders": {
+"X-Request-Id": "23"
+},
+"note": "自己定义的错误类，改写了内容"
+},
+{
+"method": "DELETE",
+"target": "/api/books/1",
+"status": 204,
+"expect": "",
+"type": null,
+"headers": {
+"Authorization": "Bearer k-ming"
+},
+"resHeaders": {
+"X-Request-Id": "24"
+},
+"note": "处理函数返回空 → 204"
+},
+{
+"method": "DELETE",
+"target": "/api/books/1",
+"status": 404,
+"expect": "{\"error\":\"没有这本书\"}",
+"type": "application/json; charset=utf-8",
+"headers": {
+"Authorization": "Bearer k-ming"
+},
+"resHeaders": {
+"X-Request-Id": "25"
+}
+},
+{
+"method": "GET",
+"target": "/api/books",
+"status": 200,
+"expect": "[{\"by\":\"小红\",\"id\":2,\"tag\":\"未分类\",\"title\":\"活着\",\"year\":1992}]",
+"type": "application/json; charset=utf-8",
+"headers": {
+"Authorization": "Bearer k-hong"
+},
+"resHeaders": {
+"X-Request-Id": "26"
+}
+},
+{
+"method": "POST",
+"target": "/api/authors",
+"status": 201,
+"expect": "{\"id\":1,\"name\":\"刘慈欣\"}",
+"type": "application/json; charset=utf-8",
+"body": "{\"name\":\"刘慈欣\"}",
+"headers": {
+"Authorization": "Bearer k-ming"
+},
+"resHeaders": {
+"X-Group": "authors",
+"X-Request-Id": "27"
+},
+"note": "第二个资源；下一层分组的中间件加了头"
+},
+{
+"method": "GET",
+"target": "/api/authors",
+"status": 200,
+"expect": "[{\"id\":1,\"name\":\"刘慈欣\"}]",
+"type": "application/json; charset=utf-8",
+"headers": {
+"Authorization": "Bearer k-hong"
+},
+"resHeaders": {
+"X-Group": "authors",
+"X-Request-Id": "28"
+}
+},
+{
+"method": "GET",
+"target": "/api/authors",
+"status": 401,
+"expect": "{\"error\":\"请先登录\"}",
+"type": "application/json; charset=utf-8",
+"resHeaders": {
+"X-Request-Id": "29"
+},
+"note": "下一层分组也受上一层的鉴权管"
+},
+{
+"method": "GET",
+"target": "/nope",
+"status": 404,
+"expect": "{\"error\":\"没有这个接口\"}",
+"type": "application/json; charset=utf-8",
+"resHeaders": {
+"X-Request-Id": "30"
+},
+"note": "404"
+},
+{
+"method": "GET",
+"target": "/api/nope",
+"status": 404,
+"expect": "{\"error\":\"没有这个接口\"}",
+"type": "application/json; charset=utf-8",
+"headers": {
+"Authorization": "Bearer k-ming"
+},
+"resHeaders": {
+"X-Request-Id": "31"
+},
+"note": "404（分组里）"
+},
+{
+"method": "POST",
+"target": "/health",
+"status": 405,
+"expect": "{\"error\":\"这个地址不支持这种请求方式\"}",
+"type": "application/json; charset=utf-8",
+"resHeaders": {
+"Allow": "GET",
+"X-Request-Id": "32"
+},
+"note": "405，带 Allow 头"
+},
+{
+"method": "PATCH",
+"target": "/api/books/2",
+"status": 405,
+"expect": "{\"error\":\"这个地址不支持这种请求方式\"}",
+"type": "application/json; charset=utf-8",
+"headers": {
+"Authorization": "Bearer k-ming"
+},
+"resHeaders": {
+"Allow": "GET, PUT, DELETE",
+"X-Request-Id": "33"
+},
+"note": "405"
+},
+{
+"method": "GET",
+"target": "/boom",
+"status": 500,
+"expect": "{\"error\":\"服务器内部出错\"}",
+"type": "application/json; charset=utf-8",
+"resHeaders": {
+"X-Request-Id": "34"
+},
+"note": "处理函数抛文字 → 兜底 500"
+},
+{
+"method": "GET",
+"target": "/boom/teapot",
+"status": 418,
+"expect": "{\"error\":\"我是茶壶\",\"tea\":\"龙井\"}",
+"type": "application/json; charset=utf-8",
+"resHeaders": {
+"X-Request-Id": "35"
+},
+"note": "处理函数抛自定义错误"
+},
+{
+"method": "GET",
+"target": "/boom/lib",
+"status": 500,
+"expect": "{\"error\":\"服务器内部出错\"}",
+"type": "application/json; charset=utf-8",
+"resHeaders": {
+"X-Request-Id": "36"
+},
+"note": "标准库抛的错 → 兜底 500"
+},
+{
+"method": "GET",
+"target": "/slow",
+"status": 200,
+"expect": "{\"slept\":30}",
+"type": "application/json; charset=utf-8",
+"resHeaders": {
+"X-Request-Id": "37"
+},
+"note": "处理函数里有要等的事"
+},
+{
+"method": "GET",
+"target": "/parallel",
+"status": 200,
+"expect": "{\"sum\":3}",
+"type": "application/json; charset=utf-8",
+"resHeaders": {
+"X-Request-Id": "38"
+},
+"note": "同时开始两件事，再等它们"
+},
+{
+"method": "GET",
+"target": "/health",
+"status": 200,
+"expect": "{\"books\":1,\"ok\":true}",
+"type": "application/json; charset=utf-8",
+"resHeaders": {
+"X-Request-Id": "39"
+}
+}
+]

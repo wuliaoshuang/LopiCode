@@ -1,0 +1,168 @@
+; 05 的前端页面＋检查程序：表单 → 发请求 → 后端校验、存 → 返回 → 列表更新。
+; 用的库：状态库（03）、画面库和待办组件库（04）、表单组件库和待办接口库（05）。两轮共用这一份，只换“待办接口库”。
+; 后端的地址从环境变量 LC_API 来；LC_DEAD 是一个没有服务在听的地址。期望的输出是先手写好的（../../expected.txt）。
+(module 页面
+  (uses 状态库 画面库 待办组件库 表单组件库 待办接口库)
+  (native env.get (名字))
+  (native test.tree (从哪 带号))
+  (native test.find (范围 选择 第几个))
+  (native test.click (控件))
+  (native test.clickNoWait (控件))
+  (native test.input (控件 文字))
+  (native test.netCount ())
+
+  ; —— 页面的状态 ——
+  (var 条目们 (call 新状态 (list)))
+  (var 标题 (call 新状态 ""))
+  (var 级别 (call 新状态 "中"))
+  (var 提交中 (call 新状态 false))
+  (var 错误 (call 新状态 ""))
+  (var 在途 0)
+
+  (func 报 (号 名字 值)
+    (do (rt log (rt join "[" 号 "] " 名字 "：" 值))))
+
+  ; 服务器的一行 {id, title, level} → 组件要的条目 {号, 标题, 级}
+  (func 变条目 (行)
+    (return (dict ("号" (rt dictGet 行 "id")) ("标题" (rt dictGet 行 "title")) ("级" (rt dictGet 行 "level")))))
+
+  ; —— 页面的逻辑 ——
+  (func 加载 ()
+    (set 在途 (+ 在途 1))
+    (try
+      (body
+        (let 结果 (call 取全部))
+        (if (when (rt dictGet 结果 "成功")
+              (let 新的 (list))
+              (for-each 行 (rt dictGet 结果 "条目们") (do (rt listPush 新的 (call 变条目 行))))
+              (do (send 条目们 写 新的)))
+            (else (do (send 错误 写 (rt dictGet 结果 "错误"))))))
+      (finally (set 在途 (- 在途 1)))))
+
+  (func 提交 (数据)
+    (if (when (send 提交中 偷看) (return null)))        ; 上一次还没回来：这一下不算
+    (do (send 提交中 写 true))
+    (do (send 错误 写 ""))
+    (set 在途 (+ 在途 1))
+    (try
+      (body
+        (let 结果 (call 添加 (rt dictGet 数据 "title") (rt dictGet 数据 "level")))
+        (if (when (rt dictGet 结果 "成功")
+              (let 新的 (list))
+              (for-each 老 (send 条目们 偷看) (do (rt listPush 新的 老)))
+              (do (rt listPush 新的 (call 变条目 (rt dictGet 结果 "条目"))))
+              (do (send 条目们 写 新的))
+              (do (send 标题 写 "")))
+            (else (do (send 错误 写 (rt dictGet 结果 "错误"))))))
+      (finally
+        (do (send 提交中 写 false))
+        (set 在途 (- 在途 1)))))
+
+  (func 删掉 (条)
+    (set 在途 (+ 在途 1))
+    (try
+      (body
+        (let 结果 (call 删除 (rt dictGet 条 "号")))
+        (if (when (rt dictGet 结果 "成功")
+              (let 剩下 (list))
+              (for-each 老 (send 条目们 偷看)
+                (if (when (!= (rt dictGet 老 "号") (rt dictGet 条 "号")) (do (rt listPush 剩下 老)))))
+              (do (send 条目们 写 剩下)))
+            (else (do (send 错误 写 (rt dictGet 结果 "错误"))))))
+      (finally (set 在途 (- 在途 1)))))
+
+  ; —— 页面长什么样 ——
+  (func 画页面 ()
+    (return (call 元素 "div" (dict ("类名" "app")) (list
+      (call 待办表单
+        (dict ("标题" 标题) ("级别" 级别)
+              ("提交中" (fn () (return (send 提交中 读))))
+              ("错误" (fn () (return (send 错误 读)))))
+        (dict ("提交" (fn (数据) (do (call 提交 数据))))))
+      (call 待办列表
+        (dict ("条目们" (fn () (return (send 条目们 读)))))
+        (dict ("删了" (fn (条) (do (call 删掉 条)))))
+        (dict
+          ("每一条" (fn (条目)
+            (return (call 元素 "div" (dict ("类名" "row")) (list
+              (call 元素 "span" (dict ("类名" "pri") ("文字" (fn () (return (rt dictGet (call! 条目) "级"))))))
+              (call 元素 "span" (dict ("类名" "name") ("文字" (fn () (return (rt dictGet (call! 条目) "标题")))))))))))
+          ("空的时候" (fn ()
+            (return (call 元素 "p" (dict ("类名" "none") ("文字" "还没有待办，加一条吧"))))))))))))
+
+  ; —— 下面是检查程序 ——
+  (func 等完 ()
+    (do (call 等更新))
+    (while (> 在途 0) (do (call 等更新)))
+    (do (call 等更新)))
+
+  (func 页面的树 ()
+    (return (native test.tree (native test.find null "div.app" 1) false)))
+
+  (func 填 (选择 文字)
+    (do (native test.input (native test.find null 选择 1) 文字)))
+
+  (func 点添加 ()
+    (do (native test.click (native test.find null "button.submit" 1)))
+    (do (call 等完)))
+
+  (main
+    (do (call 设地址 (native env.get "LC_API")))
+    (let 忙记录 (list))
+    (do (call 当变了 (fn () (return (send 提交中 读))) (fn (新 旧) (do (rt listPush 忙记录 新)))))
+    (do (call 挂上 (call 页面根) 画页面))
+    (do (call 加载))
+    (do (call 等完))
+    (do (call 报 "1" "打开页面、加载完（空的）" (call 页面的树)))
+
+    (do (call 填 "input.title" "买菜"))
+    (do (call 点添加))
+    (do (call 报 "2" "填“买菜”点添加（合法）：列表多一条、输入框清空" (call 页面的树)))
+    (do (call 报 "3" "到这里宿主一共发了几个请求" (native test.netCount)))
+    (let 第一条 (native test.find null "li.item" 1))
+
+    (do (call 点添加))
+    (do (call 报 "4" "标题空着点添加（非法）：显示服务器说的原因、列表不变" (call 页面的树)))
+
+    (do (call 填 "input.title" "这是一条特别特别特别特别特别特别长的待办事项"))
+    (do (call 填 "input.level" "特急"))
+    (do (call 点添加))
+    (do (call 报 "5" "标题太长、级别乱填（非法）：两条原因都显示、填的东西还在、列表不变" (call 页面的树)))
+
+    (do (call 填 "input.title" "写作业"))
+    (do (call 填 "input.level" "高"))
+    (do (call 点添加))
+    (do (call 报 "6" "改对了再交：错误没了、列表两条" (call 页面的树)))
+    (do (call 报 "7" "第一条还是原来那个元素" (rt isSame 第一条 (native test.find null "li.item" 1))))
+
+    (do (call 填 "input.title" "买菜"))
+    (do (call 点添加))
+    (do (call 报 "8" "再交一次“买菜”（重复）：服务器不收、列表还是两条" (call 页面的树)))
+
+    (do (call 填 "input.title" "复习"))
+    (let 按钮 (native test.find null "button.submit" 1))
+    (let 第一下 (native test.clickNoWait 按钮))
+    (let 第二下 (native test.clickNoWait 按钮))
+    (do (await 第一下))
+    (do (await 第二下))
+    (do (call 等完))
+    (do (call 报 "9" "填“复习”连点两下添加：只多一条" (call 页面的树)))
+    (do (call 报 "10" "到这里宿主一共发了几个请求（连点的两下只发了一个）" (native test.netCount)))
+    (do (call 报 "11" "“提交中”的变化（6 次提交，每次先是后否）" 忙记录))
+
+    (let 第二条 (native test.find null "li.item" 2))
+    (let 第三条 (native test.find null "li.item" 3))
+    (do (native test.click (native test.find null "button.del" 1)))
+    (do (call 等完))
+    (do (call 报 "12" "点第 1 条的“删”" (call 页面的树)))
+
+    (do (call 加载))
+    (do (call 等完))
+    (do (call 报 "13" "重新从服务器拿一遍，和页面上的一样" (rt join (call 页面的树) "｜剩下的还是原来的元素："
+      (rt isSame 第二条 (native test.find null "li.item" 1)) "，" (rt isSame 第三条 (native test.find null "li.item" 2)))))
+
+    (do (call 设地址 (native env.get "LC_DEAD")))
+    (do (call 填 "input.title" "测试"))
+    (do (call 点添加))
+    (do (call 报 "14" "服务器连不上的时候点添加：显示连不上、列表不变" (call 页面的树)))
+    (do (call 报 "15" "一共发了几个请求" (native test.netCount)))))

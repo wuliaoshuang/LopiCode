@@ -1,0 +1,25 @@
+[1] 画出来的树：ul.todo[li.item[span.title“买菜” button.del“删”] li.item.done[span.title“写作业” button.del“删”]]
+[2] 点第 2 条，收到的事件：["点了:写作业"]
+[3] 点了以后的树（第 2 条多了“选中”）：ul.todo[li.item[span.title“买菜” button.del“删”] li.item.done.sel[span.title“写作业” button.del“删”]]
+[4] 这一下宿主只被要求做了：新建 0，写 1，插入 0，拿走 0
+[5] 把第 1 条标成完成以后的树：ul.todo[li.item.done[span.title“买菜” button.del“删”] li.item.done.sel[span.title“写作业” button.del“删”]]
+[6] 这一下宿主只被要求做了：新建 0，写 1，插入 0，拿走 0
+[7] 末尾加一条以后的树：ul.todo[li.item.done[span.title“买菜” button.del“删”] li.item.done.sel[span.title“写作业” button.del“删”] li.item[span.title“复习” button.del“删”]]
+[8] 原来两条还是原来那两个元素：true，true
+[9] 再加第四条以后的树：ul.todo[li.item.done[span.title“买菜” button.del“删”] li.item.done.sel[span.title“写作业” button.del“删”] li.item[span.title“复习” button.del“删”]]
+[10] 点第 1 条的“删”，收到的事件（没有多出“点了:买菜”）：["点了:写作业","删了:买菜"]
+[11] 删了以后的树：ul.todo[li.item.done.sel[span.title“写作业” button.del“删”] li.item[span.title“复习” button.del“删”] li.item[span.title“交报告” button.del“删”]]
+[12] 这一下宿主只被要求做了：新建 0，写 5，插入 0，拿走 0
+[13] 剩下三条还是原来的元素：false，false，false
+[14] 把顺序倒过来以后的树：ul.todo[li.item[span.title“交报告” button.del“删”] li.item[span.title“复习” button.del“删”] li.item.done.sel[span.title“写作业” button.del“删”]]
+[15] 调顺序没有新建也没有拿走，元素还是原来的：新建 0，拿走 0，false，false，false
+[16] 清空以后（默认的“空的时候”）：ul.todo[li.empty“还没有待办”]
+[17] 再加一条，空提示没了：ul.todo[li.item[span.title“新的一条” button.del“删”]]
+[18] 第二个待办列表（自己给了两个插槽），空的时候：写不出来：页面上只摆了一套控件，组件认的是控件的名字；第二个实例要再摆一套、再起一套名字
+[19] 第二个列表有了一条（“每一条怎么画”是自己给的）：写不出来：插槽只能交回一段文字，画不出“一行里两个带样式的小块”——没有造元素的接口
+[20] 点第二个列表的第 1 条：写不出来：没有第二个实例
+[21] 第二个列表的“放上以后”叫过：写不出来：组件不是被放上去的，是认领现成的控件，没有“放上”这个时刻
+[22] 拿走第二个列表：写不出来：没有“拿下来”的接口，最多把控件藏起来；登记的事件处理也没有地方统一取消
+[23] 拿走以后改它的条目、点它原来的元素：写不出来：同上
+[24] 用积木外观放一个待办列表：写不出来：积木没法“放”一个组件到页面上，只能认领
+[25] 积木外观的“当点了”口收到：写不出来：同上

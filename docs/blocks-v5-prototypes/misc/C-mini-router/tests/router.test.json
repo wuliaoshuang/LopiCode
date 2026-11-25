@@ -1,0 +1,21 @@
+{
+  "format": 1,
+  "cases": [
+    {"name": "路径一样长、带一个参数", "call": "match", "args": ["/todos/:id", "/todos/7"], "expect": {"value": {"id": "7"}}},
+    {"name": "段数不一样", "call": "match", "args": ["/todos/:id", "/todos"], "expect": {"value": null}},
+    {"name": "固定的段不一样", "call": "match", "args": ["/a/b", "/a/c"], "expect": {"value": null}},
+    {"name": "回应的样子", "call": "reply", "args": [201, {"ok": true}],
+     "expect": {"value": {"status": 201, "headers": {"content-type": "application/json; charset=utf-8"}, "body": "{\"ok\":true}"}}},
+    {"name": "生成编号是 36 个字", "call": "newId", "args": [], "expect": {"check": {"size": 36}}, "targets": ["node", "python", "java"]}
+  ],
+  "scenes": [
+    {"name": "打招呼", "program": "examples/hello.json",
+     "host": {"fake": ["http.serve"]},
+     "steps": [
+       {"request": {"method": "GET", "path": "/hello/小明", "query": "", "headers": {}, "body": null},
+        "expect": {"status": 200, "body": "{\"message\":\"你好，小明\"}"}},
+       {"request": {"method": "GET", "path": "/nothing", "query": "", "headers": {}, "body": null},
+        "expect": {"status": 404}}
+     ]}
+  ]
+}

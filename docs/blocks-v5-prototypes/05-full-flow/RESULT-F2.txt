@@ -1,0 +1,254 @@
+任务 F2 的全部原型，重跑于 2026-11-25 12:56:14 UTC；node v24.22.1，Python 3.12.3
+
+════════ 03-frontend-lib ════════
+—— 第 1 轮（只用 F1 第 2 轮的核心；预期有不过的，原样留档在 round1/RESULT-round1.txt）——
+[03 第1轮] node 退出码 1，错误输出 1 行：没接住的错误：派生值的算法里不能改状态
+[03 第1轮] python 退出码 0，错误输出 0 行
+[03 第1轮 node] 48 条检查，6 条等于手写的期望，42 条不等
+  [03 第1轮 node] 第 [3b] 条
+      期望：[3b] 菱形：改了甲以后读丁：23
+      实际：（没有这一行）
+  [03 第1轮 node] 第 [3c] 条
+      期望：[3c] 丁算出过的值（没有半新半旧的）：[12,23]
+      实际：（没有这一行）
+  [03 第1轮 node] 第 [3d] 条
+      期望：[3d] 丁一共算了几次：2
+      实际：（没有这一行）
+  [03 第1轮 node] 第 [4] 条
+      期望：[4] 条件里的依赖关掉以后不再触发：3，关
+      实际：（没有这一行）
+  [03 第1轮 node] 第 [5a] 条
+      期望：[5a] 设成同一个值不触发：1
+      实际：（没有这一行）
+  [03 第1轮 node] 第 [5b] 条
+      期望：[5b] 数字 1 换成文字“1”：算变了：2
+      实际：（没有这一行）
+  [03 第1轮 node] 第 [5c] 条
+      期望：[5c] 换成内容一样的另一个列表：算变了：2
+      实际：（没有这一行）
+  [03 第1轮 node] 第 [5d] 条
+      期望：[5d] 原地改了再写回同一个列表：不算变（已知的坑）：2
+      实际：（没有这一行）
+  [03 第1轮 node] 第 [6] 条
+      期望：[6] 收尾函数：重做前叫、停掉时叫，停掉后不再做：["做0","收0","做1","收1"]
+      实际：（没有这一行）
+  [03 第1轮 node] 第 [7a] 条
+      期望：[7a] 跟着做的事改它自己看的状态：报错停下：["跟着变的积木互相触发超过 100 轮"]
+      实际：（没有这一行）
+  [03 第1轮 node] 第 [7b] 条
+      期望：[7b] 它一共跑了几次：101
+      实际：（没有这一行）
+  [03 第1轮 node] 第 [8] 条
+      期望：[8] 两个派生值互相绕：派生值绕回了自己
+      实际：（没有这一行）
+  [03 第1轮 node] 第 [9a] 条
+      期望：[9a] 当…变了：登记时不先叫：[]
+      实际：（没有这一行）
+  [03 第1轮 node] 第 [9b] 条
+      期望：[9b] 一轮里变多次只叫一次，拿到最后的值和原来的值：["1→3"]
+      实际：（没有这一行）
+  [03 第1轮 node] 第 [9c] 条
+      期望：[9c] 变了又变回来：不叫：["1→3"]
+      实际：（没有这一行）
+  [03 第1轮 node] 第 [10] 条
+      期望：[10] “马上先做一次”（旧值是空）：["→3"]
+      实际：（没有这一行）
+  [03 第1轮 node] 第 [11] 条
+      期望：[11] 取消以后不再叫：1，1
+      实际：（没有这一行）
+  [03 第1轮 node] 第 [12a] 条
+      期望：[12a] 一起改：中间等过，跟着做的也只跑一次：["0+0","中间","1+1"]
+      实际：（没有这一行）
+  [03 第1轮 node] 第 [12b] 条
+      期望：[12b] 不用一起改：等一次跑一次：["0+0","中间","1+1","2+1","2+2"]
+      实际：（没有这一行）
+  [03 第1轮 node] 第 [13a] 条
+      期望：[13a] 派生值的算法里改状态：派生值的算法里不能改状态
+      实际：（没有这一行）
+  [03 第1轮 node] 第 [13b] 条
+      期望：[13b] 那个状态没被改：2
+      实际：（没有这一行）
+  [03 第1轮 node] 第 [14] 条
+      期望：[14] 归属收了：里面的都停、收尾都叫（后建的先收）：["甲0","乙0","甲收","甲1","乙收","乙1","乙收","甲收"]
+      实际：（没有这一行）
+  [03 第1轮 node] 第 [15] 条
+      期望：[15] 偷看、不记依赖地做：不算依赖：1，1
+      实际：（没有这一行）
+  [03 第1轮 node] 第 [16a] 条
+      期望：[16a] 派生值没人读就不算：0
+      实际：（没有这一行）
+  [03 第1轮 node] 第 [16b] 条
+      期望：[16b] 读两次只算一次：1
+      实际：（没有这一行）
+  [03 第1轮 node] 第 [16c] 条
+      期望：[16c] 依赖变了也不马上算：1
+      实际：（没有这一行）
+  [03 第1轮 node] 第 [16d] 条
+      期望：[16d] 再读才算：2，2
+      实际：（没有这一行）
+  [03 第1轮 node] 第 [17] 条
+      期望：[17] 跟着做的事读派生值（已知的粗糙处：派生值没变也重做一次）：[1,4,4]
+      实际：（没有这一行）
+  [03 第1轮 node] 第 [18] 条
+      期望：[18] 一件跟着做的事出错，不影响别的：["好0","好1"]｜故意的
+      实际：（没有这一行）
+  [03 第1轮 node] 第 [19a] 条
+      期望：[19a] 用积木外观写的“当…变了”：["0→7"]
+      实际：（没有这一行）
+  [03 第1轮 node] 第 [19b] 条
+      期望：[19b] 用积木外观读状态：7
+      实际：（没有这一行）
+  [03 第1轮 node] 第 [20] 条
+      期望：[20] 订阅和发出：按订阅的先后叫：["甲:你好","乙:你好"]，叫到 2 个
+      实际：（没有这一行）
+  [03 第1轮 node] 第 [21] 条
+      期望：[21] 退订以后不叫；再退一次也没事：["甲:你好","乙:你好","乙:再见"]，true，false
+      实际：（没有这一行）
+  [03 第1轮 node] 第 [22] 条
+      期望：[22] 只听一次：[1]，第二次叫到 0，还在听的 0
+      实际：（没有这一行）
+  [03 第1轮 node] 第 [23] 条
+      期望：[23] 发出过程中把排在后面的退订了：它不被叫：["一","三"]，叫到 2
+      实际：（没有这一行）
+  [03 第1轮 node] 第 [24] 条
+      期望：[24] 发出过程中新订阅的：这一次不叫，下一次才叫：["老","老","新"]
+      实际：（没有这一行）
+  [03 第1轮 node] 第 [25] 条
+      期望：[25] 一个处理出错（或者参数个数不对）不影响别的：["还是叫到了"]｜["炸:坏了","炸:调用函数时给的参数个数对不上"]｜3
+      实际：（没有这一行）
+  [03 第1轮 node] 第 [26] 条
+      期望：[26] 没人听的事件：0
+      实际：（没有这一行）
+  [03 第1轮 node] 第 [27] 条
+      期望：[27] 两条总线互不相干：0，1，["给第二条"]
+      实际：（没有这一行）
+  [03 第1轮 node] 第 [28] 条
+      期望：[28] 事件处理里改状态：三次改动，跟着做的只多跑一次：3，2
+      实际：（没有这一行）
+  [03 第1轮 node] 第 [29] 条
+      期望：[29] 处理里再发出：里面的先做完：["外1","内","外1完","外2"]
+      实际：（没有这一行）
+  [03 第1轮 node] 第 [30] 条
+      期望：[30] 用积木外观写的订阅和发出：["来了",null]
+      实际：（没有这一行）
+[03 第1轮 python] 48 条检查，45 条等于手写的期望，3 条不等
+  [03 第1轮 python] 第 [5b] 条
+      期望：[5b] 数字 1 换成文字“1”：算变了：2
+      实际：[5b] 数字 1 换成文字“1”：算变了：1
+  [03 第1轮 python] 第 [5c] 条
+      期望：[5c] 换成内容一样的另一个列表：算变了：2
+      实际：[5c] 换成内容一样的另一个列表：算变了：1
+  [03 第1轮 python] 第 [5d] 条
+      期望：[5d] 原地改了再写回同一个列表：不算变（已知的坑）：2
+      实际：[5d] 原地改了再写回同一个列表：不算变（已知的坑）：1
+[03 第1轮] node 和 python 的输出不同
+[03 第1轮] 核心表以外、被迫加的：orElse（GAP-F1-08，第 2 轮）
+[03 第1轮] 要“等”的函数单位（Node 里生成成 async）：50 / 105
+[03 第1轮] 和留档的一样：node 6/48（跑到第 [3b] 条时程序死了），python 45/48
+—— 第 2 轮（增补 call! / isSame / 懒值槽 以后）——
+[03 第2轮] node 退出码 0，错误输出 0 行
+[03 第2轮] python 退出码 0，错误输出 0 行
+[03 第2轮 node] 48 条检查，48 条等于手写的期望，0 条不等
+[03 第2轮 python] 48 条检查，48 条等于手写的期望，0 条不等
+[03 第2轮] node 和 python 的输出逐字节相同
+[03 第2轮] 核心表以外、被迫加的：call!（GAP-F2-01，第 3 轮）、isSame（GAP-F2-02，第 3 轮）、orElse（GAP-F1-08，第 2 轮）
+[03 第2轮] 要“等”的函数单位（Node 里生成成 async）：4 / 106
+—— 探针：把“要等的”处理函数交给事件总线（两种语言不一样，这就是要记的事）——
+[03 探针] Node 的输出：
+    发出刚回来：["开始","出错：这里要一个不用等的函数，可给的函数里有要等的事"]
+    又等了一拍：["开始","出错：这里要一个不用等的函数，可给的函数里有要等的事","等完了"]
+[03 探针] Python 的输出：
+    发出刚回来：["开始","等完了"]
+    又等了一拍：["开始","等完了"]
+[03-frontend-lib] run.sh 退出码 0
+
+════════ 04-component ════════
+—— 第 1 轮（组件只用 D 的甲类界面接口：读、写、当事件；预期有不过的，原样留档在 round1/RESULT-round1.txt）——
+[04 第1轮] node 退出码 0，错误输出 0 行
+[04 第1轮] 用到的宿主原生接口（11 个）：log.error×1、test.click×2、test.find×2、test.ops×2、test.page×1、test.tree×1、tick.defer×1、tick.wait×1、ui.get×1、ui.on×2、ui.set×1
+[04 第1轮 node] 25 条检查，13 条等于手写的期望，12 条不等
+  [04 第1轮 node] 第 [9] 条
+      期望：[9] 再加第四条以后的树：ul.todo[li.item.done[span.title“买菜” button.del“删”] li.item.done.sel[span.title“写作业” button.del“删”] li.item[span.title“复习” button.del“删”] li.item[span.title“交报告” button.del“删”]]
+      实际：[9] 再加第四条以后的树：ul.todo[li.item.done[span.title“买菜” button.del“删”] li.item.done.sel[span.title“写作业” button.del“删”] li.item[span.title“复习” button.del“删”]]
+  [04 第1轮 node] 第 [12] 条
+      期望：[12] 这一下宿主只被要求做了：新建 0，写 0，插入 0，拿走 1
+      实际：[12] 这一下宿主只被要求做了：新建 0，写 5，插入 0，拿走 0
+  [04 第1轮 node] 第 [13] 条
+      期望：[13] 剩下三条还是原来的元素：true，true，true
+      实际：[13] 剩下三条还是原来的元素：false，false，false
+  [04 第1轮 node] 第 [15] 条
+      期望：[15] 调顺序没有新建也没有拿走，元素还是原来的：新建 0，拿走 0，true，true，true
+      实际：[15] 调顺序没有新建也没有拿走，元素还是原来的：新建 0，拿走 0，false，false，false
+  [04 第1轮 node] 第 [18] 条
+      期望：[18] 第二个待办列表（自己给了两个插槽），空的时候：ul.todo[p.none“空空如也”]
+      实际：[18] 第二个待办列表（自己给了两个插槽），空的时候：写不出来：页面上只摆了一套控件，组件认的是控件的名字；第二个实例要再摆一套、再起一套名字
+  [04 第1轮 node] 第 [19] 条
+      期望：[19] 第二个列表有了一条（“每一条怎么画”是自己给的）：ul.todo[li.item[div.row[span.pri“高” span.name“交报告”] button.del“删”]]
+      实际：[19] 第二个列表有了一条（“每一条怎么画”是自己给的）：写不出来：插槽只能交回一段文字，画不出“一行里两个带样式的小块”——没有造元素的接口
+  [04 第1轮 node] 第 [20] 条
+      期望：[20] 点第二个列表的第 1 条：第二个：ul.todo[li.item.sel[div.row[span.pri“高” span.name“交报告”] button.del“删”]]｜第一个没变：ul.todo[li.item[span.title“新的一条” button.del“删”]]
+      实际：[20] 点第二个列表的第 1 条：写不出来：没有第二个实例
+  [04 第1轮 node] 第 [21] 条
+      期望：[21] 第二个列表的“放上以后”叫过：["放上以后"]
+      实际：[21] 第二个列表的“放上以后”叫过：写不出来：组件不是被放上去的，是认领现成的控件，没有“放上”这个时刻
+  [04 第1轮 node] 第 [22] 条
+      期望：[22] 拿走第二个列表：容器里：div.b｜["放上以后","拿走之前"]
+      实际：[22] 拿走第二个列表：写不出来：没有“拿下来”的接口，最多把控件藏起来；登记的事件处理也没有地方统一取消
+  [04 第1轮 node] 第 [23] 条
+      期望：[23] 拿走以后改它的条目、点它原来的元素：宿主什么都没被要求做：新建 0，写 0，插入 0，拿走 0｜事件一共还是 3 个
+      实际：[23] 拿走以后改它的条目、点它原来的元素：写不出来：同上
+  [04 第1轮 node] 第 [24] 条
+      期望：[24] 用积木外观放一个待办列表：ul.todo[li.item[span.title“积木放的” button.del“删”]]
+      实际：[24] 用积木外观放一个待办列表：写不出来：积木没法“放”一个组件到页面上，只能认领
+  [04 第1轮 node] 第 [25] 条
+      期望：[25] 积木外观的“当点了”口收到：["积木放的"]
+      实际：[25] 积木外观的“当点了”口收到：写不出来：同上
+[04 第1轮] 和留档的一样：13/25
+—— 第 2 轮（加了 4 个元素级宿主接口，用积木写了“画面库”）——
+[04 第2轮] node 退出码 0，错误输出 0 行
+[04 第2轮] 用到的宿主原生接口（13 个）：log.error×1、test.click×5、test.find×3、test.ops×2、test.tree×2、tick.defer×1、tick.wait×1、ui.create×3、ui.insert×5、ui.on×1、ui.remove×3、ui.root×1、ui.set×2
+[04 第2轮 node] 25 条检查，25 条等于手写的期望，0 条不等
+[04-component] run.sh 退出码 0
+
+════════ 05-full-flow ════════
+—— 第 1 轮（前端发请求只用 F1 的 net.fetch；预期有不过的，原样留档在 round1/RESULT-round1.txt）——
+[05 第1轮 对 node 服务] 前端退出码 0，错误输出 0 行
+[05 第1轮 对 node 服务] 15 条检查，11 条等于手写的期望，4 条不等
+  [05 第1轮 对 node 服务] 第 [4] 条
+      期望：[4] 标题空着点添加（非法）：显示服务器说的原因、列表不变：div.app[form.add[input.title〔〕 input.level〔中〕 button.submit“添加” p.err“title 的长度要在 1 到 20 之间”] ul.todo[li.item[div.row[span.pri“中” span.name“买菜”] button.del“删”]]]
+      实际：[4] 标题空着点添加（非法）：显示服务器说的原因、列表不变：div.app[form.add[input.title〔〕 input.level〔中〕 button.submit“添加” p.err“提交失败”] ul.todo[li.item[div.row[span.pri“中” span.name“买菜”] button.del“删”]]]
+  [05 第1轮 对 node 服务] 第 [5] 条
+      期望：[5] 标题太长、级别乱填（非法）：两条原因都显示、填的东西还在、列表不变：div.app[form.add[input.title〔这是一条特别特别特别特别特别特别长的待办事项〕 input.level〔特急〕 button.submit“添加” p.err“title 的长度要在 1 到 20 之间；level 只能是 高、中、低 里的一个”] ul.todo[li.item[div.row[span.pri“中” span.name“买菜”] button.del“删”]]]
+      实际：[5] 标题太长、级别乱填（非法）：两条原因都显示、填的东西还在、列表不变：div.app[form.add[input.title〔这是一条特别特别特别特别特别特别长的待办事项〕 input.level〔特急〕 button.submit“添加” p.err“提交失败”] ul.todo[li.item[div.row[span.pri“中” span.name“买菜”] button.del“删”]]]
+  [05 第1轮 对 node 服务] 第 [8] 条
+      期望：[8] 再交一次“买菜”（重复）：服务器不收、列表还是两条：div.app[form.add[input.title〔买菜〕 input.level〔高〕 button.submit“添加” p.err“已经有这一条了”] ul.todo[li.item[div.row[span.pri“中” span.name“买菜”] button.del“删”] li.item[div.row[span.pri“高” span.name“写作业”] button.del“删”]]]
+      实际：[8] 再交一次“买菜”（重复）：服务器不收、列表还是两条：div.app[form.add[input.title〔买菜〕 input.level〔高〕 button.submit“添加” p.err“提交失败”] ul.todo[li.item[div.row[span.pri“中” span.name“买菜”] button.del“删”] li.item[div.row[span.pri“高” span.name“写作业”] button.del“删”]]]
+  [05 第1轮 对 node 服务] 第 [14] 条
+      期望：[14] 服务器连不上的时候点添加：显示连不上、列表不变：div.app[form.add[input.title〔测试〕 input.level〔高〕 button.submit“添加” p.err“连不上服务器”] ul.todo[li.item[div.row[span.pri“高” span.name“写作业”] button.del“删”] li.item[div.row[span.pri“高” span.name“复习”] button.del“删”]]]
+      实际：[14] 服务器连不上的时候点添加：显示连不上、列表不变：div.app[form.add[input.title〔测试〕 input.level〔高〕 button.submit“添加” p.err“提交失败”] ul.todo[li.item[div.row[span.pri“高” span.name“写作业”] button.del“删”] li.item[div.row[span.pri“高” span.name“复习”] button.del“删”]]]
+[05 第1轮 对 python 服务] 前端退出码 0，错误输出 0 行
+[05 第1轮 对 python 服务] 15 条检查，11 条等于手写的期望，4 条不等
+  [05 第1轮 对 python 服务] 第 [4] 条
+      期望：[4] 标题空着点添加（非法）：显示服务器说的原因、列表不变：div.app[form.add[input.title〔〕 input.level〔中〕 button.submit“添加” p.err“title 的长度要在 1 到 20 之间”] ul.todo[li.item[div.row[span.pri“中” span.name“买菜”] button.del“删”]]]
+      实际：[4] 标题空着点添加（非法）：显示服务器说的原因、列表不变：div.app[form.add[input.title〔〕 input.level〔中〕 button.submit“添加” p.err“提交失败”] ul.todo[li.item[div.row[span.pri“中” span.name“买菜”] button.del“删”]]]
+  [05 第1轮 对 python 服务] 第 [5] 条
+      期望：[5] 标题太长、级别乱填（非法）：两条原因都显示、填的东西还在、列表不变：div.app[form.add[input.title〔这是一条特别特别特别特别特别特别长的待办事项〕 input.level〔特急〕 button.submit“添加” p.err“title 的长度要在 1 到 20 之间；level 只能是 高、中、低 里的一个”] ul.todo[li.item[div.row[span.pri“中” span.name“买菜”] button.del“删”]]]
+      实际：[5] 标题太长、级别乱填（非法）：两条原因都显示、填的东西还在、列表不变：div.app[form.add[input.title〔这是一条特别特别特别特别特别特别长的待办事项〕 input.level〔特急〕 button.submit“添加” p.err“提交失败”] ul.todo[li.item[div.row[span.pri“中” span.name“买菜”] button.del“删”]]]
+  [05 第1轮 对 python 服务] 第 [8] 条
+      期望：[8] 再交一次“买菜”（重复）：服务器不收、列表还是两条：div.app[form.add[input.title〔买菜〕 input.level〔高〕 button.submit“添加” p.err“已经有这一条了”] ul.todo[li.item[div.row[span.pri“中” span.name“买菜”] button.del“删”] li.item[div.row[span.pri“高” span.name“写作业”] button.del“删”]]]
+      实际：[8] 再交一次“买菜”（重复）：服务器不收、列表还是两条：div.app[form.add[input.title〔买菜〕 input.level〔高〕 button.submit“添加” p.err“提交失败”] ul.todo[li.item[div.row[span.pri“中” span.name“买菜”] button.del“删”] li.item[div.row[span.pri“高” span.name“写作业”] button.del“删”]]]
+  [05 第1轮 对 python 服务] 第 [14] 条
+      期望：[14] 服务器连不上的时候点添加：显示连不上、列表不变：div.app[form.add[input.title〔测试〕 input.level〔高〕 button.submit“添加” p.err“连不上服务器”] ul.todo[li.item[div.row[span.pri“高” span.name“写作业”] button.del“删”] li.item[div.row[span.pri“高” span.name“复习”] button.del“删”]]]
+      实际：[14] 服务器连不上的时候点添加：显示连不上、列表不变：div.app[form.add[input.title〔测试〕 input.level〔高〕 button.submit“添加” p.err“提交失败”] ul.todo[li.item[div.row[span.pri“高” span.name“写作业”] button.del“删”] li.item[div.row[span.pri“高” span.name“复习”] button.del“删”]]]
+[05 第1轮] 对 Node 服务和对 Python 服务，前端的输出逐字节相同
+[05 第1轮] 和留档的一样：对两个服务都是 11/15
+—— 第 2 轮（换成 D 的“网络.请求”：不管状态码是多少都拿得到回应）——
+[05 第2轮 对 node 服务] 前端退出码 0，错误输出 0 行
+[05 第2轮 对 node 服务] 15 条检查，15 条等于手写的期望，0 条不等
+[05 第2轮 对 python 服务] 前端退出码 0，错误输出 0 行
+[05 第2轮 对 python 服务] 15 条检查，15 条等于手写的期望，0 条不等
+[05 第2轮] 对 Node 服务和对 Python 服务，前端的输出逐字节相同
+[05-full-flow] run.sh 退出码 0
+
+════════ 汇总 ════════
+三个目录的 run.sh 都是 0：第 2 轮全部通过，第 1 轮的失败和留档的一样。

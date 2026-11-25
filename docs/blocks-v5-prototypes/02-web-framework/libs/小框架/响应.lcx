@@ -1,0 +1,28 @@
+; 库“小框架”·响应：一个可以在中间件里继续改的响应对象。
+(module 响应
+
+  (public (class 响应
+    (field 状态码 200)
+    (field 头 (dict))
+    (field 内容 "")
+    (ctor (状态码 类型 内容)
+      (set (. (this) 状态码) 状态码)
+      (set (. (this) 头) (dict))
+      (if (when (!= 类型 "") (set (index (. (this) 头) "Content-Type") 类型)))
+      (set (. (this) 内容) 内容))
+
+    (static-method JSON (状态码 值)
+      (return (new 响应 状态码 "application/json; charset=utf-8" (rt toJson 值))))
+    (static-method 文字 (状态码 值)
+      (return (new 响应 状态码 "text/plain; charset=utf-8" (rt toText 值))))
+    (static-method 空的 ()
+      (return (new 响应 204 "" "")))
+
+    ; 加一个响应头；返回自己，方便连着写。
+    (method 加头 (名字 值)
+      (set (index (. (this) 头) 名字) (rt toText 值))
+      (return (this)))
+
+    ; 变成宿主认的字典。
+    (method 变成字典 ()
+      (return (dict ("status" (. (this) 状态码)) ("headers" (. (this) 头)) ("body" (. (this) 内容))))))))

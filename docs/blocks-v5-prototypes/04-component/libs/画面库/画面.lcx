@@ -1,0 +1,164 @@
+; 库“画面库”·第 2 轮：用语言核心 ＋ 状态库 ＋ 7 个元素级宿主接口，把“画界面”这件事封装出来。
+;   元素（设置可以是值，也可以是“取值函数”＝跟着变）、如果有（存在条件）、每一个（按标识的重复）、挂上 / 拿走、放上以后 / 拿走之前。
+; D 的甲类接口没有“造元素、放进去、拿下来”（它把重复和存在条件交给导出器）；第 1 轮证明那样组件写不出来（GAP-F2-05），
+; 所以第 2 轮加了 ui.root / ui.create / ui.insert / ui.remove 四个。
+; 规矩：取值函数、画法、标识函数都是“不用等的函数”（call!）。事件处理可以有要等的事——宿主不等它。
+; 已知的简化：画法只能交回“一个元素”（不能是好几个、不能直接是“如果有 / 每一个”）；调顺序时留下的元素全部重新排一遍。
+(module 画面
+  (uses 状态库)
+  (native ui.root ())
+  (native ui.create (标签))
+  (native ui.set (控件 属性名 值))
+  (native ui.insert (父 子 前面的))
+  (native ui.remove (子))
+  (native ui.on (控件 事件名 回调))
+
+  (var 放上以后要做的 (list))
+
+  ; 会自己变的一段（如果有 / 每一个）：放上去的时候才知道父元素是谁。
+  (public (class 片段
+    (field 放法 null)
+    (ctor (放法) (set (. (this) 放法) 放法))
+    (method 放上 (父 前面的)
+      (do (call! (. (this) 放法) 父 前面的)))))
+
+  ; 一项设置：值是函数＝跟着变（算出来和上次写的一样就不写）；别的＝写一次。
+  (func 绑 (元 名 值)
+    (if (when (rt isType 值 "function")
+          (let 上次 null)
+          (let 写过 false)
+          (do (call 跟着做 (fn ()
+            (let 新 (call! 值))
+            (if (when (or (not 写过) (not (rt isSame 新 上次)))
+                  (set 写过 true)
+                  (set 上次 新)
+                  (do (native ui.set 元 名 新))))
+            (return null)))))
+        (else (do (native ui.set 元 名 值)))))
+
+  (func 听 (元 事件名 处理)
+    (do (call 收尾时 (native ui.on 元 事件名 处理))))
+
+  (public (func 页面根 () (return (native ui.root))))
+
+  ; 把一个孩子放进父元素（排在 前面的 之前；空＝最后）。孩子可以是元素、片段、空。
+  (public (func 放进 (父 孩 前面的)
+    (if (when (rt isNull 孩) (return null))
+        (when (is-a 孩 片段) (do (send 孩 放上 父 前面的)))
+        (else (do (native ui.insert 父 孩 前面的))))))
+
+  ; 造一个元素。设置＝{属性名: 值或取值函数}；孩子们＝列表；事件们＝{事件名: 处理(事件)}。
+  (public (func 元素 (标签 (设置 null) (孩子们 null) (事件们 null))
+    (let 元 (native ui.create 标签))
+    (if (when (not (rt isNull 设置)) (for-pairs (名 值) 设置 (do (call 绑 元 名 值)))))
+    (if (when (not (rt isNull 事件们)) (for-pairs (事件名 处理) 事件们 (do (call 听 元 事件名 处理)))))
+    (if (when (not (rt isNull 孩子们)) (for-each 孩 孩子们 (do (call 放进 元 孩 null)))))
+    (return 元)))
+
+  ; 存在条件：条件() 是真就画 画法()，否则画 否则画法()（可以不给）。条件的真假没变就什么都不动。
+  (public (func 如果有 (条件 画法 (否则画法 null))
+    (return (new 片段 (fn (父 前面的)
+      (let 锚 (native ui.create "#锚"))
+      (do (native ui.insert 父 锚 前面的))
+      (let 定过 false)
+      (let 现在 false)
+      (let 属 null)
+      (let 节点 null)
+      (do (call 跟着做 (fn ()
+        (let 要 (cond (call! 条件) true false))
+        (if (when (and 定过 (== 要 现在)) (return null)))
+        (set 定过 true)
+        (set 现在 要)
+        (do (call 不记依赖地做 (fn ()
+          (if (when (not (rt isNull 属)) (do (send 属 收)) (set 属 null)))
+          (if (when (not (rt isNull 节点)) (do (native ui.remove 节点)) (set 节点 null)))
+          (let 用 (cond 要 画法 否则画法))
+          (if (when (not (rt isNull 用))
+                (set 属 (new 归属))
+                (set 节点 (send 属 里面做 用))
+                (do (native ui.insert 父 节点 锚))))
+          (return null))))
+        (return null))))
+      (do (call 收尾时 (fn ()
+        (if (when (not (rt isNull 属)) (do (send 属 收)) (set 属 null)))
+        (return null))))
+      (return null))))))
+
+  (func 造一行 (条 序 画法)
+    (let 属 (new 归属))
+    (let 条目 (call 新状态 条))
+    (let 序号 (call 新状态 序))
+    (let 节点 (send 属 里面做 (fn ()
+      (return (call! 画法 (fn () (return (send 条目 读))) (fn () (return (send 序号 读))))))))
+    (return (dict ("属" 属) ("节点" 节点) ("条目" 条目) ("序号" 序号))))
+
+  ; 按标识的重复：列表取值() 的每一条画一个元素。标识(条) 一样的还是原来那个元素（只把新的条目交给它）；
+  ; 没了的拿走；新来的新建；顺序变了就挪。画法(条目取值, 序号取值) 交回一个元素。
+  (public (func 每一个 (列表取值 标识 画法)
+    (return (new 片段 (fn (父 前面的)
+      (let 锚 (native ui.create "#锚"))
+      (do (native ui.insert 父 锚 前面的))
+      (let 表 (dict))
+      (let 旧序 (list))
+      (do (call 跟着做 (fn ()
+        (let 列 (call! 列表取值))
+        (do (call 不记依赖地做 (fn ()
+          (let 新序 (list))
+          (let 新表 (dict))
+          (for-each (条 序) 列
+            (let 键 (rt toText (call! 标识 条)))
+            (if (when (rt dictHas 新表 键) (throw (rt join "“每一个”里有两条的标识一样：" 键))))
+            (do (rt listPush 新序 键))
+            (if (when (rt dictHas 表 键)
+                  (let 老行 (rt dictGet 表 键))
+                  (do (send (rt dictGet 老行 "条目") 写 条))
+                  (do (send (rt dictGet 老行 "序号") 写 序))
+                  (set (index 新表 键) 老行))
+                (else (set (index 新表 键) (call 造一行 条 序 画法)))))
+          (let 留下的旧 (list))
+          (for-each 旧键 旧序
+            (if (when (rt dictHas 新表 旧键) (do (rt listPush 留下的旧 旧键)))
+                (else
+                  (let 走的 (rt dictGet 表 旧键))
+                  (do (send (rt dictGet 走的 "属") 收))
+                  (do (native ui.remove (rt dictGet 走的 "节点"))))))
+          (let 留下的新 (list))
+          (for-each 新键 新序
+            (if (when (rt dictHas 表 新键) (do (rt listPush 留下的新 新键)))))
+          (let 顺序没变 (== 留下的旧 留下的新))
+          (let 下一个 锚)
+          (let 位 (- (rt size 新序) 1))
+          (while (>= 位 0)
+            (let 这键 (rt listGet 新序 位))
+            (let 这行 (rt dictGet 新表 这键))
+            (if (when (or (not 顺序没变) (not (rt dictHas 表 这键)))
+                  (do (native ui.insert 父 (rt dictGet 这行 "节点") 下一个))))
+            (set 下一个 (rt dictGet 这行 "节点"))
+            (set 位 (- 位 1)))
+          (set 表 新表)
+          (set 旧序 新序)
+          (return null))))
+        (return null))))
+      (do (call 收尾时 (fn ()
+        (for-pairs (收键 收行) 表 (do (send (rt dictGet 收行 "属") 收)))
+        (return null))))
+      (return null))))))
+
+  ; 组件里用：登记“放上以后”“拿走之前”要做的事。
+  (public (func 放上以后 (做) (do (rt listPush 放上以后要做的 做))))
+  (public (func 拿走之前 (做) (do (call 收尾时 做))))
+
+  ; 把 画法() 画出来的东西放到 父 里。里面登记的跟着做的事、事件处理都归这一次“挂上”管。返回“拿走”函数。
+  (public (func 挂上 (父 画法)
+    (let 属 (new 归属))
+    (let 外面的 放上以后要做的)
+    (set 放上以后要做的 (list))
+    (let 节点 (send 属 里面做 画法))
+    (do (call 放进 父 节点 null))
+    (let 这次的 放上以后要做的)
+    (set 放上以后要做的 外面的)
+    (for-each 做 这次的 (do (send 属 里面做 做)))
+    (return (fn ()
+      (do (send 属 收))
+      (do (native ui.remove 节点))
+      (return null))))))

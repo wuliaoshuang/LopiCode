@@ -1,0 +1,46 @@
+; 库“接口服务”·请求：从宿主给的请求字典 {method, path, query, headers, body} 里取东西。
+; 规矩照现有小库（parseQuery / body / bodyField / header / pathParam）。
+(module 请求
+  (native url.decode (文字))
+
+  ; 原始的网址参数（问号后面那段）→ 字典。加号是空格；重名取第一个；没有等号的值是空文字；空的一段跳过。
+  (func 解析网址参数 (原文)
+    (let 表 (dict))
+    (for-each 段 (rt split 原文 "&")
+      (if (when (== 段 "") (continue)))
+      (let 等号 (rt indexOf 段 "="))
+      (let 键 段)
+      (let 值 "")
+      (if (when (>= 等号 0)
+            (set 键 (rt substring 段 0 等号))
+            (set 值 (rt substring 段 (+ 等号 1) (rt size 段)))))
+      (set 键 (native url.decode (rt replace 键 "+" " ")))
+      (set 值 (native url.decode (rt replace 值 "+" " ")))
+      (if (when (not (rt dictHas 表 键)) (set (index 表 键) 值))))
+    (return 表))
+
+  ; 第一次用到才解析，解析好的记在请求上。
+  (public (func 网址参数 (请求 名字)
+    (let 表 (rt dictGet 请求 "_query"))
+    (if (when (rt isNull 表)
+          (set 表 (call 解析网址参数 (rt dictGet 请求 "query")))
+          (set (index 请求 "_query") 表)))
+    (return (rt dictGet 表 名字))))
+
+  ; 路径参数是“分发”对上路径以后放进请求里的。
+  (public (func 路径参数 (请求 名字)
+    (return (rt dictGet (rt dictGet 请求 "params") 名字))))
+
+  ; 请求内容按 JSON 解析（只解析一次）；没提交、不是合法 JSON → 空。
+  (public (func 请求内容 (请求)
+    (if (when (not (rt dictHas 请求 "_body"))
+          (set (index 请求 "_body") (rt fromJson (rt dictGet 请求 "body")))))
+    (return (rt dictGet 请求 "_body"))))
+
+  ; 请求内容不是字典时，字段读出来是空。
+  (public (func 请求内容的字段 (请求 名字)
+    (return (rt dictGet (call 请求内容 请求) 名字))))
+
+  ; 请求头的名字不分大小写（宿主给的都是小写）。
+  (public (func 请求头 (请求 名字)
+    (return (rt dictGet (rt dictGet 请求 "headers") (rt lower 名字))))))

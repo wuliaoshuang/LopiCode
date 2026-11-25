@@ -1,0 +1,33 @@
+{
+  "kind": "lopicode-lib",
+  "format": 1,
+  "id": "demo/mini-router",
+  "name": "小路由",
+  "version": "1.2.0",
+  "summary": "按“方式 + 路径”把请求分给不同的积木串，带路径参数。",
+  "authors": [{"name": "示例作者"}],
+  "license": "MIT",
+  "keywords": ["后端", "路由", "接口"],
+  "color": "network",
+  "icon": "icon.svg",
+  "hosts": ["backend"],
+  "targets": ["node", "python", "go", "java", "php"],
+  "needs": {"host": ["http.serve"], "std": 2},
+  "dependencies": {},
+  "packages": {},
+  "native": {"allowed": true},
+  "modules": [{"file": "modules/router.json", "name": "router"}],
+  "categories": [{"id": "route", "name": "接口"}, {"id": "reply", "name": "回应"}, {"id": "tool", "name": "小工具"}],
+  "settings": [
+    {"id": "port", "name": "端口", "type": "integer", "default": 8080, "min": 1, "max": 65535, "hint": "服务开在哪个端口"}
+  ],
+  "pickers": [
+    {"id": "pathParams", "name": "路径里的参数", "source": "slot", "from": {"hat": "onRoute", "slot": "路径"}, "match": ":([A-Za-z_][A-Za-z0-9_]*)"}
+  ],
+  "rules": "rules.json",
+  "tests": ["tests/router.test.json"],
+  "examples": ["examples/hello.json"],
+  "docs": {"readme": "docs/README.md", "blocks": "docs/blocks"},
+  "legacyOps": {},
+  "files": {}
+}

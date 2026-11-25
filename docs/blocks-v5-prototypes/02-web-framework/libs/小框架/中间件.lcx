@@ -1,0 +1,45 @@
+; 库“小框架”·中间件：洋葱模型。每个中间件拿到（上下文，下一步）：
+;   · 不调“下一步”直接返回一个响应＝提前返回；
+;   · 调之前改上下文＝改请求；
+;   · 调之后拿到里面的响应再改＝处理后改响应。
+(module 中间件
+  (uses 错误们 响应)
+  (native log.error (值))
+
+  ; 中间件可以是实现了这个接口的对象，也可以直接是一个函数 (上下文 下一步)。
+  (public (interface 中间件 (sig 处理 (上下文 下一步))))
+
+  (func 包一层 (这一层 里面)
+    (if (when (rt isType 这一层 "function")
+          (return (fn (上下文) (return (call 这一层 上下文 里面))))))
+    (return (fn (上下文) (return (send 这一层 处理 上下文 里面)))))
+
+  ; 把一串中间件和最里面的处理函数套成一个函数：第一个在最外面。
+  (public (func 串起来 (中间件们 最里面)
+    (let 结果 最里面)
+    (let i (- (rt size 中间件们) 1))
+    (while (>= i 0)
+      (set 结果 (call 包一层 (rt listGet 中间件们 i) 结果))
+      (set i (- i 1)))
+    (return 结果)))
+
+  ; 现成的中间件：把里面抛出来的错误变成响应。HTTP错误 → 它自己的状态码和内容；别的错误 → 500。
+  ; 第 2 轮：合成一个类（第 1 轮是“错误处理”“兜底”两个）。别的错误默认记到错误输出；也可以给一个函数 (错误 上下文) 自己处理。
+  (public (class 错误处理 (implements 中间件)
+    (field 出错时 null)
+    (ctor ((出错时 null))
+      (set (. (this) 出错时) 出错时))
+    (method 处理 (上下文 下一步)
+      (try
+        (body (return (call 下一步 上下文)))
+        (catch e
+          (if (when (is-a e HTTP错误)
+                (let 回复 (send 响应 JSON (. e 状态码) (send e 变成内容)))
+                (if (when (is-a e 方式不对)
+                      (do (send 回复 加头 "Allow" (rt listJoin (. e 允许的) ", ")))))
+                (return 回复)))
+          (if (when (rt isNull (. (this) 出错时))
+                (do (native log.error (rt join "出错：" (. 上下文 方式) " " (. 上下文 路径) "：" (. e 消息)))))
+              (else
+                (do (call (. (this) 出错时) e 上下文))))
+          (return (send 响应 JSON 500 (dict ("error" "服务器内部出错"))))))))))

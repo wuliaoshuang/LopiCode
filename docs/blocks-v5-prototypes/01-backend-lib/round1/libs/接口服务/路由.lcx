@@ -1,0 +1,56 @@
+; 库“接口服务”·路由：路由表、注册、路径匹配、分发、开始服务。
+; 规矩照现有小库（route / match / handle）：路径对了方式不对 405；都对不上 404；处理函数抛错 500；没返回 204。
+(module 路由
+  (uses 响应)
+  (native http.serve (端口 处理函数))
+  (native url.decode (文字))
+
+  (var 路由表 (list))
+
+  ; 把路径按 / 切开，空的段扔掉；解码＝是 时每段做百分号解码。
+  (func 切路径 (路径 解码)
+    (let 段们 (list))
+    (for-each 段 (rt split 路径 "/")
+      (if (when (!= 段 "")
+            (do (rt listPush 段们 (cond 解码 (native url.decode 段) 段))))))
+    (return 段们))
+
+  ; 登记一个接口。路径里的 :名字 是路径参数。
+  (public (func 注册 (方式 路径 处理)
+    (do (rt listPush 路由表 (dict ("method" 方式) ("segments" (call 切路径 路径 false)) ("handler" 处理))))))
+
+  ; 路径对得上就返回参数字典（可能是空字典），对不上返回空。
+  (func 对得上 (模式 段们)
+    (if (when (!= (rt size 模式) (rt size 段们)) (return null)))
+    (let 参数 (dict))
+    (for-each (想要 i) 模式
+      (let 实际 (rt listGet 段们 i))
+      (if (when (rt startsWith 想要 ":")
+            (set (index 参数 (rt substring 想要 1 (rt size 想要))) 实际))
+          (when (!= 想要 实际)
+            (return null))))
+    (return 参数))
+
+  (func 分发 (请求)
+    (if (when (== (rt dictGet 请求 "method") "OPTIONS") (return (call 预检响应))))
+    (let 段们 (call 切路径 (rt dictGet 请求 "path") true))
+    (let 路径对了 false)
+    (for-each 路由 路由表
+      (let 参数 (call 对得上 (rt dictGet 路由 "segments") 段们))
+      (if (when (rt isNull 参数) (continue)))
+      (set 路径对了 true)
+      (if (when (!= (rt dictGet 路由 "method") (rt dictGet 请求 "method")) (continue)))
+      (set (index 请求 "params") 参数)
+      (let 结果 null)
+      (try
+        (body (set 结果 (call (rt dictGet 路由 "handler") 请求)))
+        (catch e
+          (return (call 错误响应 500 "服务器内部出错"))))
+      (if (when (rt isNull 结果) (return (call 空响应))))
+      (return 结果))
+    (if (when 路径对了 (return (call 错误响应 405 "这个地址不支持这种请求方式"))))
+    (return (call 错误响应 404 "没有这个接口")))
+
+  ; 唯一碰宿主的地方。
+  (public (func 开始服务 (端口)
+    (do (native http.serve 端口 分发)))))

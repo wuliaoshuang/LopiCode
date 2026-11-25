@@ -1,0 +1,7 @@
+{
+ "format": 1, "name": "表单组件库", "id": "lib.lopicode.todoform", "version": "0.2.0", "author": "LopiCode 原型（F2）",
+ "description": "组件“待办表单”：双向属性（标题、级别）、只读属性（提交中、错误）、事件（提交）。",
+ "requires": {"core": "F1 第 2 轮的核心 ＋ call!", "natives": [], "libs": ["状态库", "画面库"]},
+ "languages": ["node"], "modules": ["表单"],
+ "exports": {"classes": [], "functions": ["待办表单"]}, "blocks": []
+}

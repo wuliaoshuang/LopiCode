@@ -1,0 +1,994 @@
+[
+{
+"method": "GET",
+"target": "/todos",
+"status": 200,
+"expect": "[]",
+"type": "application/json; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/todos/count",
+"status": 200,
+"expect": "{\"count\":0}",
+"type": "application/json; charset=utf-8"
+},
+{
+"method": "POST",
+"target": "/todos",
+"status": 201,
+"expect": "{\"done\":false,\"id\":1,\"title\":\"买菜\"}",
+"type": "application/json; charset=utf-8",
+"body": "{\"title\":\"买菜\"}"
+},
+{
+"method": "POST",
+"target": "/todos",
+"status": 201,
+"expect": "{\"done\":false,\"id\":2,\"title\":\"写 \\\"代码\\\"\\n第二行 😀\"}",
+"type": "application/json; charset=utf-8",
+"body": "{\"title\":\"写 \\\"代码\\\"\\n第二行 \\ud83d\\ude00\",\"id\":99,\"done\":true}"
+},
+{
+"method": "POST",
+"target": "/todos",
+"status": 400,
+"expect": "{\"error\":\"缺少 title\"}",
+"type": "application/json; charset=utf-8",
+"body": "{\"name\":\"没有标题\"}"
+},
+{
+"method": "POST",
+"target": "/todos",
+"status": 400,
+"expect": "{\"error\":\"缺少 title\"}",
+"type": "application/json; charset=utf-8"
+},
+{
+"method": "POST",
+"target": "/todos",
+"status": 400,
+"expect": "{\"error\":\"缺少 title\"}",
+"type": "application/json; charset=utf-8",
+"body": "这不是 JSON"
+},
+{
+"method": "POST",
+"target": "/todos",
+"status": 400,
+"expect": "{\"error\":\"缺少 title\"}",
+"type": "application/json; charset=utf-8",
+"body": "{\"title\":null}"
+},
+{
+"method": "POST",
+"target": "/todos",
+"status": 201,
+"expect": "{\"done\":false,\"id\":3,\"title\":3}",
+"type": "application/json; charset=utf-8",
+"body": "{\"title\":3.0}"
+},
+{
+"method": "GET",
+"target": "/todos",
+"status": 200,
+"expect": "[{\"done\":false,\"id\":1,\"title\":\"买菜\"},{\"done\":false,\"id\":2,\"title\":\"写 \\\"代码\\\"\\n第二行 😀\"},{\"done\":false,\"id\":3,\"title\":3}]",
+"type": "application/json; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/todos/",
+"status": 200,
+"expect": "[{\"done\":false,\"id\":1,\"title\":\"买菜\"},{\"done\":false,\"id\":2,\"title\":\"写 \\\"代码\\\"\\n第二行 😀\"},{\"done\":false,\"id\":3,\"title\":3}]",
+"type": "application/json; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/todos/count",
+"status": 200,
+"expect": "{\"count\":3}",
+"type": "application/json; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/todos/1",
+"status": 200,
+"expect": "{\"done\":false,\"id\":1,\"title\":\"买菜\"}",
+"type": "application/json; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/todos/1.0",
+"status": 200,
+"expect": "{\"done\":false,\"id\":1,\"title\":\"买菜\"}",
+"type": "application/json; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/todos/%201%20",
+"status": 200,
+"expect": "{\"done\":false,\"id\":1,\"title\":\"买菜\"}",
+"type": "application/json; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/todos/99",
+"status": 404,
+"expect": "{\"error\":\"找不到 id 是 99 的待办\"}",
+"type": "application/json; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/todos/abc",
+"status": 404,
+"expect": "{\"error\":\"找不到 id 是 abc 的待办\"}",
+"type": "application/json; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/todos/%E4%B8%AD%E6%96%87",
+"status": 404,
+"expect": "{\"error\":\"找不到 id 是 中文 的待办\"}",
+"type": "application/json; charset=utf-8"
+},
+{
+"method": "PATCH",
+"target": "/todos/1",
+"status": 200,
+"expect": "{\"done\":true,\"extra\":[1,2,{\"k\":null}],\"id\":1,\"title\":\"买菜\"}",
+"type": "application/json; charset=utf-8",
+"body": "{\"done\":true,\"id\":500,\"extra\":[1,2,{\"k\":null}]}"
+},
+{
+"method": "PATCH",
+"target": "/todos/1",
+"status": 200,
+"expect": "{\"done\":true,\"extra\":[1,2,{\"k\":null}],\"id\":1,\"title\":\"买菜\"}",
+"type": "application/json; charset=utf-8",
+"body": "[1,2,3]"
+},
+{
+"method": "PATCH",
+"target": "/todos/1",
+"status": 200,
+"expect": "{\"done\":true,\"extra\":[1,2,{\"k\":null}],\"id\":1,\"title\":\"买菜\"}",
+"type": "application/json; charset=utf-8"
+},
+{
+"method": "PATCH",
+"target": "/todos/77",
+"status": 404,
+"expect": "{\"error\":\"找不到 id 是 77 的待办\"}",
+"type": "application/json; charset=utf-8",
+"body": "{\"done\":true}"
+},
+{
+"method": "GET",
+"target": "/done",
+"status": 200,
+"expect": "[{\"done\":true,\"extra\":[1,2,{\"k\":null}],\"id\":1,\"title\":\"买菜\"}]",
+"type": "application/json; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/by-title?t=3",
+"status": 200,
+"expect": "[{\"done\":false,\"id\":3,\"title\":3}]",
+"type": "application/json; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/by-title?t=%E4%B9%B0%E8%8F%9C",
+"status": 200,
+"expect": "[{\"done\":true,\"extra\":[1,2,{\"k\":null}],\"id\":1,\"title\":\"买菜\"}]",
+"type": "application/json; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/by-title",
+"status": 200,
+"expect": "[]",
+"type": "application/json; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/each",
+"status": 200,
+"expect": "{\"count\":3,\"sum\":6,\"titles\":\"买菜;写 \\\"代码\\\"\\n第二行 😀;3;\"}",
+"type": "application/json; charset=utf-8"
+},
+{
+"method": "DELETE",
+"target": "/todos/2",
+"status": 204,
+"expect": "",
+"type": null
+},
+{
+"method": "DELETE",
+"target": "/todos/2",
+"status": 404,
+"expect": "{\"error\":\"找不到 id 是 2 的待办\"}",
+"type": "application/json; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/todos/2",
+"status": 404,
+"expect": "{\"error\":\"找不到 id 是 2 的待办\"}",
+"type": "application/json; charset=utf-8"
+},
+{
+"method": "POST",
+"target": "/todos",
+"status": 201,
+"expect": "{\"done\":false,\"id\":4,\"title\":\"\"}",
+"type": "application/json; charset=utf-8",
+"body": "{\"title\":\"\"}"
+},
+{
+"method": "GET",
+"target": "/todos/count",
+"status": 200,
+"expect": "{\"count\":3}",
+"type": "application/json; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/len",
+"status": 200,
+"expect": "{\"list\":3,\"null\":0,\"num\":0,\"obj\":2,\"text\":3}",
+"type": "application/json; charset=utf-8"
+},
+{
+"method": "POST",
+"target": "/notes",
+"status": 200,
+"expect": "[{\"id\":1}]",
+"type": "application/json; charset=utf-8",
+"body": "[1,2]"
+},
+{
+"method": "POST",
+"target": "/notes",
+"status": 200,
+"expect": "[{\"id\":1},{\"id\":2}]",
+"type": "application/json; charset=utf-8"
+},
+{
+"method": "POST",
+"target": "/notes",
+"status": 200,
+"expect": "[{\"id\":1},{\"id\":2},{\"a\":{\"b\":[]},\"id\":3}]",
+"type": "application/json; charset=utf-8",
+"body": " {\"id\":\"x\",\"a\":{\"b\":[]}} "
+},
+{
+"method": "GET",
+"target": "/each?grow=1",
+"status": 200,
+"expect": "{\"count\":3,\"sum\":8,\"titles\":\"买菜;3;;\"}",
+"type": "application/json; charset=utf-8"
+},
+{
+"method": "POST",
+"target": "/notes",
+"status": 200,
+"expect": "[{\"id\":1},{\"id\":2},{\"a\":{\"b\":[]},\"id\":3},{\"from\":1,\"id\":4},{\"from\":3,\"id\":5},{\"from\":4,\"id\":6},{\"id\":7}]",
+"type": "application/json; charset=utf-8",
+"body": "7"
+},
+{
+"method": "GET",
+"target": "/calc?a=7&b=2",
+"status": 200,
+"expect": "{\"and\":true,\"diff\":5,\"eq\":false,\"ge\":true,\"gt\":true,\"le\":false,\"lt\":false,\"ne\":true,\"notA\":false,\"or\":true,\"prod\":14,\"quot\":3.5,\"rem\":1,\"sum\":9}",
+"type": "application/json; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/calc?a=%207%20&b=2.50",
+"status": 200,
+"expect": "{\"and\":true,\"diff\":4.5,\"eq\":false,\"ge\":true,\"gt\":true,\"le\":false,\"lt\":false,\"ne\":true,\"notA\":false,\"or\":true,\"prod\":17.5,\"quot\":2.8,\"rem\":2,\"sum\":9.5}",
+"type": "application/json; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/calc?a=abc&b=0",
+"status": 200,
+"expect": "{\"and\":true,\"diff\":0,\"eq\":false,\"ge\":true,\"gt\":false,\"le\":true,\"lt\":false,\"ne\":true,\"notA\":false,\"or\":true,\"prod\":0,\"quot\":0,\"rem\":0,\"sum\":0}",
+"type": "application/json; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/calc?a=5",
+"status": 200,
+"expect": "{\"and\":false,\"diff\":5,\"eq\":false,\"ge\":true,\"gt\":true,\"le\":false,\"lt\":false,\"ne\":true,\"notA\":false,\"or\":true,\"prod\":0,\"quot\":0,\"rem\":0,\"sum\":5}",
+"type": "application/json; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/calc",
+"status": 200,
+"expect": "{\"and\":false,\"diff\":0,\"eq\":true,\"ge\":true,\"gt\":false,\"le\":true,\"lt\":false,\"ne\":false,\"notA\":true,\"or\":false,\"prod\":0,\"quot\":0,\"rem\":0,\"sum\":0}",
+"type": "application/json; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/calc?a=1e3&b=.5",
+"status": 200,
+"expect": "{\"and\":true,\"diff\":999.5,\"eq\":false,\"ge\":true,\"gt\":true,\"le\":false,\"lt\":false,\"ne\":true,\"notA\":false,\"or\":true,\"prod\":500,\"quot\":2000,\"rem\":0,\"sum\":1000.5}",
+"type": "application/json; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/calc?a=0x10&b=%EF%BC%95",
+"status": 200,
+"expect": "{\"and\":true,\"diff\":0,\"eq\":false,\"ge\":true,\"gt\":false,\"le\":true,\"lt\":false,\"ne\":true,\"notA\":false,\"or\":true,\"prod\":0,\"quot\":0,\"rem\":0,\"sum\":0}",
+"type": "application/json; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/calc?a=Infinity&b=1_000",
+"status": 200,
+"expect": "{\"and\":true,\"diff\":0,\"eq\":false,\"ge\":true,\"gt\":false,\"le\":true,\"lt\":false,\"ne\":true,\"notA\":false,\"or\":true,\"prod\":0,\"quot\":0,\"rem\":0,\"sum\":0}",
+"type": "application/json; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/calc?a=1e999&b=-1e999",
+"status": 200,
+"expect": "{\"and\":true,\"diff\":0,\"eq\":false,\"ge\":true,\"gt\":false,\"le\":true,\"lt\":false,\"ne\":true,\"notA\":false,\"or\":true,\"prod\":0,\"quot\":0,\"rem\":0,\"sum\":0}",
+"type": "application/json; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/calc?a=-7&b=3",
+"status": 200,
+"expect": "{\"and\":true,\"diff\":-10,\"eq\":false,\"ge\":false,\"gt\":false,\"le\":true,\"lt\":true,\"ne\":true,\"notA\":false,\"or\":true,\"prod\":-21,\"quot\":-2.33333333333,\"rem\":-1,\"sum\":-4}",
+"type": "application/json; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/calc?a=5&b=5.0",
+"status": 200,
+"expect": "{\"and\":true,\"diff\":0,\"eq\":false,\"ge\":true,\"gt\":false,\"le\":true,\"lt\":false,\"ne\":true,\"notA\":false,\"or\":true,\"prod\":25,\"quot\":1,\"rem\":0,\"sum\":10}",
+"type": "application/json; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/calc?a=+3+&a=100&b",
+"status": 200,
+"expect": "{\"and\":false,\"diff\":3,\"eq\":false,\"ge\":true,\"gt\":true,\"le\":false,\"lt\":false,\"ne\":true,\"notA\":false,\"or\":true,\"prod\":0,\"quot\":0,\"rem\":0,\"sum\":3}",
+"type": "application/json; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/numbers",
+"status": 200,
+"expect": "{\"big\":1e21,\"bigInt\":1.23456789012e17,\"divZero\":0,\"e15\":1e15,\"frac\":123456.789,\"fracRem\":1.5,\"half\":0.5,\"justUnder\":999999999999999,\"long\":1234567890.12,\"neg\":-42,\"negFrac\":-0.5,\"negRem\":-1,\"negTie\":-12345678901.3,\"negZero\":0,\"nines\":1e15,\"overflow\":0,\"pointThree\":0.3,\"remZero\":0,\"small\":2.5e-10,\"third\":0.333333333333,\"tie\":12345678901.3,\"tinier\":1.2e-8,\"tiny\":0.00000012,\"whole\":3}",
+"type": "application/json; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/equal",
+"status": 200,
+"expect": "{\"boolText\":true,\"floatSum\":false,\"listSame\":true,\"neText\":true,\"nullEmpty\":true,\"nullNull\":true,\"nullZero\":false,\"numText\":true,\"numTextDot\":false,\"objDiff\":false,\"objOrder\":true,\"objText\":true,\"oneTrue\":false,\"zeroEmpty\":false}",
+"type": "application/json; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/truthy",
+"status": 200,
+"expect": "{\"empty\":false,\"emptyList\":true,\"emptyObj\":true,\"false\":false,\"null\":false,\"one\":true,\"space\":true,\"textZero\":true,\"true\":true,\"zero\":false}",
+"type": "application/json; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/text/%E4%B8%96%E7%95%8C",
+"status": 200,
+"expect": "你好，世界！3true1.5{\"a\":1}",
+"type": "text/plain; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/text/a%2Fb?q=x%26y%3Dz",
+"status": 200,
+"expect": "你好，a/b！3true1.5{\"a\":1}x&y=z",
+"type": "text/plain; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/text/%zz?q=%",
+"status": 200,
+"expect": "你好，%zz！3true1.5{\"a\":1}%",
+"type": "text/plain; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/text/%FF%FE?q=%C3",
+"status": 200,
+"expect": "你好，%FF%FE！3true1.5{\"a\":1}%C3",
+"type": "text/plain; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/text/a+b?q=a+b%2B",
+"status": 200,
+"expect": "你好，a+b！3true1.5{\"a\":1}a b+",
+"type": "text/plain; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/special",
+"status": 200,
+"expect": "{\"10\":6,\"9\":7,\"B\":5,\"__proto__\":8,\"a\":4,\"constructor\":9,\"value\":\"引号\\\"'反斜杠\\\\换行\\n制表\\t${x}`</script><!--*/ #{y} %s 😀 \\u0001完\",\"引号\\\"'反斜杠\\\\换行\\n制表\\t${x}`</script><!--*/ #{y} %s 😀 \\u0001完\":1,\"Ａ\":2,\"😀\":3}",
+"type": "application/json; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/special-text",
+"status": 200,
+"expect": "引号\"'反斜杠\\换行\n制表\t${x}`</script><!--*/ #{y} %s 😀 \u0001完",
+"type": "text/plain; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/loop?times=3",
+"status": 200,
+"expect": "{\"n\":13}",
+"type": "application/json; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/loop?times=2.9",
+"status": 200,
+"expect": "{\"n\":12}",
+"type": "application/json; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/loop?times=-5",
+"status": 200,
+"expect": "{\"n\":10}",
+"type": "application/json; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/loop?times=abc",
+"status": 200,
+"expect": "{\"n\":10}",
+"type": "application/json; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/loop",
+"status": 200,
+"expect": "{\"n\":10}",
+"type": "application/json; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/loop?times=99999999",
+"status": 200,
+"expect": "{\"n\":10010}",
+"type": "application/json; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/early",
+"status": 200,
+"expect": "先返回",
+"type": "text/plain; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/early-loop",
+"status": 200,
+"expect": "{\"stoppedAt\":3}",
+"type": "application/json; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/nothing",
+"status": 204,
+"expect": "",
+"type": null
+},
+{
+"method": "GET",
+"target": "/branch?x=11",
+"status": 200,
+"expect": "大",
+"type": "text/plain; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/branch?x=10",
+"status": 200,
+"expect": "小",
+"type": "text/plain; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/branch?x=0",
+"status": 200,
+"expect": "小",
+"type": "text/plain; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/branch?x=",
+"status": 200,
+"expect": "没有",
+"type": "text/plain; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/branch",
+"status": 200,
+"expect": "没有",
+"type": "text/plain; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/vars",
+"status": 200,
+"expect": "{\"acc\":0,\"flag\":true,\"n\":7,\"s\":\"初始\\\"值\\\\\",\"todo\":\"\"}",
+"type": "application/json; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/bump",
+"status": 200,
+"expect": "{\"class\":6,\"n\":8,\"s\":2}",
+"type": "application/json; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/bump",
+"status": 200,
+"expect": "{\"class\":6,\"n\":8,\"s\":2}",
+"type": "application/json; charset=utf-8"
+},
+{
+"method": "POST",
+"target": "/echo?q=%E4%BD%A0",
+"status": 200,
+"expect": "{\"body\":{\"name\":\"小明\"},\"header\":\"abc 1\",\"missing\":null,\"name\":\"小明\",\"nameLen\":2,\"noBody\":false,\"noHeader\":null,\"q\":\"你\"}",
+"type": "application/json; charset=utf-8",
+"body": "{\"name\":\"小明\"}",
+"headers": {
+"x-TEST": "abc 1"
+}
+},
+{
+"method": "POST",
+"target": "/echo",
+"status": 200,
+"expect": "{\"body\":null,\"header\":null,\"missing\":null,\"name\":null,\"nameLen\":0,\"noBody\":true,\"noHeader\":null,\"q\":null}",
+"type": "application/json; charset=utf-8"
+},
+{
+"method": "POST",
+"target": "/echo",
+"status": 200,
+"expect": "{\"body\":null,\"header\":null,\"missing\":null,\"name\":null,\"nameLen\":0,\"noBody\":true,\"noHeader\":null,\"q\":null}",
+"type": "application/json; charset=utf-8",
+"body": "{\"name\": \"半截"
+},
+{
+"method": "POST",
+"target": "/echo",
+"status": 200,
+"expect": "{\"body\":null,\"header\":null,\"missing\":null,\"name\":null,\"nameLen\":0,\"noBody\":true,\"noHeader\":null,\"q\":null}",
+"type": "application/json; charset=utf-8",
+"body": "{\"name\": NaN}"
+},
+{
+"method": "POST",
+"target": "/echo",
+"status": 200,
+"expect": "{\"body\":null,\"header\":null,\"missing\":null,\"name\":null,\"nameLen\":0,\"noBody\":true,\"noHeader\":null,\"q\":null}",
+"type": "application/json; charset=utf-8",
+"body": "{'name': 1}"
+},
+{
+"method": "POST",
+"target": "/echo",
+"status": 200,
+"expect": "{\"body\":null,\"header\":null,\"missing\":null,\"name\":null,\"nameLen\":0,\"noBody\":true,\"noHeader\":null,\"q\":null}",
+"type": "application/json; charset=utf-8",
+"body": "   "
+},
+{
+"method": "POST",
+"target": "/echo",
+"status": 200,
+"expect": "{\"body\":null,\"header\":null,\"missing\":null,\"name\":null,\"nameLen\":0,\"noBody\":true,\"noHeader\":null,\"q\":null}",
+"type": "application/json; charset=utf-8",
+"bodyBytes": [
+239,
+187,
+191,
+123,
+125
+]
+},
+{
+"method": "POST",
+"target": "/echo",
+"status": 200,
+"expect": "{\"body\":null,\"header\":null,\"missing\":null,\"name\":null,\"nameLen\":0,\"noBody\":true,\"noHeader\":null,\"q\":null}",
+"type": "application/json; charset=utf-8",
+"bodyBytes": [
+34,
+255,
+34
+]
+},
+{
+"method": "POST",
+"target": "/echo",
+"status": 200,
+"expect": "{\"body\":\"name\",\"header\":null,\"missing\":null,\"name\":null,\"nameLen\":0,\"noBody\":false,\"noHeader\":null,\"q\":null}",
+"type": "application/json; charset=utf-8",
+"body": "\"name\""
+},
+{
+"method": "POST",
+"target": "/echo",
+"status": 200,
+"expect": "{\"body\":false,\"header\":null,\"missing\":null,\"name\":null,\"nameLen\":0,\"noBody\":false,\"noHeader\":null,\"q\":null}",
+"type": "application/json; charset=utf-8",
+"body": "false"
+},
+{
+"method": "POST",
+"target": "/echo",
+"status": 200,
+"expect": "{\"body\":null,\"header\":null,\"missing\":null,\"name\":null,\"nameLen\":0,\"noBody\":true,\"noHeader\":null,\"q\":null}",
+"type": "application/json; charset=utf-8",
+"body": "null"
+},
+{
+"method": "POST",
+"target": "/echo",
+"status": 200,
+"expect": "{\"body\":{\"__proto__\":{\"x\":1},\"a\":[1,-0.5,100,0,0,1.23456789012e19,1.5e300,0,0.1,0.0000001,1.23456789012],\"constructor\":\"c\",\"dup\":2,\"name\":[\"x\",\"y\"],\"toString\":null,\"z\":\"�|😀|é|\\u0000|/\"},\"header\":null,\"missing\":null,\"name\":[\"x\",\"y\"],\"nameLen\":2,\"noBody\":false,\"noHeader\":null,\"q\":null}",
+"type": "application/json; charset=utf-8",
+"body": "{\"z\":\"\\ud800|\\ud83d\\ude00|\\u00e9|\\u0000|\\/\",\"name\":[\"x\",\"y\"],\"dup\":1,\"dup\":2,\"constructor\":\"c\",\"toString\":null,\"__proto__\":{\"x\":1},\"a\":[1.0,-0.50,1e2,-0,1e400,12345678901234567890,1.5E+300,-1E400,0.1,0.0000001,1.2345678901234567]}"
+},
+{
+"method": "POST",
+"target": "/echo",
+"status": 200,
+"expect": "{\"body\":{\"name\":\"你好😀\"},\"header\":null,\"missing\":null,\"name\":\"你好😀\",\"nameLen\":3,\"noBody\":false,\"noHeader\":null,\"q\":null}",
+"type": "application/json; charset=utf-8",
+"body": "{\"name\":\"你好😀\"}"
+},
+{
+"method": "POST",
+"target": "/echo",
+"status": 200,
+"expect": "{\"body\":[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]],\"header\":null,\"missing\":null,\"name\":null,\"nameLen\":0,\"noBody\":false,\"noHeader\":null,\"q\":null}",
+"type": "application/json; charset=utf-8",
+"body": "[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]"
+},
+{
+"method": "POST",
+"target": "/echo",
+"status": 200,
+"expect": "{\"body\":null,\"header\":null,\"missing\":null,\"name\":null,\"nameLen\":0,\"noBody\":true,\"noHeader\":null,\"q\":null}",
+"type": "application/json; charset=utf-8",
+"body": "[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]"
+},
+{
+"method": "POST",
+"target": "/echo",
+"status": 200,
+"expect": "{\"body\":{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[1]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]},\"header\":null,\"missing\":null,\"name\":null,\"nameLen\":0,\"noBody\":false,\"noHeader\":null,\"q\":null}",
+"type": "application/json; charset=utf-8",
+"body": "{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[1]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}"
+},
+{
+"method": "POST",
+"target": "/echo",
+"status": 200,
+"expect": "{\"body\":null,\"header\":null,\"missing\":null,\"name\":null,\"nameLen\":0,\"noBody\":true,\"noHeader\":null,\"q\":null}",
+"type": "application/json; charset=utf-8",
+"body": "{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":[{\"a\":1}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}"
+},
+{
+"method": "GET",
+"target": "/status?code=201",
+"status": 201,
+"expect": "{\"ok\":true}",
+"type": "application/json; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/status?code=404.9",
+"status": 404,
+"expect": "{\"ok\":true}",
+"type": "application/json; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/status?code=999",
+"status": 200,
+"expect": "{\"ok\":true}",
+"type": "application/json; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/status?code=100",
+"status": 200,
+"expect": "{\"ok\":true}",
+"type": "application/json; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/status?code=abc",
+"status": 200,
+"expect": "{\"ok\":true}",
+"type": "application/json; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/status",
+"status": 200,
+"expect": "{\"ok\":true}",
+"type": "application/json; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/status?code=503",
+"status": 503,
+"expect": "{\"ok\":true}",
+"type": "application/json; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/status?code=204",
+"status": 204,
+"expect": "",
+"type": null
+},
+{
+"method": "GET",
+"target": "/",
+"status": 200,
+"expect": "根",
+"type": "text/plain; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "",
+"status": 200,
+"expect": "根",
+"type": "text/plain; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/?x=1",
+"status": 200,
+"expect": "根",
+"type": "text/plain; charset=utf-8"
+},
+{
+"method": "PUT",
+"target": "/a/1/b/%E4%BA%8C",
+"status": 200,
+"expect": "{\"x\":\"1\",\"y\":\"二\"}",
+"type": "application/json; charset=utf-8"
+},
+{
+"method": "PUT",
+"target": "//a/1//b/2/",
+"status": 200,
+"expect": "{\"x\":\"1\",\"y\":\"2\"}",
+"type": "application/json; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/nope",
+"status": 404,
+"expect": "{\"error\":\"没有这个接口\"}",
+"type": "application/json; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/todos/1/2",
+"status": 404,
+"expect": "{\"error\":\"没有这个接口\"}",
+"type": "application/json; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/a/1/b",
+"status": 404,
+"expect": "{\"error\":\"没有这个接口\"}",
+"type": "application/json; charset=utf-8"
+},
+{
+"method": "PUT",
+"target": "/todos",
+"status": 405,
+"expect": "{\"error\":\"这个地址不支持这种请求方式\"}",
+"type": "application/json; charset=utf-8"
+},
+{
+"method": "POST",
+"target": "/todos/1",
+"status": 405,
+"expect": "{\"error\":\"这个地址不支持这种请求方式\"}",
+"type": "application/json; charset=utf-8",
+"body": "{}"
+},
+{
+"method": "DELETE",
+"target": "/echo",
+"status": 405,
+"expect": "{\"error\":\"这个地址不支持这种请求方式\"}",
+"type": "application/json; charset=utf-8"
+},
+{
+"method": "OPTIONS",
+"target": "/todos",
+"status": 204,
+"expect": "",
+"type": null
+},
+{
+"method": "OPTIONS",
+"target": "/nope",
+"status": 204,
+"expect": "",
+"type": null
+},
+{
+"method": "GET",
+"target": "/holes",
+"status": 200,
+"expect": "{\"badCollection\":null,\"badOp\":null,\"badParam\":null,\"missing\":0,\"ok\":1,\"undeclared\":null,\"unknown\":null}",
+"type": "application/json; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/relay",
+"status": 200,
+"expect": "拿到：你好，relay！3true1.5{\"a\":1}好",
+"type": "text/plain; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/relay-post",
+"status": 200,
+"expect": "{\"body\":{\"name\":\"转发\"},\"header\":null,\"missing\":null,\"name\":\"转发\",\"nameLen\":2,\"noBody\":false,\"noHeader\":null,\"q\":null}",
+"type": "text/plain; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/relay-fail?url=http://127.0.0.1:1/",
+"status": 502,
+"expect": "失败，s 还是：初始\"值\\",
+"type": "text/plain; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/relay-fail?url=file:///etc/hostname",
+"status": 502,
+"expect": "失败，s 还是：初始\"值\\",
+"type": "text/plain; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/relay-fail?url=not-a-url",
+"status": 502,
+"expect": "失败，s 还是：初始\"值\\",
+"type": "text/plain; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/relay-fail",
+"status": 502,
+"expect": "失败，s 还是：初始\"值\\",
+"type": "text/plain; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/relay-fail?url={self}/nope",
+"status": 502,
+"expect": "失败，s 还是：初始\"值\\",
+"type": "text/plain; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/relay-get?url={self}/text/a%20b%E4%B8%AD?q=%25zz%2520",
+"status": 200,
+"expect": "你好，a b中！3true1.5{\"a\":1}%zz ",
+"type": "text/plain; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/relay-get?url={self}/text/x%23frag",
+"status": 200,
+"expect": "你好，x！3true1.5{\"a\":1}",
+"type": "text/plain; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/relay-get?url=HTTP://127.0.0.1:{port}/text/%E5%A4%A7%E5%86%99?q=%22%3C%3E%5C%5E%60%7B%7C%7D",
+"status": 200,
+"expect": "你好，大写！3true1.5{\"a\":1}\"<>\\^`{|}",
+"type": "text/plain; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/relay-get?url=%20{self}/",
+"status": 502,
+"expect": "失败",
+"type": "text/plain; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/relay-get?url={self}/text/a%5Bb%5D?q=%2540",
+"status": 200,
+"expect": "你好，a[b]！3true1.5{\"a\":1}@",
+"type": "text/plain; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/relay-get?url={self}/say?t=%25EF%25BB%25BF%25EF%25BB%25BFa%25EF%25BB%25BF",
+"status": 200,
+"expect": "﻿a﻿",
+"type": "text/plain; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/relay-get?url={self}/say?t=%25EF%25BB%25BFa",
+"status": 200,
+"expect": "a",
+"type": "text/plain; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/relay-get?url=http://user:pw@127.0.0.1:{port}/",
+"status": 502,
+"expect": "失败",
+"type": "text/plain; charset=utf-8"
+},
+{
+"method": "GET",
+"target": "/relay-get?url=http://user@127.0.0.1:{port}/",
+"status": 502,
+"expect": "失败",
+"type": "text/plain; charset=utf-8"
+},
+{
+"method": "POST",
+"target": "/echo",
+"status": 200,
+"expect": "{\"body\":null,\"header\":\"a  b\",\"missing\":null,\"name\":null,\"nameLen\":0,\"noBody\":true,\"noHeader\":null,\"q\":null}",
+"type": "application/json; charset=utf-8",
+"headers": {
+"X-Test": "  a  b  "
+}
+},
+{
+"method": "GET",
+"target": "/now",
+"status": 200,
+"expect": "",
+"type": "text/plain; charset=utf-8",
+"pattern": "^20[0-9]{2}-[01][0-9]-[0-3][0-9]T[0-2][0-9]:[0-5][0-9]:[0-6][0-9]Z$"
+},
+{
+"method": "POST",
+"target": "/notes",
+"status": 200,
+"expect": "[{\"id\":1},{\"id\":2},{\"a\":{\"b\":[]},\"id\":3},{\"from\":1,\"id\":4},{\"from\":3,\"id\":5},{\"from\":4,\"id\":6},{\"id\":7},{\"id\":8}]",
+"type": "application/json; charset=utf-8"
+}
+]

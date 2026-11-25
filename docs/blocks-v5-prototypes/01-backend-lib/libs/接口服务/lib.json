@@ -1,0 +1,513 @@
+{
+ "format": 1,
+ "name": "接口服务",
+ "id": "lib.lopicode.http-service",
+ "version": "0.2.0",
+ "author": "LopiCode 原型（F1）",
+ "description": "把积木第 3 版的全部后端积木改写成一个库：路由、请求、响应、数据集合、请求别的网址。库本身全部用语言核心写成。",
+ "requires": {
+  "core": "v4 第 4.2 节的节点 ＋ rt.dart 的标准库函数 ＋ 第 2 轮的 orElse",
+  "natives": [
+   "http.serve",
+   "store.get",
+   "store.update",
+   "url.decode",
+   "net.fetch"
+  ],
+  "libs": []
+ },
+ "languages": [
+  "node",
+  "python"
+ ],
+ "modules": [
+  "响应",
+  "请求",
+  "路由",
+  "集合",
+  "网络"
+ ],
+ "exports": {
+  "functions": [
+   "注册",
+   "开始服务",
+   "JSON响应",
+   "文字响应",
+   "错误响应",
+   "空响应",
+   "预检响应",
+   "路径参数",
+   "网址参数",
+   "请求内容",
+   "请求内容的字段",
+   "请求头",
+   "集合全部",
+   "集合个数",
+   "集合取",
+   "集合找",
+   "集合加",
+   "集合改",
+   "集合删",
+   "请求网址"
+  ],
+  "classes": []
+ },
+ "lists": [
+  {
+   "name": "数据集合",
+   "doc": "这个项目里建了哪些数据集合；“清单”种类的槽只能从里面选。"
+  }
+ ],
+ "context": [
+  {
+   "name": "请求",
+   "provided_by": "当收到请求",
+   "doc": "正在处理的那个请求；需要它的积木只能放在“当收到请求”的口里。"
+  }
+ ],
+ "blocks": [
+  {
+   "id": "route",
+   "name": "当收到请求",
+   "shape": "帽子型",
+   "text": "当收到 {method} {path} 的请求时",
+   "slots": [
+    {
+     "name": "method",
+     "kind": "选项",
+     "choices": [
+      "GET",
+      "POST",
+      "PUT",
+      "PATCH",
+      "DELETE"
+     ]
+    },
+    {
+     "name": "path",
+     "kind": "值"
+    },
+    {
+     "name": "body",
+     "kind": "回调口",
+     "params": [
+      "请求"
+     ]
+    }
+   ],
+   "def": {
+    "fn": "注册",
+    "args": [
+     "$method",
+     "$path",
+     "$body"
+    ]
+   },
+   "replaces": "（旧文档里的“接口”本身：BeRoute）",
+   "doc": "口里的积木每来一个请求做一遍；口向里面的积木提供隐含的“请求”。"
+  },
+  {
+   "id": "listen",
+   "name": "开始服务",
+   "shape": "语句型",
+   "text": "在端口 {port} 开始服务",
+   "slots": [
+    {
+     "name": "port",
+     "kind": "值"
+    }
+   ],
+   "def": {
+    "fn": "开始服务",
+    "args": [
+     "$port"
+    ]
+   },
+   "replaces": "（旧文档里的 port 字段）"
+  },
+  {
+   "id": "respondJson",
+   "name": "返回JSON",
+   "shape": "收尾型",
+   "text": "返回 JSON：状态码 {status} 内容 {value}",
+   "slots": [
+    {
+     "name": "status",
+     "kind": "值"
+    },
+    {
+     "name": "value",
+     "kind": "值"
+    }
+   ],
+   "def": {
+    "fn": "JSON响应",
+    "args": [
+     "$status",
+     "$value"
+    ]
+   },
+   "replaces": "respondJson"
+  },
+  {
+   "id": "respondText",
+   "name": "返回文字",
+   "shape": "收尾型",
+   "text": "返回文字：状态码 {status} 内容 {value}",
+   "slots": [
+    {
+     "name": "status",
+     "kind": "值"
+    },
+    {
+     "name": "value",
+     "kind": "值"
+    }
+   ],
+   "def": {
+    "fn": "文字响应",
+    "args": [
+     "$status",
+     "$value"
+    ]
+   },
+   "replaces": "respondText"
+  },
+  {
+   "id": "pathParam",
+   "name": "路径参数",
+   "shape": "值型",
+   "text": "路径参数 {name}",
+   "slots": [
+    {
+     "name": "name",
+     "kind": "值"
+    }
+   ],
+   "needs_context": [
+    "请求"
+   ],
+   "def": {
+    "fn": "路径参数",
+    "args": [
+     "@请求",
+     "$name"
+    ]
+   },
+   "replaces": "pathParam"
+  },
+  {
+   "id": "query",
+   "name": "网址参数",
+   "shape": "值型",
+   "text": "网址参数 {name}",
+   "slots": [
+    {
+     "name": "name",
+     "kind": "值"
+    }
+   ],
+   "needs_context": [
+    "请求"
+   ],
+   "def": {
+    "fn": "网址参数",
+    "args": [
+     "@请求",
+     "$name"
+    ]
+   },
+   "replaces": "query"
+  },
+  {
+   "id": "bodyField",
+   "name": "请求内容的字段",
+   "shape": "值型",
+   "text": "请求内容的 {name}",
+   "slots": [
+    {
+     "name": "name",
+     "kind": "值"
+    }
+   ],
+   "needs_context": [
+    "请求"
+   ],
+   "def": {
+    "fn": "请求内容的字段",
+    "args": [
+     "@请求",
+     "$name"
+    ]
+   },
+   "replaces": "bodyField"
+  },
+  {
+   "id": "body",
+   "name": "请求内容",
+   "shape": "值型",
+   "text": "请求内容",
+   "slots": [],
+   "needs_context": [
+    "请求"
+   ],
+   "def": {
+    "fn": "请求内容",
+    "args": [
+     "@请求"
+    ]
+   },
+   "replaces": "body"
+  },
+  {
+   "id": "header",
+   "name": "请求头",
+   "shape": "值型",
+   "text": "请求头 {name}",
+   "slots": [
+    {
+     "name": "name",
+     "kind": "值"
+    }
+   ],
+   "needs_context": [
+    "请求"
+   ],
+   "def": {
+    "fn": "请求头",
+    "args": [
+     "@请求",
+     "$name"
+    ]
+   },
+   "replaces": "header"
+  },
+  {
+   "id": "dbAll",
+   "name": "集合全部",
+   "shape": "值型",
+   "text": "{collection} 里的全部",
+   "slots": [
+    {
+     "name": "collection",
+     "kind": "清单",
+     "list": "数据集合"
+    }
+   ],
+   "def": {
+    "fn": "集合全部",
+    "args": [
+     "$collection"
+    ]
+   },
+   "replaces": "dbAll"
+  },
+  {
+   "id": "dbCount",
+   "name": "集合个数",
+   "shape": "值型",
+   "text": "{collection} 里有几条",
+   "slots": [
+    {
+     "name": "collection",
+     "kind": "清单",
+     "list": "数据集合"
+    }
+   ],
+   "def": {
+    "fn": "集合个数",
+    "args": [
+     "$collection"
+    ]
+   },
+   "replaces": "dbCount"
+  },
+  {
+   "id": "dbGet",
+   "name": "集合取",
+   "shape": "值型",
+   "text": "{collection} 里 id 是 {id} 的那条",
+   "slots": [
+    {
+     "name": "collection",
+     "kind": "清单",
+     "list": "数据集合"
+    },
+    {
+     "name": "id",
+     "kind": "值"
+    }
+   ],
+   "def": {
+    "fn": "集合取",
+    "args": [
+     "$collection",
+     "$id"
+    ]
+   },
+   "replaces": "dbGet"
+  },
+  {
+   "id": "dbFind",
+   "name": "集合找",
+   "shape": "值型",
+   "text": "{collection} 里 {key} 等于 {value} 的",
+   "slots": [
+    {
+     "name": "collection",
+     "kind": "清单",
+     "list": "数据集合"
+    },
+    {
+     "name": "key",
+     "kind": "值"
+    },
+    {
+     "name": "value",
+     "kind": "值"
+    }
+   ],
+   "def": {
+    "fn": "集合找",
+    "args": [
+     "$collection",
+     "$key",
+     "$value"
+    ]
+   },
+   "replaces": "dbFind"
+  },
+  {
+   "id": "dbInsert",
+   "name": "集合加",
+   "shape": "语句型",
+   "text": "往 {collection} 里加 {value}，结果放进 {into}",
+   "slots": [
+    {
+     "name": "collection",
+     "kind": "清单",
+     "list": "数据集合"
+    },
+    {
+     "name": "value",
+     "kind": "值"
+    },
+    {
+     "name": "into",
+     "kind": "变量",
+     "optional": true
+    }
+   ],
+   "def": {
+    "fn": "集合加",
+    "args": [
+     "$collection",
+     "$value"
+    ],
+    "into": "into"
+   },
+   "replaces": "dbInsert"
+  },
+  {
+   "id": "dbUpdate",
+   "name": "集合改",
+   "shape": "语句型",
+   "text": "把 {collection} 里 id 是 {id} 的那条改成 {value}",
+   "slots": [
+    {
+     "name": "collection",
+     "kind": "清单",
+     "list": "数据集合"
+    },
+    {
+     "name": "id",
+     "kind": "值"
+    },
+    {
+     "name": "value",
+     "kind": "值"
+    }
+   ],
+   "def": {
+    "fn": "集合改",
+    "args": [
+     "$collection",
+     "$id",
+     "$value"
+    ]
+   },
+   "replaces": "dbUpdate"
+  },
+  {
+   "id": "dbDelete",
+   "name": "集合删",
+   "shape": "语句型",
+   "text": "删掉 {collection} 里 id 是 {id} 的那条",
+   "slots": [
+    {
+     "name": "collection",
+     "kind": "清单",
+     "list": "数据集合"
+    },
+    {
+     "name": "id",
+     "kind": "值"
+    }
+   ],
+   "def": {
+    "fn": "集合删",
+    "args": [
+     "$collection",
+     "$id"
+    ]
+   },
+   "replaces": "dbDelete"
+  },
+  {
+   "id": "fetch",
+   "name": "请求别的网址",
+   "shape": "语句型",
+   "text": "用 {method} 请求 {url}，带上 {data}，拿到的文字放进 {into}；成功就 {ok} 失败就 {fail}",
+   "slots": [
+    {
+     "name": "method",
+     "kind": "选项",
+     "choices": [
+      "GET",
+      "POST",
+      "PUT",
+      "PATCH",
+      "DELETE"
+     ]
+    },
+    {
+     "name": "url",
+     "kind": "值"
+    },
+    {
+     "name": "data",
+     "kind": "值",
+     "optional": true
+    },
+    {
+     "name": "into",
+     "kind": "变量",
+     "optional": true
+    },
+    {
+     "name": "ok",
+     "kind": "内联口"
+    },
+    {
+     "name": "fail",
+     "kind": "内联口"
+    }
+   ],
+   "def": {
+    "template": "请求别的网址.tpl"
+   },
+   "replaces": "fetch",
+   "doc": "两个口是内联口：里面的“返回…”结束的是外面那个接口。"
+  }
+ ]
+}

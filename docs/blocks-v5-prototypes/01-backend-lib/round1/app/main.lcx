@@ -1,0 +1,287 @@
+; 示例服务：把产品现有的一致性样本（test/support/backend_conformance.dart 的 conformanceDocument()）
+; 逐个接口照着搬过来，全部用库“接口服务”的积木（@开头的）＋语言核心积木写成。
+; 旧积木 → 新写法的对照见 README.md 的对照表。
+(module 样本服务
+  (uses 接口服务)
+
+  ; 旧文档的“数据集合”清单 → 项目清单（“清单”种类的槽只能从这里选）。
+  (project-list 数据集合 "todos" "notes")
+
+  ; 旧文档的“变量”：每次请求都从初始值开始 → 放在每个接口的最前面。
+  ; 名字故意用了各语言的关键字（class / def / func）。没标类型的变量（todo、item）初始是空文字——照旧文档的规矩。
+  (hat-prelude
+    (let n 7)
+    (let s "初始\"值\\")
+    (let flag true)
+    (let todo "")
+    (let item "")
+    (let acc 0)
+    (let class 1)
+    (let def 2)
+    (let func 3))
+
+  ; —— 待办：增删改查 ——
+  (@当收到请求 "GET" "/todos" (口
+    (@返回JSON 200 (@集合全部 "todos"))))
+
+  (@当收到请求 "POST" "/todos" (口
+    (if (when (rt isNull (@请求内容的字段 "title"))
+          (@返回JSON 400 (dict ("error" "缺少 title")))))
+    (@集合加 "todos" (dict ("title" (@请求内容的字段 "title")) ("done" false)) todo)
+    (@返回JSON 201 todo)))
+
+  (@当收到请求 "GET" "/todos/count" (口
+    (@返回JSON 200 (dict ("count" (@集合个数 "todos"))))))
+
+  (@当收到请求 "GET" "/todos/:id" (口
+    (set todo (@集合取 "todos" (@路径参数 "id")))
+    (if (when (rt isNull todo)
+          (@返回JSON 404 (dict ("error" (rt join "找不到 id 是 " (@路径参数 "id") " 的待办"))))))
+    (@返回JSON 200 todo)))
+
+  (@当收到请求 "PATCH" "/todos/:id" (口
+    (if (when (rt isNull (@集合取 "todos" (@路径参数 "id")))
+          (@返回JSON 404 (dict ("error" (rt join "找不到 id 是 " (@路径参数 "id") " 的待办"))))))
+    (@集合改 "todos" (@路径参数 "id") (@请求内容))
+    (@返回JSON 200 (@集合取 "todos" (@路径参数 "id")))))
+
+  ; 删除：成功时没有“返回”积木 → 204。
+  (@当收到请求 "DELETE" "/todos/:id" (口
+    (if (when (rt isNull (@集合取 "todos" (@路径参数 "id")))
+          (@返回JSON 404 (dict ("error" (rt join "找不到 id 是 " (@路径参数 "id") " 的待办"))))))
+    (@集合删 "todos" (@路径参数 "id"))))
+
+  (@当收到请求 "GET" "/done" (口
+    (@返回JSON 200 (@集合找 "todos" "done" true))))
+
+  (@当收到请求 "GET" "/by-title" (口
+    (@返回JSON 200 (@集合找 "todos" "title" (@网址参数 "t")))))
+
+  (@当收到请求 "POST" "/notes" (口
+    (@集合加 "notes" (@请求内容) _)
+    (@返回JSON 200 (@集合全部 "notes"))))
+
+  ; —— 运算 ——
+  (@当收到请求 "GET" "/calc" (口
+    (@返回JSON 200 (dict
+      ("sum" (+ (@网址参数 "a") (@网址参数 "b")))
+      ("diff" (- (@网址参数 "a") (@网址参数 "b")))
+      ("prod" (* (@网址参数 "a") (@网址参数 "b")))
+      ("quot" (/ (@网址参数 "a") (@网址参数 "b")))
+      ("rem" (% (@网址参数 "a") (@网址参数 "b")))
+      ("lt" (< (@网址参数 "a") (@网址参数 "b")))
+      ("le" (<= (@网址参数 "a") (@网址参数 "b")))
+      ("gt" (> (@网址参数 "a") (@网址参数 "b")))
+      ("ge" (>= (@网址参数 "a") (@网址参数 "b")))
+      ("eq" (== (@网址参数 "a") (@网址参数 "b")))
+      ("ne" (!= (@网址参数 "a") (@网址参数 "b")))
+      ("and" (and (@网址参数 "a") (@网址参数 "b")))
+      ("or" (or (@网址参数 "a") (@网址参数 "b")))
+      ("notA" (not (@网址参数 "a")))))))
+
+  (@当收到请求 "GET" "/numbers" (口
+    (@返回JSON 200 (dict
+      ("third" (/ 1 3))
+      ("pointThree" (+ 0.1 0.2))
+      ("whole" (/ 6 2))
+      ("half" (/ 1 2))
+      ("negRem" (% -7 3))
+      ("fracRem" (% 5.5 2))
+      ("divZero" (/ 5 0))
+      ("remZero" (% 5 0))
+      ("negZero" (* 0 -1))
+      ("overflow" (* 1e308 10))
+      ("big" 1e21)
+      ("e15" 1e15)
+      ("justUnder" 999999999999999)
+      ("nines" 999999999999999.9)
+      ("small" 2.5e-10)
+      ("tiny" 0.00000012)
+      ("tinier" 0.000000012)
+      ("tie" 12345678901.25)
+      ("negTie" -12345678901.25)
+      ("frac" 123456.789)
+      ("neg" -42)
+      ("negFrac" -0.5)
+      ("long" 1234567890.123456789)
+      ("bigInt" 123456789012345678)))))
+
+  (@当收到请求 "GET" "/equal" (口
+    (@返回JSON 200 (dict
+      ("numText" (== 5 "5"))
+      ("numTextDot" (== 5 "5.0"))
+      ("nullEmpty" (== (rt dictGet (dict) "x") ""))
+      ("nullNull" (== (rt dictGet (dict) "x") (rt dictGet (dict) "x")))
+      ("nullZero" (== (rt dictGet (dict) "x") 0))
+      ("zeroEmpty" (== 0 ""))
+      ("boolText" (== true "true"))
+      ("oneTrue" (== 1 true))
+      ("objOrder" (== (dict ("a" 1) ("b" 2)) (dict ("b" 2) ("a" 1))))
+      ("objDiff" (== (dict ("a" 1)) (dict ("a" 2))))
+      ("objText" (== (dict ("a" 1)) "{\"a\":1}"))
+      ("listSame" (== (@集合全部 "todos") (@集合全部 "todos")))
+      ("floatSum" (== (+ 0.1 0.2) 0.3))
+      ("neText" (!= "a" "b"))))))
+
+  (@当收到请求 "GET" "/truthy" (口
+    (@返回JSON 200 (dict
+      ("null" (not (not (rt dictGet (dict) "x"))))
+      ("false" (not (not false)))
+      ("zero" (not (not 0)))
+      ("empty" (not (not "")))
+      ("textZero" (not (not "0")))
+      ("space" (not (not " ")))
+      ("emptyObj" (not (not (dict))))
+      ("emptyList" (not (not (@集合全部 "notes"))))
+      ("one" (not (not 1)))
+      ("true" (not (not true)))))))
+
+  (@当收到请求 "GET" "/len" (口
+    (@返回JSON 200 (dict
+      ("text" (rt size "你好😀"))
+      ("list" (rt size (@集合全部 "todos")))
+      ("obj" (rt size (dict ("a" 1) ("b" 2))))
+      ("num" (rt size 12345))
+      ("null" (rt size (rt dictGet (dict) "x")))))))
+
+  ; —— 文字 ——
+  (@当收到请求 "GET" "/text/:what" (口
+    (@返回文字 200 (rt join "你好，" (@路径参数 "what") "！" 3 true (rt dictGet (dict) "x") 1.50 (dict ("a" 1)) (@网址参数 "q")))))
+
+  (@当收到请求 "GET" "/special" (口
+    (@返回JSON 200 (dict
+      ("value" "引号\"'反斜杠\\换行\n制表\t${x}`</script><!--*/ #{y} %s 😀\u2028\u0001完")
+      ("引号\"'反斜杠\\换行\n制表\t${x}`</script><!--*/ #{y} %s 😀\u2028\u0001完" 1)
+      ("\uFF21" 2)
+      ("😀" 3)
+      ("a" 4)
+      ("B" 5)
+      ("10" 6)
+      ("9" 7)
+      ("__proto__" 8)
+      ("constructor" 9)))))
+
+  (@当收到请求 "GET" "/special-text" (口
+    (@返回文字 200 "引号\"'反斜杠\\换行\n制表\t${x}`</script><!--*/ #{y} %s 😀\u2028\u0001完")))
+
+  ; —— 流程 ——
+  (@当收到请求 "GET" "/loop" (口
+    (set n 0)
+    (repeat 5
+      (set n (+ n 2)))
+    (repeat (@网址参数 "times")
+      (set n (+ n 1)))
+    (@返回JSON 200 (dict ("n" n)))))
+
+  (@当收到请求 "GET" "/each" (口
+    (set s "")
+    (for-each item (@集合全部 "todos")
+      (set s (rt join s (rt dictGet item "title") ";"))
+      (set acc (+ acc (rt dictGet item "id")))
+      ; 循环中途往集合里加东西，不影响这一轮。
+      (if (when (== (@网址参数 "grow") "1")
+            (@集合加 "notes" (dict ("from" (rt dictGet item "id"))) _))))
+    ; 不是列表的东西：一遍也不做。
+    (for-each item "abc"
+      (set acc (+ acc 1000)))
+    (@返回JSON 200 (dict ("titles" s) ("sum" acc) ("count" (rt size (@集合全部 "todos")))))))
+
+  (@当收到请求 "GET" "/early" (口
+    (@返回文字 200 "先返回")
+    (@集合加 "notes" (dict ("bad" "返回之后不该执行")) _)
+    (@返回文字 500 "不该到这里")))
+
+  (@当收到请求 "GET" "/early-loop" (口
+    (set n 0)
+    (repeat 10
+      (set n (+ n 1))
+      (if (when (== n 3)
+            (@返回JSON 200 (dict ("stoppedAt" n))))))
+    (@返回文字 500 "不该到这里")))
+
+  (@当收到请求 "GET" "/nothing" (口
+    (do (rt log (rt join "日志：" 1.5 " " (dict ("k" "v")))))))
+
+  (@当收到请求 "GET" "/branch" (口
+    (if (when (> (@网址参数 "x") 10)
+          (@返回文字 200 "大"))
+        (else
+          (if (when (@网址参数 "x")
+                (@返回文字 200 "小"))
+              (else
+                (@返回文字 200 "没有")))))))
+
+  ; —— 变量 ——
+  (@当收到请求 "GET" "/vars" (口
+    (@返回JSON 200 (dict ("n" n) ("s" s) ("flag" flag) ("todo" todo) ("acc" acc)))))
+
+  ; 每次请求变量都从初始值开始：调几次都是 8。
+  (@当收到请求 "GET" "/bump" (口
+    (set n (+ n 1))
+    (set s (+ s 2))
+    (set class (+ class (+ def func)))
+    (@返回JSON 200 (dict ("n" n) ("s" s) ("class" class)))))
+
+  ; —— 请求 ——
+  (@当收到请求 "POST" "/echo" (口
+    (@返回JSON 200 (dict
+      ("body" (@请求内容))
+      ("name" (@请求内容的字段 "name"))
+      ("nameLen" (rt size (@请求内容的字段 "name")))
+      ("q" (@网址参数 "q"))
+      ("missing" (@网址参数 "nope"))
+      ("header" (@请求头 "X-Test"))
+      ("noHeader" (@请求头 "X-Nope"))
+      ("noBody" (rt isNull (@请求内容)))))))
+
+  (@当收到请求 "GET" "/status" (口
+    (@返回JSON (@网址参数 "code") (dict ("ok" true)))))
+
+  (@当收到请求 "GET" "/" (口
+    (@返回文字 200 "根")))
+
+  (@当收到请求 "PUT" "/a/:x/b/:y" (口
+    (@返回JSON 200 (dict ("x" (@路径参数 "x")) ("y" (@路径参数 "y"))))))
+
+  ; —— 没填好的地方 ——
+  ; 旧文档这个接口放的是“读不懂的积木、没声明的变量、不存在的集合”，生成器把它们一律降级成“空”或“什么都不做”。
+  ; 那是“旧文档容错读入”这一步的行为，不是库的行为：这里手工写成降级以后的样子（见 README 的说明）。
+  (@当收到请求 "GET" "/holes" (口
+    (@返回JSON 200 (dict
+      ("unknown" null)
+      ("undeclared" null)
+      ("badParam" (@路径参数 "nope"))
+      ("badCollection" null)
+      ("missing" (+ null null))
+      ("badOp" null)
+      ("ok" 1)))))
+
+  ; —— 请求别的网址（请求自己）——
+  (@当收到请求 "GET" "/relay" (口
+    (@请求别的网址 "GET" (rt join "http://" (@请求头 "Host") "/text/relay?q=%E5%A5%BD") _ s
+      (口 (@返回文字 200 (rt join "拿到：" s)))
+      (口 (@返回文字 502 "失败")))))
+
+  (@当收到请求 "GET" "/relay-post" (口
+    (@请求别的网址 "POST" (rt join "http://" (@请求头 "Host") "/echo") (dict ("name" "转发")) s
+      (口 (@返回文字 200 s))
+      (口 (@返回文字 502 "失败")))))
+
+  (@当收到请求 "GET" "/relay-fail" (口
+    (@请求别的网址 "GET" (@网址参数 "url") _ s
+      (口 (@返回文字 200 "不该成功"))
+      (口 (@返回文字 502 (rt join "失败，s 还是：" s))))))
+
+  (@当收到请求 "GET" "/relay-get" (口
+    (@请求别的网址 "GET" (@网址参数 "url") _ s
+      (口 (@返回文字 200 s))
+      (口 (@返回文字 502 "失败")))))
+
+  (@当收到请求 "GET" "/say" (口
+    (@返回文字 200 (@网址参数 "t"))))
+
+  (@当收到请求 "GET" "/now" (口
+    (@返回文字 200 (rt now))))
+
+  (main
+    (@开始服务 8123)))

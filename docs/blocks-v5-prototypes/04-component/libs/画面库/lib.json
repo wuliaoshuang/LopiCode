@@ -1,0 +1,20 @@
+{
+ "format": 1,
+ "name": "画面库",
+ "id": "lib.lopicode.view",
+ "version": "0.2.0",
+ "author": "LopiCode 原型（F2）",
+ "description": "元素、存在条件、按标识的重复、挂上/拿走、两个生命周期。用语言核心＋状态库＋元素级宿主接口写成（第 2 轮）。",
+ "requires": {
+  "core": "F1 第 2 轮的核心 ＋ call!、isSame",
+  "natives": ["ui.root", "ui.create", "ui.set", "ui.insert", "ui.remove", "ui.on"],
+  "libs": ["状态库"]
+ },
+ "languages": ["node"],
+ "modules": ["画面"],
+ "exports": {
+  "classes": ["片段"],
+  "functions": ["页面根", "放进", "元素", "如果有", "每一个", "放上以后", "拿走之前", "挂上"]
+ },
+ "blocks": []
+}

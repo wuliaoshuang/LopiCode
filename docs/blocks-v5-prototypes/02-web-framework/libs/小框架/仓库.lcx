@@ -1,0 +1,42 @@
+; 库“小框架”·仓库：一类东西的增删改查，数据放在宿主的 store 格子里。
+; 第 2 轮：改数据都走 store.update——“取出来 → 改 → 放回去”一口气做完（第 1 轮的写法留在 round1/）。
+(module 仓库
+  (native store.get (名字))
+  (native store.update (名字 函数))
+
+  (public (class 仓库
+    (field 名字 "")
+    (ctor (名字)
+      (set (. (this) 名字) 名字))
+
+    (method 格子 ()
+      (return (rt join "仓库:" (. (this) 名字))))
+    ; 改法：函数(库) → [新的库, 结果]
+    (method 改库 (改法)
+      (return (native store.update (send (this) 格子)
+        (fn (库) (return (call 改法 (rt orElse 库 (dict ("next" 1) ("rows" (list))))))))))
+
+    (method 全部 ()
+      (return (rt orElse (rt dictGet (native store.get (send (this) 格子)) "rows") (list))))
+    (method 取 (id)
+      (return (rt listFind (send (this) 全部) (-> (行) (== (rt dictGet 行 "id") id)))))
+    (method 加 (内容)
+      (return (send (this) 改库 (fn (库)
+        (let 行 (rt dictMerge 内容 (dict ("id" (rt dictGet 库 "next")))))
+        (set (index 库 "next") (+ (rt dictGet 库 "next") 1))
+        (do (rt listPush (rt dictGet 库 "rows") 行))
+        (return (list 库 行))))))
+    (method 改 (id 内容)
+      (return (send (this) 改库 (fn (库)
+        (let 结果 null)
+        (for-each (行 i) (rt dictGet 库 "rows")
+          (if (when (== (rt dictGet 行 "id") id)
+                (set 结果 (rt dictMerge (rt dictMerge 行 内容) (dict ("id" id))))
+                (do (rt listSet (rt dictGet 库 "rows") i 结果)))))
+        (return (list 库 结果))))))
+    (method 删 (id)
+      (return (send (this) 改库 (fn (库)
+        (let 剩下 (rt listFilter (rt dictGet 库 "rows") (-> (行) (!= (rt dictGet 行 "id") id))))
+        (let 删了 (!= (rt size 剩下) (rt size (rt dictGet 库 "rows"))))
+        (set (index 库 "rows") 剩下)
+        (return (list 库 删了)))))))))

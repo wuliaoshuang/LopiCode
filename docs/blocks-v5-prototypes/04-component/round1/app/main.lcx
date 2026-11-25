@@ -1,0 +1,112 @@
+; 04 的检查程序（第 1 轮）：步骤和第 2 轮一样，但组件只用 D 的甲类界面接口写，页面上的控件事先摆好（三行）。
+; 写不出来的步骤照实打印“写不出来”和原因。
+; 期望的输出是先手写好的（../expected.txt）。
+(module 检查
+  (uses 状态库 待办组件库)
+  (native test.page (JSON))
+  (native test.tree (从哪 带号))
+  (native test.find (范围 选择 第几个))
+  (native test.click (控件))
+  (native test.ops ())
+
+  (func 报 (号 名字 值)
+    (do (rt log (rt join "[" 号 "] " 名字 "：" 值))))
+
+  (func 做了 ()
+    (let o (native test.ops))
+    (return (rt join "新建 " (rt dictGet o "新建") "，写 " (rt dictGet o "写") "，插入 " (rt dictGet o "插入") "，拿走 " (rt dictGet o "拿走"))))
+
+  (func 树 (容器)
+    (return (native test.tree "列表" false)))
+
+  (func 行 (容器 第几)
+    (return (native test.find null "li.item" 第几)))
+
+  (func 去掉 (列 号)
+    (let 出 (list))
+    (for-each 条 列 (if (when (!= (rt dictGet 条 "号") 号) (do (rt listPush 出 条)))))
+    (return 出))
+
+  (func 加上 (列 条)
+    (let 出 (list))
+    (for-each 老 列 (do (rt listPush 出 老)))
+    (do (rt listPush 出 条))
+    (return 出))
+
+  (main
+    (let 记 (list))
+    (let 第二条 (dict ("号" 2) ("标题" "写作业") ("完成" true)))
+    (let 条目们 (call 新状态 (list (dict ("号" 1) ("标题" "买菜") ("完成" false)) 第二条)))
+    (let 容器甲 null)
+    ; 页面事先摆好：一个列表、三行（每行一个标题、一个“删”）、一条空提示。
+    (do (native test.page (rt toJson (dict ("tag" "ul") ("cls" "todo") ("id" "列表") ("children" (list
+      (dict ("tag" "li") ("cls" "item") ("id" "行1") ("shown" false) ("children" (list (dict ("tag" "span") ("cls" "title") ("id" "标题1")) (dict ("tag" "button") ("cls" "del") ("id" "删1") ("text" "删")))))
+      (dict ("tag" "li") ("cls" "item") ("id" "行2") ("shown" false) ("children" (list (dict ("tag" "span") ("cls" "title") ("id" "标题2")) (dict ("tag" "button") ("cls" "del") ("id" "删2") ("text" "删")))))
+      (dict ("tag" "li") ("cls" "item") ("id" "行3") ("shown" false) ("children" (list (dict ("tag" "span") ("cls" "title") ("id" "标题3")) (dict ("tag" "button") ("cls" "del") ("id" "删3") ("text" "删")))))
+      (dict ("tag" "li") ("cls" "empty") ("id" "空提示") ("shown" false))))))))
+    (do (call 待办列表
+      (dict ("行" (list "行1" "行2" "行3")) ("标题" (list "标题1" "标题2" "标题3")) ("删" (list "删1" "删2" "删3")) ("空提示" "空提示"))
+      (dict ("条目们" (fn () (return (send 条目们 读)))))
+      (dict
+        ("点了" (fn (条) (do (rt listPush 记 (rt join "点了:" (rt dictGet 条 "标题"))))))
+        ("删了" (fn (条)
+          (do (rt listPush 记 (rt join "删了:" (rt dictGet 条 "标题"))))
+          (do (send 条目们 写 (call 去掉 (send 条目们 偷看) (rt dictGet 条 "号")))))))))
+    (do (call 等更新))
+    (do (call 报 "1" "画出来的树" (call 树 容器甲)))
+    (let 元1 (call 行 容器甲 1))
+    (let 元2 (call 行 容器甲 2))
+
+    (do (call 做了))
+    (do (native test.click 元2))
+    (do (call 报 "2" "点第 2 条，收到的事件" 记))
+    (do (call 报 "3" "点了以后的树（第 2 条多了“选中”）" (call 树 容器甲)))
+    (do (call 报 "4" "这一下宿主只被要求做了" (call 做了)))
+
+    (do (send 条目们 写 (list (dict ("号" 1) ("标题" "买菜") ("完成" true)) 第二条)))
+    (do (call 等更新))
+    (do (call 报 "5" "把第 1 条标成完成以后的树" (call 树 容器甲)))
+    (do (call 报 "6" "这一下宿主只被要求做了" (call 做了)))
+
+    (do (send 条目们 写 (call 加上 (send 条目们 偷看) (dict ("号" 3) ("标题" "复习") ("完成" false)))))
+    (do (call 等更新))
+    (do (call 报 "7" "末尾加一条以后的树" (call 树 容器甲)))
+    (do (call 报 "8" "原来两条还是原来那两个元素" (rt join (rt isSame 元1 (call 行 容器甲 1)) "，" (rt isSame 元2 (call 行 容器甲 2)))))
+
+    (do (send 条目们 写 (call 加上 (send 条目们 偷看) (dict ("号" 4) ("标题" "交报告") ("完成" false)))))
+    (do (call 等更新))
+    (do (call 报 "9" "再加第四条以后的树" (call 树 容器甲)))
+    (let 元3 (call 行 容器甲 3))
+    (let 元4 (call 行 容器甲 4))
+
+    (do (call 做了))
+    (do (native test.click (native test.find null "button.del" 1)))
+    (do (call 报 "10" "点第 1 条的“删”，收到的事件（没有多出“点了:买菜”）" 记))
+    (do (call 报 "11" "删了以后的树" (call 树 容器甲)))
+    (do (call 报 "12" "这一下宿主只被要求做了" (call 做了)))
+    (do (call 报 "13" "剩下三条还是原来的元素" (rt join (rt isSame 元2 (call 行 容器甲 1)) "，" (rt isSame 元3 (call 行 容器甲 2)) "，" (rt isSame 元4 (call 行 容器甲 3)))))
+
+    (let 现在的 (send 条目们 偷看))
+    (do (send 条目们 写 (list (rt listGet 现在的 2) (rt listGet 现在的 1) (rt listGet 现在的 0))))
+    (do (call 等更新))
+    (do (call 报 "14" "把顺序倒过来以后的树" (call 树 容器甲)))
+    (let o (native test.ops))
+    (do (call 报 "15" "调顺序没有新建也没有拿走，元素还是原来的" (rt join "新建 " (rt dictGet o "新建") "，拿走 " (rt dictGet o "拿走") "，"
+      (rt isSame 元4 (call 行 容器甲 1)) "，" (rt isSame 元3 (call 行 容器甲 2)) "，" (rt isSame 元2 (call 行 容器甲 3)))))
+
+    (do (send 条目们 写 (list)))
+    (do (call 等更新))
+    (do (call 报 "16" "清空以后（默认的“空的时候”）" (call 树 容器甲)))
+    (do (send 条目们 写 (list (dict ("号" 5) ("标题" "新的一条") ("完成" false)))))
+    (do (call 等更新))
+    (do (call 报 "17" "再加一条，空提示没了" (call 树 容器甲)))
+
+    ; ———— 第 1 轮写不出来的 ————
+    (do (call 报 "18" "第二个待办列表（自己给了两个插槽），空的时候" "写不出来：页面上只摆了一套控件，组件认的是控件的名字；第二个实例要再摆一套、再起一套名字"))
+    (do (call 报 "19" "第二个列表有了一条（“每一条怎么画”是自己给的）" "写不出来：插槽只能交回一段文字，画不出“一行里两个带样式的小块”——没有造元素的接口"))
+    (do (call 报 "20" "点第二个列表的第 1 条" "写不出来：没有第二个实例"))
+    (do (call 报 "21" "第二个列表的“放上以后”叫过" "写不出来：组件不是被放上去的，是认领现成的控件，没有“放上”这个时刻"))
+    (do (call 报 "22" "拿走第二个列表" "写不出来：没有“拿下来”的接口，最多把控件藏起来；登记的事件处理也没有地方统一取消"))
+    (do (call 报 "23" "拿走以后改它的条目、点它原来的元素" "写不出来：同上"))
+    (do (call 报 "24" "用积木外观放一个待办列表" "写不出来：积木没法“放”一个组件到页面上，只能认领"))
+    (do (call 报 "25" "积木外观的“当点了”口收到" "写不出来：同上"))))

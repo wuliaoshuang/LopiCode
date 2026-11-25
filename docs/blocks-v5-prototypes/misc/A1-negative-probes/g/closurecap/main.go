@@ -1,0 +1,3 @@
+package main
+import "fmt"
+func main(){ var fs []func() int; for i := 0; i < 3; i++ { fs = append(fs, func() int { return i }) }; for _, f := range fs { fmt.Print(f()) }; x := 1; g := func(){ x++ }; g(); fmt.Println(x) }

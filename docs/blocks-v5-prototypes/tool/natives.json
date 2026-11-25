@@ -1,0 +1,101 @@
+{
+ "http.serve": {
+  "params": [
+   "端口",
+   "处理函数"
+  ],
+  "node": "host.httpServe",
+  "python": "host.http_serve",
+  "async": false,
+  "doc": "登记一个 HTTP 服务：每来一个请求调一次 处理函数(请求)，它返回一个响应。只登记，不马上开门；所有模块的“启动时”都做完以后才开始收请求。"
+ },
+ "store.get": {
+  "params": [
+   "名字"
+  ],
+  "node": "host.storeGet",
+  "python": "host.store_get",
+  "async": false,
+  "doc": "取一个“在请求之间留得住”的格子里的值（拿到的是一份拷贝）；没存过得空。"
+ },
+ "store.set": {
+  "params": [
+   "名字",
+   "值"
+  ],
+  "node": "host.storeSet",
+  "python": "host.store_set",
+  "async": false,
+  "doc": "往格子里放一个值（放进去的是一份拷贝）。"
+ },
+ "store.update": {
+  "params": [
+   "名字",
+   "函数"
+  ],
+  "node": "host.storeUpdate",
+  "python": "host.store_update",
+  "async": false,
+  "round": 2,
+  "doc": "第 2 轮加的（GAP-F1-12）：不被别的请求插队地做一次“取出来 → 函数(旧值) 算出 [新值, 结果] → 放回去”，返回 结果。函数里不能有要等的事（Node 里它返回“稍后的结果”就报错）。",
+  "sync_params": [
+   "函数"
+  ]
+ },
+ "url.decode": {
+  "params": [
+   "文字"
+  ],
+  "node": "host.urlDecode",
+  "python": "host.url_decode",
+  "async": false,
+  "doc": "百分号解码；写法不对（% 后面不是两位十六进制）或解出来不是合法 UTF-8 → 原样返回。不动加号。"
+ },
+ "url.encode": {
+  "params": [
+   "文字"
+  ],
+  "node": "host.urlEncode",
+  "python": "host.url_encode",
+  "async": false,
+  "doc": "百分号编码：按 UTF-8，字母、数字和 - . _ ~ 原样，其余每个字节写成 %XX（大写）。"
+ },
+ "net.fetch": {
+  "params": [
+   "方式",
+   "网址",
+   "数据"
+  ],
+  "node": "host.netFetch",
+  "python": "host.net_fetch",
+  "async": true,
+  "doc": "请求别的网址（规矩沿用第 3 版小库的 fetch）：成功（2xx）得到响应的文字，其余一律得空；最多等 10 秒。"
+ },
+ "time.sleep": {
+  "params": [
+   "毫秒"
+  ],
+  "node": "host.timeSleep",
+  "python": "host.time_sleep",
+  "async": true,
+  "doc": "等这么多毫秒。"
+ },
+ "time.ms": {
+  "params": [],
+  "node": "host.timeMs",
+  "python": "host.time_ms",
+  "async": false,
+  "round": 2,
+  "doc": "第 2 轮加的（GAP-F1-13）：现在的时间，从 1970-01-01 起的毫秒数（整数）。"
+ },
+ "log.error": {
+  "params": [
+   "值"
+  ],
+  "node": "host.logError",
+  "python": "host.log_error",
+  "async": false,
+  "round": 2,
+  "doc": "第 2 轮加的（GAP-F1-14）：文字化后写一行到错误输出（不混进标准输出）。"
+ }
+}

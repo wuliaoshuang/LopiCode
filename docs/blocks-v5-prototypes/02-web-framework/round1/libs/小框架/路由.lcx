@@ -1,0 +1,118 @@
+; 库“小框架”·路由和应用：路由器（可以分组、带前缀、各组有自己的中间件）＋应用（接到宿主上）。
+(module 路由
+  (uses 错误们 响应 上下文 中间件)
+  (native http.serve (端口 处理函数))
+
+  (func 切路径 (路径)
+    (let 段们 (list))
+    (for-each 段 (rt split 路径 "/")
+      (if (when (!= 段 "") (do (rt listPush 段们 段)))))
+    (return 段们))
+
+  ; 处理函数返回什么都行：响应对象原样；空 → 204；文字 → 文字响应；别的 → JSON 响应。
+  (func 变成响应 (值)
+    (if (when (is-a 值 响应) (return 值))
+        (when (rt isNull 值) (return (send 响应 空的)))
+        (when (rt isType 值 "text") (return (send 响应 文字 200 值))))
+    (return (send 响应 JSON 200 值)))
+
+  (public (class 路由器
+    (field 前缀段 (list))
+    (field 上级 null)
+    (field 中间件们 (list))
+    (field 路由们 (list))
+    (field 分组们 (list))
+
+    (ctor ((前缀 "") (上级 null))
+      (set (. (this) 前缀段) (call 切路径 前缀))
+      (if (when (not (rt isNull 上级))
+            (set (. (this) 前缀段) (rt listConcat (. 上级 前缀段) (. (this) 前缀段)))))
+      (set (. (this) 上级) 上级)
+      (set (. (this) 中间件们) (list))
+      (set (. (this) 路由们) (list))
+      (set (. (this) 分组们) (list)))
+
+    ; 加一个中间件（只管这个路由器和它下面的分组）。
+    (method 用 (一个中间件)
+      (do (rt listPush (. (this) 中间件们) 一个中间件))
+      (return (this)))
+
+    ; 开一个分组：路径带上前缀，可以有自己的中间件。
+    (method 分组 (前缀)
+      (let 组 (new 路由器 前缀 (this)))
+      (do (rt listPush (. (this) 分组们) 组))
+      (return 组))
+
+    (method 加 (方式 路径 处理)
+      (do (rt listPush (. (this) 路由们)
+            (dict ("method" 方式) ("segments" (rt listConcat (. (this) 前缀段) (call 切路径 路径))) ("handler" 处理))))
+      (return (this)))
+    (method GET (路径 处理) (return (send (this) 加 "GET" 路径 处理)))
+    (method POST (路径 处理) (return (send (this) 加 "POST" 路径 处理)))
+    (method PUT (路径 处理) (return (send (this) 加 "PUT" 路径 处理)))
+    (method PATCH (路径 处理) (return (send (this) 加 "PATCH" 路径 处理)))
+    (method DELETE (路径 处理) (return (send (this) 加 "DELETE" 路径 处理)))
+
+    ; 从最上面的路由器到自己，一路上的中间件（不含最上面那个的——它的在最外层，已经跑过了）。
+    (method 一路的中间件 ()
+      (if (when (rt isNull (. (this) 上级)) (return (list))))
+      (return (rt listConcat (send (. (this) 上级) 一路的中间件) (. (this) 中间件们))))
+
+    ; 自己和下面所有分组的路由，摊平成一个列表：每项 {route, router}。
+    (method 全部路由 ()
+      (let 全部 (list))
+      (for-each 路由 (. (this) 路由们)
+        (do (rt listPush 全部 (dict ("route" 路由) ("router" (this))))))
+      (for-each 组 (. (this) 分组们)
+        (set 全部 (rt listConcat 全部 (send 组 全部路由))))
+      (return 全部))))
+
+  (func 对得上 (模式 段们)
+    (if (when (!= (rt size 模式) (rt size 段们)) (return null)))
+    (let 参数 (dict))
+    (for-each (想要 i) 模式
+      (let 实际 (rt listGet 段们 i))
+      (if (when (rt startsWith 想要 ":")
+            (set (index 参数 (rt substring 想要 1 (rt size 想要))) 实际))
+          (when (!= 想要 实际)
+            (return null))))
+    (return 参数))
+
+  (public (class 应用 (extends 路由器)
+    (ctor ()
+      (super-init))
+
+    ; 最里面那一层：找路由，找不到就抛 404 / 405（外面的中间件接得到），找到就跑“分组的中间件 → 处理函数”。
+    (method 找并处理 (上下文)
+      (let 允许的 (list))
+      (for-each 项 (send (this) 全部路由)
+        (let 路由 (rt dictGet 项 "route"))
+        (let 参数 (call 对得上 (rt dictGet 路由 "segments") (. 上下文 段们)))
+        (if (when (rt isNull 参数) (continue)))
+        (if (when (!= (rt dictGet 路由 "method") (. 上下文 方式))
+              (if (when (not (rt listContains 允许的 (rt dictGet 路由 "method")))
+                    (do (rt listPush 允许的 (rt dictGet 路由 "method")))))
+              (continue)))
+        (set (. 上下文 路径参数们) 参数)
+        (let 处理 (rt dictGet 路由 "handler"))
+        (let 链 (call 串起来 (send (rt dictGet 项 "router") 一路的中间件)
+                  (fn (上下文) (return (call 变成响应 (call 处理 上下文))))))
+        (return (call 链 上下文)))
+      (if (when (> (rt size 允许的) 0) (throw (new 方式不对 允许的))))
+      (throw (new 没有这个)))
+
+    ; 宿主每来一个请求调一次。
+    (method 处理请求 (请求)
+      (let 自己 (this))
+      (let 链 (call 串起来 (. (this) 中间件们) (fn (上下文) (return (send 自己 找并处理 上下文)))))
+      (let 回复 null)
+      (try
+        (body (set 回复 (call 变成响应 (call 链 (new 上下文 请求)))))
+        (catch e
+          ; 最后的兜底：没用“错误处理”中间件、或者中间件自己出了错。
+          (set 回复 (send 响应 JSON 500 (dict ("error" "服务器内部出错"))))))
+      (return (send 回复 变成字典)))
+
+    (method 开始服务 (端口)
+      (let 自己 (this))
+      (do (native http.serve 端口 (fn (请求) (return (send 自己 处理请求 请求)))))))))

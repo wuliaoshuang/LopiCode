@@ -1,0 +1,35 @@
+; 库“小框架”·错误：带状态码的错误类。抛出以后由“错误处理”中间件变成对应的响应。
+(module 错误们
+
+  ; 所有“该回给调用方”的错误的父类。继承内置的“错误”（它有一个字段：消息）。
+  (public (class HTTP错误 (extends 错误)
+    (field 状态码 500)
+    (field 详情 null)
+    (ctor (状态码 消息 (详情 null))
+      (super-init 消息)
+      (set (. (this) 状态码) 状态码)
+      (set (. (this) 详情) 详情))
+    ; 变成回给调用方的内容。子类可以改写。
+    (method 变成内容 ()
+      (let 内容 (dict ("error" (. (this) 消息))))
+      (if (when (not (rt isNull (. (this) 详情)))
+            (set (index 内容 "details") (. (this) 详情))))
+      (return 内容))))
+
+  (public (class 请求不对 (extends HTTP错误)
+    (ctor (消息 (详情 null)) (super-init 400 消息 详情))))
+
+  (public (class 未授权 (extends HTTP错误)
+    (ctor ((消息 "请先登录")) (super-init 401 消息))))
+
+  (public (class 没有这个 (extends HTTP错误)
+    (ctor ((消息 "没有这个接口")) (super-init 404 消息))))
+
+  (public (class 方式不对 (extends HTTP错误)
+    (field 允许的 (list))
+    (ctor (允许的)
+      (super-init 405 "这个地址不支持这种请求方式")
+      (set (. (this) 允许的) 允许的))))
+
+  (public (class 校验没过 (extends HTTP错误)
+    (ctor (问题们) (super-init 422 "提交的内容不对" 问题们)))))

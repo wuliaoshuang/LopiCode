@@ -1,0 +1,7 @@
+; 库“接口服务”·请求别的网址。
+(module 网络
+  (native net.fetch (方式 网址 数据))
+
+  ; 成功（2xx）得到响应的文字，其余得空。给“请求别的网址”那块积木的模板用，所以得公开。
+  (public (func 请求网址 (方式 网址 数据)
+    (return (native net.fetch 方式 网址 数据)))))

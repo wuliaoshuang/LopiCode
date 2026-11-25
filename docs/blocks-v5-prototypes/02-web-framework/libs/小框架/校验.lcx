@@ -1,0 +1,63 @@
+; 库“小框架”·请求校验助手：一条条登记规则，最后“检查”——有问题就抛“校验没过”（422，详情里列出每个问题）。
+; 每条规则是一个函数 (数据) → 问题文字，没问题返回空。规则靠闭包记住自己的字段名和范围。
+(module 校验
+  (uses 错误们)
+
+  (public (class 校验器
+    (field 规则们 (list))
+    (ctor ()
+      (set (. (this) 规则们) (list)))
+
+    (method 规则 (一条)
+      (do (rt listPush (. (this) 规则们) 一条))
+      (return (this)))
+
+    (method 必填 (字段)
+      (return (send (this) 规则 (fn (数据)
+        (if (when (rt isNull (rt dictGet 数据 字段)) (return (rt join 字段 " 必须填"))))
+        (return null)))))
+
+    ; 是文字，长度在 最短–最长 之间（没填的不管，交给“必填”）。
+    (method 文字 (字段 最短 最长)
+      (return (send (this) 规则 (fn (数据)
+        (let 值 (rt dictGet 数据 字段))
+        (if (when (rt isNull 值) (return null))
+            (when (not (rt isType 值 "text")) (return (rt join 字段 " 要是文字")))
+            (when (or (< (rt size 值) 最短) (> (rt size 值) 最长))
+              (return (rt join 字段 " 的长度要在 " 最短 " 到 " 最长 " 之间"))))
+        (return null)))))
+
+    (method 数字 (字段 最小 最大)
+      (return (send (this) 规则 (fn (数据)
+        (let 值 (rt dictGet 数据 字段))
+        (if (when (rt isNull 值) (return null))
+            (when (not (rt isType 值 "number")) (return (rt join 字段 " 要是数字")))
+            (when (or (< 值 最小) (> 值 最大))
+              (return (rt join 字段 " 要在 " 最小 " 到 " 最大 " 之间"))))
+        (return null)))))
+
+    (method 其中之一 (字段 可选的)
+      (return (send (this) 规则 (fn (数据)
+        (let 值 (rt dictGet 数据 字段))
+        (if (when (rt isNull 值) (return null))
+            (when (not (rt listContains 可选的 值))
+              (return (rt join 字段 " 只能是 " (rt listJoin 可选的 "、") " 里的一个"))))
+        (return null)))))
+
+    ; 数据要是字典；跑完所有规则，把问题收齐了一起报。没问题就返回数据。
+    (method 检查 (数据)
+      (if (when (not (rt isType 数据 "dict"))
+            (throw (new 校验没过 (list "提交的内容要是一个 JSON 对象")))))
+      (let 问题们 (list))
+      (for-each 一条 (. (this) 规则们)
+        (let 问题 (call 一条 数据))
+        (if (when (not (rt isNull 问题)) (do (rt listPush 问题们 问题)))))
+      (if (when (> (rt size 问题们) 0) (throw (new 校验没过 问题们))))
+      (return 数据))))
+
+  ; 把文字写的编号变成数字；不是数字就抛 400。
+  ; 第 2 轮：用新加的标准库函数 isNumeric（“这是不是一个数字的写法”），“1.0”“1e3”“ 7 ”都认。
+  (public (func 要数字 (文字 名字)
+    (if (when (not (rt isNumeric 文字))
+          (throw (new 请求不对 (rt join 名字 " 要是数字")))))
+    (return (rt toNumber 文字)))))

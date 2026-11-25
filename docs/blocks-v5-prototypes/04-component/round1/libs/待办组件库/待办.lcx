@@ -1,0 +1,60 @@
+; 库“待办组件库”·第 1 轮：只用 D 的甲类界面接口（界面.读 / 界面.写 / 界面.当事件）＋ 状态库。
+; D 的甲类接口不能造元素，所以页面上的控件得事先摆好（在真产品里是可视化编辑器摆、导出器生成）；
+; 组件只能“认领”这些有名字的控件：行数是摆死的，一条画成什么样也是摆死的。
+;   属性：条目们（取值函数）  事件：点了、删了  插槽：每一条(条目) → 只能是一段文字；空的时候() → 只能是一段文字
+(module 待办
+  (uses 状态库)
+  (native ui.get (控件 属性名))
+  (native ui.set (控件 属性名 值))
+  (native ui.on (控件 事件名 回调))
+
+  (func 取 (字典 键 默认)
+    (if (when (and (not (rt isNull 字典)) (rt dictHas 字典 键)) (return (rt dictGet 字典 键))))
+    (return 默认))
+
+  (func 发 (回调 数据)
+    (if (when (not (rt isNull 回调)) (do (spawn (do (call 回调 数据)))))))
+
+  ; 和现在的一样就不写。
+  (func 写 (控件 名 值)
+    (if (when (not (rt isSame (native ui.get 控件 名) 值)) (do (native ui.set 控件 名 值)))))
+
+  (func 认领一行 (位 行名 标题名 删名 条目们 选中的 画一条 点了 删了)
+    (do (call 跟着做 (fn ()
+      (let 列 (call! 条目们))
+      (if (when (< 位 (rt size 列))
+            (let 条 (rt listGet 列 位))
+            (do (call 写 行名 "显示" true))
+            (do (call 写 行名 "类名" (rt join "item"
+              (cond (call 取 条 "完成" false) " done" "")
+              (cond (== (send 选中的 读) (rt dictGet 条 "号")) " sel" ""))))
+            (do (call 写 标题名 "文字" (call! 画一条 条))))
+          (else (do (call 写 行名 "显示" false))))
+      (return null))))
+    (do (native ui.on 行名 "点击" (fn (事件)
+      (let 列 (call! 条目们))
+      (if (when (< 位 (rt size 列))
+            (do (send 选中的 写 (rt dictGet (rt listGet 列 位) "号")))
+            (do (call 发 点了 (rt listGet 列 位))))))))
+    (do (native ui.on 删名 "点击" (fn (事件)
+      (do (call! (rt dictGet 事件 "别再往上传")))
+      (let 列 (call! 条目们))
+      (if (when (< 位 (rt size 列)) (do (call 发 删了 (rt listGet 列 位)))))))))
+
+  ; 控件名＝{"行": [名字…], "标题": [名字…], "删": [名字…], "空提示": 名字}
+  (public (func 待办列表 (控件名 属性 (事件 null) (插槽 null))
+    (let 条目们 (rt dictGet 属性 "条目们"))
+    (let 点了 (call 取 事件 "点了" null))
+    (let 删了 (call 取 事件 "删了" null))
+    (let 画一条 (call 取 插槽 "每一条" (fn (条) (return (rt dictGet 条 "标题")))))
+    (let 画空的 (call 取 插槽 "空的时候" (fn () (return "还没有待办"))))
+    (let 选中的 (call 新状态 null))
+    (let 行们 (rt dictGet 控件名 "行"))
+    (for-each (行名 位) 行们
+      (do (call 认领一行 位 行名 (rt listGet (rt dictGet 控件名 "标题") 位) (rt listGet (rt dictGet 控件名 "删") 位) 条目们 选中的 画一条 点了 删了)))
+    (do (call 跟着做 (fn ()
+      (let 空 (== (rt size (call! 条目们)) 0))
+      (do (call 写 (rt dictGet 控件名 "空提示") "显示" 空))
+      (if (when 空 (do (call 写 (rt dictGet 控件名 "空提示") "文字" (call! 画空的)))))
+      (return null))))
+    (return null))))

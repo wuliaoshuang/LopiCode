@@ -1,0 +1,22 @@
+; 库“待办接口库”·第 1 轮：只用 F1 的宿主接口 net.fetch（成功得到响应的文字，其余一律得空）。
+; 所以不成功的时候只知道“没成”：是校验没过、是重复、还是服务器连不上，分不出来，服务器说的原因也拿不到。
+(module 接口
+  (native net.fetch (方式 网址 数据))
+
+  (var 地址 "")
+  (public (func 设地址 (新地址) (set 地址 新地址)))
+
+  (public (func 取全部 ()
+    (let 文 (native net.fetch "GET" (rt join 地址 "/api/todos") null))
+    (if (when (rt isNull 文) (return (dict ("成功" false) ("错误" "加载失败")))))
+    (return (dict ("成功" true) ("条目们" (rt fromJson 文))))))
+
+  (public (func 添加 (标题 级别)
+    (let 文 (native net.fetch "POST" (rt join 地址 "/api/todos") (dict ("title" 标题) ("level" 级别))))
+    (if (when (rt isNull 文) (return (dict ("成功" false) ("错误" "提交失败")))))
+    (return (dict ("成功" true) ("条目" (rt fromJson 文))))))
+
+  (public (func 删除 (号)
+    (let 文 (native net.fetch "DELETE" (rt join 地址 "/api/todos/" 号) null))
+    (if (when (rt isNull 文) (return (dict ("成功" false) ("错误" "删除失败")))))
+    (return (dict ("成功" true))))))

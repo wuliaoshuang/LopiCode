@@ -1,0 +1,7 @@
+{
+ "format": 1, "name": "待办接口库", "id": "lib.lopicode.todoapi", "version": "0.1.0", "author": "LopiCode 原型（F2）",
+ "description": "前端这一头的发请求：取全部、添加、删除。",
+ "requires": {"core": "F1 第 2 轮的核心", "natives": ["net.fetch"], "libs": []},
+ "languages": ["node"], "modules": ["接口"],
+ "exports": {"classes": [], "functions": ["设地址", "取全部", "添加", "删除"]}, "blocks": []
+}

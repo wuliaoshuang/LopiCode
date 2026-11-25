@@ -1,0 +1,24 @@
+{
+ "format": 1,
+ "name": "待办组件库",
+ "id": "lib.lopicode.todo",
+ "version": "0.2.0",
+ "author": "LopiCode 原型（F2）",
+ "description": "组件“待办列表”：属性（条目们）、事件（点了、删了）、插槽（每一条、空的时候）。",
+ "requires": {"core": "F1 第 2 轮的核心 ＋ call!", "natives": [], "libs": ["状态库", "画面库"]},
+ "languages": ["node"],
+ "modules": ["待办"],
+ "exports": {"classes": [], "functions": ["待办列表", "放待办列表"]},
+ "blocks": [
+  {"id": "todoList", "name": "放一个待办列表", "shape": "语句型",
+   "text": "在 {父} 里放一个待办列表 条目＝{条目们} 当点了（条目）{点了} 当删了（条目）{删了}",
+   "slots": [
+    {"name": "父", "kind": "值"},
+    {"name": "条目们", "kind": "懒值"},
+    {"name": "点了", "kind": "回调口", "params": ["条目"], "optional": true},
+    {"name": "删了", "kind": "回调口", "params": ["条目"], "optional": true}
+   ],
+   "def": {"fn": "放待办列表", "args": ["$父", "$条目们", "$点了", "$删了"]},
+   "doc": "插槽在这块积木上没有做成口：清单格式里没有“带参数、要交回一个值的口”（GAP-F2-07）。"}
+ ]
+}

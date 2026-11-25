@@ -1,0 +1,79 @@
+; 库“接口服务”·数据集合：全部 / 取 / 找 / 个数 / 加 / 改 / 删。数据放在宿主的 store 格子里：{next: 下一个编号, rows: 记录列表}。
+; 规矩照现有小库（dbAll / dbGet / dbFind / dbCount / dbInsert / dbUpdate / dbDelete）。第 1 轮：只用 store.get / store.set。
+(module 集合
+  (native store.get (名字))
+  (native store.set (名字 值))
+
+  (class 集合
+    (field 名字 "")
+    (ctor (名字)
+      (set (. (this) 名字) 名字))
+
+    (method 读 ()
+      (let 库 (native store.get (rt join "集合:" (. (this) 名字))))
+      (if (when (rt isNull 库) (set 库 (dict ("next" 1) ("rows" (list))))))
+      (return 库))
+
+    (method 写 (库)
+      (do (native store.set (rt join "集合:" (. (this) 名字)) 库)))
+
+    (method 位置 (rows id)
+      (let 要找 (rt toNumber id))
+      (for-each (行 i) rows
+        (if (when (== (rt dictGet 行 "id") 要找) (return i))))
+      (return -1))
+
+    (method 全部 ()
+      (return (rt dictGet (send (this) 读) "rows")))
+
+    (method 个数 ()
+      (return (rt size (send (this) 全部))))
+
+    (method 取 (id)
+      (let rows (send (this) 全部))
+      (return (rt listGet rows (send (this) 位置 rows id))))
+
+    (method 找 (键 值)
+      (return (rt listFilter (send (this) 全部) (-> (行) (== (rt dictGet 行 键) 值)))))
+
+    ; 内容要是字典（不是就当空字典）；自动带上数字 id（从 1 开始，删掉的号不回收）。
+    (method 加 (值)
+      (let 库 (send (this) 读))
+      (let 行 (rt dictMerge (dict) 值))
+      (set (index 行 "id") (rt dictGet 库 "next"))
+      (set (index 库 "next") (+ (rt dictGet 库 "next") 1))
+      (do (rt listPush (rt dictGet 库 "rows") 行))
+      (do (send (this) 写 库))
+      (return 行))
+
+    ; 只改给出的字段，id 不许改；找不到就什么都不做。
+    (method 改 (id 值)
+      (let 库 (send (this) 读))
+      (let rows (rt dictGet 库 "rows"))
+      (let i (send (this) 位置 rows id))
+      (if (when (< i 0) (return null)))
+      (let 旧 (rt listGet rows i))
+      (if (when (not (rt isType 值 "dict")) (return 旧)))
+      (let 新 (rt dictMerge 旧 值))
+      (set (index 新 "id") (rt dictGet 旧 "id"))
+      (do (rt listSet rows i 新))
+      (do (send (this) 写 库))
+      (return 新))
+
+    (method 删 (id)
+      (let 库 (send (this) 读))
+      (let rows (rt dictGet 库 "rows"))
+      (let i (send (this) 位置 rows id))
+      (if (when (< i 0) (return false)))
+      (do (rt listRemove rows i))
+      (do (send (this) 写 库))
+      (return true)))
+
+  ; 下面七个函数是给积木用的：一块积木＝对其中一个函数的一次调用。
+  (public (func 集合全部 (名) (return (send (new 集合 名) 全部))))
+  (public (func 集合个数 (名) (return (send (new 集合 名) 个数))))
+  (public (func 集合取 (名 id) (return (send (new 集合 名) 取 id))))
+  (public (func 集合找 (名 键 值) (return (send (new 集合 名) 找 键 值))))
+  (public (func 集合加 (名 值) (return (send (new 集合 名) 加 值))))
+  (public (func 集合改 (名 id 值) (return (send (new 集合 名) 改 id 值))))
+  (public (func 集合删 (名 id) (return (send (new 集合 名) 删 id)))))

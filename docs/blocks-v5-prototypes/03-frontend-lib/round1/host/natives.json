@@ -1,0 +1,8 @@
+{
+ "tick.defer": {"params": ["函数"], "node": "host.tickDefer", "python": "host.tick_defer", "async": false,
+  "doc": "这一段跑完以后做一次 函数()。第 1 轮：D 没说这个函数许不许“等”，这里不拦。"},
+ "tick.wait": {"params": [], "node": "host.tickWait", "python": "host.tick_wait", "async": true,
+  "doc": "让攒着的事先跑完（D 的“让界面先更新一下”）。"},
+ "log.error": {"params": ["值"], "node": "host.logError", "python": "host.log_error", "async": false,
+  "doc": "文字化后写一行到错误输出（F1 第 2 轮已有）。"}
+}

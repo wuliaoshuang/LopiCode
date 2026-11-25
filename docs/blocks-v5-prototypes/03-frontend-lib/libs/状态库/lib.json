@@ -1,0 +1,185 @@
+{
+ "format": 1,
+ "name": "状态库",
+ "id": "lib.lopicode.reactive",
+ "version": "0.2.1",
+ "author": "LopiCode 原型（F2）",
+ "description": "状态、派生值、“当…变了”、一起改。D 第 4.2 节的三条语义，全部用语言核心写成（第 2 轮）。",
+ "requires": {
+  "core": "F1 第 2 轮的核心 ＋ F2 增补：call!（不用等的函数，GAP-F2-01）、isSame（GAP-F2-02）；清单里用了“懒值”槽（GAP-F2-03）",
+  "natives": [
+   "tick.defer",
+   "tick.wait",
+   "log.error"
+  ],
+  "libs": []
+ },
+ "languages": [
+  "node",
+  "python"
+ ],
+ "modules": [
+  "反应"
+ ],
+ "exports": {
+  "classes": [
+   "状态",
+   "派生",
+   "跟随",
+   "归属"
+  ],
+  "functions": [
+   "新状态",
+   "新派生",
+   "跟着做",
+   "不记依赖地做",
+   "当变了",
+   "一起改",
+   "等更新",
+   "设出错时",
+   "收尾时"
+  ]
+ },
+ "blocks": [
+  {
+   "id": "newState",
+   "name": "新状态",
+   "shape": "值型",
+   "text": "新状态 初值 {初值}",
+   "slots": [
+    {
+     "name": "初值",
+     "kind": "值"
+    }
+   ],
+   "def": {
+    "fn": "新状态",
+    "args": [
+     "$初值"
+    ]
+   }
+  },
+  {
+   "id": "read",
+   "name": "状态的值",
+   "shape": "值型",
+   "text": "{状态} 的值",
+   "slots": [
+    {
+     "name": "状态",
+     "kind": "值"
+    }
+   ],
+   "def": {
+    "method": "读",
+    "on": "$状态",
+    "args": []
+   }
+  },
+  {
+   "id": "write",
+   "name": "设为",
+   "shape": "语句型",
+   "text": "把 {状态} 设为 {值}",
+   "slots": [
+    {
+     "name": "状态",
+     "kind": "值"
+    },
+    {
+     "name": "值",
+     "kind": "值"
+    }
+   ],
+   "def": {
+    "method": "写",
+    "on": "$状态",
+    "args": [
+     "$值"
+    ]
+   }
+  },
+  {
+   "id": "watch",
+   "name": "当变了",
+   "shape": "帽子型",
+   "text": "当 {取值} 变了（新值）（旧值）",
+   "slots": [
+    {
+     "name": "取值",
+     "kind": "懒值"
+    },
+    {
+     "name": "body",
+     "kind": "回调口",
+     "params": [
+      "新值",
+      "旧值"
+     ]
+    }
+   ],
+   "def": {
+    "fn": "当变了",
+    "args": [
+     "$取值",
+     "$body"
+    ]
+   },
+   "doc": "第 2 轮：槽“取值”是“懒值”——填的式子先不算，展开时包成一个函数交给库。"
+  },
+  {
+   "id": "batch",
+   "name": "一起改",
+   "shape": "语句型",
+   "text": "一起改",
+   "slots": [
+    {
+     "name": "body",
+     "kind": "回调口",
+     "params": []
+    }
+   ],
+   "def": {
+    "fn": "一起改",
+    "args": [
+     "$body"
+    ]
+   }
+  },
+  {
+   "id": "derived",
+   "name": "新派生",
+   "shape": "值型",
+   "text": "派生值 ＝ {式子}",
+   "slots": [
+    {
+     "name": "式子",
+     "kind": "懒值"
+    }
+   ],
+   "def": {
+    "fn": "新派生",
+    "args": [
+     "$式子"
+    ]
+   }
+  },
+  {
+   "id": "readDerived",
+   "name": "派生的值",
+   "shape": "值型",
+   "text": "{派生} 的值",
+   "slots": [
+    {
+     "name": "派生",
+     "kind": "值"
+    }
+   ],
+   "def": {
+    "method": "读",
+    "on": "$派生",
+    "args": []
+   }
+  }
+ ]
+}

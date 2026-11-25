@@ -1,0 +1,155 @@
+{
+ "format": 1,
+ "name": "小框架",
+ "id": "lib.lopicode.mini-web",
+ "version": "0.1.0",
+ "author": "LopiCode 原型（F1）",
+ "description": "一个小型 Web 框架：路由（分组 / 前缀）、洋葱模型的中间件、带状态码的错误类和统一错误处理、请求校验助手、仓库。全部用语言核心写成。",
+ "requires": {
+  "core": "v4 第 4.2 节的节点 ＋ rt.dart 的标准库函数 ＋ 内置的“错误”类（GAP-F1-01）",
+  "natives": [
+   "http.serve",
+   "store.get",
+   "store.set",
+   "url.decode"
+  ],
+  "libs": []
+ },
+ "languages": [
+  "node",
+  "python"
+ ],
+ "modules": [
+  "错误们",
+  "响应",
+  "上下文",
+  "中间件",
+  "路由",
+  "校验",
+  "仓库"
+ ],
+ "exports": {
+  "classes": [
+   "HTTP错误",
+   "请求不对",
+   "未授权",
+   "没有这个",
+   "方式不对",
+   "校验没过",
+   "响应",
+   "上下文",
+   "错误处理",
+   "兜底",
+   "路由器",
+   "应用",
+   "校验器",
+   "仓库"
+  ],
+  "interfaces": [
+   "中间件"
+  ],
+  "functions": [
+   "串起来",
+   "要数字"
+  ]
+ },
+ "lists": [],
+ "context": [
+  {
+   "name": "上下文",
+   "provided_by": "当收到",
+   "doc": "这一次请求的上下文对象。"
+  }
+ ],
+ "blocks": [
+  {
+   "id": "on",
+   "name": "当收到",
+   "shape": "帽子型",
+   "text": "{app} 收到 {method} {path} 时",
+   "slots": [
+    {
+     "name": "app",
+     "kind": "值"
+    },
+    {
+     "name": "method",
+     "kind": "选项",
+     "choices": [
+      "GET",
+      "POST",
+      "PUT",
+      "PATCH",
+      "DELETE"
+     ]
+    },
+    {
+     "name": "path",
+     "kind": "值"
+    },
+    {
+     "name": "body",
+     "kind": "回调口",
+     "params": [
+      "上下文"
+     ]
+    }
+   ],
+   "def": {
+    "method": "加",
+    "on": "$app",
+    "args": [
+     "$method",
+     "$path",
+     "$body"
+    ]
+   },
+   "doc": "对象方法型的定义：展开成 (send app 加 方式 路径 回调)。"
+  },
+  {
+   "id": "replyJson",
+   "name": "回复JSON",
+   "shape": "收尾型",
+   "text": "回复 JSON：状态码 {status} 内容 {value}",
+   "slots": [
+    {
+     "name": "status",
+     "kind": "值"
+    },
+    {
+     "name": "value",
+     "kind": "值"
+    }
+   ],
+   "def": {
+    "static": "响应.JSON",
+    "args": [
+     "$status",
+     "$value"
+    ]
+   }
+  },
+  {
+   "id": "pathParam",
+   "name": "路径参数",
+   "shape": "值型",
+   "text": "路径参数 {name}",
+   "slots": [
+    {
+     "name": "name",
+     "kind": "值"
+    }
+   ],
+   "needs_context": [
+    "上下文"
+   ],
+   "def": {
+    "method": "路径参数",
+    "on": "@上下文",
+    "args": [
+     "$name"
+    ]
+   }
+  }
+ ]
+}

@@ -1,0 +1,33 @@
+; 库“表单组件库”：组件“待办表单”——两个输入框、一个按钮、一行错误。用语言核心 ＋ 状态库 ＋ 画面库 写成。
+;   双向属性：标题、级别（外面给的状态；输入框打字就写回去，外面改了输入框也跟着变）
+;   只读属性：提交中（取值函数：按钮上的字跟着变）、错误（取值函数：不是空就多画一行）
+;   事件：提交({title, level})——组件只发事件，不自己发请求
+(module 表单
+  (uses 状态库 画面库)
+
+  (func 发 (回调 数据)
+    (if (when (not (rt isNull 回调)) (do (spawn (do (call 回调 数据)))))))
+
+  (func 输入框 (类名 状态值)
+    (return (call 元素 "input"
+      (dict ("类名" 类名) ("值" (fn () (return (send 状态值 读)))))
+      null
+      (dict ("输入" (fn (事件) (do (send 状态值 写 (rt dictGet 事件 "值")))))))))
+
+  (public (func 待办表单 (属性 (事件 null))
+    (let 标题 (rt dictGet 属性 "标题"))
+    (let 级别 (rt dictGet 属性 "级别"))
+    (let 提交中 (rt dictGet 属性 "提交中"))
+    (let 错误 (rt dictGet 属性 "错误"))
+    (let 提交 (cond (rt isNull 事件) null (rt dictGet 事件 "提交")))
+    (return (call 元素 "form" (dict ("类名" "add")) (list
+      (call 输入框 "title" 标题)
+      (call 输入框 "level" 级别)
+      (call 元素 "button"
+        (dict ("类名" "submit") ("文字" (fn () (return (cond (call! 提交中) "提交中…" "添加")))))
+        null
+        (dict ("点击" (fn (事件)
+          (do (call 发 提交 (dict ("title" (send 标题 偷看)) ("level" (send 级别 偷看)))))))))
+      (call 如果有
+        (fn () (return (!= (call! 错误) "")))
+        (fn () (return (call 元素 "p" (dict ("类名" "err") ("文字" (fn () (return (call! 错误)))))))))))))))

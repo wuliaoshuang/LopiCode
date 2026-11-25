@@ -1,0 +1,38 @@
+; 库“接口服务”·响应：把“状态码 ＋ 值”拼成宿主认的响应字典 {status, headers, body}。
+; 规矩照现有小库（lib/backend/runtime_node.dart 的 statusOf / sendJson / sendText / write）。
+(module 响应
+
+  ; 状态码：数字化后去掉小数；不在 200–599 之间的当 200。
+  (func 状态码 (v)
+    (let n (rt floor (rt toNumber v)))
+    (if (when (and (>= n 200) (<= n 599)) (return n)))
+    (return 200))
+
+  ; 204 / 304 没有内容，也不带 Content-Type；别的带上类型和内容。每个响应都带允许跨域的头。
+  (func 做响应 (状态 类型 内容)
+    (let 头 (dict ("Access-Control-Allow-Origin" "*")))
+    (if (when (or (== 状态 204) (== 状态 304))
+          (return (dict ("status" 状态) ("headers" 头) ("body" "")))))
+    (set (index 头 "Content-Type") 类型)
+    (return (dict ("status" 状态) ("headers" 头) ("body" 内容))))
+
+  (public (func JSON响应 (状态 值)
+    (return (call 做响应 (call 状态码 状态) "application/json; charset=utf-8" (rt toJson 值)))))
+
+  (public (func 文字响应 (状态 值)
+    (return (call 做响应 (call 状态码 状态) "text/plain; charset=utf-8" (rt toText 值)))))
+
+  (public (func 错误响应 (状态 消息)
+    (return (call JSON响应 状态 (dict ("error" 消息))))))
+
+  ; 接口里一块“返回”都没碰到：204 空响应。
+  (public (func 空响应 ()
+    (return (call 做响应 204 "" ""))))
+
+  ; 浏览器跨域调用前的“预检”。
+  (public (func 预检响应 ()
+    (return (dict ("status" 204)
+                  ("headers" (dict ("Access-Control-Allow-Origin" "*")
+                                   ("Access-Control-Allow-Methods" "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+                                   ("Access-Control-Allow-Headers" "*")))
+                  ("body" ""))))))

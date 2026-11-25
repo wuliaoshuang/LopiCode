@@ -1,0 +1,25 @@
+[1] 画出来的树：ul.todo[li.item[span.title“买菜” button.del“删”] li.item.done[span.title“写作业” button.del“删”]]
+[2] 点第 2 条，收到的事件：["点了:写作业"]
+[3] 点了以后的树（第 2 条多了“选中”）：ul.todo[li.item[span.title“买菜” button.del“删”] li.item.done.sel[span.title“写作业” button.del“删”]]
+[4] 这一下宿主只被要求做了：新建 0，写 1，插入 0，拿走 0
+[5] 把第 1 条标成完成以后的树：ul.todo[li.item.done[span.title“买菜” button.del“删”] li.item.done.sel[span.title“写作业” button.del“删”]]
+[6] 这一下宿主只被要求做了：新建 0，写 1，插入 0，拿走 0
+[7] 末尾加一条以后的树：ul.todo[li.item.done[span.title“买菜” button.del“删”] li.item.done.sel[span.title“写作业” button.del“删”] li.item[span.title“复习” button.del“删”]]
+[8] 原来两条还是原来那两个元素：true，true
+[9] 再加第四条以后的树：ul.todo[li.item.done[span.title“买菜” button.del“删”] li.item.done.sel[span.title“写作业” button.del“删”] li.item[span.title“复习” button.del“删”] li.item[span.title“交报告” button.del“删”]]
+[10] 点第 1 条的“删”，收到的事件（没有多出“点了:买菜”）：["点了:写作业","删了:买菜"]
+[11] 删了以后的树：ul.todo[li.item.done.sel[span.title“写作业” button.del“删”] li.item[span.title“复习” button.del“删”] li.item[span.title“交报告” button.del“删”]]
+[12] 这一下宿主只被要求做了：新建 0，写 0，插入 0，拿走 1
+[13] 剩下三条还是原来的元素：true，true，true
+[14] 把顺序倒过来以后的树：ul.todo[li.item[span.title“交报告” button.del“删”] li.item[span.title“复习” button.del“删”] li.item.done.sel[span.title“写作业” button.del“删”]]
+[15] 调顺序没有新建也没有拿走，元素还是原来的：新建 0，拿走 0，true，true，true
+[16] 清空以后（默认的“空的时候”）：ul.todo[li.empty“还没有待办”]
+[17] 再加一条，空提示没了：ul.todo[li.item[span.title“新的一条” button.del“删”]]
+[18] 第二个待办列表（自己给了两个插槽），空的时候：ul.todo[p.none“空空如也”]
+[19] 第二个列表有了一条（“每一条怎么画”是自己给的）：ul.todo[li.item[div.row[span.pri“高” span.name“交报告”] button.del“删”]]
+[20] 点第二个列表的第 1 条：第二个：ul.todo[li.item.sel[div.row[span.pri“高” span.name“交报告”] button.del“删”]]｜第一个没变：ul.todo[li.item[span.title“新的一条” button.del“删”]]
+[21] 第二个列表的“放上以后”叫过：["放上以后"]
+[22] 拿走第二个列表：容器里：div.b｜["放上以后","拿走之前"]
+[23] 拿走以后改它的条目、点它原来的元素：宿主什么都没被要求做：新建 0，写 0，插入 0，拿走 0｜事件一共还是 3 个
+[24] 用积木外观放一个待办列表：ul.todo[li.item[span.title“积木放的” button.del“删”]]
+[25] 积木外观的“当点了”口收到：["积木放的"]

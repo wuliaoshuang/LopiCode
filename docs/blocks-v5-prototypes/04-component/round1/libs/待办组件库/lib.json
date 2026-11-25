@@ -1,0 +1,13 @@
+{
+ "format": 1,
+ "name": "待办组件库",
+ "id": "lib.lopicode.todo",
+ "version": "0.1.0",
+ "author": "LopiCode 原型（F2）",
+ "description": "第 1 轮：只用 D 的甲类界面接口写的“待办列表”——只能认领事先摆好的控件。",
+ "requires": {"core": "F1 第 2 轮的核心 ＋ call!、isSame", "natives": ["ui.get", "ui.set", "ui.on"], "libs": ["状态库"]},
+ "languages": ["node"],
+ "modules": ["待办"],
+ "exports": {"classes": [], "functions": ["待办列表"]},
+ "blocks": []
+}

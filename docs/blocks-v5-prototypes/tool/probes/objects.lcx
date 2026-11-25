@@ -1,0 +1,19 @@
+; 探针：把“类造出来的对象”交给标准库会怎样？（GAP-F1-05）两种语言的输出不一样——这就是要记的事。
+(module 探针对象
+  (class 点 (field x 1) (field y 2))
+  (func 试 (名字 做)
+    (try
+      (body (do (rt log (rt join 名字 "：" (call 做)))))
+      (catch e (do (rt log (rt join 名字 "：出错——" (. e 消息)))))))
+  (main
+    (let p (new 点))
+    (let q (new 点))
+    (do (call 试 "toJson" (fn () (return (rt toJson p)))))
+    (do (call 试 "toText" (fn () (return (rt toText p)))))
+    (do (call 试 "等于自己" (fn () (return (== p p)))))
+    (do (call 试 "等于另一个" (fn () (return (== p q)))))
+    (do (call 试 "isType dict" (fn () (return (rt isType p "dict")))))
+    (do (call 试 "size" (fn () (return (rt size p)))))
+    (do (call 试 "dictGet" (fn () (return (rt dictGet p "f_x")))))
+    (do (call 试 "truthy" (fn () (return (not (not p))))))
+    (do (call 试 "typeName（第2轮加的）" (fn () (return (rt typeName p)))))))

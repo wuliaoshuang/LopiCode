@@ -1,0 +1,22 @@
+类型原型全跑  2026-11-25 20:56:47 CST  node v24.22.1  Python 3.12.3  go1.25.0  javac 21.0.13.1
+p01-numbers: Node=通过 Python=通过 Go=通过 Java=通过 四份逐字节相同=是 自动推断对比手写=通过（9 行）
+p02-nullable: Node=通过 Python=通过 Go=通过 Java=通过 四份逐字节相同=是 自动推断对比手写=通过（8 行）
+p03-lists: Node=通过 Python=通过 Go=通过 Java=通过 四份逐字节相同=是 自动推断对比手写=通过（8 行）
+p04-dicts: Node=通过 Python=通过 Go=通过 Java=通过 四份逐字节相同=是 自动推断对比手写=通过（5 行）
+p05-records: Node=通过 Python=通过 Go=通过 Java=通过 四份逐字节相同=是 自动推断对比手写=通过（6 行）
+p06-closures: Node=通过 Python=通过 Go=通过 Java=通过 四份逐字节相同=是 自动推断对比手写=通过（12 行）
+p07-generics: Node=通过 Python=通过 Go=通过 Java=通过 四份逐字节相同=是 自动推断对比手写=通过（8 行）
+p08-classes: Node=通过 Python=通过 Go=通过 Java=通过 四份逐字节相同=是 自动推断对比手写=通过（14 行）
+p09-enums: Node=通过 Python=通过 Go=通过 Java=通过 四份逐字节相同=是 自动推断对比手写=通过（6 行）
+p10-any: Node=通过 Python=通过 Go=通过 Java=通过 四份逐字节相同=是 自动推断对比手写=通过（10 行）
+p11-errors: Node=通过 Python=通过 Go=通过 Java=通过 四份逐字节相同=是 自动推断对比手写=通过（7 行）
+p12-router: Node=通过 Python=通过 Go=通过 Java=通过 四份逐字节相同=是 自动推断对比手写=通过（17 行）
+p13-untyped: Node=通过 Python=通过 Go=通过 Java=通过 四份逐字节相同=是 自动推断对比手写=通过（9 行）
+p14-generic-class: Node=通过 Python=通过 Go=通过 Java=通过 四份逐字节相同=是 自动推断对比手写=通过（14 行）
+p15-fuzz: Node=通过 Python=通过 Go=通过 Java=通过 四份逐字节相同=是 自动推断对比手写=通过（15 行）
+p16-any-containers: Node=通过 Python=通过 Go=通过 Java=通过 四份逐字节相同=是 自动推断对比手写=通过（7 行）
+e01-wrong-types: 自动报错对比手写=通过（6 条）
+e02-nullable-misuse: 自动报错对比手写=通过（5 条）
+e03-cases-records: 自动报错对比手写=通过（7 条）
+e04-generics-classes: 自动报错对比手写=通过（6 条）
+合计：通过 84 项，不符 0 项

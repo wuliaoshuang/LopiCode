@@ -1,0 +1,14 @@
+{
+  "format": 1,
+  "title": "打招呼",
+  "uses": ["demo/mini-router"],
+  "settings": {"demo/mini-router": {"port": 8080}},
+  "items": [
+    {"hat": "demo/mini-router#onRoute", "args": {"方式": "GET", "路径": "/hello/:name"}, "x": 0, "y": 0,
+     "body": [
+       {"op": "demo/mini-router#reply", "args": {
+         "状态": {"e": "num", "v": 200},
+         "内容": {"e": "dictLit", "pairs": [["message", {"e": "join", "items": [{"e": "text", "v": "你好，"}, {"e": "demo/mini-router#pathParam", "args": {"名字": "name"}}]}]]}}}
+     ]}
+  ]
+}

@@ -1,0 +1,53 @@
+; 库“待办组件库”·第 2 轮：一个带属性、事件、插槽的组件“待办列表”，全部用语言核心 ＋ 状态库 ＋ 画面库 写成。
+;   属性：条目们（取值函数；每条是 {号, 标题, 完成}，号当标识）——组件只读它，不改它
+;   事件：点了(条目)、删了(条目)——组件只说“发生了什么”，改不改条目由外面定
+;   插槽：每一条(条目取值) → 元素（不给就画标题）；空的时候() → 元素（不给就画“还没有待办”）
+;   自己的状态：选中的是哪一条（每个实例一份）
+; 组件就是一个函数（D 第 6 节的“工厂函数”）：属性、事件、插槽各是一个字典。
+(module 待办
+  (uses 状态库 画面库)
+
+  (func 取 (字典 键 默认)
+    (if (when (and (not (rt isNull 字典)) (rt dictHas 字典 键)) (return (rt dictGet 字典 键))))
+    (return 默认))
+
+  ; 发事件＝“开始做、不等它”：外面的处理里有要等的事（比如发请求）也行，组件不等。
+  (func 发 (回调 数据)
+    (if (when (not (rt isNull 回调)) (do (spawn (do (call 回调 数据)))))))
+
+  (func 一行 (条目 选中的 画一条 点了 删了)
+    (return (call 元素 "li"
+      (dict ("类名" (fn ()
+        (let 条 (call! 条目))
+        (return (rt join "item"
+          (cond (call 取 条 "完成" false) " done" "")
+          (cond (== (send 选中的 读) (rt dictGet 条 "号")) " sel" ""))))))
+      (list
+        (call! 画一条 条目)
+        (call 元素 "button" (dict ("类名" "del") ("文字" "删")) null
+          (dict ("点击" (fn (事件)
+            (do (call! (rt dictGet 事件 "别再往上传")))
+            (do (call 发 删了 (call! 条目))))))))
+      (dict ("点击" (fn (事件)
+        (do (send 选中的 写 (rt dictGet (call! 条目) "号")))
+        (do (call 发 点了 (call! 条目)))))))))
+
+  (public (func 待办列表 (属性 (事件 null) (插槽 null))
+    (let 条目们 (rt dictGet 属性 "条目们"))
+    (let 点了 (call 取 事件 "点了" null))
+    (let 删了 (call 取 事件 "删了" null))
+    (let 画一条 (call 取 插槽 "每一条" (fn (条目)
+      (return (call 元素 "span" (dict ("类名" "title") ("文字" (fn () (return (rt dictGet (call! 条目) "标题"))))))))))
+    (let 画空的 (call 取 插槽 "空的时候" (fn ()
+      (return (call 元素 "li" (dict ("类名" "empty") ("文字" "还没有待办")))))))
+    (let 选中的 (call 新状态 null))
+    (return (call 元素 "ul" (dict ("类名" "todo")) (list
+      (call 每一个 条目们
+        (fn (条) (return (rt dictGet 条 "号")))
+        (fn (条目 序号) (return (call 一行 条目 选中的 画一条 点了 删了))))
+      (call 如果有 (fn () (return (== (rt size (call! 条目们)) 0))) 画空的))))))
+
+  ; 给积木外观用：把一个待办列表挂到 父 里。
+  (public (func 放待办列表 (父 条目们 (点了 null) (删了 null))
+    (return (call 挂上 父 (fn ()
+      (return (call 待办列表 (dict ("条目们" 条目们)) (dict ("点了" 点了) ("删了" 删了))))))))))

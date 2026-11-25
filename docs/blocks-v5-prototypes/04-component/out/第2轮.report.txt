@@ -1,0 +1,6 @@
+用到的语法树节点（32 种）：Assign×67、Binary×18、Call×179、ClassDecl×5、Cond×4、DictLit×41、ExprStmt×148、Field×29、ForEach×10、ForPairs×5、FuncDecl×56、If×40、IsA×2、Lambda×43、Let×77、ListLit×29、Lit×362、Logic×8、Name×542、Native×30、NativeDecl×13、New×8、Return×66、Rt×108、Send×40、Spawn×1、This×58、Throw×3、Try×6、Unary×20、VarDecl×10、While×2
+用到的标准库函数（13 个）：dictGet×31、dictHas×6、dictRemove×1、isNull×16、isSame×11、isType×2、join×14、listGet×4、listPush×15、listReverse×1、log×1、size×5、toText×1
+用到的宿主原生接口（13 个）：log.error×1、test.click×5、test.find×3、test.ops×2、test.tree×2、tick.defer×1、tick.wait×1、ui.create×3、ui.insert×5、ui.on×1、ui.remove×3、ui.root×1、ui.set×2
+展开的库积木（3 种）：放一个待办列表×1、新状态×1、状态的值×1
+核心表以外、被迫加的：call!（GAP-F2-01，第 3 轮）、isSame（GAP-F2-02，第 3 轮）
+要“等”的函数单位（Node 里生成成 async）：4 / 104

@@ -1,0 +1,29 @@
+[05 第1轮 对 node 服务] 前端退出码 0，错误输出 0 行
+[05 第1轮 对 node 服务] 15 条检查，11 条等于手写的期望，4 条不等
+  [05 第1轮 对 node 服务] 第 [4] 条
+      期望：[4] 标题空着点添加（非法）：显示服务器说的原因、列表不变：div.app[form.add[input.title〔〕 input.level〔中〕 button.submit“添加” p.err“title 的长度要在 1 到 20 之间”] ul.todo[li.item[div.row[span.pri“中” span.name“买菜”] button.del“删”]]]
+      实际：[4] 标题空着点添加（非法）：显示服务器说的原因、列表不变：div.app[form.add[input.title〔〕 input.level〔中〕 button.submit“添加” p.err“提交失败”] ul.todo[li.item[div.row[span.pri“中” span.name“买菜”] button.del“删”]]]
+  [05 第1轮 对 node 服务] 第 [5] 条
+      期望：[5] 标题太长、级别乱填（非法）：两条原因都显示、填的东西还在、列表不变：div.app[form.add[input.title〔这是一条特别特别特别特别特别特别长的待办事项〕 input.level〔特急〕 button.submit“添加” p.err“title 的长度要在 1 到 20 之间；level 只能是 高、中、低 里的一个”] ul.todo[li.item[div.row[span.pri“中” span.name“买菜”] button.del“删”]]]
+      实际：[5] 标题太长、级别乱填（非法）：两条原因都显示、填的东西还在、列表不变：div.app[form.add[input.title〔这是一条特别特别特别特别特别特别长的待办事项〕 input.level〔特急〕 button.submit“添加” p.err“提交失败”] ul.todo[li.item[div.row[span.pri“中” span.name“买菜”] button.del“删”]]]
+  [05 第1轮 对 node 服务] 第 [8] 条
+      期望：[8] 再交一次“买菜”（重复）：服务器不收、列表还是两条：div.app[form.add[input.title〔买菜〕 input.level〔高〕 button.submit“添加” p.err“已经有这一条了”] ul.todo[li.item[div.row[span.pri“中” span.name“买菜”] button.del“删”] li.item[div.row[span.pri“高” span.name“写作业”] button.del“删”]]]
+      实际：[8] 再交一次“买菜”（重复）：服务器不收、列表还是两条：div.app[form.add[input.title〔买菜〕 input.level〔高〕 button.submit“添加” p.err“提交失败”] ul.todo[li.item[div.row[span.pri“中” span.name“买菜”] button.del“删”] li.item[div.row[span.pri“高” span.name“写作业”] button.del“删”]]]
+  [05 第1轮 对 node 服务] 第 [14] 条
+      期望：[14] 服务器连不上的时候点添加：显示连不上、列表不变：div.app[form.add[input.title〔测试〕 input.level〔高〕 button.submit“添加” p.err“连不上服务器”] ul.todo[li.item[div.row[span.pri“高” span.name“写作业”] button.del“删”] li.item[div.row[span.pri“高” span.name“复习”] button.del“删”]]]
+      实际：[14] 服务器连不上的时候点添加：显示连不上、列表不变：div.app[form.add[input.title〔测试〕 input.level〔高〕 button.submit“添加” p.err“提交失败”] ul.todo[li.item[div.row[span.pri“高” span.name“写作业”] button.del“删”] li.item[div.row[span.pri“高” span.name“复习”] button.del“删”]]]
+[05 第1轮 对 python 服务] 前端退出码 0，错误输出 0 行
+[05 第1轮 对 python 服务] 15 条检查，11 条等于手写的期望，4 条不等
+  [05 第1轮 对 python 服务] 第 [4] 条
+      期望：[4] 标题空着点添加（非法）：显示服务器说的原因、列表不变：div.app[form.add[input.title〔〕 input.level〔中〕 button.submit“添加” p.err“title 的长度要在 1 到 20 之间”] ul.todo[li.item[div.row[span.pri“中” span.name“买菜”] button.del“删”]]]
+      实际：[4] 标题空着点添加（非法）：显示服务器说的原因、列表不变：div.app[form.add[input.title〔〕 input.level〔中〕 button.submit“添加” p.err“提交失败”] ul.todo[li.item[div.row[span.pri“中” span.name“买菜”] button.del“删”]]]
+  [05 第1轮 对 python 服务] 第 [5] 条
+      期望：[5] 标题太长、级别乱填（非法）：两条原因都显示、填的东西还在、列表不变：div.app[form.add[input.title〔这是一条特别特别特别特别特别特别长的待办事项〕 input.level〔特急〕 button.submit“添加” p.err“title 的长度要在 1 到 20 之间；level 只能是 高、中、低 里的一个”] ul.todo[li.item[div.row[span.pri“中” span.name“买菜”] button.del“删”]]]
+      实际：[5] 标题太长、级别乱填（非法）：两条原因都显示、填的东西还在、列表不变：div.app[form.add[input.title〔这是一条特别特别特别特别特别特别长的待办事项〕 input.level〔特急〕 button.submit“添加” p.err“提交失败”] ul.todo[li.item[div.row[span.pri“中” span.name“买菜”] button.del“删”]]]
+  [05 第1轮 对 python 服务] 第 [8] 条
+      期望：[8] 再交一次“买菜”（重复）：服务器不收、列表还是两条：div.app[form.add[input.title〔买菜〕 input.level〔高〕 button.submit“添加” p.err“已经有这一条了”] ul.todo[li.item[div.row[span.pri“中” span.name“买菜”] button.del“删”] li.item[div.row[span.pri“高” span.name“写作业”] button.del“删”]]]
+      实际：[8] 再交一次“买菜”（重复）：服务器不收、列表还是两条：div.app[form.add[input.title〔买菜〕 input.level〔高〕 button.submit“添加” p.err“提交失败”] ul.todo[li.item[div.row[span.pri“中” span.name“买菜”] button.del“删”] li.item[div.row[span.pri“高” span.name“写作业”] button.del“删”]]]
+  [05 第1轮 对 python 服务] 第 [14] 条
+      期望：[14] 服务器连不上的时候点添加：显示连不上、列表不变：div.app[form.add[input.title〔测试〕 input.level〔高〕 button.submit“添加” p.err“连不上服务器”] ul.todo[li.item[div.row[span.pri“高” span.name“写作业”] button.del“删”] li.item[div.row[span.pri“高” span.name“复习”] button.del“删”]]]
+      实际：[14] 服务器连不上的时候点添加：显示连不上、列表不变：div.app[form.add[input.title〔测试〕 input.level〔高〕 button.submit“添加” p.err“提交失败”] ul.todo[li.item[div.row[span.pri“高” span.name“写作业”] button.del“删”] li.item[div.row[span.pri“高” span.name“复习”] button.del“删”]]]
+[05 第1轮] 对 Node 服务和对 Python 服务，前端的输出逐字节相同

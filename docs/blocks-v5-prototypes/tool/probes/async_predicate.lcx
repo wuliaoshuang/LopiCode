@@ -1,0 +1,8 @@
+; 探针：把“要等的”有名字的函数交给标准库的高阶函数会怎样？（GAP-F1-09 剩下的部分）
+(module 探针要等
+  (native time.sleep (毫秒))
+  (func 慢慢判断 (x)
+    (do (native time.sleep 1))
+    (return (> x 2)))
+  (main
+    (do (rt log (rt listFilter (list 1 2 3 4) 慢慢判断)))))

@@ -1,0 +1,89 @@
+{
+ "format": 1,
+ "name": "事件总线库",
+ "id": "lib.lopicode.bus",
+ "version": "0.2.0",
+ "author": "LopiCode 原型（F2）",
+ "description": "事件总线：订阅、退订、只听一次、发出。全部用语言核心写成。",
+ "requires": {
+  "core": "F1 第 2 轮的核心 ＋ F2 增补：call!（GAP-F2-01）",
+  "natives": [
+   "log.error"
+  ],
+  "libs": []
+ },
+ "languages": [
+  "node",
+  "python"
+ ],
+ "modules": [
+  "总线"
+ ],
+ "exports": {
+  "classes": [
+   "事件总线"
+  ]
+ },
+ "blocks": [
+  {
+   "id": "on",
+   "name": "当收到事件",
+   "shape": "帽子型",
+   "text": "当 {总线} 收到 {事件名}（数据）",
+   "slots": [
+    {
+     "name": "总线",
+     "kind": "值"
+    },
+    {
+     "name": "事件名",
+     "kind": "值"
+    },
+    {
+     "name": "body",
+     "kind": "回调口",
+     "params": [
+      "数据"
+     ]
+    }
+   ],
+   "def": {
+    "method": "订阅",
+    "on": "$总线",
+    "args": [
+     "$事件名",
+     "$body"
+    ]
+   }
+  },
+  {
+   "id": "emit",
+   "name": "发出事件",
+   "shape": "语句型",
+   "text": "让 {总线} 发出 {事件名} 带上 {数据}",
+   "slots": [
+    {
+     "name": "总线",
+     "kind": "值"
+    },
+    {
+     "name": "事件名",
+     "kind": "值"
+    },
+    {
+     "name": "数据",
+     "kind": "值",
+     "optional": true
+    }
+   ],
+   "def": {
+    "method": "发出",
+    "on": "$总线",
+    "args": [
+     "$事件名",
+     "$数据"
+    ]
+   }
+  }
+ ]
+}
