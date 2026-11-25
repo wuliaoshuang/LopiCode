@@ -344,7 +344,10 @@ void main() {
       await openChat(tester);
       await focusChat(tester);
       final msg = find.descendant(of: find.byType(ChatScreen), matching: find.byType(SelectableText)).first;
-      await tester.longPress(msg);
+      // 聊天页打开就贴在底部，这条长回复的中心可能在屏幕外：按它露在列表里的那一段的中间
+      final seen = tester.getRect(msg).intersect(tester.getRect(find.descendant(of: find.byType(ChatScreen), matching: find.byType(ListView)).first));
+      expect(seen.height, greaterThan(40), reason: '这条消息有一段露在屏幕上');
+      await tester.longPressAt(seen.center);
       await tester.pump(const Duration(milliseconds: 300));
       final sel = tester.widget<EditableText>(find.descendant(of: msg, matching: find.byType(EditableText))).controller.selection;
       expect(sel.isValid && !sel.isCollapsed, isTrue, reason: '长按选中了一个词');

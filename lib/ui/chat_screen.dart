@@ -77,6 +77,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     ref.listenManual(activeChatProvider(s), (_, _) => _onSession());
     ref.listenManual(pendingCardsProvider(s), (_, _) => _onSession());
     ref.listenManual(sendQueueProvider(s), (_, _) => _onSession());
+    // 聊天页搭起来时对话已经在内存里（切页回来、重建）：没有通知会来，自己贴到底一次，不然停在最上面。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _scroll.hasClients) _scroll.jumpTo(_scroll.position.maxScrollExtent);
+    });
     ref.listenManual(chatJumpProvider(s), (_, id) => _jumpTo(id), fireImmediately: true);
     _input.addListener(_onInput);
     // 打开聊天时查一次余额（只对 DeepSeek 官方渠道有动作，最多每分钟一次）。
