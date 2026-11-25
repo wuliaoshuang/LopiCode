@@ -19,6 +19,7 @@ import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/core/safe_file.dart';
 import 'package:lopicode/core/stores.dart';
 import 'package:lopicode/core/templates.dart';
+import 'package:lopicode/session/conversation.dart';
 import 'package:lopicode/session/favorites.dart';
 import 'package:lopicode/session/turn_journal.dart';
 import 'package:lopicode/templates/project_templates.dart';
@@ -580,6 +581,52 @@ void main() {
       File(p.join(dir.path, '好的.md')).writeAsStringSync('# 好的\n\n正常\n');
       final store = MemoryStore(dir.path, MemoryScope.global);
       expect((await store.load()).map((e) => e.title), ['好的']);
+    });
+  });
+
+  group('对话的出处（对话目录 chats.json 里的 from：分支 / 旧版本）', () {
+    test('旧目录没有 from：照常读，出处是空的', () {
+      final conv = Conversation.fromJson({'id': 'main', 'title': '老对话', 'updatedAt': '2026-11-01T10:00:00.000'})!;
+      expect((conv.title, conv.origin), ('老对话', null));
+    });
+
+    test('from 的形状不对、里面的字段类型不对：当普通对话读，不抛异常', () {
+      for (final bad in <Object?>[
+        'x',
+        42,
+        true,
+        <String>['main'],
+        <String, dynamic>{},
+        {'conv': 42},
+        {'conv': null, 'msg': 'm'},
+        {'conv': '../x'},
+        {'conv': 'a/b'},
+      ]) {
+        final conv = Conversation.fromJson({'id': 'abc', 'title': 't', 'from': bad});
+        expect(conv, isNotNull, reason: '$bad');
+        expect(conv!.origin, isNull, reason: '$bad');
+      }
+      final loose = Conversation.fromJson({
+        'id': 'abc',
+        'from': {
+          'conv': 'main',
+          'msg': <int>[1],
+          'title': 9,
+          'old': 'true',
+        },
+      })!;
+      expect((loose.origin!.convId, loose.origin!.messageId, loose.origin!.title, loose.origin!.old), ('main', null, '', false));
+    });
+
+    test('存了再读：原样回来', () {
+      final conv = Conversation(
+        'abc',
+        '标题',
+        DateTime(2026, 11, 25),
+        origin: const BranchOrigin(convId: 'main', messageId: 'm1', title: '原对话', old: true),
+      );
+      final back = Conversation.fromJson(jsonDecode(jsonEncode(conv.toJson())) as Map<String, dynamic>)!;
+      expect((back.origin!.convId, back.origin!.messageId, back.origin!.title, back.origin!.old), ('main', 'm1', '原对话', true));
     });
   });
 

@@ -42,6 +42,12 @@ class ConversationsState {
       if (c.parentId == null) c,
   ];
 
+  /// 从 [convId] 这段对话分出去的对话（分支和旧版本），按目录里的先后。
+  List<Conversation> branchesOf(String convId) => [
+    for (final c in all)
+      if (c.origin?.convId == convId) c,
+  ];
+
   /// 这段对话的“根”：子代理的权限、计划模式、预设都跟着最上面那段主对话走。
   Conversation rootOf(Conversation conv) {
     var c = conv;
@@ -139,10 +145,16 @@ class ConversationsNotifier extends Notifier<ConversationsState> {
     return id;
   }
 
-  /// 加一段对话。[front]＝排到最前；[activate]＝同时切过去。
-  void add(Conversation conv, {bool front = false, bool activate = false}) {
+  /// 加一段对话。[front]＝排到最前；[after]＝紧跟在那段对话后面（没有那段就排最后）；[activate]＝同时切过去。
+  void add(Conversation conv, {bool front = false, bool activate = false, String? after}) {
     if (_snap.byId(conv.id) != null) return;
-    _set(_snap.copyWith(all: front ? [conv, ..._snap.all] : [..._snap.all, conv], activeId: activate ? conv.id : null));
+    final at = after == null ? -1 : _snap.all.indexWhere((c) => c.id == after);
+    final all = front
+        ? [conv, ..._snap.all]
+        : at < 0
+        ? [..._snap.all, conv]
+        : [..._snap.all.sublist(0, at + 1), conv, ..._snap.all.sublist(at + 1)];
+    _set(_snap.copyWith(all: all, activeId: activate ? conv.id : null));
   }
 
   /// 把 [id] 这段换成 [change] 算出来的新的；[toFront]＝同时排到最前。没有这段就什么都不做。

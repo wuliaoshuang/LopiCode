@@ -126,9 +126,11 @@ void main() {
         expect(icon('copy', id), findsOneWidget);
         expect(icon('more', id), findsOneWidget);
       }
-      // 这一步只登记了四个动作：常驻的只有复制和“更多”，重试 / 编辑 / 分支的位置不显示任何东西
-      expect(find.descendant(of: bar(last), matching: find.byType(InkResponse)), findsNWidgets(2));
-      expect(find.descendant(of: bar(mine), matching: find.byType(InkResponse)), findsNWidgets(2));
+      // 常驻的：Agent 回复是复制、重试、更多；我的消息是复制、编辑、更多。分支在“更多”里
+      expect(find.descendant(of: bar(last), matching: find.byType(InkResponse)), findsNWidgets(3));
+      expect(find.descendant(of: bar(mine), matching: find.byType(InkResponse)), findsNWidgets(3));
+      expect(icon('retry', last), findsOneWidget);
+      expect(icon('edit', mine), findsOneWidget);
       // 一共 4 条看得见的消息 → 4 排；步骤组下面没有
       expect(find.byType(MessageActionBar), findsNWidgets(4));
       expect(tester.getSize(icon('copy', last)), const Size(44, 44));
@@ -161,9 +163,11 @@ void main() {
       expect(ys, orderedEquals([...ys]..sort()), reason: '从上到下：收藏、分享、删除（删除在最后）');
       expect(ys.toSet(), hasLength(3), reason: '一行一个');
       expect(find.byKey(const ValueKey('more-copy')), findsNothing, reason: '常驻的不在“更多”里重复');
-      for (final k in ['retry', 'edit', 'branch']) {
-        expect(find.byKey(ValueKey('more-$k')), findsNothing, reason: '$k 还没登记，不放空按钮');
+      for (final k in ['retry', 'edit']) {
+        expect(find.byKey(ValueKey('more-$k')), findsNothing, reason: '$k 常驻在操作栏上，不在“更多”里重复');
       }
+      expect(find.byKey(const ValueKey('more-branch')), findsOneWidget);
+      expect(tester.getTopLeft(find.byKey(const ValueKey('more-branch'))).dy, lessThan(ys.first), reason: '分支排在收藏前面');
       expect(find.text('收藏'), findsOneWidget);
       expect(find.text('分享'), findsOneWidget);
       expect(find.text('删除'), findsOneWidget);
@@ -316,11 +320,10 @@ void main() {
     testWidgets('行级：还在往外冒的回复没有操作栏；没有 id 的没有；整轮级别的动作只在这一轮最后一段回复下面；没有聊天页环境（子代理对话页）不显示 ($suffix)', (tester) async {
       await boot(tester);
       Future<void> noop(BuildContext context, MessageTarget t) async {}
+      // 重试、编辑、分支现在是正式登记的动作；这里另外登记一个示例动作，守着“登记一条就多一个”的约定
       final actions = [
         ...kMessageActions,
-        MessageAction(slot: MessageActionSlot.retry, label: (_) => '重试', icon: (_) => Icons.refresh, appliesTo: (t) => !t.mine, pinned: (_) => true, turnLevel: true, run: noop),
-        MessageAction(slot: MessageActionSlot.edit, label: (_) => '编辑', icon: (_) => Icons.edit_outlined, appliesTo: (t) => t.mine, pinned: (_) => true, run: noop),
-        MessageAction(slot: MessageActionSlot.branch, label: (_) => '分支', icon: (_) => Icons.call_split, hint: (_) => '从这里另开一段对话', run: noop),
+        MessageAction(slot: MessageActionSlot.share, label: (_) => '示例动作', icon: (_) => Icons.star_outline, hint: (_) => '登记一条就多一行', appliesTo: (t) => !t.mine, run: noop),
       ];
       const items = <ChatItem>[
         UserItem('帮我改首页', id: 'u1'),
@@ -369,8 +372,9 @@ void main() {
       await shot(tester, 'ops-07-registered-actions-$suffix');
       await tester.tap(icon('more', 'a2'));
       await tester.pumpAndSettle();
-      expect(find.text('分支'), findsOneWidget);
-      expect(find.text('从这里另开一段对话'), findsOneWidget);
+      expect(find.text('从这里分支'), findsOneWidget);
+      expect(find.text('示例动作'), findsOneWidget);
+      expect(find.text('登记一条就多一行'), findsOneWidget);
       await tester.tapAt(const Offset(195, 80));
       await tester.pumpAndSettle();
 

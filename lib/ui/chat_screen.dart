@@ -35,6 +35,8 @@ import 'package:lopicode/ui/favorites_screen.dart';
 import 'package:lopicode/ui/file_picker_sheet.dart';
 import 'package:lopicode/ui/keyboard_tap_dismiss.dart';
 import 'package:lopicode/ui/message_action_bar.dart';
+import 'package:lopicode/ui/message_branch_actions.dart';
+import 'package:lopicode/ui/message_edit_bar.dart';
 import 'package:lopicode/ui/model_setup.dart';
 import 'package:lopicode/ui/settings_ai.dart';
 import 'package:lopicode/ui/settings_quota.dart';
@@ -68,10 +70,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   final List<Map<String, dynamic>> _attachments = [];
 
   ProjectSession get s => widget.session;
+  late final _edit = ComposerEditBinding(session: s, input: _input, attachments: _attachments, focus: _focus, changed: _onInput);
 
   @override
   void initState() {
     super.initState();
+    _edit.attach(ref); // “编辑之前的消息”：文字和图片进出输入框（message_edit_bar.dart）
     // 对话目录、当前对话的条目和忙不忙、确认卡 / 提问卡、排队的消息：哪个变了都重画（页面销毁时自动取消订阅）
     ref.listenManual(conversationsProvider(s), (_, _) => _onSession());
     ref.listenManual(activeChatProvider(s), (_, _) => _onSession());
@@ -90,6 +94,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   @override
   void dispose() {
+    _edit.dispose();
     _input.dispose();
     _focus.dispose();
     _scroll.dispose();
@@ -136,6 +141,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   Future<void> _send([String? preset, SendMode mode = SendMode.queue]) async {
     final text = (preset ?? _input.text).trim();
     if (text.isEmpty && _attachments.isEmpty) return;
+    if (preset == null && await _edit.sendIfEditing(context, text) || !mounted) return; // 正在编辑之前的消息：改走“从这条重新来”
     if (preset == null && _attachments.isEmpty && _runSlash(text)) {
       _input.clear();
       return;
@@ -392,9 +398,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               if (v == 'compact') _compact();
               if (v == 'export') _export();
               if (v == 'delete') _deleteConversation();
+              if (v == 'origin') openBranchOrigin(context, s);
             },
             itemBuilder: (_) => [
               PopupMenuItem(value: 'new', enabled: !s.agentBusy, child: const Text('新对话')),
+              ...originMenuItems(s),
               PopupMenuItem(value: 'preset', child: Text('Agent 预设：${s.preset.name}')),
               if (s.teamEnabled) const PopupMenuItem(value: 'team', child: Text('智能体团队')),
               const PopupMenuItem(value: 'usage', child: Text('用量')),
@@ -456,6 +464,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 onTap: s.clearMcpAllow,
               ),
             if (s.planMode) StatusChipRow(key: const ValueKey('plan-chip'), icon: Icons.map_outlined, text: '计划模式：只出计划，不改文件、不跑命令', action: '退出', tone: BannerTone.info, onTap: _togglePlan),
+            MessageEditBar(session: s),
             if (_attachments.isNotEmpty)
               AttachmentStrip(paths: [for (final a in _attachments) '${s.project.dir}/${a['path']}'], canSee: model?.model.vision ?? false, onRemove: (i) => setState(() => _attachments.removeAt(i))),
             if (slash.isNotEmpty)

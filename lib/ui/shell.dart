@@ -201,8 +201,10 @@ class AppDrawer extends StatelessWidget {
                     for (final conv in s.topConversations)
                       if (conv.title.isNotEmpty)
                         _DrawerItem(
-                          icon: conv.auto ? Icons.event_repeat : Icons.chat_bubble_outline,
+                          // 分出来的对话看得出来源：分支是分叉图标，重试 / 编辑留下的旧版本是时钟图标，名字后面跟小标签
+                          icon: conv.auto ? Icons.event_repeat : (conv.origin == null ? Icons.chat_bubble_outline : (conv.origin!.old ? Icons.history : Icons.call_split)),
                           label: conv.title,
+                          tag: conv.origin?.tag,
                           selected: current == ShellDest.chat && conv.id == s.activeConversationId,
                           enabled: !busy || conv.id == s.activeConversationId,
                           onTap: () => onConversation?.call(conv.id),
@@ -224,7 +226,10 @@ class AppDrawer extends StatelessWidget {
 }
 
 class _DrawerItem extends StatelessWidget {
-  const _DrawerItem({required this.icon, required this.label, required this.selected, required this.onTap, this.enabled = true});
+  const _DrawerItem({required this.icon, required this.label, required this.selected, required this.onTap, this.enabled = true, this.tag});
+
+  /// 名字后面的小标签（“分支”“旧版本”）。
+  final String? tag;
   final IconData icon;
   final String label;
   final bool selected;
@@ -259,6 +264,14 @@ class _DrawerItem extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
+                if (tag != null) ...[
+                  const SizedBox(width: Space.x2),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: Space.x2, vertical: 1),
+                    decoration: BoxDecoration(color: selected ? c.surface : c.surfaceMuted, borderRadius: BorderRadius.circular(Radii.sm)),
+                    child: Text(tag!, style: t.labelSmall?.copyWith(color: c.textMuted)),
+                  ),
+                ],
               ],
             ),
           ),

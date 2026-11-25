@@ -14,18 +14,30 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/session/message_actions.dart';
 import 'package:lopicode/state/workspace_chat.dart';
+import 'package:lopicode/state/workspace_conversations.dart';
 import 'package:lopicode/state/workspace_favorites.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/message_branch_actions.dart';
 import 'package:lopicode/ui/message_sheets.dart';
 import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// 动作在“更多”面板里的先后（也是常驻图标从左到右的先后）。
-enum MessageActionSlot { copy, retry, edit, branch, favorite, share, delete }
+enum MessageActionSlot { copy, retry, edit, branch, branches, favorite, share, delete }
 
 /// 操作栏点的是哪条消息。
 class MessageTarget {
-  const MessageTarget({required this.session, required this.item, required this.id, required this.mine, required this.text, required this.busy, required this.turnLast, required this.favorited});
+  const MessageTarget({
+    required this.session,
+    required this.item,
+    required this.id,
+    required this.mine,
+    required this.text,
+    required this.busy,
+    required this.turnLast,
+    required this.favorited,
+    this.branches = const [],
+  });
 
   final ProjectSession session;
 
@@ -47,6 +59,9 @@ class MessageTarget {
   /// 是不是这一轮最后一段回复（整轮级别的动作只挂在它下面）。
   final bool turnLast;
   final bool favorited;
+
+  /// 从这条消息分出去的对话（分支和旧版本）。
+  final List<Conversation> branches;
 }
 
 /// 一个消息动作。全部字段都是“给一条消息、答一个值”，所以同一个动作可以按消息变样子（收藏 / 取消收藏）。
@@ -101,6 +116,7 @@ class MessageOpsScope extends InheritedWidget {
     required this.busy,
     required this.lastReplyIds,
     required this.favoriteIds,
+    this.branches = const {},
     this.flash,
     this.actions = kMessageActions,
   });
@@ -112,6 +128,13 @@ class MessageOpsScope extends InheritedWidget {
   /// 当前对话里收藏着的消息 id。
   final Set<String> favoriteIds;
 
+  /// 消息 id → 从它分出去的对话（分支和旧版本）。
+  final Map<String, List<Conversation>> branches;
+
+  String get _branchSig => [
+    for (final e in branches.entries) '${e.key}:${[for (final c in e.value) '${c.id}/${c.title}'].join(',')}',
+  ].join(';');
+
   /// 刚从收藏页跳回来的那条消息的 id（短暂高亮）。
   final ValueListenable<String?>? flash;
   final List<MessageAction> actions;
@@ -120,7 +143,13 @@ class MessageOpsScope extends InheritedWidget {
 
   @override
   bool updateShouldNotify(MessageOpsScope old) =>
-      old.session != session || old.busy != busy || old.flash != flash || old.actions != actions || !setEquals(old.lastReplyIds, lastReplyIds) || !setEquals(old.favoriteIds, favoriteIds);
+      old.session != session ||
+      old.busy != busy ||
+      old.flash != flash ||
+      old.actions != actions ||
+      old._branchSig != _branchSig ||
+      !setEquals(old.lastReplyIds, lastReplyIds) ||
+      !setEquals(old.favoriteIds, favoriteIds);
 }
 
 /// 聊天页用它包住消息列表：订阅“忙不忙”和收藏，把 [MessageOpsScope] 备好。
@@ -150,6 +179,7 @@ class _MessageOpsHostState extends ConsumerState<MessageOpsHost> {
     final s = widget.session;
     final chat = ref.watch(activeChatProvider(s));
     final favorites = ref.watch(favoritesProvider(s));
+    ref.watch(conversationsProvider(s)); // 分出去的对话多了 / 少了 / 改名了
     final conv = s.activeConversationId;
     return MessageOpsScope(
       session: s,
@@ -159,6 +189,7 @@ class _MessageOpsHostState extends ConsumerState<MessageOpsHost> {
         for (final f in favorites.items)
           if (f.convId == conv) f.messageId,
       },
+      branches: s.branches.branchesByMessage,
       flash: widget.flash,
       actions: widget.actions,
       child: widget.child,
@@ -190,6 +221,7 @@ class MessageFrame extends StatelessWidget {
       busy: scope.busy,
       turnLast: scope.lastReplyIds.contains(id),
       favorited: scope.favoriteIds.contains(id),
+      branches: scope.branches[id] ?? const [],
     );
     final block = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -243,7 +275,7 @@ class MessageActionBar extends StatelessWidget {
               key: ValueKey('message-${a.slot.name}-${t.id}'),
               icon: a.icon(t),
               label: a.label(t),
-              active: a.slot == MessageActionSlot.favorite && t.favorited,
+              active: (a.slot == MessageActionSlot.favorite && t.favorited) || a.slot == MessageActionSlot.branches,
               disabled: a.disabledReason?.call(t) != null,
               onTap: () => runMessageAction(context, a, t),
             ),
@@ -298,17 +330,8 @@ class _BarIcon extends StatelessWidget {
 
 // ── 登记在册的动作 ─────────────────────────────────────
 //
-// 加一个动作＝在 [kMessageActions] 里加一条。位置（[MessageActionSlot]）已经给“重试、编辑、分支”留好了：
-//   MessageAction(
-//     slot: MessageActionSlot.retry,
-//     label: (_) => '重试',
-//     icon: (_) => Icons.refresh,
-//     appliesTo: (t) => !t.mine,          // 只在 Agent 的回复下面
-//     pinned: (_) => true,                // 常驻；不写就收进“更多”
-//     turnLevel: true,                    // 只挂在这一轮最后一段回复下面
-//     disabledReason: (t) => t.busy ? 'Agent 正在回复，等它停下再重试。' : null,
-//     run: (context, t) async { … t.session.messageOps.xxx(t.id) … },
-//   ),
+// 加一个动作＝在 [kMessageActions] 里加一条（字段说明见 [MessageAction]）。
+// 重试、编辑、分支已经登记：它们的文案和动作在 message_branch_actions.dart。
 // 没登记的位置不显示任何东西（不放点了没反应的按钮）。
 
 Future<void> _copy(BuildContext context, MessageTarget t) async {
@@ -348,6 +371,12 @@ Future<void> _delete(BuildContext context, MessageTarget t) async {
 /// 全部消息动作。顺序无所谓（按 [MessageActionSlot] 排）。
 const List<MessageAction> kMessageActions = [
   MessageAction(slot: MessageActionSlot.copy, label: _copyLabel, icon: _copyIcon, pinned: _always, run: _copy),
+  // 重试 / 编辑 / 分支（动作在 message_branch_actions.dart）
+  MessageAction(slot: MessageActionSlot.retry, label: retryLabel, icon: retryIcon, hint: retryHint, appliesTo: onReply, pinned: _always, turnLevel: true, disabledReason: rewindBlocked, run: runRetry),
+  MessageAction(slot: MessageActionSlot.retry, label: retryLabel, icon: retryIcon, hint: retryHint, appliesTo: onMine, disabledReason: rewindBlocked, run: runRetry),
+  MessageAction(slot: MessageActionSlot.edit, label: editLabel, icon: editIcon, hint: editHint, appliesTo: onMine, pinned: _always, disabledReason: rewindBlocked, run: runEdit),
+  MessageAction(slot: MessageActionSlot.branch, label: branchLabel, icon: branchIcon, hint: branchHint, disabledReason: branchBlocked, run: runBranch),
+  MessageAction(slot: MessageActionSlot.branches, label: branchesLabel, icon: branchesIcon, appliesTo: hasBranches, pinned: branchesPinned, run: runShowBranches),
   MessageAction(slot: MessageActionSlot.favorite, label: _favoriteLabel, icon: _favoriteIcon, hint: _favoriteHint, pinned: _whenFavorited, run: _favorite),
   MessageAction(slot: MessageActionSlot.share, label: _shareLabel, icon: _shareIcon, hint: _shareHint, run: _share),
   MessageAction(slot: MessageActionSlot.delete, label: _deleteLabel, icon: _deleteIcon, hint: _deleteHint, disabledReason: _deleteBlocked, danger: true, run: _delete),
