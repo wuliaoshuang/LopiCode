@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/lowcode/style_model.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/keyboard_tap_dismiss.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// 面板交给各分组的“当前样子”和“怎么改”。每次重画换一份，分组自己不存样式。
@@ -357,7 +358,10 @@ class _LengthFieldState extends State<LengthField> {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (widget.stepper) StyleIconButton(key: Key('lc-len-${widget.id}-minus'), icon: Icons.remove, semantic: '减', onTap: stepOk ? () => _bump(-1) : null),
+        if (widget.stepper)
+          KeyboardKeep(
+            child: StyleIconButton(key: Key('lc-len-${widget.id}-minus'), icon: Icons.remove, semantic: '减', onTap: stepOk ? () => _bump(-1) : null),
+          ),
         NumberBox(
           id: widget.id,
           value: v?.value,
@@ -368,7 +372,10 @@ class _LengthFieldState extends State<LengthField> {
           placeholder: isAuto ? 'auto' : null,
           onChanged: (n) => widget.onChanged(LcLength(n, _unit), merge: true),
         ),
-        if (widget.stepper) StyleIconButton(key: Key('lc-len-${widget.id}-plus'), icon: Icons.add, semantic: '加', onTap: stepOk ? () => _bump(1) : null),
+        if (widget.stepper)
+          KeyboardKeep(
+            child: StyleIconButton(key: Key('lc-len-${widget.id}-plus'), icon: Icons.add, semantic: '加', onTap: stepOk ? () => _bump(1) : null),
+          ),
         const SizedBox(width: Space.x1),
         StyleMenu(
           key: Key('lc-len-${widget.id}-unit'),
@@ -411,9 +418,13 @@ class NumberField extends StatelessWidget {
   Widget build(BuildContext context) => Row(
     mainAxisSize: MainAxisSize.min,
     children: [
-      StyleIconButton(key: Key('lc-num-$id-minus'), icon: Icons.remove, semantic: '减', onTap: () => _bump(-1)),
+      KeyboardKeep(
+        child: StyleIconButton(key: Key('lc-num-$id-minus'), icon: Icons.remove, semantic: '减', onTap: () => _bump(-1)),
+      ),
       NumberBox(id: id, value: value, allowNegative: min == null, integer: integer, faint: inherited, width: 56, onChanged: (n) => onChanged(n, merge: true)),
-      StyleIconButton(key: Key('lc-num-$id-plus'), icon: Icons.add, semantic: '加', onTap: () => _bump(1)),
+      KeyboardKeep(
+        child: StyleIconButton(key: Key('lc-num-$id-plus'), icon: Icons.add, semantic: '加', onTap: () => _bump(1)),
+      ),
       StyleIconButton(key: Key('lc-num-$id-clear'), icon: Icons.close, semantic: '清除', onTap: value != null && !inherited ? () => onChanged(null, merge: false) : null),
     ],
   );

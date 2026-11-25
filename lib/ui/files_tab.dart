@@ -16,6 +16,7 @@ import 'package:lopicode/ui/backend_screen.dart';
 import 'package:lopicode/ui/code_editor.dart';
 import 'package:lopicode/ui/editor_format.dart';
 import 'package:lopicode/ui/file_icon.dart';
+import 'package:lopicode/ui/keyboard_tap_dismiss.dart';
 import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:re_editor/re_editor.dart';
@@ -279,7 +280,8 @@ class _FilesTabState extends ConsumerState<FilesTab> {
   }
 
   @override
-  Widget build(BuildContext context) => _active >= 0 ? _buildEditor(context) : _buildList(context);
+  // 编辑器那一页整页都是输入区（页签、保存、菜单、查找框、编辑区）：点哪里都不收键盘。
+  Widget build(BuildContext context) => _active >= 0 ? KeyboardKeep(child: _buildEditor(context)) : _buildList(context);
 
   Widget _buildList(BuildContext context) {
     final c = context.colors;

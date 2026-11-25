@@ -5,6 +5,7 @@ import 'package:lopicode/theme/app_theme.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/error_guard.dart';
 import 'package:lopicode/ui/home_gate.dart';
+import 'package:lopicode/ui/keyboard_tap_dismiss.dart';
 import 'package:material_ui/material_ui.dart';
 
 class LopiCodeApp extends StatefulWidget {
@@ -37,10 +38,13 @@ class _LopiCodeAppState extends State<LopiCodeApp> {
           // 有没被接住的错误时，在所有页面上面出一条可点开的提示（见 ui/error_guard.dart）。
           builder: (context, child) => ErrorNotice(
             navigatorKey: _navigatorKey,
-            child: ColoredBox(
-              color: context.colors.canvas,
-              child: Center(
-                child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 720), child: child ?? const SizedBox.shrink()),
+            // 点输入框外面的空白收键盘：全应用只在这里接一次（见 ui/keyboard_tap_dismiss.dart）。
+            child: KeyboardTapDismiss(
+              child: ColoredBox(
+                color: context.colors.canvas,
+                child: Center(
+                  child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 720), child: child ?? const SizedBox.shrink()),
+                ),
               ),
             ),
           ),

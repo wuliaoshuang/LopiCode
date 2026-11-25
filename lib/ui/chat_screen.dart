@@ -30,6 +30,7 @@ import 'package:lopicode/ui/chat_row_view.dart';
 import 'package:lopicode/ui/chat_todos.dart';
 import 'package:lopicode/ui/chrome.dart';
 import 'package:lopicode/ui/file_picker_sheet.dart';
+import 'package:lopicode/ui/keyboard_tap_dismiss.dart';
 import 'package:lopicode/ui/model_setup.dart';
 import 'package:lopicode/ui/settings_ai.dart';
 import 'package:lopicode/ui/settings_quota.dart';
@@ -411,6 +412,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       ),
                     ),
             ),
+            const KeyboardDock(), // 这条线以下是输入区：点了不收键盘；拖动线以上的聊天内容会收（见 keyboard_tap_dismiss.dart）
             if (todos != null && todos.isNotEmpty) TodoBar(todos: todos),
             BackgroundBar(session: s),
             PendingArea(session: s),
