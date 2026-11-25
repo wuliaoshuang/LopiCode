@@ -21,15 +21,19 @@ import 'package:lopicode/state/presets_state.dart';
 import 'package:lopicode/state/ui_prefs.dart';
 import 'package:lopicode/state/workspace_chat.dart';
 import 'package:lopicode/state/workspace_conversations.dart';
+import 'package:lopicode/state/workspace_favorites.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/chat_background.dart';
 import 'package:lopicode/ui/chat_composer.dart';
 import 'package:lopicode/ui/chat_extras.dart';
+import 'package:lopicode/ui/chat_jump.dart';
 import 'package:lopicode/ui/chat_panels.dart';
 import 'package:lopicode/ui/chat_row_view.dart';
 import 'package:lopicode/ui/chat_todos.dart';
 import 'package:lopicode/ui/chrome.dart';
+import 'package:lopicode/ui/favorites_screen.dart';
 import 'package:lopicode/ui/file_picker_sheet.dart';
+import 'package:lopicode/ui/message_action_bar.dart';
 import 'package:lopicode/ui/model_setup.dart';
 import 'package:lopicode/ui/settings_ai.dart';
 import 'package:lopicode/ui/settings_quota.dart';
@@ -55,7 +59,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   final _input = TextEditingController();
   final _focus = FocusNode();
   final _scroll = ScrollController();
+  late final _jump = ChatJumper(_scroll);
   int _lastCount = 0;
+  String? _lastConv;
 
   /// 还没发出去的图片附件（`{path, mime}`，path 相对工作区）。
   final List<Map<String, dynamic>> _attachments = [];
@@ -70,6 +76,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     ref.listenManual(activeChatProvider(s), (_, _) => _onSession());
     ref.listenManual(pendingCardsProvider(s), (_, _) => _onSession());
     ref.listenManual(sendQueueProvider(s), (_, _) => _onSession());
+    ref.listenManual(chatJumpProvider(s), (_, id) => _jumpTo(id), fireImmediately: true);
     _input.addListener(_onInput);
     // 打开聊天时查一次余额（只对 DeepSeek 官方渠道有动作，最多每分钟一次）。
     s.loadChat().then((_) {
@@ -85,6 +92,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     _input.dispose();
     _focus.dispose();
     _scroll.dispose();
+    _jump.dispose();
     super.dispose();
   }
 
@@ -100,13 +108,25 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       });
     }
     setState(() {});
-    // 有新内容时滚到底（用户自己往上翻时不打扰）。
-    final grew = s.chat.length != _lastCount;
+    // 有新内容、换了对话时滚到底（用户自己往上翻时不打扰；删掉消息变短了也留在原地）。
+    final grew = s.chat.length > _lastCount || s.activeConversationId != _lastConv;
     _lastCount = s.chat.length;
+    _lastConv = s.activeConversationId;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_scroll.hasClients) return;
+      if (!_scroll.hasClients || _jump.busy) return;
       final pos = _scroll.position;
       if (grew || pos.maxScrollExtent - pos.pixels < 120) _scroll.jumpTo(pos.maxScrollExtent);
+    });
+  }
+
+  /// 从收藏页跳回来：等这一帧搭完，滚到那条消息（它已经不在这段对话里就说一声）。
+  void _jumpTo(String? id) {
+    if (id == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      ref.read(chatJumpProvider(s).notifier).clear();
+      if (!_jump.has(id)) return showSnack(context, '已经打开那段对话，但那条消息不在了（被删掉，或已经收进步骤里）。');
+      await _jump.jumpTo(id);
     });
   }
 
@@ -341,6 +361,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final slash = text.startsWith('/') && !text.contains(RegExp(r'\s')) ? kSlashCommands.where((k) => k.$1.startsWith(text.toLowerCase())).toList() : const <(String, String)>[];
     final topInset = PageBar.insetOf(context);
     final rows = deriveChatRows(s.chat, busy: s.agentBusy, showThinking: prefs.thinking);
+    _jump.sync(rows);
     final todos = latestTodos(s.chat);
     // 最后一行已经是“进行中”的步骤组（它自己在转圈）或正在往外冒的回复时，不再另起一行“处理中”。
     final last = rows.lastOrNull;
@@ -366,6 +387,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => TeamScreen(session: s)));
               }
               if (v == 'usage') _showUsage();
+              if (v == 'favorites') openFavorites(context, s);
               if (v == 'compact') _compact();
               if (v == 'export') _export();
               if (v == 'delete') _deleteConversation();
@@ -375,6 +397,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               PopupMenuItem(value: 'preset', child: Text('Agent 预设：${s.preset.name}')),
               if (s.teamEnabled) const PopupMenuItem(value: 'team', child: Text('智能体团队')),
               const PopupMenuItem(value: 'usage', child: Text('用量')),
+              const PopupMenuItem(value: 'favorites', child: Text('收藏的消息')),
               PopupMenuItem(value: 'compact', enabled: !s.agentBusy && s.chat.isNotEmpty, child: const Text('压缩对话')),
               PopupMenuItem(value: 'export', enabled: s.chat.isNotEmpty, child: const Text('导出对话')),
               PopupMenuItem(
@@ -400,14 +423,18 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       readOutput: s.readCommandOutput,
                       onResume: s.resumeInterrupted,
                       onDismissInterrupted: s.dismissInterrupted,
-                      child: ListView.builder(
-                        controller: _scroll,
-                        padding: EdgeInsets.fromLTRB(Space.x4, topInset + Space.x2, Space.x4, Space.x4),
-                        itemCount: rows.length + (working ? 1 : 0),
-                        itemBuilder: (context, i) {
-                          if (i >= rows.length) return const _Working();
-                          return ChatRowView(row: rows[i], onOpenChild: _openChild, onOpenQuota: _openQuota, onOpenTurn: _showTurn);
-                        },
+                      child: MessageOpsHost(
+                        session: s,
+                        flash: _jump.flash,
+                        child: ListView.builder(
+                          controller: _scroll,
+                          padding: EdgeInsets.fromLTRB(Space.x4, topInset + Space.x2, Space.x4, Space.x4),
+                          itemCount: rows.length + (working ? 1 : 0),
+                          itemBuilder: (context, i) {
+                            if (i >= rows.length) return const _Working();
+                            return _jump.wrap(rows[i], ChatRowView(row: rows[i], onOpenChild: _openChild, onOpenQuota: _openQuota, onOpenTurn: _showTurn));
+                          },
+                        ),
                       ),
                     ),
             ),

@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:lopicode/agent/agent_runner.dart';
 import 'package:lopicode/agent/line_diff.dart';
+import 'package:lopicode/agent/message_ids.dart';
 import 'package:lopicode/agent/quota.dart';
 import 'package:lopicode/agent/skills.dart';
 import 'package:lopicode/agent/usage.dart';
@@ -65,7 +66,8 @@ class TurnRunner {
     core.clearInterrupted(run);
     final journal = core.journalOf(run.convId)..begin(text);
     changes.begin(run.convId, parentId: run.conv.parentId);
-    run.add(UserItem(text, images: [for (final i in images) core.hostPathOfAttachment('${i['path']}')]));
+    final userId = newMessageId();
+    run.add(UserItem(text, images: [for (final i in images) core.hostPathOfAttachment('${i['path']}')], id: userId));
     convs?.update(run.convId, (c) => c.copyWith(updatedAt: DateTime.now()));
 
     final resolved = core.modelOf(run.conv);
@@ -108,7 +110,7 @@ class TurnRunner {
     var failed = false;
     final keepAlive = TurnKeepAlive.start(core, run); // 后台保活 + 通知栏进度
     try {
-      await for (final event in runner.send(text, images: images)) {
+      await for (final event in runner.send(text, images: images, messageId: userId)) {
         switch (event) {
           case ReasoningDelta(:final text):
             final soFar = thinking;
@@ -131,15 +133,15 @@ class TurnRunner {
             } else {
               streaming = run.replace(soFar, soFar.copyWith(text: soFar.text + text));
             }
-          case AssistantMessage(:final text):
+          case AssistantMessage(:final text, :final id):
             final done = streaming;
-            if (done != null) run.replace(done, done.copyWith(streaming: false));
+            if (done != null) run.replace(done, done.copyWith(streaming: false, id: id));
             streaming = null;
             if (text.trim().isNotEmpty) last = text;
           case NoticeInjected(:final notice):
             run.add(NoticeItem(notice.label));
-          case UserInjected(:final text):
-            run.add(UserItem(text));
+          case UserInjected(:final text, :final id):
+            run.add(UserItem(text, id: id));
             if (identical(run, core.active)) queue.dropSteered(text);
           case ToolStarted(:final callId, :final name, :final arguments):
             run.add(ToolItem(callId, name, arguments, startedAt: DateTime.now()));
@@ -170,11 +172,11 @@ class TurnRunner {
               failed = true;
               last = last.isEmpty ? text : '$last\n\n（$text）';
             }
-          case AgentError(:final text):
+          case AgentError(:final text, :final partialId):
             failed = true;
             last = text;
             final cut = streaming;
-            if (cut != null) streaming = run.replace(cut, cut.copyWith(streaming: false));
+            if (cut != null) streaming = run.replace(cut, cut.copyWith(streaming: false, id: partialId));
             run.add(NoticeItem(text, isError: true));
             // 模型一个字没回时，runner 已把用户消息撤回；界面同步撤回并还原草稿。
             if (run.messages.isEmpty || run.messages.last['role'] != 'user') {

@@ -10,6 +10,7 @@ import 'package:lopicode/agent/agent_runner.dart';
 import 'package:lopicode/agent/agent_tools.dart';
 import 'package:lopicode/agent/auto_compact.dart';
 import 'package:lopicode/agent/memory_store.dart';
+import 'package:lopicode/agent/message_ids.dart';
 import 'package:lopicode/agent/model_config.dart';
 import 'package:lopicode/agent/presets.dart';
 import 'package:lopicode/agent/team.dart';
@@ -24,6 +25,7 @@ import 'package:lopicode/session/turn_journal.dart';
 import 'package:lopicode/state/team_state.dart';
 import 'package:lopicode/state/workspace_chat.dart';
 import 'package:lopicode/state/workspace_conversations.dart';
+import 'package:lopicode/state/workspace_favorites.dart';
 import 'package:lopicode/state/workspace_files.dart';
 import 'package:path/path.dart' as p;
 
@@ -71,6 +73,8 @@ class SessionCore {
     }
     box.invalidate(pendingCardsProvider(session));
     box.invalidate(sendQueueProvider(session));
+    box.invalidate(favoritesProvider(session));
+    box.invalidate(chatJumpProvider(session));
     for (final id in boards.keys) {
       box.invalidate(teamProvider((session, id)));
     }
@@ -134,6 +138,14 @@ class SessionCore {
     run.messages = await _readMessages(run.convId);
     // 上一轮要是没正常收尾，记录里可能有“调了工具却没有结果”的消息：补上说明，免得下一次请求被接口拒绝。
     repairDanglingCalls(run.messages);
+    // 旧对话文件里的消息没有稳定标识：补上并马上写回（收藏、删除认的是它，重开应用不能变）。写不了就算了，下次再补。
+    if (ensureMessageIds(run.messages) > 0) {
+      try {
+        await writeJsonAtomic(chatFileOf(run.convId), run.messages);
+      } on FileSystemException {
+        // 盘写不了：这次打开期间内存里的标识照样能用
+      }
+    }
     rebuildItems(run);
     // 上一轮进行中 App 被关掉 / 被回收：在对话末尾说清楚停在哪，等用户选“继续 / 不用了”。绝不自动重跑。
     final cut = await journalOf(run.convId).interrupted();
@@ -183,6 +195,7 @@ class SessionCore {
   }
 
   Future<void> saveRun(ChatRunNotifier run) async {
+    ensureMessageIds(run.messages); // 摘要、承接语这类不经界面的消息在这里补上标识
     try {
       await writeJsonAtomic(chatFileOf(run.conv.id), run.messages);
     } on FileSystemException {

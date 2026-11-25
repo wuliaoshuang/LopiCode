@@ -18,6 +18,7 @@ import 'package:lopicode/ui/app_ref.dart';
 import 'package:lopicode/ui/builder_hub_screen.dart';
 import 'package:lopicode/ui/chat_screen.dart';
 import 'package:lopicode/ui/chrome.dart';
+import 'package:lopicode/ui/favorites_screen.dart';
 import 'package:lopicode/ui/files_tab.dart';
 import 'package:lopicode/ui/pinned_nav_layout.dart';
 import 'package:lopicode/ui/preview_tab.dart';
@@ -195,6 +196,10 @@ class _ProjectShellState extends ConsumerState<ProjectShell> {
               _closeDrawer();
               await session.selectConversation(id);
               _go(ShellDest.chat);
+            },
+            onFavorites: () {
+              _closeDrawer();
+              openFavorites(context, session, goChat: () => _go(ShellDest.chat));
             },
             onProjects: _openProjects,
             onSettings: _openSettings,

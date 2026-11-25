@@ -19,6 +19,7 @@ import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/core/safe_file.dart';
 import 'package:lopicode/core/stores.dart';
 import 'package:lopicode/core/templates.dart';
+import 'package:lopicode/session/favorites.dart';
 import 'package:lopicode/session/turn_journal.dart';
 import 'package:lopicode/templates/project_templates.dart';
 import 'package:path/path.dart' as p;
@@ -547,6 +548,72 @@ void main() {
       File(p.join(dir.path, '好的.md')).writeAsStringSync('# 好的\n\n正常\n');
       final store = MemoryStore(dir.path, MemoryScope.global);
       expect((await store.load()).map((e) => e.title), ['好的']);
+    });
+  });
+
+  group('收藏的消息 favorites.json', () {
+    File file() => File(p.join(tmp.path, 'favorites.json'));
+
+    test('没有文件：空列表，不建文件', () async {
+      expect(await readFavorites(file()), isEmpty);
+      expect(file().existsSync(), isFalse);
+    });
+
+    test('存了再读：原样回来（顺序、已删除标记、时间）', () async {
+      final items = [
+        FavoriteMessage(convId: 'main', messageId: 'm2', role: 'assistant', text: '回答', convTitle: '对话', savedAt: DateTime.fromMillisecondsSinceEpoch(2000), gone: true),
+        FavoriteMessage(convId: 'c9', messageId: 'm1', role: 'user', text: '提问', convTitle: '', savedAt: DateTime.fromMillisecondsSinceEpoch(1000)),
+      ];
+      await writeFavorites(file(), items);
+      final back = await readFavorites(file());
+      expect([for (final f in back) f.key], ['main/m2', 'c9/m1']);
+      expect([for (final f in back) f.gone], [true, false]);
+      expect([for (final f in back) f.mine], [false, true]);
+      expect(back.first.savedAt.millisecondsSinceEpoch, 2000);
+      expect(back.first.text, '回答');
+      expect(Directory(tmp.path).listSync().where((e) => e.path.endsWith('.tmp')), isEmpty, reason: '原子写不留临时文件');
+    });
+
+    for (final entry in corruptSamples.entries) {
+      test('坏内容（${entry.key}）：空列表，不抛异常', () async {
+        file().writeAsStringSync(entry.value);
+        expect(await readFavorites(file()), isEmpty);
+      });
+    }
+
+    test('半截的文件：留一份 .bad 备份', () async {
+      file().writeAsStringSync(corruptSamples['半截']!);
+      await readFavorites(file());
+      expect(badBackups(file()), hasLength(1));
+    });
+
+    test('形状对、条目类型全错 / 缺字段 / 重复：读到哪算哪，坏的跳过，不算坏文件', () async {
+      file().writeAsStringSync(
+        jsonEncode({
+          'version': 1,
+          'items': [
+            1,
+            'x',
+            null,
+            {'conv': 5, 'msg': 'm'},
+            {'conv': 'main', 'msg': ''},
+            {'conv': 'main', 'msg': 'm1', 'role': 9, 'text': 3, 'title': <String>[], 'at': '不是数字', 'gone': 'yes'},
+            {'conv': 'main', 'msg': 'm1', 'role': 'user', 'text': '重复的'},
+            {'conv': 'main', 'msg': 'm2', 'role': 'user', 'text': '好的', 'title': '标题', 'at': 5},
+          ],
+        }),
+      );
+      final back = await readFavorites(file());
+      expect([for (final f in back) f.key], ['main/m1', 'main/m2']);
+      expect(back.first.text, '');
+      expect(back.first.gone, isFalse);
+      expect(back.last.convTitle, '标题');
+      expect(badBackups(file()), isEmpty);
+    });
+
+    test('items 不是列表、版本号是以后的：不崩', () async {
+      file().writeAsStringSync(jsonEncode({'version': 99, 'items': 'x'}));
+      expect(await readFavorites(file()), isEmpty);
     });
   });
 }
