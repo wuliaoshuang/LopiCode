@@ -526,6 +526,29 @@ void main() {
       expect(texts(session), ['我:看看首页', 'AI:我先读一下。', '步骤:read_file', 'AI:读完了。']);
     });
 
+    // 2026-11-26 全量测试在机器很忙时撞到的：刚发出去的那句话已经显示、也已经在忙，但还没写进记录的那一小段时间里，
+    // 原因说成了“这条消息已经不在记录里了”。这里一变忙就立刻问。
+    test('刚发出去、还没写进记录的那句话：说的是“这一轮还没跑完”；真不在的消息照旧说“不在记录里”', () async {
+      await session.sendToAgent('第一句');
+      final gate = Completer<void>();
+      turn = (m, t) async {
+        await gate.future;
+        return reply('第二句的回复');
+      };
+      final running = session.sendToAgent('第二句');
+      while (!session.agentBusy) {
+        await Future<void>.delayed(Duration.zero); // 让出一拍（发送前有真的读写文件，光等微任务等不到）
+      }
+      expect(session.branches.branchBlocked(idOf('第二句')), kBranchRunningTurn);
+      expect((await session.branches.branch(idOf('第二句'))).error, kBranchRunningTurn);
+      expect(session.branches.branchBlocked('没有这条'), kMessageGone, reason: '在忙也不能把真不在的消息说成“还没跑完”');
+      // 上一轮早就跑完了：不管第二句写没写进记录，都能从它分支。
+      expect(session.branches.branchBlocked(idOf('好的。')), isNull);
+      gate.complete();
+      await running;
+      expect(session.branches.branchBlocked(idOf('第二句')), isNull);
+    });
+
     test('Agent 正在回复时：能从已经跑完的轮分支（建好、不切过去）；正在跑的这一轮不行', () async {
       await session.sendToAgent('第一句');
       final gate = Completer<void>();
