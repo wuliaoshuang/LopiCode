@@ -28,6 +28,7 @@ tool/check.sh --fix    # 先自动排版
 | `lib/agent/` | Agent：各协议的客户端、工具、模型与渠道配置、服务商预设、额度与用量、自动化、团队、技能、联网搜索 | `core`、`agent` |
 | `lib/preview/` | 本机预览服务器 | `core` |
 | `lib/format/` | 代码格式化器（JSON / CSS / JS·JSX / HTML / Vue），纯 Dart，排完和原文对不上就原样返回 | 只依赖自己 |
+| `lib/apkpack/` | 本地打包 APK（模板套壳）：二进制清单读写、ZIP 读写与对齐、项目识别、输入校验、打包门面；`sign/` 是签名。纯 Dart，重活在后台 isolate 里跑。格式事实见 `docs/apk-format-notes.md` | `core`、`apkpack` |
 | `lib/lang/` | 积木第 4 版的语言核心：语法树、名字与类型检查、小库函数表、五种语言的生成器（纯 Dart；小库的源码文本在 `lib/backend/runtime_*_lang.dart`） | `core`、`lang` |
 | `lib/terminal/` | 终端会话与后端接口、原生伪终端的封装 | `core`、`terminal` |
 | `lib/runtime/` | Ubuntu 运行环境：下载、解压、PRoot 启动、诊断 | 下面各层 |
