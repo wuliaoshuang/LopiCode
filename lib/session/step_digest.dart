@@ -276,6 +276,8 @@ StepDigest? stepDigest(String name, String rawArgs, String? result, {bool ok = t
       'list_files' => _list(result),
       'write_file' || 'edit_file' => hasChange ? const StepDigest('') : _head(_firstLine(result)),
       'delete_file' => _head(_firstLine(result)),
+      // 步骤行已经写了“记住了 + 标题”，摘要只留括号里那句（哪种记忆、新增还是改写），不把标题再念一遍。
+      'memory_write' || 'memory_delete' => _head(RegExp(r'（([^（）]*)）').firstMatch(_firstLine(result))?.group(1) ?? _firstLine(result)),
       'web_search' => _search(result),
       'ask_user' => _ask(result),
       'update_todos' => _todos(result),
