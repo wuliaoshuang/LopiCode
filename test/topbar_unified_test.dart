@@ -242,7 +242,8 @@ void main() {
       // 打包页重做后最上面是三选一（BuildModePicker），原来是两段的 SegmentedButton<bool>；要验的还是“第一块内容起始在顶栏下面、能滚到顶栏下面”。
       final first = find.descendant(of: apkList, matching: find.byType(BuildModePicker));
       expect(tester.getRect(first).top, greaterThan(kInset));
-      tester.state<ScrollableState>(apkList).position.jumpTo(200);
+      // 三选一就在页面最上面、只有 44 高：滚 200 它整块出了屏幕（查找器不认屏幕外的）。滚 30，让它的上沿钻到顶栏下面、下半截还露着。
+      tester.state<ScrollableState>(apkList).position.jumpTo(30);
       await tester.pump();
       expect(tester.getRect(first).top, lessThan(kInset), reason: '打包页的内容滚到顶栏下面');
 
