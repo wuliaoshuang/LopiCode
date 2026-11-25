@@ -149,7 +149,7 @@ Future<BackdropThemeImport> importBackdropFromTheme(BackdropStore store, Map<Obj
   final raw = data['bytes'];
   if (raw is! List<int> || raw.isEmpty) throw const BackdropImportException('主题文件里的背景图片是空的。');
   if (raw.length > kThemeBackdropMaxBytes) {
-    throw BackdropImportException('主题文件里的背景图片太大了（上限 ${kThemeBackdropMaxBytes ~/ (1024 * 1024)}MB）。');
+    throw const BackdropImportException('主题文件里的背景图片太大了（上限 ${kThemeBackdropMaxBytes ~/ (1024 * 1024)}MB）。');
   }
   final bytes = raw is Uint8List ? raw : Uint8List.fromList(raw);
   final format = sniffBackdropFormat(bytes);
@@ -185,7 +185,7 @@ Future<BackdropThemeImport> importBackdropFromTheme(BackdropStore store, Map<Obj
         maskFollowsTheme: data.containsKey('maskColor') ? color == null : null,
         maskColor: color == null ? null : 0xFF000000 | (color & 0xFFFFFF),
         maskOpacity: dim == null ? null : (dim.clamp(0.0, 1.0) * 100).round(),
-        blur: blur == null ? null : blur.clamp(0.0, kBackdropBlurMax.toDouble()).round(),
+        blur: blur?.clamp(0.0, kBackdropBlurMax.toDouble()).round(),
         brightness: i(data['brightness']),
       );
   return BackdropThemeImport(image: image, look: look);
