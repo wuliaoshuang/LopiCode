@@ -99,7 +99,15 @@ mixin _Stmts on _Core {
             final t = w.res(ex(sc, of));
             if (w.isRecord(t)) {
               ex(sc, value);
-              err('T10', sc, '记录「${t.name}」建好以后不能改，用“复制并改”', node: s, fixes: [LFix(LFixKind.useRecordCopy, '换成“复制并改”', target: s, params: {'field': name})]);
+              err(
+                'T10',
+                sc,
+                '记录「${t.name}」建好以后不能改，用“复制并改”',
+                node: s,
+                fixes: [
+                  LFix(LFixKind.useRecordCopy, '换成“复制并改”', target: s, params: {'field': name}),
+                ],
+              );
               return;
             }
             arg(sc, value, field(sc, of, name, target), '「$name」');

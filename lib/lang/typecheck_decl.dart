@@ -162,7 +162,11 @@ mixin _Decls on _Core {
   void _class(LClassInfo c, _Scope top) {
     final d = c.decl;
     final tv = c.typeVars;
-    final self = LType(LKind.object, name: c.name, args: [for (final v in tv) LType(LKind.typeVar, name: v)]);
+    final self = LType(
+      LKind.object,
+      name: c.name,
+      args: [for (final v in tv) LType(LKind.typeVar, name: v)],
+    );
     final at = _Scope('${c.name}.字段', c.name, parent: top, tv: tv, thisType: self);
     for (final f in d.fields) {
       final init = f.init;

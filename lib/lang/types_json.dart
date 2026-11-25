@@ -31,7 +31,9 @@ const Map<LKind, String> _names = {
 Map<String, dynamic> lTypeToJson(LType t) {
   final args = switch (t.kind) {
     LKind.list || LKind.future => [if (t.of != null) t.of!],
-    LKind.dict => [if (t.of != null) ...[LType.text, t.of!]],
+    LKind.dict => [
+      if (t.of != null) ...[LType.text, t.of!],
+    ],
     _ => t.args,
   };
   return {

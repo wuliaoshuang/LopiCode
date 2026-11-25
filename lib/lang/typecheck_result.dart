@@ -186,9 +186,7 @@ extension _Finish on _Checker {
       shown.add(vkey(scope, name));
       lines.add('$scope.$name: ${w.close(t).show()}');
     }
-    final vars = <LVarInfo>[
-      for (final MapEntry(:key, :value) in vt.entries) LVarInfo(key.substring(0, key.indexOf('\u0001')), key.substring(key.indexOf('\u0001') + 1), w.close(value.t), value.kind),
-    ];
+    final vars = <LVarInfo>[for (final MapEntry(:key, :value) in vt.entries) LVarInfo(key.substring(0, key.indexOf('\u0001')), key.substring(key.indexOf('\u0001') + 1), w.close(value.t), value.kind)];
     // 放进变量的、没标返回类型的函数里返回的：它们要去的地方的类型现在才定下来。
     for (final (e, key) in _assigned) {
       wants[e] = vt[key]!.t;

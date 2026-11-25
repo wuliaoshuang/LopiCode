@@ -71,11 +71,7 @@ void main() {
   (方法 叫 () -> 文字 (返回 "汪"))
   (方法 吃 ((东西 整数)) -> 文字 (返回 "骨头"))
   (方法 腿 () -> 文字 (返回 "四")))''');
-      expect(_said(r), [
-        'T18 狗：「狗」的「叫」和「动物」的对不上：父类的收 1 个参数，这里收 0 个',
-        'T18 狗：「狗」的「吃」和「动物」的对不上：第 1 个参数父类的是文字，这里是整数',
-        'T18 狗：「狗」的「腿」和「动物」的对不上：父类的返回整数，这里返回文字',
-      ]);
+      expect(_said(r), ['T18 狗：「狗」的「叫」和「动物」的对不上：父类的收 1 个参数，这里收 0 个', 'T18 狗：「狗」的「吃」和「动物」的对不上：第 1 个参数父类的是文字，这里是整数', 'T18 狗：「狗」的「腿」和「动物」的对不上：父类的返回整数，这里返回文字']);
     });
 
     test('T16：整数写得太大；正好在边上的不报', () {
@@ -103,7 +99,10 @@ void main() {
     });
 
     test('问题能定位到是哪个参数、哪个节点；节点自己带着位置就用它的，没带用包着它的那句的', () {
-      const arg = LLit('abc', src: LSrc(script: 'r1', block: 'b7', slot: 'n'));
+      const arg = LLit(
+        'abc',
+        src: LSrc(script: 'r1', block: 'b7', slot: 'n'),
+      );
       const call = LCall(LName('f'), [arg], src: LSrc(script: 'r1', block: 'b7'));
       const loose = LLit('x');
       const m = LModule(
@@ -111,8 +110,14 @@ void main() {
           LFuncDecl('f', [LParam('n', type: LType.integer)], [LReturn(LName('n'))]),
         ],
         body: [
-          LExprStmt(call, src: LSrc(script: 'r1', block: 'b7')),
-          LExprStmt(LCall(LName('f'), [loose]), src: LSrc(script: 'r1', block: 'b9')),
+          LExprStmt(
+            call,
+            src: LSrc(script: 'r1', block: 'b7'),
+          ),
+          LExprStmt(
+            LCall(LName('f'), [loose]),
+            src: LSrc(script: 'r1', block: 'b9'),
+          ),
         ],
       );
       final r = checkModuleTypes(m);
@@ -140,7 +145,12 @@ void main() {
       final r = checkModuleTypes(m);
       expect(r.issues, isEmpty);
       LExpr init(String name) => (m.body.whereType<LLet>().firstWhere((l) => l.name == name)).value;
-      expect({for (final n in ['s', 'q', 'd', 'm', 't', '第一', '也许', '和']) n: r.opOf(init(n))}, {'s': 'iadd', 'q': 'fdiv', 'd': 'idiv', 'm': 'imod', 't': 'fmul', '第一': 'listAt', '也许': 'dictGet', '和': 'dadd'});
+      expect(
+        {
+          for (final n in ['s', 'q', 'd', 'm', 't', '第一', '也许', '和']) n: r.opOf(init(n)),
+        },
+        {'s': 'iadd', 'q': 'fdiv', 'd': 'idiv', 'm': 'imod', 't': 'fmul', '第一': 'listAt', '也许': 'dictGet', '和': 'dadd'},
+      );
       expect(r.typeOf(init('s'))!.show(), '整数');
       expect(r.typeOf(init('q'))!.show(), '小数');
       expect(r.typeOf(init('也许'))!.show(), '整数?');
@@ -163,7 +173,16 @@ void main() {
       expect(r.shared, [same(one)]);
       // 两个一模一样的空列表（const 写的是同一个对象）分在两句里：各是各的，不会串。
       const empty = LListLit([]);
-      final r2 = checkModuleTypes(const LModule(body: [LLet('甲', empty), LLet('乙', empty), LExprStmt(LRt('listPush', [LName('甲'), LLit('x')])), LExprStmt(LRt('listPush', [LName('乙'), LLit(true)]))]));
+      final r2 = checkModuleTypes(
+        const LModule(
+          body: [
+            LLet('甲', empty),
+            LLet('乙', empty),
+            LExprStmt(LRt('listPush', [LName('甲'), LLit('x')])),
+            LExprStmt(LRt('listPush', [LName('乙'), LLit(true)])),
+          ],
+        ),
+      );
       expect(r2.variable('主', '甲')!.type.show(), '列表〈文字〉');
       expect(r2.variable('主', '乙')!.type.show(), '列表〈是否〉');
     });
@@ -206,13 +225,32 @@ void main() {
           const LFuncDecl('加一', [LParam('n', type: LType.integer)], [LReturn(LBinary('+', LName('n'), LLit(1)))]),
         ],
         scripts: [
-          const LTypeScript('r1', [LLet('a', LCall(LName('加一'), [LName('次数')]))], vars: {'次数': LType.integer}),
-          const LTypeScript('r2', [LLet('a', LCall(LName('加一'), [LLit('x')]))]),
+          const LTypeScript(
+            'r1',
+            [
+              LLet('a', LCall(LName('加一'), [LName('次数')])),
+            ],
+            vars: {'次数': LType.integer},
+          ),
+          const LTypeScript('r2', [
+            LLet('a', LCall(LName('加一'), [LLit('x')])),
+          ]),
         ],
         outer: const {'req': LType.any},
       );
       expect(_said(r), ['T01 r2：「加一」的第 1 个参数要整数，放进来的是文字']);
       expect(r.variable('r1', 'a')!.type, LType.integer);
+    });
+
+    test('比大小：整数和小数能比（整数那边先变小数），文字和数字不能比；“等于”两边是什么都不报，交给严格的 eq', () {
+      final m = lcModule('(主 (设 a (< 1 2.5)) (设 b (== 1 "1")) (设 c (== 1 1.0)))');
+      final r = checkModuleTypes(m);
+      expect(r.issues, isEmpty);
+      LExpr init(String name) => m.body.whereType<LLet>().firstWhere((l) => l.name == name).value;
+      expect(r.opOf(init('a')), 'flt');
+      expect('${r.coercionOf((init('a') as LBinary).l)}', 'widen:整数→小数');
+      expect(r.opOf(init('b')), 'eq');
+      expect(_said(_check('(主 (设 a (< 1 "2")))')).single, startsWith('T06 '));
     });
 
     test('任何输入都不抛异常：空模块、不认识的名字、套得很深', () {
@@ -275,15 +313,25 @@ void main() {
         'waits': true,
       });
       expect(lTypeFromJson(lTypeToJson(f)).waits, isTrue);
-      expect(lTypeFromJson({
-        'k': 'list',
-        'of': {'k': 'number'},
-      }), const LType(LKind.list, of: LType.number));
+      expect(
+        lTypeFromJson({
+          'k': 'list',
+          'of': {'k': 'number'},
+        }),
+        const LType(LKind.list, of: LType.number),
+      );
       expect(lTypeToJson(const LType.dictOf(LType.integer))['args'], [
         {'k': 'text'},
         {'k': 'int'},
       ]);
-      for (final bad in [null, 3, 'x', <String, dynamic>{}, {'k': '没有这种'}, {'k': 'list', 'args': 'x'}]) {
+      for (final bad in [
+        null,
+        3,
+        'x',
+        <String, dynamic>{},
+        {'k': '没有这种'},
+        {'k': 'list', 'args': 'x'},
+      ]) {
         expect(lTypeFromJson(bad), anyOf(LType.any, const LType(LKind.list)));
       }
     });

@@ -30,13 +30,70 @@ const Set<String> kLangRtV2New = {'orElse', 'must', 'toInt', 'parseInt', 'codePo
 
 const Map<String, LRtSig> kLangRtV2 = {
   // —— 高阶 ——
-  'listMap': LRtSig('映射', [_listT, LType.func([_t, _u])], LType.listOf(_u), typeVars: ['T', 'U']),
-  'listFilter': LRtSig('筛选', [_listT, LType.func([_t, LType.boolean])], _listT, typeVars: ['T']),
-  'listReduce': LRtSig('归并', [_listT, LType.func([_a, _t, _a]), _a], _a, typeVars: ['T', 'A']),
-  'listFind': LRtSig('找第一个', [_listT, LType.func([_t, LType.boolean])], LType(LKind.typeVar, name: 'T', nullable: true), typeVars: ['T']),
-  'listEvery': LRtSig('每个都', [_listT, LType.func([_t, LType.boolean])], LType.boolean, typeVars: ['T']),
-  'listSome': LRtSig('有一个', [_listT, LType.func([_t, LType.boolean])], LType.boolean, typeVars: ['T']),
-  'listEach': LRtSig('每个都做', [_listT, LType.func([_t, LType.nul])], LType.nul, typeVars: ['T']),
+  'listMap': LRtSig(
+    '映射',
+    [
+      _listT,
+      LType.func([_t, _u]),
+    ],
+    LType.listOf(_u),
+    typeVars: ['T', 'U'],
+  ),
+  'listFilter': LRtSig(
+    '筛选',
+    [
+      _listT,
+      LType.func([_t, LType.boolean]),
+    ],
+    _listT,
+    typeVars: ['T'],
+  ),
+  'listReduce': LRtSig(
+    '归并',
+    [
+      _listT,
+      LType.func([_a, _t, _a]),
+      _a,
+    ],
+    _a,
+    typeVars: ['T', 'A'],
+  ),
+  'listFind': LRtSig(
+    '找第一个',
+    [
+      _listT,
+      LType.func([_t, LType.boolean]),
+    ],
+    LType(LKind.typeVar, name: 'T', nullable: true),
+    typeVars: ['T'],
+  ),
+  'listEvery': LRtSig(
+    '每个都',
+    [
+      _listT,
+      LType.func([_t, LType.boolean]),
+    ],
+    LType.boolean,
+    typeVars: ['T'],
+  ),
+  'listSome': LRtSig(
+    '有一个',
+    [
+      _listT,
+      LType.func([_t, LType.boolean]),
+    ],
+    LType.boolean,
+    typeVars: ['T'],
+  ),
+  'listEach': LRtSig(
+    '每个都做',
+    [
+      _listT,
+      LType.func([_t, LType.nul]),
+    ],
+    LType.nul,
+    typeVars: ['T'],
+  ),
   // —— 数 ——
   'toInt': LRtSig('取整', [LType.number], LType.integer, slots: ['“取整”里的数']),
   'parseInt': LRtSig('变成整数', [LType.text], LType(LKind.integer, nullable: true), slots: ['“变成整数”里的文字']),

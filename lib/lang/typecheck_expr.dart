@@ -120,7 +120,15 @@ mixin _Exprs on _Core {
           final ft = d.fields.where((x) => x.name == f.name).firstOrNull;
           if (ft == null) {
             ex(sc, f.value);
-            err('T04', sc, '「${d.name}」没有「${f.name}」这一项', node: e, fixes: [LFix(LFixKind.removeRecordField, '删掉「${f.name}」', target: e, params: {'field': f.name})]);
+            err(
+              'T04',
+              sc,
+              '「${d.name}」没有「${f.name}」这一项',
+              node: e,
+              fixes: [
+                LFix(LFixKind.removeRecordField, '删掉「${f.name}」', target: e, params: {'field': f.name}),
+              ],
+            );
           } else {
             arg(sc, f.value, w.subst(w.resolve(ft.type, _tvOf(d)), b), '「${d.name}」的「${f.name}」');
           }
@@ -312,7 +320,18 @@ mixin _Exprs on _Core {
         op(e, 'fpow');
         return _flt;
       default:
-        if (!ints) err('T06', sc, '“$label”的两边要整数，这里有一边是小数', node: e, fixes: [for (var i = 0; i < 2; i++) if (ts[i] == _flt) LFix(LFixKind.wrapToInt, '取整', target: xs[i])]);
+        if (!ints) {
+          err(
+            'T06',
+            sc,
+            '“$label”的两边要整数，这里有一边是小数',
+            node: e,
+            fixes: [
+              for (var i = 0; i < 2; i++)
+                if (ts[i] == _flt) LFix(LFixKind.wrapToInt, '取整', target: xs[i]),
+            ],
+          );
+        }
         check(LCheckKind.divideByZero, e, sc);
         op(e, o == '//' ? 'idiv' : 'imod');
         return _int;
@@ -343,7 +362,13 @@ mixin _Exprs on _Core {
     final t = w.res(ex(sc, e));
     want(e, _bool);
     if (t == _bool || t.isAny || t.isNever) return;
-    err('T09', sc, '这里要“是/否”，放进来的是${t.show()}', node: e, fixes: [if (t == _int || t == _flt) LFix(LFixKind.compareNotZero, '换成“… ≠ 0”', target: e)]);
+    err(
+      'T09',
+      sc,
+      '这里要“是/否”，放进来的是${t.show()}',
+      node: e,
+      fixes: [if (t == _int || t == _flt) LFix(LFixKind.compareNotZero, '换成“… ≠ 0”', target: e)],
+    );
   }
 
   /// 条件成立（或不成立）时，哪些变量肯定不是空。
@@ -378,19 +403,41 @@ mixin _Exprs on _Core {
       err('T08', sc, '没有叫「${e.record}」的记录', node: e);
       return _never;
     }
-    final t = LType(LKind.record, name: d.name, args: [for (final p in d.typeParams) LType(LKind.hole, name: holeKey(e, sc, ':${p.name}'))]);
+    final t = LType(
+      LKind.record,
+      name: d.name,
+      args: [for (final p in d.typeParams) LType(LKind.hole, name: holeKey(e, sc, ':${p.name}'))],
+    );
     final b = _recordArgs(d, t);
     final given = {for (final f in e.fields) f.name};
     final miss = [
       for (final f in d.fields)
         if (!given.contains(f.name)) f.name,
     ];
-    if (miss.isNotEmpty) err('T04', sc, '新建「${d.name}」还缺：${miss.join('、')}', node: e, fixes: [LFix(LFixKind.addRecordFields, '补上缺的', target: e, params: {'fields': miss})]);
+    if (miss.isNotEmpty) {
+      err(
+        'T04',
+        sc,
+        '新建「${d.name}」还缺：${miss.join('、')}',
+        node: e,
+        fixes: [
+          LFix(LFixKind.addRecordFields, '补上缺的', target: e, params: {'fields': miss}),
+        ],
+      );
+    }
     for (final f in e.fields) {
       final ft = d.fields.where((x) => x.name == f.name).firstOrNull;
       if (ft == null) {
         ex(sc, f.value);
-        err('T04', sc, '「${d.name}」没有「${f.name}」这一项', node: e, fixes: [LFix(LFixKind.removeRecordField, '删掉「${f.name}」', target: e, params: {'field': f.name})]);
+        err(
+          'T04',
+          sc,
+          '「${d.name}」没有「${f.name}」这一项',
+          node: e,
+          fixes: [
+            LFix(LFixKind.removeRecordField, '删掉「${f.name}」', target: e, params: {'field': f.name}),
+          ],
+        );
       } else {
         arg(sc, f.value, w.subst(w.resolve(ft.type, _tvOf(d)), b), '「${d.name}」的「${f.name}」');
       }

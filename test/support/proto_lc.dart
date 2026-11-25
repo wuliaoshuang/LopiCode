@@ -100,7 +100,11 @@ class _Reader {
         case '枚举':
           decls.add(LEnumDecl(name, [...d.skip(2).cast<String>()]));
         case '变体':
-          decls.add(LVariantDecl(name, [for (final c in d.skip(2).cast<_L>()) LVariantCase(c[0] as String, [for (final f in c.skip(1).cast<_L>()) LTypedField(f[0] as String, ty(f[1]))])]));
+          decls.add(
+            LVariantDecl(name, [
+              for (final c in d.skip(2).cast<_L>()) LVariantCase(c[0] as String, [for (final f in c.skip(1).cast<_L>()) LTypedField(f[0] as String, ty(f[1]))]),
+            ]),
+          );
         case '接口':
           decls.add(LInterfaceDecl(name, [for (final m in d.skip(2).cast<_L>()) LSignature(m[0] as String, params(m[1]), returns: ty(m[2]))]));
         case '别名':
@@ -278,7 +282,18 @@ class _Reader {
         return LIndex(expr(a[0]), expr(a[1]));
       case '试算':
         final name = '错${_n++}';
-        return LCall(LLambda(const [], [LTry([LReturn(LRt('toText', [expr(a[0])]))], errorName: name, onError: [LReturn(LName(name))])]), const []);
+        return LCall(
+          LLambda(const [], [
+            LTry(
+              [
+                LReturn(LRt('toText', [expr(a[0])])),
+              ],
+              errorName: name,
+              onError: [LReturn(LName(name))],
+            ),
+          ]),
+          const [],
+        );
       case 'λ':
         return LLambda.short(params(a[0]), expr(a[1]));
       case 'λ块':

@@ -9,7 +9,18 @@ import 'package:lopicode/lang/types.dart';
 
 /// 一个函数 / 方法 /“创建时”在检查器眼里的样子。
 class LTypedFunc {
-  LTypedFunc({required this.key, required this.name, required this.typeVars, required this.own, required this.bounds, required this.params, required this.ret, required this.body, this.decl, this.owner});
+  LTypedFunc({
+    required this.key,
+    required this.name,
+    required this.typeVars,
+    required this.own,
+    required this.bounds,
+    required this.params,
+    required this.ret,
+    required this.body,
+    this.decl,
+    this.owner,
+  });
 
   /// 记号：函数是名字，方法是“类.方法”，创建时是“类.创建”。
   final String key;
