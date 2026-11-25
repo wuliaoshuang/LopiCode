@@ -12,6 +12,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lopicode/appearance/theme_builtin.dart';
 import 'package:lopicode/appearance/theme_contrast.dart';
+import 'package:lopicode/appearance/theme_edit_model.dart';
 import 'package:lopicode/appearance/theme_export_file.dart';
 import 'package:lopicode/appearance/theme_fields.dart';
 import 'package:lopicode/appearance/theme_generate.dart';
@@ -81,7 +82,7 @@ void main() {
 
   /// 等真实存盘做完再排界面。
   Future<void> io(WidgetTester tester) async {
-    await settle(tester, rounds: 2);
+    await settle(tester, rounds: 4);
     await tester.pumpAndSettle();
   }
 
@@ -110,12 +111,16 @@ void main() {
   }
 
   Future<void> openItem(WidgetTester tester, String id) async {
+    // 先回到列表最上面：要找的那一项可能在现在位置的上面。
+    tester.state<ScrollableState>(find.descendant(of: k('theme-editor-list'), matching: find.byType(Scrollable)).first).position.jumpTo(0);
+    await tester.pump();
     await tester.scrollUntilVisible(
       k('theme-item-$id'),
       200,
       scrollable: find.descendant(of: k('theme-editor-list'), matching: find.byType(Scrollable)).first,
     );
-    await tester.ensureVisible(k('theme-item-$id'));
+    // 挪到列表中间再点（不顶到最上面：那样它那一组的标题行会被滚出去）。
+    await Scrollable.ensureVisible(tester.element(k('theme-item-$id')), alignment: 0.5);
     await tester.pumpAndSettle();
     await tester.tap(k('theme-item-$id'));
     await tester.pumpAndSettle();
@@ -346,6 +351,7 @@ void main() {
       expect(k('theme-preview-ansi-red'), findsOneWidget);
 
       await tester.tap(k('theme-section-ui'));
+      await tester.pumpAndSettle();
       await tester.tap(k('theme-section-tokens'));
       await tester.pumpAndSettle();
       await openItem(tester, 'tokens.keyword');
@@ -403,6 +409,7 @@ void main() {
       expect(k('color-hex'), findsNothing);
       expect(find.textContaining('内置主题不能直接改'), findsOneWidget);
       await tester.tap(k('theme-section-ui'));
+      await tester.pumpAndSettle();
       await tester.tap(k('theme-section-metrics'));
       await tester.pumpAndSettle();
       expect(tester.widget<IconButton>(k('theme-metric-${MetricKey.radiusScale}-plus')).onPressed, isNull);
@@ -587,14 +594,22 @@ void main() {
     testWidgets('允许透明的项有透明度条；高亮分类可以“不单独上色”', (tester) async {
       late ThemeSpec t;
       await boot(tester, (env) => ThemeEditorScreen(theme: t), before: (env) async => t = (await themesOf(env).create(dark: false)).theme!);
-      await openItem(tester, 'ui.scrim');
+      final soft = kThemeItems.firstWhere((i) => i.section == 'ui' && itemAllowsAlpha(i));
+      await openItem(tester, soft.id);
       expect(k('color-alpha'), findsOneWidget);
       await typeHex(tester, '#40102030');
-      expect(previewSpec(tester, 'ui').ui[UiKey.scrim], 0x40102030);
+      expect(previewSpec(tester, 'ui').ui[soft.key], 0x40102030);
+      // 点透明度条的最右边：变成不透明。
+      await tester.ensureVisible(k('color-alpha'));
+      final bar = tester.getRect(k('color-alpha'));
+      await tester.tapAt(Offset(bar.right - 1, bar.center.dy));
+      await tester.pump();
+      expect(previewSpec(tester, 'ui').ui[soft.key]! >> 24, 0xFF);
       await tester.tap(k('color-done'));
       await tester.pumpAndSettle();
 
       await tester.tap(k('theme-section-ui'));
+      await tester.pumpAndSettle();
       await tester.tap(k('theme-section-tokens'));
       await tester.pumpAndSettle();
       await openItem(tester, 'tokens.keyword');
@@ -650,7 +665,7 @@ void main() {
       await tester.pumpAndSettle();
       final made = now();
       expect(made.ui[UiKey.accentFill], 0xFF00897B);
-      expect(made.ui[UiKey.bg], isNot(t.ui[UiKey.bg]), reason: '底色带上了倾向');
+      expect(made.ui[UiKey.canvas], isNot(t.ui[UiKey.canvas]), reason: '底色带上了倾向');
       expect(decodeThemeText(encodeThemeText(made)).ok, isTrue, reason: '生成的整套能过格式校验');
       expect(made.id, t.id);
       // 一次生成只算一步。
@@ -968,7 +983,28 @@ void main() {
       expect(viewOf(env).user, isEmpty, reason: '只是预览，还没加');
     });
 
-    testWidgets('带背景图的主题：没接背景图时只说明；接上了有勾选，加入时把图交给背景图那边', (tester) async {
+    testWidgets('带背景图的主题，背景图那部分没接上：只说明，照样加入颜色', (tester) async {
+      const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+      final text = jsonEncode({
+        ...encodeTheme(kDefaultDarkTheme.copyWith(name: '带图的')),
+        'background': {'mime': 'image/png', 'data': png, 'dim': 0.3},
+      });
+      final decoded = decodeThemeText(text);
+      expect(decoded.background, isNotNull, reason: decoded.error ?? decoded.notes.join());
+      final env = await boot(tester, (_) => ThemeImportPreviewScreen(text: text, result: decoded));
+      await tester.scrollUntilVisible(
+        k('theme-import-image'),
+        200,
+        scrollable: find.descendant(of: k('theme-import-preview-scroll'), matching: find.byType(Scrollable)).first,
+      );
+      expect(tester.widget<Text>(k('theme-import-image')).data, contains('这个版本还用不了背景图'));
+      expect(k('theme-import-image-use'), findsNothing);
+      await tester.tap(k('theme-import-add'));
+      await io(tester);
+      expect(viewOf(env).user.single.name, '带图的');
+    });
+
+    testWidgets('带背景图的主题，背景图那部分接上了：有勾选，加入时把图交给背景图那边', (tester) async {
       const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
       final text = jsonEncode({
         ...encodeTheme(kDefaultDarkTheme.copyWith(name: '带图的')),
@@ -986,19 +1022,7 @@ void main() {
         },
       );
 
-      var env = await boot(tester, (_) => ThemeImportPreviewScreen(text: text, result: decoded));
-      await tester.scrollUntilVisible(
-        k('theme-import-image'),
-        200,
-        scrollable: find.descendant(of: k('theme-import-preview-scroll'), matching: find.byType(Scrollable)).first,
-      );
-      expect(tester.widget<Text>(k('theme-import-image')).data, contains('这个版本还用不了背景图'));
-      expect(k('theme-import-image-use'), findsNothing);
-      await tester.tap(k('theme-import-add'));
-      await io(tester);
-      expect(viewOf(env).user.single.name, '带图的');
-
-      env = await boot(
+      await boot(
         tester,
         (_) => ProviderScope(
           overrides: [themeBackgroundBridgeProvider.overrideWithValue(bridge)],

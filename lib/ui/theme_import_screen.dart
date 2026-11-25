@@ -250,9 +250,14 @@ class _ThemeFileSheet extends StatelessWidget {
                 builder: (context, snap) {
                   final scan = snap.data;
                   if (scan == null) {
-                    return const Padding(
-                      padding: EdgeInsets.all(Space.x6),
-                      child: Center(child: CircularProgressIndicator()),
+                    // 不放转圈：扫描一般一眨眼就完，转圈只会闪一下。
+                    return Padding(
+                      padding: const EdgeInsets.all(Space.x6),
+                      child: Text(
+                        '正在找文件…',
+                        textAlign: TextAlign.center,
+                        style: t.bodyMedium?.copyWith(color: c.textMuted),
+                      ),
                     );
                   }
                   final files = themeFileCandidates(scan.files);
