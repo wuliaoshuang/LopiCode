@@ -180,6 +180,10 @@ class ProjectSession {
 
   void clearAutoAllow() => _core.cards.clearAutoAllow(activeConversationId);
 
+  /// 当前对话里有几个 MCP 工具点过“本对话都允许”；[clearMcpAllow] 全部收回。
+  int get mcpAllowCount => _core.cards.allowedKeyCount(rootOf(activeConversation).id);
+  void clearMcpAllow() => _core.cards.clearAllowKeys(rootOf(activeConversation).id);
+
   // ── 读对话、开新对话、切换、删除 ──────────────────────
   Future<void>? _loading;
 
@@ -253,6 +257,7 @@ class ProjectSession {
       _core.dropBoard(d);
       await _background.dropConversation(d);
       _core.cards.clearAutoAllow(d);
+      _core.cards.clearAllowKeys(d);
       if (!app.disposed) app.container.invalidate(chatRunProvider((this, d)));
     }
     _core.convs?.removeAll(doomed.toSet());

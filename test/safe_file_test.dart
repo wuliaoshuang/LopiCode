@@ -5,6 +5,8 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lopicode/agent/automation.dart';
 import 'package:lopicode/agent/background_commands.dart';
+import 'package:lopicode/agent/mcp/mcp_config.dart';
+import 'package:lopicode/agent/mcp/mcp_models.dart';
 import 'package:lopicode/agent/memory_store.dart';
 import 'package:lopicode/agent/model_config.dart';
 import 'package:lopicode/agent/team.dart';
@@ -188,6 +190,15 @@ void main() {
         expect(board.tasks, isEmpty);
       });
 
+      test('MCP 服务器配置 mcp_servers.json：${entry.key} → 当一个服务器都没有，照样能再加、再存', () async {
+        final file = File(p.join(tmp.path, 'mcp_servers.json'))..writeAsStringSync(entry.value);
+        final store = McpStore(file, MemorySecretStore());
+        await store.load();
+        expect(store.servers, isEmpty);
+        await store.save([McpServerConfig(id: 'a', name: '资料库', url: 'https://example.com/mcp')]);
+        expect(((jsonDecode(file.readAsStringSync()) as Map)['servers'] as List).length, 1);
+      });
+
       test('进行中记录 turn.json：${entry.key} → 当没有记录（不提示、不崩），之后还能正常记', () async {
         final file = File(p.join(tmp.path, 'turn.json'))..writeAsStringSync(entry.value);
         final store = TurnJournalStore(file);
@@ -231,6 +242,49 @@ void main() {
       expect(cut.describe().lines, isNotEmpty);
       File(p.join(tmp.path, 'turn2.json')).writeAsStringSync(jsonEncode({'token': 'old', 'at': 1, 'steps': 'nope'}));
       expect((await TurnJournalStore(File(p.join(tmp.path, 'turn2.json'))).interrupted())!.steps, isEmpty);
+    });
+
+    test('MCP 服务器配置：字段类型全错、混着别的东西、地址不合规矩 → 读到哪算哪，坏的条目跳过，不抛异常', () async {
+      final file = File(p.join(tmp.path, 'mcp_servers.json'))
+        ..writeAsStringSync(
+          jsonEncode({
+            'version': 'x',
+            'servers': [
+              42,
+              null,
+              {'id': 7, 'name': '没有编号'},
+              {
+                'id': 'ok',
+                'name': '还行',
+                'url': 'https://example.com/mcp',
+                'transport': 'telepathy',
+                'enabled': 'yes',
+                'headerNames': ['Authorization', 5, 'bad name'],
+                'disabledTools': 'all',
+                'tools': [
+                  1,
+                  {'name': 'good', 'description': 9, 'inputSchema': 'nope'},
+                  {'name': ''},
+                ],
+                'toolsAt': 'yesterday',
+                'mode': 12,
+              },
+            ],
+          }),
+        );
+      final store = McpStore(file, MemorySecretStore());
+      await store.load();
+      final ok = store.servers.where((s) => s.id == 'ok').single;
+      expect(ok.url, 'https://example.com/mcp');
+      expect(ok.transport, McpTransportChoice.auto);
+      expect(ok.tools.map((t) => t.name), ['good']);
+      expect(ok.headerNames, ['Authorization']);
+      expect(store.servers, hasLength(1));
+      expect(ok.enabled, isTrue);
+      expect(ok.disabledTools, isEmpty);
+      expect(ok.toolsAt, isNull);
+      expect(ok.mode, isNull);
+      expect(badBackups(file), isEmpty, reason: '是合法 JSON，不算坏文件');
     });
 
     test('旧版本 / 字段类型不对的内容：读到哪算哪，不抛异常', () async {

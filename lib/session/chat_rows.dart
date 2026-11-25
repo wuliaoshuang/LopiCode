@@ -152,6 +152,7 @@ Map<String, dynamic> _argsOf(String rawArgs) {
     'memory_write' => ('记住了', a('title')),
     'memory_delete' => ('从记忆里删掉', a('title')),
     'conversation_search' => ('查历史对话', a('query')),
+    _ when name.startsWith('mcp__') => ('调用 MCP 工具', name.substring(5).replaceFirst('__', ' › ')),
     _ => (name, ''),
   };
 }

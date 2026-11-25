@@ -5,6 +5,7 @@ import 'package:lopicode/agent/memory_tools.dart';
 import 'package:lopicode/agent/skills.dart';
 import 'package:lopicode/agent/team.dart';
 import 'package:lopicode/session/conversation.dart';
+import 'package:lopicode/session/mcp_wiring.dart';
 import 'package:lopicode/session/prompt_context.dart';
 import 'package:lopicode/session/session_core.dart';
 
@@ -37,5 +38,6 @@ String systemPromptFor(SessionCore core, Conversation conv, Conversation root, L
   } else if (core.teamEnabled) {
     parts.add('这段对话开了智能体团队：你是“${TeamBoard.lead}”。复杂的事先用 team_task 在任务板上拆成任务（写清负责人、依赖、写入范围），再用 spawn_agent 把任务派给子代理（带上 task_id），最后汇总。');
   }
+  if (mcpActive(core)) parts.add(kMcpPromptNote);
   return parts.join('\n\n');
 }

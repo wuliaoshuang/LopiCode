@@ -417,6 +417,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             if (s.queue.isNotEmpty) QueueStrip(session: s),
             if (s.autoAllowActive && s.permission != PermissionLevel.full)
               StatusChipRow(key: const ValueKey('auto-allow-chip'), icon: Icons.bolt, text: '自动允许中：本对话的命令和删除不再逐次问你', action: '关闭', tone: BannerTone.warning, onTap: s.clearAutoAllow),
+            if (s.mcpAllowCount > 0)
+              StatusChipRow(
+                key: const ValueKey('mcp-allow-chip'),
+                icon: Icons.extension_outlined,
+                text: '有 ${s.mcpAllowCount} 个 MCP 工具在本对话里不再逐次问你',
+                action: '恢复询问',
+                tone: BannerTone.warning,
+                onTap: s.clearMcpAllow,
+              ),
             if (s.planMode) StatusChipRow(key: const ValueKey('plan-chip'), icon: Icons.map_outlined, text: '计划模式：只出计划，不改文件、不跑命令', action: '退出', tone: BannerTone.info, onTap: _togglePlan),
             if (_attachments.isNotEmpty)
               AttachmentStrip(paths: [for (final a in _attachments) '${s.project.dir}/${a['path']}'], canSee: model?.model.vision ?? false, onRemove: (i) => setState(() => _attachments.removeAt(i))),

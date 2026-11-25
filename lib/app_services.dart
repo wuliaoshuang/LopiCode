@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:lopicode/agent/automation.dart';
 import 'package:lopicode/agent/chat_client.dart';
 import 'package:lopicode/agent/keep_alive.dart';
+import 'package:lopicode/agent/mcp/mcp_config.dart';
 import 'package:lopicode/agent/memory_store.dart';
 import 'package:lopicode/agent/model_config.dart';
 import 'package:lopicode/agent/presets.dart';
@@ -36,7 +37,8 @@ class AppServices {
        presets = PresetStore(settings),
        skills = SkillStore(settings, p.join(settings.file.parent.path, 'skills')),
        memory = AppMemory(settings, p.join(settings.file.parent.path, 'memory')),
-       automations = AutomationStore(File(p.join(settings.file.parent.path, 'automations.json'))) {
+       automations = AutomationStore(File(p.join(settings.file.parent.path, 'automations.json'))),
+       mcp = McpStore(File(p.join(settings.file.parent.path, 'mcp_servers.json')), secrets) {
     projects.linuxRootfs ??= this.runtime.rootfsDir;
     // 技能镜像：进 Ubuntu 前把开着的技能复制一份挂到 /skills（挂副本，环境里改不到原件）。
     this.runtime.skillsMirror ??= SkillMirror(skills, p.join(this.runtime.baseDir, 'skills-mirror')).sync;
@@ -95,6 +97,9 @@ class AppServices {
   /// 文件记忆（全局的在应用文档目录的 memory/ 下，项目的在各工作区的 .lopicode/memory/ 下）。
   final AppMemory memory;
 
+  /// MCP 服务器的配置（状态在 mcpProvider）。
+  final McpStore mcp;
+
   /// 工作区列表里点了“在这里新建对话”：打开那个工作区后开一段新对话。
   String? newConversationFor;
 
@@ -107,6 +112,7 @@ class AppServices {
   Future<void> ready() => _ready ??= () async {
     await models.load();
     await automations.load();
+    await mcp.load();
   }();
 
   final SettingsStore settings;

@@ -21,6 +21,7 @@ import 'package:lopicode/session/background_flow.dart';
 import 'package:lopicode/session/chat_models.dart';
 import 'package:lopicode/session/conversation.dart';
 import 'package:lopicode/session/conversation_search.dart';
+import 'package:lopicode/session/mcp_wiring.dart';
 import 'package:lopicode/session/session_core.dart';
 import 'package:lopicode/session/view_image_tool.dart';
 import 'package:lopicode/ssh/ssh_shell_backend.dart';
@@ -91,6 +92,7 @@ class ToolboxBuilder {
     if (app.memory.enabled) extras.addAll(memoryTools(global: app.memory.global, project: core.projectMemory, canWrite: conv.parentId == null, allowGlobalWrite: !run.unattended));
     extras.add(conversationSearchTool(core, run));
     if (!run.unattended) extras.addAll(automationTools(store: app.automations, project: core.project, approve: (request) => requestApproval(run, request)));
+    extras.addAll(await mcpToolsFor(core, run, root, (request) => requestApproval(run, request), taken: {...AgentToolbox.coreKinds.keys, for (final e in extras) e.name}));
     // 后台命令：启动的确认接的是工具箱里 run_command 用的同一个判断（工具箱在下面才建，所以用 late）。
     late final AgentToolbox box;
     extras.addAll(background?.tools(run, root, runner, approve: (r) => box.approveCommand(r), stopSignal: () => box.stopSignal?.call()) ?? const []);
