@@ -305,6 +305,37 @@ void main() {
       expect(models.channels, isEmpty);
       expect(badBackups(sfile), isEmpty, reason: '文件本身是合法 JSON，不算坏文件');
 
+      // 每个模型记住的思考档位（ai.thinkingLevels）：整张表类型不对 / 里面混着别的东西 → 坏的丢掉，好的照用，之后还能再记
+      for (final bad in <Object?>[
+        'oops',
+        7,
+        <int>[1, 2],
+        null,
+      ]) {
+        await settings.set(ModelConfigStore.kLevels, bad);
+        expect(models.thinkingLevels, isEmpty, reason: '$bad');
+        expect(models.thinkingLevelOf('c', 'm'), isNull);
+      }
+      await settings.set(ModelConfigStore.kLevels, {
+        'c/m': 'high',
+        'c/n': 3,
+        'c/o': null,
+        'c/p': {'level': 'low'},
+        'c/q': '乱写的档位',
+      });
+      expect(models.thinkingLevels, {'c/m': 'high', 'c/q': '乱写的档位'});
+      final ch = await models.upsert(
+        name: '渠道',
+        protocol: ChatProtocol.openaiChat,
+        baseUrl: 'https://api.example.com/v1',
+        models: [ModelSpec(id: 'q', thinking: true)],
+      );
+      await settings.set(ModelConfigStore.kLevels, {'${ch.id}/q': '乱写的档位', 'x': 1});
+      expect(models.resolve(ModelSelection(ch.id, 'q', 'high'))!.level, 'off', reason: '不认识的档位当“关”，不发给接口');
+      await models.setThinkingLevel(ch.id, 'q', 'low');
+      expect(models.thinkingLevels, {'${ch.id}/q': 'low'}, reason: '再记一次：坏条目顺手清掉');
+      expect(models.resolve(ModelSelection(ch.id, 'q', 'high'))!.level, 'low');
+
       // 自动化：混着好的和坏的条目
       final afile = File(p.join(tmp.path, 'automations.json'))
         ..writeAsStringSync(

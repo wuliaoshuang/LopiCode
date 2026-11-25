@@ -14,6 +14,7 @@ import 'package:lopicode/agent/chat_client.dart';
 import 'package:lopicode/agent/model_config.dart';
 import 'package:lopicode/agent/protocols.dart';
 import 'package:lopicode/agent/provider_presets.dart';
+import 'package:lopicode/agent/thinking_support.dart';
 import 'package:lopicode/state/models_state.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/app_ref.dart';
@@ -253,7 +254,7 @@ class _ChannelEditScreenState extends ConsumerState<ChannelEditScreen> {
     setState(() {
       _models.removeWhere((m) => !picked.contains(m.id) && found.any((r) => r.id == m.id));
       for (final r in found) {
-        if (picked.contains(r.id) && !_models.any((m) => m.id == r.id)) _models.add(ModelSpec(id: r.id, name: r.displayName));
+        if (picked.contains(r.id) && !_models.any((m) => m.id == r.id)) _models.add(newModelSpec(_protocol, _baseUrl.text.trim(), r.id, name: r.displayName, listedThinking: r.thinking));
       }
     });
   }
@@ -281,7 +282,7 @@ class _ChannelEditScreenState extends ConsumerState<ChannelEditScreen> {
       showSnack(context, '这个模型已经在列表里了');
       return;
     }
-    setState(() => _models.add(ModelSpec(id: id.trim())));
+    setState(() => _models.add(newModelSpec(_protocol, _baseUrl.text.trim(), id.trim())));
   }
 
   Future<void> _editModel(ModelSpec m) async {

@@ -193,6 +193,8 @@ class _ModelSpecSheetState extends State<ModelSpecSheet> {
                   for (final l in kThinkingLevels) FilterChip(label: Text(thinkingLabel(l)), selected: _levels.contains(l), onSelected: (v) => setState(() => v ? _levels.add(l) : _levels.remove(l))),
                 ],
               ),
+              const SizedBox(height: Space.x1),
+              Text('有的服务商只分“关 / 开”，或者另有“最高”档；选模型时按它真实支持的显示。', style: t.bodySmall),
             ],
             const SizedBox(height: Space.x3),
             Text('单价（可不填）', style: t.labelMedium),

@@ -9,7 +9,12 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:lopicode/agent/chat_client.dart';
 import 'package:lopicode/agent/model_config.dart';
+import 'package:lopicode/agent/provider_presets.dart';
+import 'package:lopicode/agent/thinking_support.dart';
 import 'package:lopicode/agent/usage.dart';
+
+export 'package:lopicode/agent/build_chat_client.dart';
+export 'package:lopicode/agent/thinking_support.dart' show anthropicBudget;
 
 /// 一条 SSE 事件。
 class SseEvent {
@@ -91,13 +96,6 @@ Map<String, dynamic> _decodeArgs(Object? raw) {
 }
 
 // ═══════════════════════════ Anthropic Messages ═══════════════════════════
-
-/// 思考档位 → `budget_tokens`（自己定的换算，见 api-notes）。
-int anthropicBudget(String level) => switch (level) {
-  'low' => 4096,
-  'medium' => 16384,
-  _ => 32768,
-};
 
 /// OpenAI 格式的工具定义 → Anthropic 的 `tools`。
 List<Map<String, dynamic>> anthropicTools(List<Map<String, dynamic>> tools) => [
@@ -189,9 +187,17 @@ List<Map<String, dynamic>> anthropicTools(List<Map<String, dynamic>> tools) => [
 }
 
 class AnthropicChatClient implements ChatClient {
-  AnthropicChatClient({required String baseUrl, required this.apiKey, required this.model, required this.maxTokens, this.thinkingLevel, http.Client? httpClient})
-    : baseUrl = _trimBase(baseUrl, const ['/messages']),
-      _http = httpClient ?? http.Client();
+  AnthropicChatClient({
+    required String baseUrl,
+    required this.apiKey,
+    required this.model,
+    required this.maxTokens,
+    this.thinkingLevel,
+    this.adaptive = false,
+    this.whenOff = AnthropicOff.omit,
+    http.Client? httpClient,
+  }) : baseUrl = _trimBase(baseUrl, const ['/messages']),
+       _http = httpClient ?? http.Client();
 
   static const String apiVersion = '2023-06-01';
 
@@ -200,18 +206,28 @@ class AnthropicChatClient implements ChatClient {
   final String model;
   final int maxTokens;
 
-  /// `low` / `medium` / `high`；为空不开思考。
+  /// `low` / `medium` / `high`；为空＝没选档位（发什么看 [whenOff]）。
   final String? thinkingLevel;
+
+  /// 新写法（4.6 及以后的 Claude）：`thinking: {type: adaptive}` 加 `output_config: {effort}`。
+  /// false＝老写法 `thinking: {type: enabled, budget_tokens}`（4.7 及以后的模型会直接 400，见 api-notes）。
+  final bool adaptive;
+
+  /// 新写法下没选档位时发什么。
+  final AnthropicOff whenOff;
   final http.Client _http;
+
+  /// 请求体里的思考参数（没有就是空表）。
+  Map<String, dynamic> thinkingBody() => anthropicThinkingBody(level: thinkingLevel, adaptive: adaptive, whenOff: whenOff, maxTokens: maxTokens);
+
+  /// 这一次请求模型会不会思考（会的话，历史里的思考块要原样带回去）。
+  bool get _thinks => thinkingLevel != null || (adaptive && whenOff == AnthropicOff.alwaysOn);
 
   @override
   Stream<ChatDelta> streamChat({required List<Map<String, dynamic>> messages, List<Map<String, dynamic>> tools = const []}) async* {
     if (model.trim().isEmpty) throw ChatApiException('还没选模型');
     final uri = _endpoint(baseUrl, '/messages');
-    final thinking = thinkingLevel != null;
-    final converted = anthropicMessages(messages, keepThinking: thinking);
-    // 思考预算必须小于 max_tokens。
-    final budget = thinking ? anthropicBudget(thinkingLevel!).clamp(1024, maxTokens > 2048 ? maxTokens - 1024 : 1024) : 0;
+    final converted = anthropicMessages(messages, keepThinking: _thinks);
     final response = await _post(
       _http,
       uri,
@@ -223,7 +239,7 @@ class AnthropicChatClient implements ChatClient {
         if (converted.system.isNotEmpty) 'system': converted.system,
         'messages': converted.messages,
         if (tools.isNotEmpty) 'tools': anthropicTools(tools),
-        if (thinking && maxTokens > 2048) 'thinking': {'type': 'enabled', 'budget_tokens': budget},
+        ...thinkingBody(),
       },
     );
 
@@ -493,9 +509,12 @@ TokenUsage? _responseUsage(Map<String, dynamic> event) {
 // ═══════════════════════════ 模型列表 / 测试连接 ═══════════════════════════
 
 class RemoteModel {
-  RemoteModel(this.id, [this.displayName]);
+  RemoteModel(this.id, [this.displayName, this.thinking = false]);
   final String id;
   final String? displayName;
+
+  /// 模型列表自己说了这个模型能思考（目前只认 OpenRouter 的 `reasoning` 字段）。
+  final bool thinking;
 }
 
 /// 读模型列表为什么没成：界面按它分开说（Key 不对 / 没有这个接口 / 超时 / 连不上 / 返回的不是列表 / 别的错）。
@@ -540,29 +559,12 @@ Future<List<RemoteModel>> listRemoteModels({required ChatProtocol protocol, requ
     throw ModelListException(ModelListFailure.notAList, '接口返回的不是模型列表（不是 JSON），请检查接口地址');
   }
   final data = json is Map ? json['data'] : json;
+  final openRouter = presetForBaseUrl(baseUrl)?.id == 'openrouter';
   if (data is! List) throw ModelListException(ModelListFailure.notAList, '接口返回的内容里没有模型列表，请检查接口地址');
   final out = <RemoteModel>[];
   for (final m in data) {
-    if (m is Map && m['id'] is String) out.add(RemoteModel(m['id'] as String, m['display_name'] is String ? m['display_name'] as String : null));
+    if (m is Map && m['id'] is String) out.add(RemoteModel(m['id'] as String, m['display_name'] is String ? m['display_name'] as String : null, openRouter && m['reasoning'] is Map));
   }
   out.sort((a, b) => a.id.compareTo(b.id));
   return out;
-}
-
-/// 按“渠道 + 模型 + 思考档位”造客户端。
-ChatClient buildChatClient(ResolvedModel r, String apiKey, {http.Client? httpClient}) {
-  final level = r.level == 'off' ? null : r.level;
-  final m = r.model;
-  return switch (r.channel.protocol) {
-    ChatProtocol.openaiChat => OpenAiChatClient(
-      baseUrl: r.channel.baseUrl,
-      apiKey: apiKey,
-      model: m.id,
-      reasoningEffort: level,
-      maxTokens: m.maxOutput == ModelSpec.defaultMaxOutput ? null : m.maxOutput,
-      httpClient: httpClient,
-    ),
-    ChatProtocol.anthropic => AnthropicChatClient(baseUrl: r.channel.baseUrl, apiKey: apiKey, model: m.id, maxTokens: m.maxOutput, thinkingLevel: level, httpClient: httpClient),
-    ChatProtocol.openaiResponses => OpenAiResponsesClient(baseUrl: r.channel.baseUrl, apiKey: apiKey, model: m.id, maxOutputTokens: m.maxOutput, reasoningEffort: level, httpClient: httpClient),
-  };
 }

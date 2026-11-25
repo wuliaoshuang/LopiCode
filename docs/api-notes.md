@@ -47,6 +47,7 @@
 | `system` 是请求体顶层字段，不是一条消息 | 没抓到原文 | 未核对 |
 | 图片：`{type:"image", source:{type:"base64", media_type, data}}` | 没抓到原文 | 未核对 |
 | 思考：`thinking: {type:"enabled", budget_tokens: N}`，N 必须小于 `max_tokens`；开了思考后，带工具调用的那条 assistant 消息必须把 `thinking` 块连同 `signature` 原样带回 | 镜像里只看到 `{"type":"adaptive","display":"summarized"}` 这种写法，`budget_tokens` 写法没抓到原文 | 未核对。代码里把模型回复的原始内容块整条存下来、下一轮原样发回，档位换算（低 4096 / 中 16384 / 高 32768）是自己定的 |
+| （2026-11-25 更正上一行）`budget_tokens` 写法已核对：下限 1024、必须小于 `max_tokens`，只适用于 4.5 及更早的 Claude；4.6 起改用 `adaptive` 写法，4.7 及以后发 `budget_tokens` 会 400 | 见文末「2026-11-25 思考档位」 | 已核对 |
 | 模型列表：`GET {base}/models`，返回 `data[].id`、`data[].display_name`、`has_more`、`last_id`；查询参数 `limit`（1–1000，默认 20）、`after_id` | platform.claude.com/docs/en/api/http/models/list | 已核对。官方示例用的是 `Authorization: Bearer` 加新的版本号；我们发 `x-api-key` 加 `anthropic-version: 2023-06-01`（间接） |
 
 ## OpenAI Responses（`OpenAiResponsesClient`）
@@ -64,7 +65,7 @@
 
 ## Chat Completions 新用到的参数
 
-- 思考档位：`reasoning_effort`（`low` / `medium` / `high`）。**未核对**（当天没有重新打开参数表），只在模型设置里开了“思考”并且选了档位时才发。
+- 思考档位：`reasoning_effort`。2026-11-25 已重新核对，各家的取值和专属参数见文末「2026-11-25 思考档位」。只在模型标了“可思考”时才发思考参数。
 - 最大输出：只有在模型设置里改过默认值（32K）时才发 `max_tokens`。**未核对**各家兼容接口认不认；官方新模型用的是 `max_completion_tokens`，遇到报错把模型的最大输出改回 32K 就不会再发。
 - 图片：`content: [{type:"text", text}, {type:"image_url", image_url:{url:"data:<mime>;base64,..."}}]`。**未核对**（当天没有重新打开）。
 - 模型列表：`GET {base}/models`，返回 `data[].id`。**未核对**（通行做法）。“获取模型”只请求这个接口，不产生对话费用；读得到就算连接正常（2026-11-24 起不再有单独的“测试连接”按钮——它原来发的就是同一个请求）。模型行上的“测试”发的是平时对话那个请求（一句 `hi`、不带工具、收到第一段回复就断开），没有新增接口用法，会花几个 token。
@@ -418,3 +419,28 @@ PHP 估计 7.4+（PHP 那份代码从没运行过）。下面选的版本都够�
   工具说明给模型最多 600 字；工具名最长 64；确认卡上的参数最多显示 6000 字；结果超过 8000 字走“超长结果另存”。
 - 重定向：不自动跟。同一个主机（协议、主机、端口都一样）的 307 / 308 最多跟 2 次；302 / 303 不跟（会把 POST 变成 GET）；转去别的主机一律不跟——请求头里带着令牌。
 - 地址：外网必须 https；http 只能是本机或局域网（用现成的 `isLocalBaseUrl`）；地址里不许带账号密码。
+
+## 2026-11-25 思考档位：各家到底用什么参数（`lib/agent/thinking_support.dart`、`lib/agent/build_chat_client.dart`）
+
+核对时间：2026-11-25 约 11:56–12:00 UTC。**已核对**＝当天整页打开官方文档读到；**已核对（摘录）**＝官方页面抓不到全文，读的是搜索结果里摘出来的官方原文；**间接**＝只见第三方资料；**未核对**＝没找到出处。
+全部只在本地用假的 http 客户端测过请求体（`test/thinking_support_test.dart`），**没有调用过任何真实接口**。
+
+规矩：模型没标“可思考”→ 一个思考参数都不发（DeepSeek 官方地址例外，见下）。未核对的服务商 → 只走通用做法（选了档位发 `reasoning_effort: low / medium / high`，没选不发），不发任何专属参数。
+
+| 服务商（怎么认出来） | 官方怎么写 | 来源 | 状态 | 我们发什么（界面上的档位） |
+|---|---|---|---|---|
+| DeepSeek（地址 `api.deepseek.com`） | 开关 `thinking: {type: enabled / disabled}`，默认开；`reasoning_effort: low / high / max`，默认 high；`medium`、`xhigh` 会被当成 `high`，`minimal` 当 `low`。带 tools 的对话必须把 `reasoning_content` 带回，否则 400 | https://api-docs.deepseek.com/zh-cn/guides/thinking_mode/ | 已核对 | 关＝`thinking: {type: disabled}`；低 / 高 / 最高＝`reasoning_effort: low / high / max`（不再给“中”，它和“高”是同一档）。没标“可思考”也照旧发 disabled（不然默认开着白花钱） |
+| OpenAI Chat Completions（地址 `api.openai.com`） | `reasoning_effort`：`none / minimal / low / medium / high / xhigh / max`，默认 medium；“Not all reasoning models support every value” | https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create | 已核对（摘录）。哪些模型 ID 是推理模型、不支持的模型传了会怎样：**未核对** | 默认＝不发；低 / 中 / 高＝`reasoning_effort`。`none / minimal / xhigh / max` 因为按模型不同、没核对到清单，不给。不自动标“可思考” |
+| OpenAI Responses | `reasoning.effort` 同上七个值；`reasoning.summary: concise / detailed / auto` | developers.openai.com 的 Responses 参数说明 | 已核对（摘录）。没验证过的组织发 `summary` 会不会 400：**未核对**（保留原来“400 就去掉 summary 重发”的退路） | 默认＝不发；低 / 中 / 高＝`reasoning: {effort, summary: "auto"}` |
+| Anthropic Messages（协议选 Anthropic，按模型 ID 认版本） | 老写法 `thinking: {type: "enabled", budget_tokens}`：下限 1024、必须小于 `max_tokens`；4.6 上已弃用，**4.7 及以后直接 400**。新写法 `thinking: {type: "adaptive"}` 加 `output_config: {effort: low / medium / high / xhigh / max}`；4.5 及更早发 adaptive 会 400。Fable / Mythos 5.x、Opus 5.5、Sonnet 5.5 一直开着（`disabled` 会 400）；Opus 5、Sonnet 5、Haiku 5.5 默认开、可以 `disabled`；Opus 4.8 / 4.7 / 4.6、Sonnet 4.6 默认关。`display: "summarized"` 才有思考文字（5 代和 4.7 / 4.8 默认不给）。多轮要把 thinking 块原样带回 | https://platform.claude.com/docs/en/build-with-claude/extended-thinking 、同目录的 effort 、thinking-troubleshooting 、thinking 页 | 已核对。旧模型 ID 的写法（`claude-opus-4-8`、`claude-sonnet-4-5-日期`）：**间接** | 4.5 及更早、或认不出版本（第三方兼容接口）：老写法，预算低 4096 / 中 16384 / 高 32768（自己定的），压到 `[1024, max_tokens-1024]`，`max_tokens ≤ 2048` 时不发。4.6 起：`thinking: {type: adaptive, display: summarized}` 加 `output_config: {effort}`。“关”：默认关的不发；Opus 5 / Sonnet 5 / Haiku 5.5 发 `{type: disabled}`；一直开着的和没见过的更新版本显示成“默认”，只发 `thinking: {type: adaptive, display: summarized}`、并把历史里的 thinking 块带回。`xhigh / max` 按模型不同，不给 |
+| Gemini 的 OpenAI 兼容接口（地址 `generativelanguage.googleapis.com`） | `reasoning_effort: minimal / low / medium / high`；不传用模型默认；`"none"` 只有 2.5 系列（非 Pro）能关，2.5 Pro、3、4 关不掉 | https://aistudio.google.com/docs/openai | 已核对 | `gemini-2.5*` 且名字里没有 `pro`：关＝`reasoning_effort: "none"`；其余“默认”＝不发。低 / 中 / 高照发 |
+| 阿里云百炼（地址 `dashscope.aliyuncs.com`） | 千问的混合思考模型用 `enable_thinking: true / false`；“控制参数因模型而异” | https://help.aliyun.com/zh/model-studio/deep-thinking | 已核对（摘录）。哪些模型 ID 支持没逐个核对 | 模型 ID 以 `qwen` 开头：关 / 开＝`enable_thinking: false / true`，不发 `reasoning_effort`。其它模型：通用做法。不自动标“可思考” |
+| 智谱（地址 `open.bigmodel.cn`） | `thinking.type: enabled / disabled`，默认 enabled；GLM-5.3 系列传 disabled 报错、`reasoning_effort` 只收 `max / high / low`；GLM-5.2 收的值多但 low、medium 都当 high；支持思考的有 5.3、5.2、5.1、5、4.7、4.6、4.5 各系列 | https://docs.bigmodel.cn/cn/guide/capabilities/thinking | 已核对（摘录） | `glm-5.3*`：默认＝不发；低 / 高 / 最高＝`reasoning_effort`。`glm-5.2*`：关＝`thinking: {type: disabled}`；高 / 最高＝`thinking: {type: enabled}` 加 `reasoning_effort: high / max`。其余：关 / 开＝`thinking: {type: disabled / enabled}` |
+| Kimi（地址 `api.moonshot.cn` / `api.moonshot.ai`） | `kimi-k3*`：一直思考、不认 `thinking`，`reasoning_effort: low / high / max`，默认 max；`kimi-k2.7-code`：一直思考、不能调；`kimi-k2.6`：默认开，`thinking: {type: "disabled"}` 可关。多轮和工具调用必须把 assistant 消息连同 `reasoning_content` 原样带回 | https://platform.kimi.com/docs/guide/use-thinking-models | 已核对（摘录） | `kimi-k3*`：默认＝不发；低 / 高 / 最高＝`reasoning_effort`。`kimi-k2.7-code*`：什么都不发，界面写明调不了。`kimi-k2.6*`：关＝`thinking: {type: disabled}`，开＝不发。其它 ID：通用做法。官方地址或模型名带 `kimi` 时带回 `reasoning_content`（和 DeepSeek 用同一段代码） |
+| 硅基流动（地址 `api.siliconflow.cn`） | `enable_thinking: boolean`（“适用于大多数推理模型”）；`reasoning_effort` 只适用于个别列出的模型 | https://docs.siliconflow.cn/docs/api/chat-completions-post | 已核对（摘录）。不支持的模型传了会怎样：**未核对** | 关 / 开＝`enable_thinking: false / true`，不发 `reasoning_effort`。不自动标“可思考” |
+| OpenRouter（地址 `openrouter.ai`） | 认顶层 `reasoning_effort`，也有统一的 `reasoning: {effort, …}`；`GET /api/v1/models` 里能思考的模型带 `reasoning` 对象 | https://openrouter.ai/docs/guides/best-practices/reasoning-tokens | 已核对（摘录） | 默认＝不发；低 / 中 / 高＝`reasoning_effort`。“获取模型”时带 `reasoning` 对象的自动标“可思考” |
+| 火山方舟、MiniMax、xAI、Groq、腾讯混元、百度千帆、阶跃星辰、Cerebras、Ollama、自己填的中转站 | — | — | **未核对** | 通用做法，不发专属参数，不自动标 |
+
+添加模型时自动标“可思考”的规则（`knownThinkingModel`，只标上表核对到的）：DeepSeek 官方地址的 `deepseek-*`；Anthropic 协议下认得出版本的 Opus 4 / 4.1 / 4.5、Sonnet 4 / 4.5、Haiku 4.5、4.6 及以后、Fable、Mythos；Gemini 官方地址的 `gemini-2.5 / 3 / 4`；智谱地址的 `glm-4.5 / 4.6 / 4.7 / 5*`；Kimi 地址的 `kimi-k3*`、`kimi-k2.7-code*`、`kimi-k2.6*`；OpenRouter 模型列表里带 `reasoning` 对象的。其余一律不自动标，用户可以在选模型的面板里自己打开。
+
+每个模型上次设的档位存在设置键 `ai.thinkingLevels`（`{"渠道 id/模型 id": 档位}`）；档位值有 `off / on / low / medium / high / max`。旧存盘里某个模型现在不支持的档位，按“先往高找最近的一档”落（例如 DeepSeek 的 `medium` → `high`，和官方的映射一致）。
