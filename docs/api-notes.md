@@ -485,6 +485,8 @@ PHP 估计 7.4+（PHP 那份代码从没运行过）。下面选的版本都够�
 | 照片选择器要不要权限 | 不需要任何运行时权限；系统只对用户选中的那几个媒体给临时读取权 | https://developer.android.com/privacy-and-security/minimize-permission-requests | 已核对（2026-11-26） | 不声明 `READ_MEDIA_IMAGES` / `READ_EXTERNAL_STORAGE` |
 | Storage Access Framework `Intent.ACTION_OPEN_DOCUMENT`（配 `CATEGORY_OPENABLE`、类型 `image/*`） | Android 4.4（API 19）起可用；文件由用户亲手在系统界面里选，应用不需要任何系统权限就能读选中的那个文件 | https://developer.android.com/training/data-storage/shared/documents-files | 已核对（2026-11-26） | 照片选择器不可用时退到它；两个都没有时回 `no_picker` |
 
+| 照片选择器在哪些设备上有、没有时怎么办 | Android 11（API 30）起、并且能收到系统组件更新的设备上有；没有时官方自己的库也是退到 `ACTION_OPEN_DOCUMENT`（API 19 起）。Android 4.4–10 可以靠 Google Play 服务装一个移植版（要在清单里加一个 `<service>` 条目，不是权限） | https://developer.android.com/training/data-storage/shared/photo-picker | 已核对（2026-11-26，接手的人重新打开页面核对） | 我们不加那个移植版的清单条目（国内手机多半没有 Google Play 服务）：Android 7–10 上直接用系统文件选择器 |
+
 做法和上限（自己定的，不是官方规定）：
 
 - 拿到 `content://` 地址后**在原生那头**读：不把图片字节塞过通道，只交回应用缓存目录（`cacheDir/backdrop_pick/`）里一个副本的路径。
@@ -492,4 +494,4 @@ PHP 估计 7.4+（PHP 那份代码从没运行过）。下面选的版本都够�
 - 结果只有三种：成功（路径）、取消、失败（代号 `too_large` / `unsupported` / `read_failed` / `no_picker` / `no_space` / `busy`，Dart 那头换成人话，系统原始报错不给用户看）。
 - Dart 那头再校验一遍文件头（只收 JPG / PNG / WebP；GIF 拒收）和两个上限，搬进应用私有目录 `<设置所在目录>/appearance/background/`，缓存副本用完就删。
 
-没验证的：真机上两种选择器的实际样子、`inSampleSize` 降采样和 EXIF 摆正的效果（开发机上没有安卓环境可跑，只确认了 release 配置下 Kotlin 编译通过）。
+没验证的：真机上两种选择器的实际样子、`inSampleSize` 降采样和 EXIF 摆正的效果（开发机上没有安卓环境可跑；release 配置下的编译验证结果见 `docs/backdrop-integration.md` 末尾）。
