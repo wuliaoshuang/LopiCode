@@ -5,10 +5,12 @@
 // （turns、fit、tile、maskColor、brightness）——那边的规矩是“不认识的字段跳过”，带不带都不坏。
 //
 // 和我们自己的设置怎么对：
-// - crop：我们存的是相对**旋转后**的图；交出去时换算回原图坐标，收进来时按 turns 换算回去。
+// - crop：我们存的是相对**旋转后**的图。主题那边没有“转了几个 90°”这一项，所以转过的图导出时把旋转直接画进图里
+//   （重存成 PNG，turns 交出去一律是 0），裁剪区域原样交出去；收进来的数据万一带了 turns，按它换算回去。
 // - dim ＝ 遮罩深浅（0–100 → 0–1）；blur 我们最多 30，收进来超了就收到 30。
 // - 图超过 8MB：缩小长边重新存成 PNG 再试几档，还超就说明原因、不带图。
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
@@ -76,6 +78,46 @@ CropRect _snap(CropRect r) {
   return CropRect(l, t, r.width.clamp(0.0, 1 - l), r.height.clamp(0.0, 1 - t));
 }
 
+/// 把图解成长边 [side] 像素、按 [look] 的旋转摆正以后重新存成 PNG。
+Future<Uint8List?> _renderPng(Uint8List bytes, BackdropLook look, int side) async {
+  final long = look.width > look.height ? look.width : look.height;
+  final k = side / long;
+  final tw = (look.width * k).round().clamp(1, side);
+  final th = (look.height * k).round().clamp(1, side);
+  final codec = await ui.instantiateImageCodec(bytes, targetWidth: tw, targetHeight: th);
+  ui.Image img;
+  try {
+    img = (await codec.getNextFrame()).image;
+  } finally {
+    codec.dispose();
+  }
+  final turns = look.turns % 4;
+  if (turns != 0) {
+    final rec = ui.PictureRecorder();
+    final c = ui.Canvas(rec);
+    switch (turns) {
+      case 1:
+        c.translate(th.toDouble(), 0);
+        c.rotate(math.pi / 2);
+      case 2:
+        c.translate(tw.toDouble(), th.toDouble());
+        c.rotate(math.pi);
+      case 3:
+        c.translate(0, tw.toDouble());
+        c.rotate(-math.pi / 2);
+    }
+    c.drawImage(img, ui.Offset.zero, ui.Paint());
+    final pic = rec.endRecording();
+    final turned = await pic.toImage(turns.isOdd ? th : tw, turns.isOdd ? tw : th);
+    pic.dispose();
+    img.dispose();
+    img = turned;
+  }
+  final data = await img.toByteData(format: ui.ImageByteFormat.png);
+  img.dispose();
+  return data?.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+}
+
 /// 把 [look] 这张背景导出成能嵌进主题导出文件的数据。没有图、图读不出来、怎么缩都超过上限时回失败和原因。
 /// [maxBytes]、[shrinkSides] 只给测试改小用。
 Future<BackdropThemeExport> exportBackdropForTheme(BackdropStore store, BackdropLook look, {int maxBytes = kThemeBackdropMaxBytes, List<int> shrinkSides = kThemeBackdropShrinkSides}) async {
@@ -90,26 +132,18 @@ Future<BackdropThemeExport> exportBackdropForTheme(BackdropStore store, Backdrop
   var format = sniffBackdropFormat(bytes);
   if (format == null || format == BackdropFormat.gif) return const BackdropThemeExport.fail('背景图片的文件坏了，带不上。');
   final notes = <String>[];
-  if (bytes.length > maxBytes) {
+  // 主题文件里没有“转了几个 90°”这一项：转过的图导出时直接把旋转画进图里（存成 PNG），那边不用知道转没转过。
+  final baked = look.turns % 4 != 0;
+  if (baked || bytes.length > maxBytes) {
     // 太大：缩小长边存成 PNG 再试（裁剪区域是比例，不受影响）
+    final long = look.width > look.height ? look.width : look.height;
     Uint8List? fit;
     int? side;
     try {
-      for (final s in shrinkSides) {
-        final long = look.width > look.height ? look.width : look.height;
-        if (s >= long) continue;
-        final k = s / long;
-        final codec = await ui.instantiateImageCodec(bytes, targetWidth: (look.width * k).round().clamp(1, s), targetHeight: (look.height * k).round().clamp(1, s));
-        final ui.Image img;
-        try {
-          img = (await codec.getNextFrame()).image;
-        } finally {
-          codec.dispose();
-        }
-        final data = await img.toByteData(format: ui.ImageByteFormat.png);
-        img.dispose();
-        if (data != null && data.lengthInBytes <= maxBytes) {
-          fit = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+      for (final s in [if (baked) long, ...shrinkSides.where((s) => s < long)]) {
+        final png = await _renderPng(bytes, look, s);
+        if (png != null && png.length <= maxBytes) {
+          fit = png;
           side = s;
           break;
         }
@@ -117,14 +151,15 @@ Future<BackdropThemeExport> exportBackdropForTheme(BackdropStore store, Backdrop
     } on Exception {
       return const BackdropThemeExport.fail('背景图片解不开，带不上。');
     }
-    if (fit == null) {
+    if (fit == null || side == null) {
       return BackdropThemeExport.fail('背景图片太大了（${_mb(bytes.length)}），主题文件里最多带 ${_mb(maxBytes)} 的图，缩小以后还是放不下。这次导出不带图。');
     }
-    notes.add('背景图片超过 ${_mb(maxBytes)}，导出时缩小到了长边 $side 像素。');
+    if (side < long) notes.add('背景图片超过 ${_mb(maxBytes)}，导出时缩小到了长边 $side 像素。');
     bytes = fit;
     format = BackdropFormat.png;
   }
-  final crop = _snap(cropToOriginal(look.crop, look.turns));
+  // 交出去的图已经是转好的样子，所以裁剪区域就是我们存的那个（相对旋转后的图），turns 一律是 0
+  final crop = _snap(look.crop);
   return BackdropThemeExport.ok({
     'mime': _mimeOf(format),
     'bytes': bytes,
@@ -135,7 +170,7 @@ Future<BackdropThemeExport> exportBackdropForTheme(BackdropStore store, Backdrop
     'dim': look.maskOpacity / 100,
     'blur': look.blur.toDouble(),
     // 下面几项主题那边现在还没有（不认识会跳过）
-    'turns': look.turns,
+    'turns': 0,
     'fit': look.fit.name,
     'tile': look.tilePercent,
     'maskColor': look.maskFollowsTheme ? null : look.maskColor & 0xFFFFFF,

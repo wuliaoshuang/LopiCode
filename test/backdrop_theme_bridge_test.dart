@@ -105,8 +105,8 @@ void main() {
       expect(r.error, contains('没有背景图片'));
     });
 
-    test('导出：字段照主题那边的名字；裁剪换回原图坐标；另一台设备导入后图、裁剪、旋转、效果都一样', () async {
-      await seed(await makePng(80, 60), crop: const CropRect(0.1, 0.2, 0.3, 0.4), turns: 1);
+    test('导出：字段照主题那边的名字；没转过的图原样带上；另一台设备导入后图、裁剪、效果都一样', () async {
+      await seed(await makePng(80, 60), crop: const CropRect(0.1, 0.2, 0.3, 0.4));
       n().updateLook(dark: false, change: (l) => l.copyWith(maskOpacity: 35, blur: 12, brightness: -20, fit: BackdropFit.tile, tilePercent: 40, maskFollowsTheme: false, maskColor: 0xFF1B2A4A));
       final r = await n().exportForTheme(dark: false);
       expect(r.error, isNull);
@@ -114,11 +114,11 @@ void main() {
       final d = r.data!;
       expect(d['mime'], 'image/png');
       expect(d['bytes'], isA<Uint8List>());
-      expect(sniffBackdropFormat(d['bytes']! as Uint8List), BackdropFormat.png);
-      expectCrop(CropRect(d['cropX']! as double, d['cropY']! as double, d['cropW']! as double, d['cropH']! as double), cropToOriginal(const CropRect(0.1, 0.2, 0.3, 0.4), 1));
+      expect(d['bytes'], await store().imageFile(s().light.file!).readAsBytes(), reason: '没转过、没超限：文件原样带上');
+      expectCrop(CropRect(d['cropX']! as double, d['cropY']! as double, d['cropW']! as double, d['cropH']! as double), const CropRect(0.1, 0.2, 0.3, 0.4));
       expect(d['dim'], 0.35);
       expect(d['blur'], 12.0);
-      expect((d['turns'], d['fit'], d['tile'], d['maskColor'], d['brightness']), (1, 'tile', 40, 0x1B2A4A, -20));
+      expect((d['turns'], d['fit'], d['tile'], d['maskColor'], d['brightness']), (0, 'tile', 40, 0x1B2A4A, -20));
 
       final other = open('b');
       addTearDown(other.dispose);
@@ -136,6 +136,37 @@ void main() {
       addTearDown(again.dispose);
       await again.read(backdropProvider.notifier).ready;
       expect(again.read(backdropProvider).light.file, got.light.file);
+    });
+
+    test('转过的图：导出时把旋转画进图里（主题那边没有“转了几个 90°”这一项），只认主题那几个字段的一方导入后看到的也是转好的样子', () async {
+      // 80×60，顺时针转 90° 以后是 60×80：原来左下的蓝到了左上，左上的红到了右上
+      await seed(await makePng(80, 60), crop: const CropRect(0.1, 0.2, 0.3, 0.4), turns: 1);
+      final r = await n().exportForTheme(dark: false);
+      expect(r.error, isNull);
+      expect(r.notes, isEmpty);
+      final d = r.data!;
+      expect((d['mime'], d['turns']), ('image/png', 0));
+      expectCrop(CropRect(d['cropX']! as double, d['cropY']! as double, d['cropW']! as double, d['cropH']! as double), const CropRect(0.1, 0.2, 0.3, 0.4));
+      final codec = await ui.instantiateImageCodec(d['bytes']! as Uint8List);
+      final img = (await codec.getNextFrame()).image;
+      codec.dispose();
+      expect((img.width, img.height), (60, 80));
+      final px = (await img.toByteData())!;
+      int rgb(int x, int y) => (px.getUint8((y * 60 + x) * 4) << 16) | (px.getUint8((y * 60 + x) * 4 + 1) << 8) | px.getUint8((y * 60 + x) * 4 + 2);
+      expect((rgb(5, 5), rgb(54, 5), rgb(5, 74), rgb(54, 74)), (0x2E5FD0, 0xD23A3A, 0xE8B923, 0x2FA35B), reason: '左上蓝、右上红、左下黄、右下绿');
+      img.dispose();
+
+      // 只带主题格式里有的那几项（主题文件现在就是这样存的）
+      final other = open('b');
+      addTearDown(other.dispose);
+      final slim = {
+        for (final k in const ['mime', 'bytes', 'cropX', 'cropY', 'cropW', 'cropH', 'dim', 'blur']) k: d[k],
+      };
+      expect(await other.read(backdropProvider.notifier).applyThemeBackground(slim), isNull);
+      final got = other.read(backdropProvider).light;
+      expect((got.width, got.height, got.turns), (60, 80, 0));
+      expect((got.rotatedWidth, got.rotatedHeight), (s().light.rotatedWidth, s().light.rotatedHeight));
+      expectCrop(got.crop, s().light.crop);
     });
 
     test('只带主题那边认识的字段（mime、bytes、crop、dim、blur）也能导入：其余保持原样；模糊、压暗超范围收回来；裁剪不合理当没裁', () async {

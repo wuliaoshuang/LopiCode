@@ -234,6 +234,20 @@ void main() {
       expect(await images.load(bad).timeout(const Duration(seconds: 20)), isNull);
     });
 
+    test('按屏幕降采样：长边比上限大的解成上限那么大（比例不变），不超的原样解', () async {
+      final images = BackdropImages.instance;
+      images.decodeSideOverride = 100;
+      final wide = await images.load(writePick(tmp, 'wide.png', await makePng(400, 200))).timeout(const Duration(seconds: 20));
+      expect((wide!.width, wide.height), (100, 50));
+      final tall = await images.load(writePick(tmp, 'tall.png', await makePng(150, 300))).timeout(const Duration(seconds: 20));
+      expect((tall!.width, tall.height), (50, 100));
+      final small = await images.load(writePick(tmp, 'small.png', await makePng(100, 60))).timeout(const Duration(seconds: 20));
+      expect((small!.width, small.height), (100, 60));
+      // 上限按屏幕算：不低于 kMinDecodeSide
+      images.decodeSideOverride = null;
+      expect(images.decodeSide == 0 || images.decodeSide >= kMinDecodeSide, isTrue);
+    });
+
     test('最多记 ${BackdropImages.kMaxSources} 张，多了丢最久没用的', () async {
       final images = BackdropImages.instance;
       final paths = [for (var i = 0; i < BackdropImages.kMaxSources + 1; i++) writePick(tmp, 'i$i.png', await makePng(8 + i, 8))];

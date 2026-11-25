@@ -1,6 +1,8 @@
 // 背景图片的解码缓存和“模糊好的小图”缓存（界面层；全应用一份）。
 //
 // - 同一个文件只解码一次：解好的图按路径记着，各页面共用，切页面不用重新解、不闪。
+// - 解码按屏幕降采样：图的长边比这台手机屏幕的物理像素长边（不低于 [kMinDecodeSide]）还大时，直接解成小的，
+//   省内存（一张 2560×1440 的图解开要 14MB，720p 的手机上解成 1600 长边只要 5MB 多）。裁剪区域是比例，不受影响。
 //   最多记 [kMaxSources] 张（浅色、深色各一张 + 裁剪页临时的一张），多了丢最久没用的。
 // - 模糊不每帧算：按“哪张图、哪块区域、多糊”预先画一张**缩小的**模糊图记着（模糊本来就没细节，
 //   缩小到模糊半径约 4 像素的分辨率就够，画的时候再放大），之后每帧只是贴一张小图。
@@ -12,6 +14,9 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/painting.dart';
 import 'package:lopicode/backdrop/crop_math.dart';
+
+/// 按屏幕降采样时长边的下限：屏幕再小也至少解到这么大（裁剪放大以后不至于太糊）。
+const int kMinDecodeSide = 1280;
 
 /// 模糊小图里，模糊半径最多占几个像素（越小图越小、越省，太小会看出马赛克）。
 const double kBlurSigmaPixels = 4;
@@ -33,6 +38,20 @@ class BackdropImages {
   /// 算了几张模糊图（测试用来确认“不是每帧重算”）。
   int blurCount = 0;
 
+  /// 解码时长边最多多少像素。null＝按屏幕算（见 [decodeSide]）；测试里可以写死。
+  int? decodeSideOverride;
+
+  /// 解码时长边的上限：屏幕物理像素的长边，不低于 [kMinDecodeSide]；拿不到屏幕就不限（返回 0）。
+  int get decodeSide {
+    final fixed = decodeSideOverride;
+    if (fixed != null) return fixed;
+    var side = 0.0;
+    for (final v in ui.PlatformDispatcher.instance.views) {
+      side = math.max(side, v.physicalSize.longestSide);
+    }
+    return side <= 0 ? 0 : math.max(kMinDecodeSide, side.ceil());
+  }
+
   /// 已经解好的图；没解好返回 null（调用方去 [load]）。
   ui.Image? peek(String path) {
     final img = _sources.remove(path);
@@ -53,12 +72,24 @@ class BackdropImages {
   Future<ui.Image?> _decode(String path) async {
     try {
       final bytes = await File(path).readAsBytes();
-      final codec = await ui.instantiateImageCodec(bytes);
+      final buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
       final ui.Image image;
+      ui.ImageDescriptor? desc;
       try {
-        image = (await codec.getNextFrame()).image;
+        desc = await ui.ImageDescriptor.encoded(buffer);
+        // 比屏幕还大就直接解成小的（只给长的那一边，另一边按比例来）
+        final limit = decodeSide;
+        final wide = desc.width >= desc.height;
+        final shrink = limit > 0 && math.max(desc.width, desc.height) > limit;
+        final codec = await desc.instantiateCodec(targetWidth: shrink && wide ? limit : null, targetHeight: shrink && !wide ? limit : null);
+        try {
+          image = (await codec.getNextFrame()).image;
+        } finally {
+          codec.dispose();
+        }
       } finally {
-        codec.dispose();
+        desc?.dispose();
+        buffer.dispose();
       }
       decodeCount++;
       _sources[path] = image;
@@ -120,6 +151,7 @@ class BackdropImages {
     _sources.clear();
     _blurred.clear();
     _loading.clear();
+    decodeSideOverride = null;
     decodeCount = 0;
     blurCount = 0;
   }
