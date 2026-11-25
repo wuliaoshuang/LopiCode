@@ -42,7 +42,9 @@ class MessageOps {
   /// 这一轮里派出去的子代理对话（整轮删时会一起删）。
   List<String> childConversationsOf(DeleteResult result) => [
     for (final item in _run.items)
-      if (item is ToolItem && item.childConversationId != null && result.goneCallIds.contains(item.callId)) item.childConversationId!,
+      // 只算这段对话自己派出去的：分支 / 旧版本里抄来的调用连着的是原对话的子代理，不归这里删
+      if (item is ToolItem && item.childConversationId != null && result.goneCallIds.contains(item.callId) && core.dir.byId(item.childConversationId)?.parentId == _run.convId)
+        item.childConversationId!,
   ];
 
   /// 删一条 / 删一整轮。成功返回 null；没删成返回原因（给用户看）。

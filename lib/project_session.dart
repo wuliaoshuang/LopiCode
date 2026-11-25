@@ -31,6 +31,7 @@ import 'package:lopicode/session/chat_models.dart';
 import 'package:lopicode/session/compact_flow.dart';
 import 'package:lopicode/session/conversation.dart';
 import 'package:lopicode/session/message_actions.dart';
+import 'package:lopicode/session/message_branches.dart';
 import 'package:lopicode/session/send_flow.dart';
 import 'package:lopicode/session/session_core.dart';
 import 'package:lopicode/session/subagents.dart';
@@ -77,6 +78,14 @@ class ProjectSession {
 
   /// 对当前对话里一条消息的操作（删除、导出、收藏；规矩在 lib/session/message_actions.dart）。
   late final MessageOps messageOps = MessageOps(_core, dropConversations: _dropConversations);
+
+  /// 重试、编辑、分支（规矩在 lib/session/message_branches.dart）。
+  late final MessageBranches branches = MessageBranches(
+    _core,
+    send: (text, {images = const []}) => _sending.send(text, images: images),
+    loadChat: loadChat,
+    open: selectConversation,
+  );
 
   /// 测试用：换掉执行命令的环境、联网搜索的客户端。
   CommandRunner Function()? commandRunnerFactory;

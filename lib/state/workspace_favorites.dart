@@ -93,6 +93,21 @@ class FavoritesNotifier extends Notifier<FavoritesState> {
     await _save();
   }
 
+  /// 这些消息被挪到另一段对话里了（重试 / 编辑时另存的旧版本，消息 id 不变）：收藏跟过去，照样能跳回原消息。
+  Future<void> moveTo(String convId, Set<String> messageIds, String toConvId) async {
+    if (!_snap.loaded) await load();
+    if (!_snap.items.any((f) => f.convId == convId && messageIds.contains(f.messageId))) return;
+    final taken = {for (final f in _snap.items) f.key};
+    _set([
+      for (final f in _snap.items)
+        if (f.convId == convId && messageIds.contains(f.messageId) && !taken.contains('$toConvId/${f.messageId}'))
+          FavoriteMessage(convId: toConvId, messageId: f.messageId, role: f.role, text: f.text, convTitle: f.convTitle, savedAt: f.savedAt, gone: f.gone)
+        else
+          f,
+    ]);
+    await _save();
+  }
+
   /// 原消息被删了：收藏留着（文字快照还在），标成“原消息已删除”。
   Future<void> markGone(String convId, Set<String> messageIds) async {
     if (!_snap.loaded) await load();

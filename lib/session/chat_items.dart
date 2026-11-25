@@ -6,9 +6,20 @@ import 'package:lopicode/agent/message_ids.dart';
 import 'package:lopicode/agent/usage.dart';
 import 'package:lopicode/session/chat_models.dart';
 
+/// 分支 / 旧版本里：带工具调用的那条消息上记着“哪次 spawn_agent 调用 → 原来那段子对话的 id”。
+/// 子对话不复制，卡片点开的还是原来那段。以 `_` 开头，不会发给模型。
+const String kChildLinksKey = '_kids';
+
 /// [childConversationIds]：这段对话派出的子代理对话，按派出顺序；第几次 spawn_agent 调用就对上第几个。
 /// [hostPathOf]：把附件的相对路径换成手机上的真实路径。
-List<ChatItem> chatItemsFromMessages(List<Map<String, dynamic>> messages, {required List<String> childConversationIds, required String Function(String rel) hostPathOf}) {
+/// [conversationExists]：分支 / 旧版本里抄过来的 spawn_agent 调用，消息上记着它当初对应哪段子对话（[kChildLinksKey]）；
+/// 那段子对话还在才连上（不在了卡片就点不开），而且不占“第几个”的名额。
+List<ChatItem> chatItemsFromMessages(
+  List<Map<String, dynamic>> messages, {
+  required List<String> childConversationIds,
+  required String Function(String rel) hostPathOf,
+  bool Function(String id)? conversationExists,
+}) {
   final items = <ChatItem>[];
   final toolAt = <String, int>{};
   var kid = 0;
@@ -42,17 +53,19 @@ List<ChatItem> chatItemsFromMessages(List<Map<String, dynamic>> messages, {requi
         final text = m['content'];
         if (text is String && text.isNotEmpty) items.add(AssistantItem(text, id: messageIdOf(m)));
         final calls = m['tool_calls'];
+        final links = m[kChildLinksKey];
         for (final c in calls is List ? calls : const []) {
           if (c is! Map) continue;
           final fn = c['function'];
           final name = fn is Map ? '${fn['name']}' : '';
-          final item = ToolItem(
-            '${c['id']}',
-            name,
-            fn is Map ? '${fn['arguments']}' : '',
-            result: '（没有记录到结果）',
-            childConversationId: name == 'spawn_agent' && kid < childConversationIds.length ? childConversationIds[kid++] : null,
-          );
+          final linked = links is Map ? links['${c['id']}'] : null;
+          final String? child;
+          if (linked is String) {
+            child = conversationExists?.call(linked) ?? true ? linked : null;
+          } else {
+            child = name == 'spawn_agent' && kid < childConversationIds.length ? childConversationIds[kid++] : null;
+          }
+          final item = ToolItem('${c['id']}', name, fn is Map ? '${fn['arguments']}' : '', result: '（没有记录到结果）', childConversationId: child);
           toolAt[item.callId] = items.length;
           items.add(item);
         }

@@ -22,6 +22,7 @@ import 'package:lopicode/core/stores.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/session/chat_items.dart';
 import 'package:lopicode/session/turn_journal.dart';
+import 'package:lopicode/state/message_edit.dart';
 import 'package:lopicode/state/team_state.dart';
 import 'package:lopicode/state/workspace_chat.dart';
 import 'package:lopicode/state/workspace_conversations.dart';
@@ -75,6 +76,7 @@ class SessionCore {
     box.invalidate(sendQueueProvider(session));
     box.invalidate(favoritesProvider(session));
     box.invalidate(chatJumpProvider(session));
+    box.invalidate(messageEditProvider(session));
     for (final id in boards.keys) {
       box.invalidate(teamProvider((session, id)));
     }
@@ -191,7 +193,7 @@ class SessionCore {
   /// 从接口格式的消息记录重建界面条目（记录是唯一的事实来源）。
   void rebuildItems(ChatRunNotifier run) {
     final kids = dir.all.where((c) => c.parentId == run.convId).toList()..sort((a, b) => a.updatedAt.compareTo(b.updatedAt));
-    run.setItems(chatItemsFromMessages(run.messages, childConversationIds: [for (final k in kids) k.id], hostPathOf: hostPathOfAttachment));
+    run.setItems(chatItemsFromMessages(run.messages, childConversationIds: [for (final k in kids) k.id], hostPathOf: hostPathOfAttachment, conversationExists: (id) => dir.byId(id) != null));
   }
 
   Future<void> saveRun(ChatRunNotifier run) async {

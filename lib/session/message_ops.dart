@@ -211,6 +211,13 @@ List<Map<String, dynamic>> _dropOrphanResults(List<Map<String, dynamic>> message
   return out;
 }
 
+/// 兜底收拾：找不到调用的工具结果拿掉，缺结果的工具调用补一条说明。返回新列表（重试 / 编辑 / 分支截断记录后也用它）。
+List<Map<String, dynamic>> tidyForWire(List<Map<String, dynamic>> messages) {
+  final clean = _dropOrphanResults(messages);
+  repairDanglingCalls(clean);
+  return clean;
+}
+
 DeleteResult _finish(List<Map<String, dynamic>> next, Set<String> goneIds, Set<String> goneCallIds) {
   final clean = _dropOrphanResults(next);
   repairDanglingCalls(clean);
