@@ -2,6 +2,7 @@
 import 'dart:async';
 
 import 'package:lopicode/agent/agent_tools.dart';
+import 'package:lopicode/agent/line_diff.dart';
 import 'package:lopicode/agent/usage.dart';
 
 /// 对话里显示的一项。
@@ -26,7 +27,10 @@ class AssistantItem extends ChatItem {
 }
 
 class ToolItem extends ChatItem {
-  const ToolItem(this.callId, this.name, this.arguments, {this.result, this.ok = true, this.denied = false, this.childConversationId});
+  const ToolItem(this.callId, this.name, this.arguments, {this.result, this.ok = true, this.denied = false, this.childConversationId, this.change});
+
+  /// 这一步把文件改成了什么样（精简的对比，不带全文）；没改文件、旧记录里没存就是 null。
+  final FileChange? change;
   final String callId;
   final String name;
   final String arguments;
@@ -38,8 +42,16 @@ class ToolItem extends ChatItem {
   /// 派子代理的调用：对应的子对话。
   final String? childConversationId;
 
-  ToolItem copyWith({String? result, bool? ok, bool? denied, String? childConversationId}) =>
-      ToolItem(callId, name, arguments, result: result ?? this.result, ok: ok ?? this.ok, denied: denied ?? this.denied, childConversationId: childConversationId ?? this.childConversationId);
+  ToolItem copyWith({String? result, bool? ok, bool? denied, String? childConversationId, FileChange? change}) => ToolItem(
+    callId,
+    name,
+    arguments,
+    result: result ?? this.result,
+    ok: ok ?? this.ok,
+    denied: denied ?? this.denied,
+    childConversationId: childConversationId ?? this.childConversationId,
+    change: change ?? this.change,
+  );
 }
 
 /// 模型的一段思考。[streaming]＝还在想；想完后 [ms] 是想了多久（旧记录里没存就是 null）。
@@ -84,6 +96,12 @@ class ContextUsage {
   /// true＝按字数估的“预计下次请求”；false＝接口返回的“上次请求”。
   final bool estimated;
   double get fraction => (used / limit).clamp(0.0, 1.0);
+}
+
+/// 一轮结束后，回复下方那行“改了 N 个文件”。[files] 是这一轮合并后的改动（子代理改的也在里面）。
+class ChangedFilesItem extends ChatItem {
+  const ChangedFilesItem(this.files);
+  final List<FileChange> files;
 }
 
 /// 一轮结束后，回复下方那行用量。

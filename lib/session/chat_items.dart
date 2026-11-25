@@ -1,5 +1,6 @@
 // 从接口格式的消息记录重建聊天页显示的条目。纯计算：不读盘、不碰状态。
 import 'package:lopicode/agent/auto_compact.dart';
+import 'package:lopicode/agent/line_diff.dart';
 import 'package:lopicode/agent/usage.dart';
 import 'package:lopicode/session/chat_models.dart';
 
@@ -53,9 +54,18 @@ List<ChatItem> chatItemsFromMessages(List<Map<String, dynamic>> messages, {requi
         final at = toolAt['${m['tool_call_id']}'];
         if (at != null) {
           final result = '${m['content'] ?? ''}';
-          items[at] = (items[at] as ToolItem).copyWith(result: result, ok: !result.startsWith('错误') && !result.startsWith('用户拒绝'), denied: result.startsWith('用户拒绝'));
+          // `_diff`：这一步的改动对比（旧记录没有；类型不对就当没有）。
+          items[at] = (items[at] as ToolItem).copyWith(
+            result: result,
+            ok: !result.startsWith('错误') && !result.startsWith('用户拒绝'),
+            denied: result.startsWith('用户拒绝'),
+            change: FileChange.tryParse(m['_diff']),
+          );
         }
     }
+    // `_files`：这一轮改过的文件（旧记录没有）。排在用量脚注前面。
+    final files = parseFileChanges(m['_files']);
+    if (files.isNotEmpty) items.add(ChangedFilesItem(files));
     final turn = TurnUsage.fromJson(m['_usage']);
     if (turn != null) items.add(UsageItem(turn));
   }

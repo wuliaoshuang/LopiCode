@@ -130,7 +130,7 @@ class AgentRunner {
   static const String defaultSystemPrompt =
       '你是 LopiCode 里的编程助手，在用户手机上帮他完成一个代码项目。\n'
       '- 用提供的工具查看和修改项目文件；所有路径都是项目内的相对路径。\n'
-      '- 改文件前先读一下相关文件；写文件时给出完整内容。\n'
+      '- 改文件前先读一下相关文件。改已有文件优先用 edit_file（只换要改的那一段）；新建文件或整份重写才用 write_file，这时给出完整内容。\n'
       '- 执行命令和删除文件需要用户确认，被拒绝后不要重复请求，换个办法或说明情况。\n'
       '- 手机自带的 shell 没有编译器和包管理器，不要假设能运行 npm、flutter、gradle。\n'
       '- 用户消息里的 @路径 指项目里的那个文件，回答前先读它。\n'
@@ -473,7 +473,7 @@ class AgentRunner {
             if (nudge != null) outcome = outcome.withText('${outcome.text}$nudge');
           }
           // 每个 tool_call 都必须有对应的 tool 消息，否则下一次请求会被接口拒绝。
-          messages.add({'role': 'tool', 'tool_call_id': batch[k].id, 'content': outcome.text});
+          messages.add({'role': 'tool', 'tool_call_id': batch[k].id, 'content': outcome.text, '_diff': ?outcome.change?.slim.toJson()});
           yield ToolFinished(batch[k].id, batch[k].name, outcome);
         }
         if (verdicts.contains(LoopVerdict.stop)) {

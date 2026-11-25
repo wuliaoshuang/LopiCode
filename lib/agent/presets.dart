@@ -5,6 +5,7 @@ const Map<String, String> kToolLabels = {
   'list_files': '查看文件列表',
   'read_file': '读取文件',
   'write_file': '写入文件',
+  'edit_file': '局部修改文件',
   'delete_file': '删除文件',
   'run_command': '执行命令',
   'lowcode_get_page': '读取低代码页面',
