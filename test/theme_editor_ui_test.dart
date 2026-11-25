@@ -346,7 +346,7 @@ void main() {
       );
       expect(k('theme-preview-ui'), findsOneWidget);
       await shot(tester, 'editor-ui-dark');
-      for (final (label, kind) in [('代码', 'code'), ('积木', 'blocks'), ('终端', 'terminal'), ('搭建', 'lowcode')]) {
+      for (final (label, kind) in [('代码', 'code'), ('积木', 'blocks'), ('搭建', 'lowcode'), ('终端', 'terminal')]) {
         await tester.tap(find.descendant(of: k('theme-preview-kind'), matching: find.text(label)));
         await tester.pumpAndSettle();
         expect(k('theme-preview-$kind'), findsOneWidget);
