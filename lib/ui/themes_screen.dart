@@ -215,15 +215,17 @@ class _ThemesScreenState extends ConsumerState<ThemesScreen> {
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(Space.x1, 0, Space.x1, Space.x2),
-              child: Text(
-                dark ? '颜色模式是深色（或跟随系统且手机是深色）时用选中的这套。点一张卡就换上。' : '颜色模式是浅色（或跟随系统且手机是浅色）时用选中的这套。点一张卡就换上。',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: c.textMuted),
-              ),
+              child: Text(dark ? '颜色模式是深色（或跟随系统且手机是深色）时用选中的这套。点一张卡就换上。' : '颜色模式是浅色（或跟随系统且手机是浅色）时用选中的这套。点一张卡就换上。', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: c.textMuted)),
             ),
             for (final t in choices)
               Padding(
                 padding: const EdgeInsets.only(bottom: Space.x2),
-                child: _ThemeCard(theme: t, inUse: t.id == current.id, onTap: () => _select(t), onMore: () => _more(t, inUse: t.id == current.id)),
+                child: _ThemeCard(
+                  theme: t,
+                  inUse: t.id == current.id,
+                  onTap: () => _select(t),
+                  onMore: () => _more(t, inUse: t.id == current.id),
+                ),
               ),
           ],
         ),
@@ -346,10 +348,7 @@ class ThemeMiniLook extends StatelessWidget {
               width: 20 * u,
               color: theme.codeColor(CodeKey.bg),
               padding: EdgeInsets.symmetric(vertical: 8 * u),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [for (final f in kBlockCategoryFields.take(3)) bar(theme.blockColor(f.key), 10, 8)],
-              ),
+              child: Column(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [for (final f in kBlockCategoryFields.take(3)) bar(theme.blockColor(f.key), 10, 8)]),
             ),
           ],
         ),

@@ -145,7 +145,12 @@ class _ThemeEditorScreenState extends ConsumerState<ThemeEditorScreen> {
         _ => _kind,
       };
     });
-    await showThemeColorSheet(context, item: item, spec: () => _spec, onChanged: (c) => _apply(setItemColor(_spec, item, c), tag: tag));
+    await showThemeColorSheet(
+      context,
+      item: item,
+      spec: () => _spec,
+      onChanged: (c) => _apply(setItemColor(_spec, item, c), tag: tag),
+    );
     if (!mounted) return;
     setState(() => _sheetOpen = false);
     final after = itemColor(_spec, item);
@@ -163,7 +168,10 @@ class _ThemeEditorScreenState extends ConsumerState<ThemeEditorScreen> {
       accent: _spec.ui[UiKey.accentFill] ?? _spec.ui[UiKey.accent] ?? 0xFF2962CB,
       tint: _spec.ui[UiKey.bg] ?? 0xFFFFFFFF,
       // 每次都从打开面板之前的那份算起（不在算过的结果上再叠一遍）。
-      onChanged: (accent, tint) => _apply(full ? generateTheme(dark: before.current.dark, tint: tint, accent: accent, shell: before.current) : reaccentTheme(before.current, accent), tag: tag),
+      onChanged: (accent, tint) => _apply(
+        full ? generateTheme(dark: before.current.dark, tint: tint, accent: accent, shell: before.current) : reaccentTheme(before.current, accent),
+        tag: tag,
+      ),
     );
     if (!mounted) return;
     setState(() {
@@ -253,8 +261,18 @@ class _ThemeEditorScreenState extends ConsumerState<ThemeEditorScreen> {
         title: const Text('改动还没保存'),
         content: const Text('现在离开，这次的改动就没了。'),
         actions: [
-          TextButton(key: const Key('theme-leave-discard'), onPressed: () => Navigator.pop(context, 'discard'), style: TextButton.styleFrom(foregroundColor: context.colors.danger), child: const Text('不保存')),
-          TextButton(key: const Key('theme-leave-stay'), onPressed: () => Navigator.pop(context, 'stay'), style: TextButton.styleFrom(foregroundColor: context.colors.textMuted), child: const Text('继续编辑')),
+          TextButton(
+            key: const Key('theme-leave-discard'),
+            onPressed: () => Navigator.pop(context, 'discard'),
+            style: TextButton.styleFrom(foregroundColor: context.colors.danger),
+            child: const Text('不保存'),
+          ),
+          TextButton(
+            key: const Key('theme-leave-stay'),
+            onPressed: () => Navigator.pop(context, 'stay'),
+            style: TextButton.styleFrom(foregroundColor: context.colors.textMuted),
+            child: const Text('继续编辑'),
+          ),
           TextButton(key: const Key('theme-leave-save'), onPressed: () => Navigator.pop(context, 'save'), child: const Text('保存并离开')),
         ],
       ),
@@ -291,7 +309,9 @@ class _ThemeEditorScreenState extends ConsumerState<ThemeEditorScreen> {
           final total = s == _kMetrics ? kMetricFields.length : kThemeItems.where((i) => i.section == s).length;
           return DecoratedBox(
             decoration: BoxDecoration(
-              border: Border(top: BorderSide(color: c.border, width: c.hairline)),
+              border: Border(
+                top: BorderSide(color: c.border, width: c.hairline),
+              ),
             ),
             child: ThemeSectionHeader(
               id: s,
@@ -380,7 +400,10 @@ class _ThemeEditorScreenState extends ConsumerState<ThemeEditorScreen> {
                         borderRadius: BorderRadius.circular(Radii.md),
                         border: Border.all(color: c.border),
                       ),
-                      child: SizedBox(height: kThemePreviewHeight, child: ThemePreview(spec: _spec, kind: _kind)),
+                      child: SizedBox(
+                        height: kThemePreviewHeight,
+                        child: ThemePreview(spec: _spec, kind: _kind),
+                      ),
                     ),
                   ),
                 ),

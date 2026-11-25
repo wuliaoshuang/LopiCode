@@ -123,10 +123,7 @@ class _UiPreview extends StatelessWidget {
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(Space.x3, 6, Space.x3, 0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [bubble('Agent 的回复', c.bubbleAgentBg, c.bubbleAgentText), bubble('我发的消息', c.bubbleMineBg, c.bubbleMineText)],
-            ),
+            child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [bubble('Agent 的回复', c.bubbleAgentBg, c.bubbleAgentText), bubble('我发的消息', c.bubbleMineBg, c.bubbleMineText)]),
           ),
           Container(
             margin: const EdgeInsets.only(top: 6),
@@ -257,11 +254,20 @@ class _CodePreview extends StatelessWidget {
           children: [
             SizedBox(
               width: 28,
-              child: Text('${i + 1}', textAlign: TextAlign.end, style: _mono.copyWith(color: spec.codeColor(current ? CodeKey.lineNumberActive : CodeKey.lineNumber))),
+              child: Text(
+                '${i + 1}',
+                textAlign: TextAlign.end,
+                style: _mono.copyWith(color: spec.codeColor(current ? CodeKey.lineNumberActive : CodeKey.lineNumber)),
+              ),
             ),
             const SizedBox(width: Space.x2),
             Flexible(
-              child: Text.rich(highlightCode(_codeLines[i], 'js', theme: spec, base: base), maxLines: 1, softWrap: false, overflow: TextOverflow.clip),
+              child: Text.rich(
+                highlightCode(_codeLines[i], 'js', theme: spec, base: base),
+                maxLines: 1,
+                softWrap: false,
+                overflow: TextOverflow.clip,
+              ),
             ),
             if (current) Container(width: 2, height: 14, color: spec.codeColor(CodeKey.cursor)),
           ],
@@ -272,7 +278,13 @@ class _CodePreview extends StatelessWidget {
     Widget diff(String sign, String text, Color bg, Color ink) => Container(
       color: bg,
       padding: const EdgeInsets.only(left: Space.x3, right: Space.x2),
-      child: Text('$sign $text', maxLines: 1, softWrap: false, overflow: TextOverflow.clip, style: _mono.copyWith(color: ink)),
+      child: Text(
+        '$sign $text',
+        maxLines: 1,
+        softWrap: false,
+        overflow: TextOverflow.clip,
+        style: _mono.copyWith(color: ink),
+      ),
     );
 
     return ColoredBox(
@@ -343,7 +355,10 @@ class _BlocksPreview extends StatelessWidget {
       margin: const EdgeInsets.only(left: 6),
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(color: tone.fieldBg, borderRadius: BorderRadius.circular(6)),
-      child: Text(text, style: style.copyWith(color: hint ? tone.fieldHint : tone.fieldText, fontWeight: FontWeight.w400)),
+      child: Text(
+        text,
+        style: style.copyWith(color: hint ? tone.fieldHint : tone.fieldText, fontWeight: FontWeight.w400),
+      ),
     );
     Widget slot(BkTone tone, String text) => Container(
       margin: const EdgeInsets.only(left: 6),
@@ -382,7 +397,10 @@ class _BlocksPreview extends StatelessWidget {
                   height: 14,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(color: badge, shape: BoxShape.circle),
-                  child: Text(mark, style: TextStyle(fontSize: 9, height: 1, fontWeight: FontWeight.w700, color: onBadge)),
+                  child: Text(
+                    mark,
+                    style: TextStyle(fontSize: 9, height: 1, fontWeight: FontWeight.w700, color: onBadge),
+                  ),
                 ),
               ),
           ],
@@ -394,32 +412,32 @@ class _BlocksPreview extends StatelessWidget {
       color: p.canvas,
       child: CustomPaint(
         painter: _DotsPainter(p.canvasDot),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(Space.x3, Space.x3, Space.x3, Space.x2),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(Space.x3, Space.x3, Space.x3, Space.x2),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              block('event', '当 按钮被点击', parts: [slot(p.tone('event'), '按钮1')]),
+              block('control', '如果', parts: [field(p.tone('control'), '条件', hint: true)], selected: true),
+              block('variable', '设 总价 为', parts: [field(p.tone('variable'), '0')], indent: Space.x4, badge: p.warning, onBadge: p.onWarning),
+              block('action', '显示', parts: [field(p.tone('action'), '你好')], indent: Space.x4, badge: p.error, onBadge: p.onError, mark: '×'),
+              const SizedBox(height: 5),
+              Wrap(
+                spacing: 4,
+                runSpacing: 4,
                 children: [
-                  block('event', '当 按钮被点击', parts: [slot(p.tone('event'), '按钮1')]),
-                  block('control', '如果', parts: [field(p.tone('control'), '条件', hint: true)], selected: true),
-                  block('variable', '设 总价 为', parts: [field(p.tone('variable'), '0')], indent: Space.x4, badge: p.warning, onBadge: p.onWarning),
-                  block('action', '显示', parts: [field(p.tone('action'), '你好')], indent: Space.x4, badge: p.error, onBadge: p.onError, mark: '×'),
-                  const SizedBox(height: 5),
-                  Wrap(
-                    spacing: 4,
-                    runSpacing: 4,
-                    children: [
-                      for (final f in kBlockCategoryFields)
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                          decoration: BoxDecoration(color: p.tone(f.key).fill, borderRadius: BorderRadius.circular(5)),
-                          child: Text(f.label, style: TextStyle(fontSize: 9.5, height: 1.2, color: p.tone(f.key).text)),
-                        ),
-                    ],
-                  ),
+                  for (final f in kBlockCategoryFields)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                      decoration: BoxDecoration(color: p.tone(f.key).fill, borderRadius: BorderRadius.circular(5)),
+                      child: Text(f.label, style: TextStyle(fontSize: 9.5, height: 1.2, color: p.tone(f.key).text)),
+                    ),
                 ],
               ),
-            ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -449,7 +467,12 @@ class _TerminalPreview extends StatelessWidget {
           ),
       ],
     );
-    Widget line(List<InlineSpan> spans) => Text.rich(TextSpan(style: base, children: spans), maxLines: 1, softWrap: false, overflow: TextOverflow.clip);
+    Widget line(List<InlineSpan> spans) => Text.rich(
+      TextSpan(style: base, children: spans),
+      maxLines: 1,
+      softWrap: false,
+      overflow: TextOverflow.clip,
+    );
     return ColoredBox(
       color: k('bg'),
       child: Padding(

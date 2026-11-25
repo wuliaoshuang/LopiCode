@@ -71,8 +71,11 @@ Future<ThemeWorkspace?> pickThemeWorkspace(BuildContext context, ProjectSession?
   );
 }
 
-Future<void> showThemeExportSheet(BuildContext context, {required ThemeSpec theme, ProjectSession? session}) =>
-    showModalBottomSheet<void>(context: context, isScrollControlled: true, builder: (_) => ThemeExportSheet(theme: theme, session: session));
+Future<void> showThemeExportSheet(BuildContext context, {required ThemeSpec theme, ProjectSession? session}) => showModalBottomSheet<void>(
+  context: context,
+  isScrollControlled: true,
+  builder: (_) => ThemeExportSheet(theme: theme, session: session),
+);
 
 class ThemeExportSheet extends ConsumerStatefulWidget {
   const ThemeExportSheet({super.key, required this.theme, this.session});
@@ -162,14 +165,8 @@ class _ThemeExportSheetState extends ConsumerState<ThemeExportSheet> {
     final t = Theme.of(context).textTheme;
     final bridge = ref.watch(themeBackgroundBridgeProvider);
     final canImage = bridge != null && bridge.hasImage();
-    Widget row(String id, IconData icon, String title, String subtitle, VoidCallback onTap) => ListTile(
-      key: Key('theme-export-$id'),
-      enabled: !_busy,
-      leading: Icon(icon),
-      title: Text(title),
-      subtitle: Text(subtitle),
-      onTap: onTap,
-    );
+    Widget row(String id, IconData icon, String title, String subtitle, VoidCallback onTap) =>
+        ListTile(key: Key('theme-export-$id'), enabled: !_busy, leading: Icon(icon), title: Text(title), subtitle: Text(subtitle), onTap: onTap);
     return SafeArea(
       top: false,
       child: SingleChildScrollView(
@@ -202,7 +199,11 @@ class _ThemeExportSheetState extends ConsumerState<ThemeExportSheet> {
             if (_note != null)
               Padding(
                 padding: const EdgeInsets.fromLTRB(Space.x4, Space.x2, Space.x4, Space.x3),
-                child: Text(_note!, key: const Key('theme-export-note'), style: t.bodySmall?.copyWith(color: _noteBad ? c.danger : c.textMuted)),
+                child: Text(
+                  _note!,
+                  key: const Key('theme-export-note'),
+                  style: t.bodySmall?.copyWith(color: _noteBad ? c.danger : c.textMuted),
+                ),
               ),
             const SizedBox(height: Space.x2),
           ],

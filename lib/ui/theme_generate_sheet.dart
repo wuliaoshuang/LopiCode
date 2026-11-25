@@ -12,12 +12,13 @@ import 'package:material_ui/material_ui.dart';
 
 /// 打开快捷生成面板。[full]＝从主色生成整套（否则只换强调色）。每次变化调 [onChanged]（强调色、底色倾向）。
 /// 返回 true＝用这个；别的都算取消。
-Future<bool?> showThemeGenerateSheet(BuildContext context, {required bool full, required int accent, required int tint, required void Function(int accent, int tint) onChanged}) => showModalBottomSheet<bool>(
-  context: context,
-  isScrollControlled: true,
-  barrierColor: Colors.transparent,
-  builder: (_) => ThemeGenerateSheet(full: full, accent: accent, tint: tint, onChanged: onChanged),
-);
+Future<bool?> showThemeGenerateSheet(BuildContext context, {required bool full, required int accent, required int tint, required void Function(int accent, int tint) onChanged}) =>
+    showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      barrierColor: Colors.transparent,
+      builder: (_) => ThemeGenerateSheet(full: full, accent: accent, tint: tint, onChanged: onChanged),
+    );
 
 class ThemeGenerateSheet extends StatefulWidget {
   const ThemeGenerateSheet({super.key, required this.full, required this.accent, required this.tint, required this.onChanged});
@@ -74,10 +75,7 @@ class _ThemeGenerateSheetState extends State<ThemeGenerateSheet> {
                     children: [
                       Text(widget.full ? '从主色生成整套' : '换强调色', style: t.titleMedium),
                       const SizedBox(height: Space.x1),
-                      Text(
-                        widget.full ? '挑一个强调色和一个底色倾向，算出一套协调的初稿（深浅不变，只换色相），之后可以逐项细调。' : '按钮、链接、选中、开关、光标这一组颜色跟着一起换，文字的深浅会自动调到看得清。',
-                        style: t.bodySmall?.copyWith(color: c.textMuted),
-                      ),
+                      Text(widget.full ? '挑一个强调色和一个底色倾向，算出一套协调的初稿（深浅不变，只换色相），之后可以逐项细调。' : '按钮、链接、选中、开关、光标这一组颜色跟着一起换，文字的深浅会自动调到看得清。', style: t.bodySmall?.copyWith(color: c.textMuted)),
                       if (widget.full) ...[
                         const SizedBox(height: Space.x3),
                         SegmentedButton<bool>(

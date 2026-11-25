@@ -196,7 +196,11 @@ class _ThemeImportScreenState extends State<ThemeImportScreen> {
                     Icon(Icons.error_outline, size: 16, color: c.danger),
                     const SizedBox(width: Space.x1),
                     Expanded(
-                      child: Text(_error!, key: const Key('theme-import-error'), style: t.bodySmall?.copyWith(color: c.danger)),
+                      child: Text(
+                        _error!,
+                        key: const Key('theme-import-error'),
+                        style: t.bodySmall?.copyWith(color: c.danger),
+                      ),
                     ),
                   ],
                 ),
@@ -384,7 +388,11 @@ class _ThemeImportPreviewScreenState extends ConsumerState<ThemeImportPreviewScr
           ),
           const SizedBox(width: Space.x2),
           Expanded(
-            child: Text(text, key: key, style: t.bodySmall?.copyWith(color: c.textMuted)),
+            child: Text(
+              text,
+              key: key,
+              style: t.bodySmall?.copyWith(color: c.textMuted),
+            ),
           ),
         ],
       ),
@@ -432,7 +440,10 @@ class _ThemeImportPreviewScreenState extends ConsumerState<ThemeImportPreviewScr
                   borderRadius: BorderRadius.circular(Radii.md),
                   border: Border.all(color: c.border),
                 ),
-                child: SizedBox(height: kThemePreviewHeight, child: ThemePreview(spec: theme, kind: _kind)),
+                child: SizedBox(
+                  height: kThemePreviewHeight,
+                  child: ThemePreview(spec: theme, kind: _kind),
+                ),
               ),
             ),
             const SizedBox(height: Space.x2),
@@ -462,7 +473,10 @@ class _ThemeImportPreviewScreenState extends ConsumerState<ThemeImportPreviewScr
               ],
             ]),
             section('检查时的提示', [
-              if (notes.isEmpty) line(Icons.check_circle_outline, c.success, '文件完整，没有要提醒的。', key: const Key('theme-import-notes')) else for (final (i, n) in notes.indexed) line(Icons.info_outline, c.info, n, key: Key('theme-import-note-$i')),
+              if (notes.isEmpty)
+                line(Icons.check_circle_outline, c.success, '文件完整，没有要提醒的。', key: const Key('theme-import-notes'))
+              else
+                for (final (i, n) in notes.indexed) line(Icons.info_outline, c.info, n, key: Key('theme-import-note-$i')),
             ]),
             section('背景图', [
               if (!hasImage)

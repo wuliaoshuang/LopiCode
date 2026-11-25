@@ -49,7 +49,11 @@ class ThemeSectionHeader extends StatelessWidget {
               Expanded(
                 child: Text(title, style: t.titleSmall, maxLines: 1, overflow: TextOverflow.ellipsis),
               ),
-              Text(changed > 0 ? '改了 $changed 项 · 共 $total 项' : '$total 项', key: Key('theme-section-$id-count'), style: t.bodySmall?.copyWith(color: changed > 0 ? c.accent : c.textFaint)),
+              Text(
+                changed > 0 ? '改了 $changed 项 · 共 $total 项' : '$total 项',
+                key: Key('theme-section-$id-count'),
+                style: t.bodySmall?.copyWith(color: changed > 0 ? c.accent : c.textFaint),
+              ),
             ],
           ),
         ),
@@ -129,8 +133,22 @@ class ThemeColorRow extends StatelessWidget {
                 ),
               ),
             if (style != null) ...[
-              _StyleToggle(key: Key('theme-item-${item.id}-bold'), label: '粗', tooltip: '粗体', on: style.bold, bold: true, onTap: readOnly ? null : () => onStyle(style.copyWith(bold: !style.bold))),
-              _StyleToggle(key: Key('theme-item-${item.id}-italic'), label: '斜', tooltip: '斜体', on: style.italic, italic: true, onTap: readOnly ? null : () => onStyle(style.copyWith(italic: !style.italic))),
+              _StyleToggle(
+                key: Key('theme-item-${item.id}-bold'),
+                label: '粗',
+                tooltip: '粗体',
+                on: style.bold,
+                bold: true,
+                onTap: readOnly ? null : () => onStyle(style.copyWith(bold: !style.bold)),
+              ),
+              _StyleToggle(
+                key: Key('theme-item-${item.id}-italic'),
+                label: '斜',
+                tooltip: '斜体',
+                on: style.italic,
+                italic: true,
+                onTap: readOnly ? null : () => onStyle(style.copyWith(italic: !style.italic)),
+              ),
             ],
           ],
         ),
@@ -175,9 +193,8 @@ class _StyleToggle extends StatelessWidget {
               ),
               child: Text(
                 label,
-                style: Theme.of(
-                  context,
-                ).textTheme.labelLarge?.copyWith(color: onTap == null ? c.textFaint : (on ? c.accent : c.textMuted), fontWeight: bold ? FontWeight.w700 : null, fontStyle: italic ? FontStyle.italic : null),
+                style: Theme.of(context).textTheme.labelLarge
+                    ?.copyWith(color: onTap == null ? c.textFaint : (on ? c.accent : c.textMuted), fontWeight: bold ? FontWeight.w700 : null, fontStyle: italic ? FontStyle.italic : null),
               ),
             ),
           ),
@@ -276,18 +293,25 @@ class ThemeActionRow extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: Space.x4),
         child: Row(
           children: [
-            SizedBox(
-              width: 32,
-              child: Icon(icon, size: 20, color: onTap == null ? c.textFaint : c.accent),
-            ),
+            SizedBox(width: 32, child: Icon(icon, size: 20, color: onTap == null ? c.textFaint : c.accent)),
             const SizedBox(width: Space.x3),
             Expanded(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: t.bodyMedium?.copyWith(color: onTap == null ? c.textFaint : null), maxLines: 1, overflow: TextOverflow.ellipsis),
-                  Text(subtitle, style: t.bodySmall?.copyWith(color: c.textFaint), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  Text(
+                    title,
+                    style: t.bodyMedium?.copyWith(color: onTap == null ? c.textFaint : null),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    subtitle,
+                    style: t.bodySmall?.copyWith(color: c.textFaint),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ],
               ),
             ),

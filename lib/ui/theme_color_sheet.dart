@@ -86,93 +86,92 @@ class _ThemeColorSheetState extends ConsumerState<ThemeColorSheet> {
       // 键盘升起来时整块往上让（输十六进制的时候）。
       padding: EdgeInsets.only(bottom: mq.viewInsets.bottom),
       child: SafeArea(
-      top: false,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(maxHeight: mq.size.height * 0.6),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Flexible(
-              child: SingleChildScrollView(
-                key: const Key('color-sheet-scroll'),
-                padding: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x2),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Row(
-                      children: [
-                        ThemeSwatch(_before, key: const Key('color-before')),
+        top: false,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: mq.size.height * 0.6),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Flexible(
+                child: SingleChildScrollView(
+                  key: const Key('color-sheet-scroll'),
+                  padding: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x2),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        children: [
+                          ThemeSwatch(_before, key: const Key('color-before')),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: Space.x1),
+                            child: Icon(Icons.arrow_forward, size: 14, color: c.textFaint),
+                          ),
+                          ThemeSwatch(_now, key: const Key('color-now')),
+                          const SizedBox(width: Space.x3),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(item.label, style: t.titleSmall, maxLines: 1, overflow: TextOverflow.ellipsis),
+                                Text(
+                                  item.note.isEmpty ? item.sectionLabel : '${item.sectionLabel} · ${item.note}',
+                                  style: t.bodySmall?.copyWith(color: c.textFaint),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (contrast != null)
                         Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: Space.x1),
-                          child: Icon(Icons.arrow_forward, size: 14, color: c.textFaint),
-                        ),
-                        ThemeSwatch(_now, key: const Key('color-now')),
-                        const SizedBox(width: Space.x3),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
+                          padding: const EdgeInsets.only(top: Space.x2),
+                          child: Row(
+                            key: const Key('color-contrast'),
                             children: [
-                              Text(item.label, style: t.titleSmall, maxLines: 1, overflow: TextOverflow.ellipsis),
-                              Text(
-                                item.note.isEmpty ? item.sectionLabel : '${item.sectionLabel} · ${item.note}',
-                                style: t.bodySmall?.copyWith(color: c.textFaint),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
+                              Icon(contrast.ok ? Icons.check_circle_outline : Icons.warning_amber_rounded, size: 16, color: contrast.ok ? c.textMuted : c.warning),
+                              const SizedBox(width: Space.x1),
+                              Expanded(
+                                child: Text(
+                                  contrastSentence(contrast),
+                                  key: const Key('color-contrast-text'),
+                                  style: t.bodySmall?.copyWith(color: contrast.ok ? c.textMuted : c.warning),
+                                ),
                               ),
                             ],
                           ),
                         ),
-                      ],
-                    ),
-                    if (contrast != null)
-                      Padding(
-                        padding: const EdgeInsets.only(top: Space.x2),
-                        child: Row(
-                          key: const Key('color-contrast'),
-                          children: [
-                            Icon(contrast.ok ? Icons.check_circle_outline : Icons.warning_amber_rounded, size: 16, color: contrast.ok ? c.textMuted : c.warning),
-                            const SizedBox(width: Space.x1),
-                            Expanded(
-                              child: Text(
-                                contrastSentence(contrast),
-                                key: const Key('color-contrast-text'),
-                                style: t.bodySmall?.copyWith(color: contrast.ok ? c.textMuted : c.warning),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    const SizedBox(height: Space.x3),
-                    ThemeColorPicker(value: _now ?? _seed, empty: _now == null, allowAlpha: _alphaOk, onChanged: _set),
-                    ThemeSwatchRow(title: '主题里已有的', colors: _own, keyPrefix: 'color-own', onPick: _set),
-                    ThemeSwatchRow(title: '常用色', colors: kThemeCommonColors, keyPrefix: 'color-common', onPick: _set),
-                    if (recent.isNotEmpty) ThemeSwatchRow(title: '最近用过', colors: recent, keyPrefix: 'color-recent', onPick: _set),
+                      const SizedBox(height: Space.x3),
+                      ThemeColorPicker(value: _now ?? _seed, empty: _now == null, allowAlpha: _alphaOk, onChanged: _set),
+                      ThemeSwatchRow(title: '主题里已有的', colors: _own, keyPrefix: 'color-own', onPick: _set),
+                      ThemeSwatchRow(title: '常用色', colors: kThemeCommonColors, keyPrefix: 'color-common', onPick: _set),
+                      if (recent.isNotEmpty) ThemeSwatchRow(title: '最近用过', colors: recent, keyPrefix: 'color-recent', onPick: _set),
+                    ],
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(Space.x2, 0, Space.x4, Space.x2),
+                child: Row(
+                  children: [
+                    TextButton(key: const Key('color-reset-default'), onPressed: atDefault ? null : () => _set(fallback), child: const Text('恢复默认值')),
+                    if (item.isToken && fallback != null) TextButton(key: const Key('color-clear'), onPressed: _now == null ? null : () => _set(null), child: const Text('不单独上色')),
+                    const Spacer(),
+                    FilledButton(key: const Key('color-done'), onPressed: () => Navigator.pop(context), child: const Text('完成')),
                   ],
                 ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(Space.x2, 0, Space.x4, Space.x2),
-              child: Row(
-                children: [
-                  TextButton(key: const Key('color-reset-default'), onPressed: atDefault ? null : () => _set(fallback), child: const Text('恢复默认值')),
-                  if (item.isToken && fallback != null) TextButton(key: const Key('color-clear'), onPressed: _now == null ? null : () => _set(null), child: const Text('不单独上色')),
-                  const Spacer(),
-                  FilledButton(key: const Key('color-done'), onPressed: () => Navigator.pop(context), child: const Text('完成')),
-                ],
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
-      ),
       ),
     );
   }
 }
 
 /// 对比度的一句话：“放在“代码 › 代码底色”上：对比度 2.34:1 · 偏低（至少 4.5:1）”。
-String contrastSentence(ItemContrast c) =>
-    '${c.asFg ? '放在' : '上面放'}“${c.other}”${c.asFg ? '上' : ''}：对比度 ${c.ratio.toStringAsFixed(2)}:1 · ${c.ok ? '达标' : '偏低'}（至少 ${formatMetric(c.min)}:1）';
+String contrastSentence(ItemContrast c) => '${c.asFg ? '放在' : '上面放'}“${c.other}”${c.asFg ? '上' : ''}：对比度 ${c.ratio.toStringAsFixed(2)}:1 · ${c.ok ? '达标' : '偏低'}（至少 ${formatMetric(c.min)}:1）';
