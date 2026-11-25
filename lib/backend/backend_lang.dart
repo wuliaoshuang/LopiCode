@@ -10,6 +10,8 @@ library;
 import 'package:lopicode/backend/backend_ir.dart';
 import 'package:lopicode/lang/ast.dart';
 import 'package:lopicode/lang/ast_util.dart';
+import 'package:lopicode/lang/gen_scope.dart';
+import 'package:lopicode/lang/names.dart';
 
 /// “这次请求”在生成的代码里叫什么。五种语言的 `BeCodeTarget.request` 都是它（有测试守着）；翻译这一层和语言无关，所以写死在这里。
 const String kBeRequestName = 'req';
@@ -76,7 +78,98 @@ bool beBodyUsesLang(List<BeS> body) {
   return used;
 }
 
-bool beUsesLang(BeProgram program) => program.routes.any((r) => beBodyUsesLang(r.body));
+bool beUsesLang(BeProgram program) => program.functions.isNotEmpty || program.routes.any((r) => beBodyUsesLang(r.body));
+
+/// **给第三步的入口**：给翻好的后端加上文档级的函数（“我的积木”的定义）。
+///
+/// 生成时每个函数变成各语言的顶层函数（Java 是 `Main` 里的静态方法），排在接口前面；每个接口体、每个函数体里都能调它们，
+/// 函数之间可以互相调、可以调排在后面的。函数里看不见接口的变量、“这次请求”（要用就当参数传进来）。
+/// 函数体里也可以夹旧语句（[beHostStmts]）。生成前先用 `analyzeFunctions`、`analyzeBody(functions: …)` 检查。
+/// [functions] 是空的时候原样返回，生成结果一个字不变。
+BeProgram beWithFunctions(BeProgram program, List<LFuncDecl> functions) =>
+    functions.isEmpty ? program : BeProgram(name: program.name, port: program.port, collections: program.collections, routes: program.routes, skipped: program.skipped, functions: functions);
+
+/// 一句旧语句用到了哪些名字（给闭包、给检查器用）：读 / 改了哪些变量，用没用“这次请求”，里面夹着的新节点新建了什么。
+/// 传给 `LangHost.inspect`、`analyzeFunctions(inspect: …)`、`analyzeBody(inspect: …)`。
+LHostUse beHostInspect(Object payload) {
+  if (payload is! BeS) return const LHostUse();
+  final reads = <String>{}, writes = <String>{}, declares = <String>{}, hostNames = <String>{};
+  final lambdas = <LLambda>[];
+  void names(List<LStmt> stmts) {
+    final n = lNames(stmts, inspect: beHostInspect);
+    reads.addAll(n.reads);
+    writes.addAll(n.writes);
+    declares.addAll(n.declared);
+    hostNames.addAll(n.hostNames);
+    lambdas.addAll(n.lambdas);
+  }
+
+  void expr(BeX x) {
+    switch (x) {
+      case BeXLang(:final expr):
+        names([LExprStmt(expr)]);
+      case BeXVar(:final name):
+        reads.add(name);
+      case BeXReq():
+        hostNames.add(kBeRequestName);
+      case BeXCall(:final args):
+        args.forEach(expr);
+      case BeXLit() || BeXTmp():
+        break;
+    }
+  }
+
+  void stmts(List<BeS> list) {
+    for (final s in list) {
+      switch (s) {
+        case BeSLang(stmts: final inner):
+          names(inner);
+        case BeSNote():
+          break;
+        case BeSSet(:final name, :final value):
+          writes.add(name);
+          expr(value);
+        case BeSLet(:final value):
+          expr(value);
+        case BeSDo(:final call):
+          expr(call);
+        case BeSReturn(:final response):
+          expr(response);
+        case BeSIf(:final cond, :final then, :final orElse):
+          expr(cond);
+          stmts(then);
+          stmts(orElse);
+        case BeSRepeat(:final times, :final body):
+          expr(times);
+          stmts(body);
+        case BeSForEach(list: final l, :final item, :final body):
+          expr(l);
+          writes.add(item);
+          stmts(body);
+      }
+    }
+  }
+
+  stmts([payload]);
+  return LHostUse(reads: reads, writes: writes, declares: declares, hostNames: hostNames, lambdas: lambdas);
+}
+
+/// 一个接口函数体的作用域：能调哪些函数、自己有哪些变量、哪些变量被里面的匿名函数用到了（Java 要给它们装盒子）。
+LangScope beRouteScope(BeRouteProgram r, List<LFuncDecl> functions) {
+  final captured = <String>{};
+  void expr(BeX x) {
+    if (x is BeXLang) captured.addAll(lCapturedNamesInExpr(x.expr, inspect: beHostInspect));
+    if (x is BeXCall) x.args.forEach(expr);
+  }
+
+  _walk(
+    r.body,
+    onLang: (s) => captured.addAll(lCapturedNames(s.stmts, inspect: beHostInspect)),
+    onExpr: expr,
+  );
+  final locals = {for (final v in r.variables) v.name, ...beLangDeclares(r.body)};
+  return LangScope.open(module: LangModuleInfo.of(functions), locals: locals, boxed: locals.intersection(captured));
+}
 
 /// 这一串语句里的新节点新建了哪些名字（变量、常量、循环变量），按第一次出现的顺序。接口函数开头要统一声明它们。
 List<String> beLangDeclares(List<BeS> body) {

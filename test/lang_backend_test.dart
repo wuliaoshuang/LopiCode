@@ -223,19 +223,19 @@ void main() {
       expect(entry, contains('require("./lc_lang.js")'));
     });
 
-    test('还不支持的节点（函数、类…）不让整份生成失败：留一行说明；这一段本该返回的补一个 500', () {
+    test('还不支持的节点（抛出错误、类…）不让整份生成失败：留一行说明；这一段本该返回的补一个 500', () {
       for (final t in backendTargets) {
         final target = t as BeCodeTarget;
         final p = _program([
-          BeSLang([
-            run(const LCall(LName('f'), [])),
-            const LHost(BeSReturn(BeXCall('sendText', [BeXLit(200), BeXLit('好')])), returns: true),
+          const BeSLang([
+            LThrow(LLit('x')),
+            LHost(BeSReturn(BeXCall('sendText', [BeXLit(200), BeXLit('好')])), returns: true),
           ]),
         ]);
         late Map<String, String> files;
         expect(() => files = target.generateProgram(p), returnsNormally, reason: target.id);
         final entry = files[target.entryFile]!;
-        expect(entry, contains('还不支持“函数”'), reason: target.id);
+        expect(entry, contains('还不支持“抛出错误”'), reason: target.id);
         expect(entry, contains('这个接口里有还不支持的积木'), reason: target.id);
       }
     });

@@ -85,7 +85,7 @@ function lc_lang_must_dict($x)
 function lc_isType($x, $name)
 {
     $k = lc_kind($x);
-    $want = $k === 'num' ? 'number' : ($k === 'obj' ? 'dict' : $k);
+    $want = $k === 'num' ? 'number' : ($k === 'obj' ? 'dict' : ($k === 'fn' ? 'function' : $k));
     return $want === lc_to_text($name);
 }
 

@@ -3,6 +3,8 @@
 /// 值一律是 `Object`（**按建议先做，可改**：设计稿“问题 2”）：`null / Boolean / Double / String / List / Map`。
 library;
 
+import 'package:lopicode/lang/ast.dart';
+import 'package:lopicode/lang/ast_util.dart';
 import 'package:lopicode/lang/gen.dart';
 import 'package:lopicode/lang/rt.dart';
 
@@ -83,12 +85,80 @@ class JavaLangGen extends LangGen {
   @override
   String intToNumber(String k) => '(double) $k';
 
+  // —— 函数 ——
+
   @override
-  String scriptSource(List<List<String>> bodies) {
+  Map<String, LCap> get caps => {...kLangBaseCaps, 'closures': LCap.lowered};
+  @override
+  bool get nativeDefaults => false;
+  @override
+  bool get argsByList => true;
+  @override
+  bool get boxesCaptured => true;
+  @override
+  bool get renamesShadows => true;
+
+  /// lambda 里的变量不许和外面的重名：里层的改叫 `v2_名字`（数字是套了几层）。
+  @override
+  String shadowName(String name, int depth) => 'v${depth}_$name';
+
+  /// lambda 只能用“不再改的”外层变量：被里层函数用到的变量装进一格的盒子（`Object[]`），读写都是 `名字[0]`。
+  @override
+  String boxed(String code) => '$code[0]';
+  @override
+  List<String> declareIn(LangScope scope, String name) => [scope.boxed.contains(name) ? 'final Object[] ${localCode(scope, name)} = {null};' : 'Object ${localCode(scope, name)} = null;'];
+  @override
+  List<String> globalDecl(String code) => ['static Object $code = null;'];
+  @override
+  String fnWrap(String name, int min, int max, String impl) => 'LcLang.fn(${literal(name)}, $min, $max, $impl)';
+
+  /// 参数是不定个数的：只有一个时写明它是一个值（见 [_args]）。
+  @override
+  String fnCall(String f, List<String> args) => 'LcLang.call(${[f, if (args.length == 1) '(Object) ${args.single}' else ...args].join(', ')})';
+  @override
+  String argAt(String args, int i, LParam p) => p.rest
+      ? 'LcLang.rest($args, $i)'
+      : p.defaultValue == null
+      ? 'LcLang.arg($args, $i)'
+      : 'LcLang.argOr($args, $i, ${literal(p.defaultValue!.value)})';
+
+  /// 有名字的函数是静态方法。要装盒子的参数：参数本身改叫 `lcP_名字`，开头装进盒子。
+  @override
+  List<String> funcDecl(String fname, List<LParam> params, LangScope scope, List<String> body) => [
+    'static Object $fname(${[for (final p in params) 'Object ${scope.boxed.contains(p.name) ? 'lcP_${p.name}' : localCode(scope, p.name)}'].join(', ')}) {',
+    ...indented(body),
+    '}',
+  ];
+  @override
+  List<String> lambdaDef(String tmp, List<LParam> params, LangScope scope, List<String> body, List<String> uses, String args) => [
+    'final Lc.Fn $tmp = LcLang.fn("", ${lMinArgs(params)}, ${lMaxArgs(params)}, ($args) -> {',
+    ...indented(body),
+    '});',
+  ];
+  @override
+  String lambdaShort(List<LParam> params, LangScope scope, String code, List<String> uses, String args) => '($args) -> $code';
+  @override
+  String namedImpl(LFuncDecl f, String fname) => '(lcA) -> $fname(${[for (var i = 0; i < f.params.length; i++) argAt('lcA', i, f.params[i])].join(', ')})';
+
+  @override
+  List<String> paramPreamble(List<LParam> params, LangScope scope, String? args) => [
+    for (var i = 0; i < params.length; i++)
+      if (args != null)
+        scope.boxed.contains(params[i].name)
+            ? 'final Object[] ${localCode(scope, params[i].name)} = {${argAt(args, i, params[i])}};'
+            : 'Object ${localCode(scope, params[i].name)} = ${argAt(args, i, params[i])};'
+      else if (scope.boxed.contains(params[i].name))
+        'final Object[] ${localCode(scope, params[i].name)} = {lcP_${params[i].name}};',
+  ];
+
+  @override
+  String scriptSource(List<List<String>> bodies, {List<String> top = const []}) {
     final out = StringBuffer()
       ..writeln('// 由 LopiCode 积木生成（Java）。')
       ..writeln('public final class $className {')
       ..writeln('    private $className() {}');
+    if (top.isNotEmpty) out.writeln();
+    indented(top).forEach(out.writeln);
     for (var i = 0; i < bodies.length; i++) {
       out
         ..writeln()

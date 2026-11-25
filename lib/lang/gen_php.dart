@@ -4,6 +4,8 @@
 /// 列表在 PHP 里是 `LcList` 对象（不是 PHP 数组）：PHP 数组传来传去是复制的，“在末尾加一项”改不到原来那个。
 library;
 
+import 'package:lopicode/lang/ast.dart';
+import 'package:lopicode/lang/ast_util.dart';
 import 'package:lopicode/lang/gen.dart';
 import 'package:lopicode/lang/rt.dart';
 
@@ -52,8 +54,59 @@ class PhpLangGen extends LangGen {
   @override
   String intToNumber(String k) => '(float) $k';
 
+  // —— 函数（未实测）——
+
   @override
-  String scriptSource(List<List<String>> bodies) {
+  Map<String, LCap> get caps => {...kLangBaseCaps, 'closures': LCap.lowered};
+  @override
+  String globalVar(String prefix, String name) => '\$g${prefix}_$name';
+  @override
+  String fnTemp(int n) => '\$lcF$n';
+  @override
+  List<String> globalDecl(String code) => ['$code = null;'];
+  @override
+  String fnWrap(String name, int min, int max, String impl) => 'lc_fn(${literal(name)}, $min, $max, $impl)';
+  @override
+  String fnCall(String f, List<String> args) => 'lc_call(${[f, ...args].join(', ')})';
+  @override
+  bool get shortRest => false;
+  @override
+  List<String> get finalReturn => const [];
+
+  String _params(List<LParam> params, LangScope scope) =>
+      [for (final p in params) '${p.rest ? '...' : ''}${localCode(scope, p.name)}${p.defaultValue == null ? '' : ' = ${literal(p.defaultValue!.value)}'}'].join(', ');
+
+  /// 匿名函数要写明用了外面哪些变量；一律按引用（`&`），里层改了外层也看得见。
+  static String _use(List<String> uses) => uses.isEmpty ? '' : ' use (${[for (final u in uses) '&$u'].join(', ')})';
+
+  @override
+  List<String> funcDecl(String fname, List<LParam> params, LangScope scope, List<String> body) => ['function $fname(${_params(params, scope)})', '{', ...indented(body), '}'];
+  @override
+  List<String> lambdaDef(String tmp, List<LParam> params, LangScope scope, List<String> body, List<String> uses, String args) => [
+    '$tmp = lc_fn("", ${lMinArgs(params)}, ${lMaxArgs(params)}, function (${_params(params, scope)})${_use(uses)} {',
+    ...indented(body),
+    '});',
+  ];
+
+  /// 不用 `fn() =>`：它抓的是当时的值，外层后来改了里层看不见。
+  @override
+  String lambdaShort(List<LParam> params, LangScope scope, String code, List<String> uses, String args) => 'function (${_params(params, scope)})${_use(uses)} { return $code; }';
+  @override
+  String namedImpl(LFuncDecl f, String fname) => "'$fname'";
+
+  /// `...$xs` 拿到的是 PHP 数组：转成列表。
+  @override
+  List<String> paramPreamble(List<LParam> params, LangScope scope, String? args) => [
+    for (final p in params)
+      if (p.rest) '${localCode(scope, p.name)} = lc_listOf(...${localCode(scope, p.name)});',
+  ];
+
+  /// 函数里用模块级变量（读也算）要先 `global`。
+  @override
+  List<String> closurePreamble(List<String> outerWritten, List<String> globalsWritten, List<String> globalsUsed) => [if (globalsUsed.isNotEmpty) 'global ${globalsUsed.join(', ')};'];
+
+  @override
+  String scriptSource(List<List<String>> bodies, {List<String> top = const []}) {
     final out = StringBuffer()
       ..writeln('<?php')
       ..writeln('// 由 LopiCode 积木生成（PHP）。')
@@ -63,6 +116,8 @@ class PhpLangGen extends LangGen {
     for (final f in ['lc_runtime.php', 'lc_json.php', runtimeFile]) {
       out.writeln("require_once __DIR__ . '/$f';");
     }
+    if (top.isNotEmpty) out.writeln();
+    top.forEach(out.writeln);
     for (var i = 0; i < bodies.length; i++) {
       out
         ..writeln()

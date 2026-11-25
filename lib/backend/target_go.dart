@@ -8,6 +8,7 @@ import 'package:lopicode/backend/backend_ir.dart';
 import 'package:lopicode/backend/backend_target.dart';
 import 'package:lopicode/backend/runtime_go.dart';
 import 'package:lopicode/backend/runtime_go_fetch.dart';
+import 'package:lopicode/backend/runtime_go_func.dart';
 import 'package:lopicode/backend/runtime_go_lang.dart';
 import 'package:lopicode/backend/runtime_go_server.dart';
 import 'package:lopicode/lang/gen.dart';
@@ -42,7 +43,7 @@ class GoBackendTarget extends BeCodeTarget {
   @override
   LangGen langGen(LangHost host) => GoLangGen(host: host, module: kGoModuleName);
   @override
-  String get langRuntimeSource => '${kGoLangRuntimeSource.trim()}\n';
+  String get langRuntimeSource => '${kGoLangRuntimeSource.trim()}\n\n${kGoLangFuncSource.trim()}\n';
   @override
   String get indentUnit => '\t';
   @override
@@ -113,11 +114,12 @@ class GoBackendTarget extends BeCodeTarget {
       out.writeln('// 没有生成：${beComment(s)}');
     }
     if (program.skipped.isNotEmpty) out.writeln();
+    moduleFunctions(program).forEach(out.writeln);
     for (final r in program.routes) {
       out.writeln('// 接口：${beComment(r.title)}');
       out.writeln('func ${r.fnName}(req *lc.Request) *lc.Response {');
       // 没有“怎么走都会返回”的接口，末尾补一句“什么都不返回”（204）。
-      for (final line in indented([...routeBody(r), if (!beAlwaysReturns(r.body)) 'return nil'])) {
+      for (final line in indented([...routeBody(r, program), if (!beAlwaysReturns(r.body)) 'return nil'])) {
         out.writeln(line);
       }
       out.writeln('}');

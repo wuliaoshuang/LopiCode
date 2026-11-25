@@ -176,22 +176,22 @@ void main() {
         final caps = langGenFor(l)!.caps;
         expect(caps.keys.toSet(), kLangFeatures.toSet(), reason: l);
         expect(caps['operators'], LCap.runtime, reason: '$l：这一阶段运算全走小库（按建议先做，可改）');
-        for (final f in ['functions', 'closures', 'classes', 'errors', 'async']) {
+        for (final f in ['classes', 'errors', 'async']) {
           expect(caps[f], LCap.later, reason: '$l $f');
         }
-        for (final f in ['logic', 'while', 'forCount', 'forEach', 'forPairs', 'repeat', 'switch', 'const', 'hoist', 'listMutation', 'cond']) {
+        // 第 2 阶段：函数、闭包做实了
+        for (final f in ['functions', 'closures', 'logic', 'while', 'forCount', 'forEach', 'forPairs', 'repeat', 'switch', 'const', 'hoist', 'listMutation', 'cond']) {
           expect(caps[f], isNot(anyOf(LCap.later, LCap.forbidden)), reason: '$l $f');
         }
       }
       expect(langGenFor('go')!.caps['cond'], LCap.runtime, reason: 'Go 没有三目运算，值版的如果走小库的 Pick');
       expect(langGenFor('node')!.caps['cond'], LCap.native);
+      expect({for (final l in kLangTargets) l: langGenFor(l)!.caps['closures']}, {'node': LCap.native, 'python': LCap.lowered, 'go': LCap.native, 'java': LCap.lowered, 'php': LCap.lowered});
     });
   });
 
   group('还不支持的节点：清楚的报错，带“第几阶段才有”', () {
     final later = <String, (LStmt, String, int)>{
-      '调函数': (run(const LCall(LName('f'), [])), '函数', 2),
-      '匿名函数': (run(const LLambda([], [])), '函数', 2),
       '新建对象': (run(const LNew('C', [])), '类和对象', 5),
       '调方法': (run(const LSend(LLit(1), 'm', [])), '类和对象', 5),
       '调父类方法': (run(const LSuperSend('m', [])), '类和对象', 5),
@@ -203,7 +203,6 @@ void main() {
       '试着做': (const LTry([]), '试着做 / 出错了', 6),
       '等待': (run(const LAwait(LLit(1))), '异步', 6),
       '同时做': (run(const LSpawn([])), '异步', 6),
-      '要函数的小库函数': (run(rt('listMap', [list(), nul])), 'listMap', 2),
     };
     for (final e in later.entries) {
       test('${e.key} → 第 ${e.value.$3} 阶段', () {
@@ -219,11 +218,12 @@ void main() {
 
     test('模块里的函数 / 类 / 接口声明；不认识的运算、不认识的小库函数、没有返回值的函数当值用', () {
       final gen = langGenFor('node')!;
+      // 第 2 阶段：函数声明能生成了
       expect(
-        () => gen.script([
+        gen.script([
           const LModule(decls: [LFuncDecl('f', [], [])]),
         ]),
-        throwsA(isA<LangUnsupported>().having((e) => e.stage, 'stage', 2)),
+        contains('function f1_f()'),
       );
       expect(
         () => gen.script([

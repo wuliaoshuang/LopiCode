@@ -13,6 +13,7 @@ import 'package:lopicode/lang/gen_php.dart';
 import 'package:lopicode/lang/gen_python.dart';
 
 export 'package:lopicode/lang/analyze.dart';
+export 'package:lopicode/lang/analyze_module.dart';
 export 'package:lopicode/lang/ast.dart';
 export 'package:lopicode/lang/ast_util.dart';
 export 'package:lopicode/lang/custom_block.dart';

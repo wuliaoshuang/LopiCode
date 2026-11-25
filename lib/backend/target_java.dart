@@ -5,6 +5,7 @@ library;
 import 'package:lopicode/backend/backend_ir.dart';
 import 'package:lopicode/backend/backend_target.dart';
 import 'package:lopicode/backend/runtime_java.dart';
+import 'package:lopicode/backend/runtime_java_func.dart';
 import 'package:lopicode/backend/runtime_java_json.dart';
 import 'package:lopicode/backend/runtime_java_lang.dart';
 import 'package:lopicode/backend/runtime_java_server.dart';
@@ -57,7 +58,7 @@ class JavaBackendTarget extends BeCodeTarget {
   @override
   LangGen langGen(LangHost host) => JavaLangGen(host: host);
   @override
-  String get langRuntimeSource => '${kJavaLangRuntimeSource.trim()}\n';
+  String get langRuntimeSource => javaLangRuntime(kJavaLangRuntimeSource);
   @override
   String get indentUnit => '    ';
   @override
@@ -83,8 +84,9 @@ class JavaBackendTarget extends BeCodeTarget {
   }
 
   /// 变量加 `v_` 前缀：不会撞上 Java 的关键字（class、int、new…）。
+  /// 被匿名函数用到的变量装在盒子里、匿名函数里的变量可能改了名（见 lib/lang/gen_java.dart）：在函数体里时问语言核心这个名字现在怎么写。
   @override
-  String variable(String name) => 'v_$name';
+  String variable(String name) => LangCtx.current == null ? 'v_$name' : langGen(const LangHost()).varCode(name);
   @override
   String temp(int slot) => 'lcT$slot';
 
@@ -95,7 +97,7 @@ class JavaBackendTarget extends BeCodeTarget {
   @override
   String comment(String text) => '// ${javaComment(text)}';
   @override
-  List<String> declare(String name, String valueCode) => ['Object ${variable(name)} = $valueCode;'];
+  List<String> declare(String name, String valueCode) => [(LangCtx.current?.scope.boxed.contains(name) ?? false) ? 'final Object[] v_$name = {$valueCode};' : 'Object v_$name = $valueCode;'];
   @override
   List<String> assign(String name, String valueCode) => ['${variable(name)} = $valueCode;'];
   @override
@@ -129,11 +131,12 @@ class JavaBackendTarget extends BeCodeTarget {
       out.writeln('    // 没有生成：${javaComment(s)}');
     }
     if (program.skipped.isNotEmpty) out.writeln();
+    indented(moduleFunctions(program)).forEach(out.writeln);
     for (final r in program.routes) {
       out.writeln('    // 接口：${javaComment(r.title)}');
       out.writeln('    static Lc.Response ${r.fnName}(Lc.Request req) {');
       // “怎么走都会返回”的接口后面不能再有代码（Java 不让写执行不到的语句）；其余的末尾补一句“什么都不返回”（204）。
-      for (final line in indented(indented([...routeBody(r), if (!beAlwaysReturns(r.body)) 'return null;']))) {
+      for (final line in indented(indented([...routeBody(r, program), if (!beAlwaysReturns(r.body)) 'return null;']))) {
         out.writeln(line);
       }
       out.writeln('    }');

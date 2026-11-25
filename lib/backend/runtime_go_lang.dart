@@ -103,7 +103,7 @@ func Pick(cond bool, then func() any, orElse func() any) any {
 
 // —— 类型 ——
 
-var langTypeNames = map[string]string{"num": "number", "text": "text", "bool": "bool", "null": "null", "list": "list", "obj": "dict"}
+var langTypeNames = map[string]string{"num": "number", "text": "text", "bool": "bool", "null": "null", "list": "list", "obj": "dict", "fn": "function"}
 
 func IsType(x any, name any) bool { return langTypeNames[kind(x)] == toText(name) }
 func ToNumber(x any) float64      { return toNum(x) }

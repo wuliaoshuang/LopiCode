@@ -35,7 +35,7 @@ const chars = (s) => Array.from(toText(s));
 
 // —— 类型 ——
 
-const TYPE_NAMES = { num: "number", text: "text", bool: "bool", null: "null", list: "list", obj: "dict" };
+const TYPE_NAMES = { num: "number", text: "text", bool: "bool", null: "null", list: "list", obj: "dict", fn: "function" };
 const isType = (x, name) => TYPE_NAMES[kind(x)] === toText(name);
 const toNumber = (x) => toNum(x);
 const toBool = (x) => truthy(x);

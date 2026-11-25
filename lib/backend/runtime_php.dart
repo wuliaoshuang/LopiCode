@@ -53,6 +53,9 @@ function lc_kind($v)
     if (is_string($v)) {
         return 'text';
     }
+    if ($v instanceof LcFn) {
+        return 'fn'; // “函数”这种值（积木第 4 版；LcFn 在 lc_lang.php 里）
+    }
     return $v instanceof LcList ? 'list' : 'obj';
 }
 
@@ -166,6 +169,8 @@ function lc_to_json($v, $exact = false)
                 $parts[] = lc_to_json($x, $exact);
             }
             return '[' . implode(',', $parts) . ']';
+        case 'fn':
+            return 'null'; // 函数写不成 JSON：当空
         default:
             $parts = array();
             foreach (lc_keys($v) as $k) {
@@ -191,6 +196,9 @@ function lc_to_text($v)
     if ($v === null) {
         return '';
     }
+    if ($v instanceof LcFn) {
+        return $v->name === '' ? '[函数]' : '[函数 ' . $v->name . ']';
+    }
     return is_string($v) ? $v : lc_to_json($v);
 }
 
@@ -212,6 +220,9 @@ function lc_eq($a, $b)
     }
     if ($ka === 'list' || $ka === 'obj') {
         return lc_to_json($a) === lc_to_json($b);
+    }
+    if ($ka === 'fn') { // 两个函数：是同一个，或者是同一个有名字的函数
+        return $a === $b || ($a->name !== '' && $a->name === $b->name);
     }
     return $ka === 'num' ? (float) $a === (float) $b : $a === $b;
 }

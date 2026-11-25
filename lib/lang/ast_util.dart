@@ -35,15 +35,18 @@ bool lExits(LStmt s) => switch (s) {
 };
 
 /// 这一串语句是不是“怎么走都返回了”（给函数末尾要不要补一句“什么都不返回”用）：只认返回 / 抛出，跳出 / 跳过不算。
+/// 从前往后看：碰到第一句“一定出去了”的就定了——它后面的语句生成器不翻译（见 [lAlwaysExits]），不能再看它们。
 bool lAlwaysReturns(List<LStmt> list) {
-  for (final s in list.reversed) {
+  for (final s in list) {
     if (s is LNote) continue;
-    return switch (s) {
+    final returns = switch (s) {
       LReturn() || LThrow() => true,
       LHost(:final returns) => returns,
       LIf(:final arms, :final orElse) => orElse.isNotEmpty && lAlwaysReturns(orElse) && arms.every((a) => lAlwaysReturns(a.body)),
       _ => false,
     };
+    if (returns) return true;
+    if (lExits(s)) return false;
   }
   return false;
 }
@@ -159,3 +162,7 @@ List<LExpr> lStmtExprs(LStmt s) => switch (s) {
 void lWalkExprs(List<LStmt> list, void Function(LExpr e) visit) {
   lWalk(list, (s) => lStmtExprs(s).forEach(visit));
 }
+
+/// 调这个函数最少、最多给几个参数（最多是 -1＝不限：最后一个参数是“剩下的全收”）。
+int lMinArgs(List<LParam> params) => params.where((p) => !p.rest && p.defaultValue == null).length;
+int lMaxArgs(List<LParam> params) => params.any((p) => p.rest) ? -1 : params.length;

@@ -24,6 +24,7 @@ function kind(v) {
   if (typeof v === "boolean") return "bool";
   if (typeof v === "number") return "num";
   if (typeof v === "string") return "text";
+  if (typeof v === "function") return "fn"; // “函数”这种值（积木第 4 版；怎么造、怎么调在 lc_lang.js 里）
   return Array.isArray(v) ? "list" : "obj";
 }
 
@@ -75,6 +76,8 @@ function toJson(v) {
       return JSON.stringify(v);
     case "list":
       return "[" + v.map(toJson).join(",") + "]";
+    case "fn":
+      return "null"; // 函数写不成 JSON：当空
     default:
       return "{" + Object.keys(v).sort(cmpKeys).map((k) => JSON.stringify(k) + ":" + toJson(v[k])).join(",") + "}";
   }
@@ -87,6 +90,8 @@ function toText(v) {
       return "";
     case "text":
       return v;
+    case "fn":
+      return v.lcName ? "[函数 " + v.lcName + "]" : "[函数]";
     default:
       return toJson(v);
   }
@@ -101,6 +106,8 @@ function truthy(v) {
 function eq(a, b) {
   const ka = kind(a);
   if (ka !== kind(b)) return toText(a) === toText(b);
+  // 两个函数：是同一个，或者是同一个有名字的函数
+  if (ka === "fn") return a === b || (!!a.lcName && a.lcName === b.lcName);
   return ka === "list" || ka === "obj" ? toJson(a) === toJson(b) : a === b;
 }
 

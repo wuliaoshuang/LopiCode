@@ -10,6 +10,7 @@ import 'package:lopicode/backend/backend_lang.dart';
 import 'package:lopicode/backend/backend_target.dart';
 import 'package:lopicode/backend/runtime_php.dart';
 import 'package:lopicode/backend/runtime_php_data.dart';
+import 'package:lopicode/backend/runtime_php_func.dart';
 import 'package:lopicode/backend/runtime_php_json.dart';
 import 'package:lopicode/backend/runtime_php_lang.dart';
 import 'package:lopicode/backend/runtime_php_server.dart';
@@ -47,7 +48,7 @@ class PhpBackendTarget extends BeCodeTarget {
   @override
   LangGen langGen(LangHost host) => PhpLangGen(host: host);
   @override
-  String get langRuntimeSource => '${kPhpLangRuntimeSource.trim()}\n';
+  String get langRuntimeSource => '${kPhpLangRuntimeSource.trim()}\n\n${kPhpLangFuncSource.trim()}\n';
   @override
   String get indentUnit => '    ';
   @override
@@ -133,11 +134,12 @@ class PhpBackendTarget extends BeCodeTarget {
       out.writeln('// 没有生成：${phpComment(s)}');
     }
     if (program.skipped.isNotEmpty) out.writeln();
+    moduleFunctions(program).forEach(out.writeln);
     for (final r in program.routes) {
       out.writeln('// 接口：${phpComment(r.title)}');
       out.writeln('function ${r.fnName}(\$req)');
       out.writeln('{');
-      for (final line in indented([...routeBody(r), if (!beAlwaysReturns(r.body)) 'return null;'])) {
+      for (final line in indented([...routeBody(r, program), if (!beAlwaysReturns(r.body)) 'return null;'])) {
         out.writeln(line);
       }
       out.writeln('}');

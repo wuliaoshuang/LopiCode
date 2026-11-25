@@ -5,6 +5,7 @@ import 'package:lopicode/backend/backend_ir.dart';
 import 'package:lopicode/backend/backend_lang.dart';
 import 'package:lopicode/backend/backend_target.dart';
 import 'package:lopicode/backend/runtime_python.dart';
+import 'package:lopicode/backend/runtime_python_func.dart';
 import 'package:lopicode/backend/runtime_python_lang.dart';
 import 'package:lopicode/lang/gen.dart';
 import 'package:lopicode/lang/gen_python.dart';
@@ -31,7 +32,7 @@ class PythonBackendTarget extends BeCodeTarget {
   @override
   LangGen langGen(LangHost host) => PythonLangGen(host: host);
   @override
-  String get langRuntimeSource => '${kPythonLangRuntimeSource.trim()}\n';
+  String get langRuntimeSource => '${kPythonLangRuntimeSource.trim()}\n\n\n${kPythonLangFuncSource.trim()}\n';
   @override
   String get indentUnit => '    ';
 
@@ -105,11 +106,16 @@ class PythonBackendTarget extends BeCodeTarget {
       out.writeln('# 没有生成：${beComment(s)}');
     }
     if (program.skipped.isNotEmpty) out.writeln();
+    for (final line in moduleFunctions(program)) {
+      // 顶层的函数之间空两行（PEP 8）
+      out.writeln(line);
+      if (line.isEmpty) out.writeln();
+    }
     for (final r in program.routes) {
       out.writeln();
       out.writeln('# 接口：${beComment(r.title)}');
       out.writeln('def ${r.fnName}(req):');
-      for (final line in _suite(routeBody(r))) {
+      for (final line in _suite(routeBody(r, program))) {
         out.writeln(line);
       }
       out.writeln();

@@ -17,6 +17,9 @@ library;
 
 import 'package:lopicode/lang/types.dart';
 
+/// 现在做到第几阶段：表里 `stage` 不超过它的函数才能生成（`stage` 是“第几阶段加进来的”）。
+const int kLangStage = 2;
+
 /// “重复”最多做这么多遍（和第 3 版后端一致）。
 const int kLangRepeatLimit = 10000;
 
@@ -154,15 +157,15 @@ const Map<String, LRtFn> kLangRtFns = {
   'listSort': LRtFn(['xs'], LRet.list, '新列表：从小到大。数字排在前面、按大小；其余的文字化后按码点；一样的保持原来的先后（自定）'),
   'listJoin': LRtFn(['xs', 'sep'], LRet.text, '每项文字化，用 sep 连起来'),
   'range': LRtFn(['a', 'b', 'step'], LRet.list, '数列：从 a 起每次加 step，到 b 为止（含两头）；规矩同“从…数到…”，最多 $kLangRangeLimit 项'),
-  // —— 列表：要拿函数当参数的，第 2 阶段实现（先占位）——
-  'listSortBy': LRtFn(['xs', 'fn'], LRet.list, '按 fn(项) 给的分从小到大', stage: 2),
-  'listMap': LRtFn(['xs', 'fn'], LRet.list, '每一项变一下', stage: 2),
-  'listFilter': LRtFn(['xs', 'fn'], LRet.list, '只留 fn(项) 算“是”的', stage: 2),
-  'listReduce': LRtFn(['xs', 'fn', 'init'], LRet.any, '合成一个值：fn(累计, 项)', stage: 2),
-  'listFind': LRtFn(['xs', 'fn'], LRet.any, '第一个满足的；没有 → 空', stage: 2),
-  'listEvery': LRtFn(['xs', 'fn'], LRet.bool, '都满足吗', stage: 2),
-  'listSome': LRtFn(['xs', 'fn'], LRet.bool, '有满足的吗', stage: 2),
-  'listEach': LRtFn(['xs', 'fn'], LRet.none, '每一项做一遍', stage: 2),
+  // —— 列表：要拿函数当参数的（第 2 阶段加的）。fn 不是函数、参数个数对不上 → 抛错；xs 不是列表 → 当空列表 ——
+  'listSortBy': LRtFn(['xs', 'fn'], LRet.list, '新列表：按 fn(项) 给的分从小到大（分怎么比同 listSort；一样的保持原来的先后）', stage: 2, throws: true),
+  'listMap': LRtFn(['xs', 'fn'], LRet.list, '新列表：每一项换成 fn(项)', stage: 2, throws: true),
+  'listFilter': LRtFn(['xs', 'fn'], LRet.list, '新列表：只留 fn(项) 算“是”的', stage: 2, throws: true),
+  'listReduce': LRtFn(['xs', 'fn', 'init'], LRet.any, '合成一个值：从 init 起，按顺序 累计 = fn(累计, 项)（空列表 → init）', stage: 2, throws: true),
+  'listFind': LRtFn(['xs', 'fn'], LRet.any, '第一个 fn(项) 算“是”的项；没有 → 空', stage: 2, throws: true),
+  'listEvery': LRtFn(['xs', 'fn'], LRet.bool, '每一项 fn(项) 都算“是”吗（空列表 → 是）；碰到第一个“否”就停', stage: 2, throws: true),
+  'listSome': LRtFn(['xs', 'fn'], LRet.bool, '有一项 fn(项) 算“是”吗（空列表 → 否）；碰到第一个“是”就停', stage: 2, throws: true),
+  'listEach': LRtFn(['xs', 'fn'], LRet.none, '按顺序每一项调一次 fn(项)', stage: 2, throws: true),
   // —— 字典（键先文字化）——
   'dictOf': LRtFn(['键, 值'], LRet.dict, '新字典：键 1, 值 1, 键 2, 值 2…；键重复时后面的盖掉前面的；最后落单的一个键（没有值）丢掉', variadic: true),
   'dictGet': LRtFn(['d', 'k'], LRet.any, '那个键的值；没有、d 不是字典 → 空'),
@@ -184,10 +187,17 @@ const Map<String, LRtFn> kLangRtFns = {
 };
 
 /// 小库抛错时的消息（五种语言一样）。
-const Map<String, String> kLangErrors = {'notList': '这不是列表，改不了', 'notDict': '这不是字典，改不了', 'noItem': '列表里没有这个位置', 'notIndexable': '这个值不能按位置或键来改'};
+const Map<String, String> kLangErrors = {
+  'notList': '这不是列表，改不了',
+  'notDict': '这不是字典，改不了',
+  'noItem': '列表里没有这个位置',
+  'notIndexable': '这个值不能按位置或键来改',
+  'notFunction': '这不是函数，不能调用',
+  'argCount': '调用函数时给的参数个数对不上',
+};
 
 /// 二元运算符 → 小库函数。
 const Map<String, String> kLangBinaryFns = {'+': 'add', '-': 'sub', '*': 'mul', '/': 'div', '%': 'mod', '**': 'pow', '==': 'eq', '!=': 'ne', '<': 'lt', '<=': 'le', '>': 'gt', '>=': 'ge'};
 
 /// “是这种类型吗”认的类型名。
-const List<String> kLangTypeNames = ['number', 'text', 'bool', 'null', 'list', 'dict'];
+const List<String> kLangTypeNames = ['number', 'text', 'bool', 'null', 'list', 'dict', 'function'];

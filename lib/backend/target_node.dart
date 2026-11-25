@@ -5,6 +5,7 @@ import 'package:lopicode/backend/backend_ir.dart';
 import 'package:lopicode/backend/backend_lang.dart';
 import 'package:lopicode/backend/backend_target.dart';
 import 'package:lopicode/backend/runtime_node.dart';
+import 'package:lopicode/backend/runtime_node_func.dart';
 import 'package:lopicode/backend/runtime_node_lang.dart';
 import 'package:lopicode/lang/gen.dart';
 import 'package:lopicode/lang/gen_node.dart';
@@ -31,7 +32,7 @@ class NodeBackendTarget extends BeCodeTarget {
   @override
   LangGen langGen(LangHost host) => NodeLangGen(host: host);
   @override
-  String get langRuntimeSource => '${kNodeLangRuntimeSource.trim()}\n';
+  String get langRuntimeSource => '${kNodeLangRuntimeSource.trim()}\n${kNodeLangFuncSource.trim()}\n';
 
   /// 在通用写法上多拆开 `</` 和 `<!--`：万一有人把这段脚本贴进网页的 `<script>` 里，不会被提前截断。
   @override
@@ -97,10 +98,11 @@ class NodeBackendTarget extends BeCodeTarget {
       out.writeln('// 没有生成：${beComment(s)}');
     }
     if (program.skipped.isNotEmpty) out.writeln();
+    moduleFunctions(program).forEach(out.writeln);
     for (final r in program.routes) {
       out.writeln('// 接口：${beComment(r.title)}');
       out.writeln('lc.route(${literal(r.method)}, ${literal(r.path)}, async function ${r.fnName}(req) {');
-      for (final line in indented(routeBody(r))) {
+      for (final line in indented(routeBody(r, program))) {
         out.writeln(line);
       }
       out.writeln('});');

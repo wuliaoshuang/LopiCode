@@ -431,11 +431,20 @@ class LIsA extends LExpr {
   final String cls;
 }
 
-/// 匿名函数（第 2 阶段）。
+/// 匿名函数（第 2 阶段）。两种写法：带函数体的（[body]）；只有一个式子的短写法（[expr] 不是 null，这时 [body] 不用）。
 class LLambda extends LExpr {
-  const LLambda(this.params, this.body, {super.src});
+  const LLambda(this.params, this.body, {this.expr, super.src});
+
+  /// 短写法：`(x) → 式子`。
+  const LLambda.short(this.params, LExpr this.expr, {super.src}) : body = const [];
   final List<LParam> params;
   final List<LStmt> body;
+
+  /// 短写法的那个式子；带函数体的是 null。
+  final LExpr? expr;
+
+  /// 统一成函数体来看：短写法就是“返回 (式子)”。
+  List<LStmt> get stmts => expr == null ? body : [LReturn(expr, src: src)];
 }
 
 class LThis extends LExpr {

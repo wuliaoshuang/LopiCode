@@ -82,7 +82,7 @@ public final class LcLang {
 
     public static boolean isType(Object x, Object name) {
         String k = Lc.kind(x);
-        String want = k.equals("num") ? "number" : k.equals("obj") ? "dict" : k;
+        String want = k.equals("num") ? "number" : k.equals("obj") ? "dict" : k.equals("fn") ? "function" : k;
         return want.equals(Lc.toText(name));
     }
 

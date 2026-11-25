@@ -31,12 +31,23 @@ LStmt let(String name, LExpr value, {bool isConst = false}) => LLet(name, value,
 LStmt set(String name, LExpr value) => LAssign(LTName(name), value);
 LStmt setAt(LExpr of, LExpr key, LExpr value) => LAssign(LTIndex(of, key), value);
 LStmt run(LExpr e) => LExprStmt(e);
+// 函数（第 2 阶段）
+LParam p(String name, {Object? or, bool rest = false, bool hasDefault = false}) => LParam(name, defaultValue: or != null || hasDefault ? LLit(or) : null, rest: rest);
+LFuncDecl fn(String name, List<LParam> params, List<LStmt> body) => LFuncDecl(name, params, body);
+LExpr call(LExpr f, [List<LExpr> args = const []]) => LCall(f, args);
+LExpr callN(String name, [List<LExpr> args = const []]) => LCall(LName(name), args);
+LExpr lam(List<LParam> params, List<LStmt> body) => LLambda(params, body);
+LExpr lamx(List<LParam> params, LExpr e) => LLambda.short(params, e);
+LStmt ret([LExpr? value]) => LReturn(value);
 LStmt iff(LExpr cond, List<LStmt> then, [List<LStmt> orElse = const []]) => LIf([LIfArm(cond, then)], orElse: orElse);
 
 /// 一个用例：一段程序 ＋ 写死的预期输出（一行一项）。
 class LangCase {
-  const LangCase(this.name, this.body, this.expected);
+  const LangCase(this.name, this.body, this.expected, {this.decls = const []});
   final String name;
+
+  /// 模块级的声明：变量、函数（第 2 阶段）。
+  final List<LDecl> decls;
   final List<LStmt> body;
   final List<String> expected;
 }
@@ -104,7 +115,7 @@ Future<LangRun?> runLang(String language, List<LModule> modules) async {
 
 /// 把一批用例拼成一个程序：每个用例一个模块，开头先打印一行 `## 名字`。
 List<LModule> casesProgram(List<LangCase> cases) => [
-  for (final c in cases) LModule(name: c.name, body: [log(t('## ${c.name}')), ...c.body]),
+  for (final c in cases) LModule(name: c.name, decls: c.decls, body: [log(t('## ${c.name}')), ...c.body]),
 ];
 
 /// 把输出按 `## 名字` 切开：名字 → 那一段的各行。

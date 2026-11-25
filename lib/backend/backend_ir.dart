@@ -235,7 +235,7 @@ class BeRouteProgram {
 
 /// 整份后端翻好的样子。
 class BeProgram {
-  const BeProgram({required this.name, required this.port, required this.collections, required this.routes, required this.skipped});
+  const BeProgram({required this.name, required this.port, required this.collections, required this.routes, required this.skipped, this.functions = const []});
 
   final String name;
   final int port;
@@ -244,6 +244,9 @@ class BeProgram {
 
   /// 没法生成的接口和原因（路径格式不对等），生成器把它们写成注释。
   final List<String> skipped;
+
+  /// 文档级的函数（积木第 4 版·第 2 阶段，“我的积木”）：生成成顶层函数，每个接口里都能调。见 backend_lang.dart 的 `beWithFunctions`。
+  final List<LFuncDecl> functions;
 
   bool get usesFetch => routes.any((r) => r.usesFetch);
 }

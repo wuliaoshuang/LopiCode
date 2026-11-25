@@ -203,7 +203,9 @@ abstract class BeCodeTarget extends BackendTarget {
   LangGen _lang(LangCtx ctx) => langGen(
     LangHost(
       call: call,
-      stmt: (payload) => payload is BeS ? _statement(payload, ctx) : [comment('这里有一句不认识的语句，没有生成')],
+      // 旧语句可能夹在函数 / 匿名函数的体里：那时要用正在生成的那个函数体的 ctx。
+      stmt: (payload) => payload is BeS ? _statement(payload, LangCtx.current ?? ctx) : [comment('这里有一句不认识的语句，没有生成')],
+      inspect: beHostInspect,
       // 积木翻出来的语法树里“这次请求”统一叫 kBeRequestName；各语言写成自己的（PHP 是 \$req）。
       name: (name) => name == kBeRequestName ? request : name,
       allowReturn: false,
@@ -233,7 +235,8 @@ abstract class BeCodeTarget extends BackendTarget {
 
   String _langExpression(LExpr e) {
     try {
-      return _lang(LangCtx()).expr(e);
+      final ctx = LangCtx.current ?? LangCtx();
+      return LangCtx.run(ctx, () => _lang(ctx).expr(e));
     } on LangUnsupported {
       return literal(null);
     }
@@ -245,27 +248,79 @@ abstract class BeCodeTarget extends BackendTarget {
     return [for (final s in list) ..._statement(s, c)];
   }
 
-  List<String> _statement(BeS s, LangCtx ctx) => switch (s) {
-    BeSLang(:final stmts) => _langStatements(stmts, ctx),
-    BeSNote(:final text) => [comment(text)],
-    BeSSet(:final name, :final value) => assign(name, expression(value)),
-    BeSLet(:final slot, :final value) => let(slot, expression(value)),
-    BeSDo(call: final c) => perform(expression(c)),
-    BeSIf(:final cond, :final then, :final orElse) => ifElse(expression(cond), statements(then, ctx), statements(orElse, ctx)),
-    BeSRepeat(:final n, :final times, :final body) => repeat(n, expression(times), statements(body, ctx)),
-    BeSForEach(:final n, :final list, :final item, :final body) => forEach(n, expression(list), item, statements(body, ctx)),
-    BeSReturn(:final response) => respond(expression(response)),
-  };
+  List<String> _statement(BeS s, LangCtx ctx) {
+    if (s is BeSLang) return _langStatements(s.stmts, ctx);
+    if (s is BeSNote) return [comment(s.text)];
+    // 这一句自己的式子先写（式子里带函数体的匿名函数要先在这一句前面定义好，见 lib/lang/gen_func.dart），再写套着的语句。
+    return LangCtx.run(ctx, () {
+      final scope = ctx.scope;
+      final outer = scope.pending;
+      scope.pending = [];
+      try {
+        final head = switch (s) {
+          BeSSet(:final value) || BeSLet(:final value) => expression(value),
+          BeSDo(:final call) => expression(call),
+          BeSIf(:final cond) => expression(cond),
+          BeSRepeat(:final times) => expression(times),
+          BeSForEach(:final list) => expression(list),
+          BeSReturn(:final response) => expression(response),
+          BeSNote() => '',
+        };
+        final before = scope.pending;
+        scope.pending = [];
+        return [
+          ...before,
+          ...switch (s) {
+            BeSSet(:final name) => assign(name, head),
+            BeSLet(:final slot) => let(slot, head),
+            BeSDo() => perform(head),
+            BeSIf(:final then, :final orElse) => ifElse(head, statements(then, ctx), statements(orElse, ctx)),
+            BeSRepeat(:final n, :final body) => repeat(n, head, statements(body, ctx)),
+            BeSForEach(:final n, :final item, :final body) => forEach(n, head, item, statements(body, ctx)),
+            BeSReturn() => respond(head),
+            BeSNote() => const <String>[],
+          },
+        ];
+      } finally {
+        scope.pending = outer;
+      }
+    });
+  }
 
   /// 一个接口的函数体：先声明用到的变量（文档里的，再加新积木新建的——初始是空），再是翻好的积木。不带缩进。
-  List<String> routeBody(BeRouteProgram r) {
+  /// [program]：整份后端（接口里要调文档级的函数时得知道有哪些）；不传就当没有函数。
+  List<String> routeBody(BeRouteProgram r, [BeProgram? program]) {
     final known = {for (final v in r.variables) v.name};
-    return [
-      for (final v in r.variables) ...declare(v.name, literal(beInitialValue(v))),
-      for (final name in beLangDeclares(r.body))
-        if (!known.contains(name)) ...declare(name, literal(null)),
-      ...statements(r.body, LangCtx()),
-    ];
+    final ctx = LangCtx(scope: beRouteScope(r, program?.functions ?? const []));
+    return LangCtx.run(
+      ctx,
+      () => [
+        for (final v in r.variables) ...declare(v.name, literal(beInitialValue(v))),
+        for (final name in beLangDeclares(r.body))
+          if (!known.contains(name)) ...declare(name, literal(null)),
+        ...statements(r.body, ctx),
+      ],
+    );
+  }
+
+  /// 文档级的函数（`program.functions`，积木第 4 版·第 2 阶段）→ 顶层代码，不带缩进；后面带一个空行。没有函数就是空的。
+  /// 各语言的 [entrySource] 把它放在接口前面。某个函数里有这一阶段还不支持的节点：留一行说明，函数体换成空的（照样能编译）。
+  List<String> moduleFunctions(BeProgram program) {
+    if (program.functions.isEmpty) return const [];
+    final gen = _lang(LangCtx());
+    final module = LangModuleInfo.of(program.functions);
+    final out = <String>[comment('函数（“我的积木”的定义）：每个接口里都能调')];
+    for (final f in module.funcs.values) {
+      try {
+        out.addAll(gen.functionLines(f, module));
+      } on LangUnsupported catch (e) {
+        out
+          ..add(comment('函数 ${f.name} 没有生成：${e.message}'))
+          ..addAll(gen.functionLines(LFuncDecl(f.name, f.params, const []), module));
+      }
+      out.add('');
+    }
+    return out;
   }
 
   /// 运行时小库的文件名和内容。

@@ -77,11 +77,32 @@ public final class Lc {
 
     // —— 值 ——
 
+    /** “函数”这种值的实现：收一个参数表（积木第 4 版；怎么造、怎么调在 LcLang 里）。 */
+    public interface FnBody {
+        Object call(Object[] args);
+    }
+
+    /** “函数”这种值。max 是 -1＝参数个数不限。写成 JSON 时当空。 */
+    public static final class Fn {
+        final String name;
+        final int min;
+        final int max;
+        final FnBody body;
+
+        Fn(String name, int min, int max, FnBody body) {
+            this.name = name;
+            this.min = min;
+            this.max = max;
+            this.body = body;
+        }
+    }
+
     static String kind(Object v) {
         if (v == null) return "null";
         if (v instanceof Boolean) return "bool";
         if (v instanceof Double) return "num";
         if (v instanceof String) return "text";
+        if (v instanceof Fn) return "fn";
         return v instanceof List ? "list" : "obj";
     }
 
@@ -150,6 +171,7 @@ public final class Lc {
     static String toText(Object v) {
         if (v == null) return "";
         if (v instanceof String) return (String) v;
+        if (v instanceof Fn) return ((Fn) v).name.isEmpty() ? "[函数]" : "[函数 " + ((Fn) v).name + "]";
         return LcJson.write(v);
     }
 
@@ -174,6 +196,8 @@ public final class Lc {
             case "list":
             case "obj":
                 return LcJson.write(a).equals(LcJson.write(b));
+            case "fn": // 两个函数：是同一个，或者是同一个有名字的函数
+                return a == b || (!((Fn) a).name.isEmpty() && ((Fn) a).name.equals(((Fn) b).name));
             default:
                 return a.equals(b);
         }

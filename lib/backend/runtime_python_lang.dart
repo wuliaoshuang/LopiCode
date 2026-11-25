@@ -28,7 +28,7 @@ E_NOT_DICT = "这不是字典，改不了"
 E_NO_ITEM = "列表里没有这个位置"
 E_NOT_INDEXABLE = "这个值不能按位置或键来改"
 
-_TYPE_NAMES = {"num": "number", "text": "text", "bool": "bool", "null": "null", "list": "list", "obj": "dict"}
+_TYPE_NAMES = {"num": "number", "text": "text", "bool": "bool", "null": "null", "list": "list", "obj": "dict", "fn": "function"}
 _HOLE = re.compile(r"\{([^{}]*)\}")
 _LOWER = re.compile("[a-z]+")
 _UPPER = re.compile("[A-Z]+")

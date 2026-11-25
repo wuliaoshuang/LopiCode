@@ -13,170 +13,20 @@ library;
 
 import 'package:lopicode/lang/ast.dart';
 import 'package:lopicode/lang/ast_util.dart';
+import 'package:lopicode/lang/gen_func.dart';
+import 'package:lopicode/lang/gen_scope.dart';
+import 'package:lopicode/lang/gen_support.dart';
+import 'package:lopicode/lang/names.dart';
 import 'package:lopicode/lang/rt.dart';
 
-/// 生成器碰到这一阶段还不支持的节点。消息是给人看的整句话。
-class LangUnsupported implements Exception {
-  const LangUnsupported(this.what, {this.stage, this.src});
+export 'package:lopicode/lang/gen_scope.dart';
+export 'package:lopicode/lang/gen_support.dart';
+export 'package:lopicode/lang/names.dart';
 
-  /// 是什么：“函数”“类”…，或一整句说明（[stage] 是 null 时）。
-  final String what;
-
-  /// 第几阶段才有。
-  final int? stage;
-  final LSrc? src;
-
-  String get message => stage == null ? what : '还不支持“$what”（积木第 4 版第 $stage 阶段才有）';
-
-  @override
-  String toString() => 'LangUnsupported: $message${src == null ? '' : '（$src）'}';
-}
-
-/// 一种语言对一项语言特性的支持办法（设计稿 4.4 的“能力表”）。
-enum LCap {
-  /// 语言自己就有，直接生成。
-  native,
-
-  /// 语言没有，改写成别的写法（比如“从…数到…”改成按遍数的循环）。
-  lowered,
-
-  /// 交给运行时小库。
-  runtime,
-
-  /// 这种语言做不了，校验要拦。
-  forbidden,
-
-  /// 以后的阶段才做（现在生成器会抛 [LangUnsupported]）。
-  later,
-}
-
-/// 能力表里的特性名。
-const List<String> kLangFeatures = [
-  'operators', // 加减乘除、比较
-  'logic', // 并且 / 或者（短路）
-  'cond', // 值版的“如果”
-  'hoist', // 变量声明提到函数开头
-  'const', // 常量
-  'while',
-  'forCount',
-  'forEach',
-  'forPairs',
-  'repeat',
-  'switch', // 按 x 分情况
-  'listMutation', // 原地改列表
-  'functions', // 第 2 阶段
-  'closures', // 第 2 阶段
-  'classes', // 第 5 阶段
-  'errors', // 第 6 阶段
-  'async', // 第 6 阶段
-];
-
-/// 五种语言共同的部分；各语言在自己的生成器里改不一样的几项。
-const Map<String, LCap> kLangBaseCaps = {
-  'operators': LCap.runtime,
-  'logic': LCap.native,
-  'cond': LCap.native,
-  'hoist': LCap.lowered,
-  'const': LCap.lowered,
-  'while': LCap.native,
-  'forCount': LCap.lowered,
-  'forEach': LCap.lowered,
-  'forPairs': LCap.lowered,
-  'repeat': LCap.lowered,
-  'switch': LCap.lowered,
-  'listMutation': LCap.native,
-  'functions': LCap.later,
-  'closures': LCap.later,
-  'classes': LCap.later,
-  'errors': LCap.later,
-  'async': LCap.later,
-};
-
-/// 宿主（比如后端）接进来的两样东西。都没有也行（纯脚本）。
-class LangHost {
-  const LangHost({this.call, this.stmt, this.name, this.allowReturn = true});
-
-  /// [LNative]：调宿主的函数，参数已经写好。
-  final String Function(String fn, List<String> args)? call;
-
-  /// [LHost]：宿主自己的语句，返回一行行代码（不带缩进）。
-  final List<String> Function(Object payload)? stmt;
-
-  /// 宿主的名字（[LNameKind.host]）在这种语言里怎么写；不给就原样写。
-  /// 后端的“这次请求”在语法树里统一叫 `req`，PHP 里要写成 `\$req`——靠它换。
-  final String Function(String name)? name;
-
-  /// 能不能直接写“返回”（[LReturn]）。后端的接口函数不行：那里要用“返回响应”。
-  final bool allowReturn;
-}
-
-/// 一个函数体里共用的东西：给循环用的临时名字编号（同一个函数里不许重）。
-class LangCtx {
-  int _n = 0;
-  int next() => ++_n;
-}
-
-/// 一段语句生成出来的结果。
-class LangFragment {
-  const LangFragment(this.declares, this.lines);
-
-  /// 要在函数开头声明的名字（用户起的原名，没加前缀）：变量、常量、循环变量。宿主负责在函数开头写声明
-  /// （[LangGen.declare]），已经声明过的（比如后端文档里的变量）要自己去掉。
-  final List<String> declares;
-
-  /// 代码，一行一项，不带这一层的缩进。
-  final List<String> lines;
-}
-
-/// 双引号字符串字面量：`"`、`\` 和 [escape] 里的字符加反斜杠；换行 / 回车 / 制表写 `\n` `\r` `\t`；其余控制字符、DEL、U+0085、
-/// U+2028、U+2029、U+FEFF 交给 [unicode]。不成对的代理项换成 U+FFFD。中文、表情原样保留。
-String langQuoted(String s, {String escape = '', String Function(int codePoint)? unicode}) {
-  final u = unicode ?? (int c) => '\\u${c.toRadixString(16).padLeft(4, '0')}';
-  final out = StringBuffer('"');
-  for (var i = 0; i < s.length; i++) {
-    var r = s.codeUnitAt(i);
-    if (r >= 0xD800 && r <= 0xDBFF && i + 1 < s.length && s.codeUnitAt(i + 1) >= 0xDC00 && s.codeUnitAt(i + 1) <= 0xDFFF) {
-      out.write(s.substring(i, i + 2));
-      i++;
-      continue;
-    }
-    if (r >= 0xD800 && r <= 0xDFFF) r = 0xFFFD;
-    final ch = String.fromCharCode(r);
-    if (r == 0x22 || r == 0x5c || (escape.isNotEmpty && escape.contains(ch))) {
-      out.write('\\$ch');
-    } else if (r == 0x0a) {
-      out.write(r'\n');
-    } else if (r == 0x0d) {
-      out.write(r'\r');
-    } else if (r == 0x09) {
-      out.write(r'\t');
-    } else if (r < 0x20 || r == 0x7f || r == 0x85 || r == 0x2028 || r == 0x2029 || r == 0xfeff) {
-      out.write(u(r));
-    } else {
-      out.write(ch);
-    }
-  }
-  out.write('"');
-  return out.toString();
-}
-
-/// 数字字面量：不是有限的数当 0；整数不带小数点（[dotZero] 时补 `.0`，给整数和小数分家的语言用）；其余用最短写法。
-String langNumber(num v, {bool dotZero = false}) {
-  if (!v.isFinite) return dotZero ? '0.0' : '0';
-  final text = v is int || (v == v.roundToDouble() && v.abs() < 1e15) ? '${v.round()}' : '$v';
-  return dotZero && !text.contains(RegExp('[.eE]')) ? '$text.0' : text;
-}
-
-/// 收拾成能放进一行注释的内容：去掉换行类 / 控制字符，拆开 `*/` 和 `</`，过长截断。
-String langComment(String s, [int limit = 160]) {
-  var out = s.replaceAll(RegExp('[\\x00-\\x1f\\x7f\u0085\u2028\u2029\ufeff\ud800-\udfff]+'), ' ').replaceAll('*/', '* /').replaceAll('</', '< /').trim();
-  final runes = out.runes.toList();
-  if (runes.length > limit) out = '${String.fromCharCodes(runes.take(limit))}…';
-  return out.replaceAll('*/', '* /');
-}
-
-abstract class LangGen {
-  const LangGen({this.host = const LangHost()});
+/// 生成器的主体：语句和式子。函数那一部分（定义、调用、匿名函数、闭包、整份脚本）在 gen_func.dart 的 [LangFuncGen] 里，
+/// 两块合起来才是 [LangGen]。
+abstract class LangCore {
+  const LangCore({this.host = const LangHost()});
 
   final LangHost host;
 
@@ -253,7 +103,9 @@ abstract class LangGen {
 
   /// 一个完整的、能直接运行的脚本：每个模块是一个函数，按顺序各跑一遍。[bodies] 是各模块的函数体（声明＋语句，不带缩进）。
   /// 约定：运行时小库的文件和脚本放在同一个目录（各语言的文件名见 [runtimeFile] 和 lib/backend 的生成器）。
-  String scriptSource(List<List<String>> bodies);
+  ///
+  /// [top]：放在文件顶层、各模块函数前面的代码（模块级变量、有名字的函数；Java 里是类的静态成员），不带缩进。
+  String scriptSource(List<List<String>> bodies, {List<String> top = const []});
 
   // —— 骨架 ——
 
@@ -265,48 +117,63 @@ abstract class LangGen {
   /// Python 的一段缩进的代码：空的（或只有注释）补一句 `pass`。
   List<String> suite(List<String> body) => indented([...body, if (body.every((l) => l.trimLeft().startsWith('#'))) 'pass']);
 
-  /// 完整脚本：每个模块一个函数。
-  String script(List<LModule> modules) {
-    final bodies = <List<String>>[];
-    for (final m in modules) {
-      if (m.decls.any((d) => d is! LVarDecl)) {
-        final d = m.decls.firstWhere((d) => d is! LVarDecl);
-        throw LangUnsupported(_declName(d), stage: _declStage(d), src: d.src);
-      }
-      final stmts = <LStmt>[for (final d in m.decls.whereType<LVarDecl>()) LLet(d.name, d.init, isConst: d.isConst, src: d.src), ...m.body];
-      final f = fragment(stmts);
-      bodies.add([for (final n in f.declares) ...declare(n), ...f.lines]);
-    }
-    return scriptSource(bodies);
-  }
-
-  static String _declName(LDecl d) => switch (d) {
-    LFuncDecl() => '函数',
-    LClassDecl() => '类',
-    LInterfaceDecl() => '接口',
-    LNativeDecl() => '宿主函数的声明',
-    LVarDecl() => '变量',
-  };
-
-  static int _declStage(LDecl d) => switch (d) {
-    LFuncDecl() => 2,
-    LNativeDecl() => 3,
-    _ => 5,
-  };
-
   /// **入口**：一段语句 → 代码片段。[ctx] 同一个函数体里的几段要共用一个（循环的临时名字才不会重）。
   /// 碰到这一阶段不支持的节点抛 [LangUnsupported]。
-  LangFragment fragment(List<LStmt> body, {LangCtx? ctx}) => LangFragment(lDeclaredNames(body), statements(body, ctx ?? LangCtx()));
+  ///
+  /// 这一段里有匿名函数、目标语言又要给被里层函数用到的变量装“盒子”（Java）时：这些名字记进 `ctx.scope.boxed`，
+  /// 宿主声明变量要用 [declareIn]。同一个函数体分几段生成的，要先把整个函数体的算好放进 `LangScope.open(boxed: …)`
+  /// （后端的 `BeCodeTarget.routeBody` 就是这么做的）。
+  LangFragment fragment(List<LStmt> body, {LangCtx? ctx}) {
+    final c = ctx ?? LangCtx();
+    if (boxesCaptured) c.scope.boxed.addAll(lCapturedNames(body, inspect: host.inspect));
+    return LangFragment(lDeclaredNames(body), statements(body, c));
+  }
+
+  /// 在某一层里声明一个变量（[declare] 不知道它要不要装盒子）。
+  List<String> declareIn(LangScope scope, String name) => declare(name);
+
+  /// 被里层函数用到的变量要不要装“盒子”（只有 Java 要）。
+  bool get boxesCaptured => false;
 
   List<String> statements(List<LStmt> list, LangCtx ctx) {
     final out = <String>[];
-    for (final s in list) {
-      out.addAll(statement(s, ctx));
-      // 后面的不会执行，不翻译（Java 碰到执行不到的语句编译不过）。
-      if (lExits(s)) break;
+    final prev = LangCtx.current;
+    final scope = ctx.scope;
+    final outerPending = scope.pending;
+    LangCtx.current = ctx;
+    try {
+      for (final s in list) {
+        // 这一句的式子里要是有带函数体的匿名函数，它的定义先放到这一句前面。
+        scope.pending = [];
+        final lines = statement(s, ctx);
+        out
+          ..addAll(scope.pending)
+          ..addAll(lines);
+        // 后面的不会执行，不翻译（Java 碰到执行不到的语句编译不过）。
+        if (lExits(s)) break;
+      }
+    } finally {
+      scope.pending = outerPending;
+      LangCtx.current = prev;
     }
     return out;
   }
+
+  // —— 函数那一部分（gen_func.dart）——
+
+  /// 读一个用户起的名字：这一层 / 外层的变量、模块级变量，或一个有名字的函数（当值用）。
+  String nameExpr(String name, LSrc? src);
+
+  /// 给一个名字赋值时，等号左边怎么写。
+  String targetName(String name);
+  String callExpr(LCall e);
+  String lambdaExpr(LLambda e);
+
+  /// 现在这个位置能不能直接“返回”。
+  bool get canReturn;
+
+  /// “返回”：没有值的在有的语言里要补一个空（函数一律有返回值）。
+  List<String> returnStmt(LExpr? value);
 
   List<String> statement(LStmt s, LangCtx ctx) {
     switch (s) {
@@ -314,13 +181,13 @@ abstract class LangGen {
         return [comment(text)];
       case LLet(:final name, :final value, :final kind):
         return switch (kind) {
-          LNameKind.variable => ['${variable(name)} = ${expr(value)}$end'],
+          LNameKind.variable => ['${targetName(name)} = ${expr(value)}$end'],
           LNameKind.temp => [local(LRet.any, temp(name), expr(value))],
           LNameKind.host => throw LangUnsupported('不能新建宿主的名字 $name', src: s.src),
         };
       case LAssign(:final target, :final value):
         return switch (target) {
-          LTName(:final name) => ['${variable(name)} = ${expr(value)}$end'],
+          LTName(:final name) => ['${targetName(name)} = ${expr(value)}$end'],
           LTIndex(:final of, :final key) => [
             '${langCall('setItem', [expr(of), expr(key), expr(value)])}$end',
           ],
@@ -328,7 +195,7 @@ abstract class LangGen {
         };
       case LExprStmt(expr: final e):
         // 只有“调用”能单独成一句（Go、Java 的规矩）；别的包一层没有副作用的 isNull。
-        final isCall = e is LRt || e is LNative || e is LBinary || e is LUnary || e is LIndex || e is LListLit || e is LDictLit;
+        final isCall = e is LCall || e is LRt || e is LNative || e is LBinary || e is LUnary || e is LIndex || e is LListLit || e is LDictLit;
         return [
           '${isCall ? _raw(e) : coreCall('isNull', [expr(e)])}$end',
         ];
@@ -369,14 +236,14 @@ abstract class LangGen {
           local(LRet.number, b, langCall('toNumber', [expr(to)])),
           local(LRet.number, st, langCall('toNumber', [expr(step)])),
           local(LRet.nativeInt, loopName('N', n), langCall('countSteps', [a, b, st])),
-          ...block(countedHead(k, loopName('N', n)), ['${variable(name)} = ${stepValue(a, k, st)}$end', ...statements(body, ctx)]),
+          ...block(countedHead(k, loopName('N', n)), ['${targetName(name)} = ${stepValue(a, k, st)}$end', ...statements(body, ctx)]),
         ];
       case LForEach(:final list, :final item, :final index, :final body):
         final n = ctx.next();
         final l = loopName('L', n), k = loopName('K', n);
         return [
           local(LRet.nativeList, l, coreCall('items', [expr(list)])),
-          ...block(countedHead(k, nativeLen(l)), ['${variable(item)} = ${nativeAt(l, k)}$end', if (index != null) '${variable(index)} = ${intToNumber(k)}$end', ...statements(body, ctx)]),
+          ...block(countedHead(k, nativeLen(l)), ['${targetName(item)} = ${nativeAt(l, k)}$end', if (index != null) '${targetName(index)} = ${intToNumber(k)}$end', ...statements(body, ctx)]),
         ];
       case LForPairs(:final dict, :final key, :final value, :final body):
         final n = ctx.next();
@@ -391,8 +258,8 @@ abstract class LangGen {
             ]),
           ),
           ...block(countedHead(k, nativeLen(l)), [
-            '${variable(key)} = ${nativeAt(l, k)}$end',
-            '${variable(value)} = ${langCall('dictGet', [d, variable(key)])}$end',
+            '${targetName(key)} = ${nativeAt(l, k)}$end',
+            '${targetName(value)} = ${langCall('dictGet', [d, targetName(key)])}$end',
             ...statements(body, ctx),
           ]),
         ];
@@ -401,8 +268,8 @@ abstract class LangGen {
       case LContinue():
         return ['continue$end'];
       case LReturn(:final value):
-        if (!host.allowReturn) throw LangUnsupported('这里不能直接“返回”，要用宿主自己的返回（后端接口里是“返回响应”）', src: s.src);
-        return [returnLine(value == null ? null : expr(value))];
+        if (!canReturn) throw LangUnsupported('这里不能直接“返回”，要用宿主自己的返回（后端接口里是“返回响应”）', src: s.src);
+        return returnStmt(value);
       case LHost(:final payload):
         final f = host.stmt;
         if (f == null) throw LangUnsupported('这里有一句宿主的语句，但没有接宿主', src: s.src);
@@ -438,7 +305,7 @@ abstract class LangGen {
   String _rt(String fn, List<String> args, LSrc? src) {
     final lang = kLangRtFns[fn];
     if (lang != null) {
-      if (lang.stage > 1) throw LangUnsupported('小库函数 $fn（要拿函数当参数）', stage: lang.stage, src: src);
+      if (lang.stage > kLangStage) throw LangUnsupported('小库函数 $fn', stage: lang.stage, src: src);
       return langCall(fn, args);
     }
     if (kLangCoreFns.containsKey(fn)) return coreCall(fn, args);
@@ -457,7 +324,7 @@ abstract class LangGen {
         ]);
       case LName(:final name, :final kind):
         return switch (kind) {
-          LNameKind.variable => variable(name),
+          LNameKind.variable => nameExpr(name, e.src),
           LNameKind.temp => temp(name),
           LNameKind.host => host.name?.call(name) ?? name,
         };
@@ -484,12 +351,19 @@ abstract class LangGen {
         final f = host.call;
         if (f == null) throw LangUnsupported('宿主函数 $name', stage: 3, src: e.src);
         return f(name, [for (final a in args) expr(a)]);
-      case LCall() || LLambda():
-        throw LangUnsupported('函数', stage: 2, src: e.src);
+      case LCall():
+        return callExpr(e);
+      case LLambda():
+        return lambdaExpr(e);
       case LField() || LSend() || LSuperSend() || LNew() || LIsA() || LThis():
         throw LangUnsupported('类和对象', stage: 5, src: e.src);
       case LAwait() || LSpawn():
         throw LangUnsupported('异步', stage: 6, src: e.src);
     }
   }
+}
+
+/// 一种语言的生成器＝主体（[LangCore]）＋函数那一部分（[LangFuncGen]）。
+abstract class LangGen extends LangCore with LangFuncGen {
+  const LangGen({super.host});
 }

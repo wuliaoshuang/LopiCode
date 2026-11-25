@@ -38,6 +38,13 @@ const fetchTimeout = 10 * time.Second
 // List 是列表。用指针传来传去：在末尾加一项、删一项，改的是同一个列表（和别的语言一样）。
 type List struct{ items []any }
 
+// Fn 是“函数”这种值（积木第 4 版；怎么造、怎么调在 lang.go 里）。Max 是 -1＝参数个数不限。
+type Fn struct {
+	Name     string
+	Min, Max int
+	Do       func(args []any) any
+}
+
 // NewList 把一串值包成列表（不复制）。
 func NewList(items []any) *List { return &List{items: items} }
 
@@ -55,6 +62,8 @@ func kind(v any) string {
 		return "list"
 	case map[string]any:
 		return "obj"
+	case *Fn:
+		return "fn"
 	}
 	return "null"
 }
@@ -263,6 +272,11 @@ func toText(v any) string {
 		return ""
 	case string:
 		return x
+	case *Fn:
+		if x.Name == "" {
+			return "[函数]"
+		}
+		return "[函数 " + x.Name + "]"
 	}
 	return toJSON(v)
 }
@@ -297,6 +311,10 @@ func Eq(a, b any) bool {
 		return a.(bool) == b.(bool)
 	case "text":
 		return a.(string) == b.(string)
+	case "fn":
+		// 两个函数：是同一个，或者是同一个有名字的函数
+		x, y := a.(*Fn), b.(*Fn)
+		return x == y || (x.Name != "" && x.Name == y.Name)
 	}
 	return true
 }

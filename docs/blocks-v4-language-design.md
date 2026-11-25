@@ -220,6 +220,7 @@ Go 和 Java 要类型。办法是三档，从松到严（第 4.3 节细说）：
   - JavaScript、Go：原生支持，不用处理。
   - **以上四种写法已在本机跑过**：同一个“计数器闭包 ＋ 路由器类 ＋ 继承 ＋ 出错兜底”的小程序，手写成 Node / Python / Go / Java 四份
     （`docs/blocks-v4-proto/`），输出逐字相同。PHP 本机没有，未验证。
+- **实施时和上表不一样的地方**（第 2 阶段，详见“实施记录·阶段 2·语言核心”）：函数当值用时五种语言都包一层小库的函数值、调用都走小库的 `call`（上表写的 JS／Python 直接用原生函数、PHP `$g($a)` 没有照做）；Go／Java 的“剩下的全收”参数就是一个列表、调用处包好；PHP 的短写法也用 `function … use (&…)`，不用 `fn`；生成的函数名是 `f_名字`。
 - **默认值**：只许是直接填的值。Go、Java 没有默认参数 → 调用的地方少给了几个，生成器就在调用处把默认值补上（降级）。
 - **不定个数的参数**：JS `...xs`、Python `*xs`、Go `xs ...any`、Java `Object... xs`、PHP `...$xs`；函数里拿到的是一个列表。
 - **递归**：允许。**按名字传参**（`f(次数=3)`）不做——积木的槽本来就带名字，用不着。
@@ -739,7 +740,7 @@ app.listen(8080);
 库自带规则的三种声明方式（不用写代码）：**槽约束**（取值范围、正则、必须是某类东西）、**位置约束**（只能在某帽子下 / 不能在某处）、**唯一约束**（同一文档里某几个槽的组合不许重复）。
 S08“被前面的挡住”这种要算的规则，由内置库用 Dart 写（内置库可以带代码规则，用户库不行）。
 
-**新增的语言规则（L 开头，暂定 14 条）**
+**新增的语言规则（L 开头，暂定 15 条）**
 
 | 号 | 级别 | 内容 |
 | --- | --- | --- |
@@ -757,6 +758,7 @@ S08“被前面的挡住”这种要算的规则，由内置库用 Dart 写（�
 | L12 | 警告 | “试着做”里面是空的；“出错了”里什么都没做（错误被悄悄吞掉） |
 | L13 | 警告 | 可能的死循环（“一直重复”里没有出口；条件写死成“是”） |
 | L14 | 警告 | 定义了但没人用的函数 / 变量 / 参数（只在“问题”面板里列，不在积木上标） |
+| L15 | 错误 | 函数里用了宿主的东西（后端的“这次请求”、“返回响应”）：要用就当参数传进来（第 2 阶段实施时加的） |
 
 错误照旧拦“生成 / 导出 / 运行”，警告不拦。校验仍然是纯函数、不抛异常、Agent 存盘时附带结果。
 
@@ -1147,6 +1149,145 @@ op 名的风格跟 `backend_blocks.dart` 一致。**这些名字是这边提议�
 
 - 真机一概没验证（手感、渐隐观感、多口积木在小屏上的拥挤程度）。
 - PHP 没有真跑。Node / Python / Go / Java 四种真起服务、发请求，逐字节对过。
+
+### 实施记录·阶段 2·语言核心（2026-11-25）
+
+阶段 2（函数和“我的积木”）也分两半：这里记**语言核心**（`lib/lang/`、小库、后端接法、外观模型）；“新建积木”页等界面另记。把两边接到真实后端页上是第三步，照这里的入口和对照表做。
+
+#### 一、交付了什么
+
+| 东西 | 在哪 |
+| --- | --- |
+| 节点做实：`LFuncDecl`／`LParam`、`LReturn`、`LCall`、`LLambda`（带体／`LLambda.short` 短写法）、指向函数的 `LName` | `lib/lang/ast.dart`；`lMinArgs`／`lMaxArgs` 在 `ast_util.dart` |
+| 函数的生成（五种语言共用的那部分：闭包、默认值、函数值、带体匿名函数先定义再用） | `lib/lang/gen_func.dart`（mixin `LangFuncGen`）、`gen_scope.dart`（作用域）、`names.dart`（名字怎么起）、`gen_support.dart`；各语言的写法在 `gen_node.dart` 等五个文件 |
+| 检查 | `lib/lang/analyze.dart`（函数体、调用、匿名函数）、`lib/lang/analyze_module.dart`（一批函数：`analyzeFunctions`、`analyzeModule`） |
+| 小库：函数值、8 个“拿函数当参数”的列表操作 | `lib/backend/runtime_{node,python,go,java,php}_func.dart`（拼在各语言的语言核心小库后面） |
+| “我的积木”的外观 | `lib/lang/custom_block.dart`；改参数联动 `lib/lang/custom_block_edit.dart` |
+| 后端接法 | `lib/backend/backend_lang.dart`（`beWithFunctions` 等）、`backend_ir.dart`（`BeProgram.functions`）、`backend_target.dart`（`moduleFunctions`）、五个 `target_*.dart` |
+
+#### 二、入口（给第三步）
+
+```dart
+// package:lopicode/backend/backend_lang.dart
+BeProgram beWithFunctions(BeProgram program, List<LFuncDecl> functions); // 给翻好的后端加上文档级函数；空表原样返回
+LHostUse  beHostInspect(Object payload);                                 // 一句旧语句读了／改了哪些变量、用没用“这次请求”
+LangScope beRouteScope(BeRouteProgram r, List<LFuncDecl> functions);     // 生成器自己用，第三步一般不用碰
+
+// package:lopicode/lang/lang.dart
+LangFunctionsAnalysis analyzeFunctions(List<LFuncDecl> functions,
+    {Set<String> outer, Set<String> outerConsts, LHostInspect? inspect, bool hostAllowed = false});
+LangAnalysis analyzeBody(List<LStmt> body, {…阶段 1 的参数…,
+    Iterable<LFuncDecl> functions, Map<String, LFuncSig> signatures, LHostInspect? inspect});
+```
+
+第三步的做法：
+
+1. 把文档里每个“定义”帽子降级成一个 `LFuncDecl`（函数体里的旧积木用 `beHostStmts` 包、旧式子用 `beToLangExpr` 转，和阶段 1 一样）。
+2. `fa = analyzeFunctions(函数表, inspect: beHostInspect)`：`fa.issues` 是函数这一边的问题；`fa.functions[名字]`（`LFuncInfo`）给出
+   `returnsValue`（有没有返回值）、`returnType`、`returnsBool`、`minArgs`／`maxArgs`、`unusedParams`、`calls`、`recursive`、`hostNames`／`natives`／`hostStmts`／`hostReturns`。
+   调用积木的形状：`resolveLookShape(look.shape, hasValue: info.returnsValue, returnsBool: info.returnsBool)`。
+3. 每个接口体：`analyzeBody(体, outer: 文档变量, functions: 函数表, signatures: fa.signatures, inspect: beHostInspect)`；它的 `usedFunctions` 是这个接口用到的函数。
+4. “没人用的函数”（L14）要看所有接口：`fa.unusedIssues({所有接口的 usedFunctions 并起来})`。（`analyzeModule` 自己就是这么做的，后端有多个接口所以拆开给。）
+5. 没有错误再生成：`target.generateProgram(beWithFunctions(program, 函数表))`。函数排在接口前面，由 `BeCodeTarget.moduleFunctions(program)` 写（五个 target 的 `entrySource` 都接好了）；函数里出现这一阶段还不支持的节点时，那个函数留一行说明、函数体是空的，整份照样生成（和接口的做法一致）。
+
+**没有函数的文档，生成结果一个字不变**（有测试守着：`beWithFunctions(p, [])` 就是 `p` 本身，五种语言的生成结果和不走这条路的完全相同；阶段 1 的一致性测试、codegen 测试一条没改）。
+
+作用域：每个函数体是自己的一层；接口体仍是一层。函数里能用：自己的参数和变量、别的函数（排在后面的也行）、里层匿名函数能读能改外层的变量。函数里**看不见**接口的变量和文档变量（文档变量是每个接口各一份的局部变量，不是模块级的），也不能用“这次请求”——见下面的 L15。接口体里的匿名函数能读能改接口的变量、能用“这次请求”。
+
+#### 三、对照表：op ／ e → 语法树节点（建议第三步用的名字）
+
+| 积木 | 名字 | 节点 |
+| --- | --- | --- |
+| 帽子“定义 [名字]（参数…）”（文档顶层的一串） | op `defFunc` | `LFuncDecl(name, params, body)`；参数 `LParam(name, defaultValue: LLit?, type: LType?, rest: bool)` |
+| 返回 (值) ／ 返回 | op `return` | `LReturn(value)` ／ `LReturn(null)` |
+| 调用，语句型 | op `callStmt` | `LExprStmt(LCall(LName(函数名), args))` |
+| 调用，值型／是否型 | e `call` | `LCall(LName(函数名), args)` |
+| 调用放在变量里的函数 | e `callValue`（语句型 op `callValueStmt`） | `LCall(任意式子, args)` |
+| 匿名函数（带函数体） | e `lambda` | `LLambda(params, body)` |
+| 匿名函数（短写法） | e `lambdaExpr` | `LLambda.short(params, expr)` |
+| “[名字] 这个函数本身” | e `funcRef` | `LName(函数名)` |
+| 参数 | e `param` | `LName(参数名)`（和变量一样） |
+| 8 个列表操作 | e `listMap`、`listFilter`、`listReduce`、`listFind`、`listEvery`、`listSome`、`listSortBy`；op `listEach` | `LRt(同名, [列表, 函数(, 初始值)])` |
+
+名字怎么认：`LName(x)` 先找变量（参数、本函数的变量、外层函数的变量、模块级变量），找不到再找函数。所以变量可以盖住同名的函数。
+
+8 个列表操作的规矩（五种语言一样）：开始时先抄一份列表再走（回调里改原列表不影响这一趟）；`listEvery`／`listSome`／`listFind` 碰到结果就停；`listReduce` 的回调是 `fn(累计, 项)`；`listSortBy` 是稳定的、每一项只调一次给分函数、分的比法同 `listSort`（数字在前）；回调里出的错原样往外传；第二个参数不是函数报“这不是函数，不能调用”。
+
+#### 四、生成时的做法和自定的数值（都可改）
+
+- **名字**：有名字的函数生成成 `f_名字`（和变量的 `v_名字` 同一个办法，撞不上保留字）；带体的匿名函数先定义成 `lcF1`、`lcF2`…（它的参数表在 Go／Java 里叫 `lcA1`…），再在用的地方写名字；短写法就地写。测试用的整份脚本里是 `f{模块号}_名字`、模块级变量 `g{模块号}_名字`。
+- **函数一律有返回值**：没写“返回”的函数返回空（Node／Go／Java 末尾补一句，Python／PHP 天然如此）。所以“把没有返回值的函数当值用”得到空，五种语言一致。
+- **直接调用**生成原生调用（`f_名字(a, b)`）。**默认值**：Node／Python／PHP 用语言自己的默认参数；Go／Java 在调用处补齐。**剩下的全收**：Node `...xs`、Python `*xs`、PHP `...$xs` 进来后转成列表；Go／Java 的函数就收一个列表，调用处包成 `listOf(…)`（设计稿原写 `xs ...any`／`Object... xs`，这样改是为了函数值的调用和直接调用走同一个签名）。
+- **函数值**：只有“函数当值用”的地方才包一层小库的函数值——`fn(名字, 最少几个, 最多几个, 实现)`，调用走小库的 `call`（查个数、查是不是函数）。五种语言都这么做（设计稿原写 JS／Python 直接用原生函数；统一包一层是为了出错的话、转文字的结果五种语言一样）。Go：`lc.NewFn`／`lc.Call`／`lc.Arg`／`lc.ArgOr`／`lc.Rest`，类型 `*lc.Fn`；Java：`LcLang.fn`／`LcLang.call`／`arg`／`argOr`／`rest`，类型 `Lc.Fn`；PHP：类 `LcFn`、`lc_fn`／`lc_call`。
+- **函数值的规矩**：转文字是 `[函数 名字]`（匿名的 `[函数]`）；输出 JSON 当空；“类型是 函数 吗”认它；相等＝同一个值，或者是同一个有名字的函数。
+- **闭包**：JS／Go 原生。Python 里层改外层变量加 `nonlocal`，改模块级变量加 `global`。Java 被里层用到并且有人改的变量装进一格的盒子 `final Object[] v_x = {…}`、读写变 `v_x[0]`；参数要装盒时参数改叫 `lcP_名字`；里层的变量和外层重名时里层改叫 `v{层数}_名字`（Java 不许 lambda 里的局部变量和外面重名）。PHP 用到的外层变量全部按引用写进 `use (&$x)`，模块级的写 `global`；PHP 不用箭头函数（它按值抓变量）。
+- 调用时参数个数不对：能在生成前查出来的由 L02 拦；查不出来的（调变量里的函数）运行时报“调用函数时给的参数个数对不上”。调的不是函数报“这不是函数，不能调用”。
+- 函数名只差大小写也算重名（PHP 的函数名不分大小写）。
+- 外观模型：一块积木最多 32 个槽、一个下拉最多 64 个选项（多出来的读的时候丢掉）。
+
+#### 五、检查规则
+
+| 号 | 级别 | 这一阶段做了什么 |
+| --- | --- | --- |
+| L01 | 错误 | 调的函数不存在；调的东西明摆着不是函数（直接填的值、列表、字典） |
+| L02 | 错误 | 参数给少了（少了没有默认值的）／给多了；参数表本身不对：“剩下的全收”不在最后或带了默认值、没有默认值的排在有默认值的后面 |
+| L03 | 错误／警告 | “返回”不在函数里（错误）；没有返回值的函数被当成值用（警告；单独成一句的调用不报） |
+| L09 | 错误 | 函数重名（含只差大小写）、函数和模块级变量重名、参数重名、函数里新建了和参数同名的变量、先把外层的名字当外层的用了又新建同名的 |
+| L14 | 警告 | 没人用的函数（只有自己调自己的也算）、没用到的参数 |
+| **L15**（新加） | 错误 | 函数里用了宿主的东西：“这次请求”，或“返回响应”这类会结束接口的语句。提示“当参数传进来”。宿主觉得可以时传 `hostAllowed: true` 关掉 |
+| S11 | 警告 | 推广了：有返回值的函数有的走法没有返回值（包括带值和不带值的“返回”混用）。匿名函数也查 |
+
+G03、L04、L11、L13、S10 在函数体和匿名函数体里照样查（“跳出”不能穿过函数）。类型推断：函数的返回类型由各个“返回”的值合出来，调用式的类型跟着被调函数走（互相调用的几个函数一起推，推不动就是“说不准”）。
+
+**内联口**：这一阶段不做，划到**第 3 阶段**（和回调口、收尾型、帽子型一起，库才需要）。位置留好了：`CustomSlotKind.inlineMouth`（现在用它，`validateLook` 报 B08“还不能用”）和 `LFuncInfo.recursive`（这个函数会不会绕回自己）；第 3 阶段加一条“带内联口的定义不许递归”只要把这两样接起来。
+
+**类型标注**（第 11 节问题 2）：`LParam.type`、`LFuncDecl.type` 只存不用，不影响生成，也不参与检查。**按建议先做，可改。**
+
+#### 六、“我的积木”的外观：存盘格式
+
+一块自定义积木＝一个 `LFuncDecl` ＋ 一个 `CustomBlockLook`。存盘是一个 JSON 对象，键的顺序固定；以后只增字段不改名；读的时候每个字段先判类型，坏的那一截当默认值、坏的槽逐条跳过，不崩：
+
+```json
+{"name": "问好", "shape": "auto", "template": "向 {名字} 问好 {次数} 次", "colorKey": "custom", "hint": "打几声招呼",
+ "slots": [{"name": "名字", "kind": "value"},
+           {"name": "次数", "kind": "value", "defaultValue": 1},
+           {"name": "语气", "kind": "choice", "options": ["客气", "随便"], "defaultValue": "客气"}]}
+```
+
+- `shape`：`auto`（默认，按定义自动选）、`statement`、`value`、`boolean`；`cap`（收尾型）、`hat`（帽子型）只占位，第 3 阶段才能用。
+- 槽的 `kind`：`value`、`boolean`、`choice`（下拉，传给函数的是选中的那段文字）；`inlineMouth`、`callbackMouth` 只占位，第 3 阶段才能用。
+- `hint` 是空、`options` 是空、`defaultValue` 是空时不写这个键。`slots` 里没列到的参数按“值槽、没有先放的内容”算。
+- 模板：`{参数名}` 是槽，`{{`、`}}` 是花括号本身；`parseLookTemplate` 切成“字”和“槽”，`formatLookTemplate` 拼回去，`defaultLookTemplate(名字, 参数表)` 给没写模板时的样子。
+- `validateLook(look, 参数名表)` 的规则 B01–B09（B＝积木外观）：B01 没名字、B02 模板里的槽不是参数、B03 有参数在模板里没有槽、B04 同一个参数出现两次、B05 槽表里有不是参数的名字或列了两次、B06 下拉没有选项或选项空／重复、B07 先放的内容和槽的种类对不上、B08 用了第 3 阶段才有的外观；B09 是警告（模板里一个字都没有；形状和定义对不上）。
+- 改参数联动（`custom_block_edit.dart`）：`remapCallArgs(oldParams, newParams, origin, args, fill)` → 新实参表 ＋ 被丢掉的内容清单（`DroppedArg`）；`origin[i]` 说新参数 i 是原来的第几个（新加的是空）；编辑器不记来历时用 `paramOriginsByName` 按名字对。`remapCallArgsByName` 是按名字存实参时用的；`remapLook` 让外观（模板、槽表）跟着参数表变。
+
+#### 七、行为变化
+
+- **没有函数的文档：入口文件一个字不变。** 但各语言的**基础小库文件**（`lc_runtime.js`、`lc_runtime.py`、`lc/values.go`、`Lc.java`、`lc_runtime.php`）多了几行认“函数值”的代码（转文字、判类型、比相等、输出 JSON），所以重新生成的工程里这几个文件的内容会变；对现有积木的行为没有影响（现有的一致性测试全过）。
+- 文档里有函数时，即使接口里没用新积木，工程也会带上语言核心的小库文件。
+- `kLangStage` 从 1 变成 2：函数、调用、匿名函数、8 个列表操作不再报“第 2 阶段才有”。
+- `LangAnalysis` 的私有构造改名 `LangAnalysis.raw`（`lib/lang` 内部用）。
+
+#### 八、测试
+
+- `test/lang_conformance_func_test.dart`：直接用语法树搭程序，Node／Python／Go／Java 四份**真跑**，输出逐字节相同且等于写死的预期。函数 10 组（递归、互相递归、闭包计数器、闭包读改模块级变量、函数当值存进变量／列表／字典再调、匿名函数两种写法、默认参数、剩下的全收、无返回值与提前返回、函数里用阶段 1 的各种语句）、列表操作 5 组（含空列表、回调里出错往外传、短路）、出错的程序 10 个（四种语言报的话一样）。
+- `test/lang_backend_func_test.dart`：函数、匿名函数和旧后端积木混在同一个接口里，四种语言的后端**真起服务**发请求，响应逐字节相同；Go 过 gofmt、go vet；没有函数时一个字不变。
+- `test/lang_analyze_func_test.dart`：每条规则命中／不命中；函数对外的样子；宿主信息。
+- `test/lang_gen_func_test.dart`：各语言闭包、默认值、函数值的文本检查；**PHP 只有文本检查，未实测**。
+- `test/lang_custom_block_test.dart`：模板解析、JSON 往返、坏数据不崩、改参数联动。
+- 阶段 1 的测试里有几条断言写的是“函数这一阶段还不支持”，现在支持了，照实改了（`lang_gen_test.dart` 三处、`lang_backend_test.dart` 一处：把拿来当“还不支持的节点”的例子从“调函数”换成“抛出错误”），没有删测试。
+
+#### 九、测试里查出来、当场修掉的问题
+
+- **阶段 1 留下的**：`lAlwaysReturns`（“这一串语句是不是怎么走都返回了”）只看最后一句。“返回”后面还跟着别的语句时（生成器本来就不翻译后面的），它说“没返回”，于是函数／接口末尾又补一句返回——Java 里这一句执行不到，**编译不过**（`unreachable statement`）。阶段 1 的接口体同样会中（新节点里“返回响应”后面还有语句）。改成从前往后看、碰到第一句“一定出去了”的就定；检查器的 S11 也不再对这种写法误报。加了真跑的用例和单元测试。
+
+#### 十、没验证的
+
+- PHP：全部（本机没有 PHP，只有文本检查）。尤其是 `use (&$x)` 抓还没赋值的变量、`...$xs`、`LcFn` 这几处。
+- 手机上的运行环境里没跑过。
+- 很深的递归各语言的栈上限不一样（没有统一拦），速度没量过。
+
+---
 
 ## 11. 需要你定的 5 件事
 

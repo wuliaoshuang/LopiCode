@@ -4,6 +4,8 @@
 /// 列表是 `*lc.List`（一个指针），这样“在末尾加一项”改的是同一个列表，和别的语言一样。
 library;
 
+import 'package:lopicode/lang/ast.dart';
+import 'package:lopicode/lang/ast_util.dart';
 import 'package:lopicode/lang/gen.dart';
 import 'package:lopicode/lang/rt.dart';
 
@@ -98,8 +100,52 @@ class GoLangGen extends LangGen {
   @override
   String stepValue(String a, String k, String s) => '$a + float64($k)*$s';
 
+  // —— 函数 ——
+
   @override
-  String scriptSource(List<List<String>> bodies) {
+  bool get nativeDefaults => false;
+  @override
+  bool get argsByList => true;
+  @override
+  List<String> globalDecl(String code) => ['var $code any'];
+  @override
+  String fnWrap(String name, int min, int max, String impl) => 'lc.NewFn(${literal(name)}, $min, $max, $impl)';
+  @override
+  String fnCall(String f, List<String> args) => 'lc.Call(${[f, ...args].join(', ')})';
+  @override
+  String argAt(String args, int i, LParam p) => p.rest
+      ? 'lc.Rest($args, $i)'
+      : p.defaultValue == null
+      ? 'lc.Arg($args, $i)'
+      : 'lc.ArgOr($args, $i, ${literal(p.defaultValue!.value)})';
+
+  /// 有名字的函数：参数、返回值都是 `any`；“剩下的全收”的参数收到的已经是一个列表（调用的地方包好的）。
+  @override
+  List<String> funcDecl(String fname, List<LParam> params, LangScope scope, List<String> body) => [
+    'func $fname(${[for (final p in params) '${localCode(scope, p.name)} any'].join(', ')}) any {',
+    ...indented(body),
+    '}',
+  ];
+  @override
+  List<String> lambdaDef(String tmp, List<LParam> params, LangScope scope, List<String> body, List<String> uses, String args) => [
+    '$tmp := lc.NewFn("", ${lMinArgs(params)}, ${lMaxArgs(params)}, func($args []any) any {',
+    ...indented(body),
+    '})',
+  ];
+  @override
+  String lambdaShort(List<LParam> params, LangScope scope, String code, List<String> uses, String args) => 'func($args []any) any { return $code }';
+  @override
+  String namedImpl(LFuncDecl f, String fname) => 'func(lcA []any) any { return $fname(${[for (var i = 0; i < f.params.length; i++) argAt('lcA', i, f.params[i])].join(', ')}) }';
+
+  /// 匿名函数收到的是一个参数表：开头把参数一个个取出来（没用到的参数 Go 不让编译，所以跟一句 `_ = 变量`）。
+  @override
+  List<String> paramPreamble(List<LParam> params, LangScope scope, String? args) => [
+    if (args != null)
+      for (var i = 0; i < params.length; i++) ...['var ${localCode(scope, params[i].name)} any = ${argAt(args, i, params[i])}', '_ = ${localCode(scope, params[i].name)}'],
+  ];
+
+  @override
+  String scriptSource(List<List<String>> bodies, {List<String> top = const []}) {
     final out = StringBuffer()
       ..writeln('// 由 LopiCode 积木生成（Go）。')
       ..writeln('package main')
@@ -108,6 +154,8 @@ class GoLangGen extends LangGen {
       ..writeln()
       ..writeln('// 没有一块积木时也要用到小库一次，否则 Go 不让编译。')
       ..writeln('var _ = lc.Truthy');
+    if (top.isNotEmpty) out.writeln();
+    top.forEach(out.writeln);
     for (var i = 0; i < bodies.length; i++) {
       out
         ..writeln()

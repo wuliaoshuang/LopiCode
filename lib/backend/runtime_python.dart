@@ -43,6 +43,8 @@ def _kind(v):
         return "num"
     if isinstance(v, str):
         return "text"
+    if callable(v):  # “函数”这种值（积木第 4 版；怎么造、怎么调在 lc_lang.py 里）
+        return "fn"
     return "list" if isinstance(v, list) else "obj"
 
 
@@ -93,6 +95,8 @@ def to_json(v):
         return json.dumps(v, ensure_ascii=False)
     if kind == "list":
         return "[" + ",".join(to_json(x) for x in v) + "]"
+    if kind == "fn":  # 函数写不成 JSON：当空
+        return "null"
     return "{" + ",".join(json.dumps(k, ensure_ascii=False) + ":" + to_json(v[k]) for k in sorted(v)) + "}"
 
 
@@ -103,6 +107,9 @@ def to_text(v):
         return ""
     if kind == "text":
         return v
+    if kind == "fn":
+        name = getattr(v, "lc_name", "")
+        return "[函数 " + name + "]" if name else "[函数]"
     return to_json(v)
 
 
@@ -129,6 +136,9 @@ def eq(a, b):
         return to_json(a) == to_json(b)
     if kind == "num":
         return float(a) == float(b)
+    if kind == "fn":  # 两个函数：是同一个，或者是同一个有名字的函数
+        name = getattr(a, "lc_name", "")
+        return a is b or (name != "" and name == getattr(b, "lc_name", ""))
     return a == b
 
 
