@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
+import 'package:lopicode/agent/skill_scripts.dart';
 import 'package:lopicode/core/safe_file.dart';
 import 'package:lopicode/core/stores.dart';
 import 'package:lopicode/runtime/guest_groups.dart';
@@ -461,9 +462,27 @@ class LinuxRuntime {
     }
   }
 
+  /// 技能镜像（由应用装配时接上，见 lib/agent/skill_mirror.dart）：给工作区目录，返回要挂进 /skills 的主机目录；没有技能返回 null。
+  String? Function(String? projectDir)? skillsMirror;
+
+  /// 把这个工作区的技能镜像对齐好，返回要挂进环境的主机目录；没接镜像、没有技能、读写失败都是 null（不挂）。
+  String? skillsHostDirFor(String? projectDir) {
+    final dir = skillsMirror?.call(projectDir);
+    // 镜像路径我们自己定的，正常不会有冒号；真有就不挂（PRoot 用冒号分隔“主机路径:环境路径”，会被拆错）。
+    if (dir == null || dir.contains(':')) return null;
+    try {
+      // 挂载点先建好（PRoot 也能自己垫一个，但建好最稳）。
+      Directory(p.join(rootfsDir, kGuestSkillsDir.substring(1))).createSync(recursive: true);
+    } on FileSystemException {
+      // 建不出来不要紧：PRoot 会自己垫一个挂载点。
+    }
+    return dir;
+  }
+
   ProotCommand prootCommand({required List<String> guestCommand, String? projectDir, String? guestCwd, String term = 'xterm-256color'}) {
     prepareLauncherLibs();
     syncGuestGroups();
+    final skills = skillsHostDirFor(projectDir);
     return buildProotCommand(
       nativeLibDir: nativeLibDir ?? '',
       libDir: hostLibDir,
@@ -474,6 +493,7 @@ class LinuxRuntime {
       guestCwd: guestCwd,
       term: term,
       noSeccomp: compatMode,
+      extraBinds: [if (skills != null) (skills, kGuestSkillsDir)],
     );
   }
 

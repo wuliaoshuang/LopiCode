@@ -58,12 +58,14 @@ List<ChatItem> chatItemsFromMessages(List<Map<String, dynamic>> messages, {requi
         final at = toolAt['${m['tool_call_id']}'];
         if (at != null) {
           final result = '${m['content'] ?? ''}';
-          // `_diff`：这一步的改动对比（旧记录没有；类型不对就当没有）。
+          // `_diff`：这一步的改动对比；`_ms`：这一步用了多久（旧记录都没有；类型不对就当没有）。
+          final ms = m['_ms'];
           items[at] = (items[at] as ToolItem).copyWith(
             result: result,
             ok: !result.startsWith('错误') && !result.startsWith('用户拒绝'),
             denied: result.startsWith('用户拒绝'),
             change: FileChange.tryParse(m['_diff']),
+            ms: ms is int && ms >= 0 ? ms : null,
           );
         }
     }

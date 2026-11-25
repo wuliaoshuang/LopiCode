@@ -8,6 +8,7 @@ import 'package:lopicode/agent/memory_store.dart';
 import 'package:lopicode/agent/model_config.dart';
 import 'package:lopicode/agent/presets.dart';
 import 'package:lopicode/agent/protocols.dart';
+import 'package:lopicode/agent/skill_mirror.dart';
 import 'package:lopicode/agent/skills.dart';
 import 'package:lopicode/automation_scheduler.dart';
 import 'package:lopicode/core/project_store.dart';
@@ -37,6 +38,8 @@ class AppServices {
        memory = AppMemory(settings, p.join(settings.file.parent.path, 'memory')),
        automations = AutomationStore(File(p.join(settings.file.parent.path, 'automations.json'))) {
     projects.linuxRootfs ??= this.runtime.rootfsDir;
+    // 技能镜像：进 Ubuntu 前把开着的技能复制一份挂到 /skills（挂副本，环境里改不到原件）。
+    this.runtime.skillsMirror ??= SkillMirror(skills, p.join(this.runtime.baseDir, 'skills-mirror')).sync;
     keepAlive = AgentKeepAlive(keepEnabled: () => settings.getBool(SettingKeys.agentKeepAlive, true), notifyEnabled: () => settings.getBool(SettingKeys.agentNotifyDone, true))..attach(keepAliveHost);
     settings.addKeyListener(_onSettingKey);
     scheduler = AutomationScheduler(this);

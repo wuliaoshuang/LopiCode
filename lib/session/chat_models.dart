@@ -29,7 +29,13 @@ class AssistantItem extends ChatItem {
 }
 
 class ToolItem extends ChatItem {
-  const ToolItem(this.callId, this.name, this.arguments, {this.result, this.ok = true, this.denied = false, this.childConversationId, this.change});
+  const ToolItem(this.callId, this.name, this.arguments, {this.result, this.ok = true, this.denied = false, this.childConversationId, this.change, this.startedAt, this.ms});
+
+  /// 这一步从什么时候开始的（只在这次运行里有，界面拿它算“已经跑了几秒”；重新打开的旧记录是 null）。
+  final DateTime? startedAt;
+
+  /// 这一步一共用了多久（毫秒，含等用户点确认的时间）；旧记录里没存就是 null。
+  final int? ms;
 
   /// 这一步把文件改成了什么样（精简的对比，不带全文）；没改文件、旧记录里没存就是 null。
   final FileChange? change;
@@ -44,7 +50,7 @@ class ToolItem extends ChatItem {
   /// 派子代理的调用：对应的子对话。
   final String? childConversationId;
 
-  ToolItem copyWith({String? result, bool? ok, bool? denied, String? childConversationId, FileChange? change}) => ToolItem(
+  ToolItem copyWith({String? result, bool? ok, bool? denied, String? childConversationId, FileChange? change, int? ms}) => ToolItem(
     callId,
     name,
     arguments,
@@ -53,6 +59,8 @@ class ToolItem extends ChatItem {
     denied: denied ?? this.denied,
     childConversationId: childConversationId ?? this.childConversationId,
     change: change ?? this.change,
+    startedAt: startedAt,
+    ms: ms ?? this.ms,
   );
 }
 
