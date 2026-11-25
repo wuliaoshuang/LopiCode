@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:lopicode/build/github_client.dart';
+import 'package:lopicode/build/local_pack_form.dart';
 import 'package:lopicode/core/path_guard.dart';
 import 'package:lopicode/core/project_store.dart';
 import 'package:path/path.dart' as p;
@@ -73,11 +74,11 @@ class ApkBuildController extends BuildJob {
     if (_cancelled) throw _Cancelled();
   }
 
-  /// 读出项目里要推送的文件（跳过内部目录和过大的文件）。
+  /// 读出项目里要推送的文件（跳过内部目录、过大的文件，以及本地打包留在 build/ 下的安装包和钥匙备份）。
   static Future<Map<String, List<int>>> collectFiles(PathGuard guard, {int maxBytes = 5 * 1024 * 1024}) async {
     final out = <String, List<int>>{};
     for (final rel in await listProjectFiles(guard, limit: 2000)) {
-      if (rel.endsWith('/')) continue;
+      if (rel.endsWith('/') || isLocalPackOutput(rel)) continue;
       final file = File(guard.resolve(rel));
       if (await file.length() > maxBytes) continue;
       out[rel] = await file.readAsBytes();
