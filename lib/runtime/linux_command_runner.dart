@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:lopicode/agent/command_runner.dart';
 import 'package:lopicode/agent/process_tree.dart';
+import 'package:lopicode/agent/skill_scripts.dart';
 import 'package:lopicode/runtime/linux_runtime.dart';
 import 'package:lopicode/runtime/proot_command.dart';
 
@@ -13,7 +14,7 @@ import 'package:lopicode/runtime/proot_command.dart';
 /// - 桌面 / 宿主机测试：和以前一样用本机 shell（开发调试用）。
 ///
 /// 要不要先问用户，由调用它的工具层决定，这里不管。
-class LinuxCommandRunner implements CommandRunner, HasCommandTimeout, HasCommandAvailability, HasCommandStop, HasBackgroundStart {
+class LinuxCommandRunner implements CommandRunner, HasCommandTimeout, HasCommandAvailability, HasCommandStop, HasBackgroundStart, HasSkillMount {
   LinuxCommandRunner(this.runtime, {this.onOutput, this.guestCwd}) : _local = LocalShellRunner(onOutput: onOutput);
 
   final LinuxRuntime runtime;
@@ -26,6 +27,14 @@ class LinuxCommandRunner implements CommandRunner, HasCommandTimeout, HasCommand
   /// 不许用本机 shell 的平台上，命令是不是只能进 Ubuntu。
   bool get _linuxOnly => !runtime.localShellAllowed;
   bool get _useLinux => _linuxOnly ? runtime.usable : runtime.shouldUseLinux;
+
+  /// 命令进 Ubuntu 跑时，这个工作区的技能镜像挂在环境里的哪（没有技能 / 没挂上是 null）。
+  @override
+  String? skillsGuestDirFor(String workingDirectory) => _useLinux && runtime.skillsHostDirFor(workingDirectory) != null ? kGuestSkillsDir : null;
+
+  /// 命令现在是进 Ubuntu 跑的：技能脚本只能从 /skills 跑，没挂上就是跑不了。
+  @override
+  bool get skillMountRequired => _useLinux;
 
   /// 环境不能用时给模型（也会原样显示给用户）的说明；能用返回 null。
   @override

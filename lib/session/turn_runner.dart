@@ -136,15 +136,15 @@ class TurnRunner {
             run.add(UserItem(text));
             if (identical(run, core.active)) queue.dropSteered(text);
           case ToolStarted(:final callId, :final name, :final arguments):
-            run.add(ToolItem(callId, name, arguments));
+            run.add(ToolItem(callId, name, arguments, startedAt: DateTime.now()));
             turn.steps.add(ToolStep(callId, name));
             toolClocks[callId] = Stopwatch()..start();
             journal.stepStarted(callId, name, arguments);
             // 这时候记录里已经有“模型要调这些工具”那条消息：先存一次，被关掉也知道做到哪了。
             core.saveMessagesLater(run);
-          case ToolFinished(:final callId, :final outcome):
+          case ToolFinished(:final callId, :final outcome, :final ms):
             final item = run.items.whereType<ToolItem>().lastWhere((t) => t.callId == callId);
-            run.replace(item, item.copyWith(result: outcome.text, ok: outcome.ok, denied: outcome.denied, change: outcome.change?.slim));
+            run.replace(item, item.copyWith(result: outcome.text, ok: outcome.ok, denied: outcome.denied, change: outcome.change?.slim, ms: ms));
             changes.record(run.convId, outcome.change);
             if (outcome.changedFiles) core.filesChanged();
             turn.steps.whereType<ToolStep>().where((t) => t.callId == callId).lastOrNull

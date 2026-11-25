@@ -5,43 +5,25 @@
 //   · 进行中：转圈 + 现在在做什么 + “第 N 步”，就一行；
 //   · 做完：一行摘要“执行了 5 步 · 读 3 个文件 · 改 1 个文件 · 1 条命令”，有失败时行尾一个红色小标记；
 //   · 折叠时失败 / 被拒绝的那几步单独露在摘要下面（看得见停在哪），其余收起；
-//   · 点摘要展开清单（左边一条细线串起来），再点某一步看参数和结果；长结果先截一段，点“显示全部”；
-//     命令输出太长被转存成文件的，结果下面多一个“查看完整输出”（另开一页）。
+//   · 点摘要展开清单：一条时间线（左边细竖线 + 每步一个状态圆点，见 step_timeline.dart），每步下面带一小段结果摘要；
+//     再点某一步看详情（按工具分别排，见 step_detail.dart）。一步那一行在 step_row.dart。
 //   · 某一步之前模型的思考也是清单里的一行（“思考了 N 秒”，见 chat_extras.dart），折叠时不露出来。
 // - 只有一步、中间也没说话的，不套组，直接是一行。
 // - 颜色只出现在状态上：失败红、被拒绝橙、子代理的“查看”用强调色；其余全是中性灰。
 // - 主操作没有：这里全是“想看再点”的次要内容。
-import 'dart:convert';
-
-import 'package:lopicode/agent/command_output_store.dart';
 import 'package:lopicode/session/chat_models.dart';
 import 'package:lopicode/session/chat_rows.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/chat_extras.dart';
-import 'package:lopicode/ui/step_diff.dart';
+import 'package:lopicode/ui/step_row.dart';
+import 'package:lopicode/ui/step_timeline.dart';
 import 'package:material_ui/material_ui.dart';
 
-/// 结果先显示这么多字，多的点“显示全部”。
-const int kStepResultPreview = 1200;
-
-/// “显示全部”也最多这么多字（再长在手机上也没法看）。
-const int kStepResultMax = 20000;
+export 'package:lopicode/ui/step_detail.dart' show StepDetail, kStepResultMax, kStepResultPreview, stepDetailSections;
+export 'package:lopicode/ui/step_row.dart' show StepRow;
 
 /// 折叠时最多单独露出几条失败 / 被拒绝的步骤。
 const int kExposedFailures = 2;
-
-IconData _iconOf(StepKind kind) => switch (kind) {
-  StepKind.read => Icons.description_outlined,
-  StepKind.look => Icons.folder_open_outlined,
-  StepKind.edit => Icons.edit_outlined,
-  StepKind.delete => Icons.delete_outline,
-  StepKind.command => Icons.terminal,
-  StepKind.search => Icons.travel_explore,
-  StepKind.agent => Icons.account_tree_outlined,
-  StepKind.ask => Icons.help_outline,
-  StepKind.plan => Icons.checklist,
-  StepKind.other => Icons.build_outlined,
-};
 
 class StepGroupView extends StatefulWidget {
   const StepGroupView({super.key, required this.row, this.onOpenChild});
@@ -91,20 +73,27 @@ class _StepGroupViewState extends State<StepGroupView> with AutomaticKeepAliveCl
             curve: Curves.easeOut,
             alignment: Alignment.topCenter,
             child: _expanded
-                ? _Thread(
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      for (final step in row.steps)
+                      for (final (i, step) in row.steps.indexed)
                         if (step is ToolItem)
-                          StepRow(tool: step, onOpenChild: widget.onOpenChild)
+                          StepRow(
+                            tool: step,
+                            onOpenChild: widget.onOpenChild,
+                            rail: RailSpot(first: i == 0, last: i == row.steps.length - 1),
+                          )
                         else if (step is AssistantItem)
-                          _Note(step.text)
+                          _Between(child: _Note(step.text))
                         else if (step is ThinkingItem)
-                          ThinkingRow(item: step),
+                          _Between(child: ThinkingRow(item: step)),
                     ],
                   )
                 : shown.isEmpty
                 ? const SizedBox(width: double.infinity)
-                : _Thread(
+                // 折叠时露在外面的失败步骤：不是连着的一段，只有圆点、不画线。
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [for (final t in shown) StepRow(tool: t, onOpenChild: widget.onOpenChild)],
                   ),
           ),
@@ -217,19 +206,19 @@ class _Flag extends StatelessWidget {
   );
 }
 
-/// 展开后的清单：左边一条细线把这一组串起来。
-class _Thread extends StatelessWidget {
-  const _Thread({required this.children});
-  final List<Widget> children;
+/// 时间线上两步之间的东西（模型说的话、思考）：竖线从它左边穿过去不断开，内容缩进到和步骤的文字对齐。
+class _Between extends StatelessWidget {
+  const _Between({required this.child});
+  final Widget child;
 
   @override
-  Widget build(BuildContext context) => Container(
-    margin: const EdgeInsets.only(left: 11),
-    padding: const EdgeInsets.only(left: Space.x3),
-    decoration: BoxDecoration(
-      border: Border(left: BorderSide(color: context.colors.border)),
+  Widget build(BuildContext context) => TimelineRail(
+    spot: const RailSpot(first: false, last: false),
+    marker: false,
+    child: Padding(
+      padding: const EdgeInsets.only(left: kRailWidth + Space.x2),
+      child: child,
     ),
-    child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children),
   );
 }
 
@@ -243,209 +232,4 @@ class _Note extends StatelessWidget {
     padding: const EdgeInsets.symmetric(vertical: Space.x2),
     child: Text(text.trim(), style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: context.colors.textMuted)),
   );
-}
-
-/// 一步：一行“动作 + 对象”，行尾是状态；点开看参数和结果。
-class StepRow extends StatefulWidget {
-  const StepRow({super.key, required this.tool, this.onOpenChild});
-  final ToolItem tool;
-  final void Function(String conversationId)? onOpenChild;
-
-  @override
-  State<StepRow> createState() => _StepRowState();
-}
-
-class _StepRowState extends State<StepRow> {
-  bool _open = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.colors;
-    final t = Theme.of(context).textTheme;
-    final tool = widget.tool;
-    final (verb, target) = stepLabelOf(tool);
-    final failed = !tool.running && !tool.ok && !tool.denied;
-    final child = tool.childConversationId;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        InkWell(
-          key: ValueKey('step-${tool.callId}'),
-          borderRadius: BorderRadius.circular(Radii.sm),
-          onTap: () => setState(() => _open = !_open),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 36),
-            child: Row(
-              children: [
-                SizedBox(
-                  width: 24,
-                  child: Center(child: Icon(_iconOf(stepKindOf(tool.name)), size: 16, color: failed ? c.danger : c.textFaint)),
-                ),
-                const SizedBox(width: Space.x2),
-                Expanded(
-                  child: Text.rich(
-                    TextSpan(
-                      text: verb,
-                      children: [
-                        if (target.isNotEmpty)
-                          TextSpan(
-                            text: ' ${target.replaceAll('\n', ' ')}',
-                            style: TextStyle(fontFamily: kMonoFont, fontFamilyFallback: kMonoFallback, fontSize: FontSize.xs, color: c.textFaint),
-                          ),
-                      ],
-                    ),
-                    style: t.bodyMedium?.copyWith(color: c.textMuted),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                StepStat(tool: tool),
-                if (tool.running) ...[const SizedBox(width: Space.x2), SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 1.5, color: c.textFaint))],
-                if (failed) ...[const SizedBox(width: Space.x2), Text('失败', style: t.bodySmall?.copyWith(color: c.danger))],
-                if (tool.denied) ...[const SizedBox(width: Space.x2), Text('已拒绝', style: t.bodySmall?.copyWith(color: c.warning))],
-                if (child != null && widget.onOpenChild != null)
-                  InkWell(
-                    borderRadius: BorderRadius.circular(Radii.sm),
-                    onTap: () => widget.onOpenChild!(child),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: Space.x2, vertical: Space.x2),
-                      child: Text('查看', style: t.bodySmall?.copyWith(color: c.accent)),
-                    ),
-                  ),
-                const SizedBox(width: Space.x1),
-                Icon(_open ? Icons.expand_less : Icons.expand_more, size: 16, color: c.textFaint),
-              ],
-            ),
-          ),
-        ),
-        if (_open) _StepDetail(tool: tool),
-      ],
-    );
-  }
-}
-
-/// 一步的参数和结果要显示的几段：（小标题，内容）。
-List<(String, String)> stepDetailSections(ToolItem tool) {
-  Map<String, dynamic> args = const {};
-  try {
-    final decoded = jsonDecode(tool.arguments);
-    if (decoded is Map<String, dynamic>) args = decoded;
-  } on FormatException {
-    // 不是合法 JSON：下面按原文显示
-  }
-  String a(String key) => '${args[key] ?? ''}';
-  final out = <(String, String)>[];
-  switch (tool.name) {
-    case 'run_command':
-      out.add(('命令', '\$ ${a('command')}'));
-    case 'write_file':
-      out
-        ..add(('文件', a('path')))
-        // 有红绿对比就不再把整份内容重复贴一遍。
-        ..addAll([if (!(tool.change?.hasDiff ?? false)) ('写入的内容', a('content'))]);
-    case 'edit_file' when tool.change != null || editPreviewOf(tool) != null:
-      out.add(('文件', a('path')));
-    case 'read_file' || 'delete_file':
-      out.add(('文件', a('path')));
-    default:
-      final raw = tool.arguments.trim();
-      if (args.isNotEmpty) {
-        out.add(('参数', const JsonEncoder.withIndent('  ').convert(args)));
-      } else if (raw.isNotEmpty && raw != '{}') {
-        out.add(('参数', raw));
-      }
-  }
-  final result = tool.result;
-  out.add((
-    result == null
-        ? '结果'
-        : tool.denied
-        ? '没有执行'
-        : tool.ok
-        ? '结果'
-        : '报错',
-    result ?? '执行中…',
-  ));
-  return out;
-}
-
-class _StepDetail extends StatefulWidget {
-  const _StepDetail({required this.tool});
-  final ToolItem tool;
-
-  @override
-  State<_StepDetail> createState() => _StepDetailState();
-}
-
-class _StepDetailState extends State<_StepDetail> {
-  bool _full = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.colors;
-    final t = Theme.of(context).textTheme;
-    final mono = TextStyle(fontFamily: kMonoFont, fontFamilyFallback: kMonoFallback, fontSize: FontSize.xs, height: 1.5, color: c.textMuted);
-    final sections = stepDetailSections(widget.tool);
-    final limit = _full ? kStepResultMax : kStepResultPreview;
-    final clipped = sections.any((s) => s.$2.length > kStepResultPreview);
-    // 命令输出太长、完整的转存成了文件：给一个整页查看的入口。
-    final spilled = spilledOutputPathOf(widget.tool.result);
-    final readOutput = ChatRowActions.maybeOf(context)?.readOutput;
-    return Container(
-      margin: const EdgeInsets.only(left: Space.x8, bottom: Space.x2),
-      constraints: BoxConstraints(maxHeight: _full ? 420 : 240),
-      decoration: BoxDecoration(color: c.codeBg, borderRadius: BorderRadius.circular(Radii.md)),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Flexible(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(Space.x3),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  StepDiffBlock(tool: widget.tool),
-                  for (final (i, (title, body)) in sections.indexed) ...[
-                    if (i > 0) const SizedBox(height: Space.x3),
-                    Text(title, style: t.bodySmall?.copyWith(color: c.textFaint)),
-                    const SizedBox(height: Space.x1),
-                    SelectableText(body.length > limit ? '${body.substring(0, limit)}\n…（共 ${body.length} 字，${_full ? '太长，只显示前 $limit 字' : '还有 ${body.length - limit} 字没显示'}）' : body, style: mono),
-                  ],
-                  if (clipped && !_full)
-                    Padding(
-                      padding: const EdgeInsets.only(top: Space.x2),
-                      child: InkWell(
-                        onTap: () => setState(() => _full = true),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: Space.x1),
-                          child: Text('显示全部', style: t.bodySmall?.copyWith(color: c.accent)),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ),
-          // 完整输出的入口钉在框底，不跟着内容滚走：输出很长时不用先滑到底才看得见。
-          if (spilled != null && readOutput != null)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(Space.x3, 0, Space.x3, Space.x2),
-              child: InkWell(
-                key: const ValueKey('open-full-output'),
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => CommandOutputPage(path: spilled, load: readOutput),
-                  ),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: Space.x1),
-                  child: Text('查看完整输出', style: t.bodySmall?.copyWith(color: c.accent)),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
 }

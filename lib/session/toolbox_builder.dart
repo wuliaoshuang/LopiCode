@@ -7,6 +7,7 @@
 // - “本对话都允许”按主对话记；
 // - 写入范围（团队任务）原样传给 AgentToolbox。
 import 'package:lopicode/agent/agent_tools.dart';
+import 'package:lopicode/agent/skill_scripts.dart';
 import 'package:lopicode/agent/skills.dart';
 import 'package:lopicode/agent/team.dart';
 import 'package:lopicode/agent/todos.dart';
@@ -88,12 +89,12 @@ class ToolboxBuilder {
     extras.addAll(backendTools(guard: core.guard, writeScope: writeScope));
     final search = await WebSearchConfig.load(app.settings, app.secrets);
     if (search != null) extras.add((session.webSearchFactory ?? WebSearchClient.new)(search).tool);
-    final skillTool = app.skills.tool(skills);
+    final runner = session.commandRunnerFactory?.call() ?? LinuxCommandRunner(app.runtime, guestCwd: core.project.linuxPath, onOutput: (t) => _echoTerminal()?.append(t));
+    final skillTool = app.skills.tool(skills, scriptEnv: () => skillScriptEnvOf(runner, core.guard.root));
     if (skillTool != null) extras.add(skillTool);
     if (core.subagentsEnabled && conv.depth < core.subagentMaxDepth) extras.add(spawnTool(run, root, skills));
     if (core.teamEnabled) extras.addAll((await core.boardOf(root)).tools(conv.parentId == null ? TeamBoard.lead : conv.agentName));
     if (!run.unattended) extras.addAll(automationTools(store: app.automations, project: core.project, approve: (request) => requestApproval(run, request)));
-    final runner = session.commandRunnerFactory?.call() ?? LinuxCommandRunner(app.runtime, guestCwd: core.project.linuxPath, onOutput: (t) => _echoTerminal()?.append(t));
     // 后台命令：启动的确认接的是工具箱里 run_command 用的同一个判断（工具箱在下面才建，所以用 late）。
     late final AgentToolbox box;
     extras.addAll(background?.tools(run, root, runner, approve: (r) => box.approveCommand(r), stopSignal: () => box.stopSignal?.call()) ?? const []);

@@ -128,6 +128,8 @@ void main() {
 
       // 再点摘要收起
       await tester.ensureVisible(find.byKey(const ValueKey('step-group-c1')));
+      // 展开的清单现在带结果摘要，比一屏高：滚回去以后要先推一帧，点的位置才是滚动后的位置。
+      await tester.pump();
       await tester.tap(find.byKey(const ValueKey('step-group-c1')));
       await tester.pumpAndSettle();
       expect(find.text('读取 index.html'), findsNothing);

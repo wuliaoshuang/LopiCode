@@ -52,10 +52,13 @@ class ToolStarted extends AgentEvent {
 }
 
 class ToolFinished extends AgentEvent {
-  ToolFinished(this.callId, this.name, this.outcome);
+  ToolFinished(this.callId, this.name, this.outcome, {this.ms});
   final String callId;
   final String name;
   final ToolOutcome outcome;
+
+  /// 这一步用了多久（毫秒，含等用户点确认的时间）；没真正执行的是 null。
+  final int? ms;
 }
 
 /// 生成过程中用户插的话，已经交给模型（从这一步起它能看到）。
@@ -501,9 +504,20 @@ class AgentRunner {
         }
         steps += batch.length;
         sinceAsk += batch.length;
+        // 每一步各自计时（同一批并行的互不影响）；存进记录里，重新打开对话还能看到用了多久。
+        final spent = List<int?>.filled(batch.length, null);
         final outcomes = await Future.wait([
           for (var k = 0; k < batch.length; k++)
-            verdicts[k] == LoopVerdict.run ? _runCall(batch[k], truncated: cutOff && identical(batch[k], ordered.last)) : Future.value(ToolOutcome(LoopGuard.refusal(batch[k].name), ok: false)),
+            verdicts[k] == LoopVerdict.run
+                ? () async {
+                    final clock = Stopwatch()..start();
+                    try {
+                      return await _runCall(batch[k], truncated: cutOff && identical(batch[k], ordered.last));
+                    } finally {
+                      spent[k] = clock.elapsedMilliseconds;
+                    }
+                  }()
+                : Future.value(ToolOutcome(LoopGuard.refusal(batch[k].name), ok: false)),
         ]);
         for (var k = 0; k < batch.length; k++) {
           var outcome = outcomes[k];
@@ -512,8 +526,8 @@ class AgentRunner {
             if (nudge != null) outcome = outcome.withText('${outcome.text}$nudge');
           }
           // 每个 tool_call 都必须有对应的 tool 消息，否则下一次请求会被接口拒绝。
-          messages.add({'role': 'tool', 'tool_call_id': batch[k].id, 'content': outcome.text, '_diff': ?outcome.change?.slim.toJson()});
-          yield ToolFinished(batch[k].id, batch[k].name, outcome);
+          messages.add({'role': 'tool', 'tool_call_id': batch[k].id, 'content': outcome.text, '_diff': ?outcome.change?.slim.toJson(), '_ms': ?spent[k]});
+          yield ToolFinished(batch[k].id, batch[k].name, outcome, ms: spent[k]);
         }
         if (verdicts.contains(LoopVerdict.stop)) {
           // 剩下没跑的调用也要有对应的 tool 消息。
