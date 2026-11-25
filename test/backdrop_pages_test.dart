@@ -121,7 +121,8 @@ void main() {
         expect(find.byKey(const ValueKey('bg-sample-text')), findsOneWidget, reason: '预览里有示例文字');
         expect(backdropStatusLabel(backdropStateOf(env)), '已启用');
         await shot(tester, 'bg-settings-image-$suffix');
-        await tester.ensureVisible(find.byKey(const Key('bg-effect-reset')));
+        // 效果这一组从“遮罩”那一行开始，摆在顶栏下面一点
+        await Scrollable.ensureVisible(tester.element(find.byKey(const Key('bg-mask-slider'))), alignment: 0.16);
         await settle(tester, rounds: 1);
         await shot(tester, 'bg-settings-effects-$suffix');
         await tester.ensureVisible(find.byKey(const Key('bg-dark-separate')));
