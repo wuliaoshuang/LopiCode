@@ -392,20 +392,7 @@ class _ThemeEditorScreenState extends ConsumerState<ThemeEditorScreen> {
               if (!typing) ...[
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: Space.x4),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(Radii.md),
-                    child: DecoratedBox(
-                      position: DecorationPosition.foreground,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(Radii.md),
-                        border: Border.all(color: c.border),
-                      ),
-                      child: SizedBox(
-                        height: kThemePreviewHeight,
-                        child: ThemePreview(spec: _spec, kind: _kind),
-                      ),
-                    ),
-                  ),
+                  child: ThemePreview(spec: _spec, kind: _kind),
                 ),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(Space.x4, Space.x2, Space.x4, 0),

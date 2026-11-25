@@ -75,7 +75,7 @@ class _ThemeGenerateSheetState extends State<ThemeGenerateSheet> {
                     children: [
                       Text(widget.full ? '从主色生成整套' : '换强调色', style: t.titleMedium),
                       const SizedBox(height: Space.x1),
-                      Text(widget.full ? '挑一个强调色和一个底色倾向，算出一套协调的初稿（深浅不变，只换色相），之后可以逐项细调。' : '按钮、链接、选中、开关、光标这一组颜色跟着一起换，文字的深浅会自动调到看得清。', style: t.bodySmall?.copyWith(color: c.textMuted)),
+                      Text(widget.full ? '挑一个强调色和一个底色倾向，从默认主题的深浅关系重新算一套初稿（现在改过的颜色会被换掉，可以撤销），之后再逐项细调。' : '按钮、链接、选中、开关、光标这一组颜色跟着一起换，文字的深浅会自动调到看得清。', style: t.bodySmall?.copyWith(color: c.textMuted)),
                       if (widget.full) ...[
                         const SizedBox(height: Space.x3),
                         SegmentedButton<bool>(

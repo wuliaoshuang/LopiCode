@@ -432,20 +432,7 @@ class _ThemeImportPreviewScreenState extends ConsumerState<ThemeImportPreviewScr
               style: t.bodyMedium?.copyWith(color: c.textMuted),
             ),
             const SizedBox(height: Space.x3),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(Radii.md),
-              child: DecoratedBox(
-                position: DecorationPosition.foreground,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(Radii.md),
-                  border: Border.all(color: c.border),
-                ),
-                child: SizedBox(
-                  height: kThemePreviewHeight,
-                  child: ThemePreview(spec: theme, kind: _kind),
-                ),
-              ),
-            ),
+            ThemePreview(spec: theme, kind: _kind),
             const SizedBox(height: Space.x2),
             SegmentedButton<ThemePreviewKind>(
               key: const Key('theme-import-kind'),
