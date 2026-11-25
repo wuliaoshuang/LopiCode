@@ -5,7 +5,7 @@
 // - 最弱：版本说明 → “关于”组的脚注。
 // 分类（一类东西只在一处）：
 //   模型　　　　模型与渠道 · 额度与余额（只有 DeepSeek 官方渠道才有）
-//   Agent 　　　权限与执行 · 个性化 · 子代理与团队
+//   Agent 　　　权限与执行 · 个性化 · 子代理与团队 · 后台与通知
 //   能力　　　　联网搜索 · 技能 · 自动化任务
 //   界面　　　　对话显示 · 外观
 //   运行与打包　运行环境 · SSH 构建机
@@ -35,6 +35,7 @@ import 'package:lopicode/ui/automation_screen.dart';
 import 'package:lopicode/ui/error_guard.dart';
 import 'package:lopicode/ui/settings_agent.dart';
 import 'package:lopicode/ui/settings_ai.dart';
+import 'package:lopicode/ui/settings_background.dart';
 import 'package:lopicode/ui/settings_overview.dart';
 import 'package:lopicode/ui/settings_pages.dart';
 import 'package:lopicode/ui/settings_quota.dart';
@@ -125,6 +126,13 @@ class SettingsScreen extends ConsumerWidget {
               title: '子代理与团队',
               value: '子代理${subOn ? '开' : '关'} · 团队${teamOn ? '开' : '关'}',
               onTap: () => go(const SubagentSettingsScreen()),
+            ),
+            SettingsRow(
+              key: const Key('settings-background'),
+              icon: Icons.notifications_active_outlined,
+              title: '后台与通知',
+              value: backgroundSettingsLabel(app.settings),
+              onTap: () => go(const BackgroundSettingsScreen()),
             ),
           ],
         ),

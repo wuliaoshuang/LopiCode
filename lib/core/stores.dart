@@ -119,6 +119,8 @@ class SettingKeys {
   static const chatThinking = 'chat.thinking'; // 在聊天里显示思考过程，默认开
   static const agentAutoCompact = 'agent.autoCompact'; // 上下文快满时自动把较早的对话压成摘要，默认开
   static const agentMaxSteps = 'agent.maxSteps'; // 连着执行多少步后停下来问，10–100，默认 30
+  static const agentKeepAlive = 'agent.keepAlive'; // Agent 干活时保持后台运行（前台服务 + 常驻通知），默认开
+  static const agentNotifyDone = 'agent.notifyDone'; // 应用不在前台时，做完 / 出错 / 等确认发通知，默认开
 }
 
 class SecretKeys {

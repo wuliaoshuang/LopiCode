@@ -12,6 +12,7 @@ import 'package:lopicode/session/session_core.dart';
 import 'package:lopicode/session/system_prompt.dart';
 import 'package:lopicode/session/toolbox_builder.dart';
 import 'package:lopicode/session/turn_journal.dart';
+import 'package:lopicode/session/turn_keep_alive.dart';
 import 'package:lopicode/state/workspace_chat.dart';
 
 /// “要继续吗？”那张卡的两个回答。
@@ -90,6 +91,7 @@ class TurnRunner {
     ThinkingItem? thinking;
     var last = '';
     var failed = false;
+    final keepAlive = TurnKeepAlive.start(core, run); // 后台保活 + 通知栏进度
     try {
       await for (final event in runner.send(text, images: images)) {
         switch (event) {
@@ -177,6 +179,7 @@ class TurnRunner {
       core.cards.dropOf({run.conv.id});
       run.setBusy(false);
       run.runner = null;
+      keepAlive.finish(failed: failed);
       turn.ms = clock.elapsedMilliseconds;
       _recordTurn(run, turn);
       // 存对话记录，同时把进行中记录标成“已结束”（做完 / 出错 / 点了停止都算正常收尾：下次打开不提示）。
