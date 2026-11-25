@@ -63,8 +63,9 @@ Future<ProjectSession> openBuilder(WidgetTester tester, {LcDocument? doc, ThemeM
   return session;
 }
 
-/// 存盘里的页面（搭建页每次修改都会存）。
+/// 存盘里的页面（搭建页改完停手 0.4 秒才存：先把这段时间走完）。
 Future<LcDocument> savedDoc(WidgetTester tester, ProjectSession session) async {
+  await tester.pump(const Duration(milliseconds: 500));
   await settle(tester, rounds: 3);
   late LcDocument doc;
   await tester.runAsync(() async => doc = LcDocument.parse(File(session.guard.resolve(kLowcodePageFile)).readAsStringSync()));
@@ -95,6 +96,31 @@ Future<void> topMenu(WidgetTester tester, String label) async {
   await tester.tap(find.text(label).last);
   await tester.pumpAndSettle();
 }
+
+/// 打开“屏宽与缩放”面板（顶栏“⋮”里）。
+Future<void> openViewSheet(WidgetTester tester) => topMenu(tester, '屏宽与缩放');
+
+/// 关掉底部面板（点面板上面的空白）。
+Future<void> closeSheet(WidgetTester tester) async {
+  await tester.tapAt(const Offset(195, 120));
+  await tester.pumpAndSettle();
+}
+
+/// 长按 [at] 把东西拿起来（280 毫秒，多等一点）。返回的手势还按着。
+Future<TestGesture> lift(WidgetTester tester, Offset at) async {
+  final g = await tester.startGesture(at);
+  await tester.pump(const Duration(milliseconds: 320));
+  await tester.pump();
+  return g;
+}
+
+/// 打开组件盒（点工具条的“添加”）。
+Future<void> openPalette(WidgetTester tester) async {
+  await tester.tap(find.byKey(const ValueKey('lc-tool-add')));
+  await tester.pumpAndSettle();
+}
+
+Finder paletteItem(String key) => find.byKey(ValueKey('palette-item-$key'));
 
 LcNode text(String s, {Map<String, String>? style, String id = ''}) => LcNode(id: id, type: 'text', props: {'text': s}, style: style);
 
@@ -408,8 +434,9 @@ void main() {
       expect(tester.getTopLeft(node('n2')).dy - tester.getBottomLeft(node('n1')).dy, 12);
       expect(tester.getTopLeft(node('n3')).dy - tester.getBottomLeft(node('n2')).dy, 12);
       expect(tester.getTopLeft(node('n5')).dy - tester.getBottomLeft(node('n4')).dy, 8);
-      expect(find.byKey(const ValueKey('lowcode-zoom-label')), findsOneWidget);
-      expect(find.text('100%'), findsOneWidget);
+      // 画布上不再浮着缩放小条：比例在“⋮ › 屏宽与缩放”里
+      expect(find.byKey(const ValueKey('lowcode-zoom-label')), findsNothing);
+      expect(canvas(tester).scale, 1);
       // 没选中：没有拖柄、没有操作条
       expect(handle('se'), findsNothing);
       expect(find.text('属性'), findsNothing);
@@ -423,8 +450,8 @@ void main() {
       }
       expect(handle('w'), findsNothing, reason: '按钮只有 48 高，左右两边的拖柄让给四个角');
       expect(find.text('64 × 48'), findsOneWidget);
-      // 拖柄能按的范围至少 32
-      expect(tester.getSize(handle('se')), const Size(32, 32));
+      // 拖柄能按的范围是 44
+      expect(tester.getSize(handle('se')), const Size(44, 44));
       expect(tester.takeException(), isNull);
 
       await tester.tapAt(const Offset(195, 560)); // 页面空白处＝选中页面
@@ -539,6 +566,8 @@ void main() {
 
     testWidgets('缩放：按钮、双指、适应屏幕；缩放后点选仍然选中对的组件', (tester) async {
       await openBuilder(tester);
+      await openViewSheet(tester);
+      expect(find.text('100%'), findsOneWidget);
       await tester.tap(find.byTooltip('缩小'));
       await tester.pump();
       expect(find.text('75%'), findsOneWidget);
@@ -546,16 +575,17 @@ void main() {
       await tester.pump();
       expect(find.text('50%'), findsOneWidget);
       expect(canvas(tester).scale, 0.5);
+      await closeSheet(tester);
       // 页面缩到一半宽，横向居中
       expect(tester.getRect(node('n5')).size, const Size(32, 24));
       expect(tester.getRect(find.byKey(const ValueKey('lowcode-page'))).left, closeTo(390 / 4, 0.01));
 
-      // 缩小后点按钮：选中的是按钮，拖柄能按的范围还是 32
+      // 缩小后点按钮：选中的是按钮，拖柄能按的范围还是 44
       await tester.tapAt(tester.getCenter(node('n5')));
       await settle(tester, rounds: 2);
       expect(find.text('按钮'), findsWidgets);
       expect(find.widgetWithText(FilledButton, '属性'), findsOneWidget);
-      expect(tester.getRect(handle('se')).width, closeTo(32, 0.01));
+      expect(tester.getRect(handle('se')).width, closeTo(44, 0.01));
       expect(find.text('64 × 48'), findsOneWidget, reason: '尺寸标签显示的是页面上的像素，不随缩放变');
       // 缩小后拖拖柄：手指移 40，页面上是 80（手指移得太少系统不当成拖动）
       await tester.drag(handle('se'), const Offset(40, 20));
@@ -567,9 +597,11 @@ void main() {
       await settle(tester, rounds: 2);
       expect(find.text('文本'), findsWidgets);
 
-      await tester.tap(find.byTooltip('适应屏幕'));
+      await openViewSheet(tester);
+      await tester.tap(find.text('适应屏幕'));
       await tester.pump();
       expect(find.text('100%'), findsOneWidget);
+      await closeSheet(tester);
       expect(tester.getRect(find.byKey(const ValueKey('lowcode-page'))).left, 0);
 
       // 双指张开：放大
@@ -587,43 +619,48 @@ void main() {
       expect(canvas(tester).scale, greaterThan(1.5));
       expect(canvas(tester).scale, lessThanOrEqualTo(kCanvasMaxScale));
       // 放大后点选照样准
-      await tester.tap(find.byTooltip('适应屏幕'));
+      canvas(tester).fitToScreen();
       await tester.pump();
       canvas(tester).zoomTo(2, focal: Offset.zero);
       await settle(tester, rounds: 2);
       await tester.tapAt(tester.getCenter(node('n1')));
       await settle(tester, rounds: 2);
-      expect(tester.getRect(handle('se')).width, closeTo(32, 0.01));
+      expect(tester.getRect(handle('se')).width, closeTo(44, 0.01));
       expect(tester.takeException(), isNull);
     });
 
     testWidgets('缩放范围 25%–300%；页面宽度预设', (tester) async {
       await openBuilder(tester);
+      await openViewSheet(tester);
       canvas(tester).zoomTo(0.01);
       await tester.pump();
       expect(canvas(tester).scale, kCanvasMinScale);
-      expect(tester.widget<IconButton>(find.widgetWithIcon(IconButton, Icons.remove)).onPressed, isNull);
+      expect(find.text('25%'), findsOneWidget);
+      // 到头了再点“缩小”不会更小
+      await tester.tap(find.byTooltip('缩小'));
+      await tester.pump();
+      expect(canvas(tester).scale, kCanvasMinScale);
       canvas(tester).zoomTo(99);
       await tester.pump();
       expect(canvas(tester).scale, kCanvasMaxScale);
       expect(find.text('300%'), findsOneWidget);
 
-      await tester.tap(find.byTooltip('页面宽度'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('768 像素'));
+      await tester.tap(find.byKey(const ValueKey('lc-width-768')));
       await tester.pumpAndSettle();
       await settle(tester, rounds: 2);
       expect(canvas(tester).pageWidth, 768);
       expect(canvas(tester).scale, closeTo(390 / 768, 0.001), reason: '换宽度后自动适应屏幕');
       expect(find.text('51%'), findsOneWidget);
+      expect(find.textContaining('768 宽'), findsOneWidget, reason: '顶栏小字写着现在的屏宽档');
+      await closeSheet(tester);
       expect(tester.getRect(node('n3')).width, closeTo((768 - 32) * 390 / 768, 0.01));
 
-      await tester.tap(find.byTooltip('页面宽度'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('360 像素'));
+      await openViewSheet(tester);
+      await tester.tap(find.byKey(const ValueKey('lc-width-360')));
       await tester.pumpAndSettle();
       await settle(tester, rounds: 2);
       expect(find.text('100%'), findsOneWidget);
+      await closeSheet(tester);
       final page = tester.getRect(find.byKey(const ValueKey('lowcode-page')));
       expect(page.width, 360);
       expect(page.left, 15, reason: '比屏幕窄的页面横向居中');
@@ -647,8 +684,8 @@ void main() {
         await tester.pump(const Duration(seconds: 3));
       }
       final page = tester.getRect(find.byKey(const ValueKey('lowcode-page')));
-      expect(page.bottom, closeTo(view.bottom - kCanvasToolsInset, 0.01), reason: '滚到底就停，页面底边停在底部那两个悬浮小胶囊的上沿（不被它们压住）');
-      expect(tester.getRect(node('n40')).bottom, lessThanOrEqualTo(view.bottom - kCanvasToolsInset));
+      expect(page.bottom, closeTo(view.bottom, 0.01), reason: '滚到底就停，页面底边正好贴着画布底边（画布上已经没有悬浮小条压着了）');
+      expect(tester.getRect(node('n40')).bottom, lessThanOrEqualTo(view.bottom));
       // 往回拖过头：停在顶部；横向拖不动
       for (var i = 0; i < 8; i++) {
         await tester.dragFrom(view.center, const Offset(120, 400));
@@ -658,37 +695,35 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('长按拖动还在：从组件栏拖新组件进来、长按画布上的组件重排', (tester) async {
+    testWidgets('长按拖动还在：从组件盒拖新组件进来、长按画布上的组件重排', (tester) async {
       final session = await openBuilder(tester);
-      // 组件栏的“文本”长按拖到卡片下面的空白处（页面末尾）
-      final chip = await tester.startGesture(tester.getCenter(find.text('文本')));
-      await tester.pump(const Duration(milliseconds: 400));
-      await chip.moveBy(const Offset(0, -30));
+      await openPalette(tester);
+      final card = tester.getRect(node('n3'));
+      // 组件盒的“文本”长按拿起来，拖到卡片下面的空白处（页面末尾）
+      final chip = await lift(tester, tester.getCenter(paletteItem('text')));
+      await chip.moveTo(Offset(195, card.bottom + 60));
       await tester.pump();
-      // 拖动中：插入位出现
-      expect(find.byKey(const ValueKey('lc-slot-root-3')), findsOneWidget);
-      await chip.moveTo(tester.getCenter(find.byKey(const ValueKey('lc-slot-root-3'))));
-      await tester.pump(const Duration(milliseconds: 200));
+      // 拖动中：页面里不插占位，落点是页面的第 4 个
+      expect(find.byKey(const ValueKey('lc-slot-root-3')), findsNothing);
+      expect(canvas(tester).dropTarget?.parentId, 'root');
+      expect(canvas(tester).dropTarget?.index, 3);
+      expect(find.text('放到 页面 里 · 第 4 个'), findsOneWidget);
       await chip.up();
       await settle(tester, rounds: 3);
       var doc = await savedDoc(tester, session);
       expect([for (final c in doc.root.children) c.type], ['text', 'text', 'card', 'text']);
-      expect(find.byKey(const ValueKey('lc-slot-root-3')), findsNothing, reason: '松手后插入位收起');
+      expect(find.byKey(const ValueKey('lc-drop-line')), findsNothing, reason: '松手后蓝线收起');
 
       // 长按第一行标题，拖到最后
-      final title = await tester.startGesture(tester.getCenter(node('n1')));
-      await tester.pump(const Duration(milliseconds: 500));
-      await title.moveBy(const Offset(0, 30));
+      final title = await lift(tester, tester.getCenter(node('n1')));
+      await title.moveTo(Offset(195, tester.getRect(node(doc.root.children.last.id)).bottom + 40));
       await tester.pump();
-      final last = find.byKey(const ValueKey('lc-slot-root-4'));
-      expect(last, findsOneWidget);
-      await title.moveTo(tester.getCenter(last));
-      await tester.pump(const Duration(milliseconds: 200));
+      expect(canvas(tester).dropTarget?.index, 4);
       await title.up();
       await settle(tester, rounds: 3);
       doc = await savedDoc(tester, session);
       expect(doc.root.children.last.id, 'n1');
-      expect(find.byKey(const ValueKey('lc-slot-root-4')), findsNothing);
+      expect(find.byKey(const ValueKey('lc-drop-line')), findsNothing);
       expect(tester.takeException(), isNull);
     });
 
@@ -778,7 +813,7 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('新入口：样式 / 事件 / 积木逻辑 / 自定义组件 / 导出 Vue / React 都能点开', (tester) async {
+    testWidgets('新入口：样式 / 逻辑 / 积木逻辑 / 自定义组件 / 导出 Vue / React 都能点开', (tester) async {
       await openBuilder(tester);
       await select(tester, 'n5');
       // 原来的“属性”还在
@@ -795,7 +830,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(BottomSheet), findsNothing);
 
-      await tester.tap(find.byTooltip('事件'));
+      await tester.tap(find.widgetWithText(TextButton, '逻辑'));
       await tester.pumpAndSettle();
       expect(tester.widget<LogicScreen>(find.byType(LogicScreen)).initialNodeId, 'n5');
       await tester.binding.handlePopRoute();
@@ -819,9 +854,14 @@ void main() {
       // 原来的菜单项都还在
       await tester.tap(find.byTooltip('更多'));
       await tester.pumpAndSettle();
-      for (final label in ['在预览里打开网页', '导出 Flutter 代码', '修改页面标题']) {
+      for (final label in ['屏宽与缩放', '导出 Flutter 代码', '修改页面标题']) {
         expect(find.text(label), findsOneWidget);
       }
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      // “预览”从菜单挪到了底部工具条
+      expect(find.text('在预览里打开网页'), findsNothing);
+      expect(find.byTooltip('预览'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 
@@ -832,10 +872,15 @@ void main() {
       await tester.tapAt(tester.getCenter(node('n3')));
       await settle(tester, rounds: 2);
       expect(find.text('属性'), findsOneWidget);
-      expect(find.byTooltip('间距示意：开'), findsOneWidget);
-      await tester.tap(find.byTooltip('间距示意：开'));
-      await tester.pump();
-      expect(find.byTooltip('间距示意：关'), findsOneWidget);
+      // 间距示意的开关在“⋮ › 屏宽与缩放”里，默认开
+      bool boxModelOn() => tester.widget<SwitchListTile>(find.byKey(const ValueKey('lc-box-model'))).value;
+      await openViewSheet(tester);
+      expect(boxModelOn(), isTrue);
+      await tester.tap(find.byKey(const ValueKey('lc-box-model')));
+      await tester.pumpAndSettle();
+      expect(boxModelOn(), isFalse);
+      await closeSheet(tester);
+      expect(tester.widget<CanvasView>(find.byType(CanvasView)).showBoxModel, isFalse);
       expect(handle('se'), findsOneWidget, reason: '关的只是间距示意，拖柄还在');
       // 页面只占左右中间一半，点最左边的灰底
       final view = tester.getRect(find.byKey(const ValueKey('lowcode-canvas')));

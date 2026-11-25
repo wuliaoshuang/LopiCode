@@ -9,6 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lopicode/core/templates.dart';
 import 'package:lopicode/lowcode/builder_screen.dart';
 import 'package:lopicode/lowcode/canvas_component_widgets.dart';
+import 'package:lopicode/lowcode/canvas_view.dart';
 import 'package:lopicode/lowcode/component_model.dart';
 import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/lowcode/palette_widgets.dart';
@@ -62,6 +63,8 @@ Future<ProjectSession> openBuilder(WidgetTester tester, {LcDocument? doc, ThemeM
 }
 
 Future<LcDocument> savedDoc(WidgetTester tester, ProjectSession session) async {
+  // 搭建页改完停手 0.4 秒才存：先把这段时间走完。
+  await tester.pump(const Duration(milliseconds: 500));
   await settle(tester, rounds: 3);
   late LcDocument doc;
   await tester.runAsync(() async => doc = LcDocument.parse(File(session.guard.resolve(kLowcodePageFile)).readAsStringSync()));
@@ -75,6 +78,20 @@ bool undoEnabled(WidgetTester tester) => tester.widget<IconButton>(find.widgetWi
 Future<void> select(WidgetTester tester, String id) async {
   await tester.tap(node(id));
   await settle(tester, rounds: 2);
+}
+
+/// 在组件盒里点一个组件（[itemKey]：内置的是类型名，自定义组件是 `component:<id>`）。组件盒没开 / 收着就先点“添加”。
+Future<void> paletteAdd(WidgetTester tester, String itemKey) async {
+  final panel = find.byType(PalettePanel);
+  if (panel.evaluate().isEmpty || tester.state<PalettePanelState>(panel).collapsed) {
+    await tester.tap(key('lc-tool-add').last);
+    await tester.pumpAndSettle();
+  }
+  final group = itemKey.startsWith('component:') ? 'mine' : 'recent';
+  await tester.tap(key('palette-group-$group'));
+  await tester.pumpAndSettle();
+  await tester.tap(key('palette-item-$itemKey'));
+  await tester.pumpAndSettle();
 }
 
 Future<void> tapText(WidgetTester tester, String label) async {
@@ -263,15 +280,8 @@ void main() {
     expect(doc.root.children.map((n) => n.type), ['text', 'text', 'component', 'component']);
     expect(onCanvas(tester, '提交'), 2);
 
-    // 组件栏里排在内置组件后面，点一下再加一个。
-    await tester.scrollUntilVisible(
-      key('palette-comp-c1'),
-      200,
-      scrollable: find.descendant(of: find.byType(PaletteBar), matching: find.byType(Scrollable)),
-    );
-    await tester.ensureVisible(key('palette-comp-c1'));
-    await tester.pumpAndSettle();
-    await tester.tap(key('palette-comp-c1'));
+    // 组件盒的“我的”里有它，点一下再加一个。
+    await paletteAdd(tester, 'component:c1');
     await settle(tester, rounds: 2);
     doc = await savedDoc(tester, session);
     expect(doc.root.children.where((n) => n.type == 'component').length, 3);
@@ -474,7 +484,7 @@ void main() {
     await moreAction(tester, '编辑组件');
     expect(find.text('编辑组件'), findsOneWidget);
     expect(find.text('完成'), findsOneWidget);
-    expect(find.byTooltip('事件'), findsNothing, reason: '组件里的控件不支持积木逻辑');
+    expect(find.text('逻辑'), findsNothing, reason: '组件里的控件不支持积木逻辑');
     // 画布上是组件的内容；接了属性的文字在这里显示控件自己的内容。
     expect(node('k1'), findsOneWidget);
     expect(node('k2'), findsOneWidget);
@@ -483,8 +493,8 @@ void main() {
     await select(tester, 'k1');
     expect(find.text('卡片（最外层）'), findsOneWidget);
     expect(find.byTooltip('更多操作'), findsNothing);
-    // 选中最外层（容器）时点组件栏：加进它里面。
-    await tester.tap(find.descendant(of: find.byType(PaletteBar), matching: find.text('文本')));
+    // 选中最外层（容器）时点组件盒里的“文本”：加进它里面。
+    await paletteAdd(tester, 'text');
     await settle(tester, rounds: 2);
     var doc = await savedDoc(tester, session);
     expect(doc.component('c1')!.root.children.map((n) => n.type), ['text', 'button', 'text']);
@@ -502,7 +512,8 @@ void main() {
 
     await tapKey(tester, 'comp-editor-done');
     await settle(tester, rounds: 2);
-    expect(find.text('低代码搭建'), findsOneWidget);
+    expect(find.text('编辑组件'), findsNothing, reason: '回到了搭建页');
+    expect(find.byType(BuilderScreen), findsOneWidget);
     expect(onCanvas(tester, '马上去'), 2);
     expect(onCanvas(tester, '一段文本'), 2);
     doc = await savedDoc(tester, session);
@@ -528,8 +539,7 @@ void main() {
     final session = await openBuilder(tester, doc: doc);
     await openComponentSheet(tester);
     await componentMenu(tester, '问候卡', '编辑内容');
-    await tester.tap(find.descendant(of: find.byType(PaletteBar), matching: find.text('按钮')));
-    await tester.pumpAndSettle();
+    await paletteAdd(tester, 'button');
     expect(find.textContaining('组件最外层只能有一个控件'), findsOneWidget);
     await tapText(tester, '知道了');
     expect((await savedDoc(tester, session)).component('c1')!.root.children, isEmpty);
@@ -578,14 +588,17 @@ void main() {
     expect(find.textContaining('定义已经不存在了'), findsOneWidget);
     await closeSheet(tester);
 
-    // 长按拖动一个普通控件：页面里出现插入位，但实例里面（卡片 a 是容器）没有。
+    // 长按拖动一个普通控件到实例（卡片 a 是容器）上面停住：落点始终在页面里，放不进实例里面。
     final gesture = await tester.startGesture(tester.getCenter(node('n1')));
-    await tester.pump(const Duration(milliseconds: 500));
-    await gesture.moveBy(const Offset(0, 30));
+    await tester.pump(const Duration(milliseconds: 320));
+    await gesture.moveTo(tester.getCenter(node('a')));
     await tester.pump();
-    expect(key('lc-slot-root-0'), findsOneWidget);
-    expect(key('lc-slot-a-0'), findsNothing);
-    expect(find.byWidgetPredicate((w) => w.key is ValueKey<String> && (w.key! as ValueKey<String>).value.startsWith('lc-slot-a__')), findsNothing);
+    final canvas = tester.state<CanvasViewState>(find.byType(CanvasView));
+    expect(canvas.dropTarget?.parentId, 'root');
+    await tester.pump(const Duration(milliseconds: 600));
+    await gesture.moveBy(const Offset(0, 2));
+    await tester.pump();
+    expect(canvas.dropTarget?.parentId, 'root', reason: '停再久也不会放进实例里面');
     await gesture.up();
     await settle(tester, rounds: 2);
     expect(tester.takeException(), isNull);

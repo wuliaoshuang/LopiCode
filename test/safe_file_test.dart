@@ -19,6 +19,7 @@ import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/core/safe_file.dart';
 import 'package:lopicode/core/stores.dart';
 import 'package:lopicode/core/templates.dart';
+import 'package:lopicode/lowcode/editor_recents.dart';
 import 'package:lopicode/session/conversation.dart';
 import 'package:lopicode/session/favorites.dart';
 import 'package:lopicode/session/turn_journal.dart';
@@ -693,6 +694,38 @@ void main() {
     test('items 不是列表、版本号是以后的：不崩', () async {
       file().writeAsStringSync(jsonEncode({'version': 99, 'items': 'x'}));
       expect(await readFavorites(file()), isEmpty);
+    });
+  });
+
+  group('低代码组件盒的“常用” .lopicode/lowcode-editor.json', () {
+    File file() => File(p.join(tmp.path, '.lopicode', 'lowcode-editor.json'));
+
+    for (final entry in corruptSamples.entries) {
+      test('坏内容（${entry.key}）：当没用过（空表），不抛异常', () async {
+        file()
+          ..createSync(recursive: true)
+          ..writeAsStringSync(entry.value);
+        expect(await loadPaletteRecent(PathGuard(tmp.path)), isEmpty);
+      });
+    }
+
+    test('半截的文件：留一份 .bad 备份；之后照常能存能读', () async {
+      file()
+        ..createSync(recursive: true)
+        ..writeAsStringSync(corruptSamples['半截']!);
+      final guard = PathGuard(tmp.path);
+      await loadPaletteRecent(guard);
+      expect(badBackups(file()), hasLength(1));
+      await savePaletteRecent(guard, ['text', 'button']);
+      expect(await loadPaletteRecent(guard), ['text', 'button']);
+    });
+
+    test('形状对、recent 不是列表：空表，不算坏文件', () async {
+      file()
+        ..createSync(recursive: true)
+        ..writeAsStringSync('{"recent": "text"}');
+      expect(await loadPaletteRecent(PathGuard(tmp.path)), isEmpty);
+      expect(badBackups(file()), isEmpty);
     });
   });
 }
