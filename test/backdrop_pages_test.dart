@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lopicode/backdrop/backdrop_model.dart';
 import 'package:lopicode/backdrop/backdrop_picker.dart';
 import 'package:lopicode/backdrop/crop_math.dart';
+import 'package:lopicode/state/backdrop_state.dart';
 import 'package:lopicode/ui/backdrop_crop_screen.dart';
 import 'package:lopicode/ui/backdrop_images.dart';
 import 'package:lopicode/ui/backdrop_settings_groups.dart';
@@ -36,7 +37,8 @@ void main() {
 
   Future<void> tapKey(WidgetTester tester, String key, {int rounds = 2}) async {
     final f = find.byKey(Key(key));
-    await tester.ensureVisible(f);
+    // 滚到屏幕中间再点：只滚到“刚露出来”的话，它可能正好压在悬浮顶栏下面，点不着
+    await Scrollable.ensureVisible(tester.element(f), alignment: 0.5);
     await tester.pump();
     await tester.tap(f);
     await settle(tester, rounds: rounds);
@@ -47,6 +49,15 @@ void main() {
     await pumpUntil(tester, find.byKey(const ValueKey('bg-crop-paint')));
     await tester.pump(const Duration(milliseconds: 400));
     await tester.pump(const Duration(milliseconds: 400));
+  }
+
+  /// 点“用这个区域”，等裁剪页真的退干净（退场动画没走完就去点设置页，会点在还没滑走的裁剪页上）。
+  Future<void> cropDone(WidgetTester tester) async {
+    await tester.tap(find.byKey(const ValueKey('bg-crop-done')));
+    for (var i = 0; i < 40 && find.byKey(const ValueKey('bg-crop-done')).evaluate().isNotEmpty; i++) {
+      await settle(tester, rounds: 1);
+    }
+    await pumpUntil(tester, find.byKey(const Key('bg-preview')));
   }
 
   List<String> stored(TestEnv env) {
@@ -69,7 +80,7 @@ void main() {
         expect(find.byKey(const Key('bg-preview')), findsNothing);
         expect(find.byKey(const Key('bg-enabled')), findsNothing, reason: '没图时不摆一堆调不了的开关');
         expect(find.byKey(const Key('bg-dark-separate')), findsOneWidget);
-        expect(backdropSettingsLabel(backdropStateOf(env)), '没有');
+        expect(backdropStatusLabel(backdropStateOf(env)), '未设置');
         await shot(tester, 'bg-settings-empty-$suffix');
 
         late FakeBackdropPicker picker;
@@ -80,8 +91,7 @@ void main() {
         expect(find.text('裁剪背景'), findsOneWidget);
         expect(backdropStateOf(env).light.hasImage, isFalse, reason: '裁剪页没点确认之前不改设置');
         expect(stored(env), hasLength(1));
-        await tester.tap(find.byKey(const ValueKey('bg-crop-done')));
-        await pumpUntil(tester, find.byKey(const Key('bg-preview')));
+        await cropDone(tester);
 
         final look = backdropStateOf(env).light;
         expect(look.hasImage, isTrue, reason: '裁剪页还在=${find.text('裁剪背景').evaluate().length} 预览=${find.byKey(const Key('bg-preview')).evaluate().length} 文件=${stored(env)}');
@@ -109,7 +119,7 @@ void main() {
           expect(find.byKey(Key(k)), findsOneWidget, reason: k);
         }
         expect(find.byKey(const ValueKey('bg-sample-text')), findsOneWidget, reason: '预览里有示例文字');
-        expect(backdropSettingsLabel(backdropStateOf(env)), '已开');
+        expect(backdropStatusLabel(backdropStateOf(env)), '已启用');
         await shot(tester, 'bg-settings-image-$suffix');
         await tester.ensureVisible(find.byKey(const Key('bg-effect-reset')));
         await settle(tester, rounds: 1);
@@ -235,7 +245,7 @@ void main() {
         }
         await tapKey(tester, 'bg-enabled');
         expect(backdropStateOf(env).enabled, isFalse);
-        expect(backdropSettingsLabel(backdropStateOf(env)), '已关');
+        expect(backdropStatusLabel(backdropStateOf(env)), '已关闭');
 
         // 都存盘了：重新读出来一样
         // （界面上触发的写盘是在测试时钟里排的队，不能在 runAsync 里干等它；先让它们走完再读。）
@@ -258,8 +268,7 @@ void main() {
         expect(tester.widget<Text>(find.byKey(const Key('bg-crop-zoom-value'))).data, '2.00×');
         await tester.drag(find.byKey(const ValueKey('bg-crop-area')), const Offset(-60, 0));
         await tester.pump();
-        await tester.tap(find.byKey(const ValueKey('bg-crop-done')));
-        await pumpUntil(tester, find.byKey(const Key('bg-preview')));
+        await cropDone(tester);
         final again = backdropStateOf(env).light;
         expect(again.file, first.file, reason: '图没换');
         expect(again.crop.left, greaterThan(saved.left), reason: '往左拖图＝区域往右');
@@ -271,8 +280,7 @@ void main() {
         await tapKey(tester, 'bg-replace', rounds: 1);
         await cropReady(tester);
         expect(tester.widget<Text>(find.byKey(const Key('bg-crop-zoom-value'))).data, '1.00×', reason: '新图从居中最大开始');
-        await tester.tap(find.byKey(const ValueKey('bg-crop-done')));
-        await pumpUntil(tester, find.byKey(const Key('bg-preview')));
+        await cropDone(tester);
         await settle(tester, rounds: 3);
         final second = backdropStateOf(env).light;
         expect(second.file, isNot(first.file));
@@ -306,7 +314,7 @@ void main() {
 
         await tester.ensureVisible(find.byKey(const Key('bg-slot')));
         await tester.pump();
-        await tester.tap(find.text('深色外观'));
+        await tester.tap(find.descendant(of: find.byKey(const Key('bg-slot')), matching: find.text('深色外观')));
         await settle(tester, rounds: 2);
         await tapKey(tester, 'bg-brightness-minus');
         await tapKey(tester, 'bg-brightness-minus');
@@ -316,8 +324,7 @@ void main() {
         await tester.runAsync(() async => useFakePicker(env, [BackdropPicked(writePick(env.tmp, 'night.png', await makePng(400, 800)))]));
         await tapKey(tester, 'bg-replace', rounds: 1);
         await cropReady(tester);
-        await tester.tap(find.byKey(const ValueKey('bg-crop-done')));
-        await pumpUntil(tester, find.byKey(const Key('bg-preview')));
+        await cropDone(tester);
         await settle(tester, rounds: 3);
         expect(backdropStateOf(env).dark.file, isNot(light.file));
         expect(backdropStateOf(env).dark.brightness, -10, reason: '换图不丢效果');
