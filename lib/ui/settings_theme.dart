@@ -1,19 +1,25 @@
 // 设计约束（设置 › 界面 › 外观 里的“主题”两行 + 点开的主题列表页 · 390×844）— 2026-11-26
-// - 外观页里一组〔主题〕两行：浅色主题、深色主题，右边写现在用的那套的名字，点开进列表页。
+// - 外观页里一组〔主题〕三行：浅色主题、深色主题（这两行是快速选），右边写现在用的那套的名字，点开进列表页。
 //   分两行是因为“跟随系统”时两种都会用到：浅色时用哪套、深色时用哪套各选各的。
 // - 列表页一行一套主题（单选，点了立刻生效，不用再点保存）：左边三个小色点（底色、强调色、文字色）
 //   让人不点也大概知道长什么样；副标题写来源（内置 / 自己的 / 作者）。内置的在前，自己的在后。
-// - 这里只管“选”。新建、编辑、导入导出在以后的主题管理页，这一页不放那些入口。
+// - 第三行“管理主题”进主题管理页（themes_screen.dart）：新建、编辑、改名、复制、删除、导入、导出都在那里。
+//   列表页只管“选”，不放那些入口。
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lopicode/appearance/theme_fields.dart';
+import 'package:lopicode/project_session.dart';
 import 'package:lopicode/state/themes_state.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/settings_widgets.dart';
+import 'package:lopicode/ui/themes_screen.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// 外观页里的〔主题〕一组：浅色主题 / 深色主题两行。
 class ThemeSlotsGroup extends ConsumerWidget {
-  const ThemeSlotsGroup({super.key});
+  const ThemeSlotsGroup({super.key, this.session});
+
+  /// 现在开着的工作区（传给主题管理页：导出存文件、导入选文件用）；没有也行。
+  final ProjectSession? session;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -35,6 +41,13 @@ class ThemeSlotsGroup extends ConsumerWidget {
           value: view.dark.name,
           valueKey: const Key('appearance-theme-dark-value'),
           onTap: () => pushSettingsPage<void>(context, const ThemePickScreen(dark: true)),
+        ),
+        SettingsRow(
+          key: const Key('appearance-themes-manage'),
+          title: '管理主题',
+          subtitle: '新建、改颜色、导入、导出',
+          value: view.user.isEmpty ? null : '我的 ${view.user.length} 套',
+          onTap: () => pushSettingsPage<void>(context, ThemesScreen(session: session)),
         ),
       ],
     );

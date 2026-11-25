@@ -81,10 +81,14 @@ class _ThemeColorSheetState extends ConsumerState<ThemeColorSheet> {
     final recent = ref.watch(recentColorsProvider);
     final fallback = itemDefaultColor(item, dark: spec.dark);
     final atDefault = _now == fallback;
-    return SafeArea(
+    final mq = MediaQuery.of(context);
+    return Padding(
+      // 键盘升起来时整块往上让（输十六进制的时候）。
+      padding: EdgeInsets.only(bottom: mq.viewInsets.bottom),
+      child: SafeArea(
       top: false,
       child: ConstrainedBox(
-        constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.6),
+        constraints: BoxConstraints(maxHeight: mq.size.height * 0.6),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -163,6 +167,7 @@ class _ThemeColorSheetState extends ConsumerState<ThemeColorSheet> {
             ),
           ],
         ),
+      ),
       ),
     );
   }
