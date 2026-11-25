@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:lopicode/backdrop/backdrop_model.dart';
 import 'package:lopicode/backdrop/backdrop_picker.dart';
 import 'package:lopicode/backdrop/backdrop_store.dart';
+import 'package:lopicode/backdrop/backdrop_theme_bridge.dart';
 import 'package:lopicode/backdrop/crop_math.dart';
 import 'package:lopicode/core/crash_log.dart';
 import 'package:lopicode/state/app_providers.dart';
@@ -158,6 +159,29 @@ class BackdropNotifier extends Notifier<BackdropSettings> {
     await _store.cleanup(state.files);
   }
 
+  /// 给主题导出用：把现在的背景（浅色 / 深色那一份）变成能嵌进主题导出文件的数据。不改任何东西。
+  Future<BackdropThemeExport> exportForTheme({required bool dark}) async {
+    if (!state.loaded) await ready;
+    return exportBackdropForTheme(_store, state.lookFor(dark: dark));
+  }
+
+  /// 给主题导入用：把导入文件里带的背景图入库并用上（[dark]＝放到深色那一份，同时打开“深色单独设置”）。
+  /// 成功返回 null；没成返回原因（人话），原来的背景不动。
+  Future<String?> applyThemeBackground(Map<Object?, Object?> data, {bool dark = false}) async {
+    if (!state.loaded) await ready;
+    if (!state.loaded) return '背景设置还没读出来，稍后再试。';
+    try {
+      final r = await importBackdropFromTheme(_store, data, base: dark ? state.dark : state.light);
+      update((s) => (dark ? s.copyWith(dark: r.look, darkSeparate: true) : s.copyWith(light: r.look)).copyWith(enabled: true), persist: false);
+      await _save();
+      await _store.cleanup(state.files);
+      return null;
+    } on BackdropImportException catch (e) {
+      await _store.cleanup(state.files);
+      return e.message;
+    }
+  }
+
   /// 深色外观要不要单独一份。第一次打开时把浅色那份原样抄过来（同一个图片文件，不多占地方）。
   Future<void> setDarkSeparate(bool on) async {
     update((s) => s.copyWith(darkSeparate: on, dark: on && !s.dark.hasImage ? s.light : s.dark), persist: false);
@@ -166,3 +190,11 @@ class BackdropNotifier extends Notifier<BackdropSettings> {
 }
 
 final backdropProvider = NotifierProvider<BackdropNotifier, BackdropSettings>(BackdropNotifier.new);
+
+/// 外观页“背景图”那一行右边的一句当前状态。
+String backdropStatusLabel(BackdropSettings s) {
+  if (!s.loaded || s.files.isEmpty || !(s.light.hasImage || (s.darkSeparate && s.dark.hasImage))) return '未设置';
+  return s.enabled ? '已启用' : '已关闭';
+}
+
+final backdropStatusProvider = Provider<String>((ref) => backdropStatusLabel(ref.watch(backdropProvider)));

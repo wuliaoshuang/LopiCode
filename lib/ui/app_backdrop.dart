@@ -1,13 +1,17 @@
 // 设计约束（背景渲染控件）
-// - 用法只有一种：把页面的 Scaffold 包起来——
-//     AppBackdrop(area: BackdropArea.chat, builder: (context, on) => Scaffold(backgroundColor: on ? Colors.transparent : null, …))
-//   on＝这一页现在真的画着背景（开着、有图、图已解好）。没背景时 builder 拿到 false，页面和原来一模一样。
+// - 用法：把页面的 Scaffold 包起来——
+//     AppBackdrop(area: BackdropArea.chat, child: Scaffold(…))
+//   画着背景时（开着、有图、图已解好）它把下面 Scaffold 的默认底色换成透明；没背景时页面和原来一模一样。
+//   Scaffold 自己写死了 backgroundColor 的，改用 builder：
+//     AppBackdrop(area: …, builder: (context, on) => Scaffold(backgroundColor: on ? Colors.transparent : c.bg, …))
 // - 背景按**整块屏幕**摆：键盘升起、页面变矮时图不跟着缩，只是下面被盖住。
 // - 层次从下到上：图片（按裁剪 / 适配方式 / 模糊）→ 亮度 → 遮罩。遮罩默认跟随主题底色，文字直接写在上面也读得清。
 // - 页面里的表面（气泡、卡片、输入框、代码块）问 BackdropScope 要颜色：
 //     BackdropScope.surface(context, c.surfaceMuted)                           // 有背景时按“表面不透明度”变半透明
 //     BackdropScope.surface(context, c.codeBg, seeThrough: BackdropArea.code)  // “透出”开关开着才半透明
 //   没背景时原样返回，所以随手包上不会改变现在的样子。
+// - 和主题对接的两个取值入口都在这个文件里（合并主题分支后只改这两处）：
+//     backdropSurfaceAlpha —— 有背景时表面有多不透明；backdropMaskBase —— “遮罩跟随主题”时用哪个颜色。
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
@@ -17,6 +21,14 @@ import 'package:lopicode/state/backdrop_state.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/backdrop_images.dart';
 import 'package:material_ui/material_ui.dart';
+
+/// 有背景时表面（气泡、卡片、输入框）的不透明度，0–1。**全应用只有这一个入口。**
+///
+/// 现在取背景设置里的“表面不透明度”；合并主题分支后如果要改成主题的 `metrics.surfaceOpacity`，只改这里。
+double backdropSurfaceAlpha(BackdropSettings settings) => settings.surfaceOpacity / 100;
+
+/// “遮罩颜色跟随主题”时用的颜色（不带深浅）。现在是主题底色；合并主题分支后可以换成主题的 `backdropScrim`，只改这里。
+Color backdropMaskBase(BuildContext context) => context.colors.bg;
 
 /// 告诉下面的控件：这一页有没有背景、表面该多透。
 class BackdropScope extends InheritedWidget {
@@ -35,7 +47,7 @@ class BackdropScope extends InheritedWidget {
     final scope = maybeOf(context);
     if (scope == null || !scope.on) return color;
     if (seeThrough != null && !scope.settings.area(seeThrough)) return color;
-    return color.withValues(alpha: color.a * scope.settings.surfaceOpacity / 100);
+    return color.withValues(alpha: color.a * backdropSurfaceAlpha(scope.settings));
   }
 
   @override
@@ -44,13 +56,26 @@ class BackdropScope extends InheritedWidget {
 
 /// 把一页包起来，在它后面画背景。
 class AppBackdrop extends ConsumerWidget {
-  const AppBackdrop({super.key, required this.area, required this.builder});
+  const AppBackdrop({super.key, required this.area, this.child, this.builder}) : assert((child == null) != (builder == null), 'child 和 builder 给一个');
 
   /// 这一页算哪个范围（聊天页 / 其它页面）。
   final BackdropArea area;
 
-  /// [on]＝现在画着背景：页面把自己的底色改成透明。
-  final Widget Function(BuildContext context, bool on) builder;
+  /// 被包起来的页面。画着背景时，它里面 Scaffold 的默认底色会变成透明。
+  final Widget? child;
+
+  /// 要自己决定底色的用这个：[on]＝现在画着背景，页面把自己的底色改成透明。
+  final Widget Function(BuildContext context, bool on)? builder;
+
+  Widget _page(BuildContext context, bool on) {
+    final b = builder;
+    if (b != null) return b(context, on);
+    if (!on) return child!;
+    return Theme(
+      data: Theme.of(context).copyWith(scaffoldBackgroundColor: Colors.transparent),
+      child: child!,
+    );
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -60,7 +85,7 @@ class AppBackdrop extends ConsumerWidget {
       return BackdropScope(
         on: false,
         settings: settings,
-        child: Builder(builder: (context) => builder(context, false)),
+        child: Builder(builder: (context) => _page(context, false)),
       );
     }
     final look = settings.lookFor(dark: dark);
@@ -72,7 +97,7 @@ class AppBackdrop extends ConsumerWidget {
       builder: (context, ready) => BackdropScope(
         on: ready,
         settings: settings,
-        child: Builder(builder: (context) => builder(context, ready)),
+        child: Builder(builder: (context) => _page(context, ready)),
       ),
     );
   }
@@ -139,7 +164,7 @@ class _BackdropPictureState extends State<BackdropPicture> {
                 path: widget.path,
                 look: look,
                 letterbox: c.bg,
-                mask: (look.maskFollowsTheme ? c.bg : Color(look.maskColor | 0xFF000000)).withValues(alpha: look.maskOpacity / 100),
+                mask: (look.maskFollowsTheme ? backdropMaskBase(context) : Color(look.maskColor | 0xFF000000)).withValues(alpha: look.maskOpacity / 100),
                 screenHeight: widget.fullScreen ? screen.height : null,
               ),
             ),

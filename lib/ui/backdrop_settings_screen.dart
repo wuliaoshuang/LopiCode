@@ -24,12 +24,7 @@ import 'package:lopicode/ui/settings_widgets.dart';
 import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
 
-/// 外观页那一行右边的一句当前状态。
-String backdropSettingsLabel(BackdropSettings s) {
-  if (!s.light.hasImage && !(s.darkSeparate && s.dark.hasImage)) return '没有';
-  return s.enabled ? '已开' : '已关';
-}
-
+/// 背景图片设置页：外观页“背景图”那一行直接 push 它；那一行的状态文字用 backdropStatusProvider（lib/state/backdrop_state.dart）。
 class BackdropSettingsScreen extends ConsumerStatefulWidget {
   const BackdropSettingsScreen({super.key});
 

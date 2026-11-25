@@ -105,7 +105,7 @@ class ChatItemView extends ConsumerWidget {
               margin: const EdgeInsets.only(top: Space.x1, bottom: Space.x1, right: Space.x6),
               padding: const EdgeInsets.symmetric(horizontal: Space.x4, vertical: Space.x3),
               decoration: BoxDecoration(
-                color: BackdropScope.surface(context, c.surfaceMuted), // 有背景图片时按“表面不透明度”变透,
+                color: BackdropScope.surface(context, c.surfaceMuted),
                 borderRadius: const BorderRadius.only(
                   topLeft: Radius.circular(Radii.sm),
                   topRight: Radius.circular(Radii.bubble),
