@@ -33,6 +33,8 @@ List<LcBlock> bkEditedBody(List<LcBlock> body, LcBlockPath parent, bool inElse, 
     final inner = b.mouth(inElse: childElse, arm: childArm);
     if (inner == null) return list;
     final child = rebuild(inner, depth + 1);
+    // 参数里“带口的值”的口。
+    if (childArm <= -2) return [...list]..[i] = b.withExprMouth(lcExprMouthIndex(childArm), child);
     if (childArm >= 0) {
       return [...list]
         ..[i] = b.copyWith(
@@ -79,6 +81,9 @@ int bkCountBlocks(List<LcBlock> blocks) {
     n += 1 + bkCountBlocks(b.body) + bkCountBlocks(b.orElse);
     for (final a in b.arms) {
       n += bkCountBlocks(a.body);
+    }
+    for (final m in b.exprMouths) {
+      n += bkCountBlocks(m);
     }
   }
   return n;

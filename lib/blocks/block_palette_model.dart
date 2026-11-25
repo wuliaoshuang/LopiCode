@@ -65,7 +65,7 @@ List<BkPaletteSection> bkCategorySections(BlockCategory c) {
 List<BlockItemRef> bkPaletteItems(BlockHost host) {
   final seen = <String>{};
   return [
-    for (final c in host.categories)
+    for (final c in bkAllCategories(host))
       for (final s in bkCategorySections(c))
         for (final i in s.items)
           if (seen.add(i.token)) i,
@@ -77,7 +77,7 @@ String bkItemKey(BlockItemRef item) => ['${item.kind.name}-${item.id}', for (fin
 
 /// 帽子模板（按 id 找）。
 BlockHatTemplate? bkHatTemplate(BlockHost host, String id) {
-  for (final c in host.categories) {
+  for (final c in bkAllCategories(host)) {
     for (final h in c.allHats) {
       if (h.id == id) return h;
     }
@@ -177,7 +177,7 @@ List<BkPaletteSection> bkCommonSections(BlockHost host, List<String> stars) {
   ];
   if (starter.isEmpty && host.starterItems.isEmpty) {
     starter = [
-      for (final c in host.categories)
+      for (final c in bkAllCategories(host))
         for (final s in bkCategorySections(c).take(1))
           if (seen.add(s.items.first.token)) s.items.first,
     ].take(bkCommonMax).toList();
@@ -280,4 +280,30 @@ List<BlockItemRef> bkSearchPalette(BlockHost host, String query) {
   }
   hits.sort((a, b) => a.$1 != b.$1 ? a.$1 - b.$1 : a.$2 - b.$2);
   return [for (final h in hits) h.$3];
+}
+
+/// “我的积木”那一页在积木盒里的 id。
+const String bkCustomCategoryId = '@custom';
+
+/// 积木盒里全部的分类：宿主给的，加上“我的积木”（宿主有 [BlockHost.custom] 才有；一块都没有时这一页也在——里面有“新建积木”）。
+List<BlockCategory> bkAllCategories(BlockHost host) {
+  final custom = host.custom;
+  if (custom == null) return host.categories;
+  final all = custom.customs;
+  return [
+    ...host.categories,
+    BlockCategory(
+      id: bkCustomCategoryId,
+      label: kBlockCustomCategory,
+      colorKey: BlockColorKey.custom,
+      blocks: [
+        for (final c in all)
+          if (!c.isValue) c.id,
+      ],
+      exprs: [
+        for (final c in all)
+          if (c.isValue) c.id,
+      ],
+    ),
+  ];
 }

@@ -13,8 +13,11 @@ library;
 
 import 'dart:async';
 
+import 'package:lopicode/blocks/block_look.dart';
 import 'package:lopicode/lowcode/logic_blocks.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
+
+export 'package:lopicode/blocks/block_look.dart';
 
 /// 分类用哪种颜色。编辑器自己有一张色表（lib/blocks/block_colors.dart），宿主只说“用哪一种”，不直接给颜色，
 /// 这样浅色深色、立体感的几档深浅都由编辑器统一管。不在表里的键按 [unknown] 画。
@@ -367,6 +370,29 @@ abstract class BlockHost {
   /// 改帽子的槽位。要在 [edit] 里调。值不合适就不改，返回 false。
   bool setHatSlot(LcBlockTree tree, String slotId, String value);
 
+  // —— 第 4 版·阶段 2：带参数的帽子、参数小块、自定义积木（都有默认实现，不用的宿主不必管）——
+
+  /// 这一串的帽子是不是“定义”帽子（带一排参数小块：能加减、改名、给默认值、拖出来当值用）。
+  /// 不是返回 null（默认）。参数小块排在帽子那几段（[hatOf]）的后面。
+  BlockHatParams? hatParams(LcBlockTree tree) => null;
+
+  /// 把帽子的参数表整个换成 `params`。`renamed`＝这次是把哪个参数改了名（宿主顺手把函数体里用到它的地方、各处调用一起改）。
+  /// 要在 [edit] 里调。不合适就不改，返回 false。
+  bool setHatParams(LcBlockTree tree, List<BlockParam> params, {({String from, String to})? renamed}) => false;
+
+  /// 帽子上的某个参数在别处（各处调用的槽）用了几次：删参数前提示“有 N 处在用，槽里的东西会丢掉”。
+  int hatParamUses(LcBlockTree tree, String name) => 0;
+
+  /// 参数小块拖出来变成的那个值（“读这个参数”）。返回 null＝参数小块不能拖出来。
+  Map<String, dynamic>? paramExpr(String name) => null;
+
+  /// 带参数表的值（[LcExprSpec.paramsArg]，匿名函数）改了某个参数的名字：宿主顺手把它里面用到这个参数的地方一起改。
+  /// 在 [edit] 里被调（参数表已经改好了）。默认什么都不做。
+  void exprParamRenamed(LcBlockTree tree, Map<String, dynamic> expr, String from, String to) {}
+
+  /// 自定义积木（“我的积木”）。返回 null（默认）＝这个宿主没有这回事，积木盒里不出现“我的积木”页。
+  BlockCustomHost? get custom => null;
+
   /// 新建一串（从积木盒拖出一个帽子）。`templateId` 是 [BlockHatTemplate.id]；`x / y` 是放在画布的哪里。
   /// 要在 [edit] 里调。不认识的模板返回 null。
   LcBlockTree? addScript(String templateId, {double? x, double? y});
@@ -463,7 +489,10 @@ class BlockSentencePart {
 List<BlockSentencePart> parseBlockSentence(String template, List<LcArgSpec> args) {
   final parts = <BlockSentencePart>[];
   final used = <String>{};
-  final re = RegExp(r'\{([A-Za-z_][A-Za-z0-9_]*)\}');
+  // 槽名可以是任何字（自定义积木的槽名是用户起的，常常是中文）；但只有“正好是某个参数的名字”才算槽——
+  // 不是参数名、也不像标识符的花括号原样留在字里（和以前一样，不把那句话切开）。
+  final re = RegExp(r'\{([^{}\n]+)\}');
+  final ident = RegExp(r'^[A-Za-z_][A-Za-z0-9_]*$');
   var at = 0;
   void text(String s) {
     final t = s.trim();
@@ -471,9 +500,12 @@ List<BlockSentencePart> parseBlockSentence(String template, List<LcArgSpec> args
   }
 
   for (final m in re.allMatches(template)) {
+    final raw = m[1]!;
+    final name = args.any((a) => a.name == raw) ? raw : raw.trim();
+    final isArg = args.any((a) => a.name == name);
+    if (!isArg && !ident.hasMatch(raw)) continue;
     text(template.substring(at, m.start));
-    final name = m[1]!;
-    if (args.any((a) => a.name == name) && used.add(name)) {
+    if (isArg && used.add(name)) {
       parts.add(BlockSentencePart.arg(name));
     } else {
       text(m[0]!);

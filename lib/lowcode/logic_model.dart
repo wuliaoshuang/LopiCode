@@ -56,7 +56,7 @@ class LcArm {
   static LcArm? tryParse(Object? json, int depth) {
     if (json is! Map) return null;
     final args = json['args'];
-    return LcArm(args: args is Map ? {for (final e in args.entries) '${e.key}': e.value} : {}, body: LcBlock.parseList(json['body'], depth));
+    return LcArm(args: args is Map ? {for (final e in args.entries) '${e.key}': LcBlock._hydrate(e.value, depth, 0)} : {}, body: LcBlock.parseList(json['body'], depth));
   }
 }
 
@@ -124,13 +124,80 @@ class LcBlock {
   LcBlock copyWith({Map<String, dynamic>? args, List<LcBlock>? body, List<LcBlock>? orElse, List<LcArm>? arms}) =>
       LcBlock(op: op, args: args ?? this.args, body: body ?? this.body, orElse: orElse ?? this.orElse, arms: arms ?? this.arms, noElse: noElse);
 
-  /// 嵌在这块积木里的全部积木（开头口、各段、收尾口，按画出来的顺序）。
-  Iterable<LcBlock> get children => arms.isEmpty ? body.followedBy(orElse) : [...body, for (final a in arms) ...a.body, ...orElse];
+  /// 嵌在这块积木里的全部积木（开头口、各段、收尾口，按画出来的顺序；再加上参数里“带口的值”里的）。
+  Iterable<LcBlock> get children {
+    final inExprs = exprMouths;
+    if (arms.isEmpty && inExprs.isEmpty) return body.followedBy(orElse);
+    return [...body, for (final a in arms) ...a.body, ...orElse, for (final m in inExprs) ...m];
+  }
 
-  /// 某个口里的那串积木：`arm >= 0` 是第几段；否则 `inElse` 是收尾口，不然是开头口。段不存在返回 null。
+  /// 某个口里的那串积木：`arm >= 0` 是第几段；`arm <= -2` 是参数里第几个“带口的值”（见 [lcExprMouthArm]）；
+  /// 否则 `inElse` 是收尾口，不然是开头口。段 / 值不存在返回 null。
   List<LcBlock>? mouth({bool inElse = false, int arm = -1}) {
     if (arm >= 0) return arm < arms.length ? arms[arm].body : null;
+    if (arm <= -2) {
+      final all = exprMouths;
+      final k = lcExprMouthIndex(arm);
+      return k < all.length ? all[k] : null;
+    }
     return inElse ? orElse : body;
+  }
+
+  /// 这块积木的参数里（含各段的参数）所有“带口的值”的口，按固定的先后（参数表的先后，从外到里）。
+  /// 只算直接属于这块的：口里的积木自己参数里的不算（那是它们自己的）。
+  List<List<LcBlock>> get exprMouths {
+    final out = <List<LcBlock>>[];
+    _findMouths(args, out, 0);
+    for (final a in arms) {
+      _findMouths(a.args, out, 0);
+    }
+    return out;
+  }
+
+  static void _findMouths(Object? v, List<List<LcBlock>> out, int depth) {
+    if (depth > 64 || v is List<LcBlock>) return;
+    if (v is Map) {
+      final body = v[kLcExprBody];
+      if (body is List<LcBlock>) out.add(body);
+      for (final x in v.values) {
+        _findMouths(x, out, depth + 1);
+      }
+    } else if (v is List) {
+      for (final x in v) {
+        _findMouths(x, out, depth + 1);
+      }
+    }
+  }
+
+  /// 浅拷贝，把第 `k` 个“带口的值”的口换成 `child`（参数表沿路是新对象，别的口和原来共用）。预览用。
+  LcBlock withExprMouth(int k, List<LcBlock> child) {
+    var n = 0;
+    Object? copy(Object? v, int depth) {
+      if (depth > 64 || v is List<LcBlock>) return v;
+      if (v is Map) {
+        final out = <String, dynamic>{};
+        for (final e in v.entries) {
+          if (e.key == kLcExprBody && e.value is List<LcBlock>) {
+            out[kLcExprBody] = n++ == k ? child : e.value;
+          } else {
+            out['${e.key}'] = e.value;
+          }
+        }
+        // 口先数完（和 [_findMouths] 一个顺序），再往里走。
+        for (final key in out.keys.toList()) {
+          if (key != kLcExprBody) out[key] = copy(out[key], depth + 1);
+        }
+        return out;
+      }
+      if (v is List) return <dynamic>[for (final x in v) copy(x, depth + 1)];
+      return v;
+    }
+
+    final newArgs = copy(args, 0)! as Map<String, dynamic>;
+    return copyWith(
+      args: newArgs,
+      arms: arms.isEmpty ? null : [for (final a in arms) LcArm(args: copy(a.args, 0)! as Map<String, dynamic>, body: a.body)],
+    );
   }
 
   /// 按编辑器里的参数名（见 [lcArmArg]）找到装这个参数的那张表和表里的名字；段不存在返回 null。
@@ -166,6 +233,8 @@ class LcBlock {
   /// 参数里是 JSON 值（字面量 / Map / List）；超过 64 层的截掉（正常数据到不了，防自己套自己的坏数据）。
   static Object? _copyJson(Object? v, int depth) {
     if (depth > 64) return null;
+    // “带口的值”里的那串积木：不是 JSON，照积木的办法深拷贝。
+    if (v is List<LcBlock>) return <LcBlock>[for (final b in v) b.clone()];
     if (v is Map) return <String, dynamic>{for (final e in v.entries) '${e.key}': _copyJson(e.value, depth + 1)};
     if (v is List) return <dynamic>[for (final item in v) _copyJson(item, depth + 1)];
     return v is String || v is num || v is bool ? v : null;
@@ -179,7 +248,7 @@ class LcBlock {
     final arms = json['arms'];
     return LcBlock(
       op: op,
-      args: args is Map ? {for (final e in args.entries) '${e.key}': e.value} : {},
+      args: args is Map ? {for (final e in args.entries) '${e.key}': _hydrate(e.value, depth, 0)} : {},
       body: parseList(json['body'], depth + 1),
       orElse: parseList(json['else'], depth + 1),
       arms: arms is List ? [for (final a in arms.take(maxArms)) ?LcArm.tryParse(a, depth + 1)] : null,
@@ -191,7 +260,46 @@ class LcBlock {
     if (json is! List) return [];
     return [for (final item in json) ?tryParse(item, depth)];
   }
+
+  /// 读参数时把“带口的值”（表达式对象里的 [kLcExprBody]）里的那串积木读成真的积木。
+  /// 没有这种值的参数原样返回（同一个对象，一个字不动）：旧文档读进来、存出去和以前完全一样。
+  static Object? _hydrate(Object? v, int depth, int guard) {
+    if (guard > 64 || v is List<LcBlock>) return v;
+    if (v is List) {
+      List<dynamic>? out;
+      for (var i = 0; i < v.length; i++) {
+        final n = _hydrate(v[i], depth, guard + 1);
+        if (!identical(n, v[i])) (out ??= [...v])[i] = n;
+      }
+      return out ?? v;
+    }
+    if (v is Map) {
+      Map<String, dynamic>? out;
+      for (final e in v.entries) {
+        final mouth = e.key == kLcExprBody && v['e'] is String && e.value is List && e.value is! List<LcBlock>;
+        final n = mouth ? parseList(e.value, depth + 1) : _hydrate(e.value, depth, guard + 1);
+        if (!identical(n, e.value)) (out ??= {for (final x in v.entries) '${x.key}': x.value})['${e.key}'] = n;
+      }
+      return out ?? v;
+    }
+    return v;
+  }
 }
+
+/// “带口的值”（匿名函数这种：一个值，里面有一个能放积木的口）把口里的那串积木存在表达式对象的这个字段里。
+/// 名字以 `@` 开头：不会和任何参数名撞上。存盘是普通的积木列表；读进来以后是 `List<LcBlock>`。
+const String kLcExprBody = '@body';
+
+/// 表达式里的口（没有、或不是读好的积木列表返回 null）。
+List<LcBlock>? lcExprBody(Object? expr) {
+  if (expr is! Map) return null;
+  final v = expr[kLcExprBody];
+  return v is List<LcBlock> ? v : null;
+}
+
+/// 路径里“在上一块参数里的第 k 个带口的值的口里”这一步的 `arm`：-2、-3、…（-1 留给“不是段”）。
+int lcExprMouthArm(int k) => -2 - k;
+int lcExprMouthIndex(int arm) => -2 - arm;
 
 /// 积木在一个处理里的位置：从处理的 `body` 开始一步步往里走。
 /// 每一步是“在第几块”，以及（从第二步起）“在上一块的哪个口里”：`arm >= 0` 是第几段的口；
@@ -209,7 +317,7 @@ LcBlockStep lcStep(int index, {bool inElse = false, int arm = -1}) => (inElse: i
 bool lcSameStep(LcBlockStep a, LcBlockStep b) => a.index == b.index && lcSameMouth(a, b);
 
 /// 两步是不是在同一个口里（不比第几块）。
-bool lcSameMouth(LcBlockStep a, LcBlockStep b) => a.arm >= 0 || b.arm >= 0 ? a.arm == b.arm : a.inElse == b.inElse;
+bool lcSameMouth(LcBlockStep a, LcBlockStep b) => a.arm != -1 || b.arm != -1 ? a.arm == b.arm : a.inElse == b.inElse;
 
 /// “一串积木”的按路径操作（找、插、删、挪、遍历）。谁有一个 `body` 就能混进来用：
 /// 前端的事件处理（[LcHandler]）和后端的接口（lib/backend）共用这一套，积木编辑器也只认它。
@@ -318,6 +426,10 @@ mixin LcBlockTree {
           walk(b.arms[a].body, path, false, a);
         }
         walk(b.orElse, path, true, -1);
+        final inExprs = b.exprMouths;
+        for (var k = 0; k < inExprs.length; k++) {
+          walk(inExprs[k], path, false, lcExprMouthArm(k));
+        }
       }
     }
 

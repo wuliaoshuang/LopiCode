@@ -67,7 +67,8 @@ class ShellScope extends InheritedWidget {
 Widget? shellLeading(BuildContext context) {
   final shell = ShellScope.maybeOf(context);
   if (shell != null) return _MenuButton(onPressed: shell.openDrawer);
-  if (Navigator.canPop(context)) {
+  // 问的是“这一页自己能不能返回”，不是“导航栈上有没有东西”：不然在最底下那一页上弹个菜单 / 对话框，顶栏会冒出一个返回箭头。
+  if (ModalRoute.of(context)?.canPop ?? Navigator.canPop(context)) {
     return RoundIconButton(icon: Icons.arrow_back_ios_new_rounded, tooltip: '返回', onPressed: () => Navigator.maybePop(context));
   }
   final drawer = PushDrawerScope.maybeOf(context);

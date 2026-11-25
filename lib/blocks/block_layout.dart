@@ -19,6 +19,8 @@ import 'package:lopicode/blocks/block_host.dart';
 import 'package:lopicode/lowcode/logic_blocks.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 
+part 'block_layout_fn.dart';
+
 /// 量一段字有多宽（字号、字重由调用方定死：积木上的字都是同一种）。
 typedef BkMeasure = double Function(String text);
 
@@ -55,6 +57,7 @@ void _shiftSlot(BkSlot s, Offset d) {
 
 void _shiftExpr(BkExpr e, Offset d) {
   e.rect = e.rect.shift(d);
+  e.mouth = e.mouth?.shift(d);
   for (final l in e.labels) {
     l.rect = l.rect.shift(d);
   }
@@ -78,6 +81,11 @@ class BlockLayoutEngine {
   String _curScript = '';
   LcBlockPath? _curBlock;
 
+  /// 正在排的那块积木本身和它在第几层（“带口的值”要知道自己的口在这块积木里排第几个）。
+  LcBlock? _curOwner;
+  int _curDepth = 0;
+  int _looseMouths = 0;
+
   bool _overridden(String arg, BkExprPath path, String? hatSlotId) {
     final o = fieldOverride;
     if (o == null || o.scriptId != _curScript) return false;
@@ -96,7 +104,7 @@ class BlockLayoutEngine {
     final snaps = <BkSnap>[];
     _curScript = tree.id;
     _curBlock = null;
-    final hat = _hat(host.hatOf(tree));
+    final hat = _hat(host.hatOf(tree), host.hatParams(tree));
     blocks.add(hat);
     _list(body ?? tree.body, const [], false, 0, hat.rect.bottom, blocks, snaps, 0, hat.rect.width);
     _curScript = '';
@@ -130,9 +138,19 @@ class BlockLayoutEngine {
   }
 
   /// 排一个单独的表达式块（积木盒里的样品、拖在手上的表达式）。
-  BkScriptLayout layoutExpr(Map<String, dynamic> expr) {
+  /// `controls: false`＝参数小块后面不带“＋”（样品上点不了）。
+  BkScriptLayout layoutExpr(Map<String, dynamic> expr, {bool controls = true}) {
+    _controls = controls;
+    _curBlock = null;
+    _curOwner = null;
+    _curDepth = 0;
+    _looseMouths = 0;
     final e = _expr(expr, '', const [], metrics.maxBlockWidth, 0);
-    return BkScriptLayout(scriptId: '', blocks: [], snaps: [], size: Size(e.rect.width, e.rect.height + metrics.edgeH), loose: e);
+    // “带口的值”口里的积木：跟着一起排出来（拖在手上、摆在积木盒里都要画）。
+    final blocks = <BkBlock>[];
+    _flushExpr(e, blocks, []);
+    _controls = true;
+    return BkScriptLayout(scriptId: '', blocks: blocks, snaps: [], size: Size(e.rect.width, e.rect.height + metrics.edgeH), loose: e);
   }
 
   BkScriptLayout _finish(String id, List<BkBlock> blocks, List<BkSnap> snaps) {
@@ -263,7 +281,8 @@ class BlockLayoutEngine {
       e.rect = Rect.fromLTWH(0, 0, label.rect.width + m.exprPadH * 2, m.textH + m.exprPadV * 2);
       return e;
     }
-    final parts = parseBlockSentence(host.exprSentence(kind) ?? defaultExprSentence(spec), spec.args);
+    final hasParams = spec.paramsArg != null;
+    final parts = parseBlockSentence((host.exprSentence(kind) ?? defaultExprSentence(spec)).replaceAll(_paramsMark, _paramsHere), spec.args);
     final onlyArg = spec.args.length == 1 && parts.length == 1 && parts.first.arg != null ? spec.args.first : null;
     final bare = onlyArg != null && (onlyArg.kind == LcArgKind.literalText || onlyArg.kind == LcArgKind.literalNumber || onlyArg.kind == LcArgKind.literalBool);
     final hex = !bare && host.isBooleanExpr(expr);
@@ -273,12 +292,34 @@ class BlockLayoutEngine {
 
     final e = BkExpr(expr: expr, kind: kind, colorKey: host.exprColorKey(kind), rect: Rect.zero, hex: hex || (bare && onlyArg.kind == LcArgKind.literalBool), bare: bare);
     final items = <_Item>[];
+    var chipsDone = !hasParams;
+    void word(String text) {
+      if (text.trim().isEmpty) return;
+      final l = _label(text.trim(), inner);
+      e.labels.add(l);
+      items.add(_Item.label(l));
+    }
+
+    void chips() {
+      chipsDone = true;
+      for (final s in _exprParamSlots(expr, spec, arg, path)) {
+        e.slots.add(s);
+        items.add(_Item.slot(s));
+      }
+    }
+
     for (final p in parts) {
       final a = p.arg == null ? null : spec.arg(p.arg!);
       if (a == null) {
-        final l = _label(p.text, inner);
-        e.labels.add(l);
-        items.add(_Item.label(l));
+        final at = chipsDone ? -1 : p.text.indexOf(_paramsHere);
+        if (at < 0) {
+          word(p.text.replaceAll(_paramsHere, ''));
+        } else {
+          // 那句话里写了 {@params}：参数小块排在这里。
+          word(p.text.substring(0, at));
+          chips();
+          word(p.text.substring(at + 1).replaceAll(_paramsHere, ''));
+        }
       } else {
         for (final s in _argSlots(a, expr[a.name], arg, [...path, a.name], inner, depth + 1)) {
           e.slots.add(s);
@@ -286,12 +327,14 @@ class BlockLayoutEngine {
         }
       }
     }
+    if (!chipsDone) chips();
     final size = _flow(items, inner);
     final h = math.max(size.height, bare ? 0.0 : m.textH);
     for (final it in items) {
       it.moveTo(it.rect.topLeft + Offset(padX, padY + (h - size.height) / 2));
     }
     e.rect = Rect.fromLTWH(0, 0, math.max(size.width + padX * 2, bare ? 0.0 : m.fieldMinW), h + padY * 2);
+    if (spec.hasMouth) _exprMouth(e, expr);
     return e;
   }
 
@@ -302,10 +345,11 @@ class BlockLayoutEngine {
 
   // —— 积木 ——
 
-  BkBlock _hat(BlockHat hat) {
+  BkBlock _hat(BlockHat hat, [BlockHatParams? params]) {
     final m = metrics;
     final b = BkBlock(path: const [], block: null, shape: BkShape.hat, colorKey: hat.colorKey, rect: Rect.zero, head: Rect.zero);
-    final inner = m.maxBlockWidth - m.padH * 2;
+    // “定义”帽子放宽一点（多出一个“＋”的位置）：三个参数加“＋”正好一行，“＋”不单独掉到下一行。
+    final inner = m.maxBlockWidth + (params == null ? 0 : 36) - m.padH * 2;
     final items = <_Item>[];
     for (final p in hat.parts) {
       final id = p.slotId;
@@ -316,6 +360,13 @@ class BlockLayoutEngine {
       } else {
         final typed = p.kind == LcArgKind.literalText || p.kind == LcArgKind.literalNumber;
         final s = typed ? _field('', const [], null, p.text, hatSlotId: id, placeholder: p.empty) : _dropdown('', const [], null, p.text, placeholder: p.empty, hatSlotId: id);
+        b.slots.add(s);
+        items.add(_Item.slot(s));
+      }
+    }
+    // “定义”帽子：参数小块排在后面，最后一个“＋”。
+    if (params != null) {
+      for (final s in _paramSlots([for (final p in params.params) p], '', const [], canAdd: params.params.length < params.max)) {
         b.slots.add(s);
         items.add(_Item.slot(s));
       }
@@ -389,6 +440,8 @@ class BlockLayoutEngine {
     final inner = m.maxBlockWidth - m.padH * 2;
     final items = <_Item>[];
     _curBlock = path;
+    _curOwner = block;
+    _curDepth = depth;
     if (spec == null) {
       final l = _label('不认识的积木（${_clip(block.op)}）', inner);
       b.labels.add(l);
@@ -505,6 +558,8 @@ class BlockLayoutEngine {
       cy += footH;
     }
     b.rect = Rect.fromLTWH(x, y, w, cy - y);
+    // 槽里“带口的值”口里的积木：这块的字和槽都摆到位了，把它们挪到位、接进整串的表里（排在这块后面＝画在上面、先被点到）。
+    _flush(b.slots, out, snaps);
     return b;
   }
 

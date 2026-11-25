@@ -182,6 +182,8 @@ class BkScriptPainter {
     }
 
     final clip = state.clip;
+    // 单独摆着的值先画：它要是“带口的值”，口里的积木（在 blocks 里）得画在它上面。
+    if (loose != null) _expr(canvas, loose, palette.tone(loose.colorKey), const [], state);
     for (final b in layout.blocks) {
       final posed = state.pose?.call(b);
       // 很长的一串只画露出来的那几块（正在滑的按滑到的位置算）。
@@ -205,7 +207,6 @@ class BkScriptPainter {
         _block(canvas, b, state, posed);
       }
     }
-    if (loose != null) _expr(canvas, loose, palette.tone(loose.colorKey), const [], state);
     // 选中描边最后画，压在所有积木上面（不会被下一块盖住半边）。
     final sel = state.selected;
     for (final b in layout.blocks) {
@@ -409,6 +410,13 @@ class BkScriptPainter {
       case BkSlotLook.empty:
         canvas.drawPath(path, Paint()..color = tone.deep);
         _inset(canvas, path, 0.30);
+      case BkSlotLook.param:
+        // 参数小块：就是它拖出来以后那个值的样子（同色的小胶囊），比槽略矮一点，看得出是“放在上面的一小块”。
+        final chip = palette.tone(s.colorKey ?? BlockColorKey.variable);
+        final r = s.rect.deflate(1);
+        _solid(canvas, bkPillPath(r), r, identical(chip.fill, tone.fill) || chip.fill == tone.fill ? chip.nested : chip, 1.5);
+        text.paint(canvas, s.text, Rect.fromLTRB(r.left + m.fieldPadH, r.top, r.right - m.fieldPadH, r.bottom), chip.text, center: true);
+        return;
       case BkSlotLook.add:
         final c = s.rect.center;
         canvas.drawCircle(c, 10, Paint()..color = tone.deep);
@@ -426,11 +434,11 @@ class BkScriptPainter {
     final bad = state.marks?.slotLevel(block, s);
     if (bad != null) bkPaintSlotMark(canvas, palette, metrics, s, error: bad);
     final sel = state.selectedSlot;
-    if (sel != null && sel.arg == s.arg && bkSameBlockPath(sel.block, block) && bkSameExprPath(sel.path, s.exprPath) && s.hatSlotId == null && s.look != BkSlotLook.add) {
+    if (sel != null && sel.arg == s.arg && bkSameBlockPath(sel.block, block) && bkSameExprPath(sel.path, s.exprPath) && s.hatSlotId == null && s.look != BkSlotLook.add && s.param == null) {
       _outline(canvas, path, color: state.slotColor);
     }
     final ps = state.pulseSlot, pp = state.pulse;
-    if (ps != null && pp != null && ps.arg == s.arg && bkSameBlockPath(ps.block, block) && bkSameExprPath(ps.path, s.exprPath) && s.hatSlotId == null && s.look != BkSlotLook.add) {
+    if (ps != null && pp != null && ps.arg == s.arg && bkSameBlockPath(ps.block, block) && bkSameExprPath(ps.path, s.exprPath) && s.hatSlotId == null && s.look != BkSlotLook.add && s.param == null) {
       _outline(canvas, path, color: const Color(0xFFFFFFFF), alpha: 1 - pp);
     }
   }
@@ -445,6 +453,14 @@ class BkScriptPainter {
     }
     final t = e.unknown ? palette.tone(BlockColorKey.unknown) : tone;
     _solid(canvas, bkSlotPath(e.rect, metrics, hex: e.hex), e.rect, t, 1.5);
+    final mouth = e.mouth;
+    if (mouth != null) {
+      // 带口的值：口是凹进去的一块（露出画布的底色，上沿一道暗线），里面的语句积木另外画在上面。
+      final hole = Path()..addRRect(RRect.fromRectAndRadius(mouth, const Radius.circular(9)));
+      canvas.drawPath(hole, Paint()..color = palette.canvas);
+      canvas.drawPath(hole, Paint()..color = t.deep.withValues(alpha: palette.dark ? 0.30 : 0.14));
+      _inset(canvas, hole, 0.24);
+    }
     for (final l in e.labels) {
       text.paint(canvas, l.text, l.rect, t.text);
     }

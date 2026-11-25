@@ -21,9 +21,11 @@ import 'package:lopicode/blocks/block_editor_canvas_view.dart';
 import 'package:lopicode/blocks/block_editor_dock_view.dart';
 import 'package:lopicode/blocks/block_editor_drag_view.dart';
 import 'package:lopicode/blocks/block_editor_edit_view.dart';
+import 'package:lopicode/blocks/block_editor_fn_view.dart';
 import 'package:lopicode/blocks/block_editor_fx_view.dart';
 import 'package:lopicode/blocks/block_host.dart';
 import 'package:lopicode/blocks/block_palette_model.dart';
+import 'package:lopicode/blocks/block_palette_parts_view.dart';
 import 'package:lopicode/blocks/block_palette_view.dart';
 import 'package:lopicode/blocks/block_panels_sheet.dart';
 import 'package:lopicode/blocks/block_script_view.dart';
@@ -88,7 +90,7 @@ class BlockEditorView extends StatefulWidget {
   State<BlockEditorView> createState() => BlockEditorViewState();
 }
 
-class BlockEditorViewState extends State<BlockEditorView> with TickerProviderStateMixin, BkKitHolder, BkEditorCanvas, BkEditorDrag, BkEditorEdit, BkEditorArms, BkEditorDock {
+class BlockEditorViewState extends State<BlockEditorView> with TickerProviderStateMixin, BkKitHolder, BkEditorCanvas, BkEditorDrag, BkEditorEdit, BkEditorArms, BkEditorDock, BkEditorFn {
   String? _toast;
   String? _toastAction;
   VoidCallback? _onToastAction;
@@ -165,6 +167,21 @@ class BlockEditorViewState extends State<BlockEditorView> with TickerProviderSta
   void _redo() {
     commitEdit();
     if (host.canRedo) host.redo();
+  }
+
+  void _onCustom(BkCustomAction action, String id) {
+    switch (action) {
+      case BkCustomAction.create:
+        unawaited(customNew());
+      case BkCustomAction.edit:
+        unawaited(customEdit(id));
+      case BkCustomAction.define:
+        showDefinition(id);
+      case BkCustomAction.remove:
+        unawaited(customRemove(id));
+      case BkCustomAction.star:
+        break;
+    }
   }
 
   Future<void> _showIssues() async {
@@ -251,6 +268,7 @@ class BlockEditorViewState extends State<BlockEditorView> with TickerProviderSta
                           handleLeading: buildDockLead(context, onIssues: _showIssues),
                           handleTrailing: buildDockTools(context, onUndo: host.canUndo ? _undo : null, onRedo: host.canRedo ? _redo : null),
                           onHandleTap: dockToggle,
+                          onCustom: host.custom == null ? null : _onCustom,
                           onResizeDown: dockHold,
                           onResizeStart: dockResizeStart,
                           onResizeUpdate: dockResizeUpdate,

@@ -73,7 +73,6 @@ mixin BkEditorCanvas on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Ti
   late final AnimationController flashAnim = AnimationController(vsync: this, duration: const Duration(milliseconds: 900));
 
   // —— 动效 ——
-
   /// 让位滑动多久；落下以后轻弹多久。
   static const Duration roomTime = Duration(milliseconds: 150);
   static const Duration pulseTime = Duration(milliseconds: 100);
@@ -137,7 +136,6 @@ mixin BkEditorCanvas on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Ti
   Offset get downCanvas => toCanvas(_downAt);
 
   // —— 别的几层提供的 ——
-
   BkDragSession? get drag;
   bool get busy;
 
@@ -151,6 +149,12 @@ mixin BkEditorCanvas on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Ti
   void dragEnd();
   void dragCancel();
   void onTapHit(BkPlaced script, BkHit hit);
+
+  /// 长按参数小块：拿出一份。拿起来了返回 true。
+  bool liftParam(BkPlaced script, BkHit hit, Offset viewAt) => false;
+
+  /// 长按拿起来、没挪就松手：这样东西有自己的菜单就放回原处并弹出来，返回 true；没有返回 false（照老样子）。
+  bool onLiftRelease(BkPlaced script, BkHit hit) => false;
 
   /// 长按的地方有没有“换成…”可弹：`open`＝有就弹出来；否则只是问一声。返回有没有。
   bool onLongPressHit(BkPlaced script, BkHit hit, {bool open = true});
@@ -271,7 +275,6 @@ mixin BkEditorCanvas on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Ti
   }
 
   // —— 手指 ——
-
   void _clearLongPress() {
     _longPress?.cancel();
     _longPress = null;
@@ -304,14 +307,17 @@ mixin BkEditorCanvas on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Ti
     final hit = _downHit;
     if (!mounted || _touch != _Touch.pending || hit == null) return;
     _touch = _Touch.held;
-    // 直接填的槽（里面没有值积木可拿）：长按＝换成别的值。
-    if (hit.hit.expr == null && onLongPressHit(hit.script, hit.hit)) return;
-    dragStartFromCanvas(hit.script, hit.hit, _downAt);
-    if (drag == null) {
+    if (hit.hit.slot?.look == BkSlotLook.param) {
+      // 参数小块：长按＝拿出一份当值用。
+      if (!liftParam(hit.script, hit.hit, _downAt)) return;
+    } else {
+      // 直接填的槽（里面没有值积木可拿）：长按＝换成别的值。
+      if (hit.hit.expr == null && onLongPressHit(hit.script, hit.hit)) return;
+      dragStartFromCanvas(hit.script, hit.hit, _downAt);
       // 拿不起来（这块刚好没了）：退回老的长按。
-      onLongPressHit(hit.script, hit.hit);
-      return;
+      if (drag == null) onLongPressHit(hit.script, hit.hit);
     }
+    if (drag == null) return;
     _liftMoved = false;
     _touch = _Touch.drag;
   }
@@ -370,6 +376,8 @@ mixin BkEditorCanvas on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Ti
         final hit = _downHit;
         if (cancelled) {
           dragCancel();
+        } else if (!_liftMoved && hit != null && onLiftRelease(hit.script, hit.hit)) {
+          // ↑ 没挪就松手，这样东西有自己的菜单（参数小块的小卡、语句积木的“包成积木”）：那边已经处理了。
         } else if (!_liftMoved && hit != null && hit.hit.expr != null && onLongPressHit(hit.script, hit.hit, open: false)) {
           // 拿起一个值积木、没挪就松手：放回原处，弹“换成…”。
           dragCancel();
@@ -450,6 +458,7 @@ mixin BkEditorCanvas on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Ti
               motionT: t,
               pulse: pulse != null && pulseAnim.isAnimating ? (scriptId: pulse.scriptId, range: pulse.range, slot: pulse.slot, t: pulseAnim.value) : null,
               hints: d == null || busy || d.kind == BkDragKind.hat ? null : (d.kind == BkDragKind.statement ? BkSnapKind.statement : BkSnapKind.expr),
+              hintsIn: d?.palette?.onlyScript,
               slot: d == null || d.kind != BkDragKind.expr || d.target == null
                   ? null
                   : (scriptId: d.target!.scriptId, block: d.target!.snap.parent, arg: d.target!.snap.arg ?? '', path: d.target!.snap.exprPath, warn: d.target!.mismatch),
@@ -476,6 +485,7 @@ class BkWorkspacePainter extends CustomPainter {
     this.motionT = 1,
     this.pulse,
     this.hints,
+    this.hintsIn,
     this.slot,
   });
 
@@ -496,8 +506,9 @@ class BkWorkspacePainter extends CustomPainter {
   /// 刚落下的那一段轻弹一下（`t`＝进度）。
   final ({String scriptId, BkRoom? range, ({LcBlockPath block, String arg, BkExprPath path})? slot, double t})? pulse;
 
-  /// 拖动中：把这一种拼接点都淡淡地标出来。
+  /// 拖动中：把这一种拼接点都淡淡地标出来（`hintsIn`＝只标这一串的：参数小块只能放进自己那一串）。
   final BkSnapKind? hints;
+  final String? hintsIn;
   final ({String scriptId, LcBlockPath block, String arg, BkExprPath path, bool warn})? slot;
 
   @override
@@ -537,7 +548,7 @@ class BkWorkspacePainter extends CustomPainter {
       canvas.save();
       canvas.translate(s.origin.dx, s.origin.dy);
       kit.painter.paint(canvas, s.layout, state);
-      if (hints != null) _hints(canvas, s, visible.shift(-s.origin), g);
+      if (hints != null && (hintsIn == null || hintsIn == s.id)) _hints(canvas, s, visible.shift(-s.origin), g);
       canvas.restore();
     }
     canvas.restore();

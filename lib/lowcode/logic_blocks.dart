@@ -137,10 +137,17 @@ class LcArmSpec {
 
 /// 一种表达式的说明。
 class LcExprSpec {
-  const LcExprSpec(this.kind, this.label, this.category, this.args, {this.hint = ''});
+  const LcExprSpec(this.kind, this.label, this.category, this.args, {this.hint = '', this.paramsArg, this.hasMouth = false});
 
   final String kind;
   final String label;
+
+  /// 这种值自己带参数表（匿名函数的 `(x, y)`）：参数名存在表达式对象的哪个字段里（一个字符串列表）。null＝不带。
+  /// 积木上画成一排小块，能加减改名、能拖出来当值用；那句话里用 `{@params}` 指定它们排在哪（不写＝排在最后）。
+  final String? paramsArg;
+
+  /// 这种值里面有一个能放语句积木的口（“带口的值”，口里的积木存在表达式对象的 `@body` 里，见 `kLcExprBody`）。
+  final bool hasMouth;
 
   /// 分类，见 [lcExprCategories]。
   final String category;

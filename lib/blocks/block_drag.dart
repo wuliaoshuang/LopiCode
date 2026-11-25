@@ -27,7 +27,7 @@ enum BkDragKind { statement, hat, expr }
 
 /// 从积木盒里拿出来的是什么（和积木盒控件里的那一项对应，这里不依赖界面）。
 class BkPaletteSource {
-  const BkPaletteSource(this.kind, this.id, {this.preset = const {}});
+  const BkPaletteSource(this.kind, this.id, {this.preset = const {}, this.expr, this.onlyScript});
   final BkDragKind kind;
 
   /// 帽子模板的 id / 积木的 op / 表达式的 e。
@@ -37,7 +37,14 @@ class BkPaletteSource {
   final Map<String, String> preset;
 
   LcBlock newBlock(BlockHost host) => host.newBlock(id)..args.addAll(preset);
-  Map<String, dynamic> newExpr(BlockHost host) => host.newExpr(id)..addAll(preset);
+
+  /// 现成的一个值（参数小块拖出来的那一份）：放下去的是它的副本，不问宿主要新的。
+  final Map<String, dynamic>? expr;
+
+  /// 只能放进这一串（帽子上的参数小块只在自己这串里有意义）；null＝哪都能放。
+  final String? onlyScript;
+
+  Map<String, dynamic> newExpr(BlockHost host) => copyExpr(expr) ?? (host.newExpr(id)..addAll(preset));
 }
 
 /// 现在能落在哪。
@@ -198,6 +205,9 @@ class BkDragSession {
   /// 原来就是默认值的不算。界面拿它给一条带“撤销”的提示。
   Map<String, dynamic>? droppedExpr;
 
+  /// 拖着值的时候拿哪个高度去对槽：第一行的中间（带口的值很高，不能拿整块的中间去对）。
+  double get probeY => (piece.loose?.mouth?.top ?? piece.size.height) / 2;
+
   static bool _isPrefix(BkExprPath a, BkExprPath b) => a.length < b.length && bkSameExprPath(a, b.sublist(0, a.length));
 
   bool get isNew => palette != null;
@@ -249,9 +259,11 @@ class BkDragSession {
   /// 手指动了：`topLeft` 是手上那一截的左上角现在在画布的哪里。返回落点有没有变。
   bool update(Offset topLeft) {
     if (kind == BkDragKind.hat) return false;
-    final probe = kind == BkDragKind.statement ? topLeft : topLeft + Offset(6, piece.size.height / 2);
+    final probe = kind == BkDragKind.statement ? topLeft : topLeft + Offset(6, probeY);
     final found = base.nearestSnap(probe, kind: kind == BkDragKind.statement ? BkSnapKind.statement : BkSnapKind.expr, maxDistance: snapRadius);
     if (found == null) return clearTarget();
+    final only = palette?.onlyScript;
+    if (only != null && found.script.id != only) return clearTarget();
     final old = target;
     if (old != null && identical(old.snap, found.snap)) return false;
     final snap = found.snap;
@@ -397,8 +409,7 @@ class BkDragSession {
         case BkDragKind.expr:
           final t = target!;
           final tree = host.script(t.scriptId);
-          final to = tree?.blockAt(t.snap.parent);
-          if (tree == null || to == null) return;
+          if (tree == null || tree.blockAt(t.snap.parent) == null && palette != null) return;
           final toArg = t.snap.arg!;
           final src = palette;
           Map<String, dynamic>? moving;
@@ -422,6 +433,18 @@ class BkDragSession {
             }
           }
           if (moving == null) return;
+          // 落点的路径是按“拿走以后”的样子算的（拿走一个带口的值，同一块积木上别的口的编号会变），所以拿走以后再找。
+          final to = tree.blockAt(t.snap.parent);
+          if (to == null) {
+            // 找不到落点了：原样放回去，当没拖过。
+            final list = fromList;
+            if (list != null) {
+              list.insert(removedAt.clamp(0, list.length), moving);
+            } else if (from != null) {
+              bkSetExprAt(from, arg!, exprPath, moving);
+            }
+            return;
+          }
           // 落点是原槽的外层（把里面的一块拖出来盖住整块）：换下来的那块里已经没有原槽了，没法交换。
           final inside = from != null && t.scriptId == scriptId && bkSameBlockPath(t.snap.parent, path) && toArg == arg && _isPrefix(t.snap.exprPath, exprPath);
           final old = asExpr(bkExprAt(to, toArg, t.snap.exprPath));
@@ -439,11 +462,17 @@ class BkDragSession {
             }
             if (swapped) host.argChanged(fromTree!, from, arg!, exprPath);
           }
-          if (old != null && !swapped && !wasDefault) droppedExpr = old;
+          // 盖上去的和原来的一模一样（把同一个参数再放一次）：没丢东西，不用说“被换掉了”。
+          if (old != null && !swapped && !wasDefault && !bkSameJson(old, moving)) droppedExpr = old;
           bkPushDown(host, engine, normal, t.scriptId);
           final other = scriptId;
           if (swapped && other != null && other != t.scriptId) bkPushDown(host, engine, normal, other);
-          result = (scriptId: t.scriptId, path: t.snap.parent);
+          // 交换以后口的编号可能又变了：照着那块积木本身找它现在的路径。
+          var at = t.snap.parent;
+          tree.visitBlocks((x, p) {
+            if (identical(x, to)) at = p;
+          });
+          result = (scriptId: t.scriptId, path: at);
       }
     });
     return result;

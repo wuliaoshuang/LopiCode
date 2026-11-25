@@ -144,32 +144,75 @@ class BkPaletteSearchHint extends StatelessWidget {
   }
 }
 
-/// 贴着 [box]（一块样品）弹出加星的小菜单。选了返回 true。
-Future<bool?> showBkStarMenu(BuildContext box, {required bool starred}) {
+/// 长按积木盒里的一样东西弹出的菜单里的一项。
+enum BkCustomAction { star, create, edit, define, remove }
+
+/// 样品旁边的小菜单：加到常用 / 从常用拿掉；是自定义积木（`custom`）的再多三项：编辑、看定义、删除。
+Future<BkCustomAction?> showBkStarMenu(BuildContext box, {required bool starred, bool custom = false}) {
   final render = box.findRenderObject();
   final overlay = Overlay.of(box).context.findRenderObject();
   if (render is! RenderBox || overlay is! RenderBox || !render.attached) return Future.value();
   final at = render.localToGlobal(Offset.zero, ancestor: overlay) & render.size;
   final c = box.colors;
-  return showMenu<bool>(
+  PopupMenuItem<BkCustomAction> item(BkCustomAction value, String key, IconData icon, String text, {bool danger = false}) => PopupMenuItem<BkCustomAction>(
+    key: ValueKey(key),
+    value: value,
+    height: 44,
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 20, color: danger ? c.danger : c.textMuted),
+        const SizedBox(width: 8),
+        Text(text, style: danger ? TextStyle(color: c.danger) : null),
+      ],
+    ),
+  );
+  return showMenu<BkCustomAction>(
     context: box,
-    position: RelativeRect.fromRect(at.translate(8, -52), Offset.zero & overlay.size),
+    // 项多的时候菜单往上长：贴着样品的上沿，别盖住它。
+    position: RelativeRect.fromRect(at.translate(8, custom ? -196 : -52), Offset.zero & overlay.size),
+    shape: custom ? RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)) : null,
     items: [
-      PopupMenuItem<bool>(
-        key: const ValueKey('bk-palette-star-toggle'),
-        value: true,
-        height: 44,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(starred ? Icons.star_outline_rounded : Icons.star_rounded, size: 20, color: c.textMuted),
-            const SizedBox(width: 8),
-            Text(starred ? '从常用拿掉' : '加到常用'),
-          ],
-        ),
-      ),
+      if (custom) ...[item(BkCustomAction.edit, 'bk-palette-custom-edit', Icons.edit_outlined, '编辑这块积木'), item(BkCustomAction.define, 'bk-palette-custom-define', Icons.my_location_rounded, '看它的定义')],
+      item(BkCustomAction.star, 'bk-palette-star-toggle', starred ? Icons.star_outline_rounded : Icons.star_rounded, starred ? '从常用拿掉' : '加到常用'),
+      if (custom) item(BkCustomAction.remove, 'bk-palette-custom-remove', Icons.delete_outline_rounded, '删除', danger: true),
     ],
   );
+}
+
+/// “我的积木”那一页最上面：“新建积木”按钮；一块都还没有时下面多一句话说它是干什么的。
+class BkPaletteCustomHead extends StatelessWidget {
+  const BkPaletteCustomHead({super.key, required this.empty, required this.onNew});
+  final bool empty;
+  final VoidCallback onNew;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final t = Theme.of(context).textTheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        OutlinedButton.icon(
+          key: const ValueKey('bk-palette-custom-new'),
+          onPressed: onNew,
+          icon: const Icon(Icons.add_rounded, size: 18),
+          label: const Text('新建积木'),
+          style: OutlinedButton.styleFrom(minimumSize: const Size(0, 40), padding: const EdgeInsets.symmetric(horizontal: 14), shape: const StadiumBorder()),
+        ),
+        if (empty)
+          Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: Text(
+              '把常用的几块包成一块自己的积木：起个名字、写一句文案，以后拖出来就能用。',
+              key: const ValueKey('bk-palette-custom-empty'),
+              style: t.bodySmall?.copyWith(color: c.textMuted, height: 1.5),
+            ),
+          ),
+      ],
+    );
+  }
 }
 
 /// 按下态：手指按着的时候缩到 96%、略暗。只是看的，不拦手势。

@@ -6,6 +6,8 @@
 /// 约定见 docs/lowcode-v2-design.md。
 library;
 
+import 'package:lopicode/lowcode/logic_model.dart';
+
 /// 表达式嵌套最多这么多层。读文件时不限制表达式深度，所以校验和翻代码都要自己封顶，免得坏数据把栈撑爆。
 const int kMaxExprDepth = 24;
 
@@ -102,6 +104,8 @@ Map<String, dynamic> exJoin(List<Map<String, dynamic>> items) => {'e': 'join', '
 /// 层数超过 [kMaxExprDepth] 的两倍就截成 null（正常数据到不了；防自己套自己的坏数据）。
 Object? deepCopyJson(Object? v, [int depth = 0]) {
   if (depth > kMaxExprDepth * 2) return null;
+  // “带口的值”里的那串积木（见 kLcExprBody）：照积木的办法深拷贝。
+  if (v is List<LcBlock>) return <LcBlock>[for (final b in v) b.clone()];
   if (v is Map) return <String, dynamic>{for (final e in v.entries) '${e.key}': deepCopyJson(e.value, depth + 1)};
   if (v is List) return <dynamic>[for (final item in v) deepCopyJson(item, depth + 1)];
   if (v is String || v is num || v is bool) return v;

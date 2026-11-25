@@ -75,6 +75,9 @@ mixin BkEditorEdit on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Tick
     editFocus.dispose();
   }
 
+  /// 点了参数小块 / 它后面的“＋”（见 block_editor_fn_view.dart）。
+  void onParamTap(BkPlaced script, BkBlock block, BkSlot slot) {}
+
   // —— 找槽 ——
 
   BkSlotRef _ref(BkPlaced script, BkBlock block, BkSlot slot) => (scriptId: script.id, path: block.isHat ? const [] : block.path, arg: slot.arg, exprPath: slot.exprPath, hatSlotId: slot.hatSlotId);
@@ -87,7 +90,7 @@ mixin BkEditorEdit on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Tick
       final samePlace = ref.hatSlotId != null
           ? (b.isHat && s.hatSlotId == ref.hatSlotId)
           : (!b.isHat && s.hatSlotId == null && bkSameBlockPath(b.path, ref.path) && s.arg == ref.arg && bkSameExprPath(s.exprPath, ref.exprPath));
-      if (samePlace && s.look != BkSlotLook.add) return (script: placed, block: b, slot: s, view: rectToView(s.rect.shift(placed.origin)));
+      if (samePlace && s.look != BkSlotLook.add && s.param == null) return (script: placed, block: b, slot: s, view: rectToView(s.rect.shift(placed.origin)));
     }
     return null;
   }
@@ -123,6 +126,8 @@ mixin BkEditorEdit on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Tick
       select(sel.same(selection) ? null : sel);
       return;
     }
+    // 参数小块、它后面的“＋”：不选中所在的积木（选中会弹出删除条，挡着小块）。
+    if (slot.param != null) return onParamTap(script, hit.block, slot);
     select(sel);
     final ref = _ref(script, hit.block, slot);
     switch (slot.look) {
@@ -133,6 +138,8 @@ mixin BkEditorEdit on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Tick
       case BkSlotLook.toggle:
         unawaited(HapticFeedback.selectionClick());
         _write(ref, slot.text != '是');
+      case BkSlotLook.param:
+        break;
       case BkSlotLook.add:
         final list = slot.exprPath.sublist(0, slot.exprPath.length - 1);
         host.edit(() {
