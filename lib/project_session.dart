@@ -42,6 +42,7 @@ import 'package:lopicode/session/turn_runner.dart';
 import 'package:lopicode/ssh/ssh_config.dart';
 import 'package:lopicode/ssh/ssh_connector.dart';
 import 'package:lopicode/state/backend_run.dart';
+import 'package:lopicode/state/local_pack.dart';
 import 'package:lopicode/state/workspace_background.dart';
 import 'package:lopicode/state/workspace_chat.dart';
 import 'package:lopicode/state/workspace_files.dart';
@@ -492,6 +493,7 @@ class ProjectSession {
     _core.disposed = true;
     _core.releaseWhenIdle();
     if (!app.disposed) {
+      app.container.invalidate(localPackProvider(this)); // 还在打的本地打包作废
       app.container.invalidate(filesRevProvider(this));
       app.container.invalidate(terminalsProvider(this)); // 会话的进程在这里收掉
       app.container.invalidate(previewProvider(this)); // 预览服务器在这里停掉

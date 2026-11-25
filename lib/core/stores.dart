@@ -102,7 +102,7 @@ class SettingKeys {
   static const sshBuildOutput = 'ssh.buildOutput';
   static const sshBuildDir = 'ssh.buildDir';
   static const sshKnownHosts = 'ssh.knownHosts'; // {"host:port": "SHA256:..."}
-  static const apkBuildMode = 'apk.buildMode'; // github / ssh
+  static const apkBuildMode = 'apk.buildMode'; // local / github / ssh；没存过＝local（2026-11-26 起，原来没存过是 github）
   static const lastProject = 'ui.lastProject';
   static const runtimeRootfsSource = 'runtime.rootfsSource'; // tuna / aliyun / official
   static const runtimeAptMirror = 'runtime.aptMirror';
@@ -132,4 +132,7 @@ class SecretKeys {
   static const sshPassword = 'ssh_password';
   static const sshPrivateKey = 'ssh_private_key';
   static const sshKeyPassphrase = 'ssh_key_passphrase';
+
+  /// 本地打包 APK 用的签名钥匙（全应用一把）。
+  static const apkSigningKey = 'apk_signing_key';
 }

@@ -461,6 +461,8 @@ void main() {
 
     testWidgets('APK 打包 ($suffix)', (tester) async {
       final (env, project, session) = await open(tester, ProjectTemplate.web);
+      // 打包页重做以后，没选过方式的默认是“本地打包”；这个用例看的是两种远程方式，先存成原来的默认值。
+      await tester.runAsync(() => env.services.settings.set(SettingKeys.apkBuildMode, 'github'));
       // 从外壳里进：顶栏左边是汉堡按钮，不是返回箭头
       await tester.pumpWidget(
         appFor(
