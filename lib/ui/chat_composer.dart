@@ -1,22 +1,30 @@
 // 设计约束（聊天输入栏 · 390×844）
-// - 输入区常驻底部。没点进去且没有字：收成一行胶囊（附件、提示、用量小环、语音、发送）。
-//   胶囊连边框高 48（字体特别大时跟着长高）；发送圆钮看着是 36，但 ＋、用量小环、语音、发送每个可点区域都不小于 44×44。
-// - 点进去或有草稿：展开成两行，上方多行输入，下方工具栏放附件、权限、模型、用量小环、语音和发送。
+// - 输入区常驻底部。没点进去且没有字：收成一行胶囊（附件、提示、用量小环、发送）。
+//   胶囊连边框高 48（字体特别大时跟着长高）；发送圆钮看着是 36，但 ＋、用量小环、发送每个可点区域都不小于 44×44。
+// - 点进去或有草稿：展开成两行，上方多行输入，下方工具栏放附件、权限、模型、用量小环和发送。
+// - 语音输入暂时隐藏（2026-11-25 霜霜定）：开关是 kChatVoiceEnabled，默认关，设置页里没有入口。关着的时候两种排法里都没有麦克风，
+//   位置由旁边的控件自然补上；不创建语音识别、不申请麦克风权限。代码留着，打开开关就回到原样（麦克风排在发送左边）。
+// - 在输入框里打 @：输入栏正上方出现工作区文件候选（界面在 file_mention.dart，规则在 session/file_mentions.dart）。
 // - 软键盘被用户收起（系统手势 / 返回键）时输入框跟着失焦：键盘一开始往下走就摘，不等它降完。没草稿收回胶囊，有草稿保持展开。
 //   判断规则在 keyboard_dismiss.dart；只看这块屏幕自己的键盘高度，不依赖输入栏外面怎么摆。语音输入不会因此被打断。
 // - 长按发送仍可选排队、插话或中断。
-// - 语音识别把实时结果接进草稿，不覆盖已有文字；不可用时给出明确原因。
+// - （开关打开时）语音识别把实时结果接进草稿，不覆盖已有文字；不可用时给出明确原因。
 import 'dart:async';
 
 import 'package:lopicode/agent/agent_tools.dart';
+import 'package:lopicode/core/path_guard.dart';
 import 'package:lopicode/session/chat_models.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/file_mention.dart';
 import 'package:lopicode/ui/keyboard_dismiss.dart';
 import 'package:lopicode/ui/usage_ui.dart';
 import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:speech_to_text/speech_recognition_error.dart';
 import 'package:speech_to_text/speech_to_text.dart';
+
+/// 语音输入的入口要不要露出来。暂时隐藏（2026-11-25）；这是内部开关，设置页里没有。
+const bool kChatVoiceEnabled = false;
 
 abstract interface class ChatVoiceInput {
   bool get isListening;
@@ -96,6 +104,9 @@ class ChatComposer extends StatefulWidget {
     this.context_,
     this.onContext,
     this.voiceInput,
+    this.showVoice = kChatVoiceEnabled,
+    this.mentionGuard,
+    this.mentionScanner,
   });
 
   final TextEditingController controller;
@@ -113,6 +124,13 @@ class ChatComposer extends StatefulWidget {
   final ContextUsage? context_;
   final VoidCallback? onContext;
   final ChatVoiceInput? voiceInput;
+
+  /// 要不要显示麦克风。不显示时不创建语音识别，也就不会申请麦克风权限。
+  final bool showVoice;
+
+  /// 工作区的路径守卫：给了才有“打 @ 选文件”。
+  final PathGuard? mentionGuard;
+  final MentionScanner? mentionScanner;
 
   @override
   State<ChatComposer> createState() => _ChatComposerState();
@@ -213,7 +231,8 @@ class _ChatComposerState extends State<ChatComposer> with WidgetsBindingObserver
     WidgetsBinding.instance.removeObserver(this);
     widget.focusNode.removeListener(_onInputChanged);
     widget.controller.removeListener(_onInputChanged);
-    _voice.dispose();
+    // 麦克风藏着的时候从没碰过语音识别：这里也不碰，免得为了“释放”反而把它建出来。
+    if (widget.showVoice) _voice.dispose();
     super.dispose();
   }
 
@@ -362,7 +381,7 @@ class _ChatComposerState extends State<ChatComposer> with WidgetsBindingObserver
             plus,
             Expanded(child: field),
             ?ring,
-            voice,
+            if (widget.showVoice) voice,
             send,
           ],
         ),
@@ -408,7 +427,7 @@ class _ChatComposerState extends State<ChatComposer> with WidgetsBindingObserver
                 ),
               ),
               ?ring,
-              voice,
+              if (widget.showVoice) voice,
               send,
             ],
           ),
@@ -416,7 +435,8 @@ class _ChatComposerState extends State<ChatComposer> with WidgetsBindingObserver
       );
     }
 
-    return Container(
+    final guard = widget.mentionGuard;
+    final input = Container(
       key: const ValueKey('chat-input'),
       margin: const EdgeInsets.fromLTRB(Space.x3, 0, Space.x3, Space.x2),
       padding: collapsed ? const EdgeInsets.symmetric(horizontal: 2, vertical: 1) : const EdgeInsets.fromLTRB(Space.x1, Space.x2, Space.x1, Space.x1),
@@ -426,6 +446,15 @@ class _ChatComposerState extends State<ChatComposer> with WidgetsBindingObserver
         border: Border.all(color: c.border),
       ),
       child: AnimatedSize(duration: const Duration(milliseconds: 140), curve: Curves.easeOut, alignment: Alignment.bottomCenter, child: body),
+    );
+    if (guard == null) return input;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        FileMentionLayer(controller: widget.controller, focusNode: widget.focusNode, guard: guard, scanner: widget.mentionScanner),
+        input,
+      ],
     );
   }
 }
