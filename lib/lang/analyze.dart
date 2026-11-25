@@ -385,7 +385,12 @@ class _Analyzer {
         final use = env.inspect?.call(payload);
         if (use == null) break;
         for (final name in {...use.reads, ...use.writes}) {
-          if (_sees(name)) _touch(name);
+          if (_sees(name)) {
+            _touch(name);
+          } else if (env.self != null && !use.declares.contains(name)) {
+            // 有名字的函数里看不见接口的变量。（接口体里的旧语句由宿主自己的校验管，这里不重复报。）
+            _err('G03', '变量 $name 在函数 ${env.self} 里看不见（接口的变量要当参数传进来）', s.src);
+          }
         }
         for (final name in use.declares) {
           _visible.add(name);

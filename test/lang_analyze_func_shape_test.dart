@@ -379,6 +379,24 @@ void main() {
       expect(_codes(analyzeFunctions([g]).issues), ['L14w']);
       expect(analyzeFunctions([g], inspect: (_) => const LHostUse(reads: {'x'})).issues, isEmpty);
     });
+
+    test('宿主语句用到了函数里看不见的变量（接口的变量）：G03；看得见的、宿主语句自己新建的不报', () {
+      final g = fn('viaHost', [p('x')], [const LHost('用 x 和 total')]);
+      final bad = analyzeFunctions([g], inspect: (_) => const LHostUse(reads: {'x', 'total'}, writes: {'count'})).issues;
+      expect(_codes(bad), ['G03', 'G03']);
+      expect(bad.first.message, allOf(contains('viaHost'), contains('参数')));
+      expect(
+        analyzeFunctions(
+          [g],
+          outer: {'total'},
+          inspect: (_) => const LHostUse(reads: {'x', 'total'}),
+        ).issues,
+        isEmpty,
+      );
+      expect(analyzeFunctions([g], inspect: (_) => const LHostUse(reads: {'x', 'tmp'}, declares: {'tmp'})).issues, isEmpty);
+      // 接口体里（不是有名字的函数）：旧语句的名字归宿主自己的校验管，这里不报
+      expect(analyzeBody([const LHost('用 total')], inspect: (_) => const LHostUse(reads: {'total'})).issues, isEmpty);
+    });
   });
 
   test('任何输入都不抛异常：套得很深的匿名函数、空名字、参数表是空的', () {

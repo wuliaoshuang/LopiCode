@@ -122,18 +122,13 @@ final List<LangCase> kLangFuncMoreCases = [
           ),
         ),
       ]),
-      LForEach(
-        list([t('甲'), t('乙')]),
-        'it',
-        [
-          run(
-            call(v('note'), [
-              call(lamx([], _join([v('idx'), v('it')]))),
-            ]),
-          ),
-        ],
-        index: 'idx',
-      ),
+      LForEach(list([t('甲'), t('乙')]), 'it', [
+        run(
+          call(v('note'), [
+            call(lamx([], _join([v('idx'), v('it')]))),
+          ]),
+        ),
+      ], index: 'idx'),
       logJson(v('seen')),
     ],
     ['30,30', '["a=1","b=2","0甲","1乙"]'],
@@ -143,34 +138,12 @@ final List<LangCase> kLangFuncMoreCases = [
     [
       let('c', n(0)),
       let('next', lam([], [set('c', _add(v('c'), n(1))), ret(v('c'))])),
-      LWhile(
-        bin(
-          '<',
-          call(
-            lam([], [
-              ret(call(v('next'))),
-            ]),
-          ),
-          n(4),
-        ),
-        [run(call(v('next')))],
-      ),
+      LWhile(bin('<', call(lam([], [ret(call(v('next')))])), n(4)), [run(call(v('next')))]),
       log(v('c')),
       LIf(
         [
           LIfArm(bin('>', v('c'), n(10)), [log(t('大'))]),
-          LIfArm(
-            call(
-              lam(
-                [p('q')],
-                [
-                  ret(bin('==', v('q'), n(5))),
-                ],
-              ),
-              [v('c')],
-            ),
-            [log(t('正好'))],
-          ),
+          LIfArm(call(lam([p('q')], [ret(bin('==', v('q'), n(5)))]), [v('c')]), [log(t('正好'))]),
         ],
         orElse: [log(t('别的'))],
       ),
@@ -201,10 +174,7 @@ final List<LangCase> kLangFuncMoreCases = [
             ret(
               rt('listReduce', [
                 v('node'),
-                lamx(
-                  [p('a'), p('x')],
-                  _add(v('a'), callN('walk', [v('x')])),
-                ),
+                lamx([p('a'), p('x')], _add(v('a'), callN('walk', [v('x')]))),
                 n(0),
               ]),
             ),
