@@ -8,6 +8,7 @@ library;
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:lopicode/backend/backend_blocks_lang.dart';
 import 'package:lopicode/core/safe_file.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 
@@ -155,8 +156,12 @@ class BeDocument {
 
   static bool _validPort(int p) => p >= 1 && p <= 65535;
 
+  /// 有没有用到第 4 版才有的积木（见 backend_blocks_lang.dart 的 `beBlocksUseLang`）。用到了存盘时版本号写 2，否则还是 1
+  /// ——旧文档不改、或只用旧积木改，存出来和以前一个字节都不差。
+  bool get usesLang => routes.any((r) => beBlocksUseLang(r.body));
+
   Map<String, dynamic> toJson() => {
-    'version': 1,
+    'version': usesLang ? 2 : 1,
     'kind': 'backend',
     'name': name,
     'port': port,

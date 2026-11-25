@@ -330,6 +330,9 @@ class BlockLayoutEngine {
     }
     b.rect = Rect.fromLTWH(0, 0, w, m.hatDome + headH);
     b.head = b.rect;
+    // 帽子上的字和槽都算“头上的”（画的时候只画头上的这几个；漏了这两行帽子就是空的）。
+    b.headSlots = b.slots.length;
+    b.headLabels = b.labels.length;
     return b;
   }
 
@@ -455,6 +458,9 @@ class BlockLayoutEngine {
     _exprSnaps(b.slots, path, snaps);
 
     var cy = y + headH;
+    // 不带槽的矮横栏：能加段的积木用高一点的那种，字往上提 1（下沿有一道深色的边，正中间看着偏下）。
+    final lowBarH = armSpec == null ? m.dividerH : m.armBarH;
+    final lowBarLift = armSpec == null ? 0.0 : 1.0;
     Rect controlAt(double top, double barH) => Rect.fromLTWH(x + w - m.padH - m.controlD + 2, top + (barH - m.controlD) / 2, m.controlD, m.controlD);
     void open(BkMouth mouth, List<LcBlock> list) {
       final bottom = _list(list, path, mouth.inElse, x + m.armW, cy, out, snaps, depth + 1, w - m.armW, arm: mouth.arm);
@@ -468,9 +474,9 @@ class BlockLayoutEngine {
     for (var i = 0; i < block.arms.length; i++) {
       final r = rows[i];
       // 段不带参数（“出错了”）用矮横栏；带槽的和积木头一样高。
-      final barH = r.slots.isEmpty ? m.dividerH : math.max(r.size.height + m.padV * 2, m.minBlockHeight);
+      final barH = r.slots.isEmpty ? lowBarH : math.max(r.size.height + m.padV * 2, m.minBlockHeight);
       for (final it in r.items) {
-        it.moveTo(it.rect.topLeft + Offset(x + m.padH, cy + (barH - r.size.height) / 2));
+        it.moveTo(it.rect.topLeft + Offset(x + m.padH, cy + (barH - r.size.height) / 2 - (r.slots.isEmpty ? lowBarLift : 0)));
       }
       final mouth = BkMouth(inElse: false, arm: i, rect: Rect.zero, bar: Rect.fromLTWH(x, cy, w, barH))
         ..labels.addAll(r.labels)
@@ -484,11 +490,11 @@ class BlockLayoutEngine {
     }
     // 只有“否则”没有 body 的（坏数据）也照样画出来，口上的标签照常写。
     if (hasElse) {
-      final bar = Rect.fromLTWH(x, cy, w, m.dividerH);
+      final bar = Rect.fromLTWH(x, cy, w, lowBarH);
       final lw = math.min(measure(elseLabel), w - m.padH * 2 - (canHideTail ? ctrlRoom : 0));
-      final label = BkLabel(elseLabel, Rect.fromLTWH(x + m.padH, cy + (m.dividerH - m.textH) / 2, lw, m.textH));
-      if (canHideTail) b.controls.add(BkControl(kind: BkControlKind.removeTail, mouth: b.mouths.length, rect: controlAt(cy, m.dividerH)));
-      cy += m.dividerH;
+      final label = BkLabel(elseLabel, Rect.fromLTWH(x + m.padH, cy + (lowBarH - m.textH) / 2 - lowBarLift, lw, m.textH));
+      if (canHideTail) b.controls.add(BkControl(kind: BkControlKind.removeTail, mouth: b.mouths.length, rect: controlAt(cy, lowBarH)));
+      cy += lowBarH;
       open(BkMouth(inElse: true, rect: Rect.zero, bar: bar, label: label), block.orElse);
     }
     if (mouthed) {

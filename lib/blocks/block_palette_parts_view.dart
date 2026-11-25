@@ -204,3 +204,40 @@ class _PressFeelState extends State<BkPressFeel> {
     );
   }
 }
+
+/// 页签条一头的渐隐：从面板底色实心过渡到透明，盖在滑出去的页签上。[shown]＝这一头还有页签。
+class BkPaletteTabsFade extends StatelessWidget {
+  const BkPaletteTabsFade({super.key, required this.left, required this.shown, required this.color});
+
+  final bool left;
+  final bool shown;
+  final Color color;
+
+  /// 渐隐的宽度：左边（挨着放大镜）大约盖住一个字多一点，半个字不会像被切掉；右边是面板的边，窄一些就够。
+  double get width => widthOf(left: left);
+  static double widthOf({required bool left}) => left ? 36 : 28;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = [color, color.withValues(alpha: 0.86), color.withValues(alpha: 0)];
+    return Positioned(
+      left: left ? 0 : null,
+      right: left ? null : 0,
+      top: 0,
+      bottom: 0,
+      width: width,
+      child: IgnorePointer(
+        child: AnimatedOpacity(
+          key: ValueKey(left ? 'bk-palette-tabs-fade-left' : 'bk-palette-tabs-fade-right'),
+          opacity: shown ? 1 : 0,
+          duration: const Duration(milliseconds: 120),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(begin: left ? Alignment.centerLeft : Alignment.centerRight, end: left ? Alignment.centerRight : Alignment.centerLeft, colors: colors, stops: const [0, 0.3, 1]),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

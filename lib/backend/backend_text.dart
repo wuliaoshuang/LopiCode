@@ -3,6 +3,7 @@ library;
 
 import 'package:lopicode/backend/backend_blocks.dart';
 import 'package:lopicode/backend/backend_model.dart';
+import 'package:lopicode/backend/backend_text_lang.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 
 /// `keepEdges`：文字字面量两头的空格是内容的一部分，要留着给人看见。
@@ -94,7 +95,7 @@ String _expr(Object? expr, int depth, bool nested) {
     case 'field':
       return '${sub('of')} 的 ${_name(exprString(expr, 'key'), '没填字段')}';
     default:
-      return '不认识的值（${_clip(kind)}）';
+      return describeBeLangExpr(expr, sub) ?? '不认识的值（${_clip(kind)}）';
   }
 }
 
@@ -123,11 +124,13 @@ String describeBeBlock(LcBlock b) {
     case 'changeVar':
       return '把 ${_var(b.args['name'])} 加上 ${arg('by')}';
     case 'if':
-      return b.orElse.isEmpty ? '如果 ${arg('cond')} 那么…' : '如果 ${arg('cond')} 那么…否则…';
+      final more = b.arms.isEmpty ? '' : (b.arms.length == 1 ? '否则如果…' : '否则如果…（共 ${b.arms.length} 段）');
+      return b.orElse.isEmpty ? '如果 ${arg('cond')} 那么…$more' : '如果 ${arg('cond')} 那么…$more否则…';
     case 'repeat':
       return '重复 ${arg('times')} 次…';
     case 'forEach':
-      return '对 ${arg('list')} 里的每一项（放进 ${_var(b.args['item'])}）依次做…';
+      final index = b.args['index'];
+      return '对 ${arg('list')} 里的每一项（放进 ${_var(b.args['item'])}${index is String && index.isNotEmpty ? '，序号放进 ${_clip(index, 32)}' : ''}）依次做…';
     case 'log':
       return '写到日志 ${arg('value')}';
     case 'fetch':
@@ -135,7 +138,7 @@ String describeBeBlock(LcBlock b) {
       final data = method == 'POST' && isExpr(b.args['data']) ? '，提交 ${arg('data')}' : '';
       return '用 $method 请求 ${arg('url')}$data${into('，结果放进')}';
     default:
-      return '不认识的积木（${_clip(b.op)}）';
+      return describeBeLangBlock(b, arg, (key) => _name(b.args[key], '没填')) ?? '不认识的积木（${_clip(b.op)}）';
   }
 }
 
@@ -160,8 +163,15 @@ String describeBeBlockPath(LcBlockTree tree, LcBlockPath path) {
   for (var i = 0; i < path.length; i++) {
     if (parent != null) {
       final spec = beBlockSpecs[parent.op];
-      parts.add(path[i].inElse ? (spec?.elseLabel ?? '否则') : (spec?.bodyLabel ?? '里面'));
-      list = path[i].inElse ? parent.orElse : parent.body;
+      final arm = path[i].arm;
+      if (arm >= 0) {
+        // 多口积木中间的段：“第 2 段否则如果”“第 1 段是…时”。
+        parts.add('第 ${arm + 1} 段${spec?.arms?.label ?? ''}');
+        list = arm < parent.arms.length ? parent.arms[arm].body : const [];
+      } else {
+        parts.add(path[i].inElse ? (spec?.elseLabel ?? '否则') : (spec?.bodyLabel ?? '里面'));
+        list = path[i].inElse ? parent.orElse : parent.body;
+      }
     }
     parts.add('第 ${path[i].index + 1} 块');
     final index = path[i].index;

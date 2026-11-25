@@ -280,7 +280,7 @@ void main() {
       expect(blk.rect.bottom, blk.mouths.last.rect.bottom + const BkMetrics().addFooterH);
       // 段的横栏和积木头一样高（里面有槽）；“否则”还是矮的那条。
       expect(blk.mouths[1].bar!.height, greaterThanOrEqualTo(const BkMetrics().minBlockHeight));
-      expect(blk.mouths[3].bar!.height, const BkMetrics().dividerH);
+      expect(blk.mouths[3].bar!.height, const BkMetrics().armBarH);
       expect(blk.mouths[3].label!.text, '否则');
       // 槽：头上一个 cond，每段一个 @i:cond；都落在各自的横栏里。
       final own = blk.slots.where((s) => s.exprPath.isEmpty).toList();
@@ -335,7 +335,7 @@ void main() {
       final tryB = l.blockAt([lcStep(2)])!;
       expect(kinds(tryB), ['add']);
       expect([for (final m in tryB.mouths) m.arm], [-1, 0]);
-      expect(tryB.mouths[1].bar!.height, const BkMetrics().dividerH, reason: '不带参数的段用矮横栏');
+      expect(tryB.mouths[1].bar!.height, const BkMetrics().armBarH, reason: '不带参数的段用矮横栏');
       expect(tryB.mouths[1].labels.single.text, '出错了');
       // 段到了上限、否则也在：没有“＋”，底条回到普通高度。
       final full = LcBlock(

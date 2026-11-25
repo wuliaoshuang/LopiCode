@@ -277,9 +277,18 @@ void main() {
       ]);
       await rig.pump(tester, mode: mode);
       await pullDockDown(tester);
-      await tester.tapAt(rig.control([lcStep(1)], BkControlKind.add));
-      await tester.pumpAndSettle();
-      await shot(tester, 'bk6-add-menu-$suffix');
+      // 测试环境默认把投影画成一圈实心黑边（debugDisableShadows）：小菜单外面那圈粗黑边就是这么来的，真机上是柔和的投影。
+      // 这一张按真机的画法截；截完改回去。
+      debugDisableShadows = false;
+      try {
+        await tester.tapAt(rig.control([lcStep(1)], BkControlKind.add));
+        await tester.pumpAndSettle();
+        await shot(tester, 'bk6-add-menu-$suffix');
+        await tester.tapAt(const Offset(300, 700));
+        await tester.pumpAndSettle();
+      } finally {
+        debugDisableShadows = true;
+      }
     });
   }
 }

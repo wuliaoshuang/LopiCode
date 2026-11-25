@@ -6,7 +6,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lopicode/agent/automation.dart';
 import 'package:lopicode/agent/model_config.dart';
 import 'package:lopicode/agent/team.dart';
+import 'package:lopicode/backend/backend_model.dart';
 import 'package:lopicode/backend/backend_project.dart';
+import 'package:lopicode/backend/backend_validate.dart';
 import 'package:lopicode/core/crash_log.dart';
 import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/core/safe_file.dart';
@@ -262,6 +264,74 @@ void main() {
       final board = TeamBoard(file: tfile);
       await board.load();
       expect(board.tasks, isEmpty);
+    });
+
+    test('后端积木文件 backend.lc.json（第 2 版，用了新积木）：段 / 参数 / 选项的类型全错 → 读到哪算哪，不抛异常、不算坏文件，再存一次是稳定的', () async {
+      final file = File(p.join(tmp.path, 'backend.lc.json'))
+        ..writeAsStringSync(
+          jsonEncode({
+            'version': 2,
+            'kind': 'backend',
+            'language': 'node',
+            'routes': [
+              {
+                'id': 'r1',
+                'method': 'GET',
+                'path': '/x',
+                'body': [
+                  {
+                    'op': 'let',
+                    'args': {'name': 7, 'value': '不是式子'},
+                  },
+                  {
+                    'op': 'if',
+                    'args': {'cond': null},
+                    'arms': '不是列表',
+                    'noElse': 'yes',
+                  },
+                  {
+                    'op': 'if',
+                    'args': <String, Object?>{},
+                    'arms': [
+                      3,
+                      null,
+                      {'args': '不是对象', 'body': 9},
+                    ],
+                    'else': 'x',
+                  },
+                  {
+                    'op': 'switch',
+                    'arms': {'a': 1},
+                  },
+                  {
+                    'op': 'forCount',
+                    'args': {'name': <Object?>[], 'from': <String, Object?>{}, 'to': 'x', 'step': null},
+                    'body': 'x',
+                  },
+                  {
+                    'op': 'respondJson',
+                    'args': {
+                      'value': {
+                        'e': 'round',
+                        'x': {'e': 'listLit', 'items': 4},
+                        'fn': 5,
+                      },
+                    },
+                  },
+                ],
+              },
+              '不是接口',
+            ],
+          }),
+        );
+      final parsed = (await loadBackendFile(file))!;
+      expect(badBackups(file), isEmpty, reason: '文件本身是合法 JSON，不算坏文件');
+      expect(parsed.doc.routes, hasLength(1));
+      expect(parsed.doc.routes.single.body.map((b) => b.op), containsAll(['let', 'if', 'switch', 'forCount']));
+      expect(() => validateBackend(parsed.doc), returnsNormally);
+      await saveBackendFile(file, parsed.doc);
+      final again = (await loadBackendFile(file))!;
+      expect(again.doc.encode(), parsed.doc.encode());
     });
   });
 }

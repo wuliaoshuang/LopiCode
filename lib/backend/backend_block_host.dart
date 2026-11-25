@@ -2,13 +2,15 @@
 /// 包成积木编辑器认的 [BlockHost]。编辑器（lib/blocks）不直接碰后端文档。
 ///
 /// 一串脚本＝一个接口（[BeRoute]）；帽子＝“当收到 [GET▾] [/todos/:id]”（请求方式是下拉槽，路径是直接输入的文字槽）。
-/// 积木盒：事件（五种请求方式的新接口）＋ 返回 / 数据 / 变量 / 流程 / 调试 / 网络 / 请求 / 运算 / 对象 / 值。
+/// 积木盒：事件（五种请求方式的新接口）＋ 变量 / 运算 / 流程 / 文字 / 列表 / 字典 / 请求 / 返回 / 数据集合 / 调试 / 网络 / 值
+/// （怎么排、别名、入门积木在 backend_palette.dart）。
 /// 撤销重做是这里自己的快照栈（每次改动前记一份文档的副本）；落盘和重新生成代码由外面（后端积木页）接 [onEdited] 去做。
 library;
 
 import 'package:lopicode/backend/backend_blocks.dart';
 import 'package:lopicode/backend/backend_edit.dart';
 import 'package:lopicode/backend/backend_model.dart';
+import 'package:lopicode/backend/backend_palette.dart';
 import 'package:lopicode/backend/backend_targets.dart';
 import 'package:lopicode/backend/backend_text.dart';
 import 'package:lopicode/backend/backend_validate.dart';
@@ -26,9 +28,10 @@ const Map<String, String> beBlockSentences = {
   'changeVar': '把 {name} 加上 {by}',
   'if': '如果 {cond} 那么',
   'repeat': '重复 {times} 次',
-  'forEach': '对 {list} 的每一项 放进 {item} 依次做',
+  'forEach': '对 {list} 的每一项 放进 {item} 序号叫 {index} 依次做',
   'log': '写到日志 {value}',
   'fetch': '用 {method} 请求 {url} 带上 {data} 结果放进 {into} 成功后',
+  ...beLangBlockSentences,
 };
 
 const Map<String, String> beExprSentences = {
@@ -48,9 +51,10 @@ const Map<String, String> beExprSentences = {
   'len': '{x} 有几个',
   'isNull': '{x} 是空的',
   'now': '现在的时间',
-  'obj': '对象 {fields}',
+  'obj': '字典 {fields}',
   'pair': '{key} : {value}',
   'field': '{of} 的 {key}',
+  ...beLangExprSentences,
 };
 
 /// 运算符在积木上显示成符号（下拉里还是中文全称）。
@@ -66,7 +70,9 @@ const Map<String, String> beCategoryColors = {
   '网络': BlockColorKey.network,
   '请求': BlockColorKey.request,
   '运算': BlockColorKey.operator,
-  '对象': BlockColorKey.widget,
+  '文字': BlockColorKey.text,
+  '列表': BlockColorKey.list,
+  '对象': BlockColorKey.dict,
   '直接填': BlockColorKey.value,
 };
 
@@ -149,15 +155,20 @@ class BeBlockHost extends BlockHost {
       colorKey: BlockColorKey.event,
       hats: [for (final m in kBeMethods) BlockHatTemplate(m, _hat(m, freePath(m)), hint: '新接口：${describeBeMethod(m)}')],
     ),
-    for (final c in {...beBlockCategories, ...beExprCategories})
-      BlockCategory(
-        id: c,
-        label: c == '直接填' ? '值' : c,
-        colorKey: beCategoryColors[c] ?? BlockColorKey.unknown,
-        blocks: [for (final s in beBlockSpecsIn(c)) s.op],
-        exprs: [for (final s in beExprSpecsIn(c)) s.kind],
-      ),
+    ...bePaletteCategories,
   ];
+
+  @override
+  List<String> aliasesOf(BlockItemRef item) => beAliasesOf(item);
+
+  @override
+  List<BlockItemRef> variantsOf(BlockItemRef item) => beVariantsOf(item);
+
+  @override
+  List<BlockItemRef> get starterItems => beStarterItems;
+
+  @override
+  String? armSentence(String op) => beArmSentences[op];
 
   @override
   LcBlockSpec? blockSpec(String op) => beBlockSpecs[op];
@@ -167,7 +178,7 @@ class BeBlockHost extends BlockHost {
 
   /// `pair` 不在积木盒里（只能出现在“对象”里），颜色跟着“对象”。
   @override
-  String exprColorKey(String kind) => kind == 'pair' ? BlockColorKey.widget : super.exprColorKey(kind);
+  String exprColorKey(String kind) => kind == 'pair' ? BlockColorKey.dict : super.exprColorKey(kind);
 
   @override
   String? blockSentence(String op) => beBlockSentences[op];
@@ -241,7 +252,14 @@ class BeBlockHost extends BlockHost {
   List<BlockOption> options(LcArgSpec arg, {LcBlockTree? tree, LcBlock? block, Map<String, dynamic>? expr}) {
     switch (arg.kind) {
       case LcArgKind.variable:
-        return [if (arg.optional) const BlockOption('', '不选'), for (final v in _doc.variables) BlockOption(v.name, v.name)];
+        // 文档里声明的变量 ＋ 这个接口里用“新建变量 / 常量”“从…数到…”这些新建的名字。
+        final locals = tree == null ? const <String, bool>{} : beLocalNames(tree.body, beNamePattern);
+        return [
+          if (arg.optional) const BlockOption('', '不选'),
+          for (final v in _doc.variables) BlockOption(v.name, v.name),
+          for (final e in locals.entries)
+            if (_doc.variable(e.key) == null) BlockOption(e.key, e.key, hint: e.value ? '这个接口里新建的常量' : '这个接口里新建的'),
+        ];
       case LcArgKind.collection:
         return [for (final c in _doc.collections) BlockOption(c.name, c.name)];
       case LcArgKind.choice:
@@ -288,7 +306,7 @@ class BeBlockHost extends BlockHost {
   @override
   String optionLabel(LcArgSpec arg, String value) {
     if (arg.kind != LcArgKind.choice) return value;
-    if (arg.name == 'op') return _opSigns[value] ?? value;
+    if (arg.name == 'op') return _opSigns[value] ?? arg.choiceLabel(value);
     return arg.choiceLabel(value).split('（').first;
   }
 

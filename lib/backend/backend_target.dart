@@ -200,7 +200,15 @@ abstract class BeCodeTarget extends BackendTarget {
   /// 语言核心小库的内容（文件名是 `langGen(...).runtimeFile`）。只有用到新积木的工程才带。
   String get langRuntimeSource;
 
-  LangGen _lang(LangCtx ctx) => langGen(LangHost(call: call, stmt: (payload) => payload is BeS ? _statement(payload, ctx) : [comment('这里有一句不认识的语句，没有生成')], allowReturn: false));
+  LangGen _lang(LangCtx ctx) => langGen(
+    LangHost(
+      call: call,
+      stmt: (payload) => payload is BeS ? _statement(payload, ctx) : [comment('这里有一句不认识的语句，没有生成')],
+      // 积木翻出来的语法树里“这次请求”统一叫 kBeRequestName；各语言写成自己的（PHP 是 \$req）。
+      name: (name) => name == kBeRequestName ? request : name,
+      allowReturn: false,
+    ),
+  );
 
   /// 新节点 → 代码。碰到这一阶段还不支持的节点不抛异常：留一行说明；这一段本来“怎么走都会返回”的话补一个 500，生成的代码照样能编译。
   List<String> _langStatements(List<LStmt> stmts, LangCtx ctx) {

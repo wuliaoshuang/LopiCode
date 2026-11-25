@@ -94,13 +94,17 @@ const Map<String, LCap> kLangBaseCaps = {
 
 /// 宿主（比如后端）接进来的两样东西。都没有也行（纯脚本）。
 class LangHost {
-  const LangHost({this.call, this.stmt, this.allowReturn = true});
+  const LangHost({this.call, this.stmt, this.name, this.allowReturn = true});
 
   /// [LNative]：调宿主的函数，参数已经写好。
   final String Function(String fn, List<String> args)? call;
 
   /// [LHost]：宿主自己的语句，返回一行行代码（不带缩进）。
   final List<String> Function(Object payload)? stmt;
+
+  /// 宿主的名字（[LNameKind.host]）在这种语言里怎么写；不给就原样写。
+  /// 后端的“这次请求”在语法树里统一叫 `req`，PHP 里要写成 `\$req`——靠它换。
+  final String Function(String name)? name;
 
   /// 能不能直接写“返回”（[LReturn]）。后端的接口函数不行：那里要用“返回响应”。
   final bool allowReturn;
@@ -455,7 +459,7 @@ abstract class LangGen {
         return switch (kind) {
           LNameKind.variable => variable(name),
           LNameKind.temp => temp(name),
-          LNameKind.host => name,
+          LNameKind.host => host.name?.call(name) ?? name,
         };
       case LIndex(:final of, :final key):
         return langCall('item', [expr(of), expr(key)]);

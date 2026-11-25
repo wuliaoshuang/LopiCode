@@ -64,6 +64,10 @@ class BkMetrics {
   double get armW => 14;
   double get mouthMinH => 30;
   double get dividerH => 26;
+
+  /// 多口积木（能加段的）上不带槽的矮横栏（“否则”“都不是”“出错了”）：比 [dividerH] 高一点——横栏右边有“−”小按钮，
+  /// 上面那块积木的榫头又会探进来，26 高时字显得挤、偏下。
+  double get armBarH => 32;
   double get footerH => 16;
 
   /// 多口积木上的小按钮（“＋”“−”）：圆的直径；带“＋”的底条的高度。

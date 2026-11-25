@@ -6,21 +6,30 @@
 /// ——`test/backend_model_test.dart` 会核对这张表和设计文档是不是一致。
 library;
 
+import 'package:lopicode/backend/backend_blocks_lang.dart';
 import 'package:lopicode/backend/backend_model.dart';
 import 'package:lopicode/lowcode/logic_blocks.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 
-export 'package:lopicode/lowcode/logic_blocks.dart' show LcArgKind, LcArgSpec, LcBlockSpec, LcExprSpec;
+export 'package:lopicode/backend/backend_blocks_lang.dart';
+export 'package:lopicode/lowcode/logic_blocks.dart' show LcArgKind, LcArgSpec, LcArmSpec, LcBlockSpec, LcExprSpec;
 export 'package:lopicode/lowcode/logic_expr.dart';
 
 /// 积木盒的分类，按这个顺序排。
-const List<String> beBlockCategories = ['返回', '数据', '变量', '流程', '调试', '网络'];
+const List<String> beBlockCategories = ['变量', '运算', '流程', '列表', '对象', '返回', '数据', '调试', '网络'];
 
 /// 选表达式时的分类。
-const List<String> beExprCategories = ['直接填', '请求', '数据', '变量', '运算', '对象'];
+const List<String> beExprCategories = ['直接填', '变量', '运算', '文字', '列表', '对象', '请求', '数据'];
 
 /// 两边合起来（给按类别上色用）：一个类别一种颜色。
-const List<String> beCategories = ['请求', '返回', '数据', '变量', '流程', '运算', '对象', '调试', '网络', '直接填'];
+const List<String> beCategories = ['请求', '返回', '数据', '变量', '流程', '运算', '文字', '列表', '对象', '调试', '网络', '直接填'];
+
+/// 分类在界面上叫什么：`对象` 这一类从第 4 版起叫“字典”（id 不改，旧设置、旧测试都认它），`直接填` 叫“值”。
+String beCategoryLabel(String id) => switch (id) {
+  '对象' => '字典',
+  '直接填' => '值',
+  _ => id,
+};
 
 const List<String> _binLabels = ['加', '减', '乘', '除以', '除以…的余数', '等于', '不等于', '小于', '小于等于', '大于', '大于等于', '并且', '或者'];
 
@@ -28,7 +37,10 @@ const List<String> _binLabels = ['加', '减', '乘', '除以', '除以…的余
 const Map<int, String> kBeCommonStatus = {200: '成功', 201: '已创建', 400: '请求不对', 401: '没登录', 403: '不允许', 404: '找不到', 500: '服务器出错'};
 
 /// 全部积木，按积木盒里的顺序。键是 op。
-const Map<String, LcBlockSpec> beBlockSpecs = {
+const Map<String, LcBlockSpec> beBlockSpecs = {..._coreBlockSpecs, ...beLangBlockSpecs};
+
+/// 第 3 版就有的积木（“如果”“对每一项”在第 4 版里多了口和参数，旧文档不受影响）。
+const Map<String, LcBlockSpec> _coreBlockSpecs = {
   'respondJson': LcBlockSpec('respondJson', '返回数据', '返回', [
     LcArgSpec('status', '状态码', LcArgKind.expr, valueType: LcType.number),
     LcArgSpec('value', '内容', LcArgKind.expr),
@@ -60,7 +72,8 @@ const Map<String, LcBlockSpec> beBlockSpecs = {
     [LcArgSpec('cond', '条件', LcArgKind.expr, valueType: LcType.boolean)],
     bodyLabel: '那么',
     elseLabel: '否则',
-    hint: '条件成立做一些事，不成立做另一些事',
+    arms: kBeIfArms,
+    hint: '条件成立做一些事，不成立做另一些事；点“＋”可以加“否则如果”',
   ),
   'repeat': LcBlockSpec(
     'repeat',
@@ -70,7 +83,14 @@ const Map<String, LcBlockSpec> beBlockSpecs = {
     bodyLabel: '重复做',
     hint: '把里面的积木做 N 遍（最多 10000 遍）',
   ),
-  'forEach': LcBlockSpec('forEach', '对列表里的每一项', '流程', [LcArgSpec('list', '列表', LcArgKind.expr), LcArgSpec('item', '这一项放进变量', LcArgKind.variable)], bodyLabel: '依次做', hint: '把列表里的每一项轮流放进变量，各做一遍里面的积木'),
+  'forEach': LcBlockSpec(
+    'forEach',
+    '对列表里的每一项',
+    '流程',
+    [LcArgSpec('list', '列表', LcArgKind.expr), LcArgSpec('item', '这一项放进变量', LcArgKind.variable), LcArgSpec('index', '第几项放进', LcArgKind.literalText, optional: true)],
+    bodyLabel: '依次做',
+    hint: '把列表里的每一项轮流放进变量，各做一遍里面的积木；要知道是第几项（从 0 数），给“序号”起个名字',
+  ),
   'log': LcBlockSpec('log', '写到日志', '调试', [LcArgSpec('value', '内容', LcArgKind.expr)], hint: '调试用：在服务的输出里记一笔'),
   'fetch': LcBlockSpec(
     'fetch',
@@ -89,7 +109,9 @@ const Map<String, LcBlockSpec> beBlockSpecs = {
 };
 
 /// 全部表达式。键是 e。
-const Map<String, LcExprSpec> beExprSpecs = {
+const Map<String, LcExprSpec> beExprSpecs = {..._coreExprSpecs, ...beLangExprSpecs};
+
+const Map<String, LcExprSpec> _coreExprSpecs = {
   'text': LcExprSpec('text', '文字', '直接填', [LcArgSpec('v', '文字', LcArgKind.literalText)]),
   'num': LcExprSpec('num', '数字', '直接填', [LcArgSpec('v', '数字', LcArgKind.literalNumber)]),
   'bool': LcExprSpec('bool', '是 / 否', '直接填', [LcArgSpec('v', '是否', LcArgKind.literalBool)]),
@@ -111,15 +133,15 @@ const Map<String, LcExprSpec> beExprSpecs = {
     LcArgSpec('l', '左边', LcArgKind.expr),
     LcArgSpec('op', '运算', LcArgKind.choice, choices: kBinOps, choiceLabels: _binLabels),
     LcArgSpec('r', '右边', LcArgKind.expr),
-  ], hint: '加减乘除、比大小、并且 / 或者'),
+  ], hint: '加减乘除、乘方、比大小、并且 / 或者'),
   'not': LcExprSpec('not', '不是', '运算', [LcArgSpec('x', '条件', LcArgKind.expr, valueType: LcType.boolean)], hint: '把“是”变成“否”，“否”变成“是”'),
   'join': LcExprSpec('join', '拼成文字', '运算', [LcArgSpec('items', '内容', LcArgKind.exprList)], hint: '把几个值连成一段文字'),
   'len': LcExprSpec('len', '有几个', '运算', [LcArgSpec('x', '列表或文字', LcArgKind.expr)], hint: '列表有几项、文字有几个字、对象有几个字段'),
   'isNull': LcExprSpec('isNull', '是空的', '运算', [LcArgSpec('x', '值', LcArgKind.expr)], hint: '这个值是不是“空”（没找到、没带）'),
   'now': LcExprSpec('now', '现在的时间', '运算', [], hint: '形如 2026-11-24T06:00:00Z 的文字（世界标准时间）'),
-  'obj': LcExprSpec('obj', '对象', '对象', [LcArgSpec('fields', '字段', LcArgKind.exprList)], hint: '把几个“名字: 值”组成一个对象'),
-  'pair': LcExprSpec('pair', '一个字段', '对象', [LcArgSpec('key', '名字', LcArgKind.literalText), LcArgSpec('value', '值', LcArgKind.expr)], hint: '只能放在“对象”里'),
-  'field': LcExprSpec('field', '对象的字段', '对象', [LcArgSpec('of', '对象', LcArgKind.expr), LcArgSpec('key', '字段', LcArgKind.literalText)], hint: '取对象里某个字段的值；没有就是空'),
+  'obj': LcExprSpec('obj', '字典', '对象', [LcArgSpec('fields', '字段', LcArgKind.exprList)], hint: '把几个“名字: 值”组成一个字典（也叫对象）；一个都没有就是空字典'),
+  'pair': LcExprSpec('pair', '一个字段', '对象', [LcArgSpec('key', '名字', LcArgKind.literalText), LcArgSpec('value', '值', LcArgKind.expr)], hint: '只能放在“字典”里'),
+  'field': LcExprSpec('field', '字典的字段', '对象', [LcArgSpec('of', '对象', LcArgKind.expr), LcArgSpec('key', '字段', LcArgKind.literalText)], hint: '取字典里某个字段的值（名字直接填）；没有就是空'),
 };
 
 /// 只返回 true / false 的表达式（积木编辑器可以把它们画成六边形）。`bin` 要看运算符，见 [beExprIsBool]。
@@ -132,7 +154,8 @@ bool beExprIsBool(Object? expr) {
     final op = exprString(expr, 'op');
     return kCompareOps.contains(op) || kLogicOps.contains(op);
   }
-  return _boolKinds.contains(kind);
+  if (kind == 'convert') return exprString(expr, 'fn') == 'toBool';
+  return _boolKinds.contains(kind) || kBeLangBoolKinds.contains(kind);
 }
 
 /// 某一类里的积木，按积木盒顺序。
@@ -228,13 +251,13 @@ Map<String, dynamic> newBeExpr(String kind, [BeDocument? doc, BeRoute? route]) {
     case 'field':
       return beField(exText(''), 'id');
     default:
-      return exText('');
+      return newBeLangExpr(kind, _firstVar(doc)) ?? exText('');
   }
 }
 
 /// 往“一串值”的参数里加一项时，新的一项默认是什么：“对象”的字段里加的是 `pair`，其余是一段空文字。
 /// `ownerKind`＝外面那个表达式的种类，`arg`＝是它的哪个参数。
-Map<String, dynamic> newBeListItem(String ownerKind, String arg) => ownerKind == 'obj' && arg == 'fields' ? bePair('name', exText('')) : exText('');
+Map<String, dynamic> newBeListItem(String ownerKind, String arg) => ownerKind == 'obj' && arg == 'fields' ? bePair('name', exText('')) : (ownerKind == 'listLit' ? exNum(0) : exText(''));
 
 /// 新建一块积木，参数填默认值。`doc` 给了就顺手挑第一个合适的变量 / 集合填上（这样新积木直接能用）；
 /// 没给、或文档里没有合适的，就留空，校验会提示“还没选”。不认识的 op 返回一块没有参数的积木。
@@ -271,6 +294,6 @@ LcBlock newBeBlock(String op, [BeDocument? doc]) {
     case 'fetch':
       return LcBlock(op: op, args: {'url': exText('https://'), 'method': 'GET', 'into': _firstVar(doc, 'text')});
     default:
-      return LcBlock(op: op);
+      return newBeLangBlock(op, _firstVar(doc)) ?? LcBlock(op: op);
   }
 }

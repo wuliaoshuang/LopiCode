@@ -11,6 +11,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:lopicode/agent/agent_tools.dart';
+import 'package:lopicode/backend/backend_blocks.dart';
 import 'package:lopicode/backend/backend_model.dart';
 import 'package:lopicode/backend/backend_project.dart';
 import 'package:lopicode/backend/backend_targets.dart';
@@ -37,8 +38,23 @@ collection / name / into / item 直接写名字（字符串，要先在 collecti
 text{v} num{v} bool{v} var{name} bin{l,op,r}（op: + - * / % == != < <= > >= and or） not{x} join{items:[…]}
 pathParam{name} query{name} bodyField{name} body{} header{name}（name 直接写字符串，读不到是空）
 dbAll{collection} dbGet{collection,id} dbFind{collection,key,value} dbCount{collection}
-len{x} isNull{x} now{} obj{fields:[{e:"pair",key:"title",value:表达式}]} field{of,key}
+len{x} isNull{x} now{} obj{fields:[{e:"pair",key:"title",value:表达式}]}（字典） field{of,key}
+${backendLangGuide()}
 例：{"op":"respondJson","args":{"status":{"e":"num","v":200},"value":{"e":"dbAll","collection":"todos"}}}''';
+
+/// 第 4 版（语言核心）新加的积木和表达式，接在 [backendModelGuide] 后面。
+String backendLangGuide() => '''语言核心（第 4 版，用到了文档版本自动升到 2）：
+- let{name,value} / const{name,value}：在这个接口里新建变量 / 常量（name 直接写名字，不用在 variables 里声明；常量不许再改）；之后用 var{name} 读、setVar 改
+- if 可以带“否则如果”：{op:"if",args:{cond},body:[…],arms:[{args:{cond},body:[…]}…],else:[…]}
+- switch{value}+arms:[{args:{value},body:[…]}…]+else(都不是)：等于哪一种就做哪一段
+- while{cond}+body、forever+body、forCount{name,from,to,step}+body（含两头）、forEach{list,item,index?}+body（index 是序号的新名字，从 0 数）、forPairs{dict,key,value}+body（key / value 是新名字）、break、continue
+- listPush{xs,v} listInsert{xs,i,v} listSet{xs,i,v} listRemove{xs,i} setItem{of,key,value} dictSet{d,k,v} dictRemove{d,k}：原地改列表 / 字典；do{value}：只算一下；note{text}
+表达式：logic{l,op:"and|or",r}（短路）；cond{cond,then,orElse}；neg{x}；null{}；isType{x,type:"number|text|bool|null|list|dict"}；convert{x,fn:"toNumber|toText|toBool"}；copy{x}
+round{x,fn:"round|floor|ceil"} math{x,fn:"abs|sqrt"} minmax{a,b,fn:"max|min"} pow{a,b} random{a,b}
+charAt{s,i} substring{s,from,to} indexOf{sub,s} textHas{s,fn:"contains|startsWith|endsWith",sub} replace{s,from,to} textCase{s,fn:"trim|upper|lower"} repeatText{s,n} split{s,sep} template{s,dict} toJson{x} fromJson{s}
+listLit{items:[…]} range{a,b,step} index{of,key} listGet{xs,i} listPop{xs} listContains{xs,v} listIndexOf{v,xs} listSlice{xs,from,to} listConcat{a,b} listOrder{xs,fn:"listReverse|listSort"} listJoin{xs,sep}
+dictGet{d,k} dictHas{d,k} dictPart{d,fn:"dictKeys|dictValues|dictPairs"} dictMerge{a,b}
+位置都从 0 数；“跳出 / 跳过”只能放在循环里；同一个接口里新名字不能重复。''';
 
 /// 整份文档的中文读法（每个接口一行标题，下面是一块块积木）。
 String describeBackendDocument(BeDocument doc) {
@@ -55,8 +71,12 @@ String describeBackendDocument(BeDocument doc) {
       for (final b in list) {
         out.writeln('$indent- ${describeBeBlock(b)}');
         walk(b.body, '$indent  ', depth + 1);
+        for (var k = 0; k < b.arms.length; k++) {
+          out.writeln('$indent  第 ${k + 1} 段（${beBlockSpecs[b.op]?.arms?.label ?? '段'} ${[for (final v in b.arms[k].args.values) describeBeExpr(v)].join(' ')}）：');
+          walk(b.arms[k].body, '$indent  ', depth + 1);
+        }
         if (b.orElse.isNotEmpty) {
-          out.writeln('$indent  否则 / 失败后：');
+          out.writeln('$indent  ${beBlockSpecs[b.op]?.arms == null ? '否则 / 失败后' : (beBlockSpecs[b.op]?.elseLabel ?? '否则')}：');
           walk(b.orElse, '$indent  ', depth + 1);
         }
       }
@@ -249,6 +269,12 @@ int _countBlocks(Object? routes) {
       n++;
       if (b is Map) {
         walk(b['body'], depth + 1);
+        final arms = b['arms'];
+        if (arms is List) {
+          for (final a in arms.take(LcBlock.maxArms)) {
+            if (a is Map) walk(a['body'], depth + 1);
+          }
+        }
         walk(b['else'], depth + 1);
       }
     }
@@ -262,4 +288,4 @@ int _countBlocks(Object? routes) {
   return n;
 }
 
-int _countParsed(List<LcBlock> list) => list.fold<int>(0, (n, b) => n + 1 + _countParsed(b.body) + _countParsed(b.orElse));
+int _countParsed(List<LcBlock> list) => list.fold<int>(0, (n, b) => n + 1 + _countParsed(b.body) + b.arms.fold<int>(0, (m, a) => m + _countParsed(a.body)) + _countParsed(b.orElse));

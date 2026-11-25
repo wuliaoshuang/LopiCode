@@ -64,6 +64,9 @@ class LcValueChecker {
     if (b.op == 'repeat') _repeat(b.args['times']);
   }
 
+  /// 检查单独一个参数（多口积木中间那些段的参数用）：`arg`＝报问题时记在哪个参数名上。
+  void arg(LcArgSpec a, Object? value, String arg) => _arg(a, value, arg, const [], 0, a.valueType);
+
   void _arg(LcArgSpec a, Object? value, String arg, List<Object> xp, int depth, String want) {
     if (a.kind == LcArgKind.expr) {
       _value(value, arg, xp, depth, want);

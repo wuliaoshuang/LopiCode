@@ -135,6 +135,25 @@ class _BlockPaletteViewState extends State<BlockPaletteView> with BkKitHolder {
   late List<String> _stars = bkCleanStars(_store.load());
   bool _searching = false;
 
+  /// 页签条左边 / 右边还有没有滑出去的页签（有才画那一头的渐隐）。
+  bool _tabsBefore = false, _tabsAfter = false;
+
+  bool _tabsMoved(ScrollMetrics m) {
+    if (m.axis != Axis.horizontal) return false;
+    final before = m.pixels > 1, after = m.pixels < m.maxScrollExtent - 1;
+    if (before != _tabsBefore || after != _tabsAfter) {
+      // 可能正在排版当中（页签刚铺好就来报尺寸）：推后一帧再改。
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        setState(() {
+          _tabsBefore = before;
+          _tabsAfter = after;
+        });
+      });
+    }
+    return false;
+  }
+
   /// 按住样品以后手指挪过没有（样品每次重画都会换一批回调，所以记在这里，不记在回调里）。
   bool _moved = false;
   final TextEditingController _query = TextEditingController();
@@ -329,26 +348,25 @@ class _BlockPaletteViewState extends State<BlockPaletteView> with BkKitHolder {
                                       Expanded(
                                         child: Stack(
                                           children: [
-                                            ListView.separated(
-                                              key: const ValueKey('bk-palette-tabs'),
-                                              scrollDirection: Axis.horizontal,
-                                              padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
-                                              itemCount: ids.length,
-                                              separatorBuilder: (_, _) => const SizedBox(width: 6),
-                                              itemBuilder: (_, i) => i == 0 ? _commonTab(currentId == bkCommonCategoryId) : _tab(categories[i - 1], categories[i - 1].id == currentId),
-                                            ),
-                                            // 滑到左边去的页签在细线旁边淡出，不是被一刀切掉。
-                                            Positioned(
-                                              left: 0,
-                                              top: 0,
-                                              bottom: 0,
-                                              width: 12,
-                                              child: IgnorePointer(
-                                                child: DecoratedBox(
-                                                  decoration: BoxDecoration(gradient: LinearGradient(colors: [theme.colorScheme.surface, theme.colorScheme.surface.withValues(alpha: 0)])),
+                                            NotificationListener<ScrollMetricsNotification>(
+                                              onNotification: (n) => _tabsMoved(n.metrics),
+                                              child: NotificationListener<ScrollUpdateNotification>(
+                                                onNotification: (n) => _tabsMoved(n.metrics),
+                                                child: ListView.separated(
+                                                  key: const ValueKey('bk-palette-tabs'),
+                                                  scrollDirection: Axis.horizontal,
+                                                  padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+                                                  itemCount: ids.length,
+                                                  separatorBuilder: (_, _) => const SizedBox(width: 6),
+                                                  itemBuilder: (_, i) => Builder(
+                                                    builder: (at) => i == 0 ? _commonTab(currentId == bkCommonCategoryId, at) : _tab(categories[i - 1], categories[i - 1].id == currentId, at),
+                                                  ),
                                                 ),
                                               ),
                                             ),
+                                            // 滑出去的页签在两头渐渐淡掉，不是被一刀切掉；没滑动时不盖住第一个 / 最后一个页签。
+                                            BkPaletteTabsFade(left: true, shown: _tabsBefore, color: theme.colorScheme.surface),
+                                            BkPaletteTabsFade(left: false, shown: _tabsAfter, color: theme.colorScheme.surface),
                                           ],
                                         ),
                                       ),
@@ -419,14 +437,29 @@ class _BlockPaletteViewState extends State<BlockPaletteView> with BkKitHolder {
     );
   }
 
+  /// 点一个页签：切过去，并把它整个滑进来（点的是露了一半的页签时，不让它继续被边上的渐隐盖着）。
+  void _pickTab(String id, BuildContext at) {
+    setState(() => _category = id);
+    // 只在它有一部分在外面、或者被两头的渐隐盖着时才动，而且只动到刚好露全：看得全的页签点了不滑（不打乱她手上的位置）。
+    final box = at.findRenderObject(), pos = Scrollable.maybeOf(at)?.position;
+    final port = Scrollable.maybeOf(at)?.context.findRenderObject();
+    if (box is! RenderBox || port is! RenderBox || pos == null || !box.hasSize) return;
+    final left = box.localToGlobal(Offset.zero, ancestor: port).dx, right = left + box.size.width;
+    final lo = BkPaletteTabsFade.widthOf(left: true);
+    final hi = port.size.width - BkPaletteTabsFade.widthOf(left: false);
+    final by = left < lo ? left - lo : (right > hi ? right - hi : 0.0);
+    final to = (pos.pixels + by).clamp(pos.minScrollExtent, pos.maxScrollExtent).toDouble();
+    if (to != pos.pixels) unawaited(pos.animateTo(to, duration: const Duration(milliseconds: 160), curve: Curves.easeOut));
+  }
+
   /// “常用”页签：星形 + 中性色（不占任何一种积木的颜色）。
-  Widget _commonTab(bool selected) {
+  Widget _commonTab(bool selected, BuildContext at) {
     final c = context.colors;
     final fg = selected ? c.surface : c.text;
     return GestureDetector(
       key: const ValueKey('bk-palette-tab-$bkCommonCategoryId'),
       behavior: HitTestBehavior.opaque,
-      onTap: () => setState(() => _category = bkCommonCategoryId),
+      onTap: () => _pickTab(bkCommonCategoryId, at),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 140),
         padding: const EdgeInsets.only(left: 10, right: 12),
@@ -446,13 +479,13 @@ class _BlockPaletteViewState extends State<BlockPaletteView> with BkKitHolder {
     );
   }
 
-  Widget _tab(BlockCategory c, bool selected) {
+  Widget _tab(BlockCategory c, bool selected, BuildContext at) {
     final tone = kit.palette.tone(c.colorKey);
     final theme = Theme.of(context);
     return GestureDetector(
       key: ValueKey('bk-palette-tab-${c.id}'),
       behavior: HitTestBehavior.opaque,
-      onTap: () => setState(() => _category = c.id),
+      onTap: () => _pickTab(c.id, at),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 140),
         padding: const EdgeInsets.symmetric(horizontal: 12),

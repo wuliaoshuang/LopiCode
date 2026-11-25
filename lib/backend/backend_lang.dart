@@ -11,6 +11,9 @@ import 'package:lopicode/backend/backend_ir.dart';
 import 'package:lopicode/lang/ast.dart';
 import 'package:lopicode/lang/ast_util.dart';
 
+/// “这次请求”在生成的代码里叫什么。五种语言的 `BeCodeTarget.request` 都是它（有测试守着）；翻译这一层和语言无关，所以写死在这里。
+const String kBeRequestName = 'req';
+
 /// 旧式子 → 语法树的式子。[request] 是“这次请求”在生成的代码里叫什么（`BeCodeTarget.request`）。
 /// 调小库函数变成 `LNative`（宿主函数）：生成时交回给后端的 `call`，写法和旧路一样。
 LExpr beToLangExpr(BeX x, {required String request}) => switch (x) {

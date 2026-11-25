@@ -10,10 +10,13 @@ import 'package:lopicode/backend/backend_blocks.dart';
 import 'package:lopicode/backend/backend_ir.dart' show kBeRepeatLimit;
 import 'package:lopicode/backend/backend_model.dart';
 import 'package:lopicode/backend/backend_text.dart';
+import 'package:lopicode/backend/backend_validate_lang.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
+import 'package:lopicode/lowcode/logic_rules.dart';
 import 'package:lopicode/lowcode/logic_validate.dart';
 import 'package:lopicode/lowcode/logic_validate_types.dart';
 
+export 'package:lopicode/backend/backend_validate_lang.dart' show BeLangIssueCode;
 export 'package:lopicode/lowcode/logic_validate.dart' show LcIssueCode, LcIssueLevel, LcLogicIssue;
 
 /// 后端特有的问题种类（通用的——缺参数、没声明的变量、不认识的积木等——用 [LcIssueCode] 里现成的）。
@@ -78,6 +81,7 @@ const Set<String> _respondOps = {'respondJson', 'respondText'};
 /// 所以只有直接填的值、运算、拼接、计数这些“一定是什么”的才给出类型，其余一律 [LcType.any]（不报）。
 String beExprType(Object? expr) {
   if (beExprIsBool(expr)) return LcType.boolean;
+  if (beLangExprSpecs.containsKey(exprKind(expr))) return beLangExprType(expr);
   return switch (exprKind(expr)) {
     'text' || 'join' || 'now' => LcType.text,
     'num' || 'len' || 'dbCount' => LcType.number,
@@ -86,14 +90,14 @@ String beExprType(Object? expr) {
   };
 }
 
-/// 这一串积木是不是“怎么走都会返回”（最后一定碰到“返回”积木）。
-bool _alwaysResponds(List<LcBlock> list, [int depth = 0]) {
-  if (depth > LcBlock.maxDepth) return false;
-  for (final b in list) {
-    if (_respondOps.contains(b.op)) return true;
-    if (b.op == 'if' && _alwaysResponds(b.body, depth + 1) && _alwaysResponds(b.orElse, depth + 1)) return true;
+bool _alwaysResponds(List<LcBlock> list) => beAlwaysResponds(list);
+
+bool _samePath(LcBlockPath a, LcBlockPath b) {
+  if (a.length != b.length) return false;
+  for (var i = 0; i < a.length; i++) {
+    if (a[i] != b[i]) return false;
   }
-  return false;
+  return true;
 }
 
 bool _hasRespond(BeRoute r) {
@@ -112,6 +116,9 @@ class _Validator {
   // 正在检查的位置。
   BeRoute? _route;
   Set<String> _params = const {};
+
+  /// 这个接口里新积木新建的名字（新建变量 / 常量、循环变量）→ 是不是常量。
+  Map<String, bool> _locals = const {};
   LcBlockPath _path = const [];
   LcBlock? _block;
 
@@ -163,7 +170,9 @@ class _Validator {
       _path = const [];
       _block = null;
       _routeHead(r, i, seen);
+      _locals = beLocalNames(r.body, beNamePattern);
       _blocks(r.body, const [], false);
+      _lang(r);
       _path = const [];
       _block = null;
       // 一块“返回”都没有的接口是有意回 204（比如删除），不提示；有“返回”但不是每种走法都碰得到的，多半是漏了。
@@ -251,10 +260,23 @@ class _Validator {
     }
   }
 
-  void _blocks(List<LcBlock> list, LcBlockPath parent, bool inElse) {
+  /// 语言核心的检查器报的（只有用到新积木的接口才有）；和上面已经报过的同一条不重复报。
+  void _lang(BeRoute r) {
+    for (final f in beLangFindings(doc, r)) {
+      final rule = lcRuleId(f.code);
+      if (issues.any((i) => i.handlerId == r.id && i.rule == rule && _samePath(i.path, f.path) && (f.arg == null || i.arg == f.arg))) continue;
+      _path = f.path;
+      _block = r.blockAt(f.path);
+      _add(f.isError ? LcIssueLevel.error : LcIssueLevel.warning, f.code, f.problem, arg: f.arg, xp: const [], fix: f.fix);
+    }
+    _path = const [];
+    _block = null;
+  }
+
+  void _blocks(List<LcBlock> list, LcBlockPath parent, bool inElse, {int arm = -1}) {
     var responded = false;
     for (var i = 0; i < list.length; i++) {
-      final path = [...parent, lcStep(i, inElse: inElse)];
+      final path = [...parent, lcStep(i, inElse: inElse, arm: arm)];
       _path = path;
       _block = list[i];
       // 第几步就是第几层（从 0 数）；超过的存盘再读会被丢掉，翻代码也不翻。
@@ -268,6 +290,9 @@ class _Validator {
       }
       _oneBlock(list[i]);
       _blocks(list[i].body, path, false);
+      for (var k = 0; k < list[i].arms.length; k++) {
+        _blocks(list[i].arms[k].body, path, false, arm: k);
+      }
       _blocks(list[i].orElse, path, true);
       if (i < list.length - 1 && _alwaysResponds([list[i]])) responded = true;
     }
@@ -285,9 +310,11 @@ class _Validator {
       _top = a.name;
       _arg(a, b.args[a.name], b.args.containsKey(a.name), ownerKind: null);
     }
+    _arms(b, spec);
     _top = null;
     _xp = const [];
     _values.block(b, spec);
+    _newNames(b);
     if (b.op == 'fetch') _url(b);
     if (!spec.hasBody && b.body.isNotEmpty) {
       _warn(LcIssueCode.strayBody, '“${spec.label}”里面不能放积木，里面的 ${b.body.length} 块生成代码时会被忽略');
@@ -307,6 +334,41 @@ class _Validator {
       final n = exprKind(status) == 'num' ? exprNum(status, 'v') : null;
       if (n != null && (n != n.roundToDouble() || n < 200 || n > 599)) {
         _warn(BeIssueCode.badStatus, '状态码要是 200 到 599 之间的整数，现在这个运行时会当成 200', arg: 'status');
+      }
+    }
+  }
+
+  /// 多口积木中间那些段（否则如果 / 是…时）的参数；段参数的名字是 `@<第几段>:<名字>`。
+  void _arms(LcBlock b, LcBlockSpec spec) {
+    _top = null;
+    final arms = spec.arms;
+    if (arms == null) {
+      if (b.arms.isNotEmpty) _warn(LcIssueCode.strayBody, '“${spec.label}”不能加段，多出来的 ${b.arms.length} 段生成代码时会被忽略');
+      return;
+    }
+    if (b.arms.length < arms.min) {
+      _error(LcIssueCode.missingArg, '“${spec.label}”至少要有 ${arms.min} 段“${arms.label}”', fix: '点这块积木上的“＋”，加一段“${arms.label}”。');
+    }
+    for (var k = 0; k < b.arms.length; k++) {
+      for (final a in arms.args) {
+        final value = b.arms[k].args[a.name];
+        _top = lcArmArg(k, a.name);
+        _arg(a, value, b.arms[k].args.containsKey(a.name), ownerKind: null);
+        _xp = const [];
+        _values.arg(a, value, lcArmArg(k, a.name));
+      }
+    }
+  }
+
+  /// “新建一个名字”的格子：名字要合规矩，不能和“变量”里声明的重名（同一个接口里重复新建由语言核心的检查器报）。
+  void _newNames(LcBlock b) {
+    for (final n in kBeNewNameArgs[b.op] ?? const <String>[]) {
+      final name = b.args[n];
+      if (name is! String || name.isEmpty) continue;
+      if (!beNamePattern.hasMatch(name)) {
+        _error(LcIssueCode.badArg, '名字只能用英文字母、数字和下划线，不能用数字开头，最多 32 个字符', arg: n);
+      } else if (doc.variable(name) != null) {
+        _error(BeLangIssueCode.duplicateName, '“变量”里已经声明了一个叫 $name 的，这里不能再新建同名的', arg: n);
       }
     }
   }
@@ -383,7 +445,7 @@ class _Validator {
           if (!a.optional) _error(LcIssueCode.missingArg, '还没选变量', arg: a.name);
         } else if (value is! String) {
           _error(LcIssueCode.badArg, '“${a.label}”应该是变量的名字', arg: a.name);
-        } else if (doc.variable(value) == null) {
+        } else if (doc.variable(value) == null && !_locals.containsKey(value)) {
           _error(LcIssueCode.unknownVar, '变量 $value 还没有声明（先到“变量”里加一个）', arg: a.name);
         }
       case LcArgKind.collection:
@@ -403,7 +465,9 @@ class _Validator {
           _error(LcIssueCode.badArg, '“${a.label}”只能是 ${a.choices.join(' / ')}', arg: a.name);
         }
       case LcArgKind.literalText:
-        if (value is! String) {
+        if (a.optional && (missing || value == '')) {
+          // 可填可不填的名字（“对每一项”的序号、备注）空着不报。
+        } else if (value is! String) {
           _error(missing ? LcIssueCode.missingArg : LcIssueCode.badArg, '“${a.label}”应该是一段文字', arg: a.name);
         } else if (value.isEmpty && ownerKind != 'text') {
           // 文字字面量可以是空的；名字、字段名空着多半是忘了填。

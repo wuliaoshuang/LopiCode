@@ -8,6 +8,7 @@
 library;
 
 import 'package:lopicode/backend/backend_blocks.dart';
+import 'package:lopicode/backend/backend_lower_lang.dart';
 import 'package:lopicode/backend/backend_model.dart';
 import 'package:lopicode/backend/backend_text.dart';
 import 'package:lopicode/lang/ast.dart';
@@ -278,7 +279,7 @@ BeProgram lowerBackend(BeDocument doc) {
       name = '${base}_$n';
     }
     final lower = _Lowerer(doc, r);
-    final body = lower.blocks(r.body, 0);
+    final body = lower.body();
     routes.add(
       BeRouteProgram(
         id: r.id,
@@ -304,8 +305,46 @@ BeProgram lowerBackend(BeDocument doc) {
 
 const Map<String, String> _binFns = {'+': 'add', '-': 'sub', '*': 'mul', '/': 'div', '%': 'mod', '==': 'eq', '!=': 'ne', '<': 'lt', '<=': 'le', '>': 'gt', '>=': 'ge', 'and': 'allOf', 'or': 'anyOf'};
 
-class _Lowerer {
-  _Lowerer(this.doc, this.route) : _params = bePathParams(route.path).toSet();
+/// 给校验用：用到第 4 版积木的接口翻成语法树（影子模式，见 backend_lower_lang.dart）。没用到的返回 null。
+({List<LStmt> stmts, List<BeLangSpot> spots, Map<String, bool> locals})? beLangShadow(BeDocument doc, BeRoute route) {
+  final lang = _Lowerer(doc, route, shadow: true)._lang;
+  if (lang == null) return null;
+  return (stmts: lang.stmts(route.body, const [], 0), spots: lang.spots, locals: lang.locals);
+}
+
+class _Lowerer implements BeLowerHost {
+  _Lowerer(this.doc, this.route, {bool shadow = false}) : _params = bePathParams(route.path).toSet() {
+    if (beBlocksUseLang(route.body)) _lang = BeLangLower(this, route, shadow: shadow);
+  }
+
+  /// 这个接口用到了第 4 版的积木：整个接口走新路。
+  BeLangLower? _lang;
+
+  /// 整个接口的函数体。
+  List<BeS> body() {
+    final lang = _lang;
+    return lang == null ? blocks(route.body, 0) : [BeSLang(lang.stmts(route.body, const [], 0))];
+  }
+
+  @override
+  bool useDocVar(String name) {
+    if (doc.variable(name) == null) return false;
+    used.add(name);
+    return true;
+  }
+
+  @override
+  List<String> swapNotes(List<String> fresh) {
+    final was = _notes;
+    _notes = fresh;
+    return was;
+  }
+
+  @override
+  void addNote(String note) => _notes.add(note);
+
+  @override
+  List<BeS> leaf(LcBlock b) => _block(b, 0);
 
   final BeDocument doc;
   final BeRoute route;
@@ -329,15 +368,19 @@ class _Lowerer {
 
   /// 变量名：声明过、名字合规矩才算数。
   String? _varName(Object? name) {
-    if (name is! String || !beNamePattern.hasMatch(name) || doc.variable(name) == null) return null;
+    if (name is! String || !beNamePattern.hasMatch(name)) return null;
+    if (doc.variable(name) == null) return (_lang?.knows(name) ?? false) ? name : null;
     used.add(name);
     return name;
   }
 
   String? _collection(Object? name) => name is String && beNamePattern.hasMatch(name) && doc.collection(name) != null ? name : null;
 
+  @override
   BeX expr(Object? e, [int depth = 0]) {
     if (depth >= kMaxExprDepth) return _hole('值套得太深，当成空的');
+    final viaLang = _lang?.expr(e, depth);
+    if (viaLang != null) return viaLang;
     BeX sub(String key) => expr(exprField(e, key), depth + 1);
     BeX named(String fn, String what) {
       final name = exprString(e, 'name');
@@ -428,6 +471,7 @@ class _Lowerer {
         if (key == null || key.isEmpty) return _hole('“对象的字段”没填字段名，当成空的');
         return BeXCall('field', [sub('of'), BeXLit(key)]);
       default:
+        // 新的式子单独出现在旧接口里是不会的（有它就整个走新路）；这里只剩真不认识的。
         return _hole('不认识的值 $kind，当成空的');
     }
   }

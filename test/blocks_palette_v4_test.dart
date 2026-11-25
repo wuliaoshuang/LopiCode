@@ -525,7 +525,7 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('真的前端宿主、后端宿主不改：没有小标题、没有入门声明也照常——多一个“常用”页，原来各页的内容和顺序不变', (tester) async {
+    testWidgets('真的前端宿主不改：没有小标题、没有入门声明也照常——多一个“常用”页，原来各页的内容和顺序不变；后端宿主（第 1 阶段接线后）有小标题、入门积木、多口的“如果”', (tester) async {
       final doc = sampleDoc();
       final logic = LogicBlockHost(doc: doc, onEdit: (c) => c(doc));
       for (final c in logic.categories) {
@@ -542,12 +542,16 @@ void main() {
       expect(common.single.items.length, lessThanOrEqualTo(bkCommonMax));
 
       final be = BeBlockHost(doc: backendStarterDocument('样本'));
-      for (final c in be.categories) {
-        expect(c.groups, isEmpty);
-      }
+      // 接线以后后端宿主声明了两级分类、入门积木和多口的“如果”（原来这里断言的是“没有”）。
+      expect([
+        for (final c in be.categories)
+          if (c.groups.isNotEmpty) c.id,
+      ], containsAll(['流程', '列表', '文字']));
+      expect(be.starterItems, isNotEmpty);
       expect(bkCommonSections(be, const []).single.items, isNotEmpty);
       expect(bkSearchPalette(be, 'JSON'), isNotEmpty);
-      expect(be.blockSpec('if')!.hasArms, isFalse);
+      expect(bkSearchPalette(be, '循环'), isNotEmpty);
+      expect(be.blockSpec('if')!.hasArms, isTrue);
     });
   });
 

@@ -33,8 +33,8 @@ void main() {
         expect(c.colorKey, isNot(BlockColorKey.unknown), reason: '${c.id} 要有自己的颜色');
         expect(BkPalette.light.tone(c.colorKey).fill, isNot(BkPalette.light.tone(BlockColorKey.unknown).fill));
       }
-      expect({for (final c in cats) ...c.blocks}, beBlockSpecs.keys.toSet());
-      expect({for (final c in cats) ...c.exprs}, beExprSpecs.keys.toSet()..remove('pair'));
+      expect({for (final c in cats) ...c.allBlocks}, beBlockSpecs.keys.toSet());
+      expect({for (final c in cats) ...c.allExprs}, beExprSpecs.keys.toSet()..remove('pair'));
       for (final op in beBlockSpecs.keys) {
         expect(host.blockColorKey(op), isNot(BlockColorKey.unknown), reason: op);
       }
