@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:lopicode/agent/automation.dart';
 import 'package:lopicode/agent/chat_client.dart';
+import 'package:lopicode/agent/keep_alive.dart';
 import 'package:lopicode/agent/model_config.dart';
 import 'package:lopicode/agent/presets.dart';
 import 'package:lopicode/agent/protocols.dart';
@@ -20,13 +21,22 @@ import 'package:riverpod/riverpod.dart';
 
 /// 全应用共用的服务：设置、密钥、项目仓库。测试里可以整体替换。
 class AppServices {
-  AppServices({required this.settings, required this.secrets, required this.projects, this.chatClientFactory, this.quotaHttp, LinuxRuntime? runtime})
-    : runtime = runtime ?? LinuxRuntime(settings: settings, baseDir: p.join(settings.file.parent.path, 'runtime')),
-      models = ModelConfigStore(settings, secrets),
-      presets = PresetStore(settings),
-      skills = SkillStore(settings, p.join(settings.file.parent.path, 'skills')),
-      automations = AutomationStore(File(p.join(settings.file.parent.path, 'automations.json'))) {
+  AppServices({
+    required this.settings,
+    required this.secrets,
+    required this.projects,
+    this.chatClientFactory,
+    this.quotaHttp,
+    LinuxRuntime? runtime,
+    KeepAliveHost keepAliveHost = const NoKeepAliveHost(),
+  }) : runtime = runtime ?? LinuxRuntime(settings: settings, baseDir: p.join(settings.file.parent.path, 'runtime')),
+       models = ModelConfigStore(settings, secrets),
+       presets = PresetStore(settings),
+       skills = SkillStore(settings, p.join(settings.file.parent.path, 'skills')),
+       automations = AutomationStore(File(p.join(settings.file.parent.path, 'automations.json'))) {
     projects.linuxRootfs ??= this.runtime.rootfsDir;
+    keepAlive = AgentKeepAlive(keepEnabled: () => settings.getBool(SettingKeys.agentKeepAlive, true), notifyEnabled: () => settings.getBool(SettingKeys.agentNotifyDone, true))..attach(keepAliveHost);
+    settings.addKeyListener(_onSettingKey);
     scheduler = AutomationScheduler(this);
     container = ProviderContainer(overrides: [appServicesProvider.overrideWithValue(this)]);
     // 现在就建好：销毁以后还在收尾的对话也能拿到它（那时只读快照、不再写）
@@ -44,7 +54,16 @@ class AppServices {
     if (_disposed) return;
     _disposed = true;
     scheduler.stop();
+    settings.removeKeyListener(_onSettingKey);
+    keepAlive.dispose();
     container.dispose();
+  }
+
+  /// Agent 干活时的后台保活和通知（真机上是安卓前台服务；测试、桌面是空实现）。
+  late final AgentKeepAlive keepAlive;
+
+  void _onSettingKey(String key) {
+    if (key == SettingKeys.agentKeepAlive || key == SettingKeys.agentNotifyDone) keepAlive.refresh();
   }
 
   /// 测试钩子：查余额用的网络。
@@ -102,7 +121,7 @@ class AppServices {
     final support = await getApplicationSupportDirectory();
     final runtime = LinuxRuntime(settings: settings, baseDir: p.join(support.path, 'runtime'), host: ChannelRuntimeHost());
     await runtime.init();
-    final app = AppServices(settings: settings, secrets: secrets, projects: ProjectStore(p.join(docs.path, 'projects')), runtime: runtime);
+    final app = AppServices(settings: settings, secrets: secrets, projects: ProjectStore(p.join(docs.path, 'projects')), runtime: runtime, keepAliveHost: ChannelKeepAliveHost());
     await app.ready();
     app.scheduler.start();
     return app;

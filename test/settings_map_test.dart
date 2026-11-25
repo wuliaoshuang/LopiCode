@@ -15,6 +15,7 @@ import 'package:lopicode/ui/automation_screen.dart';
 import 'package:lopicode/ui/error_guard.dart';
 import 'package:lopicode/ui/settings_agent.dart';
 import 'package:lopicode/ui/settings_ai.dart';
+import 'package:lopicode/ui/settings_background.dart';
 import 'package:lopicode/ui/settings_pages.dart';
 import 'package:lopicode/ui/settings_quota.dart';
 import 'package:lopicode/ui/settings_screen.dart';
@@ -47,6 +48,12 @@ const _entries = <_Entry>[
     keys: ['subagent-enabled', 'subagent-depth', 'subagent-concurrent', 'team-enabled'],
     texts: ['子代理可以换用的模型', 'deepseek-chat'],
     shot: '06-subagents',
+  ),
+  _Entry(
+    'settings-background',
+    BackgroundSettingsScreen,
+    keys: ['settings-keep-alive', 'settings-notify-done', 'settings-notification-permission', 'settings-open-app-settings'],
+    texts: ['Agent 干活时保持后台运行', '做完时通知我'],
   ),
   _Entry('settings-search', WebSearchSettingsScreen, keys: ['search-url', 'search-key', 'search-save', 'search-test'], texts: ['填入 Tavily 的官方地址'], shot: '07-search'),
   _Entry('settings-skills', SkillsScreen, texts: ['新建技能', '这个工作区：我的小站', '全局（所有工作区都能用）', '发版', '写周报'], shot: '08-skills'),

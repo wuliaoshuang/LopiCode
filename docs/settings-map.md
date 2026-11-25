@@ -14,6 +14,7 @@
 | Agent | 权限与执行 | `AgentBehaviorScreen` | 〔权限〕新对话的权限；〔执行〕连续执行多少步后问我、上下文快满时自动压缩 |
 | Agent | 个性化 | `PersonalizeScreen` | 〔个人偏好〕；〔Agent 预设〕列表、新建、编辑、复制、设为默认、删除 |
 | Agent | 子代理与团队 | `SubagentSettingsScreen` | 〔子代理〕开关、最多几层、同时几个；〔可以换用的模型〕；〔智能体团队〕开关 |
+| Agent | 后台与通知（2026-11-25 新增） | `BackgroundSettingsScreen` | 〔后台〕Agent 干活时保持后台运行；〔通知〕做完时通知我、通知权限；〔系统的省电规则〕打开系统的应用设置 |
 | 能力 | 联网搜索 | `WebSearchSettingsScreen` | 〔搜索服务〕地址、Key、保存；〔测试〕搜一次试试 |
 | 能力 | 技能 | `SkillsScreen` | 〔这个工作区〕和〔全局〕分开两组；开关、看全文、新建、删除 |
 | 能力 | 自动化任务 | `AutomationListScreen` | 原样 |
