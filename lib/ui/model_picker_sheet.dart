@@ -4,6 +4,8 @@
 // - 上半截是“选哪个”：渠道（自动换行标签）→ 模型（列表），模型多了只滚这一截。
 // - 下半截固定在面板底部、不跟着滚：“思考深度”和“用这个模型”。模型再多也不用滚到底才看得见。
 // - 选中任何模型都有“思考深度”这一段。模型没标记“可思考”时不整段消失，而是一行说明加一个就地打开的开关。
+// - 思考参数没对着官方文档核对过的服务商 / 模型（2026-11-25 霜霜定）：这一段只剩标题和一句灰色说明，
+//   没有开关、没有档位，列表里也不写“可思考”；请求里不带任何思考参数。
 // - 档位只给这个模型在这家接口上真实有区别的（lib/agent/thinking_support.dart）：只能开关的就只有“关 / 开”，
 //   调不了的写一句为什么，不给点了没用的档位。
 // - 每个模型上次设的档位记在设置里（ai.thinkingLevels），切走再切回来还是它。
@@ -62,7 +64,8 @@ class _ModelPickerSheetState extends ConsumerState<ModelPickerSheet> {
 
   Future<void> _confirm(Channel ch, ModelSpec m, String level) async {
     final nav = Navigator.of(context);
-    if (m.thinking) await ref.read(modelsProvider.notifier).setThinkingLevel(ch.id, m.id, level);
+    // 没核对过的服务商不改记住的档位（那里只有“不发”，以前记的留着，哪天核对过了还是它）
+    if (m.thinking && thinkingVerified(ch, m)) await ref.read(modelsProvider.notifier).setThinkingLevel(ch.id, m.id, level);
     nav.pop(ModelSelectionResult(ModelSelection(ch.id, m.id, level)));
   }
 
@@ -133,7 +136,10 @@ class _ModelPickerSheetState extends ConsumerState<ModelPickerSheet> {
                               contentPadding: EdgeInsets.zero,
                               leading: Icon(m.id == model?.id ? Icons.radio_button_checked : Icons.radio_button_off, color: m.id == model?.id ? c.accent : c.textFaint),
                               title: Text(m.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-                              subtitle: Text('${m.contextLength ~/ 1000}K 上下文 · ${m.vision ? '能看图' : '只看文字'}${m.thinking ? ' · 可思考' : ''}', style: t.bodySmall),
+                              subtitle: Text(
+                                '${m.contextLength ~/ 1000}K 上下文 · ${m.vision ? '能看图' : '只看文字'}${showsThinking(channel.protocol, channel.baseUrl, m) ? ' · 可思考' : ''}',
+                                style: t.bodySmall,
+                              ),
                               onTap: () => setState(() => _modelId = m.id),
                             ),
                       ],
@@ -179,6 +185,20 @@ class _ThinkingSection extends StatelessWidget {
     final caps = thinkingCaps(channel.protocol, channel.baseUrl, model.id);
     final options = thinkingOptions(channel, model);
     final hint = t.bodySmall?.copyWith(color: c.textMuted);
+    if (!caps.verified) {
+      // 没核对过：不给开关和档位，原位置只说明为什么
+      return Column(
+        key: const ValueKey('thinking-section'),
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const SizedBox(height: Space.x3),
+          Text('思考深度', style: t.labelMedium),
+          const SizedBox(height: Space.x1),
+          Text(caps.note, key: const ValueKey('thinking-unverified'), style: hint),
+        ],
+      );
+    }
     return Column(
       key: const ValueKey('thinking-section'),
       mainAxisSize: MainAxisSize.min,

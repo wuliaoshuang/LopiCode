@@ -8,11 +8,12 @@ import 'package:lopicode/agent/thinking_support.dart';
 ChatClient buildChatClient(ResolvedModel r, String apiKey, {http.Client? httpClient}) {
   final m = r.model;
   final caps = thinkingCaps(r.channel.protocol, r.channel.baseUrl, m.id);
-  // 没标记“可思考”的模型一律当没选档位
-  final level = !m.thinking || r.level == 'off' ? null : r.level;
+  // 没标记“可思考”的模型、思考参数没核对过的服务商：一律当没选档位，一个思考参数都不发
+  final marked = m.thinking && caps.verified;
+  final level = !marked || r.level == 'off' ? null : r.level;
   switch (r.channel.protocol) {
     case ChatProtocol.openaiChat:
-      final plan = openAiChatThinking(caps, marked: m.thinking, level: level ?? 'off');
+      final plan = openAiChatThinking(caps, marked: marked, level: level ?? 'off');
       return OpenAiChatClient(
         baseUrl: r.channel.baseUrl,
         apiKey: apiKey,
@@ -30,7 +31,7 @@ ChatClient buildChatClient(ResolvedModel r, String apiKey, {http.Client? httpCli
         maxTokens: m.maxOutput,
         thinkingLevel: level,
         adaptive: caps.wire == ThinkingWire.anthropicAdaptive,
-        whenOff: m.thinking ? caps.anthropicOff : AnthropicOff.omit,
+        whenOff: marked ? caps.anthropicOff : AnthropicOff.omit,
         httpClient: httpClient,
       );
     case ChatProtocol.openaiResponses:

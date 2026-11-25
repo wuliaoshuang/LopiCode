@@ -126,7 +126,8 @@ void main() {
       final ch = await store.upsert(
         name: 'A',
         protocol: ChatProtocol.openaiChat,
-        baseUrl: 'https://a.test/v1',
+        // 思考参数核对过的地址（OpenRouter：低 / 中 / 高）；没核对过的服务商不给档位，另有测试
+        baseUrl: 'https://openrouter.ai/api/v1',
         models: [
           ModelSpec(id: 'm1'),
           ModelSpec(id: 'm2', thinking: true),

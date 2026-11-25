@@ -289,7 +289,7 @@ class _ChannelEditScreenState extends ConsumerState<ChannelEditScreen> {
     final result = await showModalBottomSheet<Object>(
       context: context,
       isScrollControlled: true,
-      builder: (_) => ModelSpecSheet(model: m),
+      builder: (_) => ModelSpecSheet(model: m, protocol: _protocol, baseUrl: _baseUrl.text.trim()),
     );
     if (!mounted) return;
     final at = _models.indexWhere((x) => identical(x, m));
@@ -430,7 +430,14 @@ class _ChannelEditScreenState extends ConsumerState<ChannelEditScreen> {
           footer: _models.isEmpty ? '第 2 步读到列表后在弹出的面板里勾选，选中的会出现在这里。读不到列表的服务，在这里手动添加模型 ID。' : '点模型改它的上下文长度、最大输出、能不能看图、思考档位和单价。\n点“测试”会给这个模型发一句很短的话，确认它能对话——会花一点点额度（几个 token），不点不会发。',
           children: [
             for (final m in _models)
-              ModelStepRow(model: m, onEdit: () => _editModel(m), onTest: missing != null || _busy || _testing != null ? null : () => _testModel(m), testing: _testing == m.id, result: _tests[m.id]),
+              ModelStepRow(
+                model: m,
+                thinking: showsThinking(_protocol, _baseUrl.text.trim(), m),
+                onEdit: () => _editModel(m),
+                onTest: missing != null || _busy || _testing != null ? null : () => _testModel(m),
+                testing: _testing == m.id,
+                result: _tests[m.id],
+              ),
             SettingsRow(key: const Key('channel-add-manual'), icon: Icons.add, title: '手动添加模型 ID', accent: true, onTap: _addManually),
           ],
         ),

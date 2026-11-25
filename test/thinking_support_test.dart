@@ -8,12 +8,13 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:lopicode/agent/model_config.dart';
 import 'package:lopicode/agent/protocols.dart';
+import 'package:lopicode/agent/provider_presets.dart';
 import 'package:lopicode/agent/thinking_support.dart';
 import 'package:lopicode/core/safe_file.dart';
 import 'package:lopicode/core/stores.dart';
 import 'package:path/path.dart' as p;
 
-const _urls = {
+final _urls = {
   'deepseek': 'https://api.deepseek.com',
   'openai': 'https://api.openai.com/v1',
   'gemini': 'https://generativelanguage.googleapis.com/v1beta/openai',
@@ -22,10 +23,16 @@ const _urls = {
   'moonshot': 'https://api.moonshot.cn/v1',
   'siliconflow': 'https://api.siliconflow.cn/v1',
   'openrouter': 'https://openrouter.ai/api/v1',
-  'volcengine': 'https://ark.cn-beijing.volces.com/api/v3',
   'relay': 'https://api.example.com/v1',
   'anthropic': 'https://api.anthropic.com/v1',
+  'local': 'http://192.168.1.20:1234/v1',
+  // 没核对过思考参数的服务商：地址直接取预设里的
+  for (final id in _unverifiedPresets) id: _presetUrl(id),
 };
+
+/// 思考参数没对着官方文档核对过的服务商（预设 id）。
+const _unverifiedPresets = ['volcengine', 'minimax', 'xai', 'groq', 'hunyuan', 'qianfan', 'stepfun', 'cerebras', 'ollama'];
+String _presetUrl(String id) => presetById(id)!.baseUrl;
 
 /// 按“渠道 + 模型 + 档位”造客户端、发一次请求，返回发出去的请求体。
 Future<Map<String, dynamic>> sent(
@@ -77,15 +84,78 @@ Map<String, dynamic> thinkingOf(Map<String, dynamic> body) => {
 
 void main() {
   group('OpenAI Chat 协议：各家各档位发什么', () {
-    test('没核对过的服务商 / 自己填的中转站：选了档位只发 reasoning_effort，“默认”什么都不发', () async {
-      for (final provider in ['relay', 'volcengine']) {
-        expect(thinkingOf(await sent(provider, 'some-model', 'off')), isEmpty, reason: provider);
-        for (final l in ['low', 'medium', 'high']) {
-          expect(thinkingOf(await sent(provider, 'some-model', l)), {'reasoning_effort': l}, reason: '$provider $l');
+    test('没核对过的服务商：标了“可思考”、存着哪一档都一样，一个思考参数都不发（通用的 reasoning_effort 也不发）', () async {
+      for (final provider in [..._unverifiedPresets, 'local', 'relay']) {
+        for (final l in ['off', 'on', 'low', 'medium', 'high', 'max']) {
+          expect(thinkingOf(await sent(provider, 'some-model', l)), isEmpty, reason: '$provider $l');
         }
-        // 这家没有“最高”“开”这两档：落到最接近的，不发它不认识的值，也不发别家的专属参数
-        expect(thinkingOf(await sent(provider, 'some-model', 'max')), {'reasoning_effort': 'high'});
-        expect(thinkingOf(await sent(provider, 'some-model', 'on')), {'reasoning_effort': 'medium'});
+        expect(thinkingCaps(ChatProtocol.openaiChat, _urls[provider]!, 'some-model').verified, isFalse, reason: provider);
+      }
+      // 不经过档位收口、直接拿着“高”去造客户端（比如旧代码路径）：照样不发
+      for (final provider in ['volcengine', 'relay']) {
+        Map<String, dynamic>? body;
+        final ch = Channel(
+          id: 'c',
+          name: provider,
+          protocol: ChatProtocol.openaiChat,
+          baseUrl: _urls[provider]!,
+          models: [ModelSpec(id: 'some-model', thinking: true)],
+        );
+        final client = MockClient.streaming((req, bodyStream) async {
+          body = jsonDecode(await utf8.decoder.bind(bodyStream).join()) as Map<String, dynamic>;
+          return http.StreamedResponse(Stream.value(utf8.encode('data: [DONE]\n\n')), 200, headers: {'content-type': 'text/event-stream'});
+        });
+        try {
+          await buildChatClient(ResolvedModel(ch, ch.models.first, 'high'), 'sk-test', httpClient: client)
+              .streamChat(
+                messages: [
+                  {'role': 'user', 'content': '你好'},
+                ],
+                tools: const [],
+              )
+              .toList();
+        } on Object {
+          // 假回复很简陋，只看发出去的请求
+        }
+        expect(thinkingOf(body!), isEmpty, reason: provider);
+      }
+    });
+
+    test('没核对过的服务商上的知名模型也不发：地址是那家的，参数就得按那家的文档，不能按模型名猜', () async {
+      expect(thinkingOf(await sent('volcengine', 'deepseek-v4-pro', 'high')), isEmpty);
+      expect(thinkingOf(await sent('groq', 'gpt-oss', 'high')), isEmpty);
+      expect(thinkingOf(await sent('local', 'deepseek-v4-pro', 'high')), isEmpty, reason: '本机 / 局域网服务不是中转站');
+      expect(thinkingOf(await sent('ollama', 'qwen3', 'on')), isEmpty);
+    });
+
+    test('自己填的中转站：模型名认得出是核对过的那几家，就按那家官方文档的写法发', () async {
+      // DeepSeek：不是官方地址，开关和强度都明说
+      expect(thinkingOf(await sent('relay', 'deepseek-v4-pro', 'off')), {
+        'thinking': {'type': 'disabled'},
+      });
+      expect(thinkingOf(await sent('relay', 'deepseek-v4-pro', 'medium')), {
+        'thinking': {'type': 'enabled'},
+        'reasoning_effort': 'high',
+      });
+      expect(thinkingOf(await sent('relay', 'deepseek/deepseek-v4-pro', 'max')), {
+        'thinking': {'type': 'enabled'},
+        'reasoning_effort': 'max',
+      }, reason: '“厂商/模型”的写法看最后一段');
+      expect(thinkingOf(await sent('relay', 'deepseek-v4-pro', 'high', marked: false)), isEmpty, reason: '中转站上没标记就什么都不发（只有官方地址才替她关）');
+      // OpenAI
+      expect(thinkingOf(await sent('relay', 'gpt-6', 'off')), isEmpty);
+      expect(thinkingOf(await sent('relay', 'openai/o5-mini', 'low')), {'reasoning_effort': 'low'});
+      // 智谱 / Kimi / 千问 / Gemini
+      expect(thinkingOf(await sent('relay', 'glm-4.6', 'on')), {
+        'thinking': {'type': 'enabled'},
+      });
+      expect(thinkingOf(await sent('relay', 'kimi-k3', 'max')), {'reasoning_effort': 'max'});
+      expect(thinkingOf(await sent('relay', 'kimi-k2.7-code', 'high')), isEmpty);
+      expect(thinkingOf(await sent('relay', 'qwen-plus', 'on')), {'enable_thinking': true});
+      expect(thinkingOf(await sent('relay', 'gemini-2.5-flash', 'off')), {'reasoning_effort': 'none'});
+      // 认不出的：不发
+      for (final id in ['claude-opus-4-8', 'moonshot-v1-8k', 'kimi-latest', 'my-model', 'doubao-pro', 'grok-5', 'ogpt-1']) {
+        expect(thinkingOf(await sent('relay', id, 'high')), isEmpty, reason: id);
       }
     });
 
@@ -175,8 +245,8 @@ void main() {
       });
       expect(thinkingOf(await sent('moonshot', 'kimi-k2.6', 'on')), isEmpty, reason: '默认就开着');
       expect(thinkingOf(await sent('moonshot', 'kimi-k2.6', 'high')), isEmpty);
-      // 没核对到的 Kimi 模型：通用做法
-      expect(thinkingOf(await sent('moonshot', 'moonshot-v1-8k', 'low')), {'reasoning_effort': 'low'});
+      // 没核对到的 Kimi 模型：不发
+      expect(thinkingOf(await sent('moonshot', 'moonshot-v1-8k', 'low')), isEmpty);
     });
 
     test('Kimi：思考内容要原样带回（官方地址）；别家不带', () async {
@@ -212,9 +282,11 @@ void main() {
           expect(thinkingOf(await sent(e.key, e.value, l)), {'enable_thinking': true}, reason: '${e.key} $l');
         }
       }
-      // 百炼上不是千问的模型：参数因模型而异、没逐个核对 → 通用做法
+      // 百炼上不是千问的模型：参数因模型而异、没逐个核对 → 不发
       expect(thinkingOf(await sent('bailian', 'deepseek-v4-pro', 'off')), isEmpty);
-      expect(thinkingOf(await sent('bailian', 'deepseek-v4-pro', 'high')), {'reasoning_effort': 'high'});
+      expect(thinkingOf(await sent('bailian', 'deepseek-v4-pro', 'high')), isEmpty);
+      // Kimi 地址上没核对到的模型：同样不发
+      expect(thinkingOf(await sent('moonshot', 'moonshot-v1-8k', 'high')), isEmpty);
     });
   });
 
@@ -228,6 +300,16 @@ void main() {
         });
       }
       expect(thinkingOf(await r('high', marked: false)), isEmpty);
+    });
+
+    test('只有 OpenAI 官方地址、或者中转站上看着是 OpenAI 的模型才发；别的不发', () async {
+      Future<Map<String, dynamic>> r(String provider, String id) => sent(provider, id, 'high', protocol: ChatProtocol.openaiResponses);
+      expect(thinkingOf(await r('relay', 'gpt-6')), {
+        'reasoning': {'effort': 'high', 'summary': 'auto'},
+      });
+      expect(thinkingOf(await r('relay', 'my-model')), isEmpty);
+      expect(thinkingOf(await r('xai', 'gpt-6')), isEmpty);
+      expect(thinkingOf(await r('local', 'gpt-6')), isEmpty);
     });
   });
 
@@ -261,11 +343,22 @@ void main() {
       expect(thinkingOf(await a('claude-haiku-4-5', 'high', maxOutput: 2048)), isEmpty, reason: '输出上限太小，放不下最少 1024 的预算');
     });
 
-    test('认不出版本的（第三方兼容接口）：保持老写法', () async {
-      expect(thinkingOf(await a('claude-x', 'low')), {
+    test('认不出是哪一代的：新旧写法不知道该用哪种，什么都不发', () async {
+      for (final l in ['off', 'low', 'medium', 'high']) {
+        expect(thinkingOf(await a('claude-x', l)), isEmpty, reason: l);
+        expect(thinkingOf(await a('my-proxy-model', l)), isEmpty, reason: l);
+      }
+      expect(thinkingCaps(ChatProtocol.anthropic, _urls['anthropic']!, 'claude-x').verified, isFalse);
+    });
+
+    test('中转站上的 Claude（Anthropic 协议）：认得出版本就和官方地址一样发', () async {
+      expect(thinkingOf(await sent('relay', 'claude-sonnet-4-5-20250929', 'low', protocol: ChatProtocol.anthropic)), {
         'thinking': {'type': 'enabled', 'budget_tokens': 4096},
       });
-      expect(thinkingOf(await a('my-proxy-model', 'off')), isEmpty);
+      expect(thinkingOf(await sent('relay', 'claude-opus-4-8', 'high', protocol: ChatProtocol.anthropic)), {
+        'thinking': {'type': 'adaptive', 'display': 'summarized'},
+        'output_config': {'effort': 'high'},
+      });
     });
 
     test('4.6 / Opus 4.7 / 4.8：新写法 adaptive + output_config.effort；关＝不发（默认就不思考）', () async {
@@ -339,7 +432,12 @@ void main() {
     test('每家真实能选的档位', () {
       List<String> opts(String provider, String id, {ChatProtocol protocol = ChatProtocol.openaiChat}) =>
           thinkingOptions(ch(provider, ModelSpec(id: id, thinking: true), protocol: protocol), ModelSpec(id: id, thinking: true));
-      expect(opts('relay', 'x'), ['off', 'low', 'medium', 'high']);
+      expect(opts('relay', 'x'), ['off'], reason: '没核对过：一个能点的档位都不给');
+      expect(opts('volcengine', 'doubao-pro'), ['off']);
+      expect(opts('bailian', 'deepseek-v4-pro'), ['off']);
+      expect(opts('relay', 'gpt-6'), ['off', 'low', 'medium', 'high']);
+      expect(opts('relay', 'deepseek-v4-pro'), ['off', 'low', 'high', 'max']);
+      expect(opts('openrouter', 'a/b'), ['off', 'low', 'medium', 'high']);
       expect(opts('deepseek', 'deepseek-flash'), ['off', 'low', 'high', 'max']);
       expect(opts('zhipu', 'glm-5.3'), ['off', 'low', 'high', 'max']);
       expect(opts('zhipu', 'glm-5.2'), ['off', 'high', 'max']);
@@ -355,7 +453,7 @@ void main() {
       final plain = ModelSpec(id: 'x');
       expect(thinkingOptions(ch('relay', plain), plain), ['off']);
       final some = ModelSpec(id: 'x', thinking: true, levels: const ['high']);
-      expect(thinkingOptions(ch('relay', some), some), ['off', 'high']);
+      expect(thinkingOptions(ch('openrouter', some), some), ['off', 'high']);
       final ds = ModelSpec(id: 'deepseek-v4-pro', thinking: true, levels: const ['low']);
       expect(thinkingOptions(ch('deepseek', ds), ds), ['off', 'low', 'max'], reason: '“最高”不在可勾掉的三档里，一直在');
     });
@@ -370,6 +468,7 @@ void main() {
       expect(off('zhipu', 'glm-4.6'), '关');
       expect(off('anthropic', 'claude-opus-5-5', protocol: ChatProtocol.anthropic), '默认');
       expect(off('anthropic', 'claude-sonnet-5', protocol: ChatProtocol.anthropic), '关');
+      expect(off('relay', 'deepseek-v4-pro'), '关');
       expect(thinkingLabel('max'), '最高');
       expect(thinkingLabel('on'), '开');
     });
@@ -415,6 +514,24 @@ void main() {
       expect(known('anthropic', 'claude-3-5-haiku-20241022', protocol: ChatProtocol.anthropic), isFalse);
       expect(known('anthropic', 'claude-x', protocol: ChatProtocol.anthropic), isFalse);
       expect(known('openai', 'gpt-6', protocol: ChatProtocol.openaiResponses), isFalse);
+    });
+
+    test('自动标上的，一定是核对过、有档位可调或有说明的（不会出现“自动标了却说没核对”）', () {
+      for (final e in {
+        'deepseek': ['deepseek-v4-pro'],
+        'gemini': ['gemini-2.5-flash', 'gemini-3-pro-preview'],
+        'zhipu': ['glm-5.3-flash', 'glm-4.6'],
+        'moonshot': ['kimi-k3.1-pro', 'kimi-k2.7-code', 'kimi-k2.6'],
+        'openrouter': ['a/b'],
+      }.entries) {
+        for (final id in e.value) {
+          expect(known(e.key, id, listed: true), isTrue, reason: id);
+          expect(thinkingCaps(ChatProtocol.openaiChat, _urls[e.key]!, id).verified, isTrue, reason: id);
+        }
+      }
+      for (final provider in [..._unverifiedPresets, 'local', 'relay']) {
+        expect(known(provider, 'deepseek-v4-pro', listed: true), isFalse, reason: provider);
+      }
     });
 
     test('newModelSpec 照这个规则给 thinking', () {
@@ -464,10 +581,11 @@ void main() {
       await settings.load();
       models = ModelConfigStore(settings, MemorySecretStore());
       await models.load();
+      // 用一家核对过、低中高都有的（OpenRouter）；没核对过的服务商另有一条测试
       relay = await models.upsert(
-        name: '中转站',
+        name: '渠道',
         protocol: ChatProtocol.openaiChat,
-        baseUrl: _urls['relay']!,
+        baseUrl: _urls['openrouter']!,
         models: [
           ModelSpec(id: 'a', thinking: true),
           ModelSpec(id: 'b', thinking: true),
@@ -517,6 +635,29 @@ void main() {
         models: [ModelSpec(id: 'a')],
       );
       expect(models.resolve(ModelSelection(relay.id, 'a', 'high'))!.level, 'off');
+    });
+
+    test('旧存盘：没核对过的服务商上已经标了“可思考”、记了档位——读进来不崩，档位落回 off，记的东西不丢', () async {
+      final old = await models.upsert(
+        name: '火山方舟',
+        protocol: ChatProtocol.openaiChat,
+        baseUrl: _urls['volcengine']!,
+        models: [ModelSpec(id: 'doubao-pro', thinking: true)],
+      );
+      await models.setThinkingLevel(old.id, 'doubao-pro', 'high');
+      await pendingWrites();
+      final again = SettingsStore(File(p.join(tmp.path, 'settings.json')));
+      await again.load();
+      final reopened = ModelConfigStore(again, MemorySecretStore());
+      await reopened.load();
+      final m = reopened.channel(old.id)!.model('doubao-pro')!;
+      expect(m.thinking, isTrue, reason: '存着的标记原样读回来');
+      expect(reopened.thinkingLevelOf(old.id, 'doubao-pro'), 'high');
+      final r = reopened.resolve(ModelSelection(old.id, 'doubao-pro', 'high'))!;
+      expect(r.level, 'off');
+      expect(thinkingOptions(r.channel, r.model), ['off']);
+      expect(showsThinking(r.channel.protocol, r.channel.baseUrl, r.model), isFalse);
+      expect(thinkingVerified(r.channel, r.model), isFalse);
     });
 
     test('删渠道时把它名下记住的档位一起清掉', () async {

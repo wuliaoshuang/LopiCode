@@ -241,7 +241,12 @@ void main() {
       expect(File('${env.tmp.path}/settings.json').readAsStringSync(), isNot(contains('sk-demo')));
 
       // 模型参数面板
-      await show(tester, Scaffold(body: ModelSpecSheet(model: ch.models.first)));
+      await show(
+        tester,
+        Scaffold(
+          body: ModelSpecSheet(model: ch.models.first, protocol: ch.protocol, baseUrl: ch.baseUrl),
+        ),
+      );
       expect(find.textContaining('上下文'), findsWidgets);
       expect(find.textContaining('最大输出'), findsWidgets);
       await shot(tester, '41-model-spec-$suffix');
