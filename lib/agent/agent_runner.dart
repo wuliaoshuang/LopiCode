@@ -7,6 +7,7 @@ import 'package:lopicode/agent/auto_compact.dart';
 import 'package:lopicode/agent/chat_client.dart';
 import 'package:lopicode/agent/context_relief.dart';
 import 'package:lopicode/agent/loop_guard.dart';
+import 'package:lopicode/agent/message_ids.dart';
 import 'package:lopicode/agent/tool_images.dart';
 import 'package:lopicode/agent/tool_output_spill.dart';
 import 'package:lopicode/agent/usage.dart';
@@ -210,10 +211,11 @@ class AgentRunner {
     return out;
   }
 
-  Stream<AgentEvent> send(String userText, {List<Map<String, dynamic>> images = const []}) async* {
+  /// [messageId]：这条用户消息的稳定标识（聊天页先拿它显示）；不给就自己生成。
+  Stream<AgentEvent> send(String userText, {List<Map<String, dynamic>> images = const [], String? messageId}) async* {
     _cancelled = false;
     if (_stopped.isCompleted) _stopped = Completer<void>();
-    messages.add({'role': 'user', 'content': userText, if (images.isNotEmpty) '_images': images});
+    messages.add({'role': 'user', 'content': userText, if (images.isNotEmpty) '_images': images, kMessageIdKey: messageId ?? newMessageId()});
 
     var steps = 0; // 这一轮一共执行了几步
     var sinceAsk = 0; // 上次问过“要不要继续”之后又执行了几步
@@ -242,12 +244,13 @@ class AgentRunner {
       // 插话在这里交给模型：这一步起它就能看到。
       while (_steer.isNotEmpty) {
         final text = _steer.removeAt(0);
-        messages.add({'role': 'user', 'content': text});
-        yield UserInjected(text);
+        final id = newMessageId();
+        messages.add({'role': 'user', 'content': text, kMessageIdKey: id});
+        yield UserInjected(text, id: id);
       }
       // 应用的通知（后台命令结束了……）也在这里交给模型。
       for (final note in takeNotices?.call() ?? const <AppNotice>[]) {
-        messages.add({'role': 'user', 'content': note.text, kAppNoticeMark: note.label});
+        messages.add({'role': 'user', 'content': note.text, kAppNoticeMark: note.label, kMessageIdKey: newMessageId()});
         yield NoticeInjected(note);
       }
 
@@ -331,15 +334,15 @@ class AgentRunner {
             if (!_cancelled) continue;
             // 等的时候用户点了停止：按出错收尾（一个字没回，把用户消息还给输入框）。
           }
-          _rollbackIfEmpty(text);
+          final partial = _rollbackIfEmpty(text);
           // 接口已经开始回话才算一次请求（被额度上限拦下、连不上的不算）。
           if (started) yield RequestFinished(usage, clock.elapsedMilliseconds, firstMs: firstMs, startedAt: startedAt);
-          yield AgentError(e.message);
+          yield AgentError(e.message, partialId: partial);
           return;
         } on Exception catch (e) {
-          _rollbackIfEmpty(text);
+          final partial = _rollbackIfEmpty(text);
           if (started) yield RequestFinished(usage, clock.elapsedMilliseconds, firstMs: firstMs, startedAt: startedAt);
-          yield AgentError('和模型的连接中断了：${shortError(e)}');
+          yield AgentError('和模型的连接中断了：${shortError(e)}', partialId: partial);
           return;
         }
       }
@@ -347,10 +350,17 @@ class AgentRunner {
 
       if (_cancelled) {
         // 被打断的这一轮不留工具调用（没执行，留下会让下一次请求对不上）。
-        if (text.isNotEmpty) {
-          messages.add({'role': 'assistant', 'content': text.toString(), if (reasoning.isNotEmpty) '_reasoning': reasoning.toString(), if (reasoning.isNotEmpty) '_reasoningMs': thinkMs});
+        final id = text.isEmpty ? null : newMessageId();
+        if (id != null) {
+          messages.add({
+            'role': 'assistant',
+            'content': text.toString(),
+            if (reasoning.isNotEmpty) '_reasoning': reasoning.toString(),
+            if (reasoning.isNotEmpty) '_reasoningMs': thinkMs,
+            kMessageIdKey: id,
+          });
         }
-        yield AssistantMessage(text.toString());
+        yield AssistantMessage(text.toString(), id: id);
         yield AgentNotice('已停止。');
         return;
       }
@@ -361,9 +371,11 @@ class AgentRunner {
         if (ordered[i].id.isEmpty) ordered[i].id = 'call_${round}_$i';
       }
 
+      final replyId = newMessageId();
       messages.add({
         'role': 'assistant',
         'content': text.isEmpty ? null : text.toString(),
+        kMessageIdKey: replyId,
         if (ordered.isNotEmpty)
           'tool_calls': [
             for (final c in ordered)
@@ -379,7 +391,7 @@ class AgentRunner {
         if (reasoning.isNotEmpty) '_reasoning': reasoning.toString(),
         if (reasoning.isNotEmpty) '_reasoningMs': thinkMs,
       });
-      yield AssistantMessage(text.toString());
+      yield AssistantMessage(text.toString(), id: replyId);
 
       if (ordered.isEmpty) {
         if (_steer.isEmpty) return;
@@ -494,8 +506,8 @@ class AgentRunner {
   }
 
   /// 请求失败时：模型已经说了一些就留下这半截；一个字都没回且上一条是用户消息，
-  /// 就把那条用户消息撤回（界面会把文字放回输入框，重发不会重复）。
-  void _rollbackIfEmpty(StringBuffer text) {
+  /// 就把那条用户消息撤回（界面会把文字放回输入框，重发不会重复）。返回留下的那半截的稳定标识（没留是 null）。
+  String? _rollbackIfEmpty(StringBuffer text) {
     if (text.isEmpty) {
       // 末尾还没被模型看到的应用通知：先拿下来还回去（下次请求再带），再按原来的规矩处理用户消息。
       final back = <AppNotice>[];
@@ -506,9 +518,11 @@ class AgentRunner {
       if (back.isNotEmpty) returnNotices?.call(back);
     }
     if (text.isNotEmpty) {
-      messages.add({'role': 'assistant', 'content': text.toString()});
-    } else if (messages.isNotEmpty && messages.last['role'] == 'user') {
-      messages.removeLast();
+      final id = newMessageId();
+      messages.add({'role': 'assistant', 'content': text.toString(), kMessageIdKey: id});
+      return id;
     }
+    if (messages.isNotEmpty && messages.last['role'] == 'user') messages.removeLast();
+    return null;
   }
 }

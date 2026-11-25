@@ -51,7 +51,18 @@ class Conversation {
   /// 最近一次请求的输入 token 数（接口给的），用来算上下文占用；还没有是 null。
   final int? lastInput;
 
-  Conversation copyWith({String? title, DateTime? updatedAt, ModelSelection? selection, String? permission, bool? planMode, String? presetId, UsageTotals? usage, int? lastInput}) => Conversation(
+  /// [clearLastInput]：消息记录被删改过，“上次请求的输入 token 数”不再作数（上下文占用改回按字数估）。
+  Conversation copyWith({
+    String? title,
+    DateTime? updatedAt,
+    ModelSelection? selection,
+    String? permission,
+    bool? planMode,
+    String? presetId,
+    UsageTotals? usage,
+    int? lastInput,
+    bool clearLastInput = false,
+  }) => Conversation(
     id,
     title ?? this.title,
     updatedAt ?? this.updatedAt,
@@ -64,7 +75,7 @@ class Conversation {
     presetId: presetId ?? this.presetId,
     auto: auto,
     usage: usage ?? this.usage,
-    lastInput: lastInput ?? this.lastInput,
+    lastInput: clearLastInput ? null : lastInput ?? this.lastInput,
   );
 
   /// 把一轮的用量累计进来（轮数加一），得到一份新的。

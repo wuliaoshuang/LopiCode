@@ -2,6 +2,7 @@
 import 'package:lopicode/agent/agent_runner.dart' show kAppNoticeMark;
 import 'package:lopicode/agent/auto_compact.dart';
 import 'package:lopicode/agent/line_diff.dart';
+import 'package:lopicode/agent/message_ids.dart';
 import 'package:lopicode/agent/usage.dart';
 import 'package:lopicode/session/chat_models.dart';
 
@@ -24,6 +25,7 @@ List<ChatItem> chatItemsFromMessages(List<Map<String, dynamic>> messages, {requi
         items.add(
           UserItem(
             '${m['content'] ?? ''}',
+            id: messageIdOf(m),
             images: [
               for (final i in images is List ? images : const [])
                 if (i is Map) hostPathOf('${i['path']}'),
@@ -38,7 +40,7 @@ List<ChatItem> chatItemsFromMessages(List<Map<String, dynamic>> messages, {requi
         final thoughtMs = m['_reasoningMs'];
         if (thought is String && thought.trim().isNotEmpty) items.add(ThinkingItem(thought, ms: thoughtMs is int ? thoughtMs : null));
         final text = m['content'];
-        if (text is String && text.isNotEmpty) items.add(AssistantItem(text));
+        if (text is String && text.isNotEmpty) items.add(AssistantItem(text, id: messageIdOf(m)));
         final calls = m['tool_calls'];
         for (final c in calls is List ? calls : const []) {
           if (c is! Map) continue;

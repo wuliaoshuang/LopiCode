@@ -33,8 +33,11 @@ class ContextCompacted extends AgentEvent {
 
 /// 一轮模型回复结束（[text] 是这一轮的完整文字，可能为空）。
 class AssistantMessage extends AgentEvent {
-  AssistantMessage(this.text);
+  AssistantMessage(this.text, {this.id});
   final String text;
+
+  /// 这段回复存进消息记录时的稳定标识（`_id`）；没存（被打断而且一个字没说）是 null。
+  final String? id;
 }
 
 class ToolStarted extends AgentEvent {
@@ -56,8 +59,11 @@ class ToolFinished extends AgentEvent {
 
 /// 生成过程中用户插的话，已经交给模型（从这一步起它能看到）。
 class UserInjected extends AgentEvent {
-  UserInjected(this.text);
+  UserInjected(this.text, {this.id});
   final String text;
+
+  /// 这句插话在消息记录里的稳定标识（`_id`）。
+  final String? id;
 }
 
 /// 应用自己告诉模型的一件事（不是用户说的话）。[text] 给模型看；[label] 是聊天页上那一行短提示。
@@ -97,6 +103,9 @@ class RequestFinished extends AgentEvent {
 }
 
 class AgentError extends AgentEvent {
-  AgentError(this.text);
+  AgentError(this.text, {this.partialId});
   final String text;
+
+  /// 出错前模型已经说了半截、这半截存进了消息记录：它的稳定标识（`_id`）。没有半截是 null。
+  final String? partialId;
 }
