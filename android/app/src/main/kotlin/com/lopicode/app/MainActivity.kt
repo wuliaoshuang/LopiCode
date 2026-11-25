@@ -21,6 +21,9 @@ class MainActivity : FlutterActivity() {
     /** 这次运行里已经为 Agent 问过一次通知权限（免得每一轮都弹）。 */
     private var askedForAgent = false
 
+    /** 选背景图片的通道（系统选择器，不要权限；见 BackdropPicker.kt）。 */
+    private var backdropPicker: BackdropPicker? = null
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "lopicode/runtime").setMethodCallHandler { call, result ->
@@ -69,11 +72,20 @@ class MainActivity : FlutterActivity() {
         agentChannel = channel
         channel.setMethodCallHandler { call, result -> onAgentCall(call, result) }
         KeepAliveHub.onStopPressed = { agentChannel?.invokeMethod("stopPressed", null) }
+        backdropPicker = BackdropPicker(this, flutterEngine.dartExecutor.binaryMessenger)
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        // 选背景图片的结果在这里收；不是它的照旧交给上层（别的插件要用）。
+        if (backdropPicker?.onActivityResult(requestCode, resultCode, data) == true) return
+        super.onActivityResult(requestCode, resultCode, data)
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
         // Flutter 引擎没了，Agent 也就不在跑了：把 Agent 这头的保活撤掉（运行环境那头照旧）。
         KeepAliveHub.onStopPressed = null
+        backdropPicker?.dispose()
+        backdropPicker = null
         agentChannel?.setMethodCallHandler(null)
         agentChannel = null
         KeepAliveHub.agent = null

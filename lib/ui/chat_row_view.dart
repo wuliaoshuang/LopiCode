@@ -10,6 +10,7 @@ import 'package:lopicode/session/chat_models.dart';
 import 'package:lopicode/session/chat_rows.dart';
 import 'package:lopicode/state/ui_prefs.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/app_backdrop.dart';
 import 'package:lopicode/ui/changed_files.dart';
 import 'package:lopicode/ui/chat_extras.dart';
 import 'package:lopicode/ui/chat_panels.dart';
@@ -67,7 +68,7 @@ class ChatItemView extends ConsumerWidget {
               margin: const EdgeInsets.only(top: Space.x2, bottom: Space.x1, left: Space.x8),
               padding: const EdgeInsets.symmetric(horizontal: Space.x4, vertical: Space.x3),
               decoration: BoxDecoration(
-                color: c.bubbleMineBg,
+                color: BackdropScope.surface(context, c.bubbleMineBg),
                 borderRadius: BorderRadius.only(
                   topLeft: Radius.circular(c.radius(Radii.bubble)),
                   topRight: Radius.circular(c.radius(Radii.sm)),
@@ -104,7 +105,7 @@ class ChatItemView extends ConsumerWidget {
               margin: const EdgeInsets.only(top: Space.x1, bottom: Space.x1, right: Space.x6),
               padding: const EdgeInsets.symmetric(horizontal: Space.x4, vertical: Space.x3),
               decoration: BoxDecoration(
-                color: c.bubbleAgentBg,
+                color: BackdropScope.surface(context, c.bubbleAgentBg),
                 borderRadius: BorderRadius.only(
                   topLeft: Radius.circular(c.radius(Radii.sm)),
                   topRight: Radius.circular(c.radius(Radii.bubble)),

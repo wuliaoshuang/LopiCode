@@ -14,6 +14,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lopicode/agent/agent_tools.dart';
 import 'package:lopicode/agent/usage.dart';
+import 'package:lopicode/backdrop/backdrop_model.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/session/chat_rows.dart';
 import 'package:lopicode/state/models_state.dart';
@@ -23,6 +24,7 @@ import 'package:lopicode/state/workspace_chat.dart';
 import 'package:lopicode/state/workspace_conversations.dart';
 import 'package:lopicode/state/workspace_favorites.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/app_backdrop.dart';
 import 'package:lopicode/ui/chat_background.dart';
 import 'package:lopicode/ui/chat_composer.dart';
 import 'package:lopicode/ui/chat_extras.dart';
@@ -381,7 +383,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         (last is ItemRow && last.item is AssistantItem && (last.item as AssistantItem).streaming) ||
         (last is ItemRow && last.item is ThinkingItem && (last.item as ThinkingItem).streaming);
     final working = s.agentBusy && pending == null && question == null && !showsProgress;
-    return Scaffold(
+    // 背景图片（外观 › 背景图片）画在整页后面：on＝现在画着背景，页面底色让开；没设背景时和原来一模一样。
+    Widget page(bool on) => Scaffold(
+      backgroundColor: on ? Colors.transparent : null,
       extendBodyBehindAppBar: true,
       appBar: ShellAppBar(
         title: s.conversationTitle,
@@ -501,6 +505,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         ),
       ),
     );
+    return AppBackdrop(area: BackdropArea.chat, builder: (context, on) => page(on));
   }
 }
 
