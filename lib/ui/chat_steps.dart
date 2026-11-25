@@ -18,6 +18,7 @@ import 'package:lopicode/session/chat_models.dart';
 import 'package:lopicode/session/chat_rows.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/chat_extras.dart';
+import 'package:lopicode/ui/step_diff.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// 结果先显示这么多字，多的点“显示全部”。
@@ -262,7 +263,7 @@ class _StepRowState extends State<StepRow> {
     final c = context.colors;
     final t = Theme.of(context).textTheme;
     final tool = widget.tool;
-    final (verb, target) = stepLabel(tool.name, tool.arguments);
+    final (verb, target) = stepLabelOf(tool);
     final failed = !tool.running && !tool.ok && !tool.denied;
     final child = tool.childConversationId;
     return Column(
@@ -298,6 +299,7 @@ class _StepRowState extends State<StepRow> {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
+                StepStat(tool: tool),
                 if (tool.running) ...[const SizedBox(width: Space.x2), SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 1.5, color: c.textFaint))],
                 if (failed) ...[const SizedBox(width: Space.x2), Text('失败', style: t.bodySmall?.copyWith(color: c.danger))],
                 if (tool.denied) ...[const SizedBox(width: Space.x2), Text('已拒绝', style: t.bodySmall?.copyWith(color: c.warning))],
@@ -339,7 +341,10 @@ List<(String, String)> stepDetailSections(ToolItem tool) {
     case 'write_file':
       out
         ..add(('文件', a('path')))
-        ..add(('写入的内容', a('content')));
+        // 有红绿对比就不再把整份内容重复贴一遍。
+        ..addAll([if (!(tool.change?.hasDiff ?? false)) ('写入的内容', a('content'))]);
+    case 'edit_file' when tool.change != null || editPreviewOf(tool) != null:
+      out.add(('文件', a('path')));
     case 'read_file' || 'delete_file':
       out.add(('文件', a('path')));
     default:
@@ -400,6 +405,7 @@ class _StepDetailState extends State<_StepDetail> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  StepDiffBlock(tool: widget.tool),
                   for (final (i, (title, body)) in sections.indexed) ...[
                     if (i > 0) const SizedBox(height: Space.x3),
                     Text(title, style: t.bodySmall?.copyWith(color: c.textFaint)),

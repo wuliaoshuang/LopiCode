@@ -9,6 +9,7 @@ import 'package:lopicode/session/chat_models.dart';
 import 'package:lopicode/session/chat_rows.dart';
 import 'package:lopicode/state/ui_prefs.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/changed_files.dart';
 import 'package:lopicode/ui/chat_extras.dart';
 import 'package:lopicode/ui/chat_panels.dart';
 import 'package:lopicode/ui/chat_steps.dart';
@@ -118,6 +119,8 @@ class ChatItemView extends ConsumerWidget {
         return CompactionRow(item: compaction);
       case final InterruptedItem cut:
         return InterruptedCard(item: cut);
+      case ChangedFilesItem(:final files):
+        return ChangedFilesRow(files: files);
       case UsageItem(:final turn):
         if (!showUsage) return const SizedBox.shrink();
         return TurnFootnote(turn: turn, onTap: onOpenTurn == null ? null : () => onOpenTurn!(turn));

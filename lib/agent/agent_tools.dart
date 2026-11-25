@@ -3,6 +3,8 @@ import 'dart:io';
 
 import 'package:lopicode/agent/command_output_store.dart';
 import 'package:lopicode/agent/command_runner.dart';
+import 'package:lopicode/agent/edit_file_tool.dart';
+import 'package:lopicode/agent/line_diff.dart';
 import 'package:lopicode/core/path_guard.dart';
 import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/core/templates.dart';
@@ -13,7 +15,10 @@ import 'package:lopicode/lowcode/model.dart';
 
 /// 需要用户点头的一次操作（显示成对话里的确认卡）。
 class ApprovalRequest {
-  ApprovalRequest({required this.tool, required this.title, required this.detail, this.allowAlways = true});
+  ApprovalRequest({required this.tool, required this.title, required this.detail, this.allowAlways = true, this.preview});
+
+  /// 这次操作会把文件改成什么样（确认卡上可以先看对比）；没有就是 null。
+  final FileChange? preview;
 
   /// 这类确认能不能用“本对话都允许”带过。自动化任务的确认卡不能。
   final bool allowAlways;
@@ -25,7 +30,10 @@ class ApprovalRequest {
 typedef ApprovalRequester = Future<bool> Function(ApprovalRequest request);
 
 class ToolOutcome {
-  ToolOutcome(this.text, {this.ok = true, this.denied = false, this.changedFiles = false});
+  ToolOutcome(this.text, {this.ok = true, this.denied = false, this.changedFiles = false, this.change});
+
+  /// 这一步把哪个文件改成了什么样（给界面画对比、记“这次改过的文件”；不发给模型）。
+  final FileChange? change;
   final String text;
   final bool ok;
   final bool denied;
@@ -34,7 +42,7 @@ class ToolOutcome {
   final bool changedFiles;
 
   /// 换一段文字，别的不变。
-  ToolOutcome withText(String text) => ToolOutcome(text, ok: ok, denied: denied, changedFiles: changedFiles);
+  ToolOutcome withText(String text) => ToolOutcome(text, ok: ok, denied: denied, changedFiles: changedFiles, change: change);
 }
 
 /// 权限三档。
@@ -141,6 +149,7 @@ class AgentToolbox {
     'list_files': ToolKind.read,
     'read_file': ToolKind.read,
     'write_file': ToolKind.write,
+    kEditFileTool: ToolKind.write,
     'delete_file': ToolKind.write,
     'run_command': ToolKind.exec,
     'lowcode_get_page': ToolKind.read,
@@ -198,6 +207,7 @@ class AgentToolbox {
       },
       ['path', 'content'],
     ),
+    editFileSpec,
     _fn(
       'delete_file',
       '删除项目里的一个文件或目录。需要用户确认。',
@@ -240,6 +250,8 @@ class AgentToolbox {
           return await _read(argString(args, 'path'), start: _argLine(args, 'start_line'), end: _argLine(args, 'end_line'));
         case 'write_file':
           return await _write(argString(args, 'path'), argString(args, 'content', allowEmpty: true));
+        case kEditFileTool:
+          return await runEditFile(guard, args, checkScope: _checkScope);
         case 'delete_file':
           return await _delete(argString(args, 'path'));
         case 'run_command':
@@ -339,9 +351,10 @@ class AgentToolbox {
     }
     if (await Directory(full).exists()) throw ToolArgError('$path 是一个目录');
     final file = File(full);
+    final before = await FileSnapshot.of(file);
     await file.parent.create(recursive: true);
     await file.writeAsString(content);
-    return ToolOutcome('已写入 ${guard.relative(full)}（${content.length} 字符）', changedFiles: true);
+    return ToolOutcome('已写入 ${guard.relative(full)}（${content.length} 字符）', changedFiles: true, change: before.changeTo(guard.relative(full), content));
   }
 
   Future<ToolOutcome> _delete(String path) async {
@@ -354,7 +367,8 @@ class AgentToolbox {
     }
     final rel = guard.relative(full);
     final isDir = type == FileSystemEntityType.directory;
-    if (!await _approved(ApprovalRequest(tool: 'delete_file', title: isDir ? '删除目录' : '删除文件', detail: rel))) {
+    final gone = isDir ? dirDeleted(rel) : (await FileSnapshot.of(File(full))).changeTo(rel, null);
+    if (!await _approved(ApprovalRequest(tool: 'delete_file', title: isDir ? '删除目录' : '删除文件', detail: rel, preview: gone.slim))) {
       return ToolOutcome('用户拒绝了这次删除，文件没有被改动。', ok: false, denied: true);
     }
     if (isDir) {
@@ -362,7 +376,7 @@ class AgentToolbox {
     } else {
       await File(full).delete();
     }
-    return ToolOutcome('已删除 $rel', changedFiles: true);
+    return ToolOutcome('已删除 $rel', changedFiles: true, change: gone);
   }
 
   Future<ToolOutcome> _run(String command) async {

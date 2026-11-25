@@ -12,6 +12,7 @@
 import 'package:lopicode/agent/approval_risk.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/step_diff.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// 钉在输入卡片上方：最前面的一张确认卡，或一张提问卡。
@@ -155,6 +156,7 @@ class _ApprovalCardState extends State<ApprovalCard> {
             ),
           ),
         ),
+        if (req.preview case final preview? when preview.hasDiff || preview.note != null) ApprovalPreview(change: preview),
         const SizedBox(height: Space.x4),
         if (_confirmingAlways && req.allowAlways) ...[
           Text(

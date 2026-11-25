@@ -3,6 +3,7 @@
 import 'dart:io';
 
 import 'package:lopicode/agent/agent_runner.dart';
+import 'package:lopicode/agent/line_diff.dart';
 import 'package:lopicode/agent/quota.dart';
 import 'package:lopicode/agent/skills.dart';
 import 'package:lopicode/agent/usage.dart';
@@ -11,6 +12,7 @@ import 'package:lopicode/session/conversation.dart';
 import 'package:lopicode/session/session_core.dart';
 import 'package:lopicode/session/system_prompt.dart';
 import 'package:lopicode/session/toolbox_builder.dart';
+import 'package:lopicode/session/turn_changes.dart';
 import 'package:lopicode/session/turn_journal.dart';
 import 'package:lopicode/state/workspace_chat.dart';
 
@@ -38,6 +40,9 @@ class TurnRunner {
   final SessionCore core;
   final ToolboxBuilder toolbox;
 
+  /// 每段正在跑的对话这一轮改过哪些文件（子代理改的也记进上级那一轮）。
+  final TurnChangeBook changes = TurnChangeBook();
+
   Future<TurnOutcome> execute(
     ChatRunNotifier run,
     String text, {
@@ -54,6 +59,7 @@ class TurnRunner {
     // 又开始新的一轮了：上一轮“没正常结束”的提示不用再挂着。
     core.clearInterrupted(run);
     final journal = core.journalOf(run.convId)..begin(text);
+    changes.begin(run.convId, parentId: run.conv.parentId);
     run.add(UserItem(text, images: [for (final i in images) core.hostPathOfAttachment('${i['path']}')]));
     convs?.update(run.convId, (c) => c.copyWith(updatedAt: DateTime.now()));
 
@@ -131,7 +137,8 @@ class TurnRunner {
             core.saveMessagesLater(run);
           case ToolFinished(:final callId, :final outcome):
             final item = run.items.whereType<ToolItem>().lastWhere((t) => t.callId == callId);
-            run.replace(item, item.copyWith(result: outcome.text, ok: outcome.ok, denied: outcome.denied));
+            run.replace(item, item.copyWith(result: outcome.text, ok: outcome.ok, denied: outcome.denied, change: outcome.change?.slim));
+            changes.record(run.convId, outcome.change);
             if (outcome.changedFiles) core.filesChanged();
             turn.steps.whereType<ToolStep>().where((t) => t.callId == callId).lastOrNull
               ?..ms = toolClocks.remove(callId)?.elapsedMilliseconds
@@ -178,6 +185,7 @@ class TurnRunner {
       run.setBusy(false);
       run.runner = null;
       turn.ms = clock.elapsedMilliseconds;
+      _recordFiles(run, changes.end(run.convId));
       _recordTurn(run, turn);
       // 存对话记录，同时把进行中记录标成“已结束”（做完 / 出错 / 点了停止都算正常收尾：下次打开不提示）。
       await Future.wait([core.saveRun(run), journal.finish()]);
@@ -210,6 +218,13 @@ class TurnRunner {
     } finally {
       journal.setAwaitingContinue(false);
     }
+  }
+
+  /// 这一轮改过的文件：挂在这一轮最后一条消息上（跟着对话存盘），并在回复下方加一行。
+  void _recordFiles(ChatRunNotifier run, List<FileChange> files) {
+    if (files.isEmpty || run.messages.isEmpty || run.messages.last.containsKey('_files')) return;
+    run.messages.last['_files'] = [for (final f in files) f.toJson()];
+    run.add(ChangedFilesItem(files));
   }
 
   /// 把这一轮的用量记到对话上：累计进对话合计，并挂在这一轮最后一条消息上（跟着对话存盘）。
