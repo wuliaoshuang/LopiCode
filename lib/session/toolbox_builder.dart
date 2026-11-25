@@ -7,6 +7,7 @@
 // - “本对话都允许”按主对话记；
 // - 写入范围（团队任务）原样传给 AgentToolbox。
 import 'package:lopicode/agent/agent_tools.dart';
+import 'package:lopicode/agent/memory_tools.dart';
 import 'package:lopicode/agent/skills.dart';
 import 'package:lopicode/agent/team.dart';
 import 'package:lopicode/agent/todos.dart';
@@ -16,6 +17,7 @@ import 'package:lopicode/runtime/linux_command_runner.dart';
 import 'package:lopicode/session/automation_tools.dart';
 import 'package:lopicode/session/chat_models.dart';
 import 'package:lopicode/session/conversation.dart';
+import 'package:lopicode/session/conversation_search.dart';
 import 'package:lopicode/session/session_core.dart';
 import 'package:lopicode/ssh/ssh_shell_backend.dart';
 import 'package:lopicode/state/workspace_chat.dart';
@@ -88,6 +90,9 @@ class ToolboxBuilder {
     if (skillTool != null) extras.add(skillTool);
     if (core.subagentsEnabled && conv.depth < core.subagentMaxDepth) extras.add(spawnTool(run, root, skills));
     if (core.teamEnabled) extras.addAll((await core.boardOf(root)).tools(conv.parentId == null ? TeamBoard.lead : conv.agentName));
+    // 记忆：读和查谁都有；写和删只给主对话（子代理不给），没人在场时不许动全局记忆。查历史对话是只读的，一直在。
+    if (app.memory.enabled) extras.addAll(memoryTools(global: app.memory.global, project: core.projectMemory, canWrite: conv.parentId == null, allowGlobalWrite: !run.unattended));
+    extras.add(conversationSearchTool(core, run));
     if (!run.unattended) extras.addAll(automationTools(store: app.automations, project: core.project, approve: (request) => requestApproval(run, request)));
     return AgentToolbox(
       guard: core.guard,

@@ -6,7 +6,7 @@
 // 分类（一类东西只在一处）：
 //   模型　　　　模型与渠道 · 额度与余额（只有 DeepSeek 官方渠道才有）
 //   Agent 　　　权限与执行 · 个性化 · 子代理与团队 · 后台与通知
-//   能力　　　　联网搜索 · 技能 · 自动化任务
+//   能力　　　　联网搜索 · 技能 · 记忆 · 自动化任务
 //   界面　　　　对话显示 · 外观
 //   运行与打包　运行环境 · SSH 构建机
 //   当前工作区　项目规则（只对这个工作区生效；组标题写明是哪个工作区。没打开工作区时这一行灰掉并说明）
@@ -36,6 +36,7 @@ import 'package:lopicode/ui/error_guard.dart';
 import 'package:lopicode/ui/settings_agent.dart';
 import 'package:lopicode/ui/settings_ai.dart';
 import 'package:lopicode/ui/settings_background.dart';
+import 'package:lopicode/ui/settings_memory.dart';
 import 'package:lopicode/ui/settings_overview.dart';
 import 'package:lopicode/ui/settings_pages.dart';
 import 'package:lopicode/ui/settings_quota.dart';
@@ -150,6 +151,13 @@ class SettingsScreen extends ConsumerWidget {
               icon: Icons.menu_book_outlined,
               title: '技能',
               onTap: () => go(SkillsScreen(workspace: workspace)),
+            ),
+            SettingsRow(
+              key: const Key('settings-memory'),
+              icon: Icons.psychology_outlined,
+              title: '记忆',
+              value: memorySettingsLabel(app),
+              onTap: () => go(MemorySettingsScreen(session: session)),
             ),
             SettingsRow(
               key: const Key('settings-automations'),

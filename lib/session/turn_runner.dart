@@ -9,6 +9,7 @@ import 'package:lopicode/agent/skills.dart';
 import 'package:lopicode/agent/usage.dart';
 import 'package:lopicode/session/chat_models.dart';
 import 'package:lopicode/session/conversation.dart';
+import 'package:lopicode/session/memory_consolidation.dart';
 import 'package:lopicode/session/session_core.dart';
 import 'package:lopicode/session/system_prompt.dart';
 import 'package:lopicode/session/toolbox_builder.dart';
@@ -41,6 +42,9 @@ class TurnRunner {
   final SessionCore core;
   final ToolboxBuilder toolbox;
 
+  /// 一轮结束后的记忆整理（设置里开了才做）。
+  late final MemoryConsolidator memory = MemoryConsolidator(core);
+
   /// 每段正在跑的对话这一轮改过哪些文件（子代理改的也记进上级那一轮）。
   final TurnChangeBook changes = TurnChangeBook();
 
@@ -65,6 +69,8 @@ class TurnRunner {
     convs?.update(run.convId, (c) => c.copyWith(updatedAt: DateTime.now()));
 
     final resolved = core.modelOf(run.conv);
+    // 记忆文件可能被她手改过：这一轮开始前重新读一遍，系统提示词里带的是最新的。
+    if (app.memory.enabled) await app.memory.refresh(core.project);
     // 额度到顶的拦截在 createChatClient 里（主对话、子代理、自动化都走这一个口子）
     final client = await app.createChatClient(resolved);
     final runner = AgentRunner(
@@ -194,6 +200,8 @@ class TurnRunner {
       await Future.wait([core.saveRun(run), journal.finish()]);
       core.releaseWhenIdle();
     }
+    // 记忆整理（默认关）：不等它，在后台另发一次请求；做不做、成不成都不影响这一轮。
+    memory.afterTurn(run, failed: failed, turn: turn, resolved: resolved);
     // 额度：对话结束后查一次余额（有节流）；到提醒线或到顶时说一声。
     if (resolved != null) {
       final note = await app.quota.afterRun(resolved.channel);

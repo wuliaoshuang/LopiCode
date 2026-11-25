@@ -22,6 +22,11 @@ const Map<String, String> kToolLabels = {
   'team_message': '给团队留言',
   'list_scheduled_tasks': '查看自动化任务',
   'schedule_task': '新建 / 修改自动化任务',
+  'memory_read': '读记忆',
+  'memory_search': '查记忆',
+  'memory_write': '记下 / 改写记忆',
+  'memory_delete': '删除记忆',
+  'conversation_search': '查历史对话',
 };
 
 /// Agent 预设：一套系统提示词 + 可用工具。

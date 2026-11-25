@@ -16,6 +16,7 @@ import 'package:lopicode/ui/error_guard.dart';
 import 'package:lopicode/ui/settings_agent.dart';
 import 'package:lopicode/ui/settings_ai.dart';
 import 'package:lopicode/ui/settings_background.dart';
+import 'package:lopicode/ui/settings_memory.dart';
 import 'package:lopicode/ui/settings_pages.dart';
 import 'package:lopicode/ui/settings_quota.dart';
 import 'package:lopicode/ui/settings_screen.dart';
@@ -57,6 +58,7 @@ const _entries = <_Entry>[
   ),
   _Entry('settings-search', WebSearchSettingsScreen, keys: ['search-url', 'search-key', 'search-save', 'search-test'], texts: ['填入 Tavily 的官方地址'], shot: '07-search'),
   _Entry('settings-skills', SkillsScreen, texts: ['新建技能', '这个工作区：我的小站', '全局（所有工作区都能用）', '发版', '写周报'], shot: '08-skills'),
+  _Entry('settings-memory', MemorySettingsScreen, keys: ['memory-enabled', 'memory-auto', 'memory-add-global', 'memory-add-project'], texts: ['让 Agent 使用记忆', '每轮结束后自动整理', '每轮结束后会多花一次模型调用']),
   _Entry('settings-automations', AutomationListScreen, shot: '09-automations'),
   _Entry('settings-chat', ChatDisplayScreen, keys: ['settings-suggestions', 'settings-usage', 'settings-thinking'], texts: ['在新对话里显示开场建议', '在回复下方显示用量', '显示思考过程'], shot: '10-chat-display'),
   _Entry('settings-appearance', AppearanceScreen, keys: ['appearance-system', 'appearance-light', 'appearance-dark'], shot: '11-appearance'),
