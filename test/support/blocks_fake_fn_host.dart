@@ -398,6 +398,12 @@ class FakeFnHost extends FakeHost implements BlockCustomHost {
   }
 
   @override
+  String? wrapBlocker(LcBlockTree tree, LcBlockPath from) => null;
+
+  @override
+  String? takeNotice() => null;
+
+  @override
   List<String> outerNames(LcBlockTree tree, LcBlockPath from) {
     final names = <String>[];
     _eachBlock(

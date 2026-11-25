@@ -11,6 +11,7 @@
 library;
 
 import 'package:lopicode/backend/backend_blocks.dart';
+import 'package:lopicode/backend/backend_function.dart';
 import 'package:lopicode/backend/backend_ir.dart';
 import 'package:lopicode/backend/backend_lang.dart';
 import 'package:lopicode/backend/backend_model.dart';
@@ -40,6 +41,9 @@ abstract interface class BeLowerHost {
   /// 换一张“没填好”的说明表，返回原来那张。
   List<String> swapNotes(List<String> fresh);
   void addNote(String note);
+
+  /// 文档里的函数（“我的积木”）；没有返回 null。
+  BeFunction? function(String id);
 }
 
 /// 小库函数的参数顺序（积木的参数名和小库的参数名一样的那些）。
@@ -105,6 +109,10 @@ class BeLangLower {
   int _switches = 0;
   LcBlockPath _path = const [];
   String? _arg;
+
+  /// 正在翻的是哪块积木、它套在第几层（式子里的匿名函数要靠它找到自己的口）。
+  LcBlock? _owner;
+  int _depth = 0;
 
   LSrc _src([String? arg]) {
     spots.add(BeLangSpot(_path, arg ?? _arg));
@@ -182,6 +190,8 @@ class BeLangLower {
       case 'index':
         return lang(LIndex(sub('of'), sub('key')));
     }
+    final func = _funcExpr(kind, e!, depth, sub);
+    if (func != null) return lang(func);
     final family = _families[kind];
     if (family != null) {
       final fn = exprString(e, 'fn');
@@ -190,6 +200,122 @@ class BeLangLower {
     }
     final args = _rtArgs[kind];
     if (args != null && beLangExprSpecs.containsKey(kind)) return lang(LRt(kind, [for (final a in args) sub(a)]));
+    return null;
+  }
+
+  // —— 函数（第 2 阶段）——
+
+  List<LParam> _lambdaParams(Object? e) {
+    final raw = exprField(e, 'params');
+    final names = <String>[];
+    if (raw is List) {
+      for (final p in raw) {
+        if (p is String && p.trim().isNotEmpty && !names.contains(beIdent(p))) names.add(beIdent(p));
+      }
+    }
+    return [for (final n in names) LParam(n)];
+  }
+
+  /// 调用的实参表：按定义的参数顺序一个个取（实参按参数名存）。“剩下的全收”的槽里放的是“列表”积木就把每一项各当一个实参，放别的就当一个。
+  List<LExpr> _callArgs(BeFunction f, Object? Function(String name) read, int depth) {
+    final arg = _arg;
+    final out = <LExpr>[];
+    LExpr one(String name, Object? value) {
+      _arg = name;
+      return _toLang(host.expr(value, depth + 1));
+    }
+
+    for (final p in f.params) {
+      final value = read(p.name);
+      if (!p.rest) {
+        out.add(value == null ? LLit(p.defaultValue) : one(p.name, value));
+      } else if (exprKind(value) == 'listLit') {
+        final items = exprField(value, 'items');
+        if (items is List) out.addAll([for (final item in items) one(p.name, item)]);
+      } else if (value != null) {
+        out.add(one(p.name, value));
+      }
+    }
+    _arg = arg;
+    return out;
+  }
+
+  List<LExpr> _listArgs(Object? list, int depth) => [
+    if (list is List)
+      for (final item in list) _toLang(host.expr(item, depth + 1)),
+  ];
+
+  /// 第 2 阶段的式子；不是的返回 null。
+  LExpr? _funcExpr(String kind, Object e, int depth, LExpr Function(String key) sub) {
+    LExpr gone() {
+      host.addNote('这块自定义积木的定义已经不在了，当成空的');
+      return const LLit(null);
+    }
+
+    final callee = beCallId(kind);
+    if (callee != null) {
+      final f = host.function(callee);
+      return f == null ? gone() : LCall(LName(f.ident), _callArgs(f, (n) => exprField(e, n), depth), src: _src());
+    }
+    switch (kind) {
+      case 'param':
+        final name = exprString(e, 'name');
+        if (name == null || name.isEmpty) {
+          host.addNote('参数没选好，当成空的');
+          return const LLit(null);
+        }
+        return LName(beIdent(name), src: _src());
+      case 'funcRef':
+        final f = host.function(exprString(e, 'fn') ?? '');
+        return f == null ? gone() : LName(f.ident, src: _src());
+      case 'callValue':
+        return LCall(sub('fn'), _listArgs(exprField(e, 'args'), depth), src: _src());
+      case 'lambdaExpr':
+        return LLambda.short(_lambdaParams(e), sub('body'), src: _src());
+      case 'lambda':
+        final body = lcExprBody(e) ?? const <LcBlock>[];
+        final owner = _owner, path = _path, arg = _arg, at = _depth;
+        final src = _src();
+        // 这个口是这块积木上的第几个（按内容认，不按位置存：见 logic_model.dart 的 lcExprMouthArm）。
+        final k = owner == null ? -1 : owner.exprMouths.indexWhere((m) => identical(m, body));
+        final inner = k < 0 ? const <LStmt>[] : stmts(body, path, at + 1, arm: lcExprMouthArm(k));
+        _owner = owner;
+        _path = path;
+        _arg = arg;
+        _depth = at;
+        return LLambda(_lambdaParams(e), inner, src: src);
+      case 'listMap' || 'listFilter' || 'listFind' || 'listEvery' || 'listSome' || 'listSortBy':
+        return LRt(kind, [sub('xs'), sub('fn')], src: _src());
+      case 'listReduce':
+        return LRt(kind, [sub('xs'), sub('fn'), sub('init')], src: _src());
+    }
+    return null;
+  }
+
+  /// 第 2 阶段的语句；不是的返回 null。
+  List<LStmt>? _funcBlock(LcBlock b, LExpr Function(String name) arg, LSrc Function([String? name]) src) {
+    final callee = beCallId(b.op);
+    if (callee != null) {
+      final f = host.function(callee);
+      if (f == null) return _skip('这块自定义积木的定义已经不在了');
+      return [LExprStmt(LCall(LName(f.ident), _callArgs(f, (n) => b.args[n], 0), src: src()), src: src())];
+    }
+    switch (b.op) {
+      case 'return':
+        return [LReturn(arg('value'), src: src())];
+      case 'returnNothing':
+        return [LReturn(null, src: src())];
+      case 'callValueStmt':
+        final fn = arg('fn');
+        _arg = 'args';
+        final args = _listArgs(b.args['args'], 0);
+        _arg = null;
+        return [LExprStmt(LCall(fn, args, src: src()), src: src())];
+      case 'listEach':
+        return [
+          LExprStmt(LRt('listEach', [arg('xs'), arg('fn')], src: src()), src: src()),
+        ];
+    }
     return null;
   }
 
@@ -206,6 +332,8 @@ class BeLangLower {
       final saved = host.swapNotes([]);
       _path = path;
       _arg = null;
+      _owner = b;
+      _depth = depth;
       final translated = _block(b, path, depth);
       if (b.op != 'note') out.add(LNote(describeBeBlock(b)));
       for (final n in host.swapNotes(saved)) {
@@ -231,6 +359,8 @@ class BeLangLower {
     // 翻里面的积木会改 _path，所以每次用之前都重新对准这一块。
     LExpr at(String name, Object? value) {
       _path = path;
+      _owner = b;
+      _depth = depth;
       _arg = name;
       final x = _toLang(host.expr(value));
       _arg = null;
@@ -242,6 +372,9 @@ class BeLangLower {
       _path = path;
       return name == null ? _blockSrc() : _src(name);
     }
+
+    final func = _funcBlock(b, arg, src);
+    if (func != null) return func;
 
     List<LStmt> inner(List<LcBlock> list, {bool inElse = false, int arm = -1}) => stmts(list, path, depth + 1, inElse: inElse, arm: arm);
 
@@ -344,6 +477,7 @@ class BeLangLower {
     final spec = beBlockSpecs[b.op];
     if (spec == null) return const [];
     final path = _path;
+    _owner = b;
     final out = <LStmt>[];
     for (final a in spec.args) {
       final value = b.args[a.name];

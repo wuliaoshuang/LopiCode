@@ -333,5 +333,103 @@ void main() {
       final again = (await loadBackendFile(file))!;
       expect(again.doc.encode(), parsed.doc.encode());
     });
+
+    test('后端积木文件 backend.lc.json（第 3 版，带“我的积木”）：functions / 外观 / 参数 / 调用 / 匿名函数的类型全错 → 读到哪算哪，不抛异常、不算坏文件，再存一次是稳定的', () async {
+      for (final functions in <Object?>[
+        '不是列表',
+        {'f1': 1},
+        [
+          3,
+          null,
+          '不是函数',
+          {'id': 9, 'look': '不是对象', 'params': 7, 'body': '不是列表', 'x': '左', 'y': null},
+          {
+            'id': 'f1',
+            'look': {
+              'name': <Object?>[],
+              'shape': 5,
+              'slots': {'a': 1},
+              'template': 3,
+              'icon': <String, Object?>{},
+            },
+            'params': [
+              null,
+              '不是对象',
+              {'name': 3},
+              {
+                'name': 'a',
+                'default': {'x': 1},
+                'rest': 'yes',
+              },
+            ],
+            'body': [
+              {
+                'op': 'return',
+                'args': {
+                  'value': {'e': 'lambda', 'params': '不是列表', '@body': 'x'},
+                },
+              },
+              {'op': 'call:f1', 'args': '不是对象'},
+              {
+                'op': 'call:',
+                'args': {'a': 7},
+              },
+              {
+                'op': 'listEach',
+                'args': {
+                  'xs': 3,
+                  'fn': {
+                    'e': 'lambdaExpr',
+                    'params': [1, null, 'e', '@x'],
+                    'body': '不是式子',
+                  },
+                },
+              },
+            ],
+          },
+        ],
+      ]) {
+        final file = File(p.join(tmp.path, 'backend.lc.json'))
+          ..writeAsStringSync(
+            jsonEncode({
+              'version': 3,
+              'kind': 'backend',
+              'language': 'node',
+              'routes': [
+                {
+                  'id': 'r1',
+                  'method': 'GET',
+                  'path': '/x',
+                  'body': [
+                    {
+                      'op': 'call:f404',
+                      'args': {
+                        'a': {
+                          'e': 'call:f1',
+                          'a': {'e': 'funcRef', 'fn': 12},
+                        },
+                      },
+                    },
+                    {
+                      'op': 'respondJson',
+                      'args': {
+                        'value': {'e': 'callValue', 'fn': 4, 'args': 'x'},
+                      },
+                    },
+                  ],
+                },
+              ],
+              'functions': functions,
+            }),
+          );
+        final parsed = (await loadBackendFile(file))!;
+        expect(badBackups(file), isEmpty, reason: '文件本身是合法 JSON，不算坏文件');
+        expect(parsed.doc.routes.single.body, hasLength(2));
+        expect(() => validateBackend(parsed.doc), returnsNormally);
+        await saveBackendFile(file, parsed.doc);
+        final again = (await loadBackendFile(file))!;
+        expect(again.doc.encode(), parsed.doc.encode());
+      }
+    });
   });
 }

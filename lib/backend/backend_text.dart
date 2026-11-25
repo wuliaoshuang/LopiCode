@@ -3,6 +3,7 @@ library;
 
 import 'package:lopicode/backend/backend_blocks.dart';
 import 'package:lopicode/backend/backend_model.dart';
+import 'package:lopicode/backend/backend_text_func.dart';
 import 'package:lopicode/backend/backend_text_lang.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 
@@ -25,11 +26,14 @@ String _number(num v) => v is int || v == v.roundToDouble() && v.abs() < 1e15 ? 
 
 /// 表达式读成人话：`路径参数 id`、`集合 todos 里 id 是 路径参数 id 的那条`、`{title: “买菜”, done: 否}`。
 /// 缺了的地方写“（空）”，不认识的写“不认识的值（种类）”。
-String describeBeExpr(Object? expr) => _expr(expr, 0, false);
+/// [fnName]：按 id 查“我的积木”的名字（调用它的值读成“「名字」（…）的结果”）；不给就说“自定义积木”。
+String describeBeExpr(Object? expr, [String? Function(String id)? fnName]) => _expr(expr, 0, false, fnName);
 
-String _expr(Object? expr, int depth, bool nested) {
+String _expr(Object? expr, int depth, bool nested, [String? Function(String id)? fnName]) {
   if (depth > kMaxExprDepth) return '…';
-  String sub(String key, [bool inner = true]) => _expr(exprField(expr, key), depth + 1, inner);
+  // 一串值（“调用函数”带上的那几个）：挨个读，逗号隔开。
+  if (expr is List && expr is! List<LcBlock> && expr.isNotEmpty) return [for (final item in expr) _expr(item, depth + 1, true, fnName)].join('，');
+  String sub(String key, [bool inner = true]) => _expr(exprField(expr, key), depth + 1, inner, fnName);
   final kind = exprKind(expr);
   switch (kind) {
     case null:
@@ -74,7 +78,7 @@ String _expr(Object? expr, int depth, bool nested) {
       final items = exprField(expr, 'items');
       final parts = [
         if (items is List)
-          for (final item in items) _expr(item, depth + 1, true),
+          for (final item in items) _expr(item, depth + 1, true, fnName),
       ];
       return parts.isEmpty ? '拼接（空）' : '拼接（${parts.join('、')}）';
     case 'len':
@@ -87,7 +91,7 @@ String _expr(Object? expr, int depth, bool nested) {
       final fields = exprField(expr, 'fields');
       final parts = [
         if (fields is List)
-          for (final f in fields) _expr(f, depth + 1, false),
+          for (final f in fields) _expr(f, depth + 1, false, fnName),
       ];
       return parts.isEmpty ? '空对象 {}' : '{${parts.join(', ')}}';
     case 'pair':
@@ -95,14 +99,14 @@ String _expr(Object? expr, int depth, bool nested) {
     case 'field':
       return '${sub('of')} 的 ${_name(exprString(expr, 'key'), '没填字段')}';
     default:
-      return describeBeLangExpr(expr, sub) ?? '不认识的值（${_clip(kind)}）';
+      return describeBeLangExpr(expr, sub) ?? describeBeFuncExpr(expr, sub, fnName) ?? '不认识的值（${_clip(kind)}）';
   }
 }
 
 /// 积木读成一句人话，只说这一块自己（里面嵌的积木不展开，用“…”带过）：
 /// “返回 200 和 集合 todos 的全部”“往 集合 todos 里加一条 整个请求内容，放进 todo”。
-String describeBeBlock(LcBlock b) {
-  String arg(String name) => describeBeExpr(b.args[name]);
+String describeBeBlock(LcBlock b, [String? Function(String id)? fnName]) {
+  String arg(String name) => describeBeExpr(b.args[name], fnName);
   String into(String prefix) {
     final v = b.args['into'];
     return v is String && v.isNotEmpty ? '$prefix ${_clip(v, 32)}' : '';
@@ -138,7 +142,7 @@ String describeBeBlock(LcBlock b) {
       final data = method == 'POST' && isExpr(b.args['data']) ? '，提交 ${arg('data')}' : '';
       return '用 $method 请求 ${arg('url')}$data${into('，结果放进')}';
     default:
-      return describeBeLangBlock(b, arg, (key) => _name(b.args[key], '没填')) ?? '不认识的积木（${_clip(b.op)}）';
+      return describeBeLangBlock(b, arg, (key) => _name(b.args[key], '没填')) ?? describeBeFuncBlock(b, arg, fnName) ?? '不认识的积木（${_clip(b.op)}）';
   }
 }
 
@@ -164,7 +168,13 @@ String describeBeBlockPath(LcBlockTree tree, LcBlockPath path) {
     if (parent != null) {
       final spec = beBlockSpecs[parent.op];
       final arm = path[i].arm;
-      if (arm >= 0) {
+      if (arm <= -2) {
+        // 这块积木上“带口的值”（匿名函数）的口：第几个按积木本身现数（见 lcExprMouthArm）。
+        final mouths = parent.exprMouths;
+        final k = -2 - arm;
+        parts.add('匿名函数里');
+        list = k < mouths.length ? mouths[k] : const [];
+      } else if (arm >= 0) {
         // 多口积木中间的段：“第 2 段否则如果”“第 1 段是…时”。
         parts.add('第 ${arm + 1} 段${spec?.arms?.label ?? ''}');
         list = arm < parent.arms.length ? parent.arms[arm].body : const [];

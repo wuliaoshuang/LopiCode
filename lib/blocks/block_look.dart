@@ -205,6 +205,14 @@ abstract class BlockCustomHost {
   /// 能不能“包成积木”；不能（默认）＝画布上长按语句积木没有那个菜单。
   bool get canWrap => false;
 
+  /// 刚才那次 [update] 有没有一句要告诉用户的话（比如“删掉的参数在别处填的 2 格内容一起丢掉了”）；问过一次就清掉。默认没有。
+  /// 编辑器拿到以后用自己的提示条说出来，带一个“撤销”。
+  String? takeNotice() => null;
+
+  /// “包成积木”：从 `from` 这块往下相连的那一截为什么包不了（一句给人看的话）；能包返回 null（默认）。
+  /// 编辑器在打开“新建积木”页之前先问一次，包不了就直接把这句话告诉用户。
+  String? wrapBlocker(LcBlockTree tree, LcBlockPath from) => null;
+
   /// “包成积木”：从 `from` 这块往下相连的那一截里，用到了哪些外面的变量（它们会变成新积木的参数）。
   List<String> outerNames(LcBlockTree tree, LcBlockPath from) => const [];
 

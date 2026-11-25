@@ -5,7 +5,11 @@
 /// 再按语法树节点上的来源下标查回积木路径。只读不改、不抛异常（翻不出来就当没有问题，别的检查照常）。
 library;
 
-import 'package:lopicode/backend/backend_ir.dart' show beLangShadow;
+import 'package:lopicode/backend/backend_blocks_func.dart';
+import 'package:lopicode/backend/backend_func_table.dart';
+import 'package:lopicode/backend/backend_ir.dart' show beLangLowerOf;
+import 'package:lopicode/backend/backend_lang.dart';
+import 'package:lopicode/backend/backend_lower_lang.dart';
 import 'package:lopicode/backend/backend_model.dart';
 import 'package:lopicode/lang/lang.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
@@ -87,29 +91,69 @@ class BeLangFinding {
 const Map<String, String> _codes = {
   'G03': LcIssueCode.unknownVar,
   'G07': LcIssueCode.tooDeep,
+  'L01': 'unknownFunction',
+  'L02': 'badCall',
+  'L03': 'badReturn',
   'L04': BeLangIssueCode.outsideLoop,
   'L09': BeLangIssueCode.duplicateName,
   'L11': BeLangIssueCode.assignConst,
   'L13': BeLangIssueCode.endlessLoop,
+  'L14': 'unusedFunction',
+  'L15': 'hostInFunction',
   'S10': 'unreachable',
+  'S11': 'noRespond',
 };
 
-/// 用到新积木的接口：语言核心的检查器报了什么。没用到新积木的接口返回空表（旧的检查已经够了）。
-List<BeLangFinding> beLangFindings(BeDocument doc, BeRoute route) {
-  try {
-    final shadow = beLangShadow(doc, route);
-    if (shadow == null) return const [];
-    final result = analyzeBody(shadow.stmts, outer: {for (final v in doc.variables) v.name});
-    final out = <BeLangFinding>[];
-    for (final i in result.issues) {
-      final code = _codes[i.code];
-      final at = int.tryParse(i.src?.block ?? '');
-      if (code == null || at == null || at < 0 || at >= shadow.spots.length) continue;
-      final spot = shadow.spots[at];
-      final whole = code == 'unreachable' || code == BeLangIssueCode.outsideLoop || code == BeLangIssueCode.endlessLoop;
-      out.add(BeLangFinding(code, i.isError, i.message, spot.path, whole ? null : spot.arg, code == LcIssueCode.unknownVar ? '把“新建变量”挪到用它的积木前面（同一层或更外面一层），或者换一个这里看得见的变量。' : null));
+/// 检查器报的问题 → 对回到积木上。[spots] 是翻译时记的来源表；问题没带“哪一块”的（整个函数的问题）记在帽子上（空路径）。
+/// [script] 给了就只要这一串的（一批函数一起查，问题是混在一起的）。
+List<BeLangFinding> beMapLangIssues(Iterable<LIssue> issues, List<BeLangSpot> spots, {String? script}) {
+  final out = <BeLangFinding>[];
+  for (final i in issues) {
+    final code = _codes[i.code];
+    if (code == null || (script != null && i.src?.script != script)) continue;
+    // “不交回结果的积木被当值用”由 backend_validate.dart 自己报（旧积木的格子里的值检查器看不到，那边看得全）。
+    if (i.code == 'L03' && !i.isError) continue;
+    // 语法树里“这次请求”叫 req、自定义积木叫“函数 名字”，给人看要换回人话（前面已经写了是哪块积木）。
+    final problem = i.message
+        .replaceAll('“req”', '“这次请求”（请求里的参数、请求头、请求内容这些）')
+        .replaceAllMapped(RegExp(r'^函数 \S+ (?=定义了|里|和)'), (_) => '这块积木')
+        .replaceAll('这个函数', '这块积木')
+        .replaceAll('另一个函数', '另一块积木')
+        .replaceAllMapped(RegExp(r'已经有一个叫 (.+) 的函数了'), (m) => '已经有一块叫“${m[1]}”的积木了')
+        .replaceAll('“返回”要放在函数里面', '“返回 (值)”只能放在“定义”下面或匿名函数里');
+    final block = i.src?.block;
+    if (block == null) {
+      if (script != null) out.add(BeLangFinding(code, i.isError, problem, const [], null, null));
+      continue;
     }
-    return out;
+    final at = int.tryParse(block);
+    if (at == null || at < 0 || at >= spots.length) continue;
+    final spot = spots[at];
+    final whole = code == 'unreachable' || code == BeLangIssueCode.outsideLoop || code == BeLangIssueCode.endlessLoop || code == 'badReturn' || code == 'noRespond';
+    out.add(BeLangFinding(code, i.isError, problem, spot.path, whole ? null : spot.arg, code == LcIssueCode.unknownVar ? '把“新建变量”挪到用它的积木前面（同一层或更外面一层），或者换一个这里看得见的变量。' : null));
+  }
+  return out;
+}
+
+/// 用到新积木的接口：语言核心的检查器报了什么。没用到新积木的接口返回空表（旧的检查已经够了）。
+/// [table]＝文档里的“我的积木”（接口里调它们时要查个数、查在不在）；[used] 给了就把这个接口用到的函数记进去。
+List<BeLangFinding> beLangFindings(BeDocument doc, BeRoute route, {BeFuncTable? table, Set<String>? used}) {
+  try {
+    final lang = beLangLowerOf(doc, route, shadow: true);
+    if (lang == null) return const [];
+    final stmts = lang.stmts(route.body, const [], 0);
+    final functions = table == null || table.isEmpty ? const <LFuncDecl>[] : [for (final f in table.lowered) f.decl];
+    // “返回 (值)”直接放在接口里是错的（接口要用“返回响应”）；匿名函数里的不算。
+    final result = analyzeBody(
+      stmts,
+      outer: {for (final v in doc.variables) v.name},
+      inFunction: false,
+      functions: functions,
+      signatures: functions.isEmpty ? const {} : table!.analysis.signatures,
+      inspect: functions.isEmpty && !beBlocksUseFunc(route.body) ? null : beHostInspect,
+    );
+    used?.addAll(result.usedFunctions);
+    return beMapLangIssues(result.issues, lang.spots);
   } on Object {
     return const [];
   }

@@ -6,23 +6,25 @@
 /// ——`test/backend_model_test.dart` 会核对这张表和设计文档是不是一致。
 library;
 
+import 'package:lopicode/backend/backend_blocks_func.dart';
 import 'package:lopicode/backend/backend_blocks_lang.dart';
 import 'package:lopicode/backend/backend_model.dart';
 import 'package:lopicode/lowcode/logic_blocks.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 
+export 'package:lopicode/backend/backend_blocks_func.dart';
 export 'package:lopicode/backend/backend_blocks_lang.dart';
 export 'package:lopicode/lowcode/logic_blocks.dart' show LcArgKind, LcArgSpec, LcArmSpec, LcBlockSpec, LcExprSpec;
 export 'package:lopicode/lowcode/logic_expr.dart';
 
 /// 积木盒的分类，按这个顺序排。
-const List<String> beBlockCategories = ['变量', '运算', '流程', '列表', '对象', '返回', '数据', '调试', '网络'];
+const List<String> beBlockCategories = ['变量', '运算', '流程', '函数', '列表', '对象', '返回', '数据', '调试', '网络'];
 
 /// 选表达式时的分类。
-const List<String> beExprCategories = ['直接填', '变量', '运算', '文字', '列表', '对象', '请求', '数据'];
+const List<String> beExprCategories = ['直接填', '变量', '运算', '函数', '文字', '列表', '对象', '请求', '数据'];
 
 /// 两边合起来（给按类别上色用）：一个类别一种颜色。
-const List<String> beCategories = ['请求', '返回', '数据', '变量', '流程', '运算', '文字', '列表', '对象', '调试', '网络', '直接填'];
+const List<String> beCategories = ['请求', '返回', '数据', '变量', '流程', '函数', '运算', '文字', '列表', '对象', '调试', '网络', '直接填'];
 
 /// 分类在界面上叫什么：`对象` 这一类从第 4 版起叫“字典”（id 不改，旧设置、旧测试都认它），`直接填` 叫“值”。
 String beCategoryLabel(String id) => switch (id) {
@@ -37,7 +39,7 @@ const List<String> _binLabels = ['加', '减', '乘', '除以', '除以…的余
 const Map<int, String> kBeCommonStatus = {200: '成功', 201: '已创建', 400: '请求不对', 401: '没登录', 403: '不允许', 404: '找不到', 500: '服务器出错'};
 
 /// 全部积木，按积木盒里的顺序。键是 op。
-const Map<String, LcBlockSpec> beBlockSpecs = {..._coreBlockSpecs, ...beLangBlockSpecs};
+const Map<String, LcBlockSpec> beBlockSpecs = {..._coreBlockSpecs, ...beLangBlockSpecs, ...beFuncBlockSpecs};
 
 /// 第 3 版就有的积木（“如果”“对每一项”在第 4 版里多了口和参数，旧文档不受影响）。
 const Map<String, LcBlockSpec> _coreBlockSpecs = {
@@ -109,7 +111,7 @@ const Map<String, LcBlockSpec> _coreBlockSpecs = {
 };
 
 /// 全部表达式。键是 e。
-const Map<String, LcExprSpec> beExprSpecs = {..._coreExprSpecs, ...beLangExprSpecs};
+const Map<String, LcExprSpec> beExprSpecs = {..._coreExprSpecs, ...beLangExprSpecs, ...beFuncExprSpecs};
 
 const Map<String, LcExprSpec> _coreExprSpecs = {
   'text': LcExprSpec('text', '文字', '直接填', [LcArgSpec('v', '文字', LcArgKind.literalText)]),
@@ -155,7 +157,7 @@ bool beExprIsBool(Object? expr) {
     return kCompareOps.contains(op) || kLogicOps.contains(op);
   }
   if (kind == 'convert') return exprString(expr, 'fn') == 'toBool';
-  return _boolKinds.contains(kind) || kBeLangBoolKinds.contains(kind);
+  return _boolKinds.contains(kind) || kBeLangBoolKinds.contains(kind) || kBeFuncBoolKinds.contains(kind);
 }
 
 /// 某一类里的积木，按积木盒顺序。
@@ -251,7 +253,7 @@ Map<String, dynamic> newBeExpr(String kind, [BeDocument? doc, BeRoute? route]) {
     case 'field':
       return beField(exText(''), 'id');
     default:
-      return newBeLangExpr(kind, _firstVar(doc)) ?? exText('');
+      return newBeLangExpr(kind, _firstVar(doc)) ?? newBeFuncExpr(kind, _firstVar(doc), doc == null || doc.functions.isEmpty ? '' : doc.functions.first.id) ?? exText('');
   }
 }
 
@@ -294,6 +296,6 @@ LcBlock newBeBlock(String op, [BeDocument? doc]) {
     case 'fetch':
       return LcBlock(op: op, args: {'url': exText('https://'), 'method': 'GET', 'into': _firstVar(doc, 'text')});
     default:
-      return newBeLangBlock(op, _firstVar(doc)) ?? LcBlock(op: op);
+      return newBeLangBlock(op, _firstVar(doc)) ?? newBeFuncBlock(op, _firstVar(doc)) ?? LcBlock(op: op);
   }
 }

@@ -84,7 +84,7 @@ void main() {
     test('每种问题都有稳定的规则编号、标题和默认建议；编号不重复', () {
       final ids = <String>{};
       for (final e in kLcRules.entries) {
-        expect(e.value.id, matches(RegExp(r'^[GLPS]\d\d$')), reason: e.key);
+        expect(e.value.id, matches(RegExp(r'^[BGLPS]\d\d$')), reason: e.key);
         expect(e.value.title, isNotEmpty, reason: e.key);
         expect(e.value.fix, isNotEmpty, reason: e.key);
         expect(ids.add(e.value.id), isTrue, reason: '编号重复：${e.value.id}');
@@ -107,7 +107,7 @@ void main() {
       ];
       expect(issues.length, greaterThanOrEqualTo(3));
       for (final i in issues) {
-        expect(i.rule, matches(RegExp(r'^[GLPS]\d\d$')), reason: i.code);
+        expect(i.rule, matches(RegExp(r'^[BGLPS]\d\d$')), reason: i.code);
         expect(i.problem, isNotEmpty);
         expect(i.advice, isNotEmpty, reason: i.code);
       }

@@ -12,6 +12,7 @@ import 'dart:io';
 
 import 'package:lopicode/agent/agent_tools.dart';
 import 'package:lopicode/backend/backend_blocks.dart';
+import 'package:lopicode/backend/backend_function.dart';
 import 'package:lopicode/backend/backend_model.dart';
 import 'package:lopicode/backend/backend_project.dart';
 import 'package:lopicode/backend/backend_targets.dart';
@@ -40,6 +41,7 @@ pathParam{name} query{name} bodyField{name} body{} header{name}（name 直接写
 dbAll{collection} dbGet{collection,id} dbFind{collection,key,value} dbCount{collection}
 len{x} isNull{x} now{} obj{fields:[{e:"pair",key:"title",value:表达式}]}（字典） field{of,key}
 ${backendLangGuide()}
+${backendFuncGuide()}
 例：{"op":"respondJson","args":{"status":{"e":"num","v":200},"value":{"e":"dbAll","collection":"todos"}}}''';
 
 /// 第 4 版（语言核心）新加的积木和表达式，接在 [backendModelGuide] 后面。
@@ -56,6 +58,38 @@ listLit{items:[…]} range{a,b,step} index{of,key} listGet{xs,i} listPop{xs} lis
 dictGet{d,k} dictHas{d,k} dictPart{d,fn:"dictKeys|dictValues|dictPairs"} dictMerge{a,b}
 位置都从 0 数；“跳出 / 跳过”只能放在循环里；同一个接口里新名字不能重复。''';
 
+/// 第 4 版第 2 阶段（函数和“我的积木”）的写法，接在 [backendLangGuide] 后面。
+String backendFuncGuide() =>
+    '''函数 /“我的积木”（用到了文档版本自动升到 3）：文档顶层加 functions:[{id:"f1", look:{name:"打招呼", shape?:"auto|statement|value|boolean", template?:"向 {谁} 打招呼"}, params:[{name:"谁", default?:"你", rest?:true}], body:[积木…]}]。
+- id 写 f 加数字；名字在 look.name 里，不能重名；参数最多 $kBeMaxParams 个，名字不能叫 e、不能用 @ 开头；default 只能是文字 / 数字 / 是否；rest:true＝“剩下的全收”，只能是最后一个（函数里拿到的是一个列表）
+- 函数里读参数用 param{name}；交回结果用积木 return{value}，不带值地结束用 returnNothing；函数里看不见 variables 里的变量（要用就当参数传进来），也不能放 respondJson / respondText / fetch
+- 调用：单独成句写积木 {op:"call:f1", args:{谁:表达式}}；要它的返回值写表达式 {e:"call:f1", 谁:表达式}。实参按参数名给，没给的用默认值；rest 参数给 listLit{items:[…]} 就逐项传进去。函数可以自己调自己
+- 匿名函数：lambda{params:["x"], "@body":[积木…]}（里面用 return 交回结果，能读、能改外面用 let 建的变量）；只有一个式子的写 lambdaExpr{params:["x"], body:表达式}；funcRef{fn:"f1"}＝把一块“我的积木”当成值
+- 调用放在变量 / 参数里的函数：表达式 callValue{fn, args:[…]}，单独成句用积木 callValueStmt{fn, args:[…]}
+- 拿函数当参数的列表操作（fn 填 lambda / lambdaExpr / funcRef / 存着函数的变量）：积木 listEach{xs,fn}；表达式 listMap{xs,fn} listFilter{xs,fn} listFind{xs,fn}（没有是空） listSome{xs,fn} listEvery{xs,fn} listSortBy{xs,fn}（按 fn 算的分从小到大） listReduce{xs,fn,init}（fn 收两个参数：累到现在的、这一项）''';
+
+/// 一串积木的读法（往 `out` 里一行行写）。`fnName`＝函数 id → 名字。
+void _describeBlocks(StringBuffer out, List<LcBlock> list, String indent, int depth, String? Function(String id) fnName) {
+  if (depth > LcBlock.maxDepth + 2) return;
+  for (final b in list) {
+    out.writeln('$indent- ${describeBeBlock(b, fnName)}');
+    _describeBlocks(out, b.body, '$indent  ', depth + 1, fnName);
+    for (var k = 0; k < b.arms.length; k++) {
+      out.writeln('$indent  第 ${k + 1} 段（${beBlockSpecs[b.op]?.arms?.label ?? '段'} ${[for (final v in b.arms[k].args.values) describeBeExpr(v, fnName)].join(' ')}）：');
+      _describeBlocks(out, b.arms[k].body, '$indent  ', depth + 1, fnName);
+    }
+    if (b.orElse.isNotEmpty) {
+      out.writeln('$indent  ${beBlockSpecs[b.op]?.arms == null ? '否则 / 失败后' : (beBlockSpecs[b.op]?.elseLabel ?? '否则')}：');
+      _describeBlocks(out, b.orElse, '$indent  ', depth + 1, fnName);
+    }
+    final mouths = b.exprMouths;
+    for (var k = 0; k < mouths.length; k++) {
+      out.writeln('$indent  ${mouths.length == 1 ? '匿名函数里' : '第 ${k + 1} 个匿名函数里'}：');
+      _describeBlocks(out, mouths[k], '$indent  ', depth + 1, fnName);
+    }
+  }
+}
+
 /// 整份文档的中文读法（每个接口一行标题，下面是一块块积木）。
 String describeBackendDocument(BeDocument doc) {
   final out = StringBuffer();
@@ -63,26 +97,17 @@ String describeBackendDocument(BeDocument doc) {
   if (doc.variables.isNotEmpty) out.writeln('变量：${doc.variables.map((v) => v.name).join('、')}');
   if (doc.collections.isNotEmpty) out.writeln('数据集合：${doc.collections.map((c) => c.name).join('、')}');
   if (doc.routes.isEmpty) out.writeln('（还没有接口）');
+  String? fnName(String id) => doc.function(id)?.name;
   for (final r in doc.routes) {
     out.writeln('接口 ${describeBeRoute(r)}（id ${r.id}）：');
-    void walk(List<LcBlock> list, String indent, int depth) {
-      if (depth > LcBlock.maxDepth + 2) return;
-      if (list.isEmpty && depth == 0) out.writeln('$indent（空的，会回 204）');
-      for (final b in list) {
-        out.writeln('$indent- ${describeBeBlock(b)}');
-        walk(b.body, '$indent  ', depth + 1);
-        for (var k = 0; k < b.arms.length; k++) {
-          out.writeln('$indent  第 ${k + 1} 段（${beBlockSpecs[b.op]?.arms?.label ?? '段'} ${[for (final v in b.arms[k].args.values) describeBeExpr(v)].join(' ')}）：');
-          walk(b.arms[k].body, '$indent  ', depth + 1);
-        }
-        if (b.orElse.isNotEmpty) {
-          out.writeln('$indent  ${beBlockSpecs[b.op]?.arms == null ? '否则 / 失败后' : (beBlockSpecs[b.op]?.elseLabel ?? '否则')}：');
-          walk(b.orElse, '$indent  ', depth + 1);
-        }
-      }
-    }
-
-    walk(r.body, '  ', 0);
+    if (r.body.isEmpty) out.writeln('  （空的，会回 204）');
+    _describeBlocks(out, r.body, '  ', 0, fnName);
+  }
+  for (final f in doc.functions) {
+    final params = [for (final p in f.params) '${p.name}${p.rest ? '…（剩下的全收）' : ''}${p.defaultValue == null ? '' : '＝${p.defaultValue}'}'];
+    out.writeln('我的积木“${f.name}”（id ${f.id}${params.isEmpty ? '，没有参数' : '，参数：${params.join('、')}'}）：');
+    if (f.body.isEmpty) out.writeln('  （空的，什么都不做）');
+    _describeBlocks(out, f.body, '  ', 0, fnName);
   }
   return out.toString().trimRight();
 }
@@ -189,7 +214,7 @@ List<ExtraTool> backendTools({required PathGuard guard, List<String>? writeScope
         if (old is Map<String, dynamic>) {
           merged = {
             ...merged,
-            for (final k in const ['name', 'port', 'language', 'variables', 'collections'])
+            for (final k in const ['name', 'port', 'language', 'variables', 'collections', 'functions'])
               if (!merged.containsKey(k) && old[k] != null) k: old[k],
           };
         }
@@ -205,12 +230,24 @@ List<ExtraTool> backendTools({required PathGuard guard, List<String>? writeScope
       problems.add('language “$language”还没有生成器，现在可选：${backendTargets.map((t) => t.id).join('、')}');
     }
     final parsed = BeDocument.fromJson(merged);
-    if (parsed.note != null) problems.add('${parsed.note}——有读不懂的条目（变量 / 集合 / 接口的格式不对），请改对再传');
+    if (merged['functions'] != null && merged['functions'] is! List) problems.add('functions 应为数组（没有自定义积木就传 [] 或不传）');
+    if (parsed.note != null) problems.add('${parsed.note}——有读不懂的条目（变量 / 集合 / 接口 / 自定义积木的格式不对），请改对再传');
     final doc = parsed.doc;
     // 接口里的积木是容错读的（坏的积木会被悄悄丢掉）：数一数，少了就说出来，不让模型以为都写进去了。
-    final given = _countBlocks(merged['routes']);
-    final kept = doc.routes.fold<int>(0, (n, r) => n + _countParsed(r.body));
+    final given = _countBlocks(merged['routes']) + _countBlocks(merged['functions']);
+    final kept = [...doc.routes.map((r) => r.body), ...doc.functions.map((f) => f.body)].fold<int>(0, (n, body) => n + _countParsed(body));
     if (kept < given) problems.add('有 ${given - kept} 块积木的格式不对（每块应是 {op, args, body?, else?}）');
+    final rawFns = merged['functions'];
+    if (rawFns is List && doc.functions.length < rawFns.length) {
+      problems.add('functions 里有 ${rawFns.length - doc.functions.length} 条读不懂或超出上限（每条应是 {id, look:{name}, params:[…], body:[…]}，最多 $kBeMaxFunctions 条）');
+    }
+    if (rawFns is List) {
+      for (final raw in rawFns) {
+        final ps = raw is Map ? raw['params'] : null;
+        final f = raw is Map && raw['id'] is String ? doc.function('${raw['id']}') : null;
+        if (ps is List && f != null && f.params.length < ps.length) problems.add('自定义积木“${f.name}”有 ${ps.length - f.params.length} 个参数读不懂、重名或超出上限（最多 $kBeMaxParams 个，每个应是 {name, default?, rest?}）');
+      }
+    }
     final issues = validateBackend(doc, languages: backendTargets.map((t) => t.id));
     for (final i in issues.where((i) => i.isError)) {
       problems.add('${i.where}——${i.problem}');
@@ -249,7 +286,7 @@ List<ExtraTool> backendTools({required PathGuard guard, List<String>? writeScope
         kBackendUpdateTool,
         '用新的 JSON 整体替换后端积木文件，校验通过后保存并重新生成所选语言的代码（校验有错误会拒绝并列出问题，什么都不改）。\n${backendModelGuide()}',
         {
-          'backend': {'type': 'object', 'description': '完整的后端文档。routes 必须给全（没给的接口会被删掉）；name / port / language / variables / collections 不传就沿用现有的'},
+          'backend': {'type': 'object', 'description': '完整的后端文档。routes 必须给全（没给的接口会被删掉）；name / port / language / variables / collections / functions 不传就沿用现有的（要删光自定义积木传 functions: []）'},
           'path': {'type': 'string', 'description': '文件在项目里的相对路径；省略则自动找，找不到就在根目录新建 $kBackendFileName'},
         },
         ['backend'],
@@ -260,32 +297,55 @@ List<ExtraTool> backendTools({required PathGuard guard, List<String>? writeScope
   ];
 }
 
-/// 原始 JSON 里一共写了多少块积木（按 {op:…} 的对象数，沿 body / else 往里数）。
-int _countBlocks(Object? routes) {
+/// 原始 JSON 里一共写了多少块积木（按 {op:…} 的对象数，沿 body / arms / else 和匿名函数的口往里数）。`trees`＝routes 或 functions。
+int _countBlocks(Object? trees) {
   var n = 0;
-  void walk(Object? list, int depth) {
-    if (list is! List || depth > LcBlock.maxDepth + 4) return;
+  late void Function(Object? list, int depth) walk;
+  // 参数里的匿名函数：它口里的积木也要数。
+  void mouths(Object? value, int depth) {
+    if (depth > LcBlock.maxDepth + kMaxExprDepth * 2 + 8) return;
+    if (value is Map) {
+      for (final e in value.entries) {
+        e.key == kLcExprBody ? walk(e.value, depth + 1) : mouths(e.value, depth + 1);
+      }
+    } else if (value is List) {
+      for (final v in value) {
+        mouths(v, depth + 1);
+      }
+    }
+  }
+
+  walk = (list, depth) {
+    if (list is! List || depth > LcBlock.maxDepth + kMaxExprDepth * 2 + 8) return;
     for (final b in list) {
       n++;
       if (b is Map) {
+        mouths(b['args'], depth + 1);
         walk(b['body'], depth + 1);
         final arms = b['arms'];
         if (arms is List) {
           for (final a in arms.take(LcBlock.maxArms)) {
-            if (a is Map) walk(a['body'], depth + 1);
+            if (a is Map) {
+              mouths(a['args'], depth + 1);
+              walk(a['body'], depth + 1);
+            }
           }
         }
         walk(b['else'], depth + 1);
       }
     }
-  }
+  };
 
-  if (routes is List) {
-    for (final r in routes) {
+  if (trees is List) {
+    for (final r in trees) {
       if (r is Map) walk(r['body'], 0);
     }
   }
   return n;
 }
 
-int _countParsed(List<LcBlock> list) => list.fold<int>(0, (n, b) => n + 1 + _countParsed(b.body) + b.arms.fold<int>(0, (m, a) => m + _countParsed(a.body)) + _countParsed(b.orElse));
+int _countParsed(List<LcBlock> list) {
+  var n = 0;
+  beVisitBlocks(list, (_) => n++);
+  return n;
+}

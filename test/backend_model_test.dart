@@ -342,7 +342,8 @@ void main() {
       for (final spec in beExprSpecs.values) {
         final e = newBeExpr(spec.kind, doc, BeRoute(id: 'r', method: 'GET', path: '/x/:key'));
         expect(exprKind(e), spec.kind);
-        expect(e.keys.toSet(), {'e', for (final a in spec.args) a.name}, reason: spec.kind);
+        // 第 4 版·第 2 阶段：带参数小块的值多一个参数表（paramsArg），带口的值多一个口（@body）——规格里声明了才有。
+        expect(e.keys.toSet(), {'e', for (final a in spec.args) a.name, ?spec.paramsArg, if (spec.hasMouth) kLcExprBody}, reason: spec.kind);
       }
       expect(newBeBlock('changeVar', doc).args['name'], 'n');
       expect(newBeBlock('dbInsert', doc).args['collection'], 'todos');

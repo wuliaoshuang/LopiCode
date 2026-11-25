@@ -184,8 +184,16 @@ mixin BkEditorFn on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Ticker
   Future<void> _blockMenu(String scriptId, BkBlock block) async {
     final placed = layout.placed(scriptId);
     if (placed == null) return;
-    final head = rectToView(block.head.shift(placed.origin));
-    final at = Rect.fromPoints(globalOf(head.topLeft), globalOf(head.bottomRight));
+    // 菜单贴在“会被包进去的那一截”（这块和它下面相连的）下面：不挡住要包的积木。
+    var tail = block.rect;
+    final me = block.path.last;
+    for (final b in placed.layout.blocks) {
+      if (b.isHat || b.path.length != block.path.length || !bkSameBlockPath(b.path.sublist(0, b.path.length - 1), block.path.sublist(0, block.path.length - 1))) continue;
+      final step = b.path.last;
+      if (step.arm == me.arm && step.inElse == me.inElse && step.index > me.index) tail = tail.expandToInclude(b.rect);
+    }
+    final view = rectToView(tail.shift(placed.origin));
+    final at = Rect.fromPoints(globalOf(view.topLeft), globalOf(view.bottomRight));
     final what = await showBkMenu<String>(
       context,
       at: at,
@@ -200,6 +208,8 @@ mixin BkEditorFn on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Ticker
     final custom = host.custom;
     final tree = host.script(scriptId);
     if (custom == null || tree == null || tree.blockAt(path) == null) return;
+    final why = custom.wrapBlocker(tree, path);
+    if (why != null) return toast(why);
     final outer = custom.outerNames(tree, path);
     final rev = host.revision;
     final r = await showBlockLookPage(context, host: host, wrapParams: outer);
@@ -246,7 +256,9 @@ mixin BkEditorFn on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Ticker
     // 各处调用的槽跟着增减：原来选中的那块可能已经不是原来的样子了，先放开。
     select(null);
     host.edit(() => ok = custom.update(id, r.look, r.params, r.origin));
-    if (!ok) toast('没改成');
+    if (!ok) return toast('没改成');
+    final note = custom.takeNotice();
+    if (note != null) toast(note, actionLabel: '撤销', onAction: () => host.canUndo ? host.undo() : null);
   }
 
   Future<void> customRemove(String id) async {

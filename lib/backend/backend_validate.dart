@@ -7,15 +7,19 @@
 library;
 
 import 'package:lopicode/backend/backend_blocks.dart';
+import 'package:lopicode/backend/backend_func_table.dart';
+import 'package:lopicode/backend/backend_function.dart';
 import 'package:lopicode/backend/backend_ir.dart' show kBeRepeatLimit;
 import 'package:lopicode/backend/backend_model.dart';
 import 'package:lopicode/backend/backend_text.dart';
+import 'package:lopicode/backend/backend_validate_func.dart';
 import 'package:lopicode/backend/backend_validate_lang.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 import 'package:lopicode/lowcode/logic_rules.dart';
 import 'package:lopicode/lowcode/logic_validate.dart';
 import 'package:lopicode/lowcode/logic_validate_types.dart';
 
+export 'package:lopicode/backend/backend_validate_func.dart' show BeFuncIssueCode;
 export 'package:lopicode/backend/backend_validate_lang.dart' show BeLangIssueCode;
 export 'package:lopicode/lowcode/logic_validate.dart' show LcIssueCode, LcIssueLevel, LcLogicIssue;
 
@@ -62,9 +66,9 @@ abstract final class BeIssueCode {
 }
 
 /// 检查整份后端文档，返回所有问题（按 服务设置、变量、集合、接口、积木 的顺序）。没有问题返回空表。
-/// `languages`＝现在有生成器的语言 id；给了就检查文档选的语言在不在里面。
-List<LcLogicIssue> validateBackend(BeDocument doc, {Iterable<String>? languages}) {
-  final v = _Validator(doc, languages?.toSet());
+/// `languages`＝现在有生成器的语言 id；给了就检查文档选的语言在不在里面。`table`＝调用方手上已经有的“我的积木”一览（省得再算一遍）。
+List<LcLogicIssue> validateBackend(BeDocument doc, {Iterable<String>? languages, BeFuncTable? table}) {
+  final v = _Validator(doc, languages?.toSet(), table ?? BeFuncTable(doc));
   v.run();
   return v.issues;
 }
@@ -107,15 +111,25 @@ bool _hasRespond(BeRoute r) {
 }
 
 class _Validator {
-  _Validator(this.doc, this.languages);
+  _Validator(this.doc, this.languages, this.table);
 
   final BeDocument doc;
+  final BeFuncTable table;
   final Set<String>? languages;
   final List<LcLogicIssue> issues = [];
 
   // 正在检查的位置。
   BeRoute? _route;
   Set<String> _params = const {};
+
+  /// 正在检查的是哪个函数的定义（“我的积木”）；null＝在接口里。[_lambdas]＝现在套在几层匿名函数的口里。
+  BeFunction? _fn;
+  int _lambdas = 0;
+  LcBlockTree? get _tree => _fn ?? _route;
+  String? _fnName(String id) => doc.function(id)?.name;
+
+  /// 这一串里出现过的参数名（定义的 + 匿名函数的）。
+  Set<String> _known = const {};
 
   /// 这个接口里新积木新建的名字（新建变量 / 常量、循环变量）→ 是不是常量。
   Map<String, bool> _locals = const {};
@@ -127,17 +141,17 @@ class _Validator {
   List<Object> _xp = const [];
 
   late final LcValueChecker _values = LcValueChecker(
-    exprSpec: (kind) => beExprSpecs[kind],
-    typeOf: beExprType,
+    exprSpec: table.exprSpec,
+    typeOf: (e) => table.callOf(exprKind(e)) != null ? (table.isBool(e) ? LcType.boolean : LcType.any) : beExprType(e),
     repeatLimit: kBeRepeatLimit,
     report: (level, code, problem, {required arg, required exprPath, fix}) => _add(level, code, problem, arg: arg, xp: exprPath, fix: fix),
   );
 
   void _add(LcIssueLevel level, String code, String problem, {String? arg, String? where, List<Object>? xp, String? fix}) {
-    final r = _route;
+    final r = _tree;
     final b = _block;
-    final scope = where ?? (r == null ? '后端' : '接口「${describeBeRoute(r)}」');
-    final spot = where != null || r == null || b == null ? '' : '${describeBeBlockPath(r, _path)}（${describeBeBlock(b)}）';
+    final scope = where ?? (r == null ? '后端' : (r is BeFunction ? '积木「${r.name}」' : '接口「${describeBeRoute(r as BeRoute)}」'));
+    final spot = where != null || r == null || b == null ? '' : '${describeBeBlockPath(r, _path)}（${describeBeBlock(b, _fnName)}）';
     final at = _top ?? arg;
     issues.add(
       LcLogicIssue(
@@ -164,6 +178,7 @@ class _Validator {
     _variables();
     _collections();
     final seen = <String, BeRoute>{}; // “方式 路径形状” → 第一个这样的接口
+    final used = <String>{}; // 各个接口用到了哪些函数（“没人用的积木”要看全部接口）
     for (var i = 0; i < doc.routes.length; i++) {
       final r = doc.routes[i];
       _route = r;
@@ -171,8 +186,9 @@ class _Validator {
       _block = null;
       _routeHead(r, i, seen);
       _locals = beLocalNames(r.body, beNamePattern);
+      _known = beTreeParamNames(r);
       _blocks(r.body, const [], false);
-      _lang(r);
+      _lang(r, beLangFindings(doc, r, table: table, used: used));
       _path = const [];
       _block = null;
       // 一块“返回”都没有的接口是有意回 204（比如删除），不提示；有“返回”但不是每种走法都碰得到的，多半是漏了。
@@ -183,6 +199,25 @@ class _Validator {
       }
     }
     _route = null;
+    _functions(used);
+  }
+
+  /// “我的积木”的定义：外观、参数表、函数体里的每一块，再加语言核心的检查器对这一批函数说的。
+  void _functions(Set<String> used) {
+    _params = const {};
+    for (final f in doc.functions) {
+      _fn = f;
+      _path = const [];
+      _block = null;
+      for (final p in beFuncHeadProblems(f, table)) {
+        _add(p.isError ? LcIssueLevel.error : LcIssueLevel.warning, p.code, p.problem, arg: p.arg, xp: const [], fix: p.fix);
+      }
+      _locals = beLocalNames(f.body, beNamePattern);
+      _known = beTreeParamNames(f);
+      _blocks(f.body, const [], false);
+      _lang(f, beFuncFindings(table, f, used));
+    }
+    _fn = null;
   }
 
   void _service() {
@@ -261,8 +296,8 @@ class _Validator {
   }
 
   /// 语言核心的检查器报的（只有用到新积木的接口才有）；和上面已经报过的同一条不重复报。
-  void _lang(BeRoute r) {
-    for (final f in beLangFindings(doc, r)) {
+  void _lang(LcBlockTree r, List<BeLangFinding> findings) {
+    for (final f in findings) {
       final rule = lcRuleId(f.code);
       if (issues.any((i) => i.handlerId == r.id && i.rule == rule && _samePath(i.path, f.path) && (f.arg == null || i.arg == f.arg))) continue;
       _path = f.path;
@@ -289,6 +324,13 @@ class _Validator {
         responded = false; // 只在第一块上提示一次
       }
       _oneBlock(list[i]);
+      // 这块积木上“带口的值”（匿名函数）口里的积木：路径是序号，每次现数。
+      final mouths = list[i].exprMouths;
+      _lambdas++;
+      for (var k = 0; k < mouths.length; k++) {
+        _blocks(mouths[k], path, false, arm: lcExprMouthArm(k));
+      }
+      _lambdas--;
       _blocks(list[i].body, path, false);
       for (var k = 0; k < list[i].arms.length; k++) {
         _blocks(list[i].arms[k].body, path, false, arm: k);
@@ -301,13 +343,18 @@ class _Validator {
   }
 
   void _oneBlock(LcBlock b) {
-    final spec = beBlockSpecs[b.op];
+    final spec = table.blockSpec(b.op);
+    if (spec == null && beCallId(b.op) != null) {
+      _error(BeFuncIssueCode.unknownFunction, '这块自定义积木的定义已经不在了', fix: '删掉这一块；想留着就到“我的积木”里重新做一块，再换上。');
+      return;
+    }
     if (spec == null) {
       _warn(LcIssueCode.unknownOp, '不认识的积木 ${b.op}，生成代码时会跳过它（数据会留着）');
       return;
     }
     for (final a in spec.args) {
       _top = a.name;
+      if (!b.args.containsKey(a.name) && table.argFallsBack(b.op, a.name)) continue; // 调用时没给、参数有默认值：用默认值
       _arg(a, b.args[a.name], b.args.containsKey(a.name), ownerKind: null);
     }
     _arms(b, spec);
@@ -316,6 +363,8 @@ class _Validator {
     _values.block(b, spec);
     _newNames(b);
     if (b.op == 'fetch') _url(b);
+    final misplaced = beHostOnlyProblem(b.op, inFunction: _fn != null, inLambda: _lambdas > 0);
+    if (misplaced != null) _error(BeFuncIssueCode.hostInFunction, misplaced.$1, fix: misplaced.$2);
     if (!spec.hasBody && b.body.isNotEmpty) {
       _warn(LcIssueCode.strayBody, '“${spec.label}”里面不能放积木，里面的 ${b.body.length} 块生成代码时会被忽略');
     }
@@ -445,6 +494,8 @@ class _Validator {
           if (!a.optional) _error(LcIssueCode.missingArg, '还没选变量', arg: a.name);
         } else if (value is! String) {
           _error(LcIssueCode.badArg, '“${a.label}”应该是变量的名字', arg: a.name);
+        } else if (_fn != null && !_locals.containsKey(value)) {
+          _error(LcIssueCode.unknownVar, doc.variable(value) == null ? '变量 $value 在这块积木里还没有新建' : '变量 $value 是接口里用的，自定义积木里看不见', arg: a.name, fix: '在这块积木里用“新建变量”，或者给它加一个参数、调用时把值传进来。');
         } else if (doc.variable(value) == null && !_locals.containsKey(value)) {
           _error(LcIssueCode.unknownVar, '变量 $value 还没有声明（先到“变量”里加一个）', arg: a.name);
         }
@@ -487,18 +538,27 @@ class _Validator {
       return;
     }
     final kind = exprKind(expr);
-    final spec = beExprSpecs[kind];
+    final spec = table.exprSpec(kind);
+    if (spec == null && beCallId(kind) != null) {
+      _error(BeFuncIssueCode.unknownFunction, '这里用的自定义积木，定义已经不在了；生成代码时会当成空的', arg: arg, fix: '长按这个值换成别的；想留着就到“我的积木”里重新做一块，再换上。');
+      return;
+    }
     if (kind == null || spec == null || expr is! Map) {
       _warn(LcIssueCode.unknownExpr, '不认识的值 ${kind ?? ''}，生成代码时会当成空的', arg: arg);
       return;
     }
     final base = _xp;
+    final noValue = beCallNoValueProblem(table, kind);
+    if (noValue != null) _warn(BeFuncIssueCode.badReturn, noValue, arg: arg, fix: '在它的定义里加一块“返回 (值)”；或者把它单独当一句用。');
     if (kind == 'pair' && !inObj) {
       _error(BeIssueCode.badPair, '“一个字段”只能放在“对象”里', arg: arg);
     }
     for (final a in spec.args) {
+      if (!expr.containsKey(a.name) && table.argFallsBack(kind, a.name)) continue;
       _arg(a, expr[a.name], expr.containsKey(a.name), ownerKind: kind, depth: depth + 1, xp: [...base, a.name]);
     }
+    final bad = beFuncExprProblem(doc, kind, expr, _known);
+    if (bad != null) _error(bad.$1, bad.$2, arg: arg, fix: bad.$3);
     if (kind == 'pathParam') {
       final name = expr['name'];
       if (name is String && name.isNotEmpty && !_params.contains(name)) {

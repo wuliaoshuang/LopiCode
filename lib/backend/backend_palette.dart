@@ -106,6 +106,23 @@ const List<BlockCategory> bePaletteCategories = [
     ],
   ),
   BlockCategory(
+    id: '函数',
+    label: '函数',
+    colorKey: BlockColorKey.function,
+    hats: [
+      BlockHatTemplate(
+        'define',
+        BlockHat([BlockHatPart.text('定义'), BlockHatPart.slot('name', '新积木', kind: LcArgKind.literalText)], colorKey: BlockColorKey.function),
+        hint: '新的一块“我的积木”：下面接的积木就是它做的事',
+      ),
+    ],
+    groups: [
+      BlockGroup('在定义里', blocks: ['return', 'returnNothing'], exprs: ['param']),
+      BlockGroup('没有名字的函数', exprs: ['lambda', 'lambdaExpr']),
+      BlockGroup('把函数当成值', blocks: ['callValueStmt'], exprs: ['funcRef', 'callValue']),
+    ],
+  ),
+  BlockCategory(
     id: '文字',
     label: '文字',
     colorKey: BlockColorKey.text,
@@ -124,6 +141,7 @@ const List<BlockCategory> bePaletteCategories = [
       BlockGroup('读', exprs: ['listGet', 'index', 'listContains', 'listIndexOf', 'listSlice', 'listJoin']),
       BlockGroup('改', blocks: ['listPush', 'listInsert', 'listSet', 'listRemove', 'setItem'], exprs: ['listPop']),
       BlockGroup('变出新的', exprs: ['listConcat', 'listOrder']),
+      BlockGroup('每一项都交给一个函数', blocks: ['listEach'], exprs: ['listMap', 'listFilter', 'listFind', 'listSome', 'listEvery', 'listReduce', 'listSortBy']),
     ],
   ),
   BlockCategory(
@@ -307,7 +325,8 @@ const Map<String, List<String>> _variantAliases = {
   'dictPart:dictPairs': ['键值对', 'entries', 'items', 'pairs'],
 };
 
-List<String> beAliasesOf(BlockItemRef item) => item.preset.isEmpty ? (beAliases[item.token] ?? const []) : (_variantAliases['${item.id}:${item.preset.values.first}'] ?? const []);
+List<String> beAliasesOf(BlockItemRef item) =>
+    item.preset.isEmpty ? (beAliases[item.token] ?? beFuncAliases[item.token] ?? const []) : (_variantAliases['${item.id}:${item.preset.values.first}'] ?? const []);
 
 List<BlockItemRef> beVariantsOf(BlockItemRef item) {
   if (item.kind != BlockPaletteKind.expr) return const [];

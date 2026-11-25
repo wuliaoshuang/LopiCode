@@ -8,6 +8,8 @@
 library;
 
 import 'package:lopicode/backend/backend_blocks.dart';
+import 'package:lopicode/backend/backend_function.dart';
+import 'package:lopicode/backend/backend_lower_func.dart';
 import 'package:lopicode/backend/backend_lower_lang.dart';
 import 'package:lopicode/backend/backend_model.dart';
 import 'package:lopicode/backend/backend_text.dart';
@@ -15,14 +17,15 @@ import 'package:lopicode/lang/ast.dart';
 import 'package:lopicode/lang/ast_util.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 
+export 'package:lopicode/backend/backend_lower_func.dart' show beLangShadow;
+
 /// “重复”最多做这么多遍（运行时小库的 `times` 里封顶；各语言必须一致）。
 const int kBeRepeatLimit = 10000;
 
 /// 请求内容最多这么多字节，超过回 413。
 const int kBeBodyLimit = 1048576;
 
-/// 请求内容的 JSON，列表 / 对象最多套这么多层（`[[1]]` 是两层）；再深的整份当成空。
-/// 定这一条是因为各语言自己的上限差得很远（Python 一千层左右、Go 一万层、Java 看线程的栈有多大），不定死就没法一致。
+/// 请求内容的 JSON，列表 / 对象最多套这么多层（`[[1]]` 是两层）；再深的整份当成空。各语言自己的上限差得很远（Python 一千层左右、Go 一万层、Java 看线程的栈），不定死就没法一致。
 const int kBeJsonDepthLimit = 64;
 
 /// “请求别的网址”最多等这么多秒。
@@ -303,22 +306,23 @@ BeProgram lowerBackend(BeDocument doc) {
   for (final c in doc.collections) {
     if (beNamePattern.hasMatch(c.name) && !collections.contains(c.name)) collections.add(c.name);
   }
-  return BeProgram(name: doc.name, port: doc.port >= 1 && doc.port <= 65535 ? doc.port : kBeDefaultPort, collections: collections, routes: routes, skipped: skipped);
+  return BeProgram(name: doc.name, port: doc.port >= 1 && doc.port <= 65535 ? doc.port : kBeDefaultPort, collections: collections, routes: routes, skipped: skipped, functions: beLowerFunctions(doc));
 }
 
 const Map<String, String> _binFns = {'+': 'add', '-': 'sub', '*': 'mul', '/': 'div', '%': 'mod', '==': 'eq', '!=': 'ne', '<': 'lt', '<=': 'le', '>': 'gt', '>=': 'ge', 'and': 'allOf', 'or': 'anyOf'};
 
-/// 给校验用：用到第 4 版积木的接口翻成语法树（影子模式，见 backend_lower_lang.dart）。没用到的返回 null。
-({List<LStmt> stmts, List<BeLangSpot> spots, Map<String, bool> locals})? beLangShadow(BeDocument doc, BeRoute route) {
-  final lang = _Lowerer(doc, route, shadow: true)._lang;
-  if (lang == null) return null;
-  return (stmts: lang.stmts(route.body, const [], 0), spots: lang.spots, locals: lang.locals);
-}
+/// 一串积木走新路时用的翻译器（见 backend_lower_lang.dart）；没用到第 4 版积木的接口返回 null。[shadow]＝给校验用的影子模式；
+/// [inFunction]＝这一串是函数的定义（一定走新路，看不见文档里的变量）。
+BeLangLower? beLangLowerOf(BeDocument doc, BeRoute route, {bool shadow = false, bool inFunction = false}) => _Lowerer(doc, route, shadow: shadow, inFunction: inFunction)._lang;
 
 class _Lowerer implements BeLowerHost {
-  _Lowerer(this.doc, this.route, {bool shadow = false}) : _params = bePathParams(route.path).toSet() {
-    if (beBlocksUseLang(route.body)) _lang = BeLangLower(this, route, shadow: shadow);
+  _Lowerer(this.doc, this.route, {bool shadow = false, this.inFunction = false}) : _params = bePathParams(route.path).toSet() {
+    if (inFunction || beBlocksUseLang(route.body)) _lang = BeLangLower(this, route, shadow: shadow);
   }
+
+  final bool inFunction;
+  @override
+  BeFunction? function(String id) => doc.function(id);
 
   /// 这个接口用到了第 4 版的积木：整个接口走新路。
   BeLangLower? _lang;
@@ -331,7 +335,7 @@ class _Lowerer implements BeLowerHost {
 
   @override
   bool useDocVar(String name) {
-    if (doc.variable(name) == null) return false;
+    if (inFunction || doc.variable(name) == null) return false;
     used.add(name);
     return true;
   }
@@ -372,7 +376,7 @@ class _Lowerer implements BeLowerHost {
   /// 变量名：声明过、名字合规矩才算数。
   String? _varName(Object? name) {
     if (name is! String || !beNamePattern.hasMatch(name)) return null;
-    if (doc.variable(name) == null) return (_lang?.knows(name) ?? false) ? name : null;
+    if (inFunction || doc.variable(name) == null) return (_lang?.knows(name) ?? false) ? name : null;
     used.add(name);
     return name;
   }

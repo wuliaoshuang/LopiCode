@@ -9,6 +9,9 @@ library;
 
 import 'package:lopicode/backend/backend_blocks.dart';
 import 'package:lopicode/backend/backend_edit.dart';
+import 'package:lopicode/backend/backend_func_edit.dart';
+import 'package:lopicode/backend/backend_func_host.dart';
+import 'package:lopicode/backend/backend_function.dart';
 import 'package:lopicode/backend/backend_model.dart';
 import 'package:lopicode/backend/backend_palette.dart';
 import 'package:lopicode/backend/backend_targets.dart';
@@ -32,6 +35,7 @@ const Map<String, String> beBlockSentences = {
   'log': '写到日志 {value}',
   'fetch': '用 {method} 请求 {url} 带上 {data} 结果放进 {into} 成功后',
   ...beLangBlockSentences,
+  ...beFuncBlockSentences,
 };
 
 const Map<String, String> beExprSentences = {
@@ -55,6 +59,7 @@ const Map<String, String> beExprSentences = {
   'pair': '{key} : {value}',
   'field': '{of} 的 {key}',
   ...beLangExprSentences,
+  ...beFuncExprSentences,
 };
 
 /// 运算符在积木上显示成符号（下拉里还是中文全称）。
@@ -73,6 +78,7 @@ const Map<String, String> beCategoryColors = {
   '文字': BlockColorKey.text,
   '列表': BlockColorKey.list,
   '对象': BlockColorKey.dict,
+  '函数': BlockColorKey.function,
   '直接填': BlockColorKey.value,
 };
 
@@ -96,7 +102,7 @@ String bePathProblem(String path) {
   return '路径格式不对';
 }
 
-class BeBlockHost extends BlockHost {
+class BeBlockHost extends BlockHost with BeFuncHost {
   /// `doc`＝要编辑的文档（宿主拿走以后外面别再直接改它，要改走 [edit]）。
   /// `onEdited`＝内容真的变了以后调（改动、撤销、重做；外面拿去落盘、重新生成）。
   /// `onNotice`＝有一句话要告诉用户（比如路径格式不对、为什么没改）。
@@ -104,12 +110,14 @@ class BeBlockHost extends BlockHost {
 
   BeDocument _doc;
   void Function()? onEdited;
+  @override
   void Function(String message)? onNotice;
   final int maxHistory;
   final List<BeDocument> _undo = [];
   final List<BeDocument> _redo = [];
   int _revision = 0;
 
+  @override
   BeDocument get doc => _doc;
 
   /// 外面换了文档（文件在别处被改了、重新读盘）。撤销记录作废。
@@ -123,6 +131,7 @@ class BeBlockHost extends BlockHost {
   void _bump() {
     _revision++;
     _categories = null;
+    dropFuncTable();
     _code = null;
     onChanged?.call();
   }
@@ -171,34 +180,43 @@ class BeBlockHost extends BlockHost {
   String? armSentence(String op) => beArmSentences[op];
 
   @override
-  LcBlockSpec? blockSpec(String op) => beBlockSpecs[op];
+  LcBlockSpec? blockSpec(String op) => funcBlockSpec(op);
 
   @override
-  LcExprSpec? exprSpec(String kind) => kind == 'pathParam' ? _pathParamSpec : beExprSpecs[kind];
+  LcExprSpec? exprSpec(String kind) => kind == 'pathParam' ? _pathParamSpec : funcExprSpec(kind);
 
   /// `pair` 不在积木盒里（只能出现在“对象”里），颜色跟着“对象”。
   @override
-  String exprColorKey(String kind) => kind == 'pair' ? BlockColorKey.dict : super.exprColorKey(kind);
+  String exprColorKey(String kind) => kind == 'pair' ? BlockColorKey.dict : (funcColorKey(kind) ?? (kind == 'param' ? BlockColorKey.function : super.exprColorKey(kind)));
 
   @override
-  String? blockSentence(String op) => beBlockSentences[op];
+  String blockColorKey(String op) => funcColorKey(op) ?? super.blockColorKey(op);
 
   @override
-  String? exprSentence(String kind) => beExprSentences[kind];
+  String? blockSentence(String op) => funcTable.sentenceOf(op) ?? beBlockSentences[op];
 
   @override
-  bool isBooleanExpr(Map<String, dynamic> expr) => beExprIsBool(expr);
+  String? exprSentence(String kind) => funcTable.sentenceOf(kind) ?? beExprSentences[kind];
+
+  @override
+  bool isBooleanExpr(Map<String, dynamic> expr) => funcTable.isBool(expr) || beExprIsBool(expr);
 
   // —— 脚本 ——
 
   @override
-  List<LcBlockTree> get scripts => _doc.routes;
+  List<LcBlockTree> get scripts => beTrees(_doc);
 
   @override
-  BlockHat hatOf(LcBlockTree tree) => tree is BeRoute ? _hat(tree.method, tree.path) : const BlockHat([BlockHatPart.text('不认识的接口')], colorKey: BlockColorKey.unknown);
+  BlockHat hatOf(LcBlockTree tree) => tree is BeFunction
+      ? beDefineHat(tree.name)
+      : tree is BeRoute
+      ? _hat(tree.method, tree.path)
+      : const BlockHat([BlockHatPart.text('不认识的接口')], colorKey: BlockColorKey.unknown);
 
   @override
-  String hatSlotValue(LcBlockTree tree, String slotId) => tree is! BeRoute
+  String hatSlotValue(LcBlockTree tree, String slotId) => tree is BeFunction
+      ? (slotId == 'name' ? tree.name : '')
+      : tree is! BeRoute
       ? ''
       : switch (slotId) {
           'method' => tree.method,
@@ -213,6 +231,7 @@ class BeBlockHost extends BlockHost {
   /// 路径参数只是改了名字（个数没变）时，这个接口里读旧名字的“路径参数”积木跟着改名。
   @override
   bool setHatSlot(LcBlockTree tree, String slotId, String value) {
+    if (tree is BeFunction) return slotId == 'name' && renameFunction(tree, value);
     if (tree is! BeRoute) return false;
     if (slotId == 'method') return _doc.setRouteMethod(tree.id, value);
     if (slotId != 'path') return false;
@@ -226,21 +245,28 @@ class BeBlockHost extends BlockHost {
 
   @override
   LcBlockTree? addScript(String templateId, {double? x, double? y}) {
+    if (templateId == kBeDefineTemplate) return addDefinition(x: x, y: y);
     final method = templateId.toUpperCase();
     if (!kBeMethods.contains(method)) return null;
     return _doc.addRoute(method, freePath(method), x: x, y: y);
   }
 
   @override
-  bool removeScript(String id) => _doc.removeRoute(id);
+  bool removeScript(String id) => _doc.function(id) != null ? removeFunctionScript(id) : _doc.removeRoute(id);
 
   // —— 造新的 ——
 
   @override
-  LcBlock newBlock(String op) => newBeBlock(op, _doc);
+  LcBlock newBlock(String op) {
+    final f = _doc.function(beCallId(op) ?? '');
+    return f != null ? beNewCallBlock(f) : newBeBlock(op, _doc);
+  }
 
   @override
-  Map<String, dynamic> newExpr(String kind) => newBeExpr(kind, _doc);
+  Map<String, dynamic> newExpr(String kind) {
+    final f = _doc.function(beCallId(kind) ?? '');
+    return f != null ? beNewCallExpr(f) : newBeExpr(kind, _doc);
+  }
 
   /// “对象”的字段里加一项＝加一个“名字 : 值”；别的“一串值”加一段空文字。
   @override
@@ -250,13 +276,17 @@ class BeBlockHost extends BlockHost {
 
   @override
   List<BlockOption> options(LcArgSpec arg, {LcBlockTree? tree, LcBlock? block, Map<String, dynamic>? expr}) {
+    final own = funcOptions(arg, tree: tree, expr: expr);
+    if (own != null) return own;
     switch (arg.kind) {
       case LcArgKind.variable:
         // 文档里声明的变量 ＋ 这个接口里用“新建变量 / 常量”“从…数到…”这些新建的名字。
         final locals = tree == null ? const <String, bool>{} : beLocalNames(tree.body, beNamePattern);
         return [
           if (arg.optional) const BlockOption('', '不选'),
-          for (final v in _doc.variables) BlockOption(v.name, v.name),
+          // 自定义积木里看不见文档变量（它不在哪个接口里跑）。
+          if (tree is! BeFunction)
+            for (final v in _doc.variables) BlockOption(v.name, v.name),
           for (final e in locals.entries)
             if (_doc.variable(e.key) == null) BlockOption(e.key, e.key, hint: e.value ? '这个接口里新建的常量' : '这个接口里新建的'),
         ];
@@ -306,6 +336,8 @@ class BeBlockHost extends BlockHost {
   @override
   String optionLabel(LcArgSpec arg, String value) {
     if (arg.kind != LcArgKind.choice) return value;
+    final fn = funcOptionLabel(arg, value);
+    if (fn != null) return fn;
     if (arg.name == 'op') return _opSigns[value] ?? arg.choiceLabel(value);
     return arg.choiceLabel(value).split('（').first;
   }
@@ -314,7 +346,7 @@ class BeBlockHost extends BlockHost {
 
   late final BlockIssueCache _issueCache = BlockIssueCache(
     () => [
-      for (final i in validateBackend(_doc, languages: [for (final t in backendTargets) t.id])) blockIssueOf(i),
+      for (final i in validateBackend(_doc, languages: [for (final t in backendTargets) t.id], table: funcTable)) blockIssueOf(i),
     ],
     () => _revision,
     () => onChanged?.call(),

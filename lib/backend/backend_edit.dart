@@ -25,7 +25,7 @@ void _visitExprs(Object? value, void Function(Map<Object?, Object?> expr) visit,
 
 /// 把一处处“名字引用”都过一遍：积木自己的参数和表达式里的参数，只要种类是 `kind`（变量名 / 集合名）就交给 `visit`。
 /// `visit` 返回新名字就改，返回 null 不动。
-void _visitNames(Iterable<BeRoute> routes, LcArgKind kind, String? Function(String name) visit) {
+void _visitNames(Iterable<LcBlockTree> routes, LcArgKind kind, String? Function(String name) visit) {
   void slot(Map<Object?, Object?> holder, List<LcArgSpec> specs) {
     for (final a in specs) {
       if (a.kind != kind) continue;
@@ -37,9 +37,13 @@ void _visitNames(Iterable<BeRoute> routes, LcArgKind kind, String? Function(Stri
   }
 
   for (final r in routes) {
-    r.visitBlocks((b, _) {
+    // 连匿名函数口里的积木一起走（beVisitBlocks 会进各个口）。
+    beVisitBlocks(r.body, (b) {
       slot(b.args, beBlockSpecs[b.op]?.args ?? const []);
       _visitExprs(b.args, (e) => slot(e, beExprSpecs[e['e']]?.args ?? const []));
+      for (final a in b.arms) {
+        _visitExprs(a.args, (e) => slot(e, beExprSpecs[e['e']]?.args ?? const []));
+      }
     });
   }
 }
@@ -47,7 +51,7 @@ void _visitNames(Iterable<BeRoute> routes, LcArgKind kind, String? Function(Stri
 extension BeDocumentEdit on BeDocument {
   int _count(LcArgKind kind, String name) {
     var n = 0;
-    _visitNames(routes, kind, (v) {
+    _visitNames([...routes, ...functions], kind, (v) {
       if (v == name) n++;
       return null;
     });
@@ -67,6 +71,7 @@ extension BeDocumentEdit on BeDocument {
     if (oldName == newName) return true;
     if (variable(newName) != null) return false;
     v.name = newName;
+    // 自定义积木里看不见文档变量，那里同名的是它自己新建的，不跟着改。
     _visitNames(routes, LcArgKind.variable, (n) => n == oldName ? newName : null);
     return true;
   }
@@ -101,7 +106,7 @@ extension BeDocumentEdit on BeDocument {
     if (oldName == newName) return true;
     if (collection(newName) != null) return false;
     c.name = newName;
-    _visitNames(routes, LcArgKind.collection, (n) => n == oldName ? newName : null);
+    _visitNames([...routes, ...functions], LcArgKind.collection, (n) => n == oldName ? newName : null);
     return true;
   }
 
@@ -160,7 +165,7 @@ extension BeDocumentEdit on BeDocument {
     final i = routes.indexWhere((r) => r.id == id);
     if (i < 0) return null;
     final src = routes[i];
-    final ids = {for (final r in routes) r.id};
+    final ids = {for (final r in routes) r.id, for (final f in functions) f.id};
     var n = 1;
     while (ids.contains('r$n')) {
       n++;

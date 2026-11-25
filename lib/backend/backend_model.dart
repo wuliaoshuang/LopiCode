@@ -8,7 +8,9 @@ library;
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:lopicode/backend/backend_blocks_func.dart';
 import 'package:lopicode/backend/backend_blocks_lang.dart';
+import 'package:lopicode/backend/backend_function.dart';
 import 'package:lopicode/core/safe_file.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 
@@ -134,12 +136,20 @@ class BeRoute with LcBlockTree {
 typedef BeParseResult = ({BeDocument doc, String? note});
 
 class BeDocument {
-  BeDocument({this.name = '我的后端', int port = kBeDefaultPort, String language = kBeDefaultLanguage, List<LcVariable>? variables, List<BeCollection>? collections, List<BeRoute>? routes})
-    : port = _validPort(port) ? port : kBeDefaultPort,
-      language = _idPattern.hasMatch(language) ? language : kBeDefaultLanguage,
-      variables = variables ?? [],
-      collections = collections ?? [],
-      routes = routes ?? [] {
+  BeDocument({
+    this.name = '我的后端',
+    int port = kBeDefaultPort,
+    String language = kBeDefaultLanguage,
+    List<LcVariable>? variables,
+    List<BeCollection>? collections,
+    List<BeRoute>? routes,
+    List<BeFunction>? functions,
+  }) : port = _validPort(port) ? port : kBeDefaultPort,
+       language = _idPattern.hasMatch(language) ? language : kBeDefaultLanguage,
+       variables = variables ?? [],
+       collections = collections ?? [],
+       routes = routes ?? [],
+       functions = functions ?? [] {
     _normalize();
   }
 
@@ -154,14 +164,20 @@ class BeDocument {
   final List<BeCollection> collections;
   final List<BeRoute> routes;
 
+  /// 函数 / “我的积木”（积木第 4 版·第 2 阶段，见 backend_function.dart）。每个接口、每个函数里都能调。
+  final List<BeFunction> functions;
+
   static bool _validPort(int p) => p >= 1 && p <= 65535;
 
   /// 有没有用到第 4 版才有的积木（见 backend_blocks_lang.dart 的 `beBlocksUseLang`）。用到了存盘时版本号写 2，否则还是 1
   /// ——旧文档不改、或只用旧积木改，存出来和以前一个字节都不差。
   bool get usesLang => routes.any((r) => beBlocksUseLang(r.body));
 
+  /// 有没有用到第 2 阶段才有的东西（函数、调用、匿名函数、拿函数当参数的列表操作）。用到了版本号写 3。
+  bool get usesFunctions => functions.isNotEmpty || routes.any((r) => beBlocksUseFunc(r.body));
+
   Map<String, dynamic> toJson() => {
-    'version': usesLang ? 2 : 1,
+    'version': usesFunctions ? 3 : (usesLang ? 2 : 1),
     'kind': 'backend',
     'name': name,
     'port': port,
@@ -169,6 +185,7 @@ class BeDocument {
     'variables': [for (final v in variables) v.toJson()],
     'collections': [for (final c in collections) c.toJson()],
     'routes': [for (final r in routes) r.toJson()],
+    if (functions.isNotEmpty) 'functions': [for (final f in functions) f.toJson()],
   };
 
   /// 存盘用的文字（带缩进，方便人看和版本对比）。
@@ -181,6 +198,7 @@ class BeDocument {
     variables: [for (final v in variables) LcVariable(name: v.name, type: v.type, initial: v.initial)],
     collections: [for (final c in collections) BeCollection(name: c.name)],
     routes: [for (final r in routes) r.clone()],
+    functions: [for (final f in functions) f.clone()],
   );
 
   /// 从文件内容读。读不懂（不是 JSON、不是对象、不是后端文档）→ 空白文档 + 说明；坏的条目逐条跳过并在说明里报数。绝不抛异常。
@@ -220,17 +238,32 @@ class BeDocument {
       variables: list(json['variables'], LcVariable.tryParse),
       collections: list(json['collections'], BeCollection.tryParse),
       routes: list(json['routes'], BeRoute.tryParse),
+      functions: list(json['functions'], BeFunction.tryParse),
     );
     return (doc: doc, note: skipped == 0 ? null : '后端文件里有 $skipped 条读不懂的内容，已跳过');
   }
 
   /// 变量、集合重名只留第一个；接口的 id 缺了 / 不合规矩 / 重了就补一个 `r数字`。
+  /// 函数最多留 [kBeMaxFunctions] 个（多出来的丢掉）。
+  /// 函数的 id 先占位（调用是按它认的，不能动）：缺了 / 不合规矩 / 重了才补一个 `f数字`；接口的 id 和函数撞了，换的是接口的。
   void _normalize() {
     final names = <String>{};
     variables.removeWhere((v) => !names.add(v.name));
     final cols = <String>{};
     collections.removeWhere((c) => !cols.add(c.name));
+    if (functions.length > kBeMaxFunctions) functions.removeRange(kBeMaxFunctions, functions.length);
     final ids = <String>{};
+    for (final f in functions) {
+      if (BeFunction.validId(f.id)) ids.add(f.id);
+    }
+    final taken = <String>{};
+    for (final f in functions) {
+      if (!BeFunction.validId(f.id) || !taken.add(f.id)) {
+        f.id = beFreeFunctionId({...ids, ...taken, for (final r in routes) r.id});
+        ids.add(f.id);
+        taken.add(f.id);
+      }
+    }
     for (final r in routes) {
       if (!_idPattern.hasMatch(r.id) || !ids.add(r.id)) {
         r.id = _freeRouteId(ids);
@@ -270,13 +303,20 @@ class BeDocument {
     return null;
   }
 
+  BeFunction? function(String id) {
+    for (final f in functions) {
+      if (f.id == id) return f;
+    }
+    return null;
+  }
+
   // —— 最基本的增删（连带改引用的操作在 backend_edit.dart）——
 
   /// 新建一个接口加到最后；id 自动取没用过的 `r数字`。请求方式不认识返回 null（路径格式不在这里拦，校验会报）。
   BeRoute? addRoute(String method, String path, {double? x, double? y}) {
     final upper = method.toUpperCase();
     if (!kBeMethods.contains(upper)) return null;
-    final r = BeRoute(id: _freeRouteId({for (final r in routes) r.id}), method: upper, path: path, x: x, y: y);
+    final r = BeRoute(id: _freeRouteId({for (final r in routes) r.id, for (final f in functions) f.id}), method: upper, path: path, x: x, y: y);
     routes.add(r);
     return r;
   }
