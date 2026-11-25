@@ -110,9 +110,21 @@ class BlockLayoutEngine {
   /// 排一截没有帽子的积木（积木盒里的样品、拖在手上的那一截）。
   /// `parent / inElse / startIndex` 说明这一截原来在哪（路径照原样算）；样品不用给。
   /// `arm >= 0`＝原来在 `parent` 第几段的口里。
-  BkScriptLayout layoutStack(List<LcBlock> list, {LcBlockPath parent = const [], bool inElse = false, int arm = -1, int startIndex = 0}) {
+  /// `controls: false`＝不带“＋ / −”小按钮（积木盒里的样品：那里点不了，画出来只会骗人）。
+  BkScriptLayout layoutStack(List<LcBlock> list, {LcBlockPath parent = const [], bool inElse = false, int arm = -1, int startIndex = 0, bool controls = true}) {
     final blocks = <BkBlock>[];
     final snaps = <BkSnap>[];
+    _controls = controls;
+    try {
+      return _stack(list, parent, inElse, arm, startIndex, blocks, snaps);
+    } finally {
+      _controls = true;
+    }
+  }
+
+  bool _controls = true;
+
+  BkScriptLayout _stack(List<LcBlock> list, LcBlockPath parent, bool inElse, int arm, int startIndex, List<BkBlock> blocks, List<BkSnap> snaps) {
     _list(list, parent, inElse, 0, 0, blocks, snaps, parent.length, metrics.minBlockWidth, startIndex: startIndex, edgeSnaps: false, arm: arm);
     return _finish('', blocks, snaps);
   }
@@ -399,7 +411,7 @@ class BlockLayoutEngine {
     b.headLabels = b.labels.length;
 
     // 各段横栏上的话先排好（要先知道它们多宽，才知道整块多宽；也得赶在排口里的积木之前，那时 _curBlock 就换了）。
-    final canRemove = armSpec != null && block.arms.length > armSpec.min;
+    final canRemove = _controls && armSpec != null && block.arms.length > armSpec.min;
     final ctrlRoom = m.controlD + m.gap;
     final armInner = inner - (canRemove ? ctrlRoom : 0);
     final armSentence = armSpec == null ? null : (host.armSentence(block.op) ?? defaultArmSentence(armSpec));
@@ -429,7 +441,7 @@ class BlockLayoutEngine {
       rows.add((items: rowItems, labels: labels, slots: slots, size: _flow(rowItems, armInner)));
     }
     final elseLabel = spec?.elseLabel ?? '否则';
-    final canHideTail = hasElse && armSpec?.tailOptional == true;
+    final canHideTail = _controls && hasElse && armSpec?.tailOptional == true;
 
     var w = math.max(size.width + m.padH * 2, mouthed ? m.minMouthBlockWidth : m.minBlockWidth);
     for (final r in rows) {
@@ -481,7 +493,7 @@ class BlockLayoutEngine {
     }
     if (mouthed) {
       // 还能加段（或把收起来的收尾口加回来）：底条加高，左边放一个“＋”。
-      final canAdd = armSpec != null && (block.arms.length < math.min(armSpec.max, LcBlock.maxArms) || (armSpec.tailOptional && spec?.hasElse == true && !hasElse));
+      final canAdd = _controls && armSpec != null && (block.arms.length < math.min(armSpec.max, LcBlock.maxArms) || (armSpec.tailOptional && spec?.hasElse == true && !hasElse));
       final footH = canAdd ? m.addFooterH : m.footerH;
       if (canAdd) b.controls.add(BkControl(kind: BkControlKind.add, rect: Rect.fromLTWH(x + m.padH - 2, cy + (footH - m.controlD) / 2, m.controlD, m.controlD)));
       cy += footH;

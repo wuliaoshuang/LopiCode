@@ -21,6 +21,7 @@ import 'package:lopicode/backend/backend_project.dart';
 import 'package:lopicode/backend/backend_targets.dart';
 import 'package:lopicode/backend/backend_templates.dart';
 import 'package:lopicode/blocks/block_editor_view.dart';
+import 'package:lopicode/blocks/block_palette_model.dart';
 import 'package:lopicode/blocks/block_panels_sheet.dart';
 import 'package:lopicode/core/path_guard.dart';
 import 'package:lopicode/lowcode/logic_blocks.dart';
@@ -29,6 +30,7 @@ import 'package:lopicode/project_session.dart';
 import 'package:lopicode/state/backend_run.dart';
 import 'package:lopicode/state/workspace_files.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/app_ref.dart';
 import 'package:lopicode/ui/backend_panels_sheet.dart';
 import 'package:lopicode/ui/backend_run_sheet.dart';
 import 'package:lopicode/ui/file_icon.dart';
@@ -55,6 +57,7 @@ class BackendScreen extends ConsumerStatefulWidget {
 }
 
 class BackendScreenState extends ConsumerState<BackendScreen> {
+  late final BlockStars? _stars = blockStarsOf(context, 'backend');
   BeBlockHost? _host;
   String _rel = kBackendFileName;
   bool _loading = true;
@@ -468,6 +471,7 @@ class BackendScreenState extends ConsumerState<BackendScreen> {
       title: '后端积木',
       subtitle: _status(host),
       dockMemoryKey: 'backend',
+      stars: _stars,
       menuExtra: _menuExtra,
       onHostChanged: () => setState(() {}),
       extraActions: [

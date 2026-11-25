@@ -23,6 +23,7 @@ import 'package:lopicode/blocks/block_editor_drag_view.dart';
 import 'package:lopicode/blocks/block_editor_edit_view.dart';
 import 'package:lopicode/blocks/block_editor_fx_view.dart';
 import 'package:lopicode/blocks/block_host.dart';
+import 'package:lopicode/blocks/block_palette_model.dart';
 import 'package:lopicode/blocks/block_palette_view.dart';
 import 'package:lopicode/blocks/block_panels_sheet.dart';
 import 'package:lopicode/blocks/block_script_view.dart';
@@ -55,6 +56,7 @@ class BlockEditorView extends StatefulWidget {
     this.onHostChanged,
     this.paletteHeight = 248,
     this.dockMemoryKey,
+    this.stars,
   });
 
   final BlockHost host;
@@ -79,6 +81,9 @@ class BlockEditorView extends StatefulWidget {
   /// 给了就在这次运行里记住面板停在多高（同一个名字的编辑器离开再回来还在那里）；不给就每次从默认档开始。
   final String? dockMemoryKey;
 
+  /// 积木盒里加的星存在哪（见 `SettingsBlockStars`）。不给＝只在这个编辑器开着的时候记着。
+  final BlockStars? stars;
+
   @override
   State<BlockEditorView> createState() => BlockEditorViewState();
 }
@@ -90,6 +95,7 @@ class BlockEditorViewState extends State<BlockEditorView> with TickerProviderSta
   Timer? _toastTimer;
   int _nudge = 0;
   bool _focused = false;
+  late final BlockStars _stars = widget.stars ?? MemoryBlockStars();
 
   @override
   void initState() {
@@ -211,6 +217,7 @@ class BlockEditorViewState extends State<BlockEditorView> with TickerProviderSta
           coveredTop = barHeight;
           layoutDock(area: page.maxHeight - safe.top, safeBottom: safe.bottom);
           final dragging = drag != null;
+          final trashing = dragging && !drag!.isNew;
           final dock = dockHeight;
           final room = page.maxHeight - barHeight - dock;
           // 画布放不下提示条了（面板拖得很高）：提示条放到面板里、分类那一行下面。
@@ -226,15 +233,19 @@ class BlockEditorViewState extends State<BlockEditorView> with TickerProviderSta
               // 悬浮顶栏：在画布上面、积木盒面板下面（面板全展开时盖住它）。空白处不接手指，落到画布上。
               Positioned(left: 0, right: 0, top: 0, child: bar),
               // 带 key：别的浮动控件出现 / 消失时，积木盒不能被当成新的重建（手指正按在它上面拖）。
-              if (editing == null)
-                Positioned(
-                  key: const ValueKey('bk-dock'),
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  child: dragging && !drag!.isNew
-                      ? buildTrash(context)
-                      : BlockPaletteView(
+              // 积木盒一直留在树里（就地改字、拖画布上的积木时只是不显示）：停在哪一页、搜了什么都不丢。
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: Stack(
+                  alignment: Alignment.bottomCenter,
+                  children: [
+                    Offstage(
+                      offstage: editing != null || trashing,
+                      child: TickerMode(
+                        enabled: editing == null && !trashing,
+                        child: BlockPaletteView(
                           host: host,
                           height: panelHeight,
                           handleLeading: buildDockLead(context, onIssues: _showIssues),
@@ -257,8 +268,20 @@ class BlockEditorViewState extends State<BlockEditorView> with TickerProviderSta
                           onDragUpdate: dragMoveGlobal,
                           onDragEnd: dragEnd,
                           onDragCancel: dragCancel,
+                          stars: _stars,
+                          onNotice: toast,
                         ),
+                      ),
+                    ),
+                    if (editing == null && trashing) buildTrash(context),
+                    // 看得见的那一个（积木盒或垃圾桶）占的地方；就地改字时两个都不在。
+                    if (editing == null)
+                      const Positioned.fill(
+                        child: IgnorePointer(child: SizedBox(key: ValueKey('bk-dock'))),
+                      ),
+                  ],
                 ),
+              ),
               if (toastInPanel) Positioned(key: const ValueKey('bk-toast-layer'), left: 24, right: 24, top: page.maxHeight - dock + BlockPaletteView.headHeight + 8, child: _toastBar()),
               // 手上的积木：最上面一层（拖到顶上时从悬浮按钮上面过）。
               if (dragging)

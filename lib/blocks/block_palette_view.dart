@@ -9,12 +9,26 @@
 // - 面板多高由外面说了算（[BlockPaletteView.height]，可以矮到只剩手柄条：里面的东西不挤扁，只是被裁掉）。
 //   按住手柄条、或者分类那一行，上下拖＝改高度（只把手势报给外面）；分类那一行横着滑还是翻分类，积木那一片上下滑还是翻积木，互不抢。
 //   点一下手柄条（按钮以外的地方）＝外面决定收起还是展开。收到只剩手柄条时，下面两行淡出、点不到。
+//
+// 第 4 版加的（2026-11-25；先定层级，再排版，最后上色）：
+// - 层级：积木样品 ＞ 分类页签 ＞ 搜索入口 / 小标题。小标题、搜索框只用中性色，不用彩色，不抢积木的戏。
+// - 分类那一行最左边固定一个放大镜（44 宽）；右边是横着滑的页签，第一个永远是“常用”（星形，中性色），后面是宿主的各页。
+// - 点放大镜：这一行整行换成搜索框（一行只做一件事），下面换成搜到的积木；右边的 × 退出搜索。搜到的积木一样能点、能拖；
+//   一拖出去键盘就收起（画布让出来），搜索的词和结果留着。
+// - 一页里可以分小标题（12 号、次要色）。组和组之间隔 20，标题和它的积木隔 8，积木之间隔 12：组间距 ＞ 组内间距。
+// - “常用”页：加了星的 + 这份文档里用得最多的 12 块；文档还空着时是入门积木。
+// - 加星：按住一块样品不挪、直接松手（没有拖走）→ 样品旁边弹出一项“加到常用 / 从常用拿掉”。挪了就是拖，不弹。
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/gestures.dart';
+import 'package:lopicode/blocks/block_drag.dart';
 import 'package:lopicode/blocks/block_geometry.dart';
 import 'package:lopicode/blocks/block_host.dart';
+import 'package:lopicode/blocks/block_palette_model.dart';
+import 'package:lopicode/blocks/block_palette_parts_view.dart';
 import 'package:lopicode/blocks/block_script_view.dart';
+import 'package:lopicode/theme/tokens.dart';
 import 'package:material_ui/material_ui.dart';
 
 export 'package:lopicode/blocks/block_host.dart' show BlockPaletteKind;
@@ -32,6 +46,8 @@ class BlockPaletteItem {
 
   /// 样品的排版（拖出来时可以直接拿它画拖着的样子）。
   final BkScriptLayout layout;
+
+  BlockItemRef get ref => BlockItemRef(kind, id, preset: preset);
 }
 
 class BlockPaletteView extends StatefulWidget {
@@ -41,6 +57,8 @@ class BlockPaletteView extends StatefulWidget {
     this.onPick,
     this.initialCategory,
     this.height = 300,
+    this.stars,
+    this.onNotice,
     this.handleLeading,
     this.handleTrailing,
     this.onHandleTap,
@@ -65,8 +83,14 @@ class BlockPaletteView extends StatefulWidget {
   /// 点了某一样。
   final void Function(BlockPaletteItem item)? onPick;
 
-  /// 一开始停在哪一类（[BlockCategory.id]）；不给就是第一类。
+  /// 一开始停在哪一类（[BlockCategory.id]，“常用”是 [bkCommonCategoryId]）；不给就是第一类（“常用”）。
   final String? initialCategory;
+
+  /// 加的星存在哪。不给＝只记在这个控件里（控件没了就没了）。
+  final BlockStars? stars;
+
+  /// 有话要告诉用户（“已加到常用”这种）：外面拿去显示成提示条。
+  final void Function(String text)? onNotice;
 
   /// 面板现在多高（外面每一帧给；比 [headHeight] 矮时里面的东西被裁掉，不挤扁）。
   final double height;
@@ -105,8 +129,16 @@ class BlockPaletteView extends StatefulWidget {
 
 class _BlockPaletteViewState extends State<BlockPaletteView> with BkKitHolder {
   late String? _category = widget.initialCategory;
-  final Map<String, List<BlockPaletteItem>> _items = {};
+  final Map<String, BlockPaletteItem> _items = {};
   int _rev = -1;
+  late BlockStars _store = widget.stars ?? MemoryBlockStars();
+  late List<String> _stars = bkCleanStars(_store.load());
+  bool _searching = false;
+
+  /// 按住样品以后手指挪过没有（样品每次重画都会换一批回调，所以记在这里，不记在回调里）。
+  bool _moved = false;
+  final TextEditingController _query = TextEditingController();
+  final FocusNode _queryFocus = FocusNode();
 
   @override
   void kitChanged() => _items.clear();
@@ -115,33 +147,103 @@ class _BlockPaletteViewState extends State<BlockPaletteView> with BkKitHolder {
   void didUpdateWidget(BlockPaletteView oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!identical(oldWidget.host, widget.host)) _items.clear();
+    if (!identical(oldWidget.stars, widget.stars)) {
+      _store = widget.stars ?? MemoryBlockStars(_stars);
+      _stars = bkCleanStars(_store.load());
+    }
   }
 
-  /// 这一类的样品。宿主内容变了要重排（默认参数会跟着变：第一个变量、第一个控件…）。
-  List<BlockPaletteItem> _itemsOf(BlockCategory c) {
+  @override
+  void dispose() {
+    _query.dispose();
+    _queryFocus.dispose();
+    super.dispose();
+  }
+
+  /// 一样东西的样品。宿主内容变了要重排（默认参数会跟着变：第一个变量、第一个控件…）。排不出来的（宿主已经没有这样东西）返回 null。
+  BlockPaletteItem? _itemOf(BlockItemRef ref) {
     if (_rev != widget.host.revision) {
       _items.clear();
       _rev = widget.host.revision;
     }
-    return _items[c.id] ??= () {
-      final host = widget.host;
-      final engine = kit.engine(host);
-      return [
-        for (final h in c.hats) BlockPaletteItem(BlockPaletteKind.hat, h.id, engine.layoutHat(h.hat)),
-        for (final op in c.blocks) BlockPaletteItem(BlockPaletteKind.block, op, engine.layoutStack([host.newBlock(op)])),
-        for (final e in c.exprs) BlockPaletteItem(BlockPaletteKind.expr, e, engine.layoutExpr(host.newExpr(e))),
-      ];
-    }();
+    final key = bkItemKey(ref);
+    final had = _items[key];
+    if (had != null) return had;
+    final host = widget.host;
+    final engine = kit.engine(host);
+    final BkScriptLayout layout;
+    switch (ref.kind) {
+      case BlockPaletteKind.hat:
+        final t = bkHatTemplate(host, ref.id);
+        if (t == null) return null;
+        layout = engine.layoutHat(t.hat);
+      case BlockPaletteKind.block:
+        layout = engine.layoutStack([BkPaletteSource(BkDragKind.statement, ref.id, preset: ref.preset).newBlock(host)], controls: false);
+      case BlockPaletteKind.expr:
+        layout = engine.layoutExpr(BkPaletteSource(BkDragKind.expr, ref.id, preset: ref.preset).newExpr(host));
+    }
+    return _items[key] = BlockPaletteItem(ref.kind, ref.id, layout, preset: ref.preset);
+  }
+
+  void _openSearch() {
+    setState(() => _searching = true);
+    _queryFocus.requestFocus();
+  }
+
+  void _closeSearch() {
+    _queryFocus.unfocus();
+    setState(() {
+      _searching = false;
+      _query.clear();
+    });
+  }
+
+  void _toggleStar(BlockPaletteItem item) {
+    final token = BlockItemRef(item.kind, item.id).token;
+    final had = _stars.contains(token);
+    final next = bkToggleStar(_stars, token);
+    if (next == null) {
+      widget.onNotice?.call('最多加 $bkStarMax 颗星，先拿掉几颗再加。');
+      return;
+    }
+    setState(() => _stars = next);
+    _store.save(next);
+    widget.onNotice?.call(had ? '从“常用”里拿掉了。' : '加到“常用”了。');
+  }
+
+  bool _inPanel(Offset global) {
+    final box = context.findRenderObject();
+    return box is RenderBox && box.attached && (box.localToGlobal(Offset.zero) & box.size).contains(global);
+  }
+
+  /// 按住没挪就松手：在样品旁边问要不要加星。
+  Future<void> _askStar(BuildContext box, BlockPaletteItem item) async {
+    final starred = _stars.contains(BlockItemRef(item.kind, item.id).token);
+    final picked = await showBkStarMenu(box, starred: starred);
+    if (picked == true && mounted) _toggleStar(item);
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final c = context.colors;
     final categories = [
       for (final c in widget.host.categories)
         if (!c.isEmpty) c,
     ];
-    final current = categories.isEmpty ? null : categories.firstWhere((c) => c.id == _category, orElse: () => categories.first);
+    final ids = [if (categories.isNotEmpty) bkCommonCategoryId, for (final c in categories) c.id];
+    final currentId = ids.isEmpty ? null : (ids.contains(_category) ? _category! : ids.first);
+    final BlockCategory? current = currentId == null || currentId == bkCommonCategoryId ? null : categories.firstWhere((c) => c.id == currentId);
+    final List<BkPaletteSection> sections;
+    final String? pageId;
+    if (_searching) {
+      pageId = '@search';
+      final found = bkSearchPalette(widget.host, _query.text);
+      sections = [if (found.isNotEmpty) BkPaletteSection(null, found)];
+    } else {
+      pageId = currentId;
+      sections = current != null ? bkCategorySections(current) : (currentId == null ? const [] : bkCommonSections(widget.host, _stars));
+    }
     final handleColor = theme.dividerColor;
     final safeBottom = MediaQuery.paddingOf(context).bottom;
     // 收到只剩手柄条时，下面那两行淡出去（屏幕底部有系统手势条时不露半截分类）。
@@ -217,28 +319,73 @@ class _BlockPaletteViewState extends State<BlockPaletteView> with BkKitHolder {
                           key: const ValueKey('bk-palette-tabs-grip'),
                           child: SizedBox(
                             height: 48,
-                            child: ListView.separated(
-                              key: const ValueKey('bk-palette-tabs'),
-                              scrollDirection: Axis.horizontal,
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                              itemCount: categories.length,
-                              separatorBuilder: (_, _) => const SizedBox(width: 6),
-                              itemBuilder: (_, i) => _tab(categories[i], identical(categories[i], current)),
-                            ),
+                            child: _searching
+                                ? BkPaletteSearchBar(controller: _query, focusNode: _queryFocus, onChanged: (_) => setState(() {}), onClose: _closeSearch)
+                                : Row(
+                                    children: [
+                                      BkPaletteSearchButton(onTap: ids.isEmpty ? null : _openSearch),
+                                      // 页签滑到放大镜底下时有一条细线接着，不像被一刀切掉。
+                                      Container(width: 1, height: 20, color: context.colors.border),
+                                      Expanded(
+                                        child: Stack(
+                                          children: [
+                                            ListView.separated(
+                                              key: const ValueKey('bk-palette-tabs'),
+                                              scrollDirection: Axis.horizontal,
+                                              padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+                                              itemCount: ids.length,
+                                              separatorBuilder: (_, _) => const SizedBox(width: 6),
+                                              itemBuilder: (_, i) => i == 0 ? _commonTab(currentId == bkCommonCategoryId) : _tab(categories[i - 1], categories[i - 1].id == currentId),
+                                            ),
+                                            // 滑到左边去的页签在细线旁边淡出，不是被一刀切掉。
+                                            Positioned(
+                                              left: 0,
+                                              top: 0,
+                                              bottom: 0,
+                                              width: 12,
+                                              child: IgnorePointer(
+                                                child: DecoratedBox(
+                                                  decoration: BoxDecoration(gradient: LinearGradient(colors: [theme.colorScheme.surface, theme.colorScheme.surface.withValues(alpha: 0)])),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                           ),
                         ),
                         Divider(height: 1, color: theme.dividerColor),
                         Expanded(
-                          child: current == null
+                          child: pageId == null
                               ? const SizedBox.shrink()
                               : SingleChildScrollView(
-                                  key: ValueKey('bk-palette-page-${current.id}'),
+                                  key: ValueKey('bk-palette-page-$pageId'),
                                   // 这一页没满也照样接竖着的滑动：不然竖着滑没人接，会落到样品的“横着拖”手里，把积木误拿出来。
                                   physics: const AlwaysScrollableScrollPhysics(),
                                   padding: EdgeInsets.fromLTRB(16, 14, 16, 20 + safeBottom),
                                   child: Align(
                                     alignment: Alignment.topLeft,
-                                    child: Wrap(spacing: 12, runSpacing: 12, crossAxisAlignment: WrapCrossAlignment.start, children: [for (final item in _itemsOf(current)) _sample(item)]),
+                                    child: sections.isEmpty
+                                        ? (_searching ? BkPaletteSearchHint(query: _query.text) : const SizedBox.shrink())
+                                        : Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              for (final (i, s) in sections.indexed) ...[
+                                                if (s.label != null) BkPaletteHeading(s.label!, first: i == 0, color: c.textMuted) else if (i > 0) const SizedBox(height: 12),
+                                                Wrap(
+                                                  spacing: 12,
+                                                  runSpacing: 12,
+                                                  crossAxisAlignment: WrapCrossAlignment.start,
+                                                  children: [
+                                                    for (final ref in s.items)
+                                                      if (_itemOf(ref) case final item?) _sample(item),
+                                                  ],
+                                                ),
+                                              ],
+                                            ],
+                                          ),
                                   ),
                                 ),
                         ),
@@ -269,6 +416,33 @@ class _BlockPaletteViewState extends State<BlockPaletteView> with BkKitHolder {
       onVerticalDragEnd: (d) => widget.onResizeEnd?.call(d.primaryVelocity ?? 0),
       onVerticalDragCancel: () => widget.onResizeEnd?.call(0),
       child: child,
+    );
+  }
+
+  /// “常用”页签：星形 + 中性色（不占任何一种积木的颜色）。
+  Widget _commonTab(bool selected) {
+    final c = context.colors;
+    final fg = selected ? c.surface : c.text;
+    return GestureDetector(
+      key: const ValueKey('bk-palette-tab-$bkCommonCategoryId'),
+      behavior: HitTestBehavior.opaque,
+      onTap: () => setState(() => _category = bkCommonCategoryId),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 140),
+        padding: const EdgeInsets.only(left: 10, right: 12),
+        decoration: BoxDecoration(color: selected ? c.text : Colors.transparent, borderRadius: BorderRadius.circular(20)),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.star_rounded, size: 16, color: selected ? c.surface : c.textMuted),
+            const SizedBox(width: 4),
+            Text(
+              '常用',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600, color: fg),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -305,6 +479,9 @@ class _BlockPaletteViewState extends State<BlockPaletteView> with BkKitHolder {
   Widget _sample(BlockPaletteItem item) {
     final view = BkLayoutView(layout: item.layout, kit: kit);
     void start(Offset global, Offset local, double boxHeight) {
+      _moved = false;
+      // 从搜索结果里往外拖：键盘收起来，画布让出来；搜的词和结果留着。
+      _queryFocus.unfocus();
       // 样品在 40 高的触控范围里是竖着居中的。
       final dy = (boxHeight - item.layout.size.height) / 2;
       widget.onDragStart?.call(item, global, local - Offset(0, dy > 0 ? dy : 0));
@@ -312,15 +489,24 @@ class _BlockPaletteViewState extends State<BlockPaletteView> with BkKitHolder {
 
     return Builder(
       builder: (box) => RawGestureDetector(
-        key: ValueKey('bk-palette-item-${item.kind.name}-${item.id}'),
+        key: ValueKey('bk-palette-item-${bkItemKey(item.ref)}'),
         behavior: HitTestBehavior.opaque,
         gestures: {
           TapGestureRecognizer: GestureRecognizerFactoryWithHandlers<TapGestureRecognizer>(TapGestureRecognizer.new, (r) => r.onTap = widget.onPick == null ? null : () => widget.onPick!(item)),
           if (widget.onDragStart != null) ...{
             LongPressGestureRecognizer: GestureRecognizerFactoryWithHandlers<LongPressGestureRecognizer>(() => LongPressGestureRecognizer(duration: const Duration(milliseconds: 180)), (r) {
               r.onLongPressStart = (d) => start(d.globalPosition, d.localPosition, box.size?.height ?? 0);
-              r.onLongPressMoveUpdate = (d) => widget.onDragUpdate?.call(d.globalPosition);
-              r.onLongPressEnd = (_) => widget.onDragEnd?.call();
+              r.onLongPressMoveUpdate = (d) {
+                if (d.offsetFromOrigin.distance > 8) _moved = true;
+                widget.onDragUpdate?.call(d.globalPosition);
+              };
+              r.onLongPressEnd = (d) {
+                // 按住了却一点没挪、松手时手指还在积木盒上：不是要拖，是要加星。
+                // （面板比默认档高时一拿起积木面板就自己让开，手指底下可能已经是画布了：那是在放积木。）
+                if (_moved || !_inPanel(d.globalPosition)) return widget.onDragEnd?.call();
+                widget.onDragCancel?.call();
+                unawaited(_askStar(box, item));
+              };
               r.onLongPressCancel = () => widget.onDragCancel?.call();
             }),
             HorizontalDragGestureRecognizer: GestureRecognizerFactoryWithHandlers<HorizontalDragGestureRecognizer>(HorizontalDragGestureRecognizer.new, (r) {
@@ -338,42 +524,9 @@ class _BlockPaletteViewState extends State<BlockPaletteView> with BkKitHolder {
             alignment: Alignment.centerLeft,
             widthFactor: 1,
             heightFactor: 1,
-            child: _PressFeel(child: view),
+            child: BkPressFeel(child: view),
           ),
         ),
-      ),
-    );
-  }
-}
-
-/// 按下态：手指按着的时候缩到 96%、略暗。只是看的，不拦手势。
-class _PressFeel extends StatefulWidget {
-  const _PressFeel({required this.child});
-  final Widget child;
-
-  @override
-  State<_PressFeel> createState() => _PressFeelState();
-}
-
-class _PressFeelState extends State<_PressFeel> {
-  bool _down = false;
-
-  void _set(bool v) {
-    if (_down != v && mounted) setState(() => _down = v);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final time = MediaQuery.disableAnimationsOf(context) ? Duration.zero : const Duration(milliseconds: 90);
-    return Listener(
-      onPointerDown: (_) => _set(true),
-      onPointerUp: (_) => _set(false),
-      onPointerCancel: (_) => _set(false),
-      child: AnimatedScale(
-        scale: _down ? 0.96 : 1,
-        duration: time,
-        curve: Curves.easeOut,
-        child: AnimatedOpacity(opacity: _down ? 0.82 : 1, duration: time, child: widget.child),
       ),
     );
   }
