@@ -284,6 +284,18 @@ void main() {
       expect(state().fieldErrors, isEmpty);
     });
 
+    test('打包器报错指向权限（field 是 permissions）：错记在权限那一项上；改了权限就收起来', () async {
+      await pack().load();
+      fake.packError = const ApkPackException('权限表里没有 android.permission.FOO。', field: 'permissions');
+      fake.packErrorAt = ApkPackStep.check;
+      expect(await pack().start(), isTrue);
+      expect(state().phase, LocalPackPhase.failed);
+      expect(state().failure!.field, 'permissions');
+      expect(state().fieldErrors['permissions'], contains('权限表里没有'));
+      pack().setPermission('android.permission.CAMERA', true);
+      expect(state().fieldErrors.containsKey('permissions'), isFalse);
+    });
+
     test('钥匙读不出来：打包失败，原因指向钥匙，不会悄悄换一把', () async {
       await env.services.secrets.write(SecretKeys.apkSigningKey, '坏的');
       await pack().load();

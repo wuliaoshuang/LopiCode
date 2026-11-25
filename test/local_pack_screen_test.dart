@@ -253,7 +253,8 @@ void main() {
       expect(File(workspacePath).existsSync() && File(publicPath).existsSync(), isTrue);
       expect(find.text('怎么装到手机上'), findsOneWidget);
       expect(find.textContaining('直接安装'), findsNothing, reason: '没有“直接安装”按钮（要新权限）');
-      await tester.drag(find.byType(ListView).first, const Offset(0, -80));
+      // 截图停在“主按钮完整露在顶栏下面、下面接着产物卡”的位置（按钮切一半在顶栏后面不好看）。
+      await tester.drag(find.byType(ListView).first, const Offset(0, -24));
       await settle(tester, rounds: 2);
       await shot(tester, 'pack-07-done-$suffix');
       // 复制路径、去文件页
@@ -618,6 +619,28 @@ void main() {
     await settle(tester, rounds: 6);
     expect(state().phase, LocalPackPhase.done);
     expect(find.text('生成签名钥匙'), findsNothing);
+  });
+
+  testWidgets('打包器说权限有问题：权限那一行写着原因，失败卡上有“去改权限”，点了开权限面板', (tester) async {
+    await boot(tester);
+    await show(tester);
+    fake
+      ..packError = const ApkPackException('权限表里没有 android.permission.FOO。', field: 'permissions')
+      ..packErrorAt = ApkPackStep.check;
+    await tapOn(tester, find.byKey(const Key('pack-start')), rounds: 6);
+    expect(state().phase, LocalPackPhase.failed);
+    expect(state().fieldErrors['permissions'], contains('权限表里没有'));
+    expect(
+      find.descendant(of: find.byKey(const Key('pack-perm-row')), matching: find.textContaining('权限表里没有')),
+      findsOneWidget,
+    );
+    await reveal(tester, find.byKey(const Key('pack-fix')));
+    expect(find.text('去改权限'), findsOneWidget);
+    await tapOn(tester, find.byKey(const Key('pack-fix')), rounds: 4);
+    expect(find.byKey(const Key('pack-perm-CAMERA')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('pack-perm-CAMERA')));
+    await settle(tester, rounds: 3);
+    expect(state().fieldErrors.containsKey('permissions'), isFalse);
   });
 
   testWidgets('钥匙读不出来：打包失败卡上有“去看签名钥匙”，点了进钥匙页', (tester) async {

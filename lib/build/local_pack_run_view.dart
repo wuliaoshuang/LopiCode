@@ -36,6 +36,7 @@ String? packFieldLabel(String? field) => switch (field) {
   'versionName' => '去改版本名',
   'versionCode' => '去改版本号',
   'icon' => '去换图标',
+  'permissions' => '去改权限',
   'key' => '去看签名钥匙',
   _ => null,
 };

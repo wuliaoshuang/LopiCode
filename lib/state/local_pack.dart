@@ -45,7 +45,7 @@ class LocalPackFailure {
   const LocalPackFailure({required this.message, this.field, this.step});
   final String message;
 
-  /// `packageName` / `appName` / `versionName` / `versionCode` / `icon` / `project` / `template` / `key`，没有是 null。
+  /// `packageName` / `appName` / `versionName` / `versionCode` / `icon` / `permissions` / `project` / `template` / `key`，没有是 null。
   final String? field;
 
   /// 走到哪一步出的事；null ＝ 还没开始打（准备钥匙 / 读模板时）。
@@ -253,7 +253,8 @@ class LocalPackNotifier extends Notifier<LocalPackState> {
     if (_snap.busy || !_snap.loaded) return;
     final next = {..._snap.form.permissions};
     on ? next.add(id) : next.remove(id);
-    _put(_snap.copyWith(form: _snap.form.copyWith(permissions: next)));
+    final errors = Map.of(_snap.fieldErrors)..remove('permissions');
+    _put(_snap.copyWith(form: _snap.form.copyWith(permissions: next), fieldErrors: errors));
     _saveLater();
   }
 
@@ -373,7 +374,7 @@ class LocalPackNotifier extends Notifier<LocalPackState> {
         _snap.withRun(
           phase: LocalPackPhase.failed,
           failure: LocalPackFailure(message: e.message, field: field, step: step),
-          fieldErrors: field != null && const {'appName', 'packageName', 'versionName', 'versionCode', 'icon'}.contains(field) ? {field: e.message} : const {},
+          fieldErrors: field != null && const {'appName', 'packageName', 'versionName', 'versionCode', 'icon', 'permissions'}.contains(field) ? {field: e.message} : const {},
         ),
       );
     } on SigningKeyException catch (e) {

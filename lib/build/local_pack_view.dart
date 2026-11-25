@@ -124,6 +124,8 @@ class _LocalPackViewState extends ConsumerState<LocalPackView> {
       _reveal(_keys[field]!, focus: _focus[field]);
     } else if (field == 'icon') {
       _reveal(_iconKey);
+    } else if (field == 'permissions') {
+      showApkPermissionsSheet(context, widget.session);
     } else if (field == 'key') {
       openSigningKeyScreen(context, widget.session);
     }
@@ -256,7 +258,7 @@ class _LocalPackViewState extends ConsumerState<LocalPackView> {
               key: const Key('pack-perm-row'),
               icon: Icons.shield_outlined,
               title: '权限',
-              subtitle: onPerms.isEmpty ? '一项都没开（网页连不了网）' : '已开：${onPerms.join('、')}',
+              subtitle: s.fieldErrors['permissions'] ?? (onPerms.isEmpty ? '一项都没开（网页连不了网）' : '已开：${onPerms.join('、')}'),
               enabled: !busy,
               onTap: () => showApkPermissionsSheet(context, widget.session),
             ),
