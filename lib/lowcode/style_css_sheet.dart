@@ -2,10 +2,13 @@
 // - 从上到下：标题和一句说明 → 等宽的多行输入框 → 一行“应用后会变成什么” → 不会收下的条目（有才显示）→ 操作行（取消 / 应用）
 //   → “来自属性的样式”（只读，放最后：它是参考，不是要操作的东西）。
 // - 主操作只有“应用”。预览是随输入实时算的，不用再点按钮。
-// - 输入框用代码底色和等宽字，和面板其它输入框区分开。
+// - 输入框用代码底色和等宽字，和面板其它输入框区分开；带 CSS 高亮，双指捏合可调字号（和文件编辑器共用一个字号）。
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lopicode/lowcode/css_codec.dart';
 import 'package:lopicode/lowcode/style_model.dart';
+import 'package:lopicode/state/code_font.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/code_view.dart';
 import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -17,17 +20,17 @@ Future<String?> showStyleCssEditor(BuildContext context, {required String initia
   builder: (_) => _CssSheet(initialCss: initialCss, legacy: legacy),
 );
 
-class _CssSheet extends StatefulWidget {
+class _CssSheet extends ConsumerStatefulWidget {
   const _CssSheet({required this.initialCss, required this.legacy});
   final String initialCss;
   final Map<String, String> legacy;
 
   @override
-  State<_CssSheet> createState() => _CssSheetState();
+  ConsumerState<_CssSheet> createState() => _CssSheetState();
 }
 
-class _CssSheetState extends State<_CssSheet> {
-  late final TextEditingController _text = TextEditingController(text: widget.initialCss);
+class _CssSheetState extends ConsumerState<_CssSheet> {
+  late final CodeTextController _text = CodeTextController(text: widget.initialCss, language: 'css');
   late CssParseResult _parsed = parseCss(widget.initialCss);
 
   @override
@@ -40,7 +43,8 @@ class _CssSheetState extends State<_CssSheet> {
   Widget build(BuildContext context) {
     final c = context.colors;
     final t = Theme.of(context).textTheme;
-    final mono = t.bodyMedium?.copyWith(fontFamily: kMonoFont, fontFamilyFallback: kMonoFallback, height: 1.5);
+    final size = ref.watch(codeFontProvider);
+    final mono = t.bodyMedium?.copyWith(fontFamily: kMonoFont, fontFamilyFallback: kMonoFallback, height: 1.5, fontSize: size);
     final decl = _parsed.declarations;
     final custom = LcStyle(decl).custom.length;
     final overridden = [
@@ -68,22 +72,24 @@ class _CssSheetState extends State<_CssSheet> {
                 const SizedBox(height: Space.x1),
                 Text('一行一条，写成“属性: 值;”。点“应用”会用这里的内容整个换掉这个组件自己的样式。', style: t.bodySmall),
                 const SizedBox(height: Space.x3),
-                TextField(
-                  key: const Key('lc-css-input'),
-                  controller: _text,
-                  minLines: 6,
-                  maxLines: 10,
-                  autocorrect: false,
-                  enableSuggestions: false,
-                  keyboardType: TextInputType.multiline,
-                  style: mono,
-                  decoration: InputDecoration(
-                    hintText: 'margin: 8px 4px;\ncolor: #333;',
-                    hintStyle: mono?.copyWith(color: c.textFaint),
-                    fillColor: c.codeBg,
-                    contentPadding: const EdgeInsets.all(Space.x3),
+                CodeZoom(
+                  child: TextField(
+                    key: const Key('lc-css-input'),
+                    controller: _text,
+                    minLines: 6,
+                    maxLines: 10,
+                    autocorrect: false,
+                    enableSuggestions: false,
+                    keyboardType: TextInputType.multiline,
+                    style: mono,
+                    decoration: InputDecoration(
+                      hintText: 'margin: 8px 4px;\ncolor: #333;',
+                      hintStyle: mono?.copyWith(color: c.textFaint),
+                      fillColor: c.codeBg,
+                      contentPadding: const EdgeInsets.all(Space.x3),
+                    ),
+                    onChanged: (v) => setState(() => _parsed = parseCss(v)),
                   ),
-                  onChanged: (v) => setState(() => _parsed = parseCss(v)),
                 ),
                 const SizedBox(height: Space.x2),
                 Text(summary, key: const Key('lc-css-preview'), style: t.bodySmall),
@@ -113,7 +119,7 @@ class _CssSheetState extends State<_CssSheet> {
                     child: Text(
                       declarationsToCss(widget.legacy),
                       key: const Key('lc-css-legacy'),
-                      style: mono?.copyWith(color: c.textMuted, fontSize: FontSize.xs),
+                      style: mono?.copyWith(color: c.textMuted, fontSize: size - 2),
                     ),
                   ),
                 ],

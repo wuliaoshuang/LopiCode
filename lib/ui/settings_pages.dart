@@ -17,6 +17,7 @@ import 'package:lopicode/ui/app_ref.dart';
 import 'package:lopicode/ui/chat_panels.dart';
 import 'package:lopicode/ui/provider_icon.dart';
 import 'package:lopicode/ui/settings_chat.dart';
+import 'package:lopicode/ui/settings_code_font.dart';
 import 'package:lopicode/ui/settings_quota.dart';
 import 'package:lopicode/ui/settings_widgets.dart';
 import 'package:material_ui/material_ui.dart';
@@ -166,6 +167,7 @@ class AppearanceScreen extends ConsumerWidget {
               SettingsChoiceRow(key: Key('appearance-${m.name}'), title: themeModeLabel(m), selected: m == mode, onTap: () => ref.read(themeModeProvider.notifier).set(m)),
           ],
         ),
+        const CodeFontGroup(),
       ],
     );
   }

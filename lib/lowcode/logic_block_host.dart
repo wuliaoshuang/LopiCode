@@ -274,6 +274,9 @@ class LogicBlockHost extends BlockHost {
   @override
   String get codeLanguage => 'JavaScript';
 
+  @override
+  String get codeFileName => 'logic.js';
+
   // —— 改动、撤销 ——
 
   @override

@@ -22,12 +22,14 @@ Future<void> pump(WidgetTester tester, Widget body, {ThemeMode mode = ThemeMode.
   await tester.pumpWidget(
     RepaintBoundary(
       key: shotKey,
-      child: MaterialApp(
-        debugShowCheckedModeBanner: false,
-        theme: buildAppTheme(Brightness.light, fontFamily: fontsLoaded ? kTestFont : null),
-        darkTheme: buildAppTheme(Brightness.dark, fontFamily: fontsLoaded ? kTestFont : null),
-        themeMode: mode,
-        home: Scaffold(body: SafeArea(child: body)),
+      child: bareScope(
+        MaterialApp(
+          debugShowCheckedModeBanner: false,
+          theme: buildAppTheme(Brightness.light, fontFamily: fontsLoaded ? kTestFont : null),
+          darkTheme: buildAppTheme(Brightness.dark, fontFamily: fontsLoaded ? kTestFont : null),
+          themeMode: mode,
+          home: Scaffold(body: SafeArea(child: body)),
+        ),
       ),
     ),
   );

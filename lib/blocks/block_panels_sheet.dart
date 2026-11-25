@@ -8,6 +8,7 @@ import 'package:lopicode/blocks/block_host.dart';
 import 'package:lopicode/blocks/block_issue_view.dart';
 import 'package:lopicode/lowcode/code_sheet.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/code_highlight.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// “有 N 个错误，代码没有更新”——界面上凡是说这件事的地方都用这一句。
@@ -159,6 +160,6 @@ Future<void> showBlockCode(BuildContext context, BlockHost host) {
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
-    builder: (_) => CodeSheetBody(title: '积木翻出来的 ${host.codeLanguage}', note: note, code: code),
+    builder: (_) => CodeSheetBody(title: '积木翻出来的 ${host.codeLanguage}', note: note, code: code, language: CodeHighlighter.languageFor(host.codeFileName)),
   );
 }

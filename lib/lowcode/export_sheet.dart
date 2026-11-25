@@ -15,6 +15,7 @@ import 'package:lopicode/lowcode/logic_gate.dart';
 import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/code_highlight.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// 选一种框架导出，把生成的文件写进项目的 export/ 目录并展示代码。
@@ -118,7 +119,7 @@ class _FrameworkExportSheetState extends State<FrameworkExportSheet> {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      builder: (_) => CodeSheetBody(title: f.path, note: problem == null ? '导出后在项目的 $_dir/${f.path}' : '这个文件没排版：$problem', code: f.content),
+      builder: (_) => CodeSheetBody(title: f.path, note: problem == null ? '导出后在项目的 $_dir/${f.path}' : '这个文件没排版：$problem', code: f.content, language: CodeHighlighter.languageFor(f.path)),
     );
   }
 
