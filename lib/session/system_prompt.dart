@@ -1,6 +1,7 @@
 // 拼系统提示词：默认提示词 + 执行环境 + 预设 + 个人偏好 + 项目规则 + 项目里的 AGENTS.md + 技能 + 权限说明 + 计划模式 + 子代理 / 团队的身份说明。
 import 'package:lopicode/agent/agent_runner.dart';
 import 'package:lopicode/agent/agent_tools.dart';
+import 'package:lopicode/agent/memory_tools.dart';
 import 'package:lopicode/agent/skills.dart';
 import 'package:lopicode/agent/team.dart';
 import 'package:lopicode/session/conversation.dart';
@@ -21,6 +22,10 @@ String systemPromptFor(SessionCore core, Conversation conv, Conversation root, L
   if (agentsMd != null) parts.add(agentsMd);
   final skillText = SkillStore.promptSection(skills);
   if (skillText.isNotEmpty) parts.add(skillText);
+  // 记忆的清单 / 摘要（用的是这一轮开始前读好的那份）。能不能写只影响这里怎么说，真正的拦截在工具那边。
+  if (core.app.memory.enabled) {
+    parts.add(memoryPromptSection(core.app.memory.global.entries, core.projectMemory?.entries, canWrite: conv.parentId == null && !root.planMode && core.permissionOf(root) != PermissionLevel.view));
+  }
   parts.add(switch (core.permissionOf(root)) {
     PermissionLevel.view => '当前权限：仅可查看。你只能看，不能改文件、删文件、执行命令（这些工具已经被关掉）。',
     PermissionLevel.workspace => '当前权限：工作区内修改。可以改工作区里的文件；删除文件、执行命令每次要用户确认。',

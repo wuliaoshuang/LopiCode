@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lopicode/agent/automation.dart';
 import 'package:lopicode/agent/background_commands.dart';
+import 'package:lopicode/agent/memory_store.dart';
 import 'package:lopicode/agent/model_config.dart';
 import 'package:lopicode/agent/team.dart';
 import 'package:lopicode/backend/backend_model.dart';
@@ -346,6 +347,54 @@ void main() {
       await saveBackendFile(file, parsed.doc);
       final again = (await loadBackendFile(file))!;
       expect(again.doc.encode(), parsed.doc.encode());
+    });
+  });
+
+  group('文件记忆的两个存盘文件', () {
+    for (final entry in corruptSamples.entries) {
+      test('记忆的撤销记录 undo.json：${entry.key} → 当没有可撤销的，记忆本身照常读写', () async {
+        final dir = Directory(p.join(tmp.path, 'memory'))..createSync();
+        File(p.join(dir.path, '甲.md')).writeAsStringSync('# 甲\n\n一\n');
+        final undo = File(p.join(dir.path, 'undo.json'))..writeAsStringSync(entry.value);
+        final store = MemoryStore(dir.path, MemoryScope.global);
+        expect((await store.load()).single.title, '甲');
+        expect(store.changes, isEmpty);
+        await store.write('乙', '二');
+        expect(store.entries, hasLength(2));
+        expect(store.changes, hasLength(1), reason: '坏文件回退以后撤销记录照常能用');
+        expect(jsonDecode(undo.readAsStringSync()), isA<List<dynamic>>());
+        await pendingWrites();
+      });
+    }
+
+    test('undo.json 形状对、里面的条目类型全错：读到哪算哪，不抛异常、不算坏文件', () async {
+      final dir = Directory(p.join(tmp.path, 'memory'))..createSync();
+      final undo = File(p.join(dir.path, 'undo.json'))
+        ..writeAsStringSync(
+          jsonEncode([
+            1,
+            'x',
+            null,
+            {'id': 5},
+            {'id': '甲', 'before': 3, 'after': <String>[]},
+            {'id': '../外面', 'after': 'x'},
+            {'id': '乙', 'title': 9, 'before': null, 'after': '# 乙\n\n二\n', 'at': '不是数字', 'by': 1},
+          ]),
+        );
+      final store = MemoryStore(dir.path, MemoryScope.project);
+      await store.load();
+      expect(store.changes.single.id, '乙');
+      expect(store.changes.single.title, '乙');
+      expect(store.changes.single.by, 'agent');
+      expect(badBackups(undo), isEmpty, reason: '文件本身是合法 JSON，不算坏文件');
+    });
+
+    test('记忆文件本身不是文本（二进制垃圾）：跳过那一条，别的照常', () async {
+      final dir = Directory(p.join(tmp.path, 'memory'))..createSync();
+      File(p.join(dir.path, '坏的.md')).writeAsBytesSync([0xff, 0xfe, 0x00, 0xc3, 0x28]);
+      File(p.join(dir.path, '好的.md')).writeAsStringSync('# 好的\n\n正常\n');
+      final store = MemoryStore(dir.path, MemoryScope.global);
+      expect((await store.load()).map((e) => e.title), ['好的']);
     });
   });
 }

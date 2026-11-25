@@ -93,6 +93,7 @@ enum StepKind { read, look, edit, delete, command, search, agent, ask, plan, oth
 
 StepKind stepKindOf(String name) => switch (name) {
   'read_file' || 'view_image' || 'lowcode_get_page' || 'backend_get_blocks' => StepKind.read,
+  'memory_read' || 'memory_search' || 'conversation_search' => StepKind.look,
   'list_files' || 'read_skill' || 'team_board' || 'list_scheduled_tasks' => StepKind.look,
   'write_file' || 'edit_file' || 'lowcode_update_page' || 'backend_update_blocks' => StepKind.edit,
   'delete_file' => StepKind.delete,
@@ -146,6 +147,11 @@ Map<String, dynamic> _argsOf(String rawArgs) {
     'list_scheduled_tasks' => ('查看自动化任务', ''),
     'schedule_task' => ('安排自动化任务', a('title')),
     'update_todos' => ('更新待办清单', ''),
+    'memory_read' => (a('title').isEmpty ? '查看记忆清单' : '读记忆', a('title')),
+    'memory_search' => ('查记忆', a('query')),
+    'memory_write' => ('记住了', a('title')),
+    'memory_delete' => ('从记忆里删掉', a('title')),
+    'conversation_search' => ('查历史对话', a('query')),
     _ => (name, ''),
   };
 }
@@ -169,6 +175,7 @@ class StepSummary {
     required this.failed,
     required this.denied,
     required this.running,
+    this.remembered = 0,
   });
 
   final int total;
@@ -182,8 +189,18 @@ class StepSummary {
   final int denied;
   final int running;
 
+  /// 记进记忆的条数（成功的 memory_write）。
+  final int remembered;
+
   /// “读 3 个文件 · 改 1 个文件 · 1 条命令”这样的几段；一段都没有时为空。
-  List<String> get parts => [if (read > 0) '读 $read 个文件', if (edited > 0) '改 $edited 个文件', if (commands > 0) '$commands 条命令', if (searches > 0) '搜索 $searches 次', if (agents > 0) '$agents 个子代理'];
+  List<String> get parts => [
+    if (read > 0) '读 $read 个文件',
+    if (edited > 0) '改 $edited 个文件',
+    if (commands > 0) '$commands 条命令',
+    if (searches > 0) '搜索 $searches 次',
+    if (agents > 0) '$agents 个子代理',
+    if (remembered > 0) '记住 $remembered 条',
+  ];
 
   /// 折叠时那一行：`执行了 5 步 · 读 3 个文件 · 改 1 个文件 · 1 条命令`。
   String get line => ['执行了 $total 步', ...parts].join(' · ');
@@ -192,7 +209,7 @@ class StepSummary {
 StepSummary summarizeSteps(List<ToolItem> tools) {
   final read = <String>{};
   final edited = <String>{};
-  var commands = 0, searches = 0, agents = 0, other = 0, failed = 0, denied = 0, running = 0;
+  var commands = 0, searches = 0, agents = 0, other = 0, failed = 0, denied = 0, running = 0, remembered = 0;
   for (final t in tools) {
     if (t.running) running++;
     if (t.denied) {
@@ -201,6 +218,7 @@ StepSummary summarizeSteps(List<ToolItem> tools) {
       failed++;
     }
     final good = t.running || (t.ok && !t.denied);
+    if (t.name == 'memory_write' && !t.running && t.ok && !t.denied) remembered++;
     final args = _argsOf(t.arguments);
     // 没写路径的（低代码页面、文件列表）按“工具名”算一个，免得同一个东西数好几次。
     final path = '${args['path'] ?? ''}'.trim().isEmpty ? '\u0000${t.name}' : '${args['path']}'.trim();
@@ -230,6 +248,7 @@ StepSummary summarizeSteps(List<ToolItem> tools) {
     failed: failed,
     denied: denied,
     running: running,
+    remembered: remembered,
   );
 }
 

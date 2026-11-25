@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:lopicode/agent/automation.dart';
 import 'package:lopicode/agent/chat_client.dart';
 import 'package:lopicode/agent/keep_alive.dart';
+import 'package:lopicode/agent/memory_store.dart';
 import 'package:lopicode/agent/model_config.dart';
 import 'package:lopicode/agent/presets.dart';
 import 'package:lopicode/agent/protocols.dart';
@@ -33,6 +34,7 @@ class AppServices {
        models = ModelConfigStore(settings, secrets),
        presets = PresetStore(settings),
        skills = SkillStore(settings, p.join(settings.file.parent.path, 'skills')),
+       memory = AppMemory(settings, p.join(settings.file.parent.path, 'memory')),
        automations = AutomationStore(File(p.join(settings.file.parent.path, 'automations.json'))) {
     projects.linuxRootfs ??= this.runtime.rootfsDir;
     keepAlive = AgentKeepAlive(keepEnabled: () => settings.getBool(SettingKeys.agentKeepAlive, true), notifyEnabled: () => settings.getBool(SettingKeys.agentNotifyDone, true))..attach(keepAliveHost);
@@ -86,6 +88,9 @@ class AppServices {
 
   /// 自动化任务。
   final AutomationStore automations;
+
+  /// 文件记忆（全局的在应用文档目录的 memory/ 下，项目的在各工作区的 .lopicode/memory/ 下）。
+  final AppMemory memory;
 
   /// 工作区列表里点了“在这里新建对话”：打开那个工作区后开一段新对话。
   String? newConversationFor;
