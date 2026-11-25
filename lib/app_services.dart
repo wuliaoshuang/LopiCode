@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:lopicode/agent/automation.dart';
 import 'package:lopicode/agent/chat_client.dart';
+import 'package:lopicode/agent/mcp/mcp_config.dart';
 import 'package:lopicode/agent/model_config.dart';
 import 'package:lopicode/agent/presets.dart';
 import 'package:lopicode/agent/protocols.dart';
@@ -25,7 +26,8 @@ class AppServices {
       models = ModelConfigStore(settings, secrets),
       presets = PresetStore(settings),
       skills = SkillStore(settings, p.join(settings.file.parent.path, 'skills')),
-      automations = AutomationStore(File(p.join(settings.file.parent.path, 'automations.json'))) {
+      automations = AutomationStore(File(p.join(settings.file.parent.path, 'automations.json'))),
+      mcp = McpStore(File(p.join(settings.file.parent.path, 'mcp_servers.json')), secrets) {
     projects.linuxRootfs ??= this.runtime.rootfsDir;
     scheduler = AutomationScheduler(this);
     container = ProviderContainer(overrides: [appServicesProvider.overrideWithValue(this)]);
@@ -68,6 +70,9 @@ class AppServices {
   /// 自动化任务。
   final AutomationStore automations;
 
+  /// MCP 服务器的配置（状态在 mcpProvider）。
+  final McpStore mcp;
+
   /// 工作区列表里点了“在这里新建对话”：打开那个工作区后开一段新对话。
   String? newConversationFor;
 
@@ -80,6 +85,7 @@ class AppServices {
   Future<void> ready() => _ready ??= () async {
     await models.load();
     await automations.load();
+    await mcp.load();
   }();
 
   final SettingsStore settings;

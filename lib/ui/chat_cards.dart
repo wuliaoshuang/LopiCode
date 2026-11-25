@@ -95,11 +95,12 @@ class _ApprovalCardState extends State<ApprovalCard> {
     final onAnswer = widget.onAnswer;
     final req = pending.request;
     final isSchedule = req.tool == 'schedule_task';
+    final isMcp = req.alwaysKey?.startsWith('mcp:') ?? false;
     final who = pending.agentName.isEmpty ? 'Agent' : '子代理“${pending.agentName}”';
     final icon = switch (req.tool) {
       'delete_file' => Icons.delete_outline,
       'schedule_task' => Icons.event_repeat,
-      _ => Icons.terminal,
+      _ => isMcp ? Icons.extension_outlined : Icons.terminal,
     };
     final risk = approvalRisk(req);
     final riskColor = switch (risk.level) {
@@ -145,7 +146,7 @@ class _ApprovalCardState extends State<ApprovalCard> {
         ),
         const SizedBox(height: Space.x3),
         Container(
-          constraints: BoxConstraints(maxHeight: isSchedule ? 220 : 104),
+          constraints: BoxConstraints(maxHeight: isSchedule || isMcp ? 220 : 104),
           padding: const EdgeInsets.all(Space.x3),
           decoration: BoxDecoration(color: c.codeBg, borderRadius: BorderRadius.circular(Radii.md)),
           child: SingleChildScrollView(
@@ -158,7 +159,7 @@ class _ApprovalCardState extends State<ApprovalCard> {
         const SizedBox(height: Space.x4),
         if (_confirmingAlways && req.allowAlways) ...[
           Text(
-            '确认后，这段对话里同类操作不再问你：执行命令、删除文件都会直接做，包括它派出的子代理。重开 App 或点顶上的提示可以恢复逐次询问。',
+            req.alwaysNote ?? '确认后，这段对话里同类操作不再问你：执行命令、删除文件都会直接做，包括它派出的子代理。重开 App 或点顶上的提示可以恢复逐次询问。',
             key: const Key('always-explain'),
             style: t.bodySmall?.copyWith(color: c.textMuted, height: 1.5),
           ),
@@ -178,7 +179,7 @@ class _ApprovalCardState extends State<ApprovalCard> {
               ),
               const SizedBox(width: Space.x2),
               Expanded(
-                child: FilledButton(key: const Key('always-confirm'), onPressed: () => onAnswer(true, always: true), child: const Text('确认，都允许')),
+                child: FilledButton(key: const Key('always-confirm'), onPressed: () => onAnswer(true, always: true), child: Text(isMcp ? '确认，这个工具都允许' : '确认，都允许')),
               ),
             ],
           ),
@@ -209,7 +210,7 @@ class _ApprovalCardState extends State<ApprovalCard> {
                   style: TextButton.styleFrom(foregroundColor: c.textFaint, backgroundColor: Colors.transparent, textStyle: t.bodySmall, visualDensity: VisualDensity.compact),
                   // 不直接生效：先说明后果，再点一次确认。
                   onPressed: () => setState(() => _confirmingAlways = true),
-                  child: const Text('本对话都允许'),
+                  child: Text(isMcp ? '本对话里这个工具都允许' : '本对话都允许'),
                 ),
               ),
             ),

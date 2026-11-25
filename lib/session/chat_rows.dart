@@ -137,6 +137,7 @@ Map<String, dynamic> _argsOf(String rawArgs) {
     'list_scheduled_tasks' => ('查看自动化任务', ''),
     'schedule_task' => ('安排自动化任务', a('title')),
     'update_todos' => ('更新待办清单', ''),
+    _ when name.startsWith('mcp__') => ('调用 MCP 工具', name.substring(5).replaceFirst('__', ' › ')),
     _ => (name, ''),
   };
 }

@@ -331,3 +331,47 @@ PHP 估计 7.4+（PHP 那份代码从没运行过）。下面选的版本都够�
   认不出来时归到“别的原因”，把退出码和最后三行输出原样给她。
 - 取消安装是杀掉 PRoot 进程（带 `--kill-on-exit`）；apt 的子进程是不是都跟着停、被打断后 dpkg 的状态要不要收拾，没实测。
   脚本开头加了 `dpkg --configure -a`（失败不管）来收拾上次被打断的安装。
+
+## MCP（Model Context Protocol）远程连接（`lib/agent/mcp/`）
+
+2026-11-25 新增。只做“远程”的两种连接方式（Streamable HTTP、旧的 HTTP+SSE），只用工具这一块（`tools/list`、`tools/call`）。
+来源全部是官方站 modelcontextprotocol.io，核对日期都是 **2026-11-25**。**没有连过任何真实的 MCP 服务器**，只用本机假服务器（`test/support/fake_mcp_server.dart`）测过；
+假服务器是照下面核对到的条文写的，所以“我们对规范的理解错了”这类问题测试抓不到。
+
+**先说一件和原计划不一样的事**：官方现在的最新版规范是 `2026-07-28`，它把连接改成了“无状态”——**没有** `initialize` 握手、**没有** `notifications/initialized`、
+**没有** `Mcp-Session-Id`、**没有** `ping`、没有 GET 长连接、没有 `Last-Event-ID` 续传。这些只存在于老版本（`2025-11-25` 及更早）。
+所以客户端做成“新老都认”：先按新版问，服务器不认再退到握手版，再不行退到最老的 HTTP+SSE（规范的向后兼容一节就是这么要求的）。
+
+| 项 | 核对到的事实 | 来源网址 | 状态 |
+| --- | --- | --- | --- |
+| 新版 `2026-07-28` 总览 | 无状态；每个请求自带协议版本和客户端能力 | https://modelcontextprotocol.io/specification/2026-07-28 | 已核对（页面更新于 2026-11-24） |
+| 新版的传输 | 只用 POST；`Accept: application/json, text/event-stream`；通知回 202；回答是一段 JSON 或一条 SSE 流；流里服务器只许发通知，不许发请求；不能续传 | https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/streamable-http | 已核对（2026-11-18 版） |
+| 新版的请求头 | `MCP-Protocol-Version`（要和正文 `_meta` 里的版本一致）、`Mcp-Method`、`Mcp-Name`（`tools/call` 时是工具名）；值里有非 ASCII 等字符时包成 `=?base64?…?=` | 同上 | 已核对 |
+| 新版 `x-mcp-header` | 工具参数说明里标了 `x-mcp-header` 的，参数值要同时放进 `Mcp-Param-{名字}` 头；只许字符串 / 整数 / 布尔；标得不合规矩的工具要从清单里去掉 | 同上 | 已核对；已实现 |
+| 新版的错误 | 头和正文对不上 → 400 + `-32020`；版本不支持 → 400；方法不认识 → 404 + `-32601` | 同上 | 已核对 |
+| 向后兼容（怎么探测） | 新版请求得到 400 且正文不是新版的错误 → 改发 `initialize`；POST 得到 400 / 404 / 405 → 改用 GET 等 `endpoint` 事件（最老的 HTTP+SSE） | 同上 | 已核对；已实现 |
+| 版本怎么分 | “新”＝`2026-07-28` 及以后；“老”＝`2025-11-25` 及以前；版本不支持的错误会列出服务器支持哪些 | https://modelcontextprotocol.io/specification/2026-07-28/basic/versioning | 已核对。错误里那个清单的字段名（我们读 `data.supported`）**未核对** |
+| 新版的消息格式 | id 是字符串或整数；结果里 `resultType` 是 `complete` 或 `input_required`（不写＝complete）；`_meta` 里必带 `io.modelcontextprotocol/protocolVersion`、`io.modelcontextprotocol/clientCapabilities`，可带 `io.modelcontextprotocol/clientInfo`；错误码 `-32020` `-32021` `-32022` 和标准的 `-32700`、`-32600`～`-32603` | https://modelcontextprotocol.io/specification/2026-07-28/basic/index | 已核对。`input_required` 结果的具体形状**未核对**（我们遇到就报“不支持”） |
+| `server/discover` | 新版服务器必须有；返回 `supportedVersions`、`capabilities`、`_meta` 里的服务器名字和版本、`instructions` | https://modelcontextprotocol.io/specification/2026-07-28/server/discover | 已核对；新版下用它当“连接测试”和 ping |
+| 工具 | `tools/list` 分页（`cursor` / `nextCursor`）；`tools/call` 参数 `name`、`arguments`；结果 `content`（一组内容块）、`structuredContent`、`isError`；工具名建议 1–128 个字符、只用字母数字和 `_-.` | https://modelcontextprotocol.io/specification/2026-07-28/server/tools | 已核对 |
+| 握手版的传输（`2025-06-18`） | POST + 可选 GET；回答是 JSON 或 SSE；SSE 里在回答之前可以夹带服务器的通知和请求；`Mcp-Session-Id` 在握手的回答头里给，之后每个请求都带；带着会话号得到 404 → 重新握手；结束时客户端应发 DELETE（服务器可以回 405）；之后的请求带 `MCP-Protocol-Version` 头；`Last-Event-ID` 续传是可选的 | https://modelcontextprotocol.io/specification/2025-06-18/basic/transports | 已核对 |
+| 握手流程（`2025-06-18`） | `initialize` → 回答 → 发 `notifications/initialized`；服务器回的版本客户端不支持就断开；请求应该有超时 | https://modelcontextprotocol.io/specification/2025-06-18/basic/lifecycle | 已核对 |
+| 握手版的字段 | `initialize` 参数 `protocolVersion`、`capabilities`、`clientInfo`；回答 `protocolVersion`、`capabilities`、`serverInfo{name, title?, version}`、`instructions?`；`ping` 方法名；`Tool{name, title?, description?, inputSchema, …}`；内容块 `text` / `image` / `audio` / `resource_link` / `resource` | https://modelcontextprotocol.io/specification/2025-06-18/schema | 已核对。`ping` 回答的形状**未核对**（我们只看有没有回答） |
+| 最老的 HTTP+SSE（`2024-11-05`） | GET 开一条 SSE 流；服务器先发 `endpoint` 事件，内容是之后 POST 用的地址；服务器的消息是 `message` 事件 | https://modelcontextprotocol.io/specification/2024-11-05/basic/transports | 已核对传输这一页；这一版的握手页、工具页**未核对**（按 `2025-06-18` 的写法处理） |
+| `2025-11-25` 这一版自己的页面 | — | — | **未核对**。握手时我们报 `2025-06-18`；服务器回 `2025-06-18` / `2025-03-26` / `2024-11-05` 之一才接受，回别的（包括 `2025-11-25`）会报“版本对不上” |
+| SSE 的格式细节 | 事件用空行分开、多行 `data:` 用换行拼起来、`:` 开头是注释、三种换行都认 | WHATWG HTML 标准的 server-sent events 一节 | **未核对**（照通用知识实现，`test/mcp_client_test.dart` 的“SSE 解析”一组守着行为） |
+| 会话号的字符范围 | — | — | **未核对**。自己定的：只接受看得见的 ASCII 字符、最长 512 |
+| 鉴权 / OAuth 那几页 | — | — | **未核对**，也没做 |
+
+这一轮**没做、也没向服务器声明**的：resources、prompts、sampling、elicitation、roots、logging（握手和每个请求里的客户端能力都是空的 `{}`）。
+服务器在流里夹带的通知一律忽略；夹带的请求：`ping` 回空结果，其余回 `-32601`（不支持）。`Last-Event-ID` 断线续传没做：流断了就报“连接中断”，不自动重发（重发可能让工具执行两遍）。
+本机 stdio 方式没做（手机上没有通用的本机进程环境）。OAuth 没做（只支持用户自己填请求头）。
+
+自己定的数值（`McpTimeouts`、`mcp_http.dart`、`mcp_client.dart`、`mcp_tools.dart`）：
+
+- 超时：建立连接 10 秒；等响应头 20 秒（握手、列工具、ping）；调用工具等响应头 120 秒；流里连续 60 秒没有新内容算断；收尾 5 秒。
+  对话开头自动刷新工具清单时用短的：6 秒 / 8 秒 / 8 秒。（RikkaHub 是连接 20 秒、读 10 分钟，我们收得更紧。）
+- 上限：一次回答或一个 SSE 事件最多 4 MB；工具清单最多翻 20 页、200 个工具；最多配 20 个服务器；请求头的值最长 4096 个字符；
+  工具说明给模型最多 600 字；工具名最长 64；确认卡上的参数最多显示 6000 字；结果超过 8000 字走“超长结果另存”。
+- 重定向：不自动跟。同一个主机（协议、主机、端口都一样）的 307 / 308 最多跟 2 次；302 / 303 不跟（会把 POST 变成 GET）；转去别的主机一律不跟——请求头里带着令牌。
+- 地址：外网必须 https；http 只能是本机或局域网（用现成的 `isLocalBaseUrl`）；地址里不许带账号密码。

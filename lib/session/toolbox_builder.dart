@@ -16,6 +16,7 @@ import 'package:lopicode/runtime/linux_command_runner.dart';
 import 'package:lopicode/session/automation_tools.dart';
 import 'package:lopicode/session/chat_models.dart';
 import 'package:lopicode/session/conversation.dart';
+import 'package:lopicode/session/mcp_wiring.dart';
 import 'package:lopicode/session/session_core.dart';
 import 'package:lopicode/ssh/ssh_shell_backend.dart';
 import 'package:lopicode/state/workspace_chat.dart';
@@ -89,6 +90,7 @@ class ToolboxBuilder {
     if (core.subagentsEnabled && conv.depth < core.subagentMaxDepth) extras.add(spawnTool(run, root, skills));
     if (core.teamEnabled) extras.addAll((await core.boardOf(root)).tools(conv.parentId == null ? TeamBoard.lead : conv.agentName));
     if (!run.unattended) extras.addAll(automationTools(store: app.automations, project: core.project, approve: (request) => requestApproval(run, request)));
+    extras.addAll(await mcpToolsFor(core, run, root, (request) => requestApproval(run, request), taken: {...AgentToolbox.coreKinds.keys, for (final e in extras) e.name}));
     return AgentToolbox(
       guard: core.guard,
       runner: session.commandRunnerFactory?.call() ?? LinuxCommandRunner(app.runtime, guestCwd: core.project.linuxPath, onOutput: (t) => _echoTerminal()?.append(t)),

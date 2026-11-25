@@ -13,7 +13,13 @@ import 'package:lopicode/lowcode/model.dart';
 
 /// 需要用户点头的一次操作（显示成对话里的确认卡）。
 class ApprovalRequest {
-  ApprovalRequest({required this.tool, required this.title, required this.detail, this.allowAlways = true});
+  ApprovalRequest({required this.tool, required this.title, required this.detail, this.allowAlways = true, this.alwaysKey, this.alwaysNote});
+
+  /// 不为空时，“本对话都允许”只记这一个键（比如某个 MCP 服务器的某个工具），不会把命令、删除也一起放开。
+  final String? alwaysKey;
+
+  /// 点“本对话都允许”后、二次确认前显示的说明；为空用默认那句。
+  final String? alwaysNote;
 
   /// 这类确认能不能用“本对话都允许”带过。自动化任务的确认卡不能。
   final bool allowAlways;

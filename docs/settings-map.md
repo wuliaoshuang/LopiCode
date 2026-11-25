@@ -15,6 +15,7 @@
 | Agent | 个性化 | `PersonalizeScreen` | 〔个人偏好〕；〔Agent 预设〕列表、新建、编辑、复制、设为默认、删除 |
 | Agent | 子代理与团队 | `SubagentSettingsScreen` | 〔子代理〕开关、最多几层、同时几个；〔可以换用的模型〕；〔智能体团队〕开关 |
 | 能力 | 联网搜索 | `WebSearchSettingsScreen` | 〔搜索服务〕地址、Key、保存；〔测试〕搜一次试试 |
+| 能力 | MCP 服务器（2026-11-25 新增） | `McpServersScreen` | 〔服务器〕每个服务器一行（名字、状态和工具数、开关）、添加；点开是 `McpServerEditScreen`：第 1 步名字 / 地址 / 连接方式 / 请求头 → 第 2 步连接并读取工具 → 第 3 步选工具 → 第 4 步保存；删除在右上角“更多”里 |
 | 能力 | 技能 | `SkillsScreen` | 〔这个工作区〕和〔全局〕分开两组；开关、看全文、新建、删除 |
 | 能力 | 自动化任务 | `AutomationListScreen` | 原样 |
 | 界面 | 对话显示 | `ChatDisplayScreen` | 〔新对话〕开场建议；〔回复里〕用量、思考过程 |
