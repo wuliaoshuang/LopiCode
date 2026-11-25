@@ -6,6 +6,8 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lopicode/agent/provider_presets.dart';
+import 'package:lopicode/build/build_widgets.dart';
+import 'package:lopicode/core/stores.dart';
 import 'package:lopicode/core/templates.dart';
 import 'package:lopicode/lowcode/builder_screen.dart';
 import 'package:lopicode/lowcode/canvas_view.dart';
@@ -173,6 +175,9 @@ void main() {
         );
       });
       final (_, project, session) = await openProject(tester, env: env, template: ProjectTemplate.web);
+      // 打包页重做后没选过方式的默认是“本地打包”，那一页可能很短（项目不适用时只有一张卡），滚不到顶栏下面；
+      // 这个用例看的是顶栏和滚动，先存成原来的默认值（GitHub Actions 的长表单）。
+      await tester.runAsync(() => env.services.settings.set(SettingKeys.apkBuildMode, 'github'));
       await tester.pumpWidget(
         appFor(
           env,
@@ -234,7 +239,8 @@ void main() {
       expectFloatingBar(tester, '打包');
       final apkList = find.byType(Scrollable).hitTestable().first;
       expect(tester.getRect(apkList).top, 0);
-      final first = find.descendant(of: apkList, matching: find.byType(SegmentedButton<bool>));
+      // 打包页重做后最上面是三选一（BuildModePicker），原来是两段的 SegmentedButton<bool>；要验的还是“第一块内容起始在顶栏下面、能滚到顶栏下面”。
+      final first = find.descendant(of: apkList, matching: find.byType(BuildModePicker));
       expect(tester.getRect(first).top, greaterThan(kInset));
       tester.state<ScrollableState>(apkList).position.jumpTo(200);
       await tester.pump();

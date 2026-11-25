@@ -39,7 +39,7 @@ class RealLocalPackBackend implements LocalPackBackend {
   @override
   String? validateVersionName(String value) => value.trim().isEmpty ? '版本名不能空着' : null;
 
-  /// 接：`validateVersionCode(value)`
+  /// 接：打包器的 `validateVersionCode` 入参是 int——先 `int.tryParse(value.trim())`，解析不了就地返回“版本号要是一个整数”，解析得了再交给它。
   @override
   String? validateVersionCode(String value) => int.tryParse(value.trim()) == null ? '版本号要是一个整数' : null;
 
@@ -63,6 +63,8 @@ class RealLocalPackBackend implements LocalPackBackend {
   @override
   ApkSigningKey importKey(String text, String passphrase) => throw const ApkPackException(_notWired, field: 'key');
 
+  /// 失败抛的 [ApkPackException.field] 除约定文件里列的以外还可能是 `permissions`（界面有落点：权限那一行 + “去改权限”）。
+  /// 图标：界面已经缩成 48/72/96/144/192 五张 PNG 放在 `request.iconPngs`；打包器的 `validateIconPng(size, bytes)` 由它自己在 pack 里查，不过抛 field 为 `icon`。
   /// 接：`LocalApkPacker(template: template, signer: <la-signer 里拿 key 做 v1+v2 签名的 ApkSigner 实现>(key)).pack(request, onProgress: onProgress)`
   @override
   Future<ApkPackResult> pack({required Uint8List template, required ApkSigningKey key, required ApkPackRequest request, void Function(ApkPackProgress progress)? onProgress}) async =>
