@@ -17,6 +17,7 @@ import 'package:lopicode/session/chat_models.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/file_mention.dart';
 import 'package:lopicode/ui/keyboard_dismiss.dart';
+import 'package:lopicode/ui/model_level_mark.dart';
 import 'package:lopicode/ui/usage_ui.dart';
 import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
@@ -416,12 +417,7 @@ class _ChatComposerState extends State<ChatComposer> with WidgetsBindingObserver
                         minimumSize: const Size(0, _kTarget),
                         padding: const EdgeInsets.symmetric(horizontal: Space.x2),
                       ),
-                      child: Text(
-                        widget.modelName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: t.bodyMedium?.copyWith(color: c.text),
-                      ),
+                      child: ModelButtonLabel(name: widget.modelName),
                     ),
                   ),
                 ),

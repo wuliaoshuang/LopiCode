@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:lopicode/agent/provider_presets.dart';
+import 'package:lopicode/agent/thinking_support.dart';
 import 'package:lopicode/core/stores.dart';
 
 /// 渠道用哪种接口协议。
@@ -17,15 +18,21 @@ enum ChatProtocol {
   static ChatProtocol byId(Object? id) => values.firstWhere((p) => p.id == id, orElse: () => openaiChat);
 }
 
-/// 思考档位。`off` 表示不思考。
+/// 模型设置里可以勾掉的思考档位。`off` 表示不思考（或不发思考参数）。
+/// 有的服务商还有别的档位（`max` 最高、`on` 只能开关），见 lib/agent/thinking_support.dart。
 const List<String> kThinkingLevels = ['low', 'medium', 'high'];
 
 String thinkingLabel(String level) => switch (level) {
   'low' => '低',
   'medium' => '中',
   'high' => '高',
+  'max' => '最高',
+  'on' => '开',
   _ => '关闭',
 };
+
+/// “按模型记住的思考档位”用的键。
+String thinkingLevelKey(String channelId, String modelId) => '$channelId/$modelId';
 
 double? _price(Object? v) => v is num && v >= 0 && v.isFinite ? v.toDouble() : null;
 
@@ -184,6 +191,13 @@ class ModelSelection {
   int get hashCode => Object.hash(channelId, modelId, level);
 }
 
+/// 设置文件里那张“模型 → 思考档位”的表；类型不对的一律丢掉，不抛错。
+Map<String, String> readThinkingLevels(Object? raw) => {
+  if (raw is Map)
+    for (final e in raw.entries)
+      if (e.key is String && e.value is String) e.key as String: e.value as String,
+};
+
 /// 选择解析后的结果：真的存在的渠道和模型。
 class ResolvedModel {
   ResolvedModel(this.channel, this.model, this.level);
@@ -196,19 +210,20 @@ class ResolvedModel {
 }
 
 /// 把一个选择落到 [channels] 里真实存在的渠道和模型上；指向的东西被删了就返回 null。
-ResolvedModel? resolveSelection(List<Channel> channels, ModelSelection? s) {
+/// 档位：[remembered]（按模型记住的）里有就用它，没有才用选择里带的那个（旧存盘）；再按这个模型真实支持的档位收口。
+ResolvedModel? resolveSelection(List<Channel> channels, ModelSelection? s, {Map<String, String> remembered = const {}}) {
   if (s == null) return null;
   final ch = channels.where((c) => c.id == s.channelId).firstOrNull;
   final m = ch?.model(s.modelId);
   if (ch == null || m == null) return null;
-  final level = m.thinking && m.levels.contains(s.level) ? s.level : 'off';
-  return ResolvedModel(ch, m, level);
+  final want = remembered[thinkingLevelKey(ch.id, m.id)] ?? s.level;
+  return ResolvedModel(ch, m, normalizeThinkingLevel(thinkingOptions(ch, m), want));
 }
 
 /// [channels] 里第一个能用的模型（兜底）。
-ResolvedModel? firstAvailableModel(List<Channel> channels) {
+ResolvedModel? firstAvailableModel(List<Channel> channels, {Map<String, String> remembered = const {}}) {
   for (final c in channels) {
-    if (c.models.isNotEmpty) return ResolvedModel(c, c.models.first, 'off');
+    if (c.models.isNotEmpty) return resolveSelection(channels, ModelSelection(c.id, c.models.first.id), remembered: remembered);
   }
   return null;
 }
@@ -246,6 +261,7 @@ class ModelConfigStore {
   static const kLast = 'ai.lastSelection';
   static const kFixed = 'ai.fixedSelection';
   static const kDefaultMode = 'ai.newChatDefault'; // last / fixed
+  static const kLevels = 'ai.thinkingLevels'; // {"渠道 id/模型 id": 档位}，每个模型上次设的思考档位
 
   static String keyName(String channelId) => 'channel_key_$channelId';
 
@@ -290,13 +306,7 @@ class ModelConfigStore {
       await save();
       return;
     }
-    final ch = Channel(
-      id: 'default',
-      name: '默认渠道',
-      protocol: ChatProtocol.openaiChat,
-      baseUrl: base,
-      models: [if (model.isNotEmpty) ModelSpec(id: model)],
-    );
+    final ch = Channel(id: 'default', name: '默认渠道', protocol: ChatProtocol.openaiChat, baseUrl: base, models: [if (model.isNotEmpty) newModelSpec(ChatProtocol.openaiChat, base, model)]);
     _setChannels([ch]);
     if (key != null && key.isNotEmpty) {
       // 先写新位置，写成功了再删旧的，中途失败不会丢 Key。
@@ -337,6 +347,13 @@ class ModelConfigStore {
 
   Future<void> remove(String id) async {
     _setChannels(channels.where((c) => c.id != id));
+    final levels = thinkingLevels;
+    if (levels.keys.any((k) => k.startsWith('$id/'))) {
+      await settings.set(kLevels, {
+        for (final e in levels.entries)
+          if (!e.key.startsWith('$id/')) e.key: e.value,
+      });
+    }
     await secrets.delete(keyName(id));
     _keyChanged(id);
     await save();
@@ -358,11 +375,25 @@ class ModelConfigStore {
   Future<void> setLastSelection(ModelSelection s) => settings.set(kLast, s.toJson());
   Future<void> setFixedSelection(ModelSelection? s) => settings.set(kFixed, s?.toJson());
 
+  /// 每个模型上次设的思考档位。坏数据（不是表、值不是字符串）当没有。
+  Map<String, String> get thinkingLevels => readThinkingLevels(settings.get<Object>(kLevels));
+
+  /// 这个模型上次设的档位；没设过是 null。
+  String? thinkingLevelOf(String channelId, String modelId) => thinkingLevels[thinkingLevelKey(channelId, modelId)];
+
+  /// 记住这个模型的思考档位（换到别的模型再换回来还是它）。
+  Future<void> setThinkingLevel(String channelId, String modelId, String level) async {
+    final key = thinkingLevelKey(channelId, modelId);
+    final now = thinkingLevels;
+    if (now[key] == level) return;
+    await settings.set(kLevels, {...now, key: level});
+  }
+
   /// 把一个选择落到真实存在的渠道和模型上；指向的东西被删了就返回 null。
-  ResolvedModel? resolve(ModelSelection? s) => resolveSelection(channels, s);
+  ResolvedModel? resolve(ModelSelection? s) => resolveSelection(channels, s, remembered: thinkingLevels);
 
   /// 第一个能用的模型（兜底）。
-  ResolvedModel? get firstAvailable => firstAvailableModel(channels);
+  ResolvedModel? get firstAvailable => firstAvailableModel(channels, remembered: thinkingLevels);
 
   /// 新对话用哪个模型：固定默认 → 上次用的 → 第一个能用的。
   ResolvedModel? defaultForNewChat() => (newChatUsesFixed ? resolve(fixedSelection) : null) ?? resolve(lastSelection) ?? resolve(fixedSelection) ?? firstAvailable;
