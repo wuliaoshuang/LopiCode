@@ -81,9 +81,14 @@ void main() {
   ThemesView viewOf(TestEnv env) => env.services.container.read(themesProvider);
 
   /// 等真实存盘做完再排界面。
-  Future<void> io(WidgetTester tester) async {
+  /// [until]：存盘后面还跟着换页面的（比如导入后退回管理页），机器忙的时候固定等几轮不够，就等到它出现为止（最多再等 30 轮）。
+  Future<void> io(WidgetTester tester, {Finder? until}) async {
     await settle(tester, rounds: 4);
     await tester.pumpAndSettle();
+    for (var i = 0; until != null && i < 30 && until.evaluate().isEmpty; i++) {
+      await settle(tester, rounds: 1);
+      await tester.pumpAndSettle();
+    }
   }
 
   /// 新建一套自己的主题（[make] 可以再改一改）。
@@ -331,7 +336,7 @@ void main() {
       expect(find.text('改动还没保存'), findsNothing);
     });
 
-    testWidgets('四种预览可以切；点某一项时自动切到它所在的那种（深色截图）', (tester) async {
+    testWidgets('五种预览可以切；点某一项时自动切到它所在的那种（深色截图）', (tester) async {
       late ThemeSpec t;
       await boot(
         tester,
@@ -341,7 +346,7 @@ void main() {
       );
       expect(k('theme-preview-ui'), findsOneWidget);
       await shot(tester, 'editor-ui-dark');
-      for (final (label, kind) in [('代码', 'code'), ('积木', 'blocks'), ('终端', 'terminal')]) {
+      for (final (label, kind) in [('代码', 'code'), ('积木', 'blocks'), ('终端', 'terminal'), ('搭建', 'lowcode')]) {
         await tester.tap(find.descendant(of: k('theme-preview-kind'), matching: find.text(label)));
         await tester.pumpAndSettle();
         expect(k('theme-preview-$kind'), findsOneWidget);
@@ -900,7 +905,7 @@ void main() {
       expect(tester.widget<Text>(k('theme-import-contrast')).data, checkThemeContrast(decoded.theme!).isEmpty ? contains('都达标') : contains('项对比度偏低'));
       expect(tester.widget<Text>(k('theme-import-image')).data, contains('没带背景图'));
       await shot(tester, 'import-preview-dark-theme');
-      for (final (label, kind) in [('代码', 'code'), ('积木', 'blocks'), ('终端', 'terminal')]) {
+      for (final (label, kind) in [('代码', 'code'), ('积木', 'blocks'), ('搭建', 'lowcode'), ('终端', 'terminal')]) {
         await tester.tap(find.descendant(of: k('theme-import-kind'), matching: find.text(label)));
         await tester.pumpAndSettle();
         expect(k('theme-preview-$kind'), findsOneWidget);
@@ -908,7 +913,7 @@ void main() {
       await shot(tester, 'import-preview-terminal');
 
       await tester.tap(k('theme-import-add'));
-      await io(tester);
+      await io(tester, until: find.byType(ThemesScreen));
       expect(find.byType(ThemesScreen), findsOneWidget);
       expect(find.byType(ThemeImportScreen), findsNothing, reason: '加进来以后直接回到管理页');
       expect(viewOf(env).user.map((t) => t.name).toSet(), hasLength(2), reason: '已经有一套“深海”，新的自动改名');
@@ -945,7 +950,7 @@ void main() {
       await tester.tap(k('theme-import-check'));
       await tester.pumpAndSettle();
       await tester.tap(k('theme-import-use'));
-      await io(tester);
+      await io(tester, until: find.byType(ThemesScreen));
       expect(viewOf(env).user.single.name, '别人给的');
       expect(viewOf(env).user.single.builtin, isFalse);
       expect(viewOf(env).light.id, viewOf(env).user.single.id);
@@ -1012,7 +1017,7 @@ void main() {
       expect(tester.widget<Text>(k('theme-import-image')).data, contains('这个版本还用不了背景图'));
       expect(k('theme-import-image-use'), findsNothing);
       await tester.tap(k('theme-import-add'));
-      await io(tester);
+      await io(tester, until: find.byType(ThemesScreen));
       expect(viewOf(env).user.single.name, '带图的');
     });
 
@@ -1050,7 +1055,7 @@ void main() {
       expect(tester.widget<CheckboxListTile>(k('theme-import-image-use')).value, isTrue);
       await shot(tester, 'import-preview-with-image');
       await tester.tap(k('theme-import-add'));
-      await io(tester);
+      await io(tester, until: find.byType(ThemesScreen));
       expect(got, isNotNull);
       expect(got!['mime'], 'image/png');
       expect(got!['data'], png);

@@ -1,4 +1,4 @@
-// 设计约束（主题的四种实时预览：界面 / 代码 / 积木 / 终端 · 宽约 358、高 232）— 2026-11-26
+// 设计约束（主题的实时预览：界面 / 代码 / 积木 / 终端，外加“搭建”（低代码编辑器，在 theme_preview_lowcode.dart）· 宽约 358、高 232）— 2026-11-26
 // - 用途：主题编辑器顶上固定的那一块、导入预览页。**用传进来的那份主题渲染**（不是全应用正在用的那份），
 //   所以改到一半的主题、还没导入的主题都能看；它不碰全应用的主题。
 // - 层级：预览只是“看”，不是操作区——整块不接手指、不进读屏（里面的按钮开关都是样子）。
@@ -13,13 +13,15 @@ import 'package:lopicode/blocks/block_colors.dart';
 import 'package:lopicode/theme/app_theme.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/code_langs.dart';
+import 'package:lopicode/ui/theme_preview_lowcode.dart';
 import 'package:material_ui/material_ui.dart';
 
 enum ThemePreviewKind {
   ui('界面'),
   code('代码'),
   blocks('积木'),
-  terminal('终端');
+  terminal('终端'),
+  lowcode('搭建');
 
   const ThemePreviewKind(this.label);
   final String label;
@@ -63,6 +65,7 @@ class ThemePreview extends StatelessWidget {
                     ThemePreviewKind.code => _CodePreview(spec: spec),
                     ThemePreviewKind.blocks => _BlocksPreview(spec: spec),
                     ThemePreviewKind.terminal => _TerminalPreview(spec: spec),
+                    ThemePreviewKind.lowcode => ThemeLowcodePreview(spec: spec),
                   },
                 ),
               ),

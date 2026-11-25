@@ -2,7 +2,7 @@
 // - 顶栏：返回 · 主题名 · 撤销 · 重做 · “⋯”（改名、换强调色、从主色生成整套、全部恢复为起点）。挤不下的都在“⋯”里。
 // - 顶栏下面固定不滚的一块（键盘升起来找东西时这一块让出去，只留搜索）：
 //   1) 实时预览（高 232）——用“正在编辑的这份草稿”画，不影响全应用；**保存以后**全应用才换上。
-//   2) 预览看哪一种：界面 / 代码 / 积木 / 终端（一行四段）。点某一项时自动切到它所在的那一种。
+//   2) 预览看哪一种：界面 / 代码 / 积木 / 终端 / 搭建（一行五段；“搭建”＝低代码编辑器那 21 项）。点某一项时自动切到它所在的那一种。
 //   3) 一行找东西：搜索框 + “只看改过的”。
 //   4) “N 项对比度偏低”（有才出现；点开列表、能跳到那一项；只提醒不拦保存）。
 // - 再下面是能滚的列表，一行一项、行高都一样（见 theme_editor_rows.dart）：
@@ -142,6 +142,7 @@ class _ThemeEditorScreenState extends ConsumerState<ThemeEditorScreen> {
         'code' || 'tokens' => ThemePreviewKind.code,
         'terminal' => ThemePreviewKind.terminal,
         'blocks' => ThemePreviewKind.blocks,
+        'lowcode' => ThemePreviewKind.lowcode,
         _ => _kind,
       };
     });
