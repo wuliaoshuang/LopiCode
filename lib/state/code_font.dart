@@ -8,6 +8,11 @@ const double kCodeFontMax = 24;
 const double kCodeFontDefault = 14;
 const double kCodeFontStep = 1;
 
+/// “小一号”的代码字：改动对比、步骤详情、完整输出、后台日志这些“想看再点”的次要内容比正式代码小这么多
+/// （默认 14 − 2 = 12，和原来写死的 12 号一样），但不小于最小字号。
+const double kCodeFontCompactGap = 2;
+double compactCodeFont(double size) => (size - kCodeFontCompactGap).clamp(kCodeFontMin, kCodeFontMax).toDouble();
+
 /// 把任意数夹回范围并取整到步进。
 double clampCodeFont(num v) => ((v / kCodeFontStep).round() * kCodeFontStep).clamp(kCodeFontMin, kCodeFontMax).toDouble();
 
@@ -46,3 +51,6 @@ class CodeFontNotifier extends Notifier<double> {
 }
 
 final codeFontProvider = NotifierProvider<CodeFontNotifier, double>(CodeFontNotifier.new);
+
+/// 次要代码内容（对比、步骤详情、完整输出、后台日志）的字号：跟着“代码字号”走，小一号。
+final compactCodeFontProvider = Provider<double>((ref) => compactCodeFont(ref.watch(codeFontProvider)));

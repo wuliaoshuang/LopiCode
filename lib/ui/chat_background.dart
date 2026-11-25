@@ -15,8 +15,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lopicode/agent/background_commands.dart';
 import 'package:lopicode/agent/background_tools.dart';
 import 'package:lopicode/project_session.dart';
+import 'package:lopicode/state/code_font.dart';
 import 'package:lopicode/state/workspace_background.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/code_view.dart';
 import 'package:lopicode/ui/top_bar.dart';
 import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
@@ -331,14 +333,17 @@ class _BackgroundLogScreenState extends ConsumerState<BackgroundLogScreen> with 
                           ? Center(
                               child: Text(task.running ? '还没有输出' : '没有输出', style: t.bodySmall?.copyWith(color: c.textFaint)),
                             )
-                          : SingleChildScrollView(
-                              key: const ValueKey('bg-log-scroll'),
-                              controller: _scroll,
-                              padding: const EdgeInsets.all(Space.x3),
-                              child: SelectableText(
-                                _log,
-                                key: const ValueKey('bg-log-text'),
-                                style: TextStyle(fontFamily: kMonoFont, fontFamilyFallback: kMonoFallback, fontSize: FontSize.xs, height: 1.45, color: c.text),
+                          : CodeZoom(
+                              child: SingleChildScrollView(
+                                key: const ValueKey('bg-log-scroll'),
+                                controller: _scroll,
+                                padding: const EdgeInsets.all(Space.x3),
+                                child: SelectableText(
+                                  _log,
+                                  key: const ValueKey('bg-log-text'),
+                                  // 字号跟着“代码字号”走、小一号（默认 12）；双指捏合可调。
+                                  style: TextStyle(fontFamily: kMonoFont, fontFamilyFallback: kMonoFallback, fontSize: ref.watch(compactCodeFontProvider), height: 1.45, color: c.text),
+                                ),
                               ),
                             ),
                     ),

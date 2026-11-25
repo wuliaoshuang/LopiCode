@@ -11,6 +11,7 @@ import 'package:lopicode/agent/line_diff.dart';
 import 'package:lopicode/session/chat_models.dart';
 import 'package:lopicode/session/chat_rows.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/code_view.dart';
 import 'package:lopicode/ui/diff_view.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -151,7 +152,9 @@ class _ApprovalPreviewState extends State<ApprovalPreview> {
               constraints: const BoxConstraints(maxHeight: kApprovalPreviewMaxHeight),
               padding: const EdgeInsets.all(Space.x2),
               decoration: BoxDecoration(color: c.codeBg, borderRadius: BorderRadius.circular(Radii.md)),
-              child: SingleChildScrollView(child: FileChangeBody(change: change)),
+              child: CodeZoom(
+                child: SingleChildScrollView(child: FileChangeBody(change: change)),
+              ),
             ),
         ],
       ),

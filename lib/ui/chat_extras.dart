@@ -7,9 +7,12 @@
 // - 一行只做一件事；颜色只用在状态上。
 import 'dart:async';
 
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lopicode/session/chat_models.dart';
+import 'package:lopicode/state/code_font.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/chrome.dart';
+import 'package:lopicode/ui/code_view.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// 聊天行里要用到、但行自己拿不到的几个动作。由聊天页在列表外面套一层提供；没套（比如只读的子对话页）就不出现对应按钮。
@@ -282,7 +285,7 @@ class InterruptedCard extends StatelessWidget {
   }
 }
 
-/// 整页看一份转存的完整输出（命令输出，或别的工具的超长结果）。
+/// 整页看一份转存的完整输出（命令输出，或别的工具的超长结果）。字号跟着“代码字号”走、小一号，双指捏合可调。
 class CommandOutputPage extends StatelessWidget {
   const CommandOutputPage({super.key, required this.path, required this.load});
   final String path;
@@ -311,13 +314,17 @@ class CommandOutputPage extends StatelessWidget {
             );
           }
           final shown = text.length <= maxShown ? text : '${text.substring(0, maxShown ~/ 2)}\n\n…（太长，中间 ${text.length - maxShown} 字没显示；文件在 $path）…\n\n${text.substring(text.length - maxShown ~/ 2)}';
-          return Scrollbar(
-            child: SingleChildScrollView(
-              padding: EdgeInsets.fromLTRB(Space.x4, PageBar.insetOf(context) + Space.x4, Space.x4, Space.x4),
-              child: SelectableText(
-                shown,
-                key: const ValueKey('output-full-text'),
-                style: TextStyle(fontFamily: kMonoFont, fontFamilyFallback: kMonoFallback, fontSize: FontSize.xs, height: 1.5, color: c.text),
+          return CodeZoom(
+            child: Scrollbar(
+              child: SingleChildScrollView(
+                padding: EdgeInsets.fromLTRB(Space.x4, PageBar.insetOf(context) + Space.x4, Space.x4, Space.x4),
+                child: Consumer(
+                  builder: (context, ref, _) => SelectableText(
+                    shown,
+                    key: const ValueKey('output-full-text'),
+                    style: TextStyle(fontFamily: kMonoFont, fontFamilyFallback: kMonoFallback, fontSize: ref.watch(compactCodeFontProvider), height: 1.5, color: c.text),
+                  ),
+                ),
               ),
             ),
           );

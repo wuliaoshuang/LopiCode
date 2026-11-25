@@ -1,5 +1,6 @@
 // 设计约束（改动对比 · 390×844）
-// - 这是“想看再点”的次要内容：等宽小字（12 号），不抢正式回复。
+// - 这是“想看再点”的次要内容：等宽小字，不抢正式回复。字号跟着“设置 › 界面 › 外观 › 代码字号”走、小一号
+//   （默认 14 → 这里 12）；双指捏合由外面包的 CodeZoom 管（步骤详情、确认卡预览、改过的文件各包一层），这里不再包。
 // - 一行只有三样，固定顺序：行号（淡灰，靠右对齐）｜ 标记（+ / −）｜ 这一行的内容。
 //   行号只占一列：增的行和不变的行写新文件里的行号，删的行写旧文件里的行号。
 // - 颜色只表示“增 / 删”：增＝浅绿底，删＝浅红底，不变的行没有底色。绿色是这个应用色板里原来没有的，
@@ -8,7 +9,9 @@
 // - 隔得远的不变行不显示，中间放一行淡字“… 省略 N 行”。
 // - 默认最多露 [kDiffCollapsedLines] 行，其余收在“显示其余 N 行”里（点了才展开）。
 // - 没有主操作。
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lopicode/agent/line_diff.dart';
+import 'package:lopicode/state/code_font.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -76,17 +79,17 @@ class _Code extends _Row {
 }
 
 /// 一份对比。[numbers]＝false 时不画行号（预览“打算怎么改”时，行号只是那一小段里的，没意义）。
-class DiffView extends StatefulWidget {
+class DiffView extends ConsumerStatefulWidget {
   const DiffView({super.key, required this.change, this.numbers = true, this.collapsedLines = kDiffCollapsedLines});
   final FileChange change;
   final bool numbers;
   final int collapsedLines;
 
   @override
-  State<DiffView> createState() => _DiffViewState();
+  ConsumerState<DiffView> createState() => _DiffViewState();
 }
 
-class _DiffViewState extends State<DiffView> {
+class _DiffViewState extends ConsumerState<DiffView> {
   bool _all = false;
 
   List<_Row> _rows() {
@@ -118,7 +121,8 @@ class _DiffViewState extends State<DiffView> {
       if (r is _Code) used++;
     }
     final hidden = codeRows - used;
-    final mono = TextStyle(fontFamily: kMonoFont, fontFamilyFallback: kMonoFallback, fontSize: FontSize.xs, height: 1.5, color: c.text);
+    final size = ref.watch(compactCodeFontProvider);
+    final mono = TextStyle(fontFamily: kMonoFont, fontFamilyFallback: kMonoFallback, fontSize: size, height: 1.5, color: c.text);
     var maxNo = 1;
     for (final r in shown) {
       if (r is _Code) {
@@ -126,7 +130,8 @@ class _DiffViewState extends State<DiffView> {
         if (n > maxNo) maxNo = n;
       }
     }
-    final noWidth = 8.0 * '$maxNo'.length + 8;
+    // 行号列宽跟着字号走（等宽字一位数字约占字号的 2/3；12 号时正好是原来的 8）。
+    final noWidth = size * 2 / 3 * '$maxNo'.length + 8;
 
     Widget rowOf(_Row r) {
       if (r is _Gap) {
@@ -157,7 +162,7 @@ class _DiffViewState extends State<DiffView> {
                 ),
               ),
             SizedBox(
-              width: 20,
+              width: size * 5 / 3,
               child: Text(
                 sign,
                 textAlign: TextAlign.center,

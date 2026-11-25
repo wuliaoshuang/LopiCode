@@ -7,14 +7,18 @@
 //   · 其余工具：〔参数〕→〔结果〕。
 // - 框底固定一行次要操作，不跟着内容滚：左边“用了多久”，右边“复制结果”；命令输出被转存成文件的多一个“查看完整输出”。
 // - 没有主操作；颜色只有两个文字按钮的强调色。
+// - 字号跟着“代码字号”走、小一号（默认 12）；在框里双指捏合可以调（和别的代码区域是同一个值）。
 import 'dart:convert';
 
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lopicode/agent/command_output_store.dart';
 import 'package:lopicode/session/chat_models.dart';
 import 'package:lopicode/session/step_digest.dart';
+import 'package:lopicode/state/code_font.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/chat_extras.dart';
+import 'package:lopicode/ui/code_view.dart';
 import 'package:lopicode/ui/step_diff.dart';
 import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
@@ -89,15 +93,15 @@ List<(String, String)> stepDetailSections(ToolItem tool) {
   return out;
 }
 
-class StepDetail extends StatefulWidget {
+class StepDetail extends ConsumerStatefulWidget {
   const StepDetail({super.key, required this.tool});
   final ToolItem tool;
 
   @override
-  State<StepDetail> createState() => _StepDetailState();
+  ConsumerState<StepDetail> createState() => _StepDetailState();
 }
 
-class _StepDetailState extends State<StepDetail> {
+class _StepDetailState extends ConsumerState<StepDetail> {
   bool _full = false;
 
   Future<void> _copy(String text) async {
@@ -110,7 +114,7 @@ class _StepDetailState extends State<StepDetail> {
     final c = context.colors;
     final t = Theme.of(context).textTheme;
     final tool = widget.tool;
-    final mono = TextStyle(fontFamily: kMonoFont, fontFamilyFallback: kMonoFallback, fontSize: FontSize.xs, height: 1.5, color: c.textMuted);
+    final mono = TextStyle(fontFamily: kMonoFont, fontFamilyFallback: kMonoFallback, fontSize: ref.watch(compactCodeFontProvider), height: 1.5, color: c.textMuted);
     final sections = stepDetailSections(tool);
     final limit = _full ? kStepResultMax : kStepResultPreview;
     final clipped = sections.any((s) => s.$2.length > kStepResultPreview);
@@ -137,30 +141,33 @@ class _StepDetailState extends State<StepDetail> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Flexible(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(Space.x3),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  StepDiffBlock(tool: tool),
-                  for (final (i, (title, body)) in sections.indexed) ...[
-                    if (i > 0) const SizedBox(height: Space.x3),
-                    Text(title, style: t.bodySmall?.copyWith(color: c.textFaint)),
-                    const SizedBox(height: Space.x1),
-                    SelectableText(body.length > limit ? '${body.substring(0, limit)}\n…（共 ${body.length} 字，${_full ? '太长，只显示前 $limit 字' : '还有 ${body.length - limit} 字没显示'}）' : body, style: mono),
-                  ],
-                  if (clipped && !_full)
-                    Padding(
-                      padding: const EdgeInsets.only(top: Space.x2),
-                      child: InkWell(
-                        onTap: () => setState(() => _full = true),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: Space.x1),
-                          child: Text('显示全部', style: t.bodySmall?.copyWith(color: c.accent)),
+            child: CodeZoom(
+              child: SingleChildScrollView(
+                key: const ValueKey('step-detail-scroll'),
+                padding: const EdgeInsets.all(Space.x3),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    StepDiffBlock(tool: tool),
+                    for (final (i, (title, body)) in sections.indexed) ...[
+                      if (i > 0) const SizedBox(height: Space.x3),
+                      Text(title, style: t.bodySmall?.copyWith(color: c.textFaint)),
+                      const SizedBox(height: Space.x1),
+                      SelectableText(body.length > limit ? '${body.substring(0, limit)}\n…（共 ${body.length} 字，${_full ? '太长，只显示前 $limit 字' : '还有 ${body.length - limit} 字没显示'}）' : body, style: mono),
+                    ],
+                    if (clipped && !_full)
+                      Padding(
+                        padding: const EdgeInsets.only(top: Space.x2),
+                        child: InkWell(
+                          onTap: () => setState(() => _full = true),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: Space.x1),
+                            child: Text('显示全部', style: t.bodySmall?.copyWith(color: c.accent)),
+                          ),
                         ),
                       ),
-                    ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),

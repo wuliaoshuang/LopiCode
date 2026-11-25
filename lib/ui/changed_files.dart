@@ -8,6 +8,7 @@
 import 'package:lopicode/agent/line_diff.dart';
 import 'package:lopicode/session/turn_changes.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/code_view.dart';
 import 'package:lopicode/ui/diff_view.dart';
 import 'package:lopicode/ui/top_bar.dart';
 import 'package:material_ui/material_ui.dart';
@@ -197,7 +198,7 @@ class FileDiffPage extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(Space.x2),
                 decoration: BoxDecoration(color: c.surface, borderRadius: BorderRadius.circular(Radii.md)),
-                child: change.hasDiff || change.note != null ? FileChangeBody(change: change) : Text('这个文件没有保存对比。', style: t.bodySmall?.copyWith(color: c.textMuted)),
+                child: change.hasDiff || change.note != null ? CodeZoom(child: FileChangeBody(change: change)) : Text('这个文件没有保存对比。', style: t.bodySmall?.copyWith(color: c.textMuted)),
               ),
             ],
           ),
