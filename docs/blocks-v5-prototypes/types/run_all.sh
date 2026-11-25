@@ -7,10 +7,12 @@ set -u
 cd "$(dirname "$0")"
 source ~/workspace/tools/env.sh 2>/dev/null
 export PATH=$HOME/workspace/tools/gosdk/go/bin:$PATH
-export GOFLAGS=-mod=mod GOPROXY=off GOCACHE=/tmp/v5-B/gocache
+T=${LC_PROTO_TMP:-/tmp/v5-B}                # 临时文件放哪儿（回归测试会换一个）
+export GOFLAGS=-mod=mod GOPROXY=off GOCACHE=${LC_PROTO_GOCACHE:-$T/gocache}
+skip=" ${LC_PROTO_SKIP:-} "                  # 这台机器没有的编译器（go、java），空格隔开：那一种标“跳过”，不算通过也不算不符
 export LC_ALL=C.UTF-8          # Java 的类型名要变成文件名，区域设置不是 UTF-8 时写不了中文（见 ROUNDS/round1-notes.md 的 F1）
 unset JAVA_TOOL_OPTIONS
-T=/tmp/v5-B; mkdir -p $T/bin $T/java $T/out
+mkdir -p $T/bin $T/java $T/out
 dirs=(); for a in "$@"; do dirs+=("$a"*/); done; [ ${#dirs[@]} -eq 0 ] && dirs=(p*/ e*/)
 pass=0; bad=0; lines=()
 say() { lines+=("$1"); echo "$1"; }
@@ -23,13 +25,17 @@ for d in "${dirs[@]}"; do
     o=$T/out/$d
     node "$d/main.js" > $o.node 2>$o.node.err;       same $o.node "$d/expect.txt"; row+=" Node=$R"
     python3 -B "$d/main.py" > $o.py 2>$o.py.err;     same $o.py "$d/expect.txt";   row+=" Python=$R"
+    ran=($o.node $o.py)
+    if [[ $skip == *" go "* ]]; then row+=" Go=跳过"; else
     if go build -o $T/bin/$d ./$d/go 2>$o.go.err; then $T/bin/$d > $o.go 2>>$o.go.err; else echo "编译失败" > $o.go; fi
-    same $o.go "$d/expect.txt"; row+=" Go=$R"
+    same $o.go "$d/expect.txt"; row+=" Go=$R"; ran+=($o.go); fi
+    if [[ $skip == *" java "* ]]; then row+=" Java=跳过"; else
     rm -rf $T/java/$d; mkdir -p $T/java/$d
     if javac -J-Xmx256m -J-XX:+UseSerialGC -encoding UTF-8 -Xlint:all -Werror -d $T/java/$d _prelude/Lc.java $d/Main.java 2>$o.java.err; then
       java -Xmx128m -XX:+UseSerialGC -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -cp $T/java/$d Main > $o.java 2>>$o.java.err; else echo "编译失败" > $o.java; fi
-    same $o.java "$d/expect.txt"; row+=" Java=$R"
-    if cmp -s $o.node $o.py && cmp -s $o.py $o.go && cmp -s $o.go $o.java; then row+=" 四份逐字节相同=是"; else row+=" 四份逐字节相同=否"; fi
+    same $o.java "$d/expect.txt"; row+=" Java=$R"; ran+=($o.java); fi
+    alike=是; for f in "${ran[@]:1}"; do cmp -s "${ran[0]}" "$f" || alike=否; done
+    n=${#ran[@]}; [ $n = 4 ] && n=四; row+=" ${n}份逐字节相同=$alike"
   fi
   if [ -f "$d/errors.txt" ]; then
     python3 -B infer.py "$d/prog.lc" --errors > $T/out/$d.infer 2>&1

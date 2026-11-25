@@ -5,6 +5,7 @@
 #   tool/check.sh          全部跑
 #   tool/check.sh --quick  只跑排版、静态检查、架构守门（几十秒），不跑全量测试
 #   tool/check.sh --fix    先自动排版再检查
+#   LOPI_TEST_JOBS=1 tool/check.sh   全量测试只开一路（内存紧的机器上用，慢但不会被系统杀掉）
 #
 # 说明：
 # - 全量测试要写很多临时文件。有的机器 /tmp 很小（512MB），所以这里把 TMPDIR 指到工程里的 .tmp/。
@@ -69,7 +70,9 @@ step "排版（dart format）" check_format
 step "静态检查（flutter analyze，必须零问题）" flutter analyze --no-pub
 step "架构守门（依赖方向、文件行数、存盘写法）" flutter test --no-pub test/architecture_test.dart
 if [ "$quick" = 0 ]; then
-  step "全量测试（flutter test）" flutter test --no-pub
+  # 机器内存紧（和别的任务同时跑）时可以少开几路：LOPI_TEST_JOBS=1 tool/check.sh（默认由 flutter 自己定）。
+  # shellcheck disable=SC2086
+  step "全量测试（flutter test）" flutter test --no-pub ${LOPI_TEST_JOBS:+-j $LOPI_TEST_JOBS}
 fi
 
 echo
