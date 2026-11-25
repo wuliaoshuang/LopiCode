@@ -100,20 +100,20 @@ void bkPaintBlockMark(Canvas canvas, BkPalette palette, BkMetrics m, BkBlock b, 
         ..color = palette.error,
     );
   }
-  bkPaintIssueBadge(canvas, bkIssueBadgeCenter(b, m), error: error, color: error ? palette.error : palette.warning, ring: palette.canvas);
+  bkPaintIssueBadge(canvas, bkIssueBadgeCenter(b, m), error: error, color: error ? palette.error : palette.warning, mark: error ? palette.onError : palette.onWarning, ring: palette.canvas);
 }
 
 /// 角标：错误是圆，警告是圆角三角，里面都是“!”。`ring`＝外面一圈底色（把角标和积木隔开）。
-void bkPaintIssueBadge(Canvas canvas, Offset c, {required bool error, required Color color, required Color ring, double size = 8}) {
-  final mark = Paint()
-    ..color = error ? const Color(0xFFFFFFFF) : const Color(0xFF3D2A00)
+void bkPaintIssueBadge(Canvas canvas, Offset c, {required bool error, required Color color, required Color mark, required Color ring, double size = 8}) {
+  final markPaint = Paint()
+    ..color = mark
     ..strokeWidth = size * 0.26
     ..strokeCap = StrokeCap.round;
   if (error) {
     canvas.drawCircle(c, size + 1.6, Paint()..color = ring);
     canvas.drawCircle(c, size, Paint()..color = color);
-    canvas.drawLine(c + Offset(0, -size * 0.5), c + Offset(0, size * 0.1), mark);
-    canvas.drawCircle(c + Offset(0, size * 0.5), size * 0.15, mark..style = PaintingStyle.fill);
+    canvas.drawLine(c + Offset(0, -size * 0.5), c + Offset(0, size * 0.1), markPaint);
+    canvas.drawCircle(c + Offset(0, size * 0.5), size * 0.15, markPaint..style = PaintingStyle.fill);
     return;
   }
   final r = size * 1.12;
@@ -131,8 +131,8 @@ void bkPaintIssueBadge(Canvas canvas, Offset c, {required bool error, required C
   canvas.drawPath(tri, Paint()..color = ring);
   canvas.drawPath(tri, round(color, size * 0.5));
   canvas.drawPath(tri, Paint()..color = color);
-  canvas.drawLine(c + Offset(0, -size * 0.36), c + Offset(0, size * 0.16), mark);
-  canvas.drawCircle(c + Offset(0, size * 0.52), size * 0.15, mark..style = PaintingStyle.fill);
+  canvas.drawLine(c + Offset(0, -size * 0.36), c + Offset(0, size * 0.16), markPaint);
+  canvas.drawCircle(c + Offset(0, size * 0.52), size * 0.15, markPaint..style = PaintingStyle.fill);
 }
 
 /// 出问题的那一格：外面一圈同色虚线。
@@ -171,24 +171,25 @@ class BkIssueIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // 和画布上的角标用同一套颜色：列表里看到的图标和积木上的是同一个东西。
-    final p = BkPalette.of(dark: Theme.of(context).brightness == Brightness.dark);
+    final p = BkPalette.fromTheme(context.themeSpec);
     return Semantics(
       label: error ? '错误' : '警告',
       child: CustomPaint(
         size: Size.square(size),
-        painter: _IconPainter(error: error, color: error ? p.error : p.warning),
+        painter: _IconPainter(error: error, color: error ? p.error : p.warning, mark: error ? p.onError : p.onWarning),
       ),
     );
   }
 }
 
 class _IconPainter extends CustomPainter {
-  _IconPainter({required this.error, required this.color});
+  _IconPainter({required this.error, required this.color, required this.mark});
   final bool error;
   final Color color;
+  final Color mark;
 
   @override
-  void paint(Canvas canvas, Size size) => bkPaintIssueBadge(canvas, size.center(Offset.zero), error: error, color: color, ring: const Color(0x00000000), size: size.shortestSide * 0.42);
+  void paint(Canvas canvas, Size size) => bkPaintIssueBadge(canvas, size.center(Offset.zero), error: error, color: color, mark: mark, ring: Colors.transparent, size: size.shortestSide * 0.42);
 
   @override
   bool shouldRepaint(_IconPainter old) => old.error != error || old.color != color;
@@ -250,7 +251,7 @@ Future<void> showBlockIssueCard(BuildContext context, {required Rect anchor, req
     context: context,
     barrierDismissible: true,
     barrierLabel: '关闭问题说明',
-    barrierColor: const Color(0x00000000),
+    barrierColor: Colors.transparent,
     transitionDuration: const Duration(milliseconds: 120),
     pageBuilder: (dialog, _, _) {
       final c = dialog.colors;
@@ -273,7 +274,7 @@ Future<void> showBlockIssueCard(BuildContext context, {required Rect anchor, req
               key: const ValueKey('bk-issue-card'),
               color: c.surface,
               elevation: 6,
-              shadowColor: const Color(0x55000000),
+              shadowColor: c.shadowOf(0x55 / 255),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(14),
                 side: BorderSide(color: c.border),

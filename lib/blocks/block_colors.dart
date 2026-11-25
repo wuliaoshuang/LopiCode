@@ -1,42 +1,23 @@
-/// 积木的色表。宿主只说“哪一类”（[BlockColorKey]），具体颜色在这里，浅色深色各一套。
+/// 积木的色表。宿主只说“哪一类”（[BlockColorKey]），具体颜色从当前主题来（主题的“积木”一节，
+/// 默认值在 lib/appearance/theme_builtin.dart）。
 ///
-/// 自己定的颜色（没有照搬任何现成积木工具的配色）。每一类只定一个主色，其余几档（顶部亮一点、底边深一点、
-/// 槽位更深一点）由主色算出来，保证同一块积木上的深浅关系一致。积木上的字是白色：主色都压在白字对比度 4.5:1 上下。
-/// 深色主题用压暗、降一点饱和的主色——整屏是深底，原色会刺眼。
+/// 每一类主题里只定一个主色，其余几档（顶部亮一点、底边深一点、槽位更深一点）在这里由主色算出来，
+/// 保证同一块积木上的深浅关系一致。默认主题：积木上的字是白色，主色都压在白字对比度 4.5:1 上下；
+/// 深色用压暗、降一点饱和的主色——整屏是深底，原色会刺眼。
 library;
 
 import 'dart:ui';
 
+import 'package:lopicode/appearance/theme_builtin.dart';
+import 'package:lopicode/appearance/theme_fields.dart';
+import 'package:lopicode/appearance/theme_spec.dart';
 import 'package:lopicode/blocks/block_host.dart';
 
 const Color _white = Color(0xFFFFFFFF);
 const Color _black = Color(0xFF000000);
 
-/// 浅色主题的主色。
-const Map<String, Color> _lightBase = {
-  BlockColorKey.event: Color(0xFFB4500B), // 橙：事件（帽子）
-  BlockColorKey.variable: Color(0xFFD03A6F), // 玫红：变量
-  BlockColorKey.widget: Color(0xFF1B72C4), // 蓝：控件
-  BlockColorKey.control: Color(0xFF6B4BD8), // 紫：流程
-  BlockColorKey.action: Color(0xFF0B7C8E), // 青：交互
-  BlockColorKey.network: Color(0xFF756C0E), // 橄榄：网络
-  BlockColorKey.value: Color(0xFF5B677A), // 灰蓝：直接填的值
-  BlockColorKey.operator: Color(0xFF287838), // 绿：运算
-  BlockColorKey.data: Color(0xFFA63DBF), // 洋红：数据集合
-  BlockColorKey.request: Color(0xFF0A7F5C), // 墨绿：请求
-  BlockColorKey.response: Color(0xFFC53030), // 红：返回
-  BlockColorKey.unknown: Color(0xFF636B73), // 灰：不认识的
-  // 第 4 版语言核心（设计稿 9.1）。积木盒里挨着的两页色相至少差 40°：
-  // 变量(玫红) → 运算(绿) → 流程(紫) → 函数 → 文字 → 列表 → 字典 → 类 → 出错 → 等待 → 我的积木。
-  BlockColorKey.function: Color(0xFF0F7B6C), // 松石绿：函数
-  BlockColorKey.text: Color(0xFF8A6A00), // 姜黄：文字
-  BlockColorKey.list: Color(0xFF2468C8), // 钴蓝：列表
-  BlockColorKey.dict: Color(0xFFA23BB8), // 紫红：字典
-  BlockColorKey.classes: Color(0xFF5E7A12), // 草绿：类
-  BlockColorKey.error: Color(0xFFC2362F), // 朱红：出错
-  BlockColorKey.async: Color(0xFF0B7A94), // 湖蓝：等待
-  BlockColorKey.custom: Color(0xFF4C56C8), // 靛蓝：我的积木
-};
+/// 量字宽时用的颜色：只参与排版、不会画出来（和默认浅色主题里积木上的字同色，量出来的结果能直接给画的时候复用）。
+const Color kBkMeasureInk = _white;
 
 /// 一类积木在一种主题下的几档颜色。
 class BkTone {
@@ -65,19 +46,32 @@ class BkTone {
       BkTone(fill: Color.lerp(fill, _white, 0.16)!, fillTop: Color.lerp(fillTop, _white, 0.16)!, edge: edge, deep: deep, text: text, fieldBg: fieldBg, fieldText: fieldText, fieldHint: fieldHint);
 }
 
-/// 一种主题下的整张色表。
+/// 一种主题下的整张色表。从当前主题（[ThemeSpec] 的“积木”一节）来：`BkPalette.fromTheme(context.themeSpec)`。
 class BkPalette {
-  const BkPalette._(
-    this.dark,
-    this._tones, {
-    required this.selection,
-    required this.ghost,
-    required this.shadow,
-    required this.canvas,
-    required this.canvasDot,
-    required this.error,
-    required this.warning,
-  });
+  BkPalette._(ThemeSpec t)
+    : dark = t.dark,
+      _tones = {
+        for (final f in kBlockCategoryFields)
+          f.key: _tone(
+            _base(t, f.key),
+            dark: t.dark,
+            text: _color(t, BlockKey.text),
+            fieldBg: _color(t, BlockKey.fieldBg),
+            fieldText: _color(t, BlockKey.fieldText),
+            fieldHint: _color(t, BlockKey.fieldHint),
+          ),
+      },
+      selection = _color(t, BlockKey.selection),
+      ghost = _color(t, BlockKey.ghost),
+      shadow = _color(t, BlockKey.shadow),
+      canvas = _color(t, BlockKey.canvas),
+      canvasDot = _color(t, BlockKey.canvasDot),
+      error = _color(t, BlockKey.error),
+      warning = _color(t, BlockKey.warning),
+      onError = _color(t, BlockKey.onError),
+      onWarning = _color(t, BlockKey.onWarning),
+      gloss = _color(t, BlockKey.gloss),
+      shade = _color(t, BlockKey.shade);
 
   final bool dark;
   final Map<String, BkTone> _tones;
@@ -95,40 +89,51 @@ class BkPalette {
   final Color canvas;
   final Color canvasDot;
 
-  /// 有问题的积木右上角的小圆点。
+  /// 有问题的积木右上角的小圆点，和圆点上的符号。
   final Color error;
   final Color warning;
+  final Color onError;
+  final Color onWarning;
+
+  /// 高光（积木顶上的亮边、提示闪动）和压暗（盖在不可用积木上的那层）：只定色相，深浅各处自己给。
+  final Color gloss;
+  final Color shade;
 
   BkTone tone(String key) => _tones[key] ?? _tones[BlockColorKey.unknown]!;
 
-  static final BkPalette light = BkPalette._(
-    false,
-    {for (final e in _lightBase.entries) e.key: _tone(e.value, dark: false)},
-    selection: const Color(0xFFFFC53D),
-    ghost: const Color(0x33000000),
-    shadow: const Color(0x52000000),
-    canvas: const Color(0xFFF3F4F6),
-    canvasDot: const Color(0xFFD5D8DD),
-    error: const Color(0xFFE03131),
-    warning: const Color(0xFFF59F00),
-  );
+  static final Expando<BkPalette> _cache = Expando();
 
-  static final BkPalette darkTheme = BkPalette._(
-    true,
-    {for (final e in _lightBase.entries) e.key: _tone(_dim(e.value), dark: true)},
-    selection: const Color(0xFFFFD866),
-    ghost: const Color(0x38FFFFFF),
-    shadow: const Color(0x8A000000),
-    canvas: const Color(0xFF15151B),
-    canvasDot: const Color(0xFF2B2C34),
-    error: const Color(0xFFFF6B6B),
-    warning: const Color(0xFFFFC53D),
-  );
+  /// 某份主题的色表（同一份主题对象只算一次）。
+  static BkPalette fromTheme(ThemeSpec theme) => _cache[theme] ??= BkPalette._(theme);
 
+  /// 默认浅色 / 默认深色主题的色表。
+  static BkPalette get light => fromTheme(kDefaultLightTheme);
+  static BkPalette get darkTheme => fromTheme(kDefaultDarkTheme);
+
+  /// 默认主题的色表（测试、不在应用主题里的地方用；界面里用 [fromTheme]）。
   static BkPalette of({required bool dark}) => dark ? darkTheme : light;
 }
 
-/// 深色主题：往黑里压一点，再往自己的灰度靠一点（降饱和）。
+Color _color(ThemeSpec t, String key) => Color(t.blocks[key] ?? defaultThemeFor(dark: t.dark).blocks[key] ?? 0xFFFF00FF);
+
+/// 一类积木的主色。
+///
+/// 默认深色主题的主色原本是“默认浅色的主色压暗一点”现算出来的（[_dim]），带小数；主题里存的是取整后的值。
+/// 直接拿取整后的值去算其余几档，个别档会和原来差 1/255。所以主题里这一类的主色**没改过**（还等于默认深色的值）时，
+/// 用原来没取整的那个数接着算，默认外观一个像素都不变；改过了就用主题里的值。
+Color _base(ThemeSpec t, String key) {
+  final v = t.blocks[key];
+  if (t.dark && v != null && v == kDefaultDarkTheme.blocks[key]) {
+    final light = kDefaultLightTheme.blocks[key];
+    if (light != null) {
+      final exact = _dim(Color(light));
+      if (exact.toARGB32() == v) return exact;
+    }
+  }
+  return _color(t, key);
+}
+
+/// 默认深色主题的主色是这么来的：往黑里压一点，再往自己的灰度靠一点（降饱和）。
 Color _dim(Color c) {
   final grey = c.computeLuminance();
   final g = (grey * 255).round().clamp(0, 255);
@@ -136,13 +141,14 @@ Color _dim(Color c) {
   return Color.lerp(desat, _black, 0.10)!;
 }
 
-BkTone _tone(Color base, {required bool dark}) => BkTone(
+/// 每一类只定一个主色，其余几档由主色算出来（算法没变）。
+BkTone _tone(Color base, {required bool dark, required Color text, required Color fieldBg, required Color fieldText, required Color fieldHint}) => BkTone(
   fill: base,
   fillTop: Color.lerp(base, _white, dark ? 0.07 : 0.10)!,
   edge: Color.lerp(base, _black, dark ? 0.38 : 0.30)!,
   deep: Color.lerp(base, _black, dark ? 0.26 : 0.20)!,
-  text: dark ? const Color(0xFFF4F5F7) : _white,
-  fieldBg: dark ? const Color(0xFFE4E6EB) : _white,
-  fieldText: const Color(0xFF1F2128),
-  fieldHint: const Color(0xFF7A808C),
+  text: text,
+  fieldBg: fieldBg,
+  fieldText: fieldText,
+  fieldHint: fieldHint,
 );

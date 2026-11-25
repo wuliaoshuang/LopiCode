@@ -437,9 +437,9 @@ class _ChatComposerState extends State<ChatComposer> with WidgetsBindingObserver
       margin: const EdgeInsets.fromLTRB(Space.x3, 0, Space.x3, Space.x2),
       padding: collapsed ? const EdgeInsets.symmetric(horizontal: 2, vertical: 1) : const EdgeInsets.fromLTRB(Space.x1, Space.x2, Space.x1, Space.x1),
       decoration: BoxDecoration(
-        color: c.surface,
-        borderRadius: BorderRadius.circular(collapsed ? 24 : 28),
-        border: Border.all(color: c.border),
+        color: c.inputBg,
+        borderRadius: BorderRadius.circular(c.radius(collapsed ? 24 : 28)),
+        border: Border.all(color: c.border, width: c.hairline),
       ),
       child: AnimatedSize(duration: const Duration(milliseconds: 140), curve: Curves.easeOut, alignment: Alignment.bottomCenter, child: body),
     );

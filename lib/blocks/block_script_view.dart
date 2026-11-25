@@ -7,18 +7,21 @@ import 'package:lopicode/blocks/block_geometry.dart';
 import 'package:lopicode/blocks/block_host.dart';
 import 'package:lopicode/blocks/block_layout.dart';
 import 'package:lopicode/blocks/block_paint_view.dart';
+import 'package:lopicode/theme/tokens.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// 画积木要用的一套东西：字（按主题字体）、色表（按明暗）、画笔。几个积木控件各拿一套。
 class BkKit {
-  BkKit({required String? fontFamily, required bool dark, this.metrics = const BkMetrics()}) : text = BkText(fontFamily: fontFamily, metrics: metrics), palette = BkPalette.of(dark: dark) {
-    painter = BkScriptPainter(palette: palette, text: text, metrics: metrics);
+  BkKit({required String? fontFamily, required bool dark, BkPalette? palette, this.metrics = const BkMetrics()})
+    : text = BkText(fontFamily: fontFamily, metrics: metrics),
+      palette = palette ?? BkPalette.of(dark: dark) {
+    painter = BkScriptPainter(palette: this.palette, text: text, metrics: metrics);
   }
 
   /// 照当前主题造一套。
   factory BkKit.of(BuildContext context) {
     final theme = Theme.of(context);
-    return BkKit(fontFamily: theme.textTheme.bodyMedium?.fontFamily, dark: theme.brightness == Brightness.dark);
+    return BkKit(fontFamily: theme.textTheme.bodyMedium?.fontFamily, dark: theme.brightness == Brightness.dark, palette: BkPalette.fromTheme(context.themeSpec));
   }
 
   final BkMetrics metrics;
@@ -26,10 +29,10 @@ class BkKit {
   final BkPalette palette;
   late final BkScriptPainter painter;
 
-  /// 主题没变（字体、明暗都一样）就可以接着用。
+  /// 主题没变（字体、积木色表都一样）就可以接着用。
   bool fits(BuildContext context) {
     final theme = Theme.of(context);
-    return text.fontFamily == theme.textTheme.bodyMedium?.fontFamily && palette.dark == (theme.brightness == Brightness.dark);
+    return text.fontFamily == theme.textTheme.bodyMedium?.fontFamily && identical(palette, BkPalette.fromTheme(context.themeSpec));
   }
 
   BlockLayoutEngine engine(BlockHost host) => BlockLayoutEngine(host, text.measure, metrics: metrics);

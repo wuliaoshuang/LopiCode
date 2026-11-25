@@ -1,9 +1,25 @@
+import 'package:lopicode/appearance/theme_builtin.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:material_ui/material_ui.dart';
 
-/// 把 tokens 翻译成 ThemeData。[fontFamily] 只在截图测试里传（加载真实字体）。
-ThemeData buildAppTheme(Brightness brightness, {String? fontFamily}) {
-  final c = brightness == Brightness.light ? AppColors.light : AppColors.dark;
+/// 默认浅色 / 默认深色主题的 ThemeData。没有主题库可用的地方（启动失败页、不带应用外壳的测试台）用它；
+/// 应用里一律用 [buildThemeData]，吃当前选中的主题。
+ThemeData buildAppTheme(Brightness brightness, {String? fontFamily}) => buildThemeData(defaultThemeFor(dark: brightness == Brightness.dark), fontFamily: fontFamily);
+
+final Expando<Map<String?, ThemeData>> _built = Expando();
+
+/// 把一份主题翻译成 ThemeData。[fontFamily] 只在截图测试里传（加载真实字体）。
+///
+/// 同一份主题对象只翻译一次（结果记在主题对象上），所以在 build 里反复调用不贵。
+ThemeData buildThemeData(ThemeSpec spec, {String? fontFamily}) => (_built[spec] ??= {})[fontFamily] ??= _build(spec, fontFamily);
+
+ThemeData _build(ThemeSpec spec, String? fontFamily) {
+  final brightness = spec.dark ? Brightness.dark : Brightness.light;
+  final c = AppColors.fromSpec(spec);
+  // 形状与密度：默认主题这三个都是 1，下面的式子算出来和原来的常量一模一样。
+  final line = c.hairline;
+  double r(double base) => c.radius(base);
+  double sp(double base) => c.space(base);
   final scheme = ColorScheme(
     brightness: brightness,
     primary: c.accentFill,
@@ -11,7 +27,7 @@ ThemeData buildAppTheme(Brightness brightness, {String? fontFamily}) {
     secondary: c.accent,
     onSecondary: c.onAccent,
     error: c.danger,
-    onError: brightness == Brightness.light ? Colors.white : Palette.neutral950,
+    onError: c.onDanger,
     surface: c.surface,
     onSurface: c.text,
     onSurfaceVariant: c.textMuted,
@@ -42,10 +58,10 @@ ThemeData buildAppTheme(Brightness brightness, {String? fontFamily}) {
     labelSmall: t(FontSize.xs, regular, c.textMuted, 1.2),
   );
 
-  final shape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(Radii.lg));
+  final shape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(r(Radii.lg)));
   final inputBorder = OutlineInputBorder(
-    borderRadius: BorderRadius.circular(Radii.lg),
-    borderSide: BorderSide(color: c.border),
+    borderRadius: BorderRadius.circular(r(Radii.lg)),
+    borderSide: BorderSide(color: c.border, width: line),
   );
 
   return ThemeData(
@@ -57,14 +73,14 @@ ThemeData buildAppTheme(Brightness brightness, {String? fontFamily}) {
     textTheme: textTheme,
     extensions: [c],
     splashFactory: InkSparkle.splashFactory,
-    dividerTheme: DividerThemeData(color: c.border, thickness: 1, space: 1),
+    dividerTheme: DividerThemeData(color: c.border, thickness: line, space: 1),
     appBarTheme: AppBarTheme(
       backgroundColor: c.bg,
       foregroundColor: c.text,
       elevation: 0,
       scrolledUnderElevation: 0,
       centerTitle: true,
-      titleSpacing: Space.x4,
+      titleSpacing: sp(Space.x4),
       titleTextStyle: textTheme.titleLarge?.copyWith(fontFamily: fontFamily),
     ),
     cardTheme: CardThemeData(
@@ -72,14 +88,14 @@ ThemeData buildAppTheme(Brightness brightness, {String? fontFamily}) {
       elevation: 0,
       margin: EdgeInsets.zero,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(Radii.bubble),
-        side: BorderSide(color: c.border),
+        borderRadius: BorderRadius.circular(r(Radii.bubble)),
+        side: BorderSide(color: c.border, width: line),
       ),
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
         minimumSize: const Size(0, 44),
-        padding: const EdgeInsets.symmetric(horizontal: Space.x4),
+        padding: EdgeInsets.symmetric(horizontal: sp(Space.x4)),
         shape: shape,
         textStyle: textTheme.labelLarge?.copyWith(fontFamily: fontFamily),
       ),
@@ -87,9 +103,9 @@ ThemeData buildAppTheme(Brightness brightness, {String? fontFamily}) {
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
         minimumSize: const Size(0, 44),
-        padding: const EdgeInsets.symmetric(horizontal: Space.x4),
+        padding: EdgeInsets.symmetric(horizontal: sp(Space.x4)),
         foregroundColor: c.text,
-        side: BorderSide(color: c.border),
+        side: BorderSide(color: c.border, width: line),
         shape: shape,
         textStyle: textTheme.labelLarge?.copyWith(fontFamily: fontFamily),
       ),
@@ -105,9 +121,9 @@ ThemeData buildAppTheme(Brightness brightness, {String? fontFamily}) {
     iconTheme: IconThemeData(color: c.textMuted, size: 22),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: c.surface,
+      fillColor: c.inputBg,
       isDense: true,
-      contentPadding: const EdgeInsets.symmetric(horizontal: Space.x4, vertical: Space.x3),
+      contentPadding: EdgeInsets.symmetric(horizontal: sp(Space.x4), vertical: sp(Space.x3)),
       hintStyle: textTheme.bodyMedium?.copyWith(color: c.textFaint),
       labelStyle: textTheme.bodyMedium?.copyWith(color: c.textMuted),
       helperStyle: textTheme.bodySmall,
@@ -131,19 +147,19 @@ ThemeData buildAppTheme(Brightness brightness, {String? fontFamily}) {
       surfaceTintColor: Colors.transparent,
       showDragHandle: true,
       dragHandleColor: c.border,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(Radii.card))),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(r(Radii.card)))),
     ),
     dialogTheme: DialogThemeData(
       backgroundColor: c.surface,
       surfaceTintColor: Colors.transparent,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Radii.card)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(r(Radii.card))),
       titleTextStyle: textTheme.titleLarge?.copyWith(fontFamily: fontFamily),
       contentTextStyle: textTheme.bodyMedium?.copyWith(color: c.textMuted, fontFamily: fontFamily),
     ),
     snackBarTheme: SnackBarThemeData(
       behavior: SnackBarBehavior.floating,
-      backgroundColor: brightness == Brightness.light ? Palette.neutral900 : Palette.neutral200,
-      contentTextStyle: t(FontSize.sm, regular, brightness == Brightness.light ? Palette.neutral100 : Palette.neutral950).copyWith(fontFamily: fontFamily),
+      backgroundColor: c.snackBg,
+      contentTextStyle: t(FontSize.sm, regular, c.snackText).copyWith(fontFamily: fontFamily),
       shape: shape,
     ),
     popupMenuTheme: PopupMenuThemeData(
@@ -151,8 +167,8 @@ ThemeData buildAppTheme(Brightness brightness, {String? fontFamily}) {
       surfaceTintColor: Colors.transparent,
       elevation: 3,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(Radii.bubble),
-        side: BorderSide(color: c.border),
+        borderRadius: BorderRadius.circular(r(Radii.bubble)),
+        side: BorderSide(color: c.border, width: line),
       ),
       textStyle: textTheme.bodyMedium?.copyWith(fontFamily: fontFamily),
     ),
@@ -160,7 +176,7 @@ ThemeData buildAppTheme(Brightness brightness, {String? fontFamily}) {
       iconColor: c.textMuted,
       titleTextStyle: textTheme.bodyLarge?.copyWith(fontFamily: fontFamily),
       subtitleTextStyle: textTheme.bodySmall?.copyWith(fontFamily: fontFamily),
-      contentPadding: const EdgeInsets.symmetric(horizontal: Space.x4),
+      contentPadding: EdgeInsets.symmetric(horizontal: sp(Space.x4)),
     ),
     switchTheme: SwitchThemeData(
       trackOutlineColor: WidgetStateProperty.all(Colors.transparent),
@@ -170,7 +186,7 @@ ThemeData buildAppTheme(Brightness brightness, {String? fontFamily}) {
     segmentedButtonTheme: SegmentedButtonThemeData(
       style: ButtonStyle(
         visualDensity: VisualDensity.compact,
-        side: WidgetStateProperty.all(BorderSide(color: c.border)),
+        side: WidgetStateProperty.all(BorderSide(color: c.border, width: line)),
         backgroundColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? c.accentSoft : c.surface),
         foregroundColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? c.accent : c.textMuted),
         textStyle: WidgetStateProperty.all(t(FontSize.sm, strong, c.text, 1.2).copyWith(fontFamily: fontFamily)),

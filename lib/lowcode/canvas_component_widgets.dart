@@ -13,24 +13,25 @@ class CanvasComponentPlaceholder extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final label = name == null ? '组件不存在' : '组件「$name」展开不了（它里面又用到了自己）';
+    final ui = context.themeSpec;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF4E0),
+        color: ui.lowcodeColor(LowcodeKey.missingBg),
         borderRadius: BorderRadius.circular(Radii.sm),
-        border: Border.all(color: const Color(0xFFD98A0B)),
+        border: Border.all(color: ui.lowcodeColor(LowcodeKey.missingBorder)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.extension_off_outlined, size: 18, color: Color(0xFF9A5B00)),
+          Icon(Icons.extension_off_outlined, size: 18, color: ui.lowcodeColor(LowcodeKey.missingIcon)),
           const SizedBox(width: 6),
           Flexible(
             child: Text(
               label,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 14, color: Color(0xFF7A4700)),
+              style: TextStyle(fontSize: 14, color: ui.lowcodeColor(LowcodeKey.missingText)),
             ),
           ),
         ],

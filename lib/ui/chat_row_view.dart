@@ -67,12 +67,12 @@ class ChatItemView extends ConsumerWidget {
               margin: const EdgeInsets.only(top: Space.x2, bottom: Space.x1, left: Space.x8),
               padding: const EdgeInsets.symmetric(horizontal: Space.x4, vertical: Space.x3),
               decoration: BoxDecoration(
-                color: c.accentSoft,
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(Radii.bubble),
-                  topRight: Radius.circular(Radii.sm),
-                  bottomLeft: Radius.circular(Radii.bubble),
-                  bottomRight: Radius.circular(Radii.bubble),
+                color: c.bubbleMineBg,
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(c.radius(Radii.bubble)),
+                  topRight: Radius.circular(c.radius(Radii.sm)),
+                  bottomLeft: Radius.circular(c.radius(Radii.bubble)),
+                  bottomRight: Radius.circular(c.radius(Radii.bubble)),
                 ),
               ),
               child: Column(
@@ -89,7 +89,7 @@ class ChatItemView extends ConsumerWidget {
                         children: [for (final path in images) ImageThumb(path: path, size: 64)],
                       ),
                     ),
-                  SelectableText(text, style: t.bodyLarge),
+                  SelectableText(text, style: t.bodyLarge?.copyWith(color: c.bubbleMineText)),
                 ],
               ),
             ),
@@ -104,15 +104,15 @@ class ChatItemView extends ConsumerWidget {
               margin: const EdgeInsets.only(top: Space.x1, bottom: Space.x1, right: Space.x6),
               padding: const EdgeInsets.symmetric(horizontal: Space.x4, vertical: Space.x3),
               decoration: BoxDecoration(
-                color: c.surfaceMuted,
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(Radii.sm),
-                  topRight: Radius.circular(Radii.bubble),
-                  bottomLeft: Radius.circular(Radii.bubble),
-                  bottomRight: Radius.circular(Radii.bubble),
+                color: c.bubbleAgentBg,
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(c.radius(Radii.sm)),
+                  topRight: Radius.circular(c.radius(Radii.bubble)),
+                  bottomLeft: Radius.circular(c.radius(Radii.bubble)),
+                  bottomRight: Radius.circular(c.radius(Radii.bubble)),
                 ),
               ),
-              child: SelectableText(streaming ? '$text▍' : text, style: t.bodyLarge),
+              child: SelectableText(streaming ? '$text▍' : text, style: t.bodyLarge?.copyWith(color: c.bubbleAgentText)),
             ),
           ),
         );

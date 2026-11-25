@@ -33,7 +33,9 @@ const _layerExceptions = {'lib/core/templates.dart -> lowcode': '新建“低代
 /// 各层允许依赖的层（lib 下的第一级目录名；没列出的目录不限制）。
 const _allowedLayers = {
   'core': {'core'},
-  'theme': {'theme'},
+  // 主题的数据（纯 Dart：字段目录、内置主题、读写、对比度、存盘），不碰界面库。
+  'appearance': {'core', 'appearance'},
+  'theme': {'theme', 'appearance'},
   'preview': {'core', 'preview'},
   'agent': {'core', 'agent'},
   'terminal': {'core', 'terminal'},
@@ -99,7 +101,7 @@ void main() {
     expect(bad, isEmpty, reason: bad.join('\n'));
   });
 
-  test('分层：core / theme / preview / agent / terminal 只依赖允许的层', () {
+  test('分层：core / appearance / theme / preview / agent / terminal 只依赖允许的层', () {
     final found = <String>{};
     for (final f in files) {
       final layer = f.split('/')[1];

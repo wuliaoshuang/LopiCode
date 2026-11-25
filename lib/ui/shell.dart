@@ -245,8 +245,8 @@ class _DrawerItem extends StatelessWidget {
       selected: selected,
       button: true,
       child: Material(
-        color: selected ? c.accentSoft : Colors.transparent,
-        borderRadius: BorderRadius.circular(Radii.lg),
+        color: selected ? c.selectedBg : Colors.transparent,
+        borderRadius: BorderRadius.circular(c.radius(Radii.lg)),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: enabled ? onTap : null,

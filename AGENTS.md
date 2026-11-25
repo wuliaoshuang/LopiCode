@@ -24,7 +24,8 @@ tool/check.sh --fix    # 先自动排版
 | 目录 | 管什么 | 可以依赖 |
 | --- | --- | --- |
 | `lib/core/` | 最底层：存盘（`stores.dart`、`safe_file.dart`）、项目目录、路径守卫、错误日志（`crash_log.dart`）、第三方清单 | 只有 `core` |
-| `lib/theme/` | 颜色、间距、字号这些设计 tokens 和主题 | 只有 `theme` |
+| `lib/appearance/` | 外观主题的数据（纯 Dart，不碰界面库）：字段目录、主题模型 `ThemeSpec`、内置主题表、主题文件的读写与校验、对比度检查、用户主题的存盘。说明见 [docs/themes-design.md](docs/themes-design.md) | `core`、`appearance` |
+| `lib/theme/` | 把主题变成界面能用的东西：`AppColors`（`context.colors`）、`context.themeSpec`、`buildThemeData`、间距 / 圆角 / 字号常量、界面字号倍率 | `theme`、`appearance` |
 | `lib/agent/` | Agent：各协议的客户端、工具、模型与渠道配置、服务商预设、额度与用量、自动化、团队、技能、联网搜索 | `core`、`agent` |
 | `lib/preview/` | 本机预览服务器 | `core` |
 | `lib/format/` | 代码格式化器（JSON / CSS / JS·JSX / HTML / Vue），纯 Dart，排完和原文对不上就原样返回 | 只依赖自己 |
@@ -71,6 +72,8 @@ tool/check.sh --fix    # 先自动排版
   - `app_providers.dart`：`appServicesProvider`、`settingRevProvider(键)`（某个设置键变了）、`settingsAnyRevProvider`（只给设置总览页）。
     `SettingsStore.set` 写完会自己通知，**不用也不许再手动“通知全应用”**（`AppScope`、`app.touch()` 已删，守门测试不让回来）。
   - `ui_prefs.dart`：`themeModeProvider`（外观）、`chatPrefsProvider`（开场建议、显示用量）。
+  - `themes_state.dart`：`themesProvider`——主题库（内置 + 用户的）和“浅色时用哪套、深色时用哪套”（完整版：不可变快照 + `ThemesNotifier`）；
+    `lightThemeProvider` / `darkThemeProvider`（应用外壳订阅这两个）、`activeThemeProvider(系统是不是深色)`。`ThemeSpec` 不可变，改就 `withColors` / `copyWith` 造一份新的交给 `save`。
   - `quota_state.dart`：`quotaProvider`——额度上限和余额。这是**标准样板**：状态是不可变对象，只有 `QuotaNotifier` 能改。
   - `presets_state.dart`：`presetsProvider`——Agent 预设与个人偏好（完整版：不可变快照 + `PresetsNotifier`）。
   - `skills_state.dart`：`skillsProvider(工作区目录)`——技能清单（完整版；异步扫描带代次，没人看就释放）。
@@ -167,6 +170,12 @@ tool/check.sh --fix    # 先自动排版
 - **顶栏全应用只有一套**（`lib/ui/top_bar.dart` 的 `PageBar`，外壳里用 `ShellAppBar`）：高 64、悬浮、没有底色。新页面的 Scaffold 一律
   `extendBodyBehindAppBar: true`，能滚的内容顶部留 `PageBar.insetOf(context)`，不能滚的正文包一层 `BelowBar`。不许用系统 `AppBar`、
   不许自己另画顶栏（`test/topbar_unified_test.dart` 守着）。Scaffold 正文里的 `viewPadding.top` 是 0（被 Scaffold 拿掉了），别自己拿它算状态栏。
+- **颜色一律从当前主题取，不许写死**（`test/theme_guard_test.dart` 守着：`lib/` 下不许出现 `Color(0x…)`、`Colors.某色`、`Color.fromARGB`、`Palette.某色`，
+  `Colors.transparent` 除外；例外逐条登记在那个测试里）。界面色用 `context.colors.xxx`；代码 / 终端 / 积木 / 低代码编辑器的颜色用
+  `context.themeSpec.codeColor(CodeKey.xxx)`、`.terminalColor('red')`、`BkPalette.fromTheme(context.themeSpec)`、`.lowcodeColor(LowcodeKey.xxx)`；
+  阴影和遮罩用 `context.colors.shadowOf(透明度)` / `scrimOf(透明度)`。主题里没有合适的项就在 `lib/appearance/theme_fields.dart` 加一项
+  （同时给 `theme_builtin.dart` 里每套内置主题填上值）。低代码里“用户页面内容本身的颜色”和导出代码里的颜色不是界面主题，不归这条管。
+  默认浅色 / 默认深色两套的值被 `test/theme_defaults_pin_test.dart` 钉死了（就是加主题系统之前的样子），不许改；要新样子就加一套新主题。
 - **代码字号全应用一个值**（`lib/state/code_font.dart`）：正式的代码区域（编辑器、看代码）读 `codeFontProvider`；改动对比、步骤详情、完整输出、后台日志这类次要内容读
   `compactCodeFontProvider`（小一号）。新加显示代码 / 日志的地方不要写死字号；要能捏合就在外面包**一层** `CodeZoom`（别套两层，`DiffView` 自己不包）。
 - **点输入框外面的空白收键盘，全应用只接一处**（`lib/ui/keyboard_tap_dismiss.dart` 的 `KeyboardTapDismiss`，在 `lib/app.dart` 里包着整个应用；

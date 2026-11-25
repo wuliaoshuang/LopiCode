@@ -371,7 +371,7 @@ class BlockEditorViewState extends State<BlockEditorView> with TickerProviderSta
     return Material(
       color: c.surface,
       elevation: 2,
-      shadowColor: Colors.black.withValues(alpha: 0.25),
+      shadowColor: c.shadowOf(0.25),
       shape: const StadiumBorder(),
       clipBehavior: Clip.antiAlias,
       child: Row(mainAxisSize: MainAxisSize.min, children: children),

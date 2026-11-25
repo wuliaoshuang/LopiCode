@@ -3,7 +3,7 @@
 // - 权限与执行：〔权限〕新对话的权限（跳转行，点开底部弹层选档；选“完全权限”要先确认）
 //               〔执行〕连续执行多少步后问我（跳转行，底部弹层选档）· 上下文快满时自动压缩（开关，副标题写明代价）
 // - 对话显示：〔新对话〕开场建议（开关）〔回复里〕用量（开关）· 思考过程（开关）
-// - 外观：三行单选（跟随系统 / 浅色 / 深色），点了立刻生效。
+// - 外观：三行单选（跟随系统 / 浅色 / 深色），点了立刻生效；下面〔主题〕两行（浅色主题 / 深色主题，见 settings_theme.dart）；再下面代码字号。
 // - 额度与余额：只有不止一个 DeepSeek 官方渠道时才有这一页，一行一个渠道，点进各自的额度页。
 // - 这些页面可能被留在后面（上面又盖了一页），所以各自订阅自己那几个设置键，回来时数是新的。
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -19,6 +19,7 @@ import 'package:lopicode/ui/provider_icon.dart';
 import 'package:lopicode/ui/settings_chat.dart';
 import 'package:lopicode/ui/settings_code_font.dart';
 import 'package:lopicode/ui/settings_quota.dart';
+import 'package:lopicode/ui/settings_theme.dart';
 import 'package:lopicode/ui/settings_widgets.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -167,6 +168,7 @@ class AppearanceScreen extends ConsumerWidget {
               SettingsChoiceRow(key: Key('appearance-${m.name}'), title: themeModeLabel(m), selected: m == mode, onTap: () => ref.read(themeModeProvider.notifier).set(m)),
           ],
         ),
+        const ThemeSlotsGroup(),
         const CodeFontGroup(),
       ],
     );

@@ -90,6 +90,8 @@ class SettingKeys {
   static const agentBaseUrl = 'agent.baseUrl';
   static const agentModel = 'agent.model';
   static const themeMode = 'ui.themeMode'; // system / light / dark
+  static const themeLight = 'ui.themeLight'; // 浅色时用哪套主题（主题的标识；默认 default-light）
+  static const themeDark = 'ui.themeDark'; // 深色时用哪套主题（默认 default-dark）
   static const githubOwner = 'github.owner';
   static const githubRepo = 'github.repo';
   static const githubRef = 'github.ref';

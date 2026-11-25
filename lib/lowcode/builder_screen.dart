@@ -171,7 +171,7 @@ class _BuilderScreenState extends State<BuilderScreen> {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      barrierColor: Colors.black26,
+      barrierColor: context.colors.scrimOf(0x42 / 255),
       builder: (_) => PropertySheet(
         node: node,
         doc: _doc,

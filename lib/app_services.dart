@@ -11,6 +11,7 @@ import 'package:lopicode/agent/presets.dart';
 import 'package:lopicode/agent/protocols.dart';
 import 'package:lopicode/agent/skill_mirror.dart';
 import 'package:lopicode/agent/skills.dart';
+import 'package:lopicode/appearance/theme_store.dart';
 import 'package:lopicode/automation_scheduler.dart';
 import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/core/secure_secret_store.dart';
@@ -18,6 +19,7 @@ import 'package:lopicode/core/stores.dart';
 import 'package:lopicode/runtime/linux_runtime.dart';
 import 'package:lopicode/state/app_providers.dart';
 import 'package:lopicode/state/quota_state.dart';
+import 'package:lopicode/state/themes_state.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:riverpod/riverpod.dart';
@@ -38,7 +40,8 @@ class AppServices {
        skills = SkillStore(settings, p.join(settings.file.parent.path, 'skills')),
        memory = AppMemory(settings, p.join(settings.file.parent.path, 'memory')),
        automations = AutomationStore(File(p.join(settings.file.parent.path, 'automations.json'))),
-       mcp = McpStore(File(p.join(settings.file.parent.path, 'mcp_servers.json')), secrets) {
+       mcp = McpStore(File(p.join(settings.file.parent.path, 'mcp_servers.json')), secrets),
+       themes = ThemeStore(Directory(p.join(settings.file.parent.path, 'themes'))) {
     projects.linuxRootfs ??= this.runtime.rootfsDir;
     // 技能镜像：进 Ubuntu 前把开着的技能复制一份挂到 /skills（挂副本，环境里改不到原件）。
     this.runtime.skillsMirror ??= SkillMirror(skills, p.join(this.runtime.baseDir, 'skills-mirror')).sync;
@@ -100,6 +103,9 @@ class AppServices {
   /// MCP 服务器的配置（状态在 mcpProvider）。
   final McpStore mcp;
 
+  /// 用户主题的存盘（应用数据目录的 themes/ 下，每套一个文件；状态在 themesProvider）。
+  final ThemeStore themes;
+
   /// 工作区列表里点了“在这里新建对话”：打开那个工作区后开一段新对话。
   String? newConversationFor;
 
@@ -113,6 +119,9 @@ class AppServices {
     await models.load();
     await automations.load();
     await mcp.load();
+    await themes.load();
+    // 主题库是异步读的：读完告诉状态层重拍一张（界面这时才从默认主题换成她选的那套）。
+    if (!_disposed) container.invalidate(themesProvider);
   }();
 
   final SettingsStore settings;

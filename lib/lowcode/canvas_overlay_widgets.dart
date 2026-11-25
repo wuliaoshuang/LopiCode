@@ -61,13 +61,14 @@ class CanvasSelectionOverlay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final rect = selection.rect;
+    final ui = context.themeSpec;
     final k = 1 / scale;
     final screenW = rect.width * scale, screenH = rect.height * scale;
     return Stack(
       clipBehavior: Clip.none,
       children: [
         Positioned.fill(
-          child: IgnorePointer(child: CustomPaint(painter: _SelectionPainter(selection, scale, showBoxModel))),
+          child: IgnorePointer(child: CustomPaint(painter: _SelectionPainter(selection, scale, showBoxModel, ui))),
         ),
         Positioned(
           left: rect.left,
@@ -79,10 +80,10 @@ class CanvasSelectionOverlay extends StatelessWidget {
               child: Container(
                 key: const ValueKey('lowcode-size-label'),
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(color: Palette.primary500, borderRadius: BorderRadius.circular(4)),
+                decoration: BoxDecoration(color: ui.lowcodeColor(LowcodeKey.selection), borderRadius: BorderRadius.circular(4)),
                 child: Text(
                   '${rect.width.round()} × ${rect.height.round()}',
-                  style: const TextStyle(fontSize: 11, height: 1.3, color: Colors.white, fontWeight: FontWeight.w500, decoration: TextDecoration.none),
+                  style: TextStyle(fontSize: 11, height: 1.3, color: ui.lowcodeColor(LowcodeKey.selectionText), fontWeight: FontWeight.w500, decoration: TextDecoration.none),
                 ),
               ),
             ),
@@ -91,12 +92,12 @@ class CanvasSelectionOverlay extends StatelessWidget {
         if (!selection.isRoot)
           for (final e in kCanvasHandles.entries)
             // 边上的拖柄要给两头的角让出地方：这个方向不够长就不放。
-            if ((e.value.$1 == 0 || e.value.$2 == 0) ? (e.value.$1 == 0 ? screenW : screenH) >= 56 : true) _handle(e.key, e.value.$1, e.value.$2, k),
+            if ((e.value.$1 == 0 || e.value.$2 == 0) ? (e.value.$1 == 0 ? screenW : screenH) >= 56 : true) _handle(e.key, e.value.$1, e.value.$2, k, ui),
       ],
     );
   }
 
-  Widget _handle(String name, int hx, int hy, double k) {
+  Widget _handle(String name, int hx, int hy, double k, ThemeSpec ui) {
     final rect = selection.rect;
     final cx = rect.center.dx + hx * rect.width / 2, cy = rect.center.dy + hy * rect.height / 2;
     final size = _hit * k;
@@ -123,8 +124,8 @@ class CanvasSelectionOverlay extends StatelessWidget {
             width: 9 * k,
             height: 9 * k,
             decoration: BoxDecoration(
-              color: Colors.white,
-              border: Border.all(color: Palette.primary500, width: 1.5 * k),
+              color: ui.lowcodeColor(LowcodeKey.handleFill),
+              border: Border.all(color: ui.lowcodeColor(LowcodeKey.selection), width: 1.5 * k),
               borderRadius: BorderRadius.circular(2 * k),
             ),
           ),
@@ -135,7 +136,8 @@ class CanvasSelectionOverlay extends StatelessWidget {
 }
 
 class _SelectionPainter extends CustomPainter {
-  const _SelectionPainter(this.sel, this.scale, this.showBoxModel);
+  const _SelectionPainter(this.sel, this.scale, this.showBoxModel, this.ui);
+  final ThemeSpec ui;
   final CanvasSelection sel;
   final double scale;
   final bool showBoxModel;
@@ -162,9 +164,9 @@ class _SelectionPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final rect = sel.rect;
     if (showBoxModel) {
-      if (!sel.isRoot) _ring(canvas, _inflate(rect, sel.margin), rect, const Color(0x59FF9800));
+      if (!sel.isRoot) _ring(canvas, _inflate(rect, sel.margin), rect, ui.lowcodeColor(LowcodeKey.marginRing));
       final inside = _deflate(rect, sel.border);
-      _ring(canvas, inside, _deflate(inside, sel.padding), const Color(0x5934C759));
+      _ring(canvas, inside, _deflate(inside, sel.padding), ui.lowcodeColor(LowcodeKey.paddingRing));
     }
     // 页面自己选中时的框由页面画（贴着页面边缘往里画，不会被裁掉）。
     if (!sel.isRoot) {
@@ -173,7 +175,7 @@ class _SelectionPainter extends CustomPainter {
         Paint()
           ..style = PaintingStyle.stroke
           ..strokeWidth = 2 / scale
-          ..color = Palette.primary500,
+          ..color = ui.lowcodeColor(LowcodeKey.selection),
       );
     }
   }

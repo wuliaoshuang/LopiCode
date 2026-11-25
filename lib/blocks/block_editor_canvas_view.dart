@@ -559,11 +559,11 @@ class BkWorkspacePainter extends CustomPainter {
     final mt = kit.metrics;
     final a = motion == null ? 1.0 : motionT;
     if (a <= 0) return;
-    final dot = Paint()..color = const Color(0xFFFFFFFF).withValues(alpha: 0.6 * a);
+    final dot = Paint()..color = kit.palette.gloss.withValues(alpha: 0.6 * a);
     final ring = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.2
-      ..color = const Color(0xFFFFFFFF).withValues(alpha: 0.5 * a);
+      ..color = kit.palette.gloss.withValues(alpha: 0.5 * a);
     for (final snap in s.layout.snaps) {
       if (snap.kind != hints) continue;
       if (room != null) {

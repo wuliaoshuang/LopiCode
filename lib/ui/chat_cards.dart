@@ -70,10 +70,10 @@ class ChatCard extends StatelessWidget {
       padding: const EdgeInsets.all(Space.x4),
       constraints: maxHeight == null ? null : BoxConstraints(maxHeight: maxHeight!),
       decoration: BoxDecoration(
-        color: c.surface,
-        borderRadius: BorderRadius.circular(Radii.xl),
-        border: Border.all(color: c.border),
-        boxShadow: [BoxShadow(color: const Color(0xFF000000).withValues(alpha: 0.06), blurRadius: 12, offset: const Offset(0, 4))],
+        color: c.cardBg,
+        borderRadius: BorderRadius.circular(c.radius(Radii.xl)),
+        border: Border.all(color: c.border, width: c.hairline),
+        boxShadow: [BoxShadow(color: c.shadowOf(0.06), blurRadius: 12, offset: const Offset(0, 4))],
       ),
       child: maxHeight == null ? body : SingleChildScrollView(child: body),
     );

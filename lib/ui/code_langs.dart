@@ -1,5 +1,7 @@
 // 代码高亮支持哪些语言（都是 re_highlight 自带的规则，没有新依赖）。
 // 语言判断只走 CodeHighlighter 一个入口；这里只管“语言 id → 高亮规则”。
+import 'package:lopicode/appearance/theme_builtin.dart';
+import 'package:lopicode/appearance/theme_spec.dart';
 import 'package:lopicode/ui/code_highlight.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:re_highlight/languages/apache.dart';
@@ -92,8 +94,6 @@ import 'package:re_highlight/languages/x86asm.dart';
 import 'package:re_highlight/languages/xml.dart';
 import 'package:re_highlight/languages/yaml.dart';
 import 'package:re_highlight/re_highlight.dart';
-import 'package:re_highlight/styles/atom-one-dark.dart';
-import 'package:re_highlight/styles/atom-one-light.dart';
 
 /// 语言 id（[CodeHighlighter.languageFor] 的返回值）→（re_highlight 里的名字，规则）。
 ///
@@ -197,11 +197,24 @@ final Map<String, (String, Mode)> kCodeLanguages = {
 /// 文件对应的高亮规则；不认识的类型返回 null（不高亮）。
 (String, Mode)? highlightModeFor(String path) => highlightModeForLanguage(CodeHighlighter.languageFor(path));
 
-final Map<bool, Map<String, TextStyle>> _themes = {};
+final Expando<Map<String, TextStyle>> _themes = Expando();
 
-/// 高亮配色（浅色 / 深色各一套）。只上色，不改字重和斜体：等宽代码里粗体会把列挤歪。
-Map<String, TextStyle> codeThemeFor({required bool dark}) =>
-    _themes[dark] ??= {for (final e in (dark ? atomOneDarkTheme : atomOneLightTheme).entries) e.key: e.value.copyWith(fontWeight: FontWeight.w400, fontStyle: FontStyle.normal)};
+/// 高亮配色：从主题的“代码高亮”一节来（[theme]；不传就按 [dark] 用默认浅色 / 默认深色主题）。
+///
+/// 每个分类一个颜色，可选粗体 / 斜体；没设的分类不在表里，按普通代码文字画。默认主题只上色、不加粗不倾斜
+///（等宽代码里粗体会把列挤歪）。同一份主题只算一次。
+Map<String, TextStyle> codeThemeFor({bool dark = false, ThemeSpec? theme}) {
+  final t = theme ?? defaultThemeFor(dark: dark);
+  return _themes[t] ??= {
+    for (final e in t.tokens.entries)
+      if (!e.value.isPlain)
+        e.key: TextStyle(
+          color: e.value.color == null ? null : Color(e.value.color!),
+          fontWeight: e.value.bold ? FontWeight.w700 : FontWeight.w400,
+          fontStyle: e.value.italic ? FontStyle.italic : FontStyle.normal,
+        ),
+  };
+}
 
 Highlight? _highlight;
 
@@ -209,12 +222,12 @@ Highlight? _highlight;
 const int kHighlightMaxChars = 120000;
 
 /// 把一段代码上色成一串文字片段。语言不认识、代码太长、上色出错都退回不上色的一整段。
-TextSpan highlightCode(String code, String language, {required bool dark, required TextStyle base}) {
+TextSpan highlightCode(String code, String language, {bool dark = false, ThemeSpec? theme, required TextStyle base}) {
   final mode = highlightModeForLanguage(language);
   if (mode == null || code.isEmpty || code.length > kHighlightMaxChars) return TextSpan(text: code, style: base);
   try {
     final hl = _highlight ??= (Highlight()..registerLanguages({for (final m in kCodeLanguages.values) m.$1: m.$2}));
-    final renderer = TextSpanRenderer(base, codeThemeFor(dark: dark));
+    final renderer = TextSpanRenderer(base, codeThemeFor(dark: dark, theme: theme));
     hl.highlight(code: code, language: mode.$1).render(renderer);
     return renderer.span ?? TextSpan(text: code, style: base);
   } on Object {
