@@ -254,7 +254,12 @@ class LocalPackNotifier extends Notifier<LocalPackState> {
     final next = {..._snap.form.permissions};
     on ? next.add(id) : next.remove(id);
     final errors = Map.of(_snap.fieldErrors)..remove('permissions');
-    _put(_snap.copyWith(form: _snap.form.copyWith(permissions: next), fieldErrors: errors));
+    _put(
+      _snap.copyWith(
+        form: _snap.form.copyWith(permissions: next),
+        fieldErrors: errors,
+      ),
+    );
     _saveLater();
   }
 

@@ -253,8 +253,7 @@ void main() {
       expect(File(workspacePath).existsSync() && File(publicPath).existsSync(), isTrue);
       expect(find.text('怎么装到手机上'), findsOneWidget);
       expect(find.textContaining('直接安装'), findsNothing, reason: '没有“直接安装”按钮（要新权限）');
-      // 截图停在“主按钮完整露在顶栏下面、下面接着产物卡”的位置（按钮切一半在顶栏后面不好看）。
-      await tester.drag(find.byType(ListView).first, const Offset(0, -24));
+      await tester.drag(find.byType(ListView).first, const Offset(0, -80));
       await settle(tester, rounds: 2);
       await shot(tester, 'pack-07-done-$suffix');
       // 复制路径、去文件页
@@ -630,10 +629,7 @@ void main() {
     await tapOn(tester, find.byKey(const Key('pack-start')), rounds: 6);
     expect(state().phase, LocalPackPhase.failed);
     expect(state().fieldErrors['permissions'], contains('权限表里没有'));
-    expect(
-      find.descendant(of: find.byKey(const Key('pack-perm-row')), matching: find.textContaining('权限表里没有')),
-      findsOneWidget,
-    );
+    expect(find.descendant(of: find.byKey(const Key('pack-perm-row')), matching: find.textContaining('权限表里没有')), findsOneWidget);
     await reveal(tester, find.byKey(const Key('pack-fix')));
     expect(find.text('去改权限'), findsOneWidget);
     await tapOn(tester, find.byKey(const Key('pack-fix')), rounds: 4);
