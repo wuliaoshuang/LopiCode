@@ -327,7 +327,8 @@ void main() {
       final ch = await models.upsert(
         name: '渠道',
         protocol: ChatProtocol.openaiChat,
-        baseUrl: 'https://api.example.com/v1',
+        // 思考参数核对过的地址（OpenRouter：低 / 中 / 高）；没核对过的服务商不给档位，另有测试
+        baseUrl: 'https://openrouter.ai/api/v1',
         models: [ModelSpec(id: 'q', thinking: true)],
       );
       await settings.set(ModelConfigStore.kLevels, {'${ch.id}/q': '乱写的档位', 'x': 1});

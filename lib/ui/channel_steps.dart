@@ -115,8 +115,11 @@ class FetchModelsStep extends StatelessWidget {
 
 /// 第 3 步里的一个模型：点整行改参数；右边“测试”发一句短话确认能对话，结果写在下面。
 class ModelStepRow extends StatelessWidget {
-  const ModelStepRow({super.key, required this.model, required this.onEdit, required this.onTest, required this.testing, required this.result});
+  const ModelStepRow({super.key, required this.model, required this.thinking, required this.onEdit, required this.onTest, required this.testing, required this.result});
   final ModelSpec model;
+
+  /// 要不要写“可思考”：标了、而且这家的思考参数核对过。
+  final bool thinking;
   final VoidCallback onEdit;
 
   /// null＝现在不能测（第 1 步没填好，或者别的检查正在跑）。
@@ -148,7 +151,7 @@ class ModelStepRow extends StatelessWidget {
                       Padding(
                         padding: const EdgeInsets.only(top: 2),
                         child: Text(
-                          '${m.contextLength ~/ 1000}K 上下文 · 输出 ${m.maxOutput ~/ 1000}K · ${m.vision ? '文本和图片' : '文本'}${m.thinking ? ' · 可思考' : ''}',
+                          '${m.contextLength ~/ 1000}K 上下文 · 输出 ${m.maxOutput ~/ 1000}K · ${m.vision ? '文本和图片' : '文本'}${thinking ? ' · 可思考' : ''}',
                           style: t.bodySmall?.copyWith(color: c.textFaint),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,

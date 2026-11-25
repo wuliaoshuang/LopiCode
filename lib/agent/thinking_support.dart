@@ -1,8 +1,11 @@
 // 各家接口“思考”到底怎么调：这个模型在这个渠道上真实能选哪些档位、每个档位发什么参数。
 //
 // 规矩（docs/api-notes.md「2026-11-25 思考档位」逐家记了来源）：
-// - 只有官方文档核对过的服务商 / 模型才发它专属的参数；核对不了的一律走通用做法
-//   （OpenAI Chat 协议：选了档位才发 `reasoning_effort`，没选什么都不发）。
+// - 只有官方文档核对过的服务商 / 模型才有档位、才发思考参数。核对不了的（[ThinkingCaps.verified] 为 false）：
+//   界面上不给档位也不给“可思考”开关，只写一句说明；请求里一个思考参数都不发，连通用的 `reasoning_effort` 也不发。
+//   （2026-11-25 霜霜定的。旧存盘里已经标了“可思考”、记了档位的，读进来照样按“不发”处理。）
+// - 怎么算“核对过”：官方地址按地址认；自己填的地址（中转站）按模型名认，认得出是核对过的那几家的模型才算；
+//   本机 / 局域网地址、没核对过的服务商的官方地址，一律不算。见 [thinkingCaps]。
 // - 模型没标记“可思考”时，什么思考参数都不发（DeepSeek 官方地址例外：它默认开着思考，见 chat_client.dart）。
 // - 档位只给真实有区别的：点了没用的档位不出现。
 import 'package:lopicode/agent/model_config.dart';
@@ -65,15 +68,26 @@ class ThinkingCaps {
   final String note;
   final AnthropicOff anthropicOff;
 
-  /// 是不是按官方文档核对过的专属规则（false＝通用做法）。
+  /// 是不是按官方文档核对过的规则。false＝没核对过：没有档位、不发任何思考参数，[note] 写的是为什么。
   final bool verified;
+
+  /// 没核对过的服务商 / 模型：只有 `off`，什么都不发。
+  const ThinkingCaps.unverified(this.note) : options = const ['off'], offIsDefault = true, wire = ThinkingWire.fixed, anthropicOff = AnthropicOff.omit, verified = false;
 
   bool get adjustable => options.length > 1;
 }
 
 const _graded = ['off', 'low', 'medium', 'high'];
 
-const _generic = ThinkingCaps(options: _graded, offIsDefault: true, wire: ThinkingWire.effort, note: '“默认”＝不发思考参数，模型按自己的默认来。', verified: false);
+const _noParams = '请求里不带任何思考参数，模型按自己的默认来。';
+
+/// 没核对过时写给用户的那句话。
+ThinkingCaps _unverifiedProvider(String name) => ThinkingCaps.unverified('$name的思考参数还没对着官方文档核对过，暂时不能在这里调。$_noParams');
+const _unverifiedModel = ThinkingCaps.unverified('这个模型的思考参数还没对着官方文档核对过，暂时不能在这里调。$_noParams');
+const _unverifiedRelay = ThinkingCaps.unverified('这是自己填的接口地址，从模型名认不出是哪家的模型，思考参数没法核对，暂时不能在这里调。$_noParams');
+const _unverifiedLocal = ThinkingCaps.unverified('本机 / 局域网服务的思考参数还没对着官方文档核对过，暂时不能在这里调。$_noParams');
+
+const _openAiEffort = ThinkingCaps(options: _graded, offIsDefault: true, wire: ThinkingWire.effort, note: '“默认”＝不发思考参数，模型按自己的默认来（有的模型不让关）。');
 
 /// Claude 的模型 ID → 产品线和版本号（`claude-opus-4-7` → opus 4.7；`claude-sonnet-4-20250514` → sonnet 4.0；
 /// `claude-3-7-sonnet-…` → sonnet 3.7）。认不出来返回 null。
@@ -90,7 +104,8 @@ const _generic = ThinkingCaps(options: _graded, offIsDefault: true, wire: Thinki
 ThinkingCaps _claudeCaps(String modelId) {
   final v = parseClaudeId(modelId);
   if (v == null) {
-    return const ThinkingCaps(options: _graded, offIsDefault: true, wire: ThinkingWire.anthropicBudget, note: '认不出是哪一代 Claude，按老写法发思考预算；“默认”＝不发思考参数。', verified: false);
+    // 新旧两种写法发错了都会 400，认不出是哪一代就不发
+    return const ThinkingCaps.unverified('认不出这是哪一代 Claude，新旧两种思考写法不知道该用哪种，暂时不能在这里调。$_noParams');
   }
   final n = v.major * 10 + v.minor;
   const alwaysOn = ThinkingCaps(options: _graded, offIsDefault: true, wire: ThinkingWire.anthropicAdaptive, anthropicOff: AnthropicOff.alwaysOn, note: '这个模型一直在思考，关不掉；“默认”＝用它自己的强度。');
@@ -125,37 +140,71 @@ ThinkingCaps _kimiCaps(String id) {
   if (id.startsWith('kimi-k2.6')) {
     return const ThinkingCaps(options: ['off', 'on'], offIsDefault: false, wire: ThinkingWire.disableOnly, note: '这个模型的思考只能开或关，不分档位。');
   }
-  return _generic;
+  return _unverifiedModel;
 }
 
-/// 假设模型已经标记“可思考”，它在这个渠道上能怎么调。
+ThinkingCaps _geminiCaps(String id) {
+  if (id.contains('gemini-2.5') && !id.contains('pro')) {
+    return const ThinkingCaps(options: _graded, offIsDefault: false, wire: ThinkingWire.effortWithNone, note: '选“关”会明确关掉思考。');
+  }
+  return const ThinkingCaps(options: _graded, offIsDefault: true, wire: ThinkingWire.effort, note: '这个模型关不掉思考；“默认”＝用它自己的强度。');
+}
+
+const _qwenCaps = ThinkingCaps(options: ['off', 'on'], offIsDefault: false, wire: ThinkingWire.enableThinking, note: '千问的思考只能开或关，不分档位。');
+
+/// 模型名看着是不是 OpenAI 自家的（`gpt-…`、`o3…`、`chatgpt-…`）。只用来在自己填的地址上认模型。
+bool _looksOpenAi(String id) => RegExp(r'^(gpt-|chatgpt-|o\d)').hasMatch(id);
+
+/// 自己填的地址（中转站）：只能靠模型名认。认得出是核对过的那几家的模型，就按那家官方文档的写法；认不出就是没核对。
+/// 中转站常见的 `厂商/模型` 写法只看最后一段。
+ThinkingCaps _relayChatCaps(String modelId) {
+  final id = modelId.split('/').last;
+  if (id.startsWith('deepseek-')) {
+    // 不是官方地址，客户端不会替我们发 disabled：这里照官方文档把开关和强度都明说
+    return const ThinkingCaps(options: ['off', 'low', 'high', 'max'], offIsDefault: false, wire: ThinkingWire.thinkingTypeWithEffort, note: 'DeepSeek 只分低、高、最高三档（它把“中”当“高”）。');
+  }
+  if (id.startsWith('glm-')) return _zhipuCaps(id);
+  if (id.startsWith('kimi-')) return _kimiCaps(id);
+  if (id.startsWith('qwen')) return _qwenCaps;
+  if (id.startsWith('gemini-')) return _geminiCaps(id);
+  if (_looksOpenAi(id)) return _openAiEffort;
+  return _unverifiedRelay;
+}
+
+/// 假设模型已经标记“可思考”，它在这个渠道上能怎么调。没核对过的返回 [ThinkingCaps.unverified]。
+///
+/// 怎么认：
+/// - Anthropic 协议：看模型名认得出是哪一代 Claude（官方地址和中转站一样）。
+/// - OpenAI Responses 协议：OpenAI 官方地址；或者自己填的地址上、模型名看着是 OpenAI 的。
+/// - OpenAI Chat 协议：先按地址认是哪家。是核对过的那几家就按它的规则；是没核对过的服务商、或者本机 / 局域网地址，
+///   就是没核对；哪家都不是（自己填的中转站）再按模型名认。
 ThinkingCaps thinkingCaps(ChatProtocol protocol, String baseUrl, String modelId) {
   final id = modelId.trim().toLowerCase();
+  final preset = presetForBaseUrl(baseUrl);
   switch (protocol) {
     case ChatProtocol.anthropic:
       return _claudeCaps(id);
     case ChatProtocol.openaiResponses:
-      return const ThinkingCaps(options: _graded, offIsDefault: true, wire: ThinkingWire.effort, note: '“默认”＝不发思考参数，模型按自己的默认来。');
+      const caps = ThinkingCaps(options: _graded, offIsDefault: true, wire: ThinkingWire.effort, note: '“默认”＝不发思考参数，模型按自己的默认来。');
+      if (preset?.id == 'openai') return caps;
+      if (preset != null) return _unverifiedProvider(preset.name);
+      if (isLocalBaseUrl(baseUrl)) return _unverifiedLocal;
+      return _looksOpenAi(id.split('/').last) ? caps : _unverifiedRelay;
     case ChatProtocol.openaiChat:
       break;
   }
-  switch (presetForBaseUrl(baseUrl)?.id) {
+  switch (preset?.id) {
     case 'deepseek':
       return const ThinkingCaps(options: ['off', 'low', 'high', 'max'], offIsDefault: false, wire: ThinkingWire.effort, note: 'DeepSeek 只分低、高、最高三档（它把“中”当“高”）。');
     case 'openai':
-      return const ThinkingCaps(options: _graded, offIsDefault: true, wire: ThinkingWire.effort, note: '“默认”＝不发思考参数，模型按自己的默认来（有的模型不让关）。');
+      return _openAiEffort;
     case 'openrouter':
       return const ThinkingCaps(options: _graded, offIsDefault: true, wire: ThinkingWire.effort, note: '“默认”＝不发思考参数，模型按自己的默认来。');
     case 'gemini':
-      if (id.contains('gemini-2.5') && !id.contains('pro')) {
-        return const ThinkingCaps(options: _graded, offIsDefault: false, wire: ThinkingWire.effortWithNone, note: '选“关”会明确关掉思考。');
-      }
-      return const ThinkingCaps(options: _graded, offIsDefault: true, wire: ThinkingWire.effort, note: '这个模型关不掉思考；“默认”＝用它自己的强度。');
+      return _geminiCaps(id);
     case 'bailian':
-      if (id.startsWith('qwen')) {
-        return const ThinkingCaps(options: ['off', 'on'], offIsDefault: false, wire: ThinkingWire.enableThinking, note: '千问的思考只能开或关，不分档位。');
-      }
-      return _generic;
+      // 百炼上不是千问的模型：官方只说“控制参数因模型而异”，没逐个核对
+      return id.startsWith('qwen') ? _qwenCaps : _unverifiedModel;
     case 'siliconflow':
       return const ThinkingCaps(options: ['off', 'on'], offIsDefault: false, wire: ThinkingWire.enableThinking, note: '硅基流动的思考只能开或关，不分档位。');
     case 'zhipu':
@@ -163,13 +212,22 @@ ThinkingCaps thinkingCaps(ChatProtocol protocol, String baseUrl, String modelId)
     case 'moonshot':
       return _kimiCaps(id);
   }
-  return _generic;
+  if (preset != null) return _unverifiedProvider(preset.name);
+  if (isLocalBaseUrl(baseUrl)) return _unverifiedLocal;
+  return _relayChatCaps(id);
 }
+
+/// 这个模型在这个渠道上的思考参数核对过没有。没核对过：界面不给档位和开关，请求不带思考参数。
+bool thinkingVerified(Channel channel, ModelSpec model) => thinkingCaps(channel.protocol, channel.baseUrl, model.id).verified;
+
+/// 界面上该不该写“可思考”：标了，而且核对过（旧存盘里没核对过的服务商也可能标着）。
+bool showsThinking(ChatProtocol protocol, String baseUrl, ModelSpec model) => model.thinking && thinkingCaps(protocol, baseUrl, model.id).verified;
 
 /// 这个模型现在真实能选的档位（没标记“可思考”就只有 `off`）。模型设置里去掉的档位不出现。
 List<String> thinkingOptions(Channel channel, ModelSpec model) {
   if (!model.thinking) return const ['off'];
   final caps = thinkingCaps(channel.protocol, channel.baseUrl, model.id);
+  if (!caps.verified) return const ['off'];
   return [
     for (final o in caps.options)
       if (!kThinkingLevels.contains(o) || model.levels.contains(o)) o,
@@ -204,7 +262,7 @@ String thinkingOptionLabel(ThinkingCaps caps, String level) => level == 'off' ? 
 /// OpenAI Chat 协议下这一次请求的思考参数：`reasoning_effort` 的值（null 不发）和要并进请求体的其它字段。
 ({String? effort, Map<String, dynamic> extra}) openAiChatThinking(ThinkingCaps caps, {required bool marked, required String level}) {
   const none = (effort: null, extra: <String, dynamic>{});
-  if (!marked) return none;
+  if (!marked || !caps.verified) return none;
   final off = level == 'off';
   switch (caps.wire) {
     case ThinkingWire.effort:

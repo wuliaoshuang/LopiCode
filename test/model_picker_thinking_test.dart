@@ -1,6 +1,7 @@
 // 切换模型时设思考等级（2026-11-25 霜霜真机反馈第 4 条）。390×844，浅色 + 深色：
 // 没标记的模型就地打开“可思考”、档位按模型记住、底部固定区在模型很多时也看得见、
 // 只能开关 / 调不了的服务商显示成真实的样子、输入区模型按钮上的档位标记。
+// 思考参数没核对过的服务商：面板和模型设置里都只有一句说明，没有开关和档位。
 //   LOPI_SHOTS=1 flutter test test/model_picker_thinking_test.dart   # 同时写截图到 docs/screenshots/
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lopicode/agent/model_config.dart';
@@ -10,6 +11,7 @@ import 'package:lopicode/project_session.dart';
 import 'package:lopicode/ui/model_level_mark.dart';
 import 'package:lopicode/ui/model_picker_sheet.dart';
 import 'package:lopicode/ui/project_shell.dart';
+import 'package:lopicode/ui/settings_model_sheets.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'screens_test.dart' show shot, fontsLoaded;
@@ -88,8 +90,8 @@ void main() {
 
     testWidgets('没标记“可思考”的模型：这一段还在，就地打开后立刻出现档位，选的档位按模型记住 ($suffix)', (tester) async {
       await boot(tester);
-      final ch = await add(tester, '我的中转站', 'https://api.example.com/v1', [ModelSpec(id: 'plain-model', name: '普通模型'), ModelSpec(id: 'other-model', name: '另一个模型', thinking: true)]);
-      await open(tester, current: ModelSelection(ch.id, 'plain-model'));
+      final ch = await add(tester, '我的中转站', 'https://api.example.com/v1', [ModelSpec(id: 'gpt-plain', name: '普通模型'), ModelSpec(id: 'gpt-other', name: '另一个模型', thinking: true)]);
+      await open(tester, current: ModelSelection(ch.id, 'gpt-plain'));
 
       expect(find.byKey(const ValueKey('thinking-section')), findsOneWidget, reason: '没标记也不能整段消失');
       expect(find.text('这个模型没有标记为可思考'), findsOneWidget);
@@ -101,7 +103,7 @@ void main() {
       // 就地打开
       await tester.tap(find.byKey(const ValueKey('thinking-mark')));
       await settle(tester, rounds: 4);
-      expect(env.services.models.channel(ch.id)!.model('plain-model')!.thinking, isTrue, reason: '标记存在模型上');
+      expect(env.services.models.channel(ch.id)!.model('gpt-plain')!.thinking, isTrue, reason: '标记存在模型上');
       expect(find.text('这个模型没有标记为可思考'), findsNothing);
       expect(segments(tester), ['默认', '低', '中', '高']);
       expect(find.textContaining('档位越高，思考越久、花的 token 越多'), findsOneWidget);
@@ -121,11 +123,11 @@ void main() {
       await tester.tap(find.text('用这个模型'));
       await settle(tester, rounds: 4);
       final picked = (result! as ModelSelectionResult).selection;
-      expect((picked.channelId, picked.modelId, picked.level), (ch.id, 'plain-model', 'high'));
-      expect(env.services.models.thinkingLevelOf(ch.id, 'plain-model'), 'high');
+      expect((picked.channelId, picked.modelId, picked.level), (ch.id, 'gpt-plain', 'high'));
+      expect(env.services.models.thinkingLevelOf(ch.id, 'gpt-plain'), 'high');
 
       // 聊天换成了别的模型以后再打开面板、切回这个模型：还是上次给它设的“高”
-      await open(tester, current: ModelSelection(ch.id, 'other-model'));
+      await open(tester, current: ModelSelection(ch.id, 'gpt-other'));
       await tester.tap(find.text('普通模型'));
       await settle(tester, rounds: 2);
       expect(tester.widget<SegmentedButton<String>>(find.byKey(const ValueKey('thinking-levels'))).selected, {'high'});
@@ -133,7 +135,7 @@ void main() {
       // 标错了可以就地关回去
       await tester.tap(find.byKey(const ValueKey('thinking-mark')));
       await settle(tester, rounds: 4);
-      expect(env.services.models.channel(ch.id)!.model('plain-model')!.thinking, isFalse);
+      expect(env.services.models.channel(ch.id)!.model('gpt-plain')!.thinking, isFalse);
       expect(segments(tester), isEmpty);
       await tester.tap(find.text('用这个模型'));
       await settle(tester, rounds: 4);
@@ -142,8 +144,8 @@ void main() {
 
     testWidgets('模型很多：“思考深度”和“用这个模型”固定在底部，不用滚就看得见、点得到 ($suffix)', (tester) async {
       await boot(tester);
-      final ch = await add(tester, '我的中转站', 'https://api.example.com/v1', [for (var i = 1; i <= 30; i++) ModelSpec(id: 'model-$i', thinking: true)]);
-      await open(tester, current: ModelSelection(ch.id, 'model-1', 'medium'));
+      final ch = await add(tester, '我的中转站', 'https://api.example.com/v1', [for (var i = 1; i <= 30; i++) ModelSpec(id: 'gpt-model-$i', name: 'model-$i', thinking: true)]);
+      await open(tester, current: ModelSelection(ch.id, 'gpt-model-1', 'medium'));
       expect(find.byKey(const ValueKey('thinking-levels')).hitTestable(), findsOneWidget);
       expect(find.text('用这个模型').hitTestable(), findsOneWidget);
       expect(find.text('管理渠道和模型').hitTestable(), findsOneWidget);
@@ -163,7 +165,7 @@ void main() {
       await tester.tap(find.text('用这个模型'));
       await settle(tester, rounds: 4);
       final picked = (result! as ModelSelectionResult).selection;
-      expect((picked.modelId, picked.level), ('model-30', 'low'));
+      expect((picked.modelId, picked.level), ('gpt-model-30', 'low'));
     });
 
     testWidgets('档位显示成这家真实支持的样子：只有关 / 开、另有“最高”、调不了的写原因 ($suffix)', (tester) async {
@@ -200,6 +202,136 @@ void main() {
       await tester.tap(find.text('用这个模型'));
       await settle(tester, rounds: 4);
       expect((result! as ModelSelectionResult).selection.level, 'off');
+    });
+
+    testWidgets('思考参数没核对过的服务商：只有一句说明，没有开关、没有档位；旧存盘里标过、记过档位的也一样 ($suffix)', (tester) async {
+      await boot(tester);
+      // 旧存盘的样子：没核对过的服务商上已经标了“可思考”，还记了“高”
+      final ark = await add(tester, '火山方舟', 'https://ark.cn-beijing.volces.com/api/v3', [ModelSpec(id: 'doubao-pro', thinking: true), ModelSpec(id: 'doubao-lite')]);
+      final relay = await add(tester, '我的中转站', 'https://api.example.com/v1', [ModelSpec(id: 'my-model', thinking: true), ModelSpec(id: 'deepseek-v4-pro', thinking: true)]);
+      await add(tester, '本机', 'http://localhost:11434/v1', [ModelSpec(id: 'qwen3', thinking: true)]);
+      await tester.runAsync(() => env.services.models.setThinkingLevel(ark.id, 'doubao-pro', 'high'));
+      await open(tester, current: ModelSelection(ark.id, 'doubao-pro', 'high'));
+
+      void expectLocked(String because) {
+        expect(find.byKey(const ValueKey('thinking-section')), findsOneWidget, reason: because);
+        expect(find.byKey(const ValueKey('thinking-unverified')), findsOneWidget, reason: because);
+        expect(find.byKey(const ValueKey('thinking-mark')), findsNothing, reason: '$because：没有就地开关');
+        expect(find.byType(Switch), findsNothing, reason: because);
+        expect(segments(tester), isEmpty, reason: '$because：没有档位');
+        expect(find.byKey(const ValueKey('thinking-note')), findsNothing, reason: because);
+        expect(find.textContaining('可思考'), findsNothing, reason: '$because：列表里也不写“可思考”');
+      }
+
+      expectLocked('标过的');
+      expect(find.textContaining('火山方舟（豆包）的思考参数还没对着官方文档核对过，暂时不能在这里调'), findsOneWidget);
+      expect(find.textContaining('请求里不带任何思考参数'), findsOneWidget);
+      expect(find.text('用这个模型').hitTestable(), findsOneWidget);
+      await shot(tester, 'think2-01-unverified-provider-$suffix');
+
+      // 没标过的模型：同一句话，同样没有开关
+      await tester.tap(find.text('doubao-lite'));
+      await settle(tester, rounds: 2);
+      expectLocked('没标过的');
+
+      // 选它：不带档位；以前记的“高”留着不动
+      await tester.tap(find.text('doubao-pro'));
+      await settle(tester, rounds: 2);
+      await tester.tap(find.text('用这个模型'));
+      await settle(tester, rounds: 4);
+      final picked = (result! as ModelSelectionResult).selection;
+      expect((picked.channelId, picked.modelId, picked.level), (ark.id, 'doubao-pro', 'off'));
+      expect(env.services.models.thinkingLevelOf(ark.id, 'doubao-pro'), 'high', reason: '记住的档位不清掉，只是不用');
+      expect(env.services.models.resolve(picked)!.level, 'off');
+
+      // 自己填的中转站：认不出的模型是说明，认得出的（DeepSeek）照常有档位
+      await open(tester, current: ModelSelection(relay.id, 'my-model', 'high'));
+      expect(find.byKey(const ValueKey('thinking-unverified')), findsOneWidget);
+      expect(find.byKey(const ValueKey('thinking-mark')), findsNothing);
+      expect(segments(tester), isEmpty);
+      expect(find.textContaining('从模型名认不出是哪家的模型'), findsOneWidget);
+      await shot(tester, 'think2-02-unverified-relay-$suffix');
+      await tester.tap(find.text('deepseek-v4-pro'));
+      await settle(tester, rounds: 2);
+      expect(find.byKey(const ValueKey('thinking-unverified')), findsNothing);
+      expect(find.byKey(const ValueKey('thinking-mark')), findsOneWidget);
+      expect(segments(tester), ['关', '低', '高', '最高']);
+      await shot(tester, 'think2-03-relay-known-model-$suffix');
+
+      // 本机服务
+      await tester.tap(find.widgetWithText(ChoiceChip, '本机'));
+      await settle(tester, rounds: 2);
+      await tester.tap(find.text('qwen3'));
+      await settle(tester, rounds: 2);
+      expectLocked('本机');
+    });
+
+    testWidgets('模型设置面板和选模型面板说的是同一句话：没核对过的没有“可以思考”开关，存着的标记不动 ($suffix)', (tester) async {
+      await boot(tester);
+      Object? saved;
+      Future<void> openSpec(ModelSpec m, String baseUrl) async {
+        saved = null;
+        await tester.pumpWidget(
+          appFor(
+            env,
+            Scaffold(
+              key: UniqueKey(),
+              body: Builder(
+                builder: (context) => Center(
+                  child: FilledButton(
+                    onPressed: () async => saved = await showModalBottomSheet<Object>(
+                      context: context,
+                      isScrollControlled: true,
+                      showDragHandle: true,
+                      builder: (_) => ModelSpecSheet(model: m, protocol: ChatProtocol.openaiChat, baseUrl: baseUrl),
+                    ),
+                    child: const Text('改模型'),
+                  ),
+                ),
+              ),
+            ),
+            mode: mode,
+            font: kTestFont,
+          ),
+        );
+        await settle(tester, rounds: 2);
+        await tester.tap(find.text('改模型'));
+        await settle(tester, rounds: 4);
+      }
+
+      Future<void> confirm() async {
+        await tester.scrollUntilVisible(find.text('确定'), 200, scrollable: find.byType(Scrollable).last);
+        await tester.ensureVisible(find.text('确定'));
+        await settle(tester, rounds: 2);
+        await tester.tap(find.text('确定'));
+        await settle(tester, rounds: 4);
+      }
+
+      // 没核对过：没有开关和档位，只有说明
+      final old = ModelSpec(id: 'doubao-pro', thinking: true, levels: const ['high']);
+      await openSpec(old, 'https://ark.cn-beijing.volces.com/api/v3');
+      await tester.scrollUntilVisible(find.byKey(const ValueKey('spec-thinking-unverified')), 200, scrollable: find.byType(Scrollable).last);
+      await settle(tester, rounds: 2);
+      expect(find.byKey(const ValueKey('spec-thinking')), findsNothing);
+      expect(find.byType(SwitchListTile), findsNothing);
+      expect(find.byType(FilterChip), findsNothing);
+      expect(find.textContaining('火山方舟（豆包）的思考参数还没对着官方文档核对过，暂时不能在这里调'), findsOneWidget);
+      await shot(tester, 'think2-04-spec-unverified-$suffix');
+      await confirm();
+      final kept = saved! as ModelSpec;
+      expect(kept.thinking, isTrue, reason: '改不了的东西原样交回，不偷偷清掉');
+      expect(kept.levels, ['high']);
+
+      // 核对过：开关和档位都在
+      await openSpec(ModelSpec(id: 'deepseek-v4-pro', thinking: true), 'https://api.deepseek.com');
+      await tester.scrollUntilVisible(find.byKey(const ValueKey('spec-thinking')), 200, scrollable: find.byType(Scrollable).last);
+      await settle(tester, rounds: 2);
+      expect(find.byKey(const ValueKey('spec-thinking-unverified')), findsNothing);
+      expect(find.byType(FilterChip), findsNWidgets(3));
+      await tester.tap(find.byKey(const ValueKey('spec-thinking')));
+      await settle(tester, rounds: 2);
+      await confirm();
+      expect((saved! as ModelSpec).thinking, isFalse);
     });
 
     testWidgets('输入区的模型按钮：开了思考就带一个小标记，没开只有名字 ($suffix)', (tester) async {
