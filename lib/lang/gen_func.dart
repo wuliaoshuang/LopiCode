@@ -75,6 +75,9 @@ mixin LangFuncGen on LangCore {
   /// 短写法的实现（还没包成函数值）。[code] 是那个式子。
   String lambdaShort(List<LParam> params, LangScope scope, String code, List<String> uses, String args);
 
+  /// 同 [lambdaShort]，多给一份“里面用到的模块级变量”（已经是代码里的名字）。只有 PHP 用得着：别的语言函数里直接看得见模块级变量。
+  String lambdaShortWithGlobals(List<LParam> params, LangScope scope, String code, List<String> uses, String args, List<String> globalsUsed) => lambdaShort(params, scope, code, uses, args);
+
   /// 有名字的函数当值用时的“实现”。
   String namedImpl(LFuncDecl f, String fname) => fname;
 
@@ -183,7 +186,12 @@ mixin LangFuncGen on LangCore {
       final args = argsName(c.next());
       final plan = planFunction(c.scope, c.scope.module, e.params, e.stmts, shortArgs: args);
       final code = _inScope(c, plan.scope, () => LangCtx.run(c, () => expr(e.expr!)));
-      return fnWrap('', min, max, lambdaShort(e.params, plan.scope, code, _uses(e, c.scope), args));
+      // 短写法里用到的模块级变量（PHP 要先写 `global`，不然读到的是一个没定义的局部变量）。
+      final globals = <String>[
+        for (final n in {...plan.names.writes, ...plan.names.reads})
+          if (!plan.scope.locals.contains(n) && plan.scope.resolve(n).kind == LangNameKind.module) globalVar(plan.scope.module.prefix, n),
+      ];
+      return fnWrap('', min, max, lambdaShortWithGlobals(e.params, plan.scope, code, _uses(e, c.scope), args, globals));
     }
     if (ctx == null) throw LangUnsupported('带函数体的匿名函数只能放在一句话里（这里没有地方先定义它）', src: e.src);
     final n = ctx.next();

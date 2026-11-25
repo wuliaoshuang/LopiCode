@@ -1,4 +1,4 @@
-// 语言核心的生成器：入口函数、能力表、“未支持”的报错、小库函数表和五份小库对得上、Go 的格式、PHP 的文本检查（未实测）。
+// 语言核心的生成器：入口函数、能力表、“未支持”的报错、小库函数表和五份小库对得上、Go 的格式、PHP 的文本检查。
 // 真跑的一致性在 lang_conformance_*_test.dart。
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lopicode/backend/backend_ir.dart';
@@ -273,7 +273,7 @@ void main() {
     });
 
     for (final l in kLangTargets) {
-      test('$l${l == 'php' ? '（未实测，只核对文本）' : ''}：每个第 1 阶段的函数生成出来调的名字，小库里都有定义；抛错的四句话都在', () {
+      test('$l${l == 'php' ? '（只核对文本）' : ''}：每个第 1 阶段的函数生成出来调的名字，小库里都有定义；抛错的四句话都在', () {
         final runtime = _runtime(l);
         for (final e in [...kLangCoreFns.entries, ...kLangRtFns.entries]) {
           if (e.value.stage != 1 || e.key == 'now') continue;
@@ -328,11 +328,11 @@ void main() {
     });
   });
 
-  group('PHP（未实测：本机没有 php，只做文本检查）', () {
+  group('PHP（文本检查；真跑在 lang_conformance_*_test.dart）', () {
     final gen = langGenFor('php')!;
     final target = backendTargetFor('php')! as BeCodeTarget;
 
-    test('未实测：全部一致性用例都能生成；引号、括号配得上；文字里的 \$ 都转义了；没有 ?>', () {
+    test('全部一致性用例都能生成；引号、括号配得上；文字里的 \$ 都转义了；没有 ?>', () {
       final script = gen.script(casesProgram(allCases));
       expect(script, startsWith('<?php\n'));
       expect(script, isNot(contains('?>')));
@@ -340,10 +340,13 @@ void main() {
         _expectBalanced(_phpCodeOnly(entry.value), entry.key);
       }
       expect(target.langRuntimeSource, startsWith('<?php\n'));
-      expect(target.langRuntimeSource.split('\n').take(8).join('\n'), contains('还没有'), reason: '小库开头要写明没运行过');
+      // 2026-11-26 改：原来断言小库开头写着“还没有（实际运行过）”；PHP 真跑过了，改成断言开头如实写着跑过。
+      expect(target.langRuntimeSource.split('\n').take(8).join('\n'), allOf(contains('PHP 8.3 跑通过'), isNot(contains('还没有'))), reason: '小库开头如实写跑没跑过');
+      // 2026-11-26 PHP 第一次真跑撞到的：命令行的 PHP 默认把报错写到标准输出，混进程序的输出里。
+      expect(script, contains("ini_set('display_errors', 'stderr');"));
     });
 
-    test('未实测：生成的脚本里调的每个 lc_ 函数，小库里都有定义', () {
+    test('生成的脚本里调的每个 lc_ 函数，小库里都有定义', () {
       final runtime = _runtime('php');
       final called = _called('php', _phpCodeOnly(gen.script(casesProgram(allCases))));
       expect(called, isNotEmpty);
@@ -353,7 +356,7 @@ void main() {
       }
     });
 
-    test('未实测：每句话都以分号 / 花括号结尾；变量都带 \$', () {
+    test('每句话都以分号 / 花括号结尾；变量都带 \$', () {
       final lines = _phpCodeOnly(gen.script(casesProgram(allCases))).split('\n').map((l) => l.trim()).where((l) => l.isNotEmpty).toList();
       for (final line in lines.skip(1)) {
         expect(RegExp(r'[;{}]$').hasMatch(line) || line.startsWith('function '), isTrue, reason: line);
@@ -361,7 +364,7 @@ void main() {
       }
     });
 
-    test('未实测：列表是引用（LcList 对象），原地改的函数直接改它', () {
+    test('列表是引用（LcList 对象），原地改的函数直接改它', () {
       final src = _runtime('php');
       expect(src, contains('class LcList'));
       expect(

@@ -1,6 +1,6 @@
 // 新旧两条路混在同一个后端接口函数体里（积木第 4 版·第 1 阶段）：
 // 旧积木的中间形式（BeS / BeX）和新语法树（BeSLang / BeXLang）互相套着，生成四种语言的后端真的起起来发请求，响应逐字节相同。
-// PHP 本机跑不了，只做文本检查（测试名里注明“未实测”）。
+// PHP 也真跑（2026-11-26 起；本机没有 php 时跳过），另有文本检查。
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -240,7 +240,7 @@ void main() {
       }
     });
 
-    test('php（未实测）：混用的入口文件引了语言核心的小库，新旧两种写法都在', () {
+    test('php（文本检查）：混用的入口文件引了语言核心的小库，新旧两种写法都在', () {
       final target = backendTargetFor('php')! as BeCodeTarget;
       final files = target.generateProgram(_program(_mixedBody(target.request)));
       final entry = files[target.entryFile]!;

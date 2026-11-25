@@ -1,5 +1,5 @@
 // 文档级的函数（积木第 4 版·第 2 阶段）接进后端：函数、匿名函数、旧后端积木混在同一个接口里，
-// 生成四种语言的后端真的起起来发请求，响应逐字节相同、且等于写死的预期。PHP 本机跑不了，只做文本检查（测试名里注明“未实测”）。
+// 生成四种语言的后端真的起起来发请求，响应逐字节相同、且等于写死的预期。PHP 也真跑（2026-11-26 起；本机没有 php 时跳过），另有文本检查。
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -352,7 +352,7 @@ void main() {
       }
     });
 
-    test('php（未实测）：带函数的入口文件引了语言核心的小库，花括号成对', () {
+    test('php（文本检查）：带函数的入口文件引了语言核心的小库，花括号成对', () {
       final target = backendTargetFor('php')! as BeCodeTarget;
       final files = target.generateProgram(_program(target.request));
       final entry = files[target.entryFile]!;

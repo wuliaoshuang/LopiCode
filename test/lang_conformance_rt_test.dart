@@ -1,5 +1,5 @@
 // 语言核心一致性（二）：第 4 版新加的小库函数，Node / Python / Go / Java 四种语言真的跑起来，
-// 输出逐字节相同、且等于写死的预期；会抛错的操作四种语言都抛同一句话。PHP 本机跑不了，文本检查在 lang_gen_test.dart。
+// 输出逐字节相同、且等于写死的预期；会抛错的操作四种语言都抛同一句话。PHP 也真跑（2026-11-26 起；本机没有 php 时跳过），文本检查在 lang_gen_test.dart。
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lopicode/lang/lang.dart';
 
