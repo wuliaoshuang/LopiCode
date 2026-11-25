@@ -13,6 +13,7 @@ import 'package:lopicode/agent/agent_tools.dart';
 import 'package:lopicode/agent/automation.dart';
 import 'package:lopicode/agent/command_output_store.dart';
 import 'package:lopicode/agent/command_runner.dart';
+import 'package:lopicode/agent/context_segments.dart';
 import 'package:lopicode/agent/model_config.dart';
 import 'package:lopicode/agent/presets.dart';
 import 'package:lopicode/agent/team.dart';
@@ -27,6 +28,7 @@ import 'package:lopicode/session/attachments.dart' as attachments;
 import 'package:lopicode/session/background_flow.dart';
 import 'package:lopicode/session/chat_export.dart';
 import 'package:lopicode/session/chat_models.dart';
+import 'package:lopicode/session/compact_flow.dart';
 import 'package:lopicode/session/conversation.dart';
 import 'package:lopicode/session/send_flow.dart';
 import 'package:lopicode/session/session_core.dart';
@@ -353,6 +355,14 @@ class ProjectSession {
     return (system: estimateTextTokens(systemPromptFor(_core, conv, root, skills)), tools: estimateTextTokens(jsonEncode(box.specs)), messages: AgentRunner.estimateTokens(_messages));
   }
 
+  /// 上下文占用分段（估算）：系统提示词 / 工具定义 / 对话消息 / 工具结果 / 剩余。没选模型（不知道上下文多长）是 null。
+  Future<ContextSegments?> contextSegments() async {
+    final limit = contextUsage?.limit;
+    if (limit == null) return null;
+    final b = await contextBreakdown();
+    return ContextSegments.of(system: b.system, tools: b.tools, messages: _messages, limit: limit);
+  }
+
   // ── 发送、插话、排队 ─────────────────────────────────
   /// AI 生成时又发的消息（显示在输入框上方）。
   List<QueuedMessage> get queue => _core.queue.current.queue;
@@ -428,7 +438,7 @@ class ProjectSession {
     String? error;
     try {
       final before = AgentRunner.estimateTokens(run.messages);
-      error = await compactHistory(await app.createChatClient(modelOf(run.conv)), run.messages);
+      error = await compactRun(_core, _toolbox, run);
       if (error == null) {
         _core.rebuildItems(run); // 摘要那条会显示成“已压缩较早的对话”，点开能看
         run.add(NoticeItem('已把之前的对话压缩成摘要（估算从 ${before ~/ 1000}K 降到 ${AgentRunner.estimateTokens(run.messages) ~/ 1000}K）。原来的逐条记录不再保留。'));

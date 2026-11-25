@@ -1,6 +1,7 @@
 // 用量弹层：上下文占了多少、这段对话累计用了多少、缓存命中率、余额卡。从 usage_ui.dart 拆出来的。
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lopicode/agent/context_segments.dart';
 import 'package:lopicode/agent/model_config.dart';
 import 'package:lopicode/agent/quota.dart';
 import 'package:lopicode/agent/usage.dart';
@@ -10,6 +11,7 @@ import 'package:lopicode/state/workspace_chat.dart';
 import 'package:lopicode/state/workspace_conversations.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/app_ref.dart';
+import 'package:lopicode/ui/context_bar.dart';
 import 'package:lopicode/ui/usage_ui.dart';
 import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
@@ -26,7 +28,7 @@ class UsageSheet extends ConsumerStatefulWidget {
 }
 
 class _UsageSheetState extends ConsumerState<UsageSheet> {
-  ({int system, int tools, int messages})? _parts;
+  ContextSegments? _parts;
   bool _asked = false;
 
   @override
@@ -34,7 +36,7 @@ class _UsageSheetState extends ConsumerState<UsageSheet> {
     super.didChangeDependencies();
     if (_asked) return;
     _asked = true;
-    widget.session.contextBreakdown().then((v) {
+    widget.session.contextSegments().then((v) {
       if (mounted) setState(() => _parts = v);
     });
     // 打开用量弹层时查一次余额（最多每分钟一次）。
@@ -112,16 +114,8 @@ class _UsageSheetState extends ConsumerState<UsageSheet> {
                 ],
               ),
               const SizedBox(height: Space.x2),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(2),
-                child: LinearProgressIndicator(value: ctx.fraction, minHeight: 4, color: contextTone(c, ctx.fraction), backgroundColor: c.border),
-              ),
-              const SizedBox(height: Space.x2),
-              Text(
-                _parts == null ? '分项计算中…' : '系统 ${formatTokens(_parts!.system)} · 工具 ${formatTokens(_parts!.tools)} · 消息 ${formatTokens(_parts!.messages)}（分项是按字数估的）',
-                key: const Key('usage-context-parts'),
-                style: faint,
-              ),
+              // 分段条：系统提示词 / 工具定义 / 对话消息 / 工具结果 / 剩余（估算），见 context_bar.dart。
+              ContextSegmentBar(segments: _parts),
               if (ctx.fraction > 0.85)
                 const InfoBanner(
                   '上下文快满了。发 /compact 可以把前面的内容压缩成摘要再继续。',
