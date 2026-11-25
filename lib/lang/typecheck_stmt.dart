@@ -5,10 +5,12 @@ mixin _Stmts on _Core {
   @override
   void block(_Scope sc, List<LStmt> body) {
     for (final s in body) {
-      final keep = curSrc;
+      final keep = curSrc, keepStmt = curStmt;
       curSrc = s.src ?? curSrc;
+      curStmt = s;
       _st(sc, s);
       curSrc = keep;
+      curStmt = keepStmt;
     }
   }
 

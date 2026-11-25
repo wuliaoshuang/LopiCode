@@ -12,6 +12,7 @@ import 'package:lopicode/backend/backend_blocks_func.dart';
 import 'package:lopicode/backend/backend_blocks_lang.dart';
 import 'package:lopicode/backend/backend_function.dart';
 import 'package:lopicode/core/safe_file.dart';
+import 'package:lopicode/lang/rules.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 
 /// 存盘文件名。
@@ -144,7 +145,9 @@ class BeDocument {
     List<BeCollection>? collections,
     List<BeRoute>? routes,
     List<BeFunction>? functions,
+    int rules = kLangRulesLoose,
   }) : port = _validPort(port) ? port : kBeDefaultPort,
+       rules = rules < kLangRulesLoose ? kLangRulesLoose : rules,
        language = _idPattern.hasMatch(language) ? language : kBeDefaultLanguage,
        variables = variables ?? [],
        collections = collections ?? [],
@@ -167,6 +170,9 @@ class BeDocument {
   /// 函数 / “我的积木”（积木第 4 版·第 2 阶段，见 backend_function.dart）。每个接口、每个函数里都能调。
   final List<BeFunction> functions;
 
+  /// 规矩版本（见 lang/rules.dart）：1＝老规矩（旧文档，行为不变）；2＝严格规矩。是 1 时存盘不写这个字段。
+  int rules;
+
   static bool _validPort(int p) => p >= 1 && p <= 65535;
 
   /// 有没有用到第 4 版才有的积木（见 backend_blocks_lang.dart 的 `beBlocksUseLang`）。用到了存盘时版本号写 2，否则还是 1
@@ -179,6 +185,7 @@ class BeDocument {
   Map<String, dynamic> toJson() => {
     'version': usesFunctions ? 3 : (usesLang ? 2 : 1),
     'kind': 'backend',
+    if (rules != kLangRulesLoose) kLangRulesField: rules,
     'name': name,
     'port': port,
     'language': language,
@@ -199,6 +206,7 @@ class BeDocument {
     collections: [for (final c in collections) BeCollection(name: c.name)],
     routes: [for (final r in routes) r.clone()],
     functions: [for (final f in functions) f.clone()],
+    rules: rules,
   );
 
   /// 从文件内容读。读不懂（不是 JSON、不是对象、不是后端文档）→ 空白文档 + 说明；坏的条目逐条跳过并在说明里报数。绝不抛异常。
@@ -239,6 +247,7 @@ class BeDocument {
       collections: list(json['collections'], BeCollection.tryParse),
       routes: list(json['routes'], BeRoute.tryParse),
       functions: list(json['functions'], BeFunction.tryParse),
+      rules: langRulesFromJson(json[kLangRulesField]),
     );
     return (doc: doc, note: skipped == 0 ? null : '后端文件里有 $skipped 条读不懂的内容，已跳过');
   }

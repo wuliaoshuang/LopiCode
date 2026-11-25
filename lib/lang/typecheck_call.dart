@@ -231,7 +231,7 @@ mixin _Calls on _Core {
     final tv = c.typeVars;
     final targs = e.typeArgs.isNotEmpty
         ? [for (final a in e.typeArgs) w.resolve(a, sc.tv)]
-        : [for (final v in tv) LType(LKind.hole, name: '${id(e)}:$v')]; // 没写〈…〉：先留着，看后面怎么用
+        : [for (final v in tv) LType(LKind.hole, name: holeKey(e, sc, ':$v'))]; // 没写〈…〉：先留着，看后面怎么用
     final b = {for (var i = 0; i < tv.length && i < targs.length; i++) tv[i]: targs[i]};
     final ctor = w.classCtor(c);
     if (ctor == null) {

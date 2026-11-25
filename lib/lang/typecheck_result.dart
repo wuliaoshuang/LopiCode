@@ -48,7 +48,7 @@ class LTypedSig {
 
 /// 检查的结果。所有类型都是收尾以后的：不含“待定”“永不”（没定下来的按“任意”）。
 class LTypeResult {
-  LTypeResult._(this.world, this.issues, this._types, this._wants, this._ops, this._typeArgs, this.checks, this.funcs, this.vars, this._lambdaKeys, this._lines, this.passes);
+  LTypeResult._(this.world, this.issues, this._types, this._wants, this._ops, this._typeArgs, this.checks, this.funcs, this.vars, this._lambdaKeys, this._lines, this.passes, this.shared);
 
   /// 声明表（记录、枚举、变体、接口、类、函数、别名），生成器要查字段顺序、情况列表时用。
   final LTypeWorld world;
@@ -73,6 +73,10 @@ class LTypeResult {
 
   /// 反复算了几遍才不变。
   final int passes;
+
+  /// 在树里出现了不止一次的同一个节点对象（多半是 `const` 写的）。结果是按节点对象记的，这样的节点 [typeOf]、[coercionOf]、[opOf]
+  /// 只能记住一处——生成器用结果之前要保证它是空的（不会出错的那几种不算：空、是 / 否、文字的字面量）。
+  final List<LNode> shared;
 
   bool get hasErrors => issues.any((i) => i.isError);
   List<LTypeIssue> get errors => [
@@ -109,6 +113,46 @@ class LTypeResult {
 }
 
 extension _Finish on _Checker {
+  List<LNode> _sharedNodes() {
+    final seen = HashSet<LNode>.identity();
+    final out = <LNode>[];
+    late final void Function(List<LStmt>) stmts;
+    void expr(LExpr e) {
+      final harmless = e is LLit && (e.value == null || e.value is bool || e.value is String);
+      if (!harmless && !seen.add(e) && !out.any((x) => identical(x, e))) out.add(e);
+      if (e is LLambda) stmts(e.expr == null ? e.body : const []);
+      if (e is LLambda && e.expr != null) expr(e.expr!);
+      lExprChildren(e).forEach(expr);
+    }
+
+    stmts = (List<LStmt> list) {
+      lWalk(list, (s) {
+        if (!seen.add(s) && !out.any((x) => identical(x, s))) out.add(s);
+        lStmtExprs(s).forEach(expr);
+      });
+    };
+    for (final g in globals) {
+      expr(g.init);
+    }
+    for (final c in w.classes.values) {
+      for (final f in c.decl.fields) {
+        if (f.init != null) expr(f.init!);
+      }
+      if (c.ctor != null) stmts(c.ctor!.body);
+      for (final m in c.methods.values) {
+        stmts(m.body);
+      }
+    }
+    for (final f in w.funcs.values) {
+      stmts(f.body);
+    }
+    stmts(main);
+    for (final s in scripts) {
+      stmts(s.body);
+    }
+    return out;
+  }
+
   static String _bound(String b) => switch (b) {
     kBoundComparable => '能比较',
     kBoundKey => '能当键',
@@ -169,6 +213,6 @@ extension _Finish on _Checker {
       if (c.kind == LCoercionKind.checkEach) checks.add(LRuntimeCheck(LCheckKind.anyToContainer, e, type: to));
     }
     final outChecks = [for (final c in checks) LRuntimeCheck(c.kind, c.node, type: c.type == null ? null : w.close(c.type!), where: c.where)];
-    return LTypeResult._(w, issues, closedTypes, closedWants, ops, closedArgs, outChecks, sigs, vars, lambdaKeys, lines, passes);
+    return LTypeResult._(w, issues, closedTypes, closedWants, ops, closedArgs, outChecks, sigs, vars, lambdaKeys, lines, passes, _sharedNodes());
   }
 }

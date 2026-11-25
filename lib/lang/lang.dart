@@ -21,10 +21,12 @@ export 'package:lopicode/lang/custom_block_edit.dart';
 export 'package:lopicode/lang/gen.dart';
 export 'package:lopicode/lang/rt.dart';
 export 'package:lopicode/lang/rt_v2.dart';
+export 'package:lopicode/lang/rules.dart';
 export 'package:lopicode/lang/type_issue.dart';
 export 'package:lopicode/lang/type_world.dart';
 export 'package:lopicode/lang/typecheck.dart';
 export 'package:lopicode/lang/types.dart';
+export 'package:lopicode/lang/types_json.dart';
 
 /// 语言核心支持的目标语言。
 const List<String> kLangTargets = ['node', 'python', 'go', 'java', 'php'];

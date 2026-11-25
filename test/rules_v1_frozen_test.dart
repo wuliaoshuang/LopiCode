@@ -41,7 +41,7 @@ String _fingerprint(String s) {
 }
 
 Map<String, BeDocument> _docs() => {
-  '入门样本': backendStarterDocument('样本'),
+  '入门样本': backendStarterDocument('样本', rules: kLangRulesLoose),
   '一致性样本': conformanceDocument(),
   '第4版新积木': parseLangBlocksDocument(langBlocksDocumentJson(langBlocksRoutes())),
   '函数和我的积木': funcBlocksDocument(),

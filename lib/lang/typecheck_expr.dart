@@ -205,7 +205,7 @@ mixin _Exprs on _Core {
       // 匿名函数放到最后看，拿别的项的类型当线索。
       el = w.join(el, ex(sc, x, el.isNever ? null : el));
     }
-    return LType(LKind.list, of: items.isNotEmpty && !el.isNever ? el : LType(LKind.hole, name: '${id(e)}'));
+    return LType(LKind.list, of: items.isNotEmpty && !el.isNever ? el : LType(LKind.hole, name: holeKey(e, sc)));
   }
 
   LType _dictLit(_Scope sc, LDictLit e, List<LDictEntry> entries, LType? wantT) {
@@ -223,7 +223,7 @@ mixin _Exprs on _Core {
     for (final x in entries) {
       el = w.join(el, ex(sc, x.value));
     }
-    return LType(LKind.dict, of: entries.isNotEmpty && !el.isNever ? el : LType(LKind.hole, name: '${id(e)}'));
+    return LType(LKind.dict, of: entries.isNotEmpty && !el.isNever ? el : LType(LKind.hole, name: holeKey(e, sc)));
   }
 
   /// 算术的两边：有问题就说一句、返回“永不”；有一边是任意返回“任意”；都是数字返回 null（由调用的地方定是整数还是小数）。
@@ -274,6 +274,11 @@ mixin _Exprs on _Core {
       if (ts.contains(_txt) && (ts.contains(_int) || ts.contains(_flt))) err('T06', sc, '数字和文字不能互相比大小', node: e);
       if (ts.any((t) => t.isAny)) check(LCheckKind.dynamicArith, e, sc);
       op(e, '${ts.any((t) => t.isAny || WL.isVar(t)) ? 'd' : (ts.contains(_txt) ? 't' : (ts.every((t) => t == _int) ? 'i' : 'f'))}$cmp');
+      if (ts.contains(_flt) && ts.contains(_int)) {
+        for (final x in xs) {
+          want(x, _flt);
+        }
+      }
       return _bool;
     }
     final a = _arith[o];
@@ -289,6 +294,11 @@ mixin _Exprs on _Core {
       return r;
     }
     final ints = ts.every((t) => t == _int);
+    if (!ints && o != '//' && o != '%') {
+      for (final x in xs) {
+        want(x, _flt); // 整数和小数混着算：整数那边先变成小数
+      }
+    }
     switch (o) {
       case '+' || '-' || '*':
         if (ints) check(LCheckKind.intOverflow, e, sc);
@@ -368,7 +378,7 @@ mixin _Exprs on _Core {
       err('T08', sc, '没有叫「${e.record}」的记录', node: e);
       return _never;
     }
-    final t = LType(LKind.record, name: d.name, args: [for (final p in d.typeParams) LType(LKind.hole, name: '${id(e)}:${p.name}')]);
+    final t = LType(LKind.record, name: d.name, args: [for (final p in d.typeParams) LType(LKind.hole, name: holeKey(e, sc, ':${p.name}'))]);
     final b = _recordArgs(d, t);
     final given = {for (final f in e.fields) f.name};
     final miss = [

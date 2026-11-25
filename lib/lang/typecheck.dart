@@ -129,6 +129,10 @@ abstract class _Core {
 
   /// 现在在检查哪一句（式子自己没带位置时用它的）。
   LSrc? curSrc;
+  LStmt? curStmt;
+
+  /// 一个“待定”的记号：哪个节点、在哪一句、哪一层里（`const` 写的两个一模一样的空列表是同一个对象，光按节点分不开）。
+  String holeKey(LNode e, _Scope sc, [String tail = '']) => '${id(e)}@${curStmt == null ? 0 : id(curStmt!)}@${sc.key}$tail';
 
   int id(Object node) => _ids.putIfAbsent(node, () => _ids.length + 1);
   String vkey(String scope, String name) => '$scope\u0001$name';
