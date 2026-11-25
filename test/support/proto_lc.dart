@@ -1,0 +1,317 @@
+// 读推断原型的程序（docs/blocks-v5-prototypes/types/*/prog.lc，S 表达式写的语法树），翻成 Dart 的语法树。
+// 只给 test/lang_typecheck_proto_test.dart 对照原型用；写法见原型的 infer.py。
+import 'package:lopicode/lang/lang.dart';
+
+final RegExp _tok = RegExp(r'\s*(;[^\n]*|\(|\)|"[^"]*"|[^\s()";]+)');
+
+List<Object> lcParse(String src) {
+  final toks = [
+    for (final m in _tok.allMatches(src))
+      if (!m.group(1)!.startsWith(';')) m.group(1)!,
+  ];
+  var pos = 0;
+  Object rd() {
+    final t = toks[pos++];
+    if (t != '(') return t;
+    final out = <Object>[];
+    while (toks[pos] != ')') {
+      out.add(rd());
+    }
+    pos++;
+    return out;
+  }
+
+  final out = <Object>[];
+  while (pos < toks.length) {
+    out.add(rd());
+  }
+  return out;
+}
+
+typedef _L = List<Object>;
+
+/// 原型的一个程序 → 模块。
+LModule lcModule(String src) => _Reader(lcParse(src)).module();
+
+class _Reader {
+  _Reader(this.prog) {
+    for (final d in prog.cast<_L>()) {
+      if (d[0] == '变体') {
+        for (final c in d.skip(2).cast<_L>()) {
+          caseOf[c[0] as String] = d[1] as String;
+        }
+      }
+    }
+  }
+  final List<Object> prog;
+  final Map<String, String> caseOf = {};
+  var _n = 0;
+
+  static const Map<String, LType> _basic = {'整数': LType.integer, '小数': LType.number, '文字': LType.text, '是否': LType.boolean, '空': LType.nul, '任意': LType.any};
+
+  LType ty(Object s) {
+    if (s is String) return _basic[s] ?? LType.ref(s);
+    final l = s as _L;
+    final h = l[0] as String;
+    return switch (h) {
+      '可空' => _opt(ty(l[1])),
+      '列表' => LType.listOf(ty(l[1])),
+      '字典' => LType.dictOf(ty(l[1])),
+      '函数' => LType.func([for (final p in l[1] as _L) ty(p), ty(l[2])]),
+      _ => LType.ref(h, args: [for (final a in l.skip(1)) ty(a)]),
+    };
+  }
+
+  static LType _opt(LType t) => LType(t.kind, of: t.of, args: t.args, name: t.name, nullable: t.kind != LKind.any && t.kind != LKind.nul);
+
+  List<LParam> params(Object ps) => [
+    for (final p in ps as _L)
+      if (p is String) LParam(p) else LParam((p as _L)[0] as String, type: ty(p[1])),
+  ];
+
+  static const Map<String, String?> _bounds = {'能比较': kBoundComparable};
+
+  LFuncDecl func(_L d) {
+    var i = 2;
+    final tps = <LTypeParam>[];
+    if (d[i] case final _L g when g.isNotEmpty && g[0] == '泛型') {
+      for (final x in g.skip(1)) {
+        tps.add(x is String ? LTypeParam(x) : LTypeParam((x as _L)[0] as String, bound: _bounds[x[1]] ?? x[1] as String));
+      }
+      i++;
+    }
+    final ps = params(d[i++]);
+    LType? ret;
+    if (i < d.length && d[i] == '->') {
+      ret = ty(d[i + 1]);
+      i += 2;
+    }
+    return LFuncDecl(d[1] as String, ps, stmts(d.skip(i)), typeParams: tps, type: ret);
+  }
+
+  LModule module() {
+    final decls = <LDecl>[];
+    var main = <LStmt>[];
+    for (final d in prog.cast<_L>()) {
+      final name = d.length > 1 && d[1] is String ? d[1] as String : '';
+      switch (d[0]) {
+        case '记录':
+          decls.add(LRecordDecl(name, [for (final f in d.skip(2).cast<_L>()) LTypedField(f[0] as String, ty(f[1]))]));
+        case '枚举':
+          decls.add(LEnumDecl(name, [...d.skip(2).cast<String>()]));
+        case '变体':
+          decls.add(LVariantDecl(name, [for (final c in d.skip(2).cast<_L>()) LVariantCase(c[0] as String, [for (final f in c.skip(1).cast<_L>()) LTypedField(f[0] as String, ty(f[1]))])]));
+        case '接口':
+          decls.add(LInterfaceDecl(name, [for (final m in d.skip(2).cast<_L>()) LSignature(m[0] as String, params(m[1]), returns: ty(m[2]))]));
+        case '别名':
+          decls.add(LAliasDecl(name, ty(d[2])));
+        case '函数':
+          decls.add(func(d));
+        case '类':
+          decls.add(cls(d));
+        case '主':
+          main = stmts(d.skip(1));
+      }
+    }
+    return LModule(decls: decls, body: main);
+  }
+
+  LClassDecl cls(_L d) {
+    var open = false;
+    String? parent;
+    var impl = <String>[];
+    var tps = <LTypeParam>[];
+    final fields = <LFieldDecl>[];
+    final methods = <LMethodDecl>[];
+    LFuncDecl? ctor;
+    for (final x in d.skip(2)) {
+      if (x == '可继承') {
+        open = true;
+        continue;
+      }
+      final l = x as _L;
+      switch (l[0]) {
+        case '泛型':
+          tps = [for (final v in l.skip(1)) LTypeParam(v as String)];
+        case '继承':
+          parent = l[1] as String;
+        case '实现':
+          impl = [...l.skip(1).cast<String>()];
+        case '字段':
+          fields.add(LFieldDecl(l[1] as String, l.length > 3 ? expr(l[3]) : null, type: ty(l[2])));
+        case '创建':
+          ctor = LFuncDecl('创建', params(l[1]), stmts(l.skip(2)));
+        case '方法':
+          methods.add(LMethodDecl(func(l)));
+      }
+    }
+    return LClassDecl(d[1] as String, parent: parent, interfaces: impl, fields: fields, ctor: ctor, methods: methods, typeParams: tps, isOpen: open);
+  }
+
+  List<LStmt> stmts(Iterable<Object> list) => [for (final s in list) stmt(s as _L)];
+  List<LExpr> exprs(Iterable<Object> list) => [for (final e in list) expr(e)];
+
+  LStmt stmt(_L s) {
+    final h = s[0];
+    final a = s.sublist(1);
+    switch (h) {
+      case '设' || '常':
+        return a.length == 3 ? LLet(a[0] as String, expr(a[2]), isConst: h == '常', type: ty(a[1])) : LLet(a[0] as String, expr(a[1]), isConst: h == '常');
+      case '改':
+        return LAssign(LTName(a[0] as String), expr(a[1]));
+      case '加项':
+        return LExprStmt(LRt('listPush', exprs(a)));
+      case '删末项':
+        return LExprStmt(LRt('listPop', exprs(a)));
+      case '存' || '改项':
+        return LAssign(LTIndex(expr(a[0]), expr(a[1])), expr(a[2]));
+      case '删键':
+        return LExprStmt(LRt('dictRemove', exprs(a)));
+      case '改字段':
+        return LAssign(LTField(expr(a[0]), a[1] as String), expr(a[2]));
+      case '如果':
+        return LIf([LIfArm(expr(a[0]), stmts((a[1] as _L).skip(1)))], orElse: a.length > 2 ? stmts((a[2] as _L).skip(1)) : const []);
+      case '当':
+        return LWhile(expr(a[0]), stmts(a.skip(1)));
+      case '每个':
+        return LForEach(expr(a[1]), a[0] as String, stmts(a.skip(2)));
+      case '每对':
+        return LForPairs(expr(a[2]), a[0] as String, a[1] as String, stmts(a.skip(3)));
+      case '数':
+        return LForCount(a[0] as String, expr(a[1]), expr(a[2]), const LLit(1), stmts(a.skip(3)));
+      case '返回':
+        return LReturn(a.isEmpty ? null : expr(a[0]));
+      case '抛出':
+        return LThrow(expr(a[0]));
+      case '试':
+        var body = <LStmt>[], onError = <LStmt>[], last = <LStmt>[];
+        String? name;
+        for (final p in a.cast<_L>()) {
+          if (p[0] == '做') {
+            body = stmts(p.skip(1));
+          } else if (p[0] == '出错') {
+            name = p[1] as String;
+            onError = stmts(p.skip(2));
+          } else {
+            last = stmts(p.skip(1));
+          }
+        }
+        return LTry(body, errorName: name, onError: onError, finallyBody: last);
+      case '打印':
+        return LExprStmt(LRt('log', exprs(a)));
+      case '做':
+        return LExprStmt(expr(a[0]));
+      case '父创建':
+        return LExprStmt(LSuperSend.ctor(exprs(a)));
+      case '分情况':
+        final arms = <LMatchArm>[];
+        List<LStmt>? orElse;
+        for (final c in a.skip(1).cast<_L>()) {
+          if (c[0] == '其余') {
+            orElse = stmts(c.skip(1));
+          } else {
+            arms.add(LMatchArm(c[0] as String, [...(c[1] as _L).cast<String>()], stmts(c.skip(2))));
+          }
+        }
+        return LMatch(expr(a[0]), arms, orElse: orElse);
+      default:
+        return LExprStmt(expr(s));
+    }
+  }
+
+  static final RegExp _intRe = RegExp(r'^-?\d+$');
+  static final RegExp _fltRe = RegExp(r'^-?(\d+\.\d*|\.\d+|\d+)([eE][-+]?\d+)?$');
+  static const Map<String, String> _bin = {'+': '+', '-': '-', '*': '*', '/': '/', '整除': '//', '余': '%', '<': '<', '>': '>', '<=': '<=', '>=': '>=', '==': '==', '!=': '!='};
+  static const Map<String, String> _rt = {
+    '连': 'join',
+    '文': 'toText',
+    '取整': 'toInt',
+    '拼': 'listJoin',
+    '长': 'size',
+    '文长': 'size',
+    '有键': 'dictHas',
+    '键们': 'dictKeys',
+    '或空': 'orElse',
+    '必有': 'must',
+    '切': 'split',
+    '截': 'substring',
+    '开头是': 'startsWith',
+    '解析整数': 'parseInt',
+    '码点们': 'codePoints',
+  };
+
+  LExpr expr(Object e) {
+    if (e is String) {
+      if (e.startsWith('"')) return LLit(e.substring(1, e.length - 1));
+      if (_intRe.hasMatch(e)) return LLit(int.parse(e));
+      if (_fltRe.hasMatch(e)) return LLit(double.parse(e));
+      if (e == '空') return const LLit(null);
+      if (e == '是' || e == '否') return LLit(e == '是');
+      return LName(e);
+    }
+    final l = e as _L;
+    final h = l[0] as String;
+    final a = l.sublist(1);
+    final bin = _bin[h];
+    if (bin != null) return a.skip(2).fold(LBinary(bin, expr(a[0]), expr(a[1])), (acc, x) => LBinary(bin, acc, expr(x)));
+    if (h.startsWith('任') && _bin.containsKey(h.substring(1))) {
+      return LBinary(_bin[h.substring(1)]!, LAscribe(expr(a[0]), LType.any), LAscribe(expr(a[1]), LType.any));
+    }
+    final rt = _rt[h];
+    if (rt != null) return LRt(rt, exprs(a));
+    switch (h) {
+      case '且' || '或':
+        return a.skip(2).fold(LLogic(h == '且' ? 'and' : 'or', expr(a[0]), expr(a[1])), (acc, x) => LLogic(h == '且' ? 'and' : 'or', acc, expr(x)));
+      case '非':
+        return LUnary('not', expr(a[0]));
+      case '是空' || '非空':
+        return LBinary(h == '是空' ? '==' : '!=', expr(a[0]), const LLit(null));
+      case '标':
+        return LAscribe(expr(a[1]), ty(a[0]));
+      case '转':
+        return LCast(expr(a[1]), ty(a[0]));
+      case '列':
+        return LListLit(exprs(a));
+      case '典':
+        return LDictLit([for (final x in a.cast<_L>()) LDictEntry(expr(x[0]), expr(x[1]))]);
+      case '项' || '取':
+        return LIndex(expr(a[0]), expr(a[1]));
+      case '试算':
+        final name = '错${_n++}';
+        return LCall(LLambda(const [], [LTry([LReturn(LRt('toText', [expr(a[0])]))], errorName: name, onError: [LReturn(LName(name))])]), const []);
+      case 'λ':
+        return LLambda.short(params(a[0]), expr(a[1]));
+      case 'λ块':
+        return LLambda(params(a[0]), stmts(a.skip(1)));
+      case '调':
+        final f = a[0];
+        final args = exprs(a.skip(1));
+        if (f == '映射') return LRt('listMap', args);
+        if (f == '筛选') return LRt('listFilter', args);
+        if (f == '归并') return LRt('listReduce', [args[0], args[2], args[1]]);
+        return LCall(expr(f), args);
+      case '新记':
+        return LRecordNew(a[0] as String, [for (final f in a.skip(1).cast<_L>()) LFieldInit(f[0] as String, expr(f[1]))]);
+      case '改记':
+        return LRecordCopy(expr(a[0]), [for (final f in a.skip(1).cast<_L>()) LFieldInit(f[0] as String, expr(f[1]))]);
+      case '.':
+        return LField(expr(a[0]), a[1] as String);
+      case '这':
+        return const LThis();
+      case '枚':
+        return LEnumValue(a[0] as String, a[1] as String);
+      case '造':
+        return LVariantNew(caseOf[a[0]] ?? '', a[0] as String, exprs(a.skip(1)));
+      case '新':
+        final spec = a[0];
+        return spec is String ? LNew(spec, exprs(a.skip(1))) : LNew((spec as _L)[0] as String, exprs(a.skip(1)), typeArgs: [for (final t in spec.skip(1)) ty(t)]);
+      case '发':
+        return LSend(expr(a[0]), a[1] as String, exprs(a.skip(2)));
+      case '父':
+        return LSuperSend(a[0] as String, exprs(a.skip(1)));
+      case '是':
+        return LIsA(expr(a[1]), a[0] as String);
+    }
+    throw StateError('原型的写法里不认识的式子：$h');
+  }
+}

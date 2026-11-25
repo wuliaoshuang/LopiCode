@@ -401,6 +401,15 @@ class _Analyzer {
         block(body);
         block(onError);
         block(finallyBody);
+      case LStmtV5(:final childExprs, :final binds, :final childBlocks):
+        // 第 5 版的语句（“看是哪种情况”）：这里只管名字；类型的事归 typecheck.dart。它接出来的名字和别的变量一样算函数级的。
+        childExprs.forEach(expr);
+        for (final name in binds) {
+          _visible.add(name);
+          _declare(name);
+          _note(name, LType.any);
+        }
+        childBlocks.forEach(block);
     }
   }
 
@@ -566,6 +575,10 @@ class _Analyzer {
       case LLambda():
         return _lambda(e);
       case LThis() || LSpawn():
+        return LType.any;
+      case LExprV5(:final childExprs):
+        // 第 5 版的式子（记录、枚举、变体、当成〈类型〉）：这里只管名字，类型归 typecheck.dart。
+        _all(childExprs);
         return LType.any;
     }
   }

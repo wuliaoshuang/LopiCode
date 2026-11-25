@@ -9,6 +9,8 @@ library;
 
 import 'package:lopicode/lang/types.dart';
 
+part 'ast_v5.dart';
+
 /// 来源：校验问题、“看代码时点一行跳到积木”都靠它。三项都可以没有（手搭的语法树）。
 class LSrc {
   const LSrc({this.script, this.block, this.slot});
@@ -91,18 +93,26 @@ class LParam {
 
 /// 函数（第 2 阶段）。[type] 是返回类型标注。
 class LFuncDecl extends LDecl {
-  const LFuncDecl(this.name, this.params, this.body, {this.isPublic = false, super.src, super.type});
+  const LFuncDecl(this.name, this.params, this.body, {this.isPublic = false, this.typeParams = const [], this.codeName, super.src, super.type});
   @override
   final String name;
   final List<LParam> params;
   final List<LStmt> body;
   final bool isPublic;
+
+  /// 泛型函数自己的类型参数（第 5 版）。类的方法不许自己再带（设计 B 2.7）。
+  final List<LTypeParam> typeParams;
+
+  /// 代码名（拉丁字母开头，只含字母数字）：导出给别的包 / 文件用时在 Go、Java 里叫什么（第 5 版，GAP-B-1）。
+  final String? codeName;
 }
 
 class LFieldDecl {
   const LFieldDecl(this.name, this.init, {this.isPrivate = false, this.isStatic = false, this.type});
   final String name;
-  final LExpr init;
+
+  /// 初始值；null＝没写（由“创建时”来填）。
+  final LExpr? init;
   final bool isPrivate;
   final bool isStatic;
   final LType? type;
@@ -117,9 +127,29 @@ class LMethodDecl {
 
 /// 类（第 5 阶段）。
 class LClassDecl extends LDecl {
-  const LClassDecl(this.name, {this.parent, this.interfaces = const [], this.fields = const [], this.ctor, this.methods = const [], super.src});
+  const LClassDecl(
+    this.name, {
+    this.parent,
+    this.interfaces = const [],
+    this.fields = const [],
+    this.ctor,
+    this.methods = const [],
+    this.typeParams = const [],
+    this.isOpen = false,
+    this.isPublic = false,
+    this.codeName,
+    super.src,
+  });
   @override
   final String name;
+
+  /// 泛型类的类型参数（第 5 版）。
+  final List<LTypeParam> typeParams;
+
+  /// 可以被继承（第 5 版：默认不能，设计 B 2.8）。
+  final bool isOpen;
+  final bool isPublic;
+  final String? codeName;
   final String? parent;
   final List<String> interfaces;
   final List<LFieldDecl> fields;
@@ -138,10 +168,12 @@ class LSignature {
 
 /// 接口（第 5 阶段）。
 class LInterfaceDecl extends LDecl {
-  const LInterfaceDecl(this.name, this.methods, {super.src});
+  const LInterfaceDecl(this.name, this.methods, {this.isPublic = false, this.codeName, super.src});
   @override
   final String name;
   final List<LSignature> methods;
+  final bool isPublic;
+  final String? codeName;
 }
 
 /// 宿主 / 原生库提供的函数的签名，没有函数体（第 3 阶段）。
@@ -415,14 +447,22 @@ class LSend extends LExpr {
 
 class LSuperSend extends LExpr {
   const LSuperSend(this.method, this.args, {super.src});
+
+  /// 调父类的“创建时”（只能写在子类的“创建时”里）。
+  const LSuperSend.ctor(this.args, {super.src}) : method = '';
   final String method;
   final List<LExpr> args;
+
+  bool get isCtor => method.isEmpty;
 }
 
 class LNew extends LExpr {
-  const LNew(this.cls, this.args, {super.src});
+  const LNew(this.cls, this.args, {this.typeArgs = const [], super.src});
   final String cls;
   final List<LExpr> args;
+
+  /// 泛型类的类型实参（第 5 版）；空＝没写，靠推断。
+  final List<LType> typeArgs;
 }
 
 class LIsA extends LExpr {
