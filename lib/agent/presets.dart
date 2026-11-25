@@ -4,6 +4,7 @@ import 'package:lopicode/core/stores.dart';
 const Map<String, String> kToolLabels = {
   'list_files': '查看文件列表',
   'read_file': '读取文件',
+  'view_image': '查看图片',
   'write_file': '写入文件',
   'edit_file': '局部修改文件',
   'delete_file': '删除文件',

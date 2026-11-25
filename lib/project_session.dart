@@ -274,6 +274,12 @@ class ProjectSession {
     fallbackRoot: activeConversationId,
   );
 
+  /// 拒绝最前面那张确认卡，并带一句原因（原因会跟在“用户拒绝……”后面告诉模型）。和点“拒绝”一样：不执行。
+  void rejectApproval(String reason) {
+    pendingApproval?.request.denyReason = reason;
+    resolveApproval(false);
+  }
+
   void answerQuestion(String answer) => _core.cards.answerQuestion(answer);
 
   // ── 团队、子代理的设置 ───────────────────────────────
@@ -368,6 +374,15 @@ class ProjectSession {
 
   /// 排队里的一条：撤回（文字交还输入框）。
   void withdrawQueued(QueuedMessage msg) => _sending.withdrawQueued(msg);
+
+  /// 上一轮出错或被停止后，排着的消息先不自动发（等她点“继续发送”）。
+  bool get queuePaused => _core.queue.current.paused;
+
+  /// 排队消息的编辑 / 删除 / 继续发送 / 清空（规矩在 lib/session/send_flow.dart）。
+  void editQueued(QueuedMessage msg, String text) => _sending.editQueued(msg, text);
+  void deleteQueued(QueuedMessage msg) => _sending.deleteQueued(msg);
+  void resumeQueue() => _sending.resumeQueue();
+  void clearQueue() => _sending.clearQueue();
 
   void stopAgent() => _sending.stop();
 

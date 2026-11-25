@@ -8,10 +8,14 @@
 //   “本对话都允许”是更次要的操作：另起一行，小号灰字，不抢主按钮。
 //   点它不会马上生效：按钮区换成一句说明（“这段对话里同类操作不再问你”）+“取消 / 确认，都允许”，再点确认才算（2026-11-24 加，只变严）。
 // - 提问卡：同一个卡壳；选项一行一个（描边、左对齐），“其他回答”是灰色文字按钮。
+// - 拒绝时可以顺手写一句原因（2026-11-25 加）：入口是“本对话都允许”旁边的小号灰字“拒绝并说明原因”，点了以后按钮区换成一行输入框 +“取消 / 拒绝”。
+//   直接点“拒绝”和以前一样，一下就完。多个问题的提问卡在 chat_question_multi.dart（一页一问）。
 // - 安全规则不在这里：哪些要确认、能不能“都允许”由传进来的请求决定，这里只管画。
 import 'package:lopicode/agent/approval_risk.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/chat_question_multi.dart';
+import 'package:lopicode/ui/chat_reject_reason.dart';
 import 'package:lopicode/ui/step_diff.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -23,8 +27,9 @@ class PendingArea extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final approval = session.pendingApproval;
-    if (approval != null) return ApprovalCard(key: ObjectKey(approval), pending: approval, onAnswer: session.resolveApproval);
+    if (approval != null) return ApprovalCard(key: ObjectKey(approval), pending: approval, onAnswer: session.resolveApproval, onReject: session.rejectApproval);
     final question = session.pendingQuestion;
+    if (question != null && question.parts.isNotEmpty) return MultiQuestionCard(key: ObjectKey(question), question: question, onAnswer: session.answerQuestion);
     if (question != null) return QuestionCard(key: ObjectKey(question), question: question, onAnswer: session.answerQuestion);
     return const SizedBox.shrink();
   }
@@ -76,9 +81,12 @@ class ChatCard extends StatelessWidget {
 }
 
 class ApprovalCard extends StatefulWidget {
-  const ApprovalCard({super.key, required this.pending, required this.onAnswer});
+  const ApprovalCard({super.key, required this.pending, required this.onAnswer, this.onReject});
   final PendingApproval pending;
   final void Function(bool allow, {bool always}) onAnswer;
+
+  /// 拒绝并带一句原因。null＝不给写原因的入口（只读的地方）。
+  final void Function(String reason)? onReject;
 
   @override
   State<ApprovalCard> createState() => _ApprovalCardState();
@@ -87,6 +95,9 @@ class ApprovalCard extends StatefulWidget {
 class _ApprovalCardState extends State<ApprovalCard> {
   /// 点过“本对话都允许”、还没点确认：按钮区换成说明 + 取消 / 确认。
   bool _confirmingAlways = false;
+
+  /// 点过“拒绝并说明原因”：按钮区换成一行输入框 + 取消 / 拒绝。
+  bool _writingReason = false;
 
   @override
   Widget build(BuildContext context) {
@@ -158,7 +169,9 @@ class _ApprovalCardState extends State<ApprovalCard> {
         ),
         if (req.preview case final preview? when preview.hasDiff || preview.note != null) ApprovalPreview(change: preview),
         const SizedBox(height: Space.x4),
-        if (_confirmingAlways && req.allowAlways) ...[
+        if (_writingReason && widget.onReject != null)
+          RejectReasonForm(onCancel: () => setState(() => _writingReason = false), onReject: widget.onReject!)
+        else if (_confirmingAlways && req.allowAlways) ...[
           Text(
             '确认后，这段对话里同类操作不再问你：执行命令、删除文件都会直接做，包括它派出的子代理。重开 App 或点顶上的提示可以恢复逐次询问。',
             key: const Key('always-explain'),
@@ -203,16 +216,22 @@ class _ApprovalCardState extends State<ApprovalCard> {
               ),
             ],
           ),
-          if (req.allowAlways)
+          if (req.allowAlways || widget.onReject != null)
             Padding(
               padding: const EdgeInsets.only(top: Space.x1),
-              child: Center(
-                child: TextButton(
-                  style: TextButton.styleFrom(foregroundColor: c.textFaint, backgroundColor: Colors.transparent, textStyle: t.bodySmall, visualDensity: VisualDensity.compact),
-                  // 不直接生效：先说明后果，再点一次确认。
-                  onPressed: () => setState(() => _confirmingAlways = true),
-                  child: const Text('本对话都允许'),
-                ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  // 拒绝时想说一句为什么：更次要的入口，和“本对话都允许”并排的小号灰字。
+                  if (widget.onReject != null) RejectReasonLink(onTap: () => setState(() => _writingReason = true)),
+                  if (req.allowAlways)
+                    TextButton(
+                      style: TextButton.styleFrom(foregroundColor: c.textFaint, backgroundColor: Colors.transparent, textStyle: t.bodySmall, visualDensity: VisualDensity.compact),
+                      // 不直接生效：先说明后果，再点一次确认。
+                      onPressed: () => setState(() => _confirmingAlways = true),
+                      child: const Text('本对话都允许'),
+                    ),
+                ],
               ),
             ),
         ],

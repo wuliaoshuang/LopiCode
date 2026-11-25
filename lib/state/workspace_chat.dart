@@ -237,7 +237,7 @@ final pendingCardsProvider = NotifierProvider.family<PendingCardsNotifier, Pendi
 // ── 排队 / 插话 ───────────────────────────────────────
 
 class SendQueueState {
-  const SendQueueState({this.queue = const [], this.restoredDraft});
+  const SendQueueState({this.queue = const [], this.restoredDraft, this.paused = false});
 
   /// AI 生成时又发的消息（显示在输入框上方）。
   final List<QueuedMessage> queue;
@@ -245,8 +245,13 @@ class SendQueueState {
   /// 请求失败、用户消息被撤回时，要交还给输入框的文字。
   final String? restoredDraft;
 
-  SendQueueState copyWith({List<QueuedMessage>? queue, String? restoredDraft, bool clearDraft = false}) =>
-      SendQueueState(queue: queue == null ? this.queue : List.unmodifiable(queue), restoredDraft: clearDraft ? null : restoredDraft ?? this.restoredDraft);
+  /// 上一轮出错或被点了停止：排着的消息先不自动发，等用户点“继续发送”。队列空了就不算暂停。
+  final bool paused;
+
+  SendQueueState copyWith({List<QueuedMessage>? queue, String? restoredDraft, bool clearDraft = false, bool? paused}) {
+    final next = queue == null ? this.queue : List<QueuedMessage>.unmodifiable(queue);
+    return SendQueueState(queue: next, restoredDraft: clearDraft ? null : restoredDraft ?? this.restoredDraft, paused: next.isNotEmpty && (paused ?? this.paused));
+  }
 }
 
 class SendQueueNotifier extends Notifier<SendQueueState> with _Snapshot<SendQueueState> {
@@ -276,6 +281,18 @@ class SendQueueNotifier extends Notifier<SendQueueState> with _Snapshot<SendQueu
 
   void clear() {
     if (_snap.queue.isNotEmpty) _set(_snap.copyWith(queue: const []));
+  }
+
+  /// 暂停 / 恢复自动发送（队列是空的时候暂停不起来）。
+  void setPaused(bool value) {
+    if (_snap.paused != (value && _snap.queue.isNotEmpty)) _set(_snap.copyWith(paused: value));
+  }
+
+  /// 把 [msg] 换成 [next]（位置不变）。不在队里返回 false。
+  bool replace(QueuedMessage msg, QueuedMessage next) {
+    if (!_snap.queue.any((q) => identical(q, msg))) return false;
+    _set(_snap.copyWith(queue: [for (final q in _snap.queue) identical(q, msg) ? next : q]));
+    return true;
   }
 
   /// 把 [msg] 改成插话 / 改回排队。不在队里返回 null。

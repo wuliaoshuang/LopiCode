@@ -5,6 +5,7 @@ import 'package:lopicode/agent/agent_tools.dart';
 import 'package:lopicode/agent/auto_compact.dart';
 import 'package:lopicode/agent/chat_client.dart';
 import 'package:lopicode/agent/loop_guard.dart';
+import 'package:lopicode/agent/tool_images.dart';
 import 'package:lopicode/agent/usage.dart';
 
 export 'package:lopicode/agent/auto_compact.dart' show compactHistory;
@@ -160,7 +161,7 @@ class AgentRunner {
       '- 用提供的工具查看和修改项目文件；所有路径都是项目内的相对路径。\n'
       '- 改文件前先读一下相关文件。改已有文件优先用 edit_file（只换要改的那一段）；新建文件或整份重写才用 write_file，这时给出完整内容。\n'
       '- 执行命令和删除文件需要用户确认，被拒绝后不要重复请求，换个办法或说明情况。\n'
-      '- 手机自带的 shell 没有编译器和包管理器，不要假设能运行 npm、flutter、gradle。\n'
+      '- 命令在什么环境里跑、装了哪些工具，以下面“命令执行环境”那一段为准，不要凭印象假设。\n'
       '- 用户消息里的 @路径 指项目里的那个文件，回答前先读它。\n'
       '- 要分 3 步以上的任务，先用 update_todos 列出待办，每做完一项就更新；一两步的小事不用。\n'
       '- 工具报错时先看清报错原因再改，不要用同样的参数重复同一个失败的调用。\n'
@@ -251,9 +252,18 @@ class AgentRunner {
     final out = <Map<String, dynamic>>[
       {'role': 'system', 'content': systemPrompt},
     ];
-    for (final m in messages) {
+    // 工具结果带的图片（view_image）：攒着，等这一批 tool 消息过去后，作为紧跟其后的一条 user 消息发（规矩见 tool_images.dart）。
+    final sendToolImages = toolImageMessagesToSend(messages);
+    final toolImages = <Object?>[];
+    for (var i = 0; i < messages.length; i++) {
+      final m = messages[i];
       if (isArchived(m)) continue; // 已经被摘要顶替，只留着给聊天页看
+      if (m['role'] != 'tool' && toolImages.isNotEmpty) {
+        out.add(await toolImagesMessage(toolImages, vision: vision, loadImage: loadImage));
+        toolImages.clear();
+      }
       final images = m['_images'];
+      if (m['role'] == 'tool' && sendToolImages.contains(i)) toolImages.addAll(images as List);
       if (m['role'] != 'user' || images is! List || images.isEmpty) {
         out.add(m);
         continue;
@@ -287,6 +297,7 @@ class AgentRunner {
         });
       }
     }
+    if (toolImages.isNotEmpty) out.add(await toolImagesMessage(toolImages, vision: vision, loadImage: loadImage));
     return out;
   }
 
@@ -512,7 +523,7 @@ class AgentRunner {
             if (nudge != null) outcome = outcome.withText('${outcome.text}$nudge');
           }
           // 每个 tool_call 都必须有对应的 tool 消息，否则下一次请求会被接口拒绝。
-          messages.add({'role': 'tool', 'tool_call_id': batch[k].id, 'content': outcome.text, '_diff': ?outcome.change?.slim.toJson()});
+          messages.add({'role': 'tool', 'tool_call_id': batch[k].id, 'content': outcome.text, '_diff': ?outcome.change?.slim.toJson(), if (outcome.images.isNotEmpty) '_images': outcome.images});
           yield ToolFinished(batch[k].id, batch[k].name, outcome);
         }
         if (verdicts.contains(LoopVerdict.stop)) {

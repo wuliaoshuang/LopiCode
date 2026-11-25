@@ -345,7 +345,7 @@ List<(String, String)> stepDetailSections(ToolItem tool) {
         ..addAll([if (!(tool.change?.hasDiff ?? false)) ('写入的内容', a('content'))]);
     case 'edit_file' when tool.change != null || editPreviewOf(tool) != null:
       out.add(('文件', a('path')));
-    case 'read_file' || 'delete_file':
+    case 'read_file' || 'delete_file' || 'view_image':
       out.add(('文件', a('path')));
     default:
       final raw = tool.arguments.trim();

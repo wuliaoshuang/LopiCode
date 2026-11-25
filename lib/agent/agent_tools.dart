@@ -25,12 +25,25 @@ class ApprovalRequest {
   final String tool;
   final String title;
   final String detail;
+
+  /// 用户点“拒绝”时顺手写的一句原因（没写是 null）。只在拒绝时有意义：不影响“执行还是不执行”。
+  String? denyReason;
+
+  /// 拼在“用户拒绝……”后面告诉模型的那一句；没写原因是空串（和以前一样）。
+  String get denyNote {
+    final reason = (denyReason ?? '').replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (reason.isEmpty) return '';
+    return '用户写的原因：${reason.length > kDenyReasonMaxChars ? '${reason.substring(0, kDenyReasonMaxChars)}…' : reason}';
+  }
 }
+
+/// 拒绝原因最多带给模型多少个字。
+const int kDenyReasonMaxChars = 200;
 
 typedef ApprovalRequester = Future<bool> Function(ApprovalRequest request);
 
 class ToolOutcome {
-  ToolOutcome(this.text, {this.ok = true, this.denied = false, this.changedFiles = false, this.change});
+  ToolOutcome(this.text, {this.ok = true, this.denied = false, this.changedFiles = false, this.change, this.images = const []});
 
   /// 这一步把哪个文件改成了什么样（给界面画对比、记“这次改过的文件”；不发给模型）。
   final FileChange? change;
@@ -41,8 +54,11 @@ class ToolOutcome {
   /// 是否改动了项目文件（界面据此刷新文件树和预览）。
   final bool changedFiles;
 
+  /// 要交给模型看的图片（view_image）：每项 `{path, mime, bytes}`，只有路径和大小，不带图片内容。
+  final List<Map<String, dynamic>> images;
+
   /// 换一段文字，别的不变。
-  ToolOutcome withText(String text) => ToolOutcome(text, ok: ok, denied: denied, changedFiles: changedFiles, change: change);
+  ToolOutcome withText(String text) => ToolOutcome(text, ok: ok, denied: denied, changedFiles: changedFiles, change: change, images: images);
 }
 
 /// 权限三档。
@@ -374,8 +390,9 @@ class AgentToolbox {
     final rel = guard.relative(full);
     final isDir = type == FileSystemEntityType.directory;
     final gone = isDir ? dirDeleted(rel) : (await FileSnapshot.of(File(full))).changeTo(rel, null);
-    if (!await _approved(ApprovalRequest(tool: 'delete_file', title: isDir ? '删除目录' : '删除文件', detail: rel, preview: gone.slim))) {
-      return ToolOutcome('用户拒绝了这次删除，文件没有被改动。', ok: false, denied: true);
+    final request = ApprovalRequest(tool: 'delete_file', title: isDir ? '删除目录' : '删除文件', detail: rel, preview: gone.slim);
+    if (!await _approved(request)) {
+      return ToolOutcome('用户拒绝了这次删除，文件没有被改动。${request.denyNote}', ok: false, denied: true);
     }
     if (isDir) {
       await Directory(full).delete(recursive: true);
@@ -390,8 +407,9 @@ class AgentToolbox {
     final Object env = runner;
     final unavailable = env is HasCommandAvailability ? env.unavailableReason : null;
     if (unavailable != null) return ToolOutcome('命令没有执行：$unavailable', ok: false);
-    if (!await _approved(ApprovalRequest(tool: 'run_command', title: '执行命令', detail: command))) {
-      return ToolOutcome('用户拒绝执行这条命令，命令没有运行。', ok: false, denied: true);
+    final request = ApprovalRequest(tool: 'run_command', title: '执行命令', detail: command);
+    if (!await _approved(request)) {
+      return ToolOutcome('用户拒绝执行这条命令，命令没有运行。${request.denyNote}', ok: false, denied: true);
     }
     final Object r = runner;
     final timeout = r is HasCommandTimeout ? r.commandTimeout : commandTimeout;

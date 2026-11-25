@@ -331,3 +331,23 @@ PHP 估计 7.4+（PHP 那份代码从没运行过）。下面选的版本都够�
   认不出来时归到“别的原因”，把退出码和最后三行输出原样给她。
 - 取消安装是杀掉 PRoot 进程（带 `--kill-on-exit`）；apt 的子进程是不是都跟着停、被打断后 dpkg 的状态要不要收拾，没实测。
   脚本开头加了 `dpkg --configure -a`（失败不管）来收拾上次被打断的安装。
+
+## 工具结果带图片（`view_image`；`lib/agent/tool_images.dart`）
+
+核对日期：2026-11-25。三家的写法不一样，下面是各家官方文档怎么说、我们最后怎么做。
+
+| 协议 | 官方怎么说 | 出处 | 状态 |
+| --- | --- | --- | --- |
+| OpenAI Chat Completions | `tool` 消息的 `content` 是字符串，或内容块数组；内容块“对 tool 消息只支持 `text` 类型”——也就是 **tool 消息里不能放图片** | developers.openai.com 的 API 参考（chat.completions › chat_completion_message_param 的 schema 页；搜索结果里的官方原文摘录，页面本身没能直接打开） | 已核对（间接：官方页的搜索摘录） |
+| Anthropic Messages | `tool_result` 的 `content` 可以是字符串，或内容块列表；内容块可以是 `text`、`image`、`document`、`search_result`——**可以带图片** | platform.claude.com/docs/en/agents-and-tools/tool-use/handle-tool-calls（直接打开官方页读到） | 已核对 |
+| Anthropic Messages | 同一条 `user` 消息里 `tool_result` 块要排在最前面，文字、图片排在后面 | 较早的官方页面存档（见上面“Anthropic Messages”一节同一条） | 间接 |
+| OpenAI Responses | `function_call_output` 的 `output` 通常是字符串；“返回图片或文件的函数，可以传一个图片或文件对象的数组来代替字符串” | OpenAI 官方 function calling 指南“Formatting results”一段（直接打开读到；这一句链到 API 参考 `responses/create` 里 `function_tool_call_output.output` 的定义） | 已核对（有这个能力）；数组里每一项的确切字段（第三方资料写的是 `input_text` / `input_image` / `input_file`）在 API 参考里没读到原文：**未核对** |
+
+**我们的做法（三家都用同一种，最保守）**：工具结果只回文字（“已读取图片 路径（类型，大小）”），图片放在**紧跟在这一批工具结果后面的一条 `user` 消息**里，
+走的是用户发图片附件的那条已有的路（内部是 `image_url` 的 data URL；Anthropic 转成 `{type:"image", source:{type:"base64"…}}`，Responses 转成 `input_image`）。
+
+- 为什么不用各家自己的写法：Chat Completions 明文不许；Responses 的数组项字段没核对到原文；我们的历史统一存成 Chat Completions 的样子，三家用同一种写法最不容易出错。
+- Anthropic 那边相邻的 `user` 消息会被我们合并成一条：结果是 `[tool_result…, text, image]`，`tool_result` 仍在最前面，符合上面的顺序要求。
+- 代价（已知）：模型看到的图片名义上在一条 user 消息里，所以那条消息的文字开头写明“这不是用户说的话，是你刚才用 view_image 查看的图片”。
+- 聊天记录里只存路径、类型、大小（`_images`），不存图片内容；每次请求现读文件。只带最近 3 次看图的图片（`kToolImagesKept`），更早的不再带。
+- 没在任何一家的真实接口上发过带图的请求：**真实接口未验证**（测试用的是本地假服务器，只核对了我们发出去的请求体）。

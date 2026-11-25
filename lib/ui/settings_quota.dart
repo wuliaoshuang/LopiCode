@@ -11,6 +11,7 @@ import 'package:lopicode/app_services.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/state/models_state.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/agents_md_status.dart';
 import 'package:lopicode/ui/app_ref.dart';
 import 'package:lopicode/ui/chrome.dart';
 import 'package:lopicode/ui/settings_widgets.dart';
@@ -358,6 +359,7 @@ class _ProjectRulesScreenState extends State<ProjectRulesScreen> {
           FilledButton(key: const Key('rules-save'), onPressed: _ready ? _save : null, child: const Text('保存')),
         ],
       ),
+      AgentsMdStatusGroup(session: widget.session),
     ],
   );
 }

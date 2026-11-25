@@ -1,9 +1,11 @@
 // 聊天里要显示、要排队的那些东西。全都不可变：要改就换一个新的，交给对应的 Notifier 换进状态里。
+
 import 'dart:async';
 
 import 'package:lopicode/agent/agent_tools.dart';
 import 'package:lopicode/agent/line_diff.dart';
 import 'package:lopicode/agent/usage.dart';
+import 'package:lopicode/session/ask_user.dart';
 
 /// 对话里显示的一项。
 sealed class ChatItem {
@@ -129,7 +131,10 @@ class PendingApproval {
 
 /// AI 向用户提的问题（选择卡）。
 class PendingQuestion {
-  PendingQuestion(this.question, this.options, {this.conversationId = '', this.agentName = '', this.title, this.choiceOnly = false});
+  PendingQuestion(this.question, this.options, {this.conversationId = '', this.agentName = '', this.title, this.choiceOnly = false, this.parts = const []});
+
+  /// 一次问了几个问题、或者有多选时：每个问题一项（卡片一页一问）。空的＝普通的单个问题。
+  final List<QuestionPart> parts;
 
   /// 卡片标题；null 用默认的“Agent 想问你”。
   final String? title;
@@ -153,6 +158,9 @@ class QueuedMessage {
   final bool steer;
 
   QueuedMessage asSteer(bool value) => QueuedMessage(text, images: images, steer: value);
+
+  /// 只改文字，附件和排队 / 插话的身份都留着。
+  QueuedMessage withText(String value) => QueuedMessage(value, images: images, steer: steer);
 }
 
 /// 发送方式（AI 正在生成时）。
