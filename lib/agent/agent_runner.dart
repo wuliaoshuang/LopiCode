@@ -64,6 +64,22 @@ class UserInjected extends AgentEvent {
   final String text;
 }
 
+/// 应用自己告诉模型的一件事（不是用户说的话）。[text] 给模型看；[label] 是聊天页上那一行短提示。
+class AppNotice {
+  const AppNotice(this.text, this.label);
+  final String text;
+  final String label;
+}
+
+/// 一条应用通知已经交给模型。
+class NoticeInjected extends AgentEvent {
+  NoticeInjected(this.notice);
+  final AppNotice notice;
+}
+
+/// 消息记录里“应用通知”的标记（值是聊天页上显示的那行短提示）：聊天页据此显示成一行提示而不是用户消息。
+const String kAppNoticeMark = '_notice';
+
 /// 应用自己的提示（例如达到轮次上限）。
 class AgentNotice extends AgentEvent {
   AgentNotice(this.text);
@@ -116,8 +132,20 @@ class AgentRunner {
     this.contextLimit,
     this.maxRetries = 2,
     this.retryDelayOf = retryDelay,
+    this.takeNotices,
+    this.returnNotices,
   }) : systemPrompt = systemPrompt ?? defaultSystemPrompt,
-       messages = history ?? [];
+       messages = history ?? [] {
+    // 用户点停止时，正在跑的命令要跟着中途结束（见 AgentToolbox.stopSignal）。
+    toolbox.stopSignal = () => _stopped.future;
+  }
+
+  /// 应用自己要告诉模型的事（例如“后台命令结束了”）：每次调用模型之前取一次，取到的当成一条说明交给模型。
+  /// 没有新的返回空。只在本来就要调用模型的时候带上，不会为了它多调用一次。
+  final List<AppNotice> Function()? takeNotices;
+
+  /// 通知交出去了但那次请求一个字没回（消息被撤回）：把通知还回去，下次再带。
+  final void Function(List<AppNotice> notices)? returnNotices;
 
   /// 连着执行多少步后停下来问（设置里可调，范围 [minMaxSteps]–[maxMaxSteps]）。
   static const int defaultMaxSteps = 30;
@@ -182,8 +210,13 @@ class AgentRunner {
   bool _cancelled = false;
   bool get isCancelled => _cancelled;
 
-  /// 让当前这次 [send] 尽快停下（在下一个检查点生效）。
-  void cancel() => _cancelled = true;
+  Completer<void> _stopped = Completer<void>();
+
+  /// 让当前这次 [send] 尽快停下（在下一个检查点生效）；正在跑的命令立刻中途结束。
+  void cancel() {
+    _cancelled = true;
+    if (!_stopped.isCompleted) _stopped.complete();
+  }
 
   final List<String> _steer = [];
 
@@ -259,6 +292,7 @@ class AgentRunner {
 
   Stream<AgentEvent> send(String userText, {List<Map<String, dynamic>> images = const []}) async* {
     _cancelled = false;
+    if (_stopped.isCompleted) _stopped = Completer<void>();
     messages.add({'role': 'user', 'content': userText, if (images.isNotEmpty) '_images': images});
 
     var steps = 0; // 这一轮一共执行了几步
@@ -290,6 +324,11 @@ class AgentRunner {
         final text = _steer.removeAt(0);
         messages.add({'role': 'user', 'content': text});
         yield UserInjected(text);
+      }
+      // 应用的通知（后台命令结束了……）也在这里交给模型。
+      for (final note in takeNotices?.call() ?? const <AppNotice>[]) {
+        messages.add({'role': 'user', 'content': note.text, kAppNoticeMark: note.label});
+        yield NoticeInjected(note);
       }
 
       // 上下文快满了：先把较早的工具结果换成一句占位（不删消息，接口要求的配对不受影响）。
@@ -528,6 +567,15 @@ class AgentRunner {
   /// 请求失败时：模型已经说了一些就留下这半截；一个字都没回且上一条是用户消息，
   /// 就把那条用户消息撤回（界面会把文字放回输入框，重发不会重复）。
   void _rollbackIfEmpty(StringBuffer text) {
+    if (text.isEmpty) {
+      // 末尾还没被模型看到的应用通知：先拿下来还回去（下次请求再带），再按原来的规矩处理用户消息。
+      final back = <AppNotice>[];
+      while (messages.isNotEmpty && messages.last[kAppNoticeMark] is String) {
+        final m = messages.removeLast();
+        back.insert(0, AppNotice('${m['content']}', m[kAppNoticeMark] as String));
+      }
+      if (back.isNotEmpty) returnNotices?.call(back);
+    }
     if (text.isNotEmpty) {
       messages.add({'role': 'assistant', 'content': text.toString()});
     } else if (messages.isNotEmpty && messages.last['role'] == 'user') {

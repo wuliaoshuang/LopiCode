@@ -22,6 +22,7 @@ import 'package:lopicode/state/ui_prefs.dart';
 import 'package:lopicode/state/workspace_chat.dart';
 import 'package:lopicode/state/workspace_conversations.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/chat_background.dart';
 import 'package:lopicode/ui/chat_composer.dart';
 import 'package:lopicode/ui/chat_extras.dart';
 import 'package:lopicode/ui/chat_panels.dart';
@@ -411,6 +412,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     ),
             ),
             if (todos != null && todos.isNotEmpty) TodoBar(todos: todos),
+            BackgroundBar(session: s),
             PendingArea(session: s),
             if (s.queue.isNotEmpty) QueueStrip(session: s),
             if (s.autoAllowActive && s.permission != PermissionLevel.full)

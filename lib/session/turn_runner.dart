@@ -79,6 +79,9 @@ class TurnRunner {
       maxSteps: core.maxSteps,
       // 到步数上限：有人在场就问要不要继续；没人在场（自动化任务和它派的子代理）直接停。
       confirmContinue: run.unattended ? null : (steps) => _askContinue(run, journal, steps),
+      // 后台命令结束了：只在本来就要调用模型的时候顺带告诉它（见 background_flow.dart）。
+      takeNotices: () => toolbox.background?.takeNotices(run, root) ?? const [],
+      returnNotices: (notices) => toolbox.background?.returnNotices(notices),
     );
     run.runner = runner;
     final turn = TurnUsage();
@@ -119,6 +122,8 @@ class TurnRunner {
             if (done != null) run.replace(done, done.copyWith(streaming: false));
             streaming = null;
             if (text.trim().isNotEmpty) last = text;
+          case NoticeInjected(:final notice):
+            run.add(NoticeItem(notice.label));
           case UserInjected(:final text):
             run.add(UserItem(text));
             if (identical(run, core.active)) queue.dropSteered(text);
@@ -181,6 +186,8 @@ class TurnRunner {
       _recordTurn(run, turn);
       // 存对话记录，同时把进行中记录标成“已结束”（做完 / 出错 / 点了停止都算正常收尾：下次打开不提示）。
       await Future.wait([core.saveRun(run), journal.finish()]);
+      // 这一轮里结束、却没赶上交给模型的后台命令：在聊天里提示一行，下次发消息时带上。
+      toolbox.background?.announce(run);
       core.releaseWhenIdle();
     }
     // 额度：对话结束后查一次余额（有节流）；到提醒线或到顶时说一声。

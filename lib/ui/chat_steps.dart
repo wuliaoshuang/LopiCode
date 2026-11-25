@@ -262,7 +262,7 @@ class _StepRowState extends State<StepRow> {
     final c = context.colors;
     final t = Theme.of(context).textTheme;
     final tool = widget.tool;
-    final (verb, target) = stepLabel(tool.name, tool.arguments);
+    final (verb, target) = stepLabel(tool.name, tool.arguments, result: tool.result);
     final failed = !tool.running && !tool.ok && !tool.denied;
     final child = tool.childConversationId;
     return Column(

@@ -9,6 +9,8 @@ String conversationMarkdown(String title, List<Map<String, dynamic>> messages) {
   final out = StringBuffer('# $title\n\n');
   for (final m in messages) {
     switch (m['role']) {
+      case 'user' when m['_notice'] is String:
+        out.writeln('> 应用通知：${m['_notice']}\n'); // 应用自己告诉模型的事，不是用户说的话
       case 'user':
         out.writeln('## 我\n\n${m['content'] ?? ''}\n');
         final images = m['_images'];
