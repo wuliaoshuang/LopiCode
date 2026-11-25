@@ -6,11 +6,15 @@
 library;
 
 import 'package:lopicode/backend/backend_ir.dart';
+import 'package:lopicode/backend/backend_lang.dart';
 import 'package:lopicode/backend/backend_target.dart';
 import 'package:lopicode/backend/runtime_php.dart';
 import 'package:lopicode/backend/runtime_php_data.dart';
 import 'package:lopicode/backend/runtime_php_json.dart';
+import 'package:lopicode/backend/runtime_php_lang.dart';
 import 'package:lopicode/backend/runtime_php_server.dart';
+import 'package:lopicode/lang/gen.dart';
+import 'package:lopicode/lang/gen_php.dart';
 
 /// PHP 的注释：`// …` 碰到 `?>` 就结束了（后面的会被当成网页内容原样输出），所以拆开；`<?` 也顺手拆开。
 String phpComment(String text) => beComment(text).replaceAll('?>', '? >').replaceAll('<?', '< ?');
@@ -40,6 +44,10 @@ class PhpBackendTarget extends BeCodeTarget {
   String get runtimeFile => 'lc_runtime.php';
   @override
   String get runtimeSource => '${kPhpRuntimeSource.trim()}\n';
+  @override
+  LangGen langGen(LangHost host) => PhpLangGen(host: host);
+  @override
+  String get langRuntimeSource => '${kPhpLangRuntimeSource.trim()}\n';
   @override
   String get indentUnit => '    ';
   @override
@@ -109,7 +117,8 @@ class PhpBackendTarget extends BeCodeTarget {
     out.writeln('<?php');
     out.writeln('// ${phpComment(beComment(program.name, 60))} —— 由 LopiCode 后端积木生成（PHP）。重新生成会覆盖本文件，要改请回到积木里改。');
     out.writeln('// 启动：${startCommandFor(program.port).join(' ')}    端口写在命令里。注意：PHP 版还没有实际运行过。');
-    for (final f in ['lc_runtime.php', 'lc_json.php', 'lc_data.php', 'lc_server.php']) {
+    // 用到新积木（积木第 4 版）时多引入 lc_lang.php。
+    for (final f in ['lc_runtime.php', 'lc_json.php', 'lc_data.php', 'lc_server.php', if (beUsesLang(program)) 'lc_lang.php']) {
       out.writeln("require_once __DIR__ . '/$f';");
     }
     out.writeln();

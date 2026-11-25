@@ -15,12 +15,24 @@ const LC_REPEAT_LIMIT = 10000; // “重复”最多做这么多遍
 const LC_FETCH_TIMEOUT = 10; // “请求别的网址”最多等 10 秒
 const LC_JSON_DEPTH_LIMIT = 64; // 请求内容的 JSON 最多套这么多层
 
-// —— 值：空 / 是否 / 数字（一律 float）/ 文字 / 列表（PHP 数组）/ 对象（LcObj）——
+// —— 值：空 / 是否 / 数字（一律 float）/ 文字 / 列表（LcList）/ 对象（LcObj）——
 
 // 对象。字段放在 $f 里（PHP 数组会把 "12" 这种键变成整数 12，读键的时候一律再转回文字）。
 final class LcObj
 {
     public $f = array();
+}
+
+// 列表。项放在 $a 里（一个从 0 起连着编号的 PHP 数组）。包成对象是因为 PHP 数组传来传去是复制的：
+// “在末尾加一项”改不到原来那个；对象传的是同一个，和别的语言一样。
+final class LcList
+{
+    public $a = array();
+
+    public function __construct($a = array())
+    {
+        $this->a = $a;
+    }
 }
 
 final class LcBadJson extends Exception
@@ -41,7 +53,7 @@ function lc_kind($v)
     if (is_string($v)) {
         return 'text';
     }
-    return is_array($v) ? 'list' : 'obj';
+    return $v instanceof LcList ? 'list' : 'obj';
 }
 
 function lc_fin($n)
@@ -150,7 +162,7 @@ function lc_to_json($v, $exact = false)
             return lc_json_text($v);
         case 'list':
             $parts = array();
-            foreach ($v as $x) {
+            foreach ($v->a as $x) {
                 $parts[] = lc_to_json($x, $exact);
             }
             return '[' . implode(',', $parts) . ']';
@@ -298,7 +310,7 @@ function lc_size($x)
 {
     switch (lc_kind($x)) {
         case 'list':
-            return (float) count($x);
+            return (float) count($x->a);
         case 'text':
             return (float) (strlen($x) - preg_match_all('/[\x80-\xBF]/', $x));
         case 'obj':
@@ -337,7 +349,7 @@ function lc_times($x)
 
 function lc_items($x)
 {
-    return is_array($x) ? $x : array();
+    return $x instanceof LcList ? $x->a : array();
 }
 
 function lc_now()

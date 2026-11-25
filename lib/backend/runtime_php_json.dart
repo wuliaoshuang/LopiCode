@@ -138,7 +138,7 @@ final class LcJsonParser
         $this->blank();
         if ($this->peek() === ']') {
             $this->at++;
-            return $out;
+            return new LcList($out);
         }
         while (true) {
             $this->blank();
@@ -147,7 +147,7 @@ final class LcJsonParser
             $c = $this->peek();
             $this->at++;
             if ($c === ']') {
-                return $out;
+                return new LcList($out);
             }
             if ($c !== ',') {
                 throw new LcBadJson('不是合法的 JSON');

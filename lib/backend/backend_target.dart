@@ -6,12 +6,19 @@
 /// 2. 一个 `BeCodeTarget` 子类：字面量怎么写、变量 / 临时值叫什么、调小库函数怎么写、七种语句怎么写、整份路由文件怎么拼。
 /// 3. 在 backend_targets.dart 的 `backendTargets` 里加一行；在 test/backend_conformance_test.dart 里加一行启动命令，
 ///    同一套请求脚本就会对着它跑。跑不了的环境（本机没有这种语言）把 `verified` 写成 false。
+/// 4. 积木第 4 版的语言核心（docs/blocks-v4-language-design.md“实施记录·阶段 1”）：lib/lang 里写一个 `LangGen` 子类、在
+///    `langGenFor` 里加一行；再写一份语言核心的小库（`kLangRtFns` 里第 1 阶段的每个函数），由 [BeCodeTarget.langGen] /
+///    [BeCodeTarget.langRuntimeSource] 交出来。test/lang_*_test.dart 的一致性用例会对着它跑。
 library;
 
 import 'dart:convert';
 
 import 'package:lopicode/backend/backend_ir.dart';
+import 'package:lopicode/backend/backend_lang.dart';
 import 'package:lopicode/backend/backend_model.dart';
+import 'package:lopicode/lang/ast.dart';
+import 'package:lopicode/lang/ast_util.dart';
+import 'package:lopicode/lang/gen.dart';
 
 /// 一种目标语言。
 abstract class BackendTarget {
@@ -185,7 +192,30 @@ abstract class BeCodeTarget extends BackendTarget {
 
   // —— 骨架 ——
 
+  // —— 积木第 4 版（lib/lang）——
+
+  /// 这种语言的语言核心生成器（新积木翻成的语法树由它写代码）；[host] 把“调后端小库”“旧语句”接回这个类。
+  LangGen langGen(LangHost host);
+
+  /// 语言核心小库的内容（文件名是 `langGen(...).runtimeFile`）。只有用到新积木的工程才带。
+  String get langRuntimeSource;
+
+  LangGen _lang(LangCtx ctx) => langGen(LangHost(call: call, stmt: (payload) => payload is BeS ? _statement(payload, ctx) : [comment('这里有一句不认识的语句，没有生成')], allowReturn: false));
+
+  /// 新节点 → 代码。碰到这一阶段还不支持的节点不抛异常：留一行说明；这一段本来“怎么走都会返回”的话补一个 500，生成的代码照样能编译。
+  List<String> _langStatements(List<LStmt> stmts, LangCtx ctx) {
+    try {
+      return _lang(ctx).statements(stmts, ctx);
+    } on LangUnsupported catch (e) {
+      return [
+        comment('这一段没有生成：${e.message}'),
+        if (lAlwaysReturns(stmts)) ...respond(call('sendText', [literal(500), literal('这个接口里有还不支持的积木')])),
+      ];
+    }
+  }
+
   String expression(BeX x) => switch (x) {
+    BeXLang(:final expr) => _langExpression(expr),
     BeXLit(:final value) => literal(value is String ? beWellFormed(value) : value),
     BeXVar(:final name) => variable(name),
     BeXTmp(:final slot) => temp(slot),
@@ -193,21 +223,42 @@ abstract class BeCodeTarget extends BackendTarget {
     BeXCall(:final fn, :final args) => call(fn, [for (final a in args) expression(a)]),
   };
 
-  List<String> statements(List<BeS> list) => [for (final s in list) ..._statement(s)];
+  String _langExpression(LExpr e) {
+    try {
+      return _lang(LangCtx()).expr(e);
+    } on LangUnsupported {
+      return literal(null);
+    }
+  }
 
-  List<String> _statement(BeS s) => switch (s) {
+  /// [ctx]：同一个接口函数里的语句要共用一个（新节点里循环的临时名字才不会重）；不传就新开一个。
+  List<String> statements(List<BeS> list, [LangCtx? ctx]) {
+    final c = ctx ?? LangCtx();
+    return [for (final s in list) ..._statement(s, c)];
+  }
+
+  List<String> _statement(BeS s, LangCtx ctx) => switch (s) {
+    BeSLang(:final stmts) => _langStatements(stmts, ctx),
     BeSNote(:final text) => [comment(text)],
     BeSSet(:final name, :final value) => assign(name, expression(value)),
     BeSLet(:final slot, :final value) => let(slot, expression(value)),
     BeSDo(call: final c) => perform(expression(c)),
-    BeSIf(:final cond, :final then, :final orElse) => ifElse(expression(cond), statements(then), statements(orElse)),
-    BeSRepeat(:final n, :final times, :final body) => repeat(n, expression(times), statements(body)),
-    BeSForEach(:final n, :final list, :final item, :final body) => forEach(n, expression(list), item, statements(body)),
+    BeSIf(:final cond, :final then, :final orElse) => ifElse(expression(cond), statements(then, ctx), statements(orElse, ctx)),
+    BeSRepeat(:final n, :final times, :final body) => repeat(n, expression(times), statements(body, ctx)),
+    BeSForEach(:final n, :final list, :final item, :final body) => forEach(n, expression(list), item, statements(body, ctx)),
     BeSReturn(:final response) => respond(expression(response)),
   };
 
-  /// 一个接口的函数体：先声明用到的变量，再是翻好的积木。不带缩进。
-  List<String> routeBody(BeRouteProgram r) => [for (final v in r.variables) ...declare(v.name, literal(beInitialValue(v))), ...statements(r.body)];
+  /// 一个接口的函数体：先声明用到的变量（文档里的，再加新积木新建的——初始是空），再是翻好的积木。不带缩进。
+  List<String> routeBody(BeRouteProgram r) {
+    final known = {for (final v in r.variables) v.name};
+    return [
+      for (final v in r.variables) ...declare(v.name, literal(beInitialValue(v))),
+      for (final name in beLangDeclares(r.body))
+        if (!known.contains(name)) ...declare(name, literal(null)),
+      ...statements(r.body, LangCtx()),
+    ];
+  }
 
   /// 运行时小库的文件名和内容。
   String get runtimeFile;
@@ -220,10 +271,16 @@ abstract class BeCodeTarget extends BackendTarget {
   Map<String, String> extraFiles(BeProgram program) => const {};
 
   @override
-  Map<String, String> generate(BeDocument doc) {
-    final program = lowerBackend(doc);
-    return {entryFile: entrySource(program), runtimeFile: runtimeSource, ...extraFiles(program), 'README.md': beReadme(program, this)};
-  }
+  Map<String, String> generate(BeDocument doc) => generateProgram(lowerBackend(doc));
+
+  /// 从翻好的中间形式生成整个小工程。用到积木第 4 版的节点时多带一个语言核心的小库文件（没用到的工程和以前一模一样）。
+  Map<String, String> generateProgram(BeProgram program) => {
+    entryFile: entrySource(program),
+    runtimeFile: runtimeSource,
+    ...extraFiles(program),
+    if (beUsesLang(program)) langGen(const LangHost()).runtimeFile: langRuntimeSource,
+    'README.md': beReadme(program, this),
+  };
 }
 
 String _cmd(List<String> command) => command.join(' ');

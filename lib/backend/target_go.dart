@@ -8,7 +8,10 @@ import 'package:lopicode/backend/backend_ir.dart';
 import 'package:lopicode/backend/backend_target.dart';
 import 'package:lopicode/backend/runtime_go.dart';
 import 'package:lopicode/backend/runtime_go_fetch.dart';
+import 'package:lopicode/backend/runtime_go_lang.dart';
 import 'package:lopicode/backend/runtime_go_server.dart';
+import 'package:lopicode/lang/gen.dart';
+import 'package:lopicode/lang/gen_go.dart';
 
 /// 生成的工程的模块名（写死的，不用用户的名字：模块名里能出现的字符很有限）。
 const String kGoModuleName = 'lcbackend';
@@ -36,6 +39,10 @@ class GoBackendTarget extends BeCodeTarget {
   String get runtimeFile => 'lc/values.go';
   @override
   String get runtimeSource => '${kGoRuntimeValuesSource.trim()}\n';
+  @override
+  LangGen langGen(LangHost host) => GoLangGen(host: host, module: kGoModuleName);
+  @override
+  String get langRuntimeSource => '${kGoLangRuntimeSource.trim()}\n';
   @override
   String get indentUnit => '\t';
   @override

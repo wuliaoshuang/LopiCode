@@ -2,8 +2,12 @@
 library;
 
 import 'package:lopicode/backend/backend_ir.dart';
+import 'package:lopicode/backend/backend_lang.dart';
 import 'package:lopicode/backend/backend_target.dart';
 import 'package:lopicode/backend/runtime_node.dart';
+import 'package:lopicode/backend/runtime_node_lang.dart';
+import 'package:lopicode/lang/gen.dart';
+import 'package:lopicode/lang/gen_node.dart';
 
 class NodeBackendTarget extends BeCodeTarget {
   const NodeBackendTarget();
@@ -24,6 +28,10 @@ class NodeBackendTarget extends BeCodeTarget {
   String get runtimeFile => 'lc_runtime.js';
   @override
   String get runtimeSource => '${kNodeRuntimeSource.trim()}\n';
+  @override
+  LangGen langGen(LangHost host) => NodeLangGen(host: host);
+  @override
+  String get langRuntimeSource => '${kNodeLangRuntimeSource.trim()}\n';
 
   /// 在通用写法上多拆开 `</` 和 `<!--`：万一有人把这段脚本贴进网页的 `<script>` 里，不会被提前截断。
   @override
@@ -75,7 +83,8 @@ class NodeBackendTarget extends BeCodeTarget {
     out.writeln('// ${beComment(program.name, 60)} —— 由 LopiCode 后端积木生成（Node.js）。重新生成会覆盖本文件，要改请回到积木里改。');
     out.writeln('// 启动：node server.js    端口默认 ${program.port}，可以用环境变量 PORT 改。');
     out.writeln('"use strict";');
-    out.writeln('const lc = require("./lc_runtime.js");');
+    // 用到新积木（积木第 4 版）时引入 lc_lang.js：它把 lc_runtime.js 的函数也一起导出。
+    out.writeln('const lc = require("./${beUsesLang(program) ? 'lc_lang.js' : 'lc_runtime.js'}");');
     out.writeln();
     if (program.collections.isNotEmpty) {
       out.writeln('// 数据集合（存在内存里，服务重启就没了）');

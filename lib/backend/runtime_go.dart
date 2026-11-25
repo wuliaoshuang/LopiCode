@@ -33,7 +33,13 @@ const (
 // fetchTimeout 是“请求别的网址”最多等的时间：10 秒。
 const fetchTimeout = 10 * time.Second
 
-// —— 值：nil / bool / float64 / string / []any / map[string]any ——
+// —— 值：nil / bool / float64 / string / *List / map[string]any ——
+
+// List 是列表。用指针传来传去：在末尾加一项、删一项，改的是同一个列表（和别的语言一样）。
+type List struct{ items []any }
+
+// NewList 把一串值包成列表（不复制）。
+func NewList(items []any) *List { return &List{items: items} }
 
 func kind(v any) string {
 	switch v.(type) {
@@ -45,7 +51,7 @@ func kind(v any) string {
 		return "num"
 	case string:
 		return "text"
-	case []any:
+	case *List:
 		return "list"
 	case map[string]any:
 		return "obj"
@@ -213,9 +219,9 @@ func writeJSON(b *strings.Builder, v any) {
 		b.WriteString(fmtNum(x))
 	case string:
 		quote(b, x)
-	case []any:
+	case *List:
 		b.WriteByte('[')
-		for i, item := range x {
+		for i, item := range x.items {
 			if i > 0 {
 				b.WriteByte(',')
 			}
@@ -337,8 +343,8 @@ func Join(items ...any) string {
 
 func Size(x any) float64 {
 	switch v := x.(type) {
-	case []any:
-		return float64(len(v))
+	case *List:
+		return float64(len(v.items))
 	case string:
 		return float64(utf8.RuneCountInString(v))
 	case map[string]any:
@@ -377,8 +383,8 @@ func Times(x any) int {
 }
 
 func Items(x any) []any {
-	if list, ok := x.([]any); ok {
-		return append([]any(nil), list...)
+	if list, ok := x.(*List); ok {
+		return append([]any(nil), list.items...)
 	}
 	return nil
 }
@@ -436,7 +442,7 @@ func indexOf(rows []map[string]any, id any) int {
 	return -1
 }
 
-func DbAll(name string) []any {
+func DbAll(name string) *List {
 	dbLock.Lock()
 	defer dbLock.Unlock()
 	rows := tableOf(name).rows
@@ -444,7 +450,7 @@ func DbAll(name string) []any {
 	for i, row := range rows {
 		out[i] = row
 	}
-	return out
+	return NewList(out)
 }
 
 func DbCount(name string) float64 {
@@ -463,7 +469,7 @@ func DbGet(name string, id any) any {
 	return nil
 }
 
-func DbFind(name string, key string, value any) []any {
+func DbFind(name string, key string, value any) *List {
 	dbLock.Lock()
 	defer dbLock.Unlock()
 	out := []any{}
@@ -472,7 +478,7 @@ func DbFind(name string, key string, value any) []any {
 			out = append(out, row)
 		}
 	}
-	return out
+	return NewList(out)
 }
 
 func copyFields(target map[string]any, source any) {

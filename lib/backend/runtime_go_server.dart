@@ -94,7 +94,7 @@ func norm(v any, depth int) (any, bool) {
 			}
 			x[i] = clean
 		}
-		return x, true
+		return NewList(x), true
 	case map[string]any:
 		if depth >= jsonDepthLimit {
 			return nil, false

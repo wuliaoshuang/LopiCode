@@ -465,5 +465,7 @@ module.exports = {
   dbAll, dbGet, dbFind, dbCount, dbInsert, dbUpdate, dbDelete,
   now, log, times, items, sendJson, sendText, fetch: fetchText,
   collection, route, start, toNum, toText, toJson,
+  // 下面几个给 lc_lang.js（语言核心的小库）用
+  kind, cmpKeys, parseBody,
 };
 ''';

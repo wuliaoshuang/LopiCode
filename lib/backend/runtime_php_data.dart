@@ -105,7 +105,7 @@ function lc_db_index($name, $id)
 function lc_dbAll($name)
 {
     $name = lc_db_use($name);
-    return LcDb::$data[$name]['rows'];
+    return new LcList(LcDb::$data[$name]['rows']);
 }
 
 function lc_dbCount($name)
@@ -130,7 +130,7 @@ function lc_dbFind($name, $key, $value)
             $out[] = $row;
         }
     }
-    return $out;
+    return new LcList($out);
 }
 
 function lc_dbInsert($name, $value)

@@ -10,6 +10,8 @@ library;
 import 'package:lopicode/backend/backend_blocks.dart';
 import 'package:lopicode/backend/backend_model.dart';
 import 'package:lopicode/backend/backend_text.dart';
+import 'package:lopicode/lang/ast.dart';
+import 'package:lopicode/lang/ast_util.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 
 /// “重复”最多做这么多遍（运行时小库的 `times` 里封顶；各语言必须一致）。
@@ -95,6 +97,12 @@ class BeXLit extends BeX {
   final Object? value;
 }
 
+/// 积木第 4 版的式子（lib/lang 的语法树），夹在第 3 版的式子里。做成 [BeXLit] 的子类的原因同 [BeSLang]；[value] 没有用。
+class BeXLang extends BeXLit {
+  const BeXLang(this.expr) : super(null);
+  final LExpr expr;
+}
+
 /// 读变量（一定是这个接口用到、已声明的变量）。
 class BeXVar extends BeX {
   const BeXVar(this.name);
@@ -129,6 +137,14 @@ sealed class BeS {
 class BeSNote extends BeS {
   const BeSNote(this.text);
   final String text;
+}
+
+/// 积木第 4 版的语句（lib/lang 的语法树），夹在第 3 版的中间形式里：新积木（当…时重复、从…数到…、跳出循环…）翻成它。
+/// 生成时交给 lib/lang 的生成器；里面要再套第 3 版的语句就用 `LHost`（backend_lang.dart 的 `beHostStmts`）。
+/// 做成 [BeSNote] 的子类是为了不动 [BeS] 这一组封死的类（别处对它做了穷尽的 switch）；[text] 没有用。
+class BeSLang extends BeSNote {
+  const BeSLang(this.stmts) : super('');
+  final List<LStmt> stmts;
 }
 
 /// 给变量赋值。
@@ -180,6 +196,7 @@ class BeSForEach extends BeS {
 /// 生成器用它决定函数末尾要不要补一句“什么都不返回”（静态类型的语言需要）。循环不算：可能一遍都不做。
 bool beAlwaysReturns(List<BeS> list) {
   for (final s in list.reversed) {
+    if (s is BeSLang) return lAlwaysReturns(s.stmts);
     if (s is BeSNote) continue;
     if (s is BeSReturn) return true;
     return s is BeSIf && beAlwaysReturns(s.then) && beAlwaysReturns(s.orElse);

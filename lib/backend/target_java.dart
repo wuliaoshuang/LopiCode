@@ -6,7 +6,10 @@ import 'package:lopicode/backend/backend_ir.dart';
 import 'package:lopicode/backend/backend_target.dart';
 import 'package:lopicode/backend/runtime_java.dart';
 import 'package:lopicode/backend/runtime_java_json.dart';
+import 'package:lopicode/backend/runtime_java_lang.dart';
 import 'package:lopicode/backend/runtime_java_server.dart';
+import 'package:lopicode/lang/gen.dart';
+import 'package:lopicode/lang/gen_java.dart';
 
 /// Java 的字符串常量写进 class 文件时最多 65535 字节；超过这么多个字符的文字拆成几段在运行时拼起来。
 const int kJavaLiteralChunk = 8000;
@@ -49,6 +52,12 @@ class JavaBackendTarget extends BeCodeTarget {
   String get runtimeFile => 'Lc.java';
   @override
   String get runtimeSource => '${kJavaRuntimeSource.trim()}\n';
+
+  /// `LcLang.java` 不用写进编译命令：`Main.java` 用到它时 javac 会自己在当前目录找到并一起编译。
+  @override
+  LangGen langGen(LangHost host) => JavaLangGen(host: host);
+  @override
+  String get langRuntimeSource => '${kJavaLangRuntimeSource.trim()}\n';
   @override
   String get indentUnit => '    ';
   @override

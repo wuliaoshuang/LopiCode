@@ -2,8 +2,12 @@
 library;
 
 import 'package:lopicode/backend/backend_ir.dart';
+import 'package:lopicode/backend/backend_lang.dart';
 import 'package:lopicode/backend/backend_target.dart';
 import 'package:lopicode/backend/runtime_python.dart';
+import 'package:lopicode/backend/runtime_python_lang.dart';
+import 'package:lopicode/lang/gen.dart';
+import 'package:lopicode/lang/gen_python.dart';
 
 class PythonBackendTarget extends BeCodeTarget {
   const PythonBackendTarget();
@@ -24,6 +28,10 @@ class PythonBackendTarget extends BeCodeTarget {
   String get runtimeFile => 'lc_runtime.py';
   @override
   String get runtimeSource => '${kPythonRuntimeSource.trim()}\n';
+  @override
+  LangGen langGen(LangHost host) => PythonLangGen(host: host);
+  @override
+  String get langRuntimeSource => '${kPythonLangRuntimeSource.trim()}\n';
   @override
   String get indentUnit => '    ';
 
@@ -83,7 +91,8 @@ class PythonBackendTarget extends BeCodeTarget {
     final out = StringBuffer();
     out.writeln('# ${beComment(program.name, 60)} —— 由 LopiCode 后端积木生成（Python）。重新生成会覆盖本文件，要改请回到积木里改。');
     out.writeln('# 启动：python3 server.py    端口默认 ${program.port}，可以用环境变量 PORT 改。');
-    out.writeln('import lc_runtime as lc');
+    // 用到新积木（积木第 4 版）时引入 lc_lang：它把 lc_runtime 的函数也一起带上。
+    out.writeln('import ${beUsesLang(program) ? 'lc_lang' : 'lc_runtime'} as lc');
     out.writeln();
     if (program.collections.isNotEmpty) {
       out.writeln('# 数据集合（存在内存里，服务重启就没了）');
