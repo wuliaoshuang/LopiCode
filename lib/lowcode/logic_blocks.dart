@@ -68,7 +68,7 @@ class LcArgSpec {
 
 /// 一种积木的说明。
 class LcBlockSpec {
-  const LcBlockSpec(this.op, this.label, this.category, this.args, {this.bodyLabel, this.elseLabel, this.hint = ''});
+  const LcBlockSpec(this.op, this.label, this.category, this.args, {this.bodyLabel, this.elseLabel, this.arms, this.hint = ''});
 
   final String op;
   final String label;
@@ -83,11 +83,49 @@ class LcBlockSpec {
   /// 有 else 的积木，else 那一格叫什么（“否则”“失败后”）；null＝没有。
   final String? elseLabel;
 
+  /// 中间那些可以增减的段（“否则如果”“是…时”“出错了”）；null＝这种积木没有可变的段。见 [LcArmSpec]。
+  final LcArmSpec? arms;
+
   /// 一句话说明，给积木面板当副标题。
   final String hint;
 
   bool get hasBody => bodyLabel != null;
   bool get hasElse => elseLabel != null;
+  bool get hasArms => arms != null;
+
+  /// 按名字找参数。段参数（`@<第几段>:<名字>`，见 [lcArmArg]）到 [arms] 里找。
+  LcArgSpec? arg(String name) {
+    final inArm = lcArmArgOf(name);
+    if (inArm != null) return arms?.arg(inArm.name);
+    for (final a in args) {
+      if (a.name == name) return a;
+    }
+    return null;
+  }
+}
+
+/// 多口积木里“可以增减的段”的说明。一种积木的口由三样拼成（都可以没有）：
+/// - 开头口：[LcBlockSpec.bodyLabel]（“那么”“试着做”），永远只有一个；
+/// - 中间的段：这里说的，数量可变，每段有自己的参数和自己的口；
+/// - 收尾口：[LcBlockSpec.elseLabel]（“否则”“都不是”“最后总要”），[tailOptional]＝用户可以把它收起来。
+///
+/// 例：如果＝开头口“那么”＋段“否则如果 <条件>”（最少 0 段）＋可收起的收尾口“否则”；
+/// 分情况＝没有开头口＋段“是 (值) 时”（最少 1 段）＋可收起的收尾口“都不是”。
+class LcArmSpec {
+  const LcArmSpec(this.label, this.args, {this.min = 0, this.max = 16, this.tailOptional = false});
+
+  /// 这一段叫什么（“否则如果”“是…时”），用在“加一段…”“删掉这段…”和读法里。段在积木上怎么写由宿主的句式给。
+  final String label;
+
+  /// 每一段带哪些参数（每段各存一份，在 `arms[i].args` 里）。
+  final List<LcArgSpec> args;
+
+  /// 最少、最多几段。到了最少就不给删，到了最多就不给加。
+  final int min;
+  final int max;
+
+  /// 收尾口可有可无（积木上能把“否则”收起来 / 加回来）。
+  final bool tailOptional;
 
   LcArgSpec? arg(String name) {
     for (final a in args) {

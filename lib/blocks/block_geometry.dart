@@ -66,6 +66,10 @@ class BkMetrics {
   double get dividerH => 26;
   double get footerH => 16;
 
+  /// 多口积木上的小按钮（“＋”“−”）：圆的直径；带“＋”的底条的高度。
+  double get controlD => 20;
+  double get addFooterH => 30;
+
   /// 立体感：底下那道深色边的厚度。
   double get edgeH => 2;
 
@@ -79,7 +83,7 @@ typedef BkExprPath = List<Object>;
 
 /// 按路径取表达式里的值（表达式、字面量都可能）；走不通返回 null。
 Object? bkExprAt(LcBlock block, String arg, BkExprPath path) {
-  Object? v = block.args[arg];
+  Object? v = block.argValue(arg);
   for (final step in path) {
     if (step is int) {
       if (v is! List || step < 0 || step >= v.length) return null;
@@ -94,10 +98,7 @@ Object? bkExprAt(LcBlock block, String arg, BkExprPath path) {
 
 /// 按路径把值放进去（替换原来的）。路径走不通返回 false，什么都不改。要在宿主的 edit 里调。
 bool bkSetExprAt(LcBlock block, String arg, BkExprPath path, Object? value) {
-  if (path.isEmpty) {
-    block.args[arg] = value;
-    return true;
-  }
+  if (path.isEmpty) return block.setArgValue(arg, value);
   final parent = bkExprAt(block, arg, path.sublist(0, path.length - 1));
   final last = path.last;
   if (last is int) {
@@ -122,7 +123,7 @@ bool bkSameBlockPath(LcBlockPath a, LcBlockPath b) {
   if (a.length != b.length) return false;
   for (var i = 0; i < a.length; i++) {
     if (a[i].index != b[i].index) return false;
-    if (i > 0 && a[i].inElse != b[i].inElse) return false;
+    if (i > 0 && !lcSameMouth(a[i], b[i])) return false;
   }
   return true;
 }
@@ -173,7 +174,7 @@ class BkSlot {
     this.hatSlotId,
   });
 
-  /// 属于积木的哪个参数（帽子的槽位是空字符串，看 [hatSlotId]）。
+  /// 属于积木的哪个参数（帽子的槽位是空字符串，看 [hatSlotId]）。多口积木某一段的参数是 `@<第几段>:<名字>`（见 `lcArmArg`）。
   final String arg;
 
   /// 在那个参数里的位置（见 [BkExprPath]）。积木自己的参数是空表。
@@ -225,17 +226,53 @@ enum BkShape { hat, stack, mouth, expr }
 
 /// C 形块的一个口。
 class BkMouth {
-  BkMouth({required this.inElse, required this.rect, this.bar, this.label});
+  BkMouth({required this.inElse, required this.rect, this.bar, this.label, this.arm = -1});
 
-  /// false＝body，true＝else。
+  /// false＝body，true＝else。[arm] >= 0 时不看它。
   final bool inElse;
+
+  /// 多口积木中间的第几段（见 `LcBlock.arms`）；-1＝不是段（开头口 / 收尾口）。
+  final int arm;
+
+  /// 这一段横栏上的字和槽（“否则如果 <条件> 那么”）。槽同时也在 [BkBlock.slots] 里（排在头上的槽后面）。
+  final List<BkLabel> labels = [];
+  final List<BkSlot> slots = [];
 
   /// 口里面的空（左边贴着胳膊，右边到积木右边）。
   Rect rect;
 
-  /// 口上面那条横栏（第二个口才有，上面写“否则”“失败后”）。
+  /// 口上面那条横栏（开头口没有；收尾口的写“否则”“失败后”，在 [label] 里；段的横栏上是一句带槽的话）。
   Rect? bar;
   BkLabel? label;
+}
+
+/// 多口积木上的小按钮是干什么的。
+enum BkControlKind {
+  /// 底条上的“＋”：加一段（收尾口被收起来时，还能把它加回来）。
+  add,
+
+  /// 某一段横栏右边的“−”：删掉这一段。
+  removeArm,
+
+  /// 收尾口横栏右边的“−”：把收尾口（“否则”）收起来。
+  removeTail,
+}
+
+/// 多口积木上的一个小按钮。
+class BkControl {
+  BkControl({required this.kind, required this.rect, this.arm = -1, this.mouth = -1});
+  final BkControlKind kind;
+
+  /// 画出来的那个小圆占的位置；点击范围是 [hitRect]（不小于 40×40）。
+  Rect rect;
+
+  /// [BkControlKind.removeArm]：第几段。
+  final int arm;
+
+  /// 在第几个口的横栏上（[BkBlock.mouths] 的下标）；-1＝在底条上。让位动画里跟着那条横栏走。
+  final int mouth;
+
+  Rect get hitRect => Rect.fromCenter(center: rect.center, width: 44, height: 40);
 }
 
 /// 一块积木（帽子、语句、C 形）。
@@ -260,6 +297,13 @@ class BkBlock {
   final List<BkSlot> slots = [];
   final List<BkMouth> mouths = [];
 
+  /// [slots] / [labels] 里前多少个在头上（其余在各段的横栏上，见 [BkMouth.slots]）。
+  int headSlots = 0;
+  int headLabels = 0;
+
+  /// 多口积木上的小按钮（加一段、删一段、收起收尾口）。
+  final List<BkControl> controls = [];
+
   bool get isHat => shape == BkShape.hat;
 
   /// 点有没有落在积木“实心”的地方（C 形块的口不算）。
@@ -276,7 +320,7 @@ enum BkSnapKind { statement, expr }
 
 /// 一个可拼接点。
 class BkSnap {
-  BkSnap.statement({required this.parent, required this.inElse, required this.index, required this.anchor, required this.width})
+  BkSnap.statement({required this.parent, required this.inElse, required this.index, required this.anchor, required this.width, this.arm = -1})
     : kind = BkSnapKind.statement,
       arg = null,
       exprPath = const [],
@@ -287,6 +331,7 @@ class BkSnap {
     : kind = BkSnapKind.expr,
       parent = block,
       inElse = false,
+      arm = -1,
       index = 0,
       anchor = rect.centerLeft,
       width = rect.width;
@@ -298,6 +343,9 @@ class BkSnap {
 
   /// 语句：插进 body 还是 else。
   final bool inElse;
+
+  /// 语句：插进第几段的口（多口积木，见 `LcBlock.arms`）；-1＝不是段，看 [inElse]。
+  final int arm;
 
   /// 语句：插在第几位（0＝最前，等于列表长度＝最后）。正好对应 `LcBlockTree.insertBlock(parent, b, inElse:, index:)`。
   final int index;
@@ -333,7 +381,7 @@ class BkSnap {
 
 /// 点到了什么。
 class BkHit {
-  const BkHit(this.block, {this.slot, this.expr});
+  const BkHit(this.block, {this.slot, this.expr, this.control});
 
   /// 点到的积木（表达式块、槽位也算在它所在的积木头上）。
   final BkBlock block;
@@ -343,6 +391,9 @@ class BkHit {
 
   /// 点到的最里面那个表达式块（它所在的槽是 [slot]）。
   final BkExpr? expr;
+
+  /// 点到的是多口积木上的小按钮（这时 [slot] / [expr] 都是 null）。
+  final BkControl? control;
 }
 
 /// 一串脚本排好以后的样子。
@@ -380,7 +431,17 @@ class BkScriptLayout {
     for (var i = blocks.length - 1; i >= 0; i--) {
       final b = blocks[i];
       if (!b.solidContains(p)) continue;
+      // 小按钮：先看有没有正好点在圆上（它旁边可能紧挨着槽），再往下看槽。
+      for (final c in b.controls) {
+        if (c.rect.inflate(3).contains(p)) return BkHit(b, control: c);
+      }
       final found = _hitSlots(b.slots, p);
+      if (found == null) {
+        // 没点到槽：小按钮的点击范围放大到 40 以上（只在积木实心的地方算）。
+        for (final c in b.controls) {
+          if (c.hitRect.contains(p)) return BkHit(b, control: c);
+        }
+      }
       return BkHit(b, slot: found?.$1, expr: found?.$2);
     }
     return null;

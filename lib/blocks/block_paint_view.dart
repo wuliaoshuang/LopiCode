@@ -96,7 +96,7 @@ class BkPaintState {
   final Color? slotColor;
 
   /// 这一段积木画成落点阴影（拖动时“让出来的位置”）：`parent / inElse` 下面从 `start` 起的 `count` 块，连同它们里面的。
-  final ({LcBlockPath parent, bool inElse, int start, int count})? ghostRange;
+  final BkRange? ghostRange;
 
   /// 落点阴影的浓淡（0–1；让位动画里淡入）。
   final double ghostAlpha;
@@ -110,7 +110,7 @@ class BkPaintState {
   /// 刚落下的积木轻弹一下的进度（0–1）；null＝没有。弹的是 [pulseRange] 那一段（null＝整串），
   /// 或者 [pulseSlot] 那个槽（表达式落进槽里：槽的描边闪一下）。
   final double? pulse;
-  final ({LcBlockPath parent, bool inElse, int start, int count})? pulseRange;
+  final BkRange? pulseRange;
   final ({LcBlockPath block, String arg, BkExprPath path})? pulseSlot;
 
   /// 选中的那块闪一下的强度（0–1；跳到某块积木时用）。
@@ -247,11 +247,11 @@ class BkScriptPainter {
     );
   }
 
-  static bool _inRange(BkBlock b, ({LcBlockPath parent, bool inElse, int start, int count}) r) {
+  static bool _inRange(BkBlock b, BkRange r) {
     final n = r.parent.length;
     if (b.isHat || b.path.length <= n || !bkSameBlockPath(r.parent, b.path.sublist(0, n))) return false;
     final step = b.path[n];
-    return (n == 0 || step.inElse == r.inElse) && step.index >= r.start && step.index < r.start + r.count;
+    return (n == 0 || lcSameMouth(step, lcStep(0, inElse: r.inElse, arm: r.arm))) && step.index >= r.start && step.index < r.start + r.count;
   }
 
   /// 描边。`soft`＝选中积木用的柔和版（细线 + 淡光晕）；拖表达式时目标槽的描边要醒目，用默认的。
@@ -300,33 +300,69 @@ class BkScriptPainter {
     if (pose != null) {
       shape = BkBlock(path: b.path, block: b.block, shape: b.shape, colorKey: b.colorKey, rect: pose.rect, head: b.head.shift(d));
       for (var i = 0; i < b.mouths.length; i++) {
-        shape.mouths.add(BkMouth(inElse: b.mouths[i].inElse, rect: pose.mouths[i], bar: pose.bars[i]));
+        shape.mouths.add(BkMouth(inElse: b.mouths[i].inElse, arm: b.mouths[i].arm, rect: pose.mouths[i], bar: pose.bars[i]));
       }
     }
     final path = bkBlockPath(shape, metrics);
     _solid(canvas, path, shape.rect, tone, metrics.edgeH);
-    if (pose != null) {
+    // 头上的字和槽跟着左上角走；每段横栏上的跟着那条横栏走；底条上的“＋”跟着下沿走。
+    void shifted(Offset by, void Function() draw) {
+      if (by == Offset.zero) return draw();
       canvas.save();
-      canvas.translate(d.dx, d.dy);
+      canvas.translate(by.dx, by.dy);
+      draw();
+      canvas.restore();
     }
-    for (final l in b.labels) {
-      text.paint(canvas, l.text, l.rect, tone.text);
+
+    Offset barShift(int mouth) {
+      if (pose == null) return Offset.zero;
+      if (mouth < 0) return pose.rect.bottomLeft - b.rect.bottomLeft;
+      final from = b.mouths[mouth].bar, to = pose.bars[mouth];
+      return from != null && to != null ? to.topLeft - from.topLeft : d;
     }
-    for (final s in b.slots) {
-      _slot(canvas, s, tone, b.path, state);
-    }
-    if (pose != null) canvas.restore();
+
+    shifted(d, () {
+      for (var i = 0; i < b.headLabels && i < b.labels.length; i++) {
+        text.paint(canvas, b.labels[i].text, b.labels[i].rect, tone.text);
+      }
+      for (var i = 0; i < b.headSlots && i < b.slots.length; i++) {
+        _slot(canvas, b.slots[i], tone, b.path, state);
+      }
+    });
     for (var i = 0; i < b.mouths.length; i++) {
-      final l = b.mouths[i].label;
-      if (l == null) continue;
-      final from = b.mouths[i].bar, to = pose?.bars[i];
-      final r = from != null && to != null ? l.rect.shift(to.topLeft - from.topLeft) : l.rect;
-      text.paint(canvas, l.text, r, tone.text.withValues(alpha: 0.92), size: 13);
+      final mouth = b.mouths[i];
+      final l = mouth.label;
+      if (l == null && mouth.labels.isEmpty && mouth.slots.isEmpty) continue;
+      shifted(barShift(i), () {
+        if (l != null) text.paint(canvas, l.text, l.rect, tone.text.withValues(alpha: 0.92), size: 13);
+        for (final x in mouth.labels) {
+          text.paint(canvas, x.text, x.rect, tone.text);
+        }
+        for (final x in mouth.slots) {
+          _slot(canvas, x, tone, b.path, state);
+        }
+      });
+    }
+    for (final c in b.controls) {
+      shifted(barShift(c.mouth), () => _control(canvas, c, tone));
     }
     final marks = state.marks;
     bool same(LcBlockPath p) => bkSameBlockPath(p, b.path) && (p.isEmpty == b.isHat);
     final level = marks != null ? marks.levelOf(b) : (state.errors.any(same) ? true : (state.warnings.any(same) ? false : null));
     if (level != null) bkPaintBlockMark(canvas, palette, metrics, shape, path, error: level);
+  }
+
+  /// 多口积木上的小按钮：一个压进去的深色小圆，里面白色的“＋”或“−”（和“一串值”末尾的小“＋”同一个样子）。
+  void _control(Canvas canvas, BkControl c, BkTone tone) {
+    final o = c.rect.center;
+    final add = c.kind == BkControlKind.add;
+    canvas.drawCircle(o, c.rect.width / 2, Paint()..color = tone.deep.withValues(alpha: add ? 1 : 0.78));
+    final pen = Paint()
+      ..color = tone.text.withValues(alpha: add ? 0.92 : 0.8)
+      ..strokeWidth = 2
+      ..strokeCap = StrokeCap.round;
+    canvas.drawLine(o - const Offset(4.5, 0), o + const Offset(4.5, 0), pen);
+    if (add) canvas.drawLine(o - const Offset(0, 4.5), o + const Offset(0, 4.5), pen);
   }
 
   /// 槽位凹进去的感觉：上沿一道暗线。

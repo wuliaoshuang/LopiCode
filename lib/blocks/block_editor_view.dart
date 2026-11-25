@@ -16,6 +16,7 @@ import 'dart:async';
 
 import 'package:lopicode/blocks/block_canvas_layout.dart';
 import 'package:lopicode/blocks/block_canvas_view.dart';
+import 'package:lopicode/blocks/block_editor_arms_view.dart';
 import 'package:lopicode/blocks/block_editor_canvas_view.dart';
 import 'package:lopicode/blocks/block_editor_dock_view.dart';
 import 'package:lopicode/blocks/block_editor_drag_view.dart';
@@ -82,7 +83,7 @@ class BlockEditorView extends StatefulWidget {
   State<BlockEditorView> createState() => BlockEditorViewState();
 }
 
-class BlockEditorViewState extends State<BlockEditorView> with TickerProviderStateMixin, BkKitHolder, BkEditorCanvas, BkEditorDrag, BkEditorEdit, BkEditorDock {
+class BlockEditorViewState extends State<BlockEditorView> with TickerProviderStateMixin, BkKitHolder, BkEditorCanvas, BkEditorDrag, BkEditorEdit, BkEditorArms, BkEditorDock {
   String? _toast;
   String? _toastAction;
   VoidCallback? _onToastAction;

@@ -16,7 +16,8 @@ import 'package:lopicode/lowcode/logic_model.dart';
 
 /// 把 `parent`（`inElse`）下面那一列换成 `change` 改过的样子，返回新的最外层列表。
 /// 只有路径上的积木是新对象（浅拷贝），其余和原来共用；路径走不通就原样返回。
-List<LcBlock> bkEditedBody(List<LcBlock> body, LcBlockPath parent, bool inElse, void Function(List<LcBlock> list) change) {
+/// `arm >= 0`＝那块积木第几段的口。
+List<LcBlock> bkEditedBody(List<LcBlock> body, LcBlockPath parent, bool inElse, void Function(List<LcBlock> list) change, {int arm = -1}) {
   List<LcBlock> rebuild(List<LcBlock> list, int depth) {
     if (depth == parent.length) {
       final copy = [...list];
@@ -26,9 +27,19 @@ List<LcBlock> bkEditedBody(List<LcBlock> body, LcBlockPath parent, bool inElse, 
     final i = parent[depth].index;
     if (i < 0 || i >= list.length) return list;
     final b = list[i];
-    final childElse = depth == parent.length - 1 ? inElse : parent[depth + 1].inElse;
-    final child = rebuild(childElse ? b.orElse : b.body, depth + 1);
-    return [...list]..[i] = LcBlock(op: b.op, args: b.args, body: childElse ? b.body : child, orElse: childElse ? child : b.orElse);
+    final last = depth == parent.length - 1;
+    final childArm = last ? arm : parent[depth + 1].arm;
+    final childElse = last ? inElse : parent[depth + 1].inElse;
+    final inner = b.mouth(inElse: childElse, arm: childArm);
+    if (inner == null) return list;
+    final child = rebuild(inner, depth + 1);
+    if (childArm >= 0) {
+      return [...list]
+        ..[i] = b.copyWith(
+          arms: [...b.arms]..[childArm] = LcArm(args: b.arms[childArm].args, body: child),
+        );
+    }
+    return [...list]..[i] = childElse ? b.copyWith(orElse: child) : b.copyWith(body: child);
   }
 
   return rebuild(body, 0);
@@ -38,15 +49,22 @@ List<LcBlock> bkEditedBody(List<LcBlock> body, LcBlockPath parent, bool inElse, 
 List<LcBlock> bkBodyWithBlock(List<LcBlock> body, LcBlockPath path, LcBlock Function(LcBlock block) replace) {
   if (path.isEmpty) return body;
   final i = path.last.index;
-  return bkEditedBody(body, path.sublist(0, path.length - 1), path.last.inElse, (list) {
+  return bkEditedBody(body, path.sublist(0, path.length - 1), path.last.inElse, arm: path.last.arm, (list) {
     if (i >= 0 && i < list.length) list[i] = replace(list[i]);
   });
 }
 
-/// 一块积木的副本：参数是深拷贝（可以随便改），里面嵌的积木和原来共用。
+/// 一块积木的副本：参数（含各段的参数）是深拷贝（可以随便改），里面嵌的积木和原来共用。
 LcBlock bkCopyArgs(LcBlock b) {
-  final args = deepCopyJson(b.args);
-  return LcBlock(op: b.op, args: args is Map<String, dynamic> ? args : {}, body: b.body, orElse: b.orElse);
+  Map<String, dynamic> copy(Map<String, dynamic> m) {
+    final c = deepCopyJson(m);
+    return c is Map<String, dynamic> ? c : {};
+  }
+
+  return b.copyWith(
+    args: copy(b.args),
+    arms: b.arms.isEmpty ? null : [for (final a in b.arms) LcArm(args: copy(a.args), body: a.body)],
+  );
 }
 
 // —— 查 ——
@@ -59,6 +77,9 @@ int bkCountBlocks(List<LcBlock> blocks) {
   var n = 0;
   for (final b in blocks) {
     n += 1 + bkCountBlocks(b.body) + bkCountBlocks(b.orElse);
+    for (final a in b.arms) {
+      n += bkCountBlocks(a.body);
+    }
   }
   return n;
 }
@@ -116,6 +137,45 @@ Map<String, dynamic>? bkTakeExpr(BlockHost host, LcBlock block, String arg, BkEx
     return taken;
   }
   return bkSetExprAt(block, arg, path, empty) ? taken : null;
+}
+
+// —— 多口积木：加一段、删一段、收起 / 加回收尾口（都要在宿主的 edit 里调）——
+
+/// 这块积木还能不能再加一段（规格说它有段，而且没到上限）。
+bool bkCanAddArm(BlockHost host, LcBlock block) {
+  final spec = host.blockSpec(block.op)?.arms;
+  return spec != null && block.arms.length < spec.max && block.arms.length < LcBlock.maxArms;
+}
+
+/// 收尾口现在是不是被收起来了、可以加回来。
+bool bkCanShowTail(BlockHost host, LcBlock block) {
+  final spec = host.blockSpec(block.op);
+  return spec != null && spec.hasElse && spec.arms?.tailOptional == true && block.noElse && block.orElse.isEmpty;
+}
+
+/// 在末尾加一段（参数由宿主填默认值）。返回新的一段是第几段；加不了返回 -1。
+int bkAddArm(BlockHost host, LcBlock block) {
+  if (!bkCanAddArm(host, block)) return -1;
+  block.arms.add(host.newArm(block));
+  return block.arms.length - 1;
+}
+
+/// 删掉第 `arm` 段（连同里面的积木）。已经是最少的段数、或没有这一段：不删，返回 false。
+bool bkRemoveArm(BlockHost host, LcBlock block, int arm) {
+  final spec = host.blockSpec(block.op)?.arms;
+  if (spec == null || arm < 0 || arm >= block.arms.length || block.arms.length <= spec.min) return false;
+  block.arms.removeAt(arm);
+  return true;
+}
+
+/// 把收尾口收起来（里面的积木一起删掉）/ 加回来。规格没说它可有可无：不动，返回 false。
+bool bkSetTail(BlockHost host, LcBlock block, {required bool shown}) {
+  final spec = host.blockSpec(block.op);
+  if (spec == null || !spec.hasElse || spec.arms?.tailOptional != true) return false;
+  if (shown == !block.noElse && (shown || block.orElse.isEmpty)) return false;
+  if (!shown) block.orElse.clear();
+  block.noElse = !shown;
+  return true;
 }
 
 /// 两个值是不是一模一样（按 JSON 内容比）。

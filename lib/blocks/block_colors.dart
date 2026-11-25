@@ -26,6 +26,16 @@ const Map<String, Color> _lightBase = {
   BlockColorKey.request: Color(0xFF0A7F5C), // 墨绿：请求
   BlockColorKey.response: Color(0xFFC53030), // 红：返回
   BlockColorKey.unknown: Color(0xFF636B73), // 灰：不认识的
+  // 第 4 版语言核心（设计稿 9.1）。积木盒里挨着的两页色相至少差 40°：
+  // 变量(玫红) → 运算(绿) → 流程(紫) → 函数 → 文字 → 列表 → 字典 → 类 → 出错 → 等待 → 我的积木。
+  BlockColorKey.function: Color(0xFF0F7B6C), // 松石绿：函数
+  BlockColorKey.text: Color(0xFF8A6A00), // 姜黄：文字
+  BlockColorKey.list: Color(0xFF2468C8), // 钴蓝：列表
+  BlockColorKey.dict: Color(0xFFA23BB8), // 紫红：字典
+  BlockColorKey.classes: Color(0xFF5E7A12), // 草绿：类
+  BlockColorKey.error: Color(0xFFC2362F), // 朱红：出错
+  BlockColorKey.async: Color(0xFF0B7A94), // 湖蓝：等待
+  BlockColorKey.custom: Color(0xFF4C56C8), // 靛蓝：我的积木
 };
 
 /// 一类积木在一种主题下的几档颜色。

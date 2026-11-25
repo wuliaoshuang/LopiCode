@@ -60,7 +60,7 @@ class BlockReplaceView extends StatefulWidget {
 class _BlockReplaceViewState extends State<BlockReplaceView> {
   late final List<BlockCategory> _categories = [
     for (final c in widget.host.categories)
-      if (c.exprs.isNotEmpty) c,
+      if (c.allExprs.isNotEmpty) c,
   ];
   late String? _category = _first();
   final Map<String, List<(String, BkScriptLayout)>> _samples = {};
@@ -69,7 +69,7 @@ class _BlockReplaceViewState extends State<BlockReplaceView> {
     if (_categories.isEmpty) return null;
     if (widget.wantBoolean) {
       for (final c in _categories) {
-        if (c.exprs.any((e) => widget.host.isBooleanExpr(widget.host.newExpr(e)))) return c.id;
+        if (c.allExprs.any((e) => widget.host.isBooleanExpr(widget.host.newExpr(e)))) return c.id;
       }
     }
     return _categories.first.id;
@@ -77,7 +77,7 @@ class _BlockReplaceViewState extends State<BlockReplaceView> {
 
   List<(String, BkScriptLayout)> _of(BlockCategory c) => _samples[c.id] ??= () {
     final engine = widget.kit.engine(widget.host);
-    final kinds = [...c.exprs];
+    final kinds = [...c.allExprs];
     // 要“是 / 否”的槽：是非类的排前面。
     if (widget.wantBoolean) {
       final yes = [

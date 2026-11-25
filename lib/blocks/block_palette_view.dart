@@ -17,15 +17,18 @@ import 'package:lopicode/blocks/block_host.dart';
 import 'package:lopicode/blocks/block_script_view.dart';
 import 'package:material_ui/material_ui.dart';
 
-enum BlockPaletteKind { hat, block, expr }
+export 'package:lopicode/blocks/block_host.dart' show BlockPaletteKind;
 
 /// 积木盒里的一样东西。
 class BlockPaletteItem {
-  const BlockPaletteItem(this.kind, this.id, this.layout);
+  const BlockPaletteItem(this.kind, this.id, this.layout, {this.preset = const {}});
   final BlockPaletteKind kind;
 
   /// 帽子模板的 id / 积木的 op / 表达式的 e。
   final String id;
+
+  /// 拿出来时顺手设好的“固定选项”参数（搜到“一块顶多块”里的某一种时有，见 [BlockItemRef.preset]）。
+  final Map<String, String> preset;
 
   /// 样品的排版（拖出来时可以直接拿它画拖着的样子）。
   final BkScriptLayout layout;
