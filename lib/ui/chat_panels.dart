@@ -21,6 +21,7 @@ import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
 
 export 'package:lopicode/ui/chat_cards.dart';
+export 'package:lopicode/ui/chat_queue.dart';
 export 'package:lopicode/ui/model_picker_sheet.dart';
 
 // ── 权限 ─────────────────────────────────────────────
@@ -377,69 +378,6 @@ class SlashSuggestions extends StatelessWidget {
                     ),
                   ],
                 ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-/// 排队 / 插话的消息：每条一行，操作收进右边的菜单。
-class QueueStrip extends StatelessWidget {
-  const QueueStrip({super.key, required this.session});
-  final ProjectSession session;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.colors;
-    final t = Theme.of(context).textTheme;
-    return Container(
-      margin: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x2),
-      constraints: const BoxConstraints(maxHeight: 132),
-      decoration: BoxDecoration(
-        color: c.surface,
-        borderRadius: BorderRadius.circular(Radii.lg),
-        border: Border.all(color: c.border),
-      ),
-      child: ListView(
-        shrinkWrap: true,
-        padding: EdgeInsets.zero,
-        children: [
-          for (final q in session.queue)
-            Padding(
-              padding: const EdgeInsets.only(left: Space.x3),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: Space.x2, vertical: 2),
-                    decoration: BoxDecoration(color: c.surfaceMuted, borderRadius: BorderRadius.circular(Radii.sm)),
-                    child: Text(q.steer ? '插话' : '排队', style: t.bodySmall?.copyWith(color: q.steer ? c.accent : c.textMuted)),
-                  ),
-                  const SizedBox(width: Space.x2),
-                  Expanded(
-                    child: Text(
-                      '${q.images.isEmpty ? '' : '[${q.images.length} 张图] '}${q.text}',
-                      style: t.bodySmall?.copyWith(color: c.text),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  PopupMenuButton<String>(
-                    tooltip: '处理这条消息',
-                    icon: Icon(Icons.more_horiz, size: 20, color: c.textMuted),
-                    onSelected: (v) {
-                      if (v == 'now') session.sendQueuedNow(q);
-                      if (v == 'steer') session.steerQueued(q);
-                      if (v == 'withdraw') session.withdrawQueued(q);
-                    },
-                    itemBuilder: (_) => [
-                      const PopupMenuItem(value: 'now', child: Text('立即发送')),
-                      if (!q.steer && q.images.isEmpty) const PopupMenuItem(value: 'steer', child: Text('改为插话')),
-                      const PopupMenuItem(value: 'withdraw', child: Text('撤回')),
-                    ],
-                  ),
-                ],
               ),
             ),
         ],

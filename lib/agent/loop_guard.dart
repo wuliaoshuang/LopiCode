@@ -108,7 +108,8 @@ int pruneOldToolResults(List<Map<String, dynamic>> messages, {int keepRecent = 6
     final m = messages[toolAt[k]];
     final content = m['content'];
     if (content is! String || content.length < minChars || content.startsWith(kPrunedToolResult)) continue;
-    messages[toolAt[k]] = {...m, 'content': kPrunedToolResult};
+    // 裁掉的结果连带的图片（view_image）也不再发。
+    messages[toolAt[k]] = {...m, 'content': kPrunedToolResult}..remove('_images');
     pruned++;
   }
   return pruned;

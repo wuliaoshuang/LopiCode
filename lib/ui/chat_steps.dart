@@ -340,7 +340,7 @@ List<(String, String)> stepDetailSections(ToolItem tool) {
       out
         ..add(('文件', a('path')))
         ..add(('写入的内容', a('content')));
-    case 'read_file' || 'delete_file':
+    case 'read_file' || 'delete_file' || 'view_image':
       out.add(('文件', a('path')));
     default:
       final raw = tool.arguments.trim();

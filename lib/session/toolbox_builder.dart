@@ -13,10 +13,12 @@ import 'package:lopicode/agent/todos.dart';
 import 'package:lopicode/agent/web_search.dart';
 import 'package:lopicode/backend/backend_agent_tools.dart';
 import 'package:lopicode/runtime/linux_command_runner.dart';
+import 'package:lopicode/session/ask_user.dart';
 import 'package:lopicode/session/automation_tools.dart';
 import 'package:lopicode/session/chat_models.dart';
 import 'package:lopicode/session/conversation.dart';
 import 'package:lopicode/session/session_core.dart';
+import 'package:lopicode/session/view_image_tool.dart';
 import 'package:lopicode/ssh/ssh_shell_backend.dart';
 import 'package:lopicode/state/workspace_chat.dart';
 import 'package:lopicode/terminal/terminal_session.dart';
@@ -38,34 +40,21 @@ class ToolboxBuilder {
     return core.cards.requestApproval(PendingApproval(request, conversationId: run.convId, agentName: run.conv.agentName)).whenComplete(() => journal.setAwaitingApproval(false));
   }
 
-  Future<String> _askUser(ChatRunNotifier run, String question, List<String> options) {
+  Future<String> _askUser(ChatRunNotifier run, String question, List<String> options, {List<QuestionPart> parts = const []}) {
     if (run.unattended) return Future.value('（这是无人值守的自动化任务，没有人能回答。请按最稳妥的做法继续，或者说明卡在哪里。）');
-    return core.cards.ask(PendingQuestion(question, options, conversationId: run.convId, agentName: run.conv.agentName));
+    return core.cards.ask(PendingQuestion(question, options, conversationId: run.convId, agentName: run.conv.agentName, parts: parts));
   }
 
   ExtraTool _askTool(ChatRunNotifier run) => ExtraTool(
-    spec: toolSpec(
-      'ask_user',
-      '需要用户拿主意时，向用户提一个问题并等他回答。给出 2 到 4 个选项，用户也可以自己写别的回答。',
-      {
-        'question': {'type': 'string', 'description': '要问的问题'},
-        'options': {
-          'type': 'array',
-          'items': {'type': 'string'},
-          'description': '可选的回答',
-        },
-      },
-      ['question'],
-    ),
+    spec: askUserSpec(),
     kind: ToolKind.other,
     run: (args) async {
-      final raw = args['options'];
-      final options = [
-        for (final o in raw is List ? raw : const [])
-          if (o is String && o.trim().isNotEmpty) o.trim(),
-      ].take(6).toList();
-      final answer = await _askUser(run, AgentToolbox.argString(args, 'question'), options);
-      return ToolOutcome('用户的回答：$answer');
+      final plan = parseAskArgs(args);
+      final note = plan.dropped > 0 ? '\n（一次最多问 $kAskMaxQuestions 个问题，后面的 ${plan.dropped} 个没有问。）' : '';
+      final first = plan.parts.first;
+      // 只有一个单选的问题：和以前完全一样的卡、一样的回话。
+      if (plan.parts.length == 1 && !first.multiple) return ToolOutcome('用户的回答：${await _askUser(run, first.question, first.options)}$note');
+      return ToolOutcome('用户的回答：\n${await _askUser(run, first.question, const [], parts: plan.parts)}$note');
     },
   );
 
@@ -80,6 +69,8 @@ class ToolboxBuilder {
     final extras = <ExtraTool>[];
     extras.add(todoTool());
     if (!run.unattended) extras.add(_askTool(run));
+    // 看图工具：只有这段对话用的模型开了“支持看图”才给。
+    if (core.modelOf(conv)?.model.vision ?? false) extras.add(viewImageTool(core.guard));
     // 后端积木的读 / 改：和低代码页面的两个工具一样一直在（权限档位、计划模式由 AgentToolbox 按 kind 拦）
     extras.addAll(backendTools(guard: core.guard, writeScope: writeScope));
     final search = await WebSearchConfig.load(app.settings, app.secrets);

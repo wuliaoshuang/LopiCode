@@ -8,6 +8,7 @@
 import 'dart:convert';
 
 import 'package:lopicode/agent/todos.dart';
+import 'package:lopicode/session/ask_user.dart';
 import 'package:lopicode/session/chat_models.dart';
 
 /// 聊天页的一行。
@@ -91,7 +92,7 @@ void _segment(List<ChatItem> items, int from, int to, List<ChatRow> rows, {requi
 enum StepKind { read, look, edit, delete, command, search, agent, ask, plan, other }
 
 StepKind stepKindOf(String name) => switch (name) {
-  'read_file' || 'lowcode_get_page' || 'backend_get_blocks' => StepKind.read,
+  'read_file' || 'view_image' || 'lowcode_get_page' || 'backend_get_blocks' => StepKind.read,
   'list_files' || 'read_skill' || 'team_board' || 'list_scheduled_tasks' => StepKind.look,
   'write_file' || 'lowcode_update_page' || 'backend_update_blocks' => StepKind.edit,
   'delete_file' => StepKind.delete,
@@ -120,6 +121,7 @@ Map<String, dynamic> _argsOf(String rawArgs) {
   return switch (name) {
     'list_files' => ('查看文件列表', a('path')),
     'read_file' => ('读取', a('path')),
+    'view_image' => ('查看图片', a('path')),
     'write_file' => ('写入', a('path')),
     'delete_file' => ('删除', a('path')),
     'run_command' => ('执行', a('command')),
@@ -127,7 +129,7 @@ Map<String, dynamic> _argsOf(String rawArgs) {
     'lowcode_update_page' => ('更新低代码页面', ''),
     'backend_get_blocks' => ('读取后端积木', ''),
     'backend_update_blocks' => ('更新后端积木', ''),
-    'ask_user' => ('向你提问', a('question')),
+    'ask_user' => ('向你提问', askSummary(args)),
     'web_search' => ('联网搜索', a('query')),
     'read_skill' => ('读技能', a('name')),
     'spawn_agent' => (a('name').isEmpty ? '派子代理' : '派子代理“${a('name')}”', a('task')),

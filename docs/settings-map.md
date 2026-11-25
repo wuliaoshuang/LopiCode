@@ -21,7 +21,7 @@
 | 界面 | 外观 | `AppearanceScreen` | 跟随系统 / 浅色 / 深色 |
 | 运行与打包 | 运行环境 | `RuntimeScreen` | 原样（另一路在改，这里只是入口） |
 | 运行与打包 | SSH 构建机 | `SshConnectScreen` | 原样（和打包页里“构建机”是同一页、同一份配置） |
-| 当前工作区 · 名字 | 项目规则 | `ProjectRulesScreen` | 只对这个工作区生效；没打开工作区时这一行灰掉 |
+| 当前工作区 · 名字 | 项目规则 | `ProjectRulesScreen` | 只对这个工作区生效；没打开工作区时这一行灰掉。页面下方另有一组“项目里的 AGENTS.md”：只显示有没有读到（自动生效，不用设置） |
 | 关于 | 第三方声明 | `ThirdPartyScreen` | 原样 |
 | 关于 | 错误日志 | `ErrorLogScreen` | 原样 |
 
