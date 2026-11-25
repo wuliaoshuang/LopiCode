@@ -494,4 +494,4 @@ PHP 估计 7.4+（PHP 那份代码从没运行过）。下面选的版本都够�
 - 结果只有三种：成功（路径）、取消、失败（代号 `too_large` / `unsupported` / `read_failed` / `no_picker` / `no_space` / `busy`，Dart 那头换成人话，系统原始报错不给用户看）。
 - Dart 那头再校验一遍文件头（只收 JPG / PNG / WebP；GIF 拒收）和两个上限，搬进应用私有目录 `<设置所在目录>/appearance/background/`，缓存副本用完就删。
 
-没验证的：真机上两种选择器的实际样子、`inSampleSize` 降采样和 EXIF 摆正的效果（开发机上没有安卓环境可跑；release 配置下的编译验证结果见 `docs/backdrop-integration.md` 末尾）。
+没验证的：真机上两种选择器的实际样子、`inSampleSize` 降采样和 EXIF 摆正的效果（开发机上没有安卓环境可跑；release 配置下 Kotlin 编译通过，完整打包没跑成，详见 `docs/backdrop-integration.md` 第 6 节）。

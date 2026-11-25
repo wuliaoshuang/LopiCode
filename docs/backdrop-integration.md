@@ -107,3 +107,13 @@ BackdropScope.surface(context, c.codeBg, seeThrough: BackdropArea.terminal)
 | 裁剪最大放大 | 8 倍，滑杆一档 0.25 倍 | `crop_math.dart` |
 | 解码缓存 | 最多 3 张原图、6 张模糊小图；解码时长边不超过屏幕物理像素的长边（不低于 1280） | `backdrop_images.dart` |
 | 主题文件里带图的上限 | 8MB（主题那边定的） | `backdrop_theme_bridge.dart` |
+
+## 6. 验证做到了哪一步（2026-11-26）
+
+- **release 配置下 Kotlin 编译通过**：`(cd android && ./gradlew :app:compileReleaseKotlin --offline -Ptarget-platform=android-arm64)` → BUILD SUCCESSFUL，
+  `BackdropPicker.kt` 和改过的 `MainActivity.kt` 都编进了 release 的类目录。
+- **完整的 `flutter build apk --release --target-platform android-arm64` 没跑成**：前一位跑到一半 Gradle 进程因为机器内存不够被杀（Kotlin 那一步当时已经过了）；
+  这一轮机器上同时有别的任务在跑，空闲内存一直够不上跑整包，就只做了上面这一级。合并后打正式包时等于补上这一步。
+- `AndroidManifest.xml` 相对 master 没有任何改动（没有新权限）；`pubspec.yaml` 没有改动（没有新依赖）。
+- 真机上一概没验证：两种系统选择器的样子、大图降采样和拍摄方向摆正、背景在真屏幕上的观感和滚动流畅度。
+

@@ -331,6 +331,9 @@ void main() {
         expect(backdropStateOf(env).dark.brightness, -10, reason: '换图不丢效果');
         expect(backdropStateOf(env).light.file, light.file);
         expect(stored(env), hasLength(2));
+        // 截图从最上面开始：看得到“浅色 / 深色”那一条
+        await Scrollable.ensureVisible(tester.element(find.byKey(const Key('bg-slot'))), alignment: 0.5);
+        await settle(tester, rounds: 1);
         await shot(tester, 'bg-settings-dark-separate-$suffix');
       });
     });
