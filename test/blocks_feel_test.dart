@@ -233,6 +233,7 @@ void main() {
     expect(painterOf(tester).hints, isNull);
 
     // 按下态。
+    await rig.showTab(tester, '交互');
     await tester.tap(find.byKey(const ValueKey('bk-palette-tab-交互')));
     await tester.pumpAndSettle();
     final item = find.byKey(const ValueKey('bk-palette-item-block-alert'));
@@ -248,12 +249,20 @@ void main() {
     await tester.pumpAndSettle();
     expect(feel().scale, 1);
     expect(rig.edits, 0);
+    // 第 4 版：按住没挪就松手会问要不要加星；点菜单外面关掉，什么都不改。
+    expect(find.byKey(const ValueKey('bk-palette-star-toggle')), findsOneWidget);
+    await tester.tapAt(const Offset(195, 200));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('bk-palette-star-toggle')), findsNothing);
+    expect(rig.edits, 0);
 
     g = await rig.liftFromPalette(tester, '变量', 'expr-var');
     expect(painterOf(tester).hints, BkSnapKind.expr);
     await g.up();
     await tester.pumpAndSettle();
     expect(painterOf(tester).hints, isNull);
+    await tester.tapAt(const Offset(195, 200)); // 同上：关掉加星的小菜单
+    await tester.pumpAndSettle();
 
     // 删除：缩小 + 淡出，160 毫秒后才真的删。
     g = await rig.lift(tester, rig.grip(0, [lcStep(2)]));
@@ -386,6 +395,7 @@ void main() {
     expect(tester.getRect(arrow).bottom, lessThan(tester.getRect(find.byKey(const ValueKey('bk-dock'))).top));
 
     // 没有事件时点语句积木：提示 + 箭头再动两下。
+    await rig.showTab(tester, '交互');
     await tester.tap(find.byKey(const ValueKey('bk-palette-tab-交互')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('bk-palette-item-block-alert')));
@@ -442,6 +452,7 @@ void main() {
     await rig.pump(tester, reduceMotion: true);
     final arrow = find.byKey(const ValueKey('bk-empty-arrow'));
     final rest = tester.getCenter(arrow);
+    await rig.showTab(tester, '交互');
     await tester.tap(find.byKey(const ValueKey('bk-palette-tab-交互')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('bk-palette-item-block-alert')));

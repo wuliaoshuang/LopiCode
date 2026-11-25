@@ -18,6 +18,7 @@ import 'package:lopicode/blocks/block_canvas_layout.dart';
 import 'package:lopicode/blocks/block_geometry.dart';
 import 'package:lopicode/blocks/block_host.dart';
 import 'package:lopicode/blocks/block_layout.dart';
+import 'package:lopicode/blocks/block_motion.dart';
 import 'package:lopicode/blocks/block_ops.dart';
 import 'package:lopicode/lowcode/logic_expr.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
@@ -26,11 +27,17 @@ enum BkDragKind { statement, hat, expr }
 
 /// 从积木盒里拿出来的是什么（和积木盒控件里的那一项对应，这里不依赖界面）。
 class BkPaletteSource {
-  const BkPaletteSource(this.kind, this.id);
+  const BkPaletteSource(this.kind, this.id, {this.preset = const {}});
   final BkDragKind kind;
 
   /// 帽子模板的 id / 积木的 op / 表达式的 e。
   final String id;
+
+  /// 拿出来时顺手设好的“固定选项”参数（见 `BlockItemRef.preset`）。
+  final Map<String, String> preset;
+
+  LcBlock newBlock(BlockHost host) => host.newBlock(id)..args.addAll(preset);
+  Map<String, dynamic> newExpr(BlockHost host) => host.newExpr(id)..addAll(preset);
 }
 
 /// 现在能落在哪。
@@ -112,7 +119,7 @@ class BkDragSession {
     }
     final path = hit.block.path;
     final parent = path.sublist(0, path.length - 1);
-    final list = tree.listAt(parent, inElse: path.last.inElse);
+    final list = tree.listAt(parent, inElse: path.last.inElse, arm: path.last.arm);
     if (list == null || path.last.index >= list.length) return null;
     final tail = list.sublist(path.last.index);
     return BkDragSession._(
@@ -120,7 +127,7 @@ class BkDragSession {
       engine: engine,
       normal: normal,
       kind: BkDragKind.statement,
-      piece: engine.layoutStack(tail, parent: parent, inElse: path.last.inElse, startIndex: path.last.index),
+      piece: engine.layoutStack(tail, parent: parent, inElse: path.last.inElse, arm: path.last.arm, startIndex: path.last.index),
       scriptId: script.id,
       path: path,
       blocks: tail,
@@ -137,8 +144,8 @@ class BkDragSession {
       kind: source.kind,
       piece: piece,
       palette: source,
-      blocks: source.kind == BkDragKind.statement ? [host.newBlock(source.id)] : const [],
-      expr: source.kind == BkDragKind.expr ? host.newExpr(source.id) : null,
+      blocks: source.kind == BkDragKind.statement ? [source.newBlock(host)] : const [],
+      expr: source.kind == BkDragKind.expr ? source.newExpr(host) : null,
     );
   }
 
@@ -196,10 +203,10 @@ class BkDragSession {
   bool get isNew => palette != null;
 
   /// 落点阴影在哪一串的哪一段（语句积木才有）。
-  ({String scriptId, LcBlockPath parent, bool inElse, int start, int count})? get ghost {
+  BkRoom? get ghost {
     final t = target;
     if (t == null || kind != BkDragKind.statement) return null;
-    return (scriptId: t.scriptId, parent: t.snap.parent, inElse: t.snap.inElse, start: t.snap.index, count: blocks.length);
+    return (scriptId: t.scriptId, parent: t.snap.parent, inElse: t.snap.inElse, arm: t.snap.arm, start: t.snap.index, count: blocks.length);
   }
 
   Map<String, Offset> get _origins => {for (final p in normal.scripts) p.id: p.origin};
@@ -212,7 +219,7 @@ class BkDragSession {
     switch (kind) {
       case BkDragKind.statement:
         final start = path.last.index;
-        return bkEditedBody(tree.body, path.sublist(0, path.length - 1), path.last.inElse, (list) {
+        return bkEditedBody(tree.body, path.sublist(0, path.length - 1), path.last.inElse, arm: path.last.arm, (list) {
           if (start <= list.length) list.removeRange(start, list.length);
         });
       case BkDragKind.expr:
@@ -249,7 +256,11 @@ class BkDragSession {
     if (old != null && identical(old.snap, found.snap)) return false;
     final snap = found.snap;
     if (kind == BkDragKind.statement) {
-      final same = !isNew && found.script.id == scriptId && bkSameBlockPath(snap.parent, path.sublist(0, path.length - 1)) && (path.length == 1 || snap.inElse == path.last.inElse);
+      final same =
+          !isNew &&
+          found.script.id == scriptId &&
+          bkSameBlockPath(snap.parent, path.sublist(0, path.length - 1)) &&
+          (path.length == 1 || lcSameMouth(lcStep(0, inElse: snap.inElse, arm: snap.arm), path.last));
       target = BkDropTarget(scriptId: found.script.id, snap: snap, anchor: found.anchor, noop: same && snap.index == path.last.index);
     } else {
       final same = !isNew && found.script.id == scriptId && bkSameBlockPath(snap.parent, path) && snap.arg == arg && bkSameExprPath(snap.exprPath, exprPath);
@@ -279,7 +290,7 @@ class BkDragSession {
       display = base;
       return;
     }
-    final shown = bkEditedBody(body, t.snap.parent, t.snap.inElse, (list) => list.insertAll(t.snap.index.clamp(0, list.length), blocks));
+    final shown = bkEditedBody(body, t.snap.parent, t.snap.inElse, arm: t.snap.arm, (list) => list.insertAll(t.snap.index.clamp(0, list.length), blocks));
     // 只有落点所在的那一串要重排；别的串沿用“拿走以后”排好的（每换一个落点只排一串，不是整张画布）。
     final made = engine.layoutScript(tree, body: shown);
     final layouts = {
@@ -302,7 +313,7 @@ class BkDragSession {
     final parent = path.sublist(0, path.length - 1);
     for (final snap in placed.layout.snaps) {
       if (snap.kind != BkSnapKind.statement || snap.index != path.last.index || !bkSameBlockPath(snap.parent, parent)) continue;
-      if (path.length > 1 && snap.inElse != path.last.inElse) continue;
+      if (path.length > 1 && !lcSameMouth(lcStep(0, inElse: snap.inElse, arm: snap.arm), path.last)) continue;
       target = BkDropTarget(scriptId: id, snap: snap, anchor: placed.origin + snap.anchor, noop: true);
       _rebuildDisplay();
       return true;
@@ -331,7 +342,7 @@ class BkDragSession {
           rejectReason = '积木套得太深了（最多 ${LcBlock.maxDepth + 1} 层），放不进去。';
           return BkDropResult.rejected;
         }
-        if (host.script(t.scriptId)?.listAt(t.snap.parent, inElse: t.snap.inElse) == null) return BkDropResult.noop;
+        if (host.script(t.scriptId)?.listAt(t.snap.parent, inElse: t.snap.inElse, arm: t.snap.arm) == null) return BkDropResult.noop;
         return BkDropResult.applied;
       case BkDragKind.expr:
         if (t == null) {
@@ -363,9 +374,9 @@ class BkDragSession {
           final List<LcBlock> moving;
           final src = palette;
           if (src != null) {
-            moving = [host.newBlock(src.id)];
+            moving = [src.newBlock(host)];
           } else {
-            final list = host.script(scriptId!)?.listAt(path.sublist(0, path.length - 1), inElse: path.last.inElse);
+            final list = host.script(scriptId!)?.listAt(path.sublist(0, path.length - 1), inElse: path.last.inElse, arm: path.last.arm);
             if (list == null || path.last.index >= list.length) return;
             moving = list.sublist(path.last.index);
             list.removeRange(path.last.index, list.length);
@@ -373,14 +384,14 @@ class BkDragSession {
           final dst = host.script(t.scriptId);
           if (dst == null) return;
           for (var i = 0; i < moving.length; i++) {
-            dst.insertBlock(t.snap.parent, moving[i], inElse: t.snap.inElse, index: t.snap.index + i);
+            dst.insertBlock(t.snap.parent, moving[i], inElse: t.snap.inElse, arm: t.snap.arm, index: t.snap.index + i);
           }
           bkPushDown(host, engine, normal, t.scriptId);
           result = (
             scriptId: t.scriptId,
             path: [
               ...t.snap.parent,
-              lcStep(t.snap.index, inElse: t.snap.inElse),
+              lcStep(t.snap.index, inElse: t.snap.inElse, arm: t.snap.arm),
             ],
           );
         case BkDragKind.expr:
@@ -396,7 +407,7 @@ class BkDragSession {
           var removedAt = -1;
           List<dynamic>? fromList;
           if (src != null) {
-            moving = host.newExpr(src.id);
+            moving = src.newExpr(host);
           } else {
             fromTree = host.script(scriptId!);
             from = fromTree?.blockAt(path);
@@ -451,7 +462,7 @@ class BkDragSession {
         case BkDragKind.hat:
           done = host.removeScript(id);
         case BkDragKind.statement:
-          final list = host.script(id)?.listAt(path.sublist(0, path.length - 1), inElse: path.last.inElse);
+          final list = host.script(id)?.listAt(path.sublist(0, path.length - 1), inElse: path.last.inElse, arm: path.last.arm);
           if (list == null || path.last.index >= list.length) return;
           list.removeRange(path.last.index, list.length);
           done = true;

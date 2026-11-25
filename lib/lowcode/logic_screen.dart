@@ -8,6 +8,7 @@
 // - 从某个控件点进来（initialNodeId）：画布移到它的第一串事件并选中帽子；它还没有事件就提示一句，不再有“只看：…”的筛选标签。
 // - 所有改动都走 onEdit（每次一条撤销记录）；提交后从最近见到的文档重新读，不留着旧对象。
 import 'package:lopicode/blocks/block_editor_view.dart';
+import 'package:lopicode/blocks/block_palette_model.dart';
 import 'package:lopicode/blocks/block_panels_sheet.dart';
 import 'package:lopicode/lowcode/edit_types.dart';
 import 'package:lopicode/lowcode/logic_block_host.dart';
@@ -16,6 +17,7 @@ import 'package:lopicode/lowcode/logic_text.dart';
 import 'package:lopicode/lowcode/logic_vars_sheet.dart';
 import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/app_ref.dart';
 import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -36,6 +38,8 @@ class LogicScreen extends StatefulWidget {
 }
 
 class _LogicScreenState extends State<LogicScreen> {
+  late final BlockStars? _stars = blockStarsOf(context, 'logic');
+
   late final LogicBlockHost _host = LogicBlockHost(
     doc: widget.doc,
     onEdit: widget.onEdit,
@@ -109,6 +113,7 @@ class _LogicScreenState extends State<LogicScreen> {
       host: _host,
       title: '积木逻辑',
       dockMemoryKey: 'logic',
+      stars: _stars,
       subtitle: errors > 0 ? blockErrorsBrief(errors) : null,
       focusScriptId: _focus,
       menuExtra: _menuExtra,

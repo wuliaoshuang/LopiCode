@@ -17,8 +17,11 @@ import 'package:lopicode/blocks/block_canvas_layout.dart';
 import 'package:lopicode/blocks/block_geometry.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 
-/// 让出来的一截：哪一串、哪一列（`parent` + `inElse`）、从第几块起、一共几块。
-typedef BkRoom = ({String scriptId, LcBlockPath parent, bool inElse, int start, int count});
+/// 让出来的一截：哪一串、哪一列（`parent` + `inElse`，多口积木的第几段用 `arm`，不是段填 -1）、从第几块起、一共几块。
+typedef BkRoom = ({String scriptId, LcBlockPath parent, bool inElse, int arm, int start, int count});
+
+/// 一串里的一段积木（[BkRoom] 去掉“哪一串”）：画落点阴影、轻弹用。
+typedef BkRange = ({LcBlockPath parent, bool inElse, int arm, int start, int count});
 
 /// 一块积木会跟着让位变的那部分外形（画布坐标）。
 class BkFrame {
@@ -73,10 +76,10 @@ LcBlockPath? bkPathBeforeRoom(LcBlockPath p, BkRoom? room) {
   final n = room.parent.length;
   if (p.length <= n || !bkSameBlockPath(room.parent, p.sublist(0, n))) return p;
   final step = p[n];
-  if (n > 0 && step.inElse != room.inElse) return p;
+  if (n > 0 && !lcSameMouth(step, lcStep(0, inElse: room.inElse, arm: room.arm))) return p;
   if (step.index < room.start) return p;
   if (step.index < room.start + room.count) return null;
-  return [...p.sublist(0, n), lcStep(step.index - room.count, inElse: step.inElse), ...p.sublist(n + 1)];
+  return [...p.sublist(0, n), lcStep(step.index - room.count, inElse: step.inElse, arm: step.arm), ...p.sublist(n + 1)];
 }
 
 /// 一块积木在整个拖动期间不变的名字。
@@ -85,7 +88,7 @@ String bkMotionKey(String scriptId, LcBlockPath path, {bool hat = false}) {
   final sb = StringBuffer(scriptId)..write('/');
   for (var i = 0; i < path.length; i++) {
     sb
-      ..write(i > 0 && path[i].inElse ? 'e' : 'b')
+      ..write(i == 0 ? 'b' : (path[i].arm >= 0 ? 'a${path[i].arm}_' : (path[i].inElse ? 'e' : 'b')))
       ..write(path[i].index)
       ..write('.');
   }

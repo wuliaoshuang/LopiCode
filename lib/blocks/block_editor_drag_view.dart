@@ -112,7 +112,7 @@ mixin BkEditorDrag on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Tick
       BlockPaletteKind.block => BkDragKind.statement,
       BlockPaletteKind.expr => BkDragKind.expr,
     };
-    _begin(BkDragSession.fromPalette(host, engine, layout, BkPaletteSource(kind, item.id), item.layout), viewOf(global), grab);
+    _begin(BkDragSession.fromPalette(host, engine, layout, BkPaletteSource(kind, item.id, preset: item.preset), item.layout), viewOf(global), grab);
   }
 
   void dragMoveGlobal(Offset global) => dragMove(viewOf(global));

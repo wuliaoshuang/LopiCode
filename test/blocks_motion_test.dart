@@ -61,14 +61,14 @@ void main() {
   });
 
   test('路径换算：让出一截以后的路径换回原来的；落点阴影里的没有名字', () {
-    const BkRoom room = (scriptId: 's', parent: [], inElse: false, start: 1, count: 2);
+    const BkRoom room = (scriptId: 's', parent: [], inElse: false, arm: -1, start: 1, count: 2);
     expect(bkPathBeforeRoom([lcStep(0)], room), [lcStep(0)]);
     expect(bkPathBeforeRoom([lcStep(1)], room), isNull);
     expect(bkPathBeforeRoom([lcStep(2), lcStep(0)], room), isNull, reason: '阴影里面的子积木也算阴影');
     expect(bkPathBeforeRoom([lcStep(3)], room), [lcStep(1)]);
     expect(bkPathBeforeRoom([lcStep(4), lcStep(0, inElse: true)], room), [lcStep(2), lcStep(0, inElse: true)]);
     // 口里的一截：只动同一个口里的。
-    final BkRoom inner = (scriptId: 's', parent: [lcStep(1)], inElse: true, start: 0, count: 1);
+    final BkRoom inner = (scriptId: 's', parent: [lcStep(1)], inElse: true, arm: -1, start: 0, count: 1);
     expect(bkPathBeforeRoom([lcStep(1), lcStep(0)], inner), [lcStep(1), lcStep(0)], reason: '“那么”口里的不受“否则”口影响');
     expect(bkPathBeforeRoom([lcStep(1), lcStep(0, inElse: true)], inner), isNull);
     expect(bkPathBeforeRoom([lcStep(1), lcStep(1, inElse: true)], inner), [lcStep(1), lcStep(0, inElse: true)]);

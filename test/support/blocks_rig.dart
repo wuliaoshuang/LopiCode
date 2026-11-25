@@ -220,6 +220,16 @@ class Rig {
     return g;
   }
 
+  /// 把积木盒的某个页签滑到看得见（第 4 版起页签前面多了放大镜和“常用”，靠后的页签一开始在屏幕外）。
+  Future<void> showTab(WidgetTester tester, String category) async {
+    final tab = find.byKey(ValueKey('bk-palette-tab-$category'));
+    final tabs = find.byKey(const ValueKey('bk-palette-tabs'));
+    for (var i = 0; i < 8 && tab.hitTestable().evaluate().isEmpty; i++) {
+      await tester.drag(tabs, const Offset(-120, 0));
+      await tester.pumpAndSettle();
+    }
+  }
+
   /// 分几步挪过去，中途推帧。
   Future<void> glide(WidgetTester tester, TestGesture g, Offset to, {int steps = 6}) async {
     final start = _last ?? to;

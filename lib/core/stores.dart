@@ -85,6 +85,8 @@ class SettingsStore {
 
 /// 设置项的键名集中在这里。
 class SettingKeys {
+  /// 积木盒里加的星：后面接编辑器种类（`blocks.stars.logic`、`blocks.stars.backend`），值是一张字符串表。
+  static const blockStarsPrefix = 'blocks.stars.';
   static const agentBaseUrl = 'agent.baseUrl';
   static const agentModel = 'agent.model';
   static const themeMode = 'ui.themeMode'; // system / light / dark

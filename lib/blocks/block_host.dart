@@ -32,7 +32,17 @@ abstract final class BlockColorKey {
   static const String response = 'response';
   static const String unknown = 'unknown';
 
-  static const List<String> all = [event, variable, widget, control, action, network, value, operator, data, request, response, unknown];
+  // 第 4 版语言核心的分类（设计稿 9.1）。变量、运算、流程沿用上面的 variable / operator / control。
+  static const String function = 'function';
+  static const String text = 'text';
+  static const String list = 'list';
+  static const String dict = 'dict';
+  static const String classes = 'class';
+  static const String error = 'error';
+  static const String async = 'async';
+  static const String custom = 'custom';
+
+  static const List<String> all = [event, variable, widget, control, action, network, value, operator, data, request, response, unknown, function, text, list, dict, classes, error, async, custom];
 }
 
 /// 帽子块（一串积木最上面那块：“当 [按钮 提交] 被点击”“GET [/todos/:id]”）上的一段：文字，或一个可以点的槽位。
@@ -72,9 +82,53 @@ class BlockHatTemplate {
   final String hint;
 }
 
-/// 积木盒的一页。一页里可以同时有帽子、语句积木、表达式；按这个顺序排。
+/// 积木盒里拿得出来的东西是哪一种。
+enum BlockPaletteKind { hat, block, expr }
+
+/// 指到积木盒里的一样东西：`id` 是帽子模板的 id / 积木的 op / 表达式的 e。
+/// `preset`＝拿出来时顺手把这几个“固定选项”参数设好（“一块顶多块”的积木搜到某一种时用：搜“乘”拿出来的就是 ×）。
+class BlockItemRef {
+  const BlockItemRef(this.kind, this.id, {this.preset = const {}});
+  const BlockItemRef.hat(this.id) : kind = BlockPaletteKind.hat, preset = const {};
+  const BlockItemRef.block(this.id, {this.preset = const {}}) : kind = BlockPaletteKind.block;
+  const BlockItemRef.expr(this.id, {this.preset = const {}}) : kind = BlockPaletteKind.expr;
+
+  final BlockPaletteKind kind;
+  final String id;
+  final Map<String, String> preset;
+
+  /// 存设置、当 key 用的名字（不带 preset）：`block:if`、`expr:bin`、`hat:click`。
+  String get token => '${kind.name}:$id';
+
+  /// 把 [token] 读回来；格式不对返回 null。
+  static BlockItemRef? parse(Object? token) {
+    if (token is! String) return null;
+    final colon = token.indexOf(':');
+    if (colon <= 0 || colon == token.length - 1) return null;
+    for (final k in BlockPaletteKind.values) {
+      if (k.name == token.substring(0, colon)) return BlockItemRef(k, token.substring(colon + 1));
+    }
+    return null;
+  }
+}
+
+/// 积木盒一页里的一个小标题分组（第二级分类）：“造”“取”“改”“查”这种。
+class BlockGroup {
+  const BlockGroup(this.label, {this.hats = const [], this.blocks = const [], this.exprs = const []});
+
+  /// 小标题上的字。
+  final String label;
+  final List<BlockHatTemplate> hats;
+  final List<String> blocks;
+  final List<String> exprs;
+
+  bool get isEmpty => hats.isEmpty && blocks.isEmpty && exprs.isEmpty;
+}
+
+/// 积木盒的一页（第一级分类，一页一种颜色）。一页里可以同时有帽子、语句积木、表达式；按这个顺序排。
+/// 积木多的页可以再分小标题（[groups]）：先排不在任何分组里的（[hats] / [blocks] / [exprs]），再一组一组往下排。
 class BlockCategory {
-  const BlockCategory({required this.id, required this.label, required this.colorKey, this.hats = const [], this.blocks = const [], this.exprs = const []});
+  const BlockCategory({required this.id, required this.label, required this.colorKey, this.hats = const [], this.blocks = const [], this.exprs = const [], this.groups = const []});
 
   final String id;
   final String label;
@@ -89,7 +143,15 @@ class BlockCategory {
   /// 表达式的 e。
   final List<String> exprs;
 
-  bool get isEmpty => hats.isEmpty && blocks.isEmpty && exprs.isEmpty;
+  /// 页内的小标题分组（第二级分类）；空＝这一页不分组。
+  final List<BlockGroup> groups;
+
+  bool get isEmpty => hats.isEmpty && blocks.isEmpty && exprs.isEmpty && groups.every((g) => g.isEmpty);
+
+  /// 这一页全部的帽子 / 积木 / 表达式（不分组的在前，各组依次在后）。
+  List<BlockHatTemplate> get allHats => groups.isEmpty ? hats : [...hats, for (final g in groups) ...g.hats];
+  List<String> get allBlocks => groups.isEmpty ? blocks : [...blocks, for (final g in groups) ...g.blocks];
+  List<String> get allExprs => groups.isEmpty ? exprs : [...exprs, for (final g in groups) ...g.exprs];
 }
 
 /// 参数的一个可选项（变量、控件、集合、固定选项、帽子槽位都用它）。
@@ -243,14 +305,14 @@ abstract class BlockHost {
   /// 这种积木 / 表达式用哪种颜色。默认：它在 [categories] 的哪一页就用哪页的颜色；哪页都不在是 unknown。可覆盖。
   String blockColorKey(String op) {
     for (final c in categories) {
-      if (c.blocks.contains(op)) return c.colorKey;
+      if (c.allBlocks.contains(op)) return c.colorKey;
     }
     return BlockColorKey.unknown;
   }
 
   String exprColorKey(String kind) {
     for (final c in categories) {
-      if (c.exprs.contains(kind)) return c.colorKey;
+      if (c.allExprs.contains(kind)) return c.colorKey;
     }
     return BlockColorKey.unknown;
   }
@@ -259,11 +321,28 @@ abstract class BlockHost {
   /// 返回 null＝用通用排法（积木名 + 每个参数“参数名 [槽]”+ body 的叫法）。模板里没提到的参数会接在后面。可覆盖。
   String? blockSentence(String op) => null;
 
+  /// 多口积木每一段的横栏上的话（见 [LcArmSpec]），例如 `否则如果 {cond} 那么`、`是 {value} 时`；`{参数名}` 是段自己的参数。
+  /// 返回 null＝用通用排法（段名 + 每个参数的槽）。可覆盖。
+  String? armSentence(String op) => null;
+
   /// 表达式上的话，同上，例如 `{l} {op} {r}`、`不是 {x}`。可覆盖。
   String? exprSentence(String kind) => null;
 
   /// 这个表达式算出来是不是“是 / 否”（是＝画成六边形）。可覆盖。
   bool isBooleanExpr(Map<String, dynamic> expr) => false;
+
+  // —— 积木盒 ——
+
+  /// 积木的别名（搜索用）：积木上没写、但人会这么找它的词，例如“重复”的别名 `循环` `for` `遍历`。可覆盖。
+  List<String> aliasesOf(BlockItemRef item) => const [];
+
+  /// “一块顶多块”：这块积木靠积木上的下拉能变成的那几种（每种一个带 `preset` 的 [BlockItemRef]，如 `expr:bin` 的 ＋ − × ÷）。
+  /// 积木盒里它只占一个位置；搜索时每一种都能按自己的字（下拉上显示的字 + [aliasesOf] 给这一种的别名）搜到，拿出来就是那一种。
+  /// 空表＝没有变体。可覆盖。
+  List<BlockItemRef> variantsOf(BlockItemRef item) => const [];
+
+  /// 新文档（一块积木都还没有）时“常用”页放哪些：一套入门积木。空表＝编辑器从各页挑前几块。可覆盖。
+  List<BlockItemRef> get starterItems => const [];
 
   // —— 脚本 ——
 
@@ -300,6 +379,18 @@ abstract class BlockHost {
   /// 新建一块积木 / 一个表达式，参数填好默认值（宿主会顺手挑第一个变量、控件之类）。
   LcBlock newBlock(String op);
   Map<String, dynamic> newExpr(String kind);
+
+  /// 给多口积木新加的一段（见 [LcArmSpec]）：参数填好默认值。默认按段的参数说明填（表达式用 [defaultExpr]，固定选项挑第一个）。
+  /// 要在 [edit] 里用。可覆盖。
+  LcArm newArm(LcBlock block) {
+    final spec = blockSpec(block.op)?.arms;
+    return LcArm(
+      args: {
+        for (final a in spec?.args ?? const <LcArgSpec>[])
+          if (a.kind == LcArgKind.expr) a.name: defaultExpr(a) else if (a.kind == LcArgKind.choice && a.choices.isNotEmpty) a.name: a.choices.first else if (!a.optional) a.name: '',
+      },
+    );
+  }
 
   /// 一个表达式槽被拖空以后放回什么。默认按参数想要的类型给一个字面量。可覆盖。
   Map<String, dynamic> defaultExpr(LcArgSpec arg) => defaultExprFor(arg.valueType);
@@ -408,6 +499,9 @@ String defaultBlockSentence(LcBlockSpec spec) {
   if (spec.bodyLabel != null) b.write(' ${spec.bodyLabel}');
   return b.toString();
 }
+
+/// 段的通用排法：段名，后面每个参数一个槽。
+String defaultArmSentence(LcArmSpec spec) => [spec.label, for (final a in spec.args) '{${a.name}}'].join(' ');
 
 /// 表达式的通用排法：没有参数就是名字本身；只有一个参数就只有那个槽；多个参数依次排开。
 String defaultExprSentence(LcExprSpec spec) {

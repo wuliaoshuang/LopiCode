@@ -7,6 +7,8 @@
 /// - 一块积木上的字和槽位从左到右排，超过 [BkMetrics.maxBlockWidth] 就在积木内部换行；每一行里的东西竖直居中。
 /// - 表达式块自己也这样排（可以多行），整体当成上一层的一样东西；越套越窄，但不窄过 [BkMetrics.minExprWidth]。
 /// - 语句积木上下紧贴（上一块的凸起正好落进下一块的凹口）。C 形块的口里的积木往右缩进一个“胳膊”的宽度。
+/// - 多口积木（如果…否则如果…否则、分情况）：开头口 → 每段一条横栏（上面是一句带槽的话）加一个口 → 收尾口；
+///   整块的宽度取头和各段横栏里最宽的；能增减时横栏右边有“−”、底条上有“＋”（见 [BkControl]）。
 library;
 
 import 'dart:math' as math;
@@ -107,10 +109,23 @@ class BlockLayoutEngine {
 
   /// 排一截没有帽子的积木（积木盒里的样品、拖在手上的那一截）。
   /// `parent / inElse / startIndex` 说明这一截原来在哪（路径照原样算）；样品不用给。
-  BkScriptLayout layoutStack(List<LcBlock> list, {LcBlockPath parent = const [], bool inElse = false, int startIndex = 0}) {
+  /// `arm >= 0`＝原来在 `parent` 第几段的口里。
+  /// `controls: false`＝不带“＋ / −”小按钮（积木盒里的样品：那里点不了，画出来只会骗人）。
+  BkScriptLayout layoutStack(List<LcBlock> list, {LcBlockPath parent = const [], bool inElse = false, int arm = -1, int startIndex = 0, bool controls = true}) {
     final blocks = <BkBlock>[];
     final snaps = <BkSnap>[];
-    _list(list, parent, inElse, 0, 0, blocks, snaps, parent.length, metrics.minBlockWidth, startIndex: startIndex, edgeSnaps: false);
+    _controls = controls;
+    try {
+      return _stack(list, parent, inElse, arm, startIndex, blocks, snaps);
+    } finally {
+      _controls = true;
+    }
+  }
+
+  bool _controls = true;
+
+  BkScriptLayout _stack(List<LcBlock> list, LcBlockPath parent, bool inElse, int arm, int startIndex, List<BkBlock> blocks, List<BkSnap> snaps) {
+    _list(list, parent, inElse, 0, 0, blocks, snaps, parent.length, metrics.minBlockWidth, startIndex: startIndex, edgeSnaps: false, arm: arm);
     return _finish('', blocks, snaps);
   }
 
@@ -331,28 +346,32 @@ class BlockLayoutEngine {
     double fallbackWidth, {
     int startIndex = 0,
     bool edgeSnaps = true,
+    int arm = -1,
   }) {
     if (depth > kBkMaxBlockDepth) return y;
     var width = fallbackWidth;
     for (var i = 0; i < list.length; i++) {
       final index = startIndex + i;
       final snapAt = snaps.length;
-      final b = _block(list[i], [...parent, lcStep(index, inElse: inElse)], x, y, out, snaps, depth);
+      final b = _block(list[i], [...parent, lcStep(index, inElse: inElse, arm: arm)], x, y, out, snaps, depth);
       width = b.head.width;
       // 这块上方的插入位（排在这块自己的那些拼接点前面）。
-      if (edgeSnaps || i > 0) snaps.insert(snapAt, BkSnap.statement(parent: parent, inElse: inElse, index: index, anchor: Offset(x, y), width: width));
+      if (edgeSnaps || i > 0) snaps.insert(snapAt, BkSnap.statement(parent: parent, inElse: inElse, arm: arm, index: index, anchor: Offset(x, y), width: width));
       y = b.rect.bottom;
     }
-    if (edgeSnaps) snaps.add(BkSnap.statement(parent: parent, inElse: inElse, index: startIndex + list.length, anchor: Offset(x, y), width: width));
+    if (edgeSnaps) snaps.add(BkSnap.statement(parent: parent, inElse: inElse, arm: arm, index: startIndex + list.length, anchor: Offset(x, y), width: width));
     return y;
   }
 
   BkBlock _block(LcBlock block, LcBlockPath path, double x, double y, List<BkBlock> out, List<BkSnap> snaps, int depth) {
     final m = metrics;
     final spec = host.blockSpec(block.op);
+    final armSpec = spec?.arms;
+    // 收尾口可有可无、用户把它收起来了（里面还有积木的坏数据照样画出来）。
+    final tailOff = armSpec?.tailOptional == true && block.noElse;
     final hasBody = spec?.hasBody == true || block.body.isNotEmpty;
-    final hasElse = spec?.hasElse == true || block.orElse.isNotEmpty;
-    final mouthed = hasBody || hasElse;
+    final hasElse = (spec?.hasElse == true && !tailOff) || block.orElse.isNotEmpty;
+    final mouthed = hasBody || hasElse || block.arms.isNotEmpty || armSpec != null;
     final b = BkBlock(
       path: path,
       block: block,
@@ -388,7 +407,47 @@ class BlockLayoutEngine {
     }
     final size = _flow(items, inner);
     final headH = math.max(size.height + m.padV * 2, m.minBlockHeight);
-    final w = math.max(size.width + m.padH * 2, mouthed ? m.minMouthBlockWidth : m.minBlockWidth);
+    b.headSlots = b.slots.length;
+    b.headLabels = b.labels.length;
+
+    // 各段横栏上的话先排好（要先知道它们多宽，才知道整块多宽；也得赶在排口里的积木之前，那时 _curBlock 就换了）。
+    final canRemove = _controls && armSpec != null && block.arms.length > armSpec.min;
+    final ctrlRoom = m.controlD + m.gap;
+    final armInner = inner - (canRemove ? ctrlRoom : 0);
+    final armSentence = armSpec == null ? null : (host.armSentence(block.op) ?? defaultArmSentence(armSpec));
+    final rows = <({List<_Item> items, List<BkLabel> labels, List<BkSlot> slots, Size size})>[];
+    for (var i = 0; i < block.arms.length; i++) {
+      final rowItems = <_Item>[];
+      final labels = <BkLabel>[];
+      final slots = <BkSlot>[];
+      if (armSpec == null || armSentence == null) {
+        // 规格里没说这种积木有段（坏数据 / 宿主还没跟上）：照样画出来，里面的积木不丢。
+        labels.add(_label('另一段', armInner));
+        rowItems.add(_Item.label(labels.last));
+      } else {
+        for (final p in parseBlockSentence(armSentence, armSpec.args)) {
+          final a = p.arg == null ? null : armSpec.arg(p.arg!);
+          if (a == null) {
+            labels.add(_label(p.text, armInner));
+            rowItems.add(_Item.label(labels.last));
+          } else {
+            for (final s in _argSlots(a, block.arms[i].args[a.name], lcArmArg(i, a.name), const [], armInner, 0)) {
+              slots.add(s);
+              rowItems.add(_Item.slot(s));
+            }
+          }
+        }
+      }
+      rows.add((items: rowItems, labels: labels, slots: slots, size: _flow(rowItems, armInner)));
+    }
+    final elseLabel = spec?.elseLabel ?? '否则';
+    final canHideTail = _controls && hasElse && armSpec?.tailOptional == true;
+
+    var w = math.max(size.width + m.padH * 2, mouthed ? m.minMouthBlockWidth : m.minBlockWidth);
+    for (final r in rows) {
+      w = math.max(w, r.size.width + m.padH * 2 + (canRemove ? ctrlRoom : 0));
+    }
+    if (canHideTail) w = math.max(w, measure(elseLabel) + m.padH * 2 + ctrlRoom);
     for (final it in items) {
       it.moveTo(it.rect.topLeft + Offset(x + m.padH, y + (headH - size.height) / 2));
     }
@@ -396,25 +455,49 @@ class BlockLayoutEngine {
     _exprSnaps(b.slots, path, snaps);
 
     var cy = y + headH;
-    void mouth(bool inElse, List<LcBlock> list, String? barLabel) {
-      Rect? bar;
-      BkLabel? label;
-      if (barLabel != null) {
-        bar = Rect.fromLTWH(x, cy, w, m.dividerH);
-        final lw = math.min(measure(barLabel), w - m.padH * 2);
-        label = BkLabel(barLabel, Rect.fromLTWH(x + m.padH, cy + (m.dividerH - m.textH) / 2, lw, m.textH));
-        cy += m.dividerH;
-      }
-      final bottom = _list(list, path, inElse, x + m.armW, cy, out, snaps, depth + 1, w - m.armW);
+    Rect controlAt(double top, double barH) => Rect.fromLTWH(x + w - m.padH - m.controlD + 2, top + (barH - m.controlD) / 2, m.controlD, m.controlD);
+    void open(BkMouth mouth, List<LcBlock> list) {
+      final bottom = _list(list, path, mouth.inElse, x + m.armW, cy, out, snaps, depth + 1, w - m.armW, arm: mouth.arm);
       final h = math.max(m.mouthMinH, bottom - cy);
-      b.mouths.add(BkMouth(inElse: inElse, rect: Rect.fromLTWH(x + m.armW, cy, w - m.armW, h), bar: bar, label: label));
+      mouth.rect = Rect.fromLTWH(x + m.armW, cy, w - m.armW, h);
+      b.mouths.add(mouth);
       cy += h;
     }
 
-    if (hasBody) mouth(false, block.body, null);
+    if (hasBody) open(BkMouth(inElse: false, rect: Rect.zero), block.body);
+    for (var i = 0; i < block.arms.length; i++) {
+      final r = rows[i];
+      // 段不带参数（“出错了”）用矮横栏；带槽的和积木头一样高。
+      final barH = r.slots.isEmpty ? m.dividerH : math.max(r.size.height + m.padV * 2, m.minBlockHeight);
+      for (final it in r.items) {
+        it.moveTo(it.rect.topLeft + Offset(x + m.padH, cy + (barH - r.size.height) / 2));
+      }
+      final mouth = BkMouth(inElse: false, arm: i, rect: Rect.zero, bar: Rect.fromLTWH(x, cy, w, barH))
+        ..labels.addAll(r.labels)
+        ..slots.addAll(r.slots);
+      b.labels.addAll(r.labels);
+      b.slots.addAll(r.slots);
+      _exprSnaps(r.slots, path, snaps);
+      if (canRemove) b.controls.add(BkControl(kind: BkControlKind.removeArm, arm: i, mouth: b.mouths.length, rect: controlAt(cy, barH)));
+      cy += barH;
+      open(mouth, block.arms[i].body);
+    }
     // 只有“否则”没有 body 的（坏数据）也照样画出来，口上的标签照常写。
-    if (hasElse) mouth(true, block.orElse, spec?.elseLabel ?? '否则');
-    if (mouthed) cy += m.footerH;
+    if (hasElse) {
+      final bar = Rect.fromLTWH(x, cy, w, m.dividerH);
+      final lw = math.min(measure(elseLabel), w - m.padH * 2 - (canHideTail ? ctrlRoom : 0));
+      final label = BkLabel(elseLabel, Rect.fromLTWH(x + m.padH, cy + (m.dividerH - m.textH) / 2, lw, m.textH));
+      if (canHideTail) b.controls.add(BkControl(kind: BkControlKind.removeTail, mouth: b.mouths.length, rect: controlAt(cy, m.dividerH)));
+      cy += m.dividerH;
+      open(BkMouth(inElse: true, rect: Rect.zero, bar: bar, label: label), block.orElse);
+    }
+    if (mouthed) {
+      // 还能加段（或把收起来的收尾口加回来）：底条加高，左边放一个“＋”。
+      final canAdd = _controls && armSpec != null && (block.arms.length < math.min(armSpec.max, LcBlock.maxArms) || (armSpec.tailOptional && spec?.hasElse == true && !hasElse));
+      final footH = canAdd ? m.addFooterH : m.footerH;
+      if (canAdd) b.controls.add(BkControl(kind: BkControlKind.add, rect: Rect.fromLTWH(x + m.padH - 2, cy + (footH - m.controlD) / 2, m.controlD, m.controlD)));
+      cy += footH;
+    }
     b.rect = Rect.fromLTWH(x, y, w, cy - y);
     return b;
   }

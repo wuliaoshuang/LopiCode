@@ -523,12 +523,12 @@ class BkWorkspacePainter extends CustomPainter {
         selected: sel != null && sel.path.isNotEmpty ? sel.path : null,
         selectedHat: sel != null && sel.path.isEmpty,
         flash: sel == null ? 0 : flash,
-        ghostRange: g == null ? null : (parent: g.parent, inElse: g.inElse, start: g.start, count: g.count),
+        ghostRange: g == null ? null : (parent: g.parent, inElse: g.inElse, arm: g.arm, start: g.start, count: g.count),
         ghostAlpha: ghostAlpha,
         clip: visible.shift(-s.origin),
         pose: m == null ? null : (b) => m.frameOf(b, motionT)?.shift(-s.origin),
         pulse: pu?.t,
-        pulseRange: pr == null ? null : (parent: pr.parent, inElse: pr.inElse, start: pr.start, count: pr.count),
+        pulseRange: pr == null ? null : (parent: pr.parent, inElse: pr.inElse, arm: pr.arm, start: pr.start, count: pr.count),
         pulseSlot: pu?.slot,
         selectedSlot: sl == null ? null : (block: sl.block, arg: sl.arg, path: sl.path),
         slotColor: sl != null && sl.warn ? palette.warning : null,
@@ -557,7 +557,8 @@ class BkWorkspacePainter extends CustomPainter {
       if (snap.kind != hints) continue;
       if (room != null) {
         // 落点阴影自己（上下两头）和它里面的位置不标。
-        final sameList = bkSameBlockPath(snap.parent, room.parent) && (room.parent.isEmpty || snap.inElse == room.inElse);
+        final sameList =
+            bkSameBlockPath(snap.parent, room.parent) && (room.parent.isEmpty || lcSameMouth(lcStep(0, inElse: snap.inElse, arm: snap.arm), lcStep(0, inElse: room.inElse, arm: room.arm)));
         if (snap.kind == BkSnapKind.statement && sameList && snap.index >= room.start && snap.index <= room.start + room.count) continue;
         if (snap.parent.isNotEmpty && bkPathBeforeRoom(snap.parent, room) == null) continue;
       }

@@ -91,6 +91,36 @@ abstract class BlockHost {
 积木上的话用模板（`{参数名}`）：模板里没提到的参数会自动接在后面；有 body 的积木，第一个口的叫法写在模板末尾（“如果 {cond} 那么”），
 第二个口的叫法（`elseLabel`）画在两个口之间的横栏上。表达式只有一个直接填的参数（文字 / 数字 / 是否）时画成“光杆”输入框，不包彩色外壳。
 
+#### 第 4 版加的接口（2026-11-25，只增不改；现有两个宿主一行没动）
+
+完整说明、存盘例子、给第三步的接法见 [blocks-v4-language-design.md](blocks-v4-language-design.md) 的“实施记录·阶段 1·编辑器”。这里只列有什么。
+
+```dart
+// 多口积木（口数可增减）——规格（lib/lowcode/logic_blocks.dart）
+LcBlockSpec(..., arms: LcArmSpec('否则如果', [条件参数], min: 0, max: 16, tailOptional: true))
+
+// 模型（lib/lowcode/logic_model.dart）
+class LcArm { Map<String, dynamic> args; List<LcBlock> body; }
+LcBlock.arms            // List<LcArm>，空＝老样子
+LcBlock.noElse          // true＝收尾口被收起来了
+lcArmArg(段号, 名字)     // '@0:cond'：段参数的地址，argValue / setArgValue / BlockIssue.arg 都认
+lcStep(index, {inElse, arm})   // 路径的一步多了 arm（-1＝不在段里）
+
+// 宿主（lib/blocks/block_host.dart），全部可覆盖、有默认实现
+String? armSentence(String op);                    // 段横栏上的话：'否则如果 {cond}'、'是 {value} 时'
+LcArm newArm(LcBlock block);                       // 点“＋”时新的一段长什么样
+List<String> aliasesOf(BlockItemRef item);         // 搜索用的别名
+List<BlockItemRef> variantsOf(BlockItemRef item);  // “一块顶多块”：下拉能变成的那几种
+List<BlockItemRef> get starterItems;               // 新文档“常用”页的入门积木
+BlockCategory(..., groups: [BlockGroup('读', exprs: [...]), ...])   // 第二级小标题
+BlockItemRef.hat(id) / .block(op, {preset}) / .expr(kind, {preset}) // 积木盒里的一样东西
+
+// 编辑器（lib/blocks/block_editor_view.dart）
+BlockEditorView(host: ..., stars: BlockStars?)     // 加星存哪：应用里用 blockStarsOf(context, '种类')
+```
+
+颜色键补了 8 个：function / text / list / dict / classes / error / async / custom（共 20 个）。
+
 ### 几何与拼接（给做拖拽的人，`lib/blocks/block_geometry.dart`、`block_layout.dart`、`block_canvas_layout.dart`）
 
 - `BlockLayoutEngine(host, measure)`：`layoutScript(tree)`（帽子 + 整串）、`layoutStack(blocks, parent:, inElse:, startIndex:)`（拖在手上的一截 / 样品，

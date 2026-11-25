@@ -38,6 +38,9 @@ mixin BkEditorEdit on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Tick
 
   void toast(String text, {String? actionLabel, VoidCallback? onAction});
 
+  /// 点到了多口积木上的小按钮（加一段 / 删一段 / 收起收尾口）。实现在 block_editor_arms_view.dart。
+  void onControlTap(BkPlaced script, BkHit hit);
+
   /// 输入框最窄多宽（画布尺寸）：空着的时候也点得中、看得见光标。
   static const double editMinWidth = 44;
 
@@ -113,6 +116,7 @@ mixin BkEditorEdit on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Tick
   @override
   void onTapHit(BkPlaced script, BkHit hit) {
     commitEdit();
+    if (hit.control != null) return onControlTap(script, hit);
     final slot = hit.slot;
     final sel = BlockSelection(script.id, hit.block.isHat ? const [] : hit.block.path);
     if (slot == null) {
@@ -471,7 +475,7 @@ mixin BkEditorEdit on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Tick
     }
     final block = tree.blockAt(sel.path);
     if (block == null) return;
-    final inside = bkCountBlocks(block.body) + bkCountBlocks(block.orElse);
+    final inside = bkCountBlocks([block]) - 1;
     if (inside > 0 && !await confirmDialog(context, title: '连里面的一起删？', message: '这块积木里面还有 $inside 块积木，会一起删掉。可以用撤销找回来。', confirmLabel: '删除', danger: true)) return;
     if (!mounted) return;
     unawaited(HapticFeedback.mediumImpact());
@@ -491,12 +495,12 @@ mixin BkEditorEdit on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Tick
       final tree = host.script(sel.scriptId);
       final block = tree?.blockAt(sel.path);
       if (tree == null || block == null) return;
-      ok = tree.insertBlock(parent, block.clone(), inElse: step.inElse, index: step.index + 1);
+      ok = tree.insertBlock(parent, block.clone(), inElse: step.inElse, arm: step.arm, index: step.index + 1);
       if (ok) bkPushDown(host, engine, before, sel.scriptId);
     });
     if (!ok) return toast('积木套得太深了，复制不了。');
-    setState(() => selection = BlockSelection(sel.scriptId, [...parent, lcStep(step.index + 1, inElse: step.inElse)]));
-    pulseBlocks(sel.scriptId, range: (scriptId: sel.scriptId, parent: parent, inElse: step.inElse, start: step.index + 1, count: 1));
+    setState(() => selection = BlockSelection(sel.scriptId, [...parent, lcStep(step.index + 1, inElse: step.inElse, arm: step.arm)]));
+    pulseBlocks(sel.scriptId, range: (scriptId: sel.scriptId, parent: parent, inElse: step.inElse, arm: step.arm, start: step.index + 1, count: 1));
   }
 
   // —— 点一下积木盒里的积木：快捷添加 ——
@@ -524,11 +528,11 @@ mixin BkEditorEdit on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Tick
         host.edit(() {
           final tree = host.script(scriptId);
           if (tree == null) return;
-          final block = host.newBlock(item.id);
+          final block = host.newBlock(item.id)..args.addAll(item.preset);
           if (sel != null && sel.path.isNotEmpty) {
             final parent = sel.path.sublist(0, sel.path.length - 1);
             final step = sel.path.last;
-            if (tree.insertBlock(parent, block, inElse: step.inElse, index: step.index + 1)) at = [...parent, lcStep(step.index + 1, inElse: step.inElse)];
+            if (tree.insertBlock(parent, block, inElse: step.inElse, arm: step.arm, index: step.index + 1)) at = [...parent, lcStep(step.index + 1, inElse: step.inElse, arm: step.arm)];
           } else if (tree.insertBlock(const [], block)) {
             at = [lcStep(tree.body.length - 1)];
           }
@@ -539,7 +543,7 @@ mixin BkEditorEdit on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Tick
         unawaited(HapticFeedback.lightImpact());
         jumpTo(scriptId, path);
         final last = path.last;
-        pulseBlocks(scriptId, range: (scriptId: scriptId, parent: path.sublist(0, path.length - 1), inElse: last.inElse, start: last.index, count: 1));
+        pulseBlocks(scriptId, range: (scriptId: scriptId, parent: path.sublist(0, path.length - 1), inElse: last.inElse, arm: last.arm, start: last.index, count: 1));
     }
   }
 }

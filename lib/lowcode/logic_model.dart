@@ -34,35 +34,129 @@ class LcVariable {
   }
 }
 
+/// 多口积木里的一段（“否则如果 <条件> 那么 { … }”“是 (1) 时 { … }”“出错了 { … }”）：自己的参数 + 自己那个口里的积木。
+/// 一种积木有没有段、每段带哪些参数，由它的规格（`LcBlockSpec.arms`）说；这里只管存。
+class LcArm {
+  LcArm({Map<String, dynamic>? args, List<LcBlock>? body}) : args = args ?? {}, body = body ?? [];
+
+  final Map<String, dynamic> args;
+  final List<LcBlock> body;
+
+  Map<String, dynamic> toJson() => {
+    if (args.isNotEmpty) 'args': args,
+    if (body.isNotEmpty) 'body': [for (final b in body) b.toJson()],
+  };
+
+  LcArm clone() {
+    final copied = LcBlock._copyJson(args, 0);
+    return LcArm(args: copied is Map<String, dynamic> ? copied : {}, body: [for (final b in body) b.clone()]);
+  }
+
+  /// 不是对象就返回 null（调用方跳过这一段）。
+  static LcArm? tryParse(Object? json, int depth) {
+    if (json is! Map) return null;
+    final args = json['args'];
+    return LcArm(args: args is Map ? {for (final e in args.entries) '${e.key}': e.value} : {}, body: LcBlock.parseList(json['body'], depth));
+  }
+}
+
+/// 段里的参数在编辑器里怎么称呼：`@<第几段>:<参数名>`（积木自己的参数直接用参数名）。
+/// 槽位、校验问题、落点都用这个名字指到“第几段的哪个参数”。
+String lcArmArg(int arm, String name) => '@$arm:$name';
+
+/// 把 [lcArmArg] 拆回来；不是段参数返回 null。
+({int arm, String name})? lcArmArgOf(String key) {
+  if (!key.startsWith('@')) return null;
+  final colon = key.indexOf(':');
+  if (colon < 2) return null;
+  final arm = int.tryParse(key.substring(1, colon));
+  return arm == null || arm < 0 ? null : (arm: arm, name: key.substring(colon + 1));
+}
+
 /// 一块积木。`op` 是积木种类；`args` 是参数（字面量或表达式对象 `{"e": ...}`）；
 /// `body` / `orElse` 是嵌在里面的积木（“如果”“重复”这类才有）。
+///
+/// 多口积木（“否则如果”“分情况”“试着做”）在 `body` 和 `orElse` 之间还有任意多段 [arms]：
+/// `body`＝开头那个口，`arms`＝中间可增减的段（每段自带参数），`orElse`＝收尾那个口。
+/// [noElse]＝用户把可有可无的收尾口（“否则”）收起来了。两样都只在用到时才写进 JSON，旧文档一个字节都不变。
 class LcBlock {
-  LcBlock({required this.op, Map<String, dynamic>? args, List<LcBlock>? body, List<LcBlock>? orElse}) : args = args ?? {}, body = body ?? [], orElse = orElse ?? [];
+  LcBlock({required this.op, Map<String, dynamic>? args, List<LcBlock>? body, List<LcBlock>? orElse, List<LcArm>? arms, this.noElse = false})
+    : args = args ?? {},
+      body = body ?? [],
+      orElse = orElse ?? [],
+      arms = arms ?? [];
 
   final String op;
   final Map<String, dynamic> args;
   final List<LcBlock> body;
   final List<LcBlock> orElse;
+  final List<LcArm> arms;
+  bool noElse;
 
   static const int maxDepth = 12;
+
+  /// 一块积木最多几段（读文件时多出来的丢掉；编辑器里加到这么多就不让加了）。
+  static const int maxArms = 32;
 
   Map<String, dynamic> toJson() => {
     'op': op,
     if (args.isNotEmpty) 'args': args,
     if (body.isNotEmpty) 'body': [for (final b in body) b.toJson()],
+    if (arms.isNotEmpty) 'arms': [for (final a in arms) a.toJson()],
     if (orElse.isNotEmpty) 'else': [for (final b in orElse) b.toJson()],
+    if (noElse) 'noElse': true,
   };
 
   /// 深拷贝：参数、嵌在里面的积木全都是新对象，改副本不影响原件。
   LcBlock clone() {
     final copied = _copyJson(args, 0);
-    return LcBlock(op: op, args: copied is Map<String, dynamic> ? copied : {}, body: [for (final b in body) b.clone()], orElse: [for (final b in orElse) b.clone()]);
+    return LcBlock(
+      op: op,
+      args: copied is Map<String, dynamic> ? copied : {},
+      body: [for (final b in body) b.clone()],
+      orElse: [for (final b in orElse) b.clone()],
+      arms: [for (final a in arms) a.clone()],
+      noElse: noElse,
+    );
+  }
+
+  /// 浅拷贝后换掉其中几样（编辑器重建一块积木时用，免得漏抄字段）。
+  LcBlock copyWith({Map<String, dynamic>? args, List<LcBlock>? body, List<LcBlock>? orElse, List<LcArm>? arms}) =>
+      LcBlock(op: op, args: args ?? this.args, body: body ?? this.body, orElse: orElse ?? this.orElse, arms: arms ?? this.arms, noElse: noElse);
+
+  /// 嵌在这块积木里的全部积木（开头口、各段、收尾口，按画出来的顺序）。
+  Iterable<LcBlock> get children => arms.isEmpty ? body.followedBy(orElse) : [...body, for (final a in arms) ...a.body, ...orElse];
+
+  /// 某个口里的那串积木：`arm >= 0` 是第几段；否则 `inElse` 是收尾口，不然是开头口。段不存在返回 null。
+  List<LcBlock>? mouth({bool inElse = false, int arm = -1}) {
+    if (arm >= 0) return arm < arms.length ? arms[arm].body : null;
+    return inElse ? orElse : body;
+  }
+
+  /// 按编辑器里的参数名（见 [lcArmArg]）找到装这个参数的那张表和表里的名字；段不存在返回 null。
+  ({Map<String, dynamic> map, String name})? argHome(String key) {
+    final a = lcArmArgOf(key);
+    if (a == null) return (map: args, name: key);
+    return a.arm < arms.length ? (map: arms[a.arm].args, name: a.name) : null;
+  }
+
+  /// 按编辑器里的参数名读 / 写参数（段参数也行）。
+  Object? argValue(String key) {
+    final home = argHome(key);
+    return home?.map[home.name];
+  }
+
+  bool setArgValue(String key, Object? value) {
+    final home = argHome(key);
+    if (home == null) return false;
+    home.map[home.name] = value;
+    return true;
   }
 
   /// 这块积木往下（含自己）一共有几层。
   int get height {
     var h = 0;
-    for (final b in body.followedBy(orElse)) {
+    for (final b in children) {
       final bh = b.height;
       if (bh > h) h = bh;
     }
@@ -82,7 +176,15 @@ class LcBlock {
     final op = json['op'];
     if (op is! String || op.isEmpty) return null;
     final args = json['args'];
-    return LcBlock(op: op, args: args is Map ? {for (final e in args.entries) '${e.key}': e.value} : {}, body: parseList(json['body'], depth + 1), orElse: parseList(json['else'], depth + 1));
+    final arms = json['arms'];
+    return LcBlock(
+      op: op,
+      args: args is Map ? {for (final e in args.entries) '${e.key}': e.value} : {},
+      body: parseList(json['body'], depth + 1),
+      orElse: parseList(json['else'], depth + 1),
+      arms: arms is List ? [for (final a in arms.take(maxArms)) ?LcArm.tryParse(a, depth + 1)] : null,
+      noElse: json['noElse'] == true,
+    );
   }
 
   static List<LcBlock> parseList(Object? json, int depth) {
@@ -92,14 +194,22 @@ class LcBlock {
 }
 
 /// 积木在一个处理里的位置：从处理的 `body` 开始一步步往里走。
-/// 每一步是“在第几块”，以及（从第二步起）“是上一块的 body 还是 else 里的”。第一步的 `inElse` 不看。
+/// 每一步是“在第几块”，以及（从第二步起）“在上一块的哪个口里”：`arm >= 0` 是第几段的口；
+/// 否则 `inElse` 是收尾口（“否则”），不然是开头口（“那么”）。第一步的 `inElse` / `arm` 不看。
 ///
-/// 例：`[(inElse: false, index: 2), (inElse: true, index: 0)]` ＝ 第 3 块的“否则”里的第 1 块。
-typedef LcBlockStep = ({bool inElse, int index});
+/// 例：`[lcStep(2), lcStep(0, inElse: true)]` ＝ 第 3 块的“否则”里的第 1 块；
+/// `[lcStep(2), lcStep(0, arm: 1)]` ＝ 第 3 块的第 2 段“否则如果”里的第 1 块。
+typedef LcBlockStep = ({bool inElse, int index, int arm});
 typedef LcBlockPath = List<LcBlockStep>;
 
-/// 造一步路径（少写点字）。
-LcBlockStep lcStep(int index, {bool inElse = false}) => (inElse: inElse, index: index);
+/// 造一步路径（少写点字）。一律用它造，不要手写这个 record（以后再加字段不用到处改）。
+LcBlockStep lcStep(int index, {bool inElse = false, int arm = -1}) => (inElse: inElse, index: index, arm: arm);
+
+/// 两步是不是指同一个口里的同一个位置。
+bool lcSameStep(LcBlockStep a, LcBlockStep b) => a.index == b.index && lcSameMouth(a, b);
+
+/// 两步是不是在同一个口里（不比第几块）。
+bool lcSameMouth(LcBlockStep a, LcBlockStep b) => a.arm >= 0 || b.arm >= 0 ? a.arm == b.arm : a.inElse == b.inElse;
 
 /// “一串积木”的按路径操作（找、插、删、挪、遍历）。谁有一个 `body` 就能混进来用：
 /// 前端的事件处理（[LcHandler]）和后端的接口（lib/backend）共用这一套，积木编辑器也只认它。
@@ -117,7 +227,11 @@ mixin LcBlockTree {
     var list = body;
     LcBlock? block;
     for (var i = 0; i < path.length; i++) {
-      if (i > 0) list = path[i].inElse ? block!.orElse : block!.body;
+      if (i > 0) {
+        final inner = block!.mouth(inElse: path[i].inElse, arm: path[i].arm);
+        if (inner == null) return null;
+        list = inner;
+      }
       final index = path[i].index;
       if (index < 0 || index >= list.length) return null;
       block = list[index];
@@ -126,17 +240,19 @@ mixin LcBlockTree {
   }
 
   /// 一串积木所在的那个列表：`parent` 为空＝处理自己的 body；否则是那块积木的 body（或 `inElse` 时的 else）。
-  List<LcBlock>? listAt(LcBlockPath parent, {bool inElse = false}) {
+  /// `arm >= 0`＝那块积木第几段的口（见 [LcBlock.arms]）。
+  List<LcBlock>? listAt(LcBlockPath parent, {bool inElse = false, int arm = -1}) {
     if (parent.isEmpty) return body;
-    final block = blockAt(parent);
-    if (block == null) return null;
-    return inElse ? block.orElse : block.body;
+    return blockAt(parent)?.mouth(inElse: inElse, arm: arm);
   }
+
+  /// 路径最后一步所在的那个列表。
+  List<LcBlock>? _homeOf(LcBlockPath path) => listAt(path.sublist(0, path.length - 1), inElse: path.last.inElse, arm: path.last.arm);
 
   /// 把积木插进去；`index` 省略＝放最后。位置不存在、或插进去以后嵌套超过 [LcBlock.maxDepth] 层就不插，返回 false
   /// （超过的层数存盘后再读会被丢掉，所以这里先拦住）。
-  bool insertBlock(LcBlockPath parent, LcBlock block, {bool inElse = false, int? index}) {
-    final list = listAt(parent, inElse: inElse);
+  bool insertBlock(LcBlockPath parent, LcBlock block, {bool inElse = false, int arm = -1, int? index}) {
+    final list = listAt(parent, inElse: inElse, arm: arm);
     if (list == null) return false;
     // parent 有几步，新积木就在第几层（从 0 数）；它自己往下还有 height - 1 层。
     if (parent.length + block.height - 1 > LcBlock.maxDepth) return false;
@@ -147,20 +263,20 @@ mixin LcBlockTree {
   /// 删掉一块（连同嵌在里面的）；返回被删的那块，路径不对返回 null。
   LcBlock? removeBlock(LcBlockPath path) {
     if (path.isEmpty) return null;
-    final list = listAt(path.sublist(0, path.length - 1), inElse: path.last.inElse);
+    final list = _homeOf(path);
     final index = path.last.index;
     if (list == null || index < 0 || index >= list.length) return null;
     return list.removeAt(index);
   }
 
   /// 把一块积木挪到别处（可以跨层）。不能挪进自己里面；`index` 是“挪走之前”目标列表里的位置。
-  bool moveBlock(LcBlockPath from, LcBlockPath toParent, {bool inElse = false, int? index}) {
+  bool moveBlock(LcBlockPath from, LcBlockPath toParent, {bool inElse = false, int arm = -1, int? index}) {
     final block = blockAt(from);
-    final target = listAt(toParent, inElse: inElse);
+    final target = listAt(toParent, inElse: inElse, arm: arm);
     if (block == null || target == null) return false;
     if (toParent.length >= from.length && _samePrefix(from, toParent)) return false; // 目标在自己里面
     if (toParent.length + block.height - 1 > LcBlock.maxDepth) return false;
-    final source = listAt(from.sublist(0, from.length - 1), inElse: from.last.inElse);
+    final source = _homeOf(from);
     if (source == null) return false;
     var i = (index ?? target.length).clamp(0, target.length);
     if (identical(source, target) && from.last.index < i) i -= 1;
@@ -172,7 +288,7 @@ mixin LcBlockTree {
   /// 在同一串里上移 / 下移一位。
   bool shiftBlock(LcBlockPath path, int delta) {
     if (path.isEmpty) return false;
-    final list = listAt(path.sublist(0, path.length - 1), inElse: path.last.inElse);
+    final list = _homeOf(path);
     final i = path.last.index;
     if (list == null || i < 0 || i >= list.length) return false;
     final j = i + delta;
@@ -185,23 +301,27 @@ mixin LcBlockTree {
   bool _samePrefix(LcBlockPath outer, LcBlockPath inner) {
     for (var i = 0; i < outer.length; i++) {
       if (outer[i].index != inner[i].index) return false;
-      if (i > 0 && outer[i].inElse != inner[i].inElse) return false;
+      if (i > 0 && !lcSameMouth(outer[i], inner[i])) return false;
     }
     return true;
   }
 
-  /// 从外到里走一遍所有积木（先自己，再 body，再 else），带上各自的路径。
+  /// 从外到里走一遍所有积木（先自己，再 body，再各段，再 else），带上各自的路径。
   void visitBlocks(void Function(LcBlock block, LcBlockPath path) visit) {
-    void walk(List<LcBlock> list, LcBlockPath parent, bool inElse) {
+    void walk(List<LcBlock> list, LcBlockPath parent, bool inElse, int arm) {
       for (var i = 0; i < list.length; i++) {
-        final path = [...parent, lcStep(i, inElse: inElse)];
-        visit(list[i], path);
-        walk(list[i].body, path, false);
-        walk(list[i].orElse, path, true);
+        final path = [...parent, lcStep(i, inElse: inElse, arm: arm)];
+        final b = list[i];
+        visit(b, path);
+        walk(b.body, path, false, -1);
+        for (var a = 0; a < b.arms.length; a++) {
+          walk(b.arms[a].body, path, false, a);
+        }
+        walk(b.orElse, path, true, -1);
       }
     }
 
-    walk(body, const [], false);
+    walk(body, const [], false, -1);
   }
 }
 
