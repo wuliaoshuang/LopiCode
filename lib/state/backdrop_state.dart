@@ -95,8 +95,10 @@ class BackdropNotifier extends Notifier<BackdropSettings> {
   }
 
   /// 改浅色 / 深色那一份的样子。
-  void updateLook({required bool dark, required BackdropLook Function(BackdropLook l) change, bool persist = true}) =>
-      update((s) => dark ? s.copyWith(dark: change(s.dark)) : s.copyWith(light: change(s.light)), persist: persist);
+  void updateLook({required bool dark, required BackdropLook Function(BackdropLook l) change, bool persist = true}) => update(
+    (s) => dark ? s.copyWith(dark: change(s.dark)) : s.copyWith(light: change(s.light)),
+    persist: persist,
+  );
 
   /// 把现在的值写进存盘文件。
   Future<void> commit() => _save();
@@ -138,7 +140,11 @@ class BackdropNotifier extends Notifier<BackdropSettings> {
 
   /// 重新裁剪：只换裁剪区域和旋转，图不动。
   Future<void> setCrop({required bool dark, required CropRect crop, required int turns}) async {
-    updateLook(dark: dark, change: (l) => l.copyWith(crop: crop, turns: turns), persist: false);
+    updateLook(
+      dark: dark,
+      change: (l) => l.copyWith(crop: crop, turns: turns),
+      persist: false,
+    );
     await _save();
   }
 

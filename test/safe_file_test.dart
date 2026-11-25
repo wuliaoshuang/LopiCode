@@ -10,6 +10,9 @@ import 'package:lopicode/agent/mcp/mcp_models.dart';
 import 'package:lopicode/agent/memory_store.dart';
 import 'package:lopicode/agent/model_config.dart';
 import 'package:lopicode/agent/team.dart';
+import 'package:lopicode/backdrop/backdrop_model.dart';
+import 'package:lopicode/backdrop/backdrop_store.dart';
+import 'package:lopicode/backdrop/crop_math.dart';
 import 'package:lopicode/backend/backend_model.dart';
 import 'package:lopicode/backend/backend_project.dart';
 import 'package:lopicode/backend/backend_validate.dart';
@@ -693,6 +696,96 @@ void main() {
     test('items 不是列表、版本号是以后的：不崩', () async {
       file().writeAsStringSync(jsonEncode({'version': 99, 'items': 'x'}));
       expect(await readFavorites(file()), isEmpty);
+    });
+  });
+
+  group('背景图片设置 appearance/background.json', () {
+    BackdropStore store() => BackdropStore(p.join(tmp.path, 'appearance'));
+
+    test('没有文件：默认值（没有图、算读完了），不建文件', () async {
+      final s = await store().load();
+      expect(s.loaded, isTrue);
+      expect(s.light.hasImage, isFalse);
+      expect(store().settingsFile.existsSync(), isFalse);
+    });
+
+    for (final entry in corruptSamples.entries) {
+      test('坏内容（${entry.key}）：默认值，不抛异常', () async {
+        store().settingsFile
+          ..parent.createSync(recursive: true)
+          ..writeAsStringSync(entry.value);
+        final s = await store().load();
+        expect(s.loaded, isTrue);
+        expect(s.light.hasImage, isFalse);
+      });
+    }
+
+    test('半截的文件：留一份 .bad 备份', () async {
+      store().settingsFile
+        ..parent.createSync(recursive: true)
+        ..writeAsStringSync(corruptSamples['半截']!);
+      await store().load();
+      expect(badBackups(store().settingsFile), hasLength(1));
+    });
+
+    test('形状对、字段类型全错 / 越界 / 想指到外面去的文件名：逐项回默认，不算坏文件', () async {
+      store().settingsFile
+        ..parent.createSync(recursive: true)
+        ..writeAsStringSync(
+          jsonEncode({
+            'enabled': 'yes',
+            'light': {
+              'file': '../../etc/passwd',
+              'width': 100,
+              'height': 100,
+              'crop': {'l': -3, 't': 'x', 'w': 9, 'h': 0},
+              'fit': 42,
+              'blur': 9999,
+              'maskOpacity': -5,
+              'brightness': 'bright',
+              'turns': 7,
+            },
+            'dark': [1, 2, 3],
+            'darkSeparate': 1,
+            'onChat': null,
+            'surfaceOpacity': 3,
+          }),
+        );
+      final s = await store().load();
+      expect(s.enabled, isTrue);
+      expect(s.light.file, isNull);
+      expect(s.light.hasImage, isFalse);
+      expect(s.light.crop, CropRect.full);
+      expect(s.light.fit, BackdropFit.cover);
+      expect(s.light.blur, kBackdropBlurMax);
+      expect(s.light.maskOpacity, 0);
+      expect(s.light.brightness, 0);
+      expect(s.light.turns, 3);
+      expect(s.dark.hasImage, isFalse);
+      expect(s.darkSeparate, isFalse);
+      expect(s.onChat, isTrue);
+      expect(s.surfaceOpacity, kBackdropSurfaceMin);
+      expect(badBackups(store().settingsFile), isEmpty);
+    });
+
+    test('存了再读：原样回来', () async {
+      const look = BackdropLook(
+        file: 'bg-abc.png',
+        width: 800,
+        height: 600,
+        turns: 1,
+        crop: CropRect(0.1, 0.2, 0.3, 0.4),
+        fit: BackdropFit.tile,
+        tilePercent: 35,
+        maskFollowsTheme: false,
+        maskColor: 0xFF1B2A4A,
+        maskOpacity: 45,
+        blur: 12,
+        brightness: -20,
+      );
+      const s = BackdropSettings(enabled: false, light: look, darkSeparate: true, onPages: true, terminal: true, lowcode: true, surfaceOpacity: 70, loaded: true);
+      await store().save(s);
+      expect(await store().load(), s);
     });
   });
 }

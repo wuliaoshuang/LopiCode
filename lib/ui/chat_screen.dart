@@ -14,6 +14,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lopicode/agent/agent_tools.dart';
 import 'package:lopicode/agent/usage.dart';
+import 'package:lopicode/backdrop/backdrop_model.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/session/chat_rows.dart';
 import 'package:lopicode/state/models_state.dart';
@@ -23,6 +24,7 @@ import 'package:lopicode/state/workspace_chat.dart';
 import 'package:lopicode/state/workspace_conversations.dart';
 import 'package:lopicode/state/workspace_favorites.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/app_backdrop.dart';
 import 'package:lopicode/ui/chat_background.dart';
 import 'package:lopicode/ui/chat_composer.dart';
 import 'package:lopicode/ui/chat_extras.dart';
@@ -381,123 +383,132 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         (last is ItemRow && last.item is AssistantItem && (last.item as AssistantItem).streaming) ||
         (last is ItemRow && last.item is ThinkingItem && (last.item as ThinkingItem).streaming);
     final working = s.agentBusy && pending == null && question == null && !showsProgress;
-    return Scaffold(
-      extendBodyBehindAppBar: true,
-      appBar: ShellAppBar(
-        title: s.conversationTitle,
-        subtitle: '${s.project.name} / ${model == null ? '未设置模型' : model.model.name}',
-        actions: [
-          if (subs.isNotEmpty) SubAgentCapsule(total: subs.length, running: running, onTap: _openSubAgents),
-          PopupMenuButton<String>(
-            tooltip: '更多',
-            icon: const Icon(Icons.more_horiz),
-            onSelected: (v) {
-              if (v == 'new') s.newConversation();
-              if (v == 'preset') _pickPreset();
-              if (v == 'team') {
-                Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => TeamScreen(session: s)));
-              }
-              if (v == 'usage') _showUsage();
-              if (v == 'favorites') openFavorites(context, s);
-              if (v == 'compact') _compact();
-              if (v == 'export') _export();
-              if (v == 'delete') _deleteConversation();
-              if (v == 'origin') openBranchOrigin(context, s);
-            },
-            itemBuilder: (_) => [
-              PopupMenuItem(value: 'new', enabled: !s.agentBusy, child: const Text('新对话')),
-              ...originMenuItems(s),
-              PopupMenuItem(value: 'preset', child: Text('Agent 预设：${s.preset.name}')),
-              if (s.teamEnabled) const PopupMenuItem(value: 'team', child: Text('智能体团队')),
-              const PopupMenuItem(value: 'usage', child: Text('用量')),
-              const PopupMenuItem(value: 'favorites', child: Text('收藏的消息')),
-              PopupMenuItem(value: 'compact', enabled: !s.agentBusy && s.chat.isNotEmpty, child: const Text('压缩对话')),
-              PopupMenuItem(value: 'export', enabled: s.chat.isNotEmpty, child: const Text('导出对话')),
-              PopupMenuItem(
-                value: 'delete',
-                enabled: !s.agentBusy && s.chat.isNotEmpty,
-                child: Text('删除这段对话', style: TextStyle(color: !s.agentBusy && s.chat.isNotEmpty ? c.danger : c.textFaint)),
+    // 背景图片（设置 › 界面 › 外观 › 背景图片）：画在整页后面。on＝现在画着背景，页面底色让开；没设背景时和原来一模一样。
+    return AppBackdrop(
+      area: BackdropArea.chat,
+      builder: (context, on) => Scaffold(
+        backgroundColor: on ? Colors.transparent : null,
+        extendBodyBehindAppBar: true,
+        appBar: ShellAppBar(
+          title: s.conversationTitle,
+          subtitle: '${s.project.name} / ${model == null ? '未设置模型' : model.model.name}',
+          actions: [
+            if (subs.isNotEmpty) SubAgentCapsule(total: subs.length, running: running, onTap: _openSubAgents),
+            PopupMenuButton<String>(
+              tooltip: '更多',
+              icon: const Icon(Icons.more_horiz),
+              onSelected: (v) {
+                if (v == 'new') s.newConversation();
+                if (v == 'preset') _pickPreset();
+                if (v == 'team') {
+                  Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => TeamScreen(session: s)));
+                }
+                if (v == 'usage') _showUsage();
+                if (v == 'favorites') openFavorites(context, s);
+                if (v == 'compact') _compact();
+                if (v == 'export') _export();
+                if (v == 'delete') _deleteConversation();
+                if (v == 'origin') openBranchOrigin(context, s);
+              },
+              itemBuilder: (_) => [
+                PopupMenuItem(value: 'new', enabled: !s.agentBusy, child: const Text('新对话')),
+                ...originMenuItems(s),
+                PopupMenuItem(value: 'preset', child: Text('Agent 预设：${s.preset.name}')),
+                if (s.teamEnabled) const PopupMenuItem(value: 'team', child: Text('智能体团队')),
+                const PopupMenuItem(value: 'usage', child: Text('用量')),
+                const PopupMenuItem(value: 'favorites', child: Text('收藏的消息')),
+                PopupMenuItem(value: 'compact', enabled: !s.agentBusy && s.chat.isNotEmpty, child: const Text('压缩对话')),
+                PopupMenuItem(value: 'export', enabled: s.chat.isNotEmpty, child: const Text('导出对话')),
+                PopupMenuItem(
+                  value: 'delete',
+                  enabled: !s.agentBusy && s.chat.isNotEmpty,
+                  child: Text('删除这段对话', style: TextStyle(color: !s.agentBusy && s.chat.isNotEmpty ? c.danger : c.textFaint)),
+                ),
+              ],
+            ),
+          ],
+        ),
+        body: SafeArea(
+          top: false,
+          child: Column(
+            children: [
+              Expanded(
+                child: s.chat.isEmpty
+                    ? Padding(
+                        padding: EdgeInsets.only(top: topInset),
+                        child: _EmptyChat(configured: model != null, showIdeas: prefs.suggestions, onPick: _send),
+                      )
+                    : ChatRowActions(
+                        readOutput: s.readCommandOutput,
+                        onResume: s.resumeInterrupted,
+                        onDismissInterrupted: s.dismissInterrupted,
+                        child: MessageOpsHost(
+                          session: s,
+                          flash: _jump.flash,
+                          child: ListView.builder(
+                            controller: _scroll,
+                            padding: EdgeInsets.fromLTRB(Space.x4, topInset + Space.x2, Space.x4, Space.x4),
+                            itemCount: rows.length + (working ? 1 : 0),
+                            itemBuilder: (context, i) {
+                              if (i >= rows.length) return const _Working();
+                              return _jump.wrap(rows[i], ChatRowView(row: rows[i], onOpenChild: _openChild, onOpenQuota: _openQuota, onOpenTurn: _showTurn));
+                            },
+                          ),
+                        ),
+                      ),
+              ),
+              const KeyboardDock(), // 这条线以下是输入区：点了不收键盘；拖动线以上的聊天内容会收（见 keyboard_tap_dismiss.dart）
+              if (todos != null && todos.isNotEmpty) TodoBar(todos: todos),
+              BackgroundBar(session: s),
+              PendingArea(session: s),
+              if (s.queue.isNotEmpty) QueueStrip(session: s),
+              if (s.autoAllowActive && s.permission != PermissionLevel.full)
+                StatusChipRow(key: const ValueKey('auto-allow-chip'), icon: Icons.bolt, text: '自动允许中：本对话的命令和删除不再逐次问你', action: '关闭', tone: BannerTone.warning, onTap: s.clearAutoAllow),
+              if (s.mcpAllowCount > 0)
+                StatusChipRow(
+                  key: const ValueKey('mcp-allow-chip'),
+                  icon: Icons.extension_outlined,
+                  text: '有 ${s.mcpAllowCount} 个 MCP 工具在本对话里不再逐次问你',
+                  action: '恢复询问',
+                  tone: BannerTone.warning,
+                  onTap: s.clearMcpAllow,
+                ),
+              if (s.planMode) StatusChipRow(key: const ValueKey('plan-chip'), icon: Icons.map_outlined, text: '计划模式：只出计划，不改文件、不跑命令', action: '退出', tone: BannerTone.info, onTap: _togglePlan),
+              MessageEditBar(session: s),
+              if (_attachments.isNotEmpty)
+                AttachmentStrip(
+                  paths: [for (final a in _attachments) '${s.project.dir}/${a['path']}'],
+                  canSee: model?.model.vision ?? false,
+                  onRemove: (i) => setState(() => _attachments.removeAt(i)),
+                ),
+              if (slash.isNotEmpty)
+                SlashSuggestions(
+                  commands: slash,
+                  onPick: (cmd) {
+                    _input.clear();
+                    _runSlash(cmd);
+                  },
+                ),
+              if (model != null) LowBalanceStrip(channel: model.channel),
+              ChatComposer(
+                context_: s.contextUsage,
+                onContext: _showUsage,
+                controller: _input,
+                focusNode: _focus,
+                mentionGuard: s.guard,
+                busy: s.agentBusy,
+                canSend: _canSend,
+                modelName: model == null ? '选择模型' : model.model.name,
+                permission: s.permission,
+                onPlus: _openPlus,
+                onModel: _pickModel,
+                onPermission: _pickPermission,
+                onSend: _send,
+                onLongSend: _pickSendMode,
+                onStop: s.stopAgent,
               ),
             ],
           ),
-        ],
-      ),
-      body: SafeArea(
-        top: false,
-        child: Column(
-          children: [
-            Expanded(
-              child: s.chat.isEmpty
-                  ? Padding(
-                      padding: EdgeInsets.only(top: topInset),
-                      child: _EmptyChat(configured: model != null, showIdeas: prefs.suggestions, onPick: _send),
-                    )
-                  : ChatRowActions(
-                      readOutput: s.readCommandOutput,
-                      onResume: s.resumeInterrupted,
-                      onDismissInterrupted: s.dismissInterrupted,
-                      child: MessageOpsHost(
-                        session: s,
-                        flash: _jump.flash,
-                        child: ListView.builder(
-                          controller: _scroll,
-                          padding: EdgeInsets.fromLTRB(Space.x4, topInset + Space.x2, Space.x4, Space.x4),
-                          itemCount: rows.length + (working ? 1 : 0),
-                          itemBuilder: (context, i) {
-                            if (i >= rows.length) return const _Working();
-                            return _jump.wrap(rows[i], ChatRowView(row: rows[i], onOpenChild: _openChild, onOpenQuota: _openQuota, onOpenTurn: _showTurn));
-                          },
-                        ),
-                      ),
-                    ),
-            ),
-            const KeyboardDock(), // 这条线以下是输入区：点了不收键盘；拖动线以上的聊天内容会收（见 keyboard_tap_dismiss.dart）
-            if (todos != null && todos.isNotEmpty) TodoBar(todos: todos),
-            BackgroundBar(session: s),
-            PendingArea(session: s),
-            if (s.queue.isNotEmpty) QueueStrip(session: s),
-            if (s.autoAllowActive && s.permission != PermissionLevel.full)
-              StatusChipRow(key: const ValueKey('auto-allow-chip'), icon: Icons.bolt, text: '自动允许中：本对话的命令和删除不再逐次问你', action: '关闭', tone: BannerTone.warning, onTap: s.clearAutoAllow),
-            if (s.mcpAllowCount > 0)
-              StatusChipRow(
-                key: const ValueKey('mcp-allow-chip'),
-                icon: Icons.extension_outlined,
-                text: '有 ${s.mcpAllowCount} 个 MCP 工具在本对话里不再逐次问你',
-                action: '恢复询问',
-                tone: BannerTone.warning,
-                onTap: s.clearMcpAllow,
-              ),
-            if (s.planMode) StatusChipRow(key: const ValueKey('plan-chip'), icon: Icons.map_outlined, text: '计划模式：只出计划，不改文件、不跑命令', action: '退出', tone: BannerTone.info, onTap: _togglePlan),
-            MessageEditBar(session: s),
-            if (_attachments.isNotEmpty)
-              AttachmentStrip(paths: [for (final a in _attachments) '${s.project.dir}/${a['path']}'], canSee: model?.model.vision ?? false, onRemove: (i) => setState(() => _attachments.removeAt(i))),
-            if (slash.isNotEmpty)
-              SlashSuggestions(
-                commands: slash,
-                onPick: (cmd) {
-                  _input.clear();
-                  _runSlash(cmd);
-                },
-              ),
-            if (model != null) LowBalanceStrip(channel: model.channel),
-            ChatComposer(
-              context_: s.contextUsage,
-              onContext: _showUsage,
-              controller: _input,
-              focusNode: _focus,
-              mentionGuard: s.guard,
-              busy: s.agentBusy,
-              canSend: _canSend,
-              modelName: model == null ? '选择模型' : model.model.name,
-              permission: s.permission,
-              onPlus: _openPlus,
-              onModel: _pickModel,
-              onPermission: _pickPermission,
-              onSend: _send,
-              onLongSend: _pickSendMode,
-              onStop: s.stopAgent,
-            ),
-          ],
         ),
       ),
     );

@@ -85,17 +85,7 @@ class BackdropLook {
   int get rotatedWidth => turns.isOdd ? height : width;
   int get rotatedHeight => turns.isOdd ? width : height;
 
-  BackdropLook copyWith({
-    CropRect? crop,
-    int? turns,
-    BackdropFit? fit,
-    int? tilePercent,
-    bool? maskFollowsTheme,
-    int? maskColor,
-    int? maskOpacity,
-    int? blur,
-    int? brightness,
-  }) => BackdropLook(
+  BackdropLook copyWith({CropRect? crop, int? turns, BackdropFit? fit, int? tilePercent, bool? maskFollowsTheme, int? maskColor, int? maskOpacity, int? blur, int? brightness}) => BackdropLook(
     file: file,
     width: width,
     height: height,
