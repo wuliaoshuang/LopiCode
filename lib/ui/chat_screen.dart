@@ -443,6 +443,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               onContext: _showUsage,
               controller: _input,
               focusNode: _focus,
+              mentionGuard: s.guard,
               busy: s.agentBusy,
               canSend: _canSend,
               modelName: model == null ? '选择模型' : model.model.name,

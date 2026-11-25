@@ -186,6 +186,7 @@
 - Android 需要 `RECORD_AUDIO`，并在 `queries` 里声明 `android.speech.RecognitionService`；麦克风权限只在用户点语音按钮后请求。
 - iOS / macOS 需要 `NSSpeechRecognitionUsageDescription` 和 `NSMicrophoneUsageDescription`。本仓库目前没有 iOS 目录，新增平台时须同时补这两项。
 - 状态：官方 API 与权限配置已核对；Widget 测试用假识别器覆盖，**尚未在真机验证识别质量、权限弹窗和厂商语音服务**。
+- 2026-11-25：语音入口暂时隐藏（霜霜定）。开关是 `lib/ui/chat_composer.dart` 的 `kChatVoiceEnabled`（默认关，设置页没有入口）；关着时不创建语音识别、不申请麦克风权限。`speech_to_text` 依赖和 `RECORD_AUDIO` 声明这一轮没动，去不去掉等霜霜定。
 
 ## 后端积木生成的代码里用到的接口（`lib/backend/runtime_*.dart`）
 

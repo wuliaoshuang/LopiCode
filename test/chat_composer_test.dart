@@ -93,6 +93,8 @@ Future<({TextEditingController controller, FocusNode focus, _FakeVoice voice, _C
                 modelName: 'DeepSeek Chat',
                 permission: PermissionLevel.workspace,
                 voiceInput: input,
+                // 语音入口现在默认藏着（kChatVoiceEnabled）；这里把开关打开，原来的语音功能照旧测。
+                showVoice: true,
                 context_: ring ? const ContextUsage(42000, 128000, estimated: false) : null,
                 onContext: ring ? () => calls.rings++ : null,
                 onPlus: () => calls.plus++,
