@@ -498,6 +498,8 @@ void main() {
       for (final f in Directory('lib').listSync(recursive: true).whereType<File>().where((f) => f.path.endsWith('.dart'))) {
         final path = f.path.replaceAll(r'\', '/');
         if (path.endsWith('ui/keyboard_tap_dismiss.dart')) continue;
+        // @ 文件候选列表：它不是输入框，是和输入框同组的点按区域，用 onTapOutside 只为了“点到外面就收起候选”，不碰焦点和键盘。
+        if (path.endsWith('ui/file_mention.dart')) continue;
         final src = f.readAsStringSync();
         if (RegExp(r'\bonTapOutside\s*:').hasMatch(src) || RegExp(r'\bonTapUpOutside\s*:').hasMatch(src)) offenders.add(path);
       }
