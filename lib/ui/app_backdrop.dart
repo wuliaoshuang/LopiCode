@@ -1,9 +1,8 @@
 // 设计约束（背景渲染控件）
-// - 用法：把页面的 Scaffold 包起来——
-//     AppBackdrop(area: BackdropArea.chat, child: Scaffold(…))
-//   画着背景时（开着、有图、图已解好）它把下面 Scaffold 的默认底色换成透明；没背景时页面和原来一模一样。
-//   Scaffold 自己写死了 backgroundColor 的，改用 builder：
-//     AppBackdrop(area: …, builder: (context, on) => Scaffold(backgroundColor: on ? Colors.transparent : c.bg, …))
+// - 用法只有一种：把页面的 Scaffold 包起来——
+//     AppBackdrop(area: BackdropArea.chat, builder: (context, on) => Scaffold(backgroundColor: on ? Colors.transparent : null, …))
+//   on＝这一页现在真的画着背景（开着、有图、图已解好）。没背景时 builder 拿到 false，页面和原来一模一样。
+//   不要用“把主题里的页面底色改成透明”的办法代替：PageBar 没另给颜色时拿主题的页面底色画顶栏的渐隐遮罩，改了会连带把它弄没。
 // - 背景按**整块屏幕**摆：键盘升起、页面变矮时图不跟着缩，只是下面被盖住。
 // - 层次从下到上：图片（按裁剪 / 适配方式 / 模糊）→ 亮度 → 遮罩。遮罩默认跟随主题底色，文字直接写在上面也读得清。
 // - 页面里的表面（气泡、卡片、输入框、代码块）问 BackdropScope 要颜色：
@@ -56,26 +55,13 @@ class BackdropScope extends InheritedWidget {
 
 /// 把一页包起来，在它后面画背景。
 class AppBackdrop extends ConsumerWidget {
-  const AppBackdrop({super.key, required this.area, this.child, this.builder}) : assert((child == null) != (builder == null), 'child 和 builder 给一个');
+  const AppBackdrop({super.key, required this.area, required this.builder});
 
   /// 这一页算哪个范围（聊天页 / 其它页面）。
   final BackdropArea area;
 
-  /// 被包起来的页面。画着背景时，它里面 Scaffold 的默认底色会变成透明。
-  final Widget? child;
-
-  /// 要自己决定底色的用这个：[on]＝现在画着背景，页面把自己的底色改成透明。
-  final Widget Function(BuildContext context, bool on)? builder;
-
-  Widget _page(BuildContext context, bool on) {
-    final b = builder;
-    if (b != null) return b(context, on);
-    if (!on) return child!;
-    return Theme(
-      data: Theme.of(context).copyWith(scaffoldBackgroundColor: Colors.transparent),
-      child: child!,
-    );
-  }
+  /// [on]＝现在画着背景：页面把自己的底色改成透明。
+  final Widget Function(BuildContext context, bool on) builder;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -85,7 +71,7 @@ class AppBackdrop extends ConsumerWidget {
       return BackdropScope(
         on: false,
         settings: settings,
-        child: Builder(builder: (context) => _page(context, false)),
+        child: Builder(builder: (context) => builder(context, false)),
       );
     }
     final look = settings.lookFor(dark: dark);
@@ -97,7 +83,7 @@ class AppBackdrop extends ConsumerWidget {
       builder: (context, ready) => BackdropScope(
         on: ready,
         settings: settings,
-        child: Builder(builder: (context) => _page(context, ready)),
+        child: Builder(builder: (context) => builder(context, ready)),
       ),
     );
   }

@@ -383,7 +383,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         (last is ItemRow && last.item is AssistantItem && (last.item as AssistantItem).streaming) ||
         (last is ItemRow && last.item is ThinkingItem && (last.item as ThinkingItem).streaming);
     final working = s.agentBusy && pending == null && question == null && !showsProgress;
-    final page = Scaffold(
+    // 背景图片（外观 › 背景图片）画在整页后面：on＝现在画着背景，页面底色让开；没设背景时和原来一模一样。
+    Widget page(bool on) => Scaffold(
+      backgroundColor: on ? Colors.transparent : null,
       extendBodyBehindAppBar: true,
       appBar: ShellAppBar(
         title: s.conversationTitle,
@@ -503,8 +505,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         ),
       ),
     );
-    // 背景图片（外观 › 背景图片）：画在整页后面；没设背景时和原来一模一样。
-    return AppBackdrop(area: BackdropArea.chat, child: page);
+    return AppBackdrop(area: BackdropArea.chat, builder: (context, on) => page(on));
   }
 }
 

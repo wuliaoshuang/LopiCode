@@ -339,8 +339,10 @@ void main() {
         await settle(tester, rounds: 3);
 
         expect(find.byKey(paintKey), findsOneWidget);
-        expect(tester.getSize(find.byKey(paintKey)), const Size(390, 844));
-        expect(find.text('帮我加一个登录页'), findsOneWidget);
+        // 背景铺满聊天页这一块：从屏幕顶到底部导航的上沿（导航是实底的，不透）
+        final navTop = tester.getRect(find.byType(IconBottomNav)).top;
+        expect(tester.getRect(find.byKey(paintKey)), Rect.fromLTRB(0, 0, 390, navTop));
+        expect(find.text('帮我加一个登录页'), findsWidgets); // 气泡里一处，顶栏的对话标题也是它
         expect(find.byType(IconBottomNav), findsOneWidget);
         final scope = tester.widget<BackdropScope>(find.byType(BackdropScope).first);
         expect(scope.on, isTrue);
@@ -354,8 +356,11 @@ void main() {
         addTearDown(tester.view.resetViewInsets);
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 300));
-        expect(tester.getSize(find.byKey(paintKey)), const Size(390, 844));
         expect(tester.getRect(find.byType(IconBottomNav)).bottom, 844);
+        // 图是按整块屏幕摆的：页面变矮了，同一个位置上还是原来那块图（没跟着缩）
+        final up = await grab(tester);
+        expect(pixel(up, 2, 150), nearColor(pixel(d, 2, 150), tolerance: 3));
+        expect(pixel(up, 2, 300), nearColor(pixel(d, 2, 300), tolerance: 3));
         tester.view.resetViewInsets();
         await tester.pump();
 
