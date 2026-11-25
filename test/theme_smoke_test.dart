@@ -12,7 +12,6 @@ import 'dart:ui' as ui;
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lopicode/appearance/theme_builtin.dart';
-import 'package:lopicode/appearance/theme_spec.dart';
 import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/core/templates.dart';
 import 'package:lopicode/project_session.dart';
