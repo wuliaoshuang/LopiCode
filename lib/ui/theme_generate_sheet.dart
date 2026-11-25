@@ -2,7 +2,7 @@
 // - 两种用法共用这一个面板：
 //   · 换强调色：只挑一个颜色，相关的一组（实心按钮、强调文字、浅底、选中、开关、光标…）一起重算。
 //   · 从主色生成整套：挑两个颜色——强调色、底色倾向（底色和文字往哪个色相偏一点）。上面一行两段切换现在在挑哪一个。
-// - 和取色面板一样：后面不压暗、只占下面六成，上面那块预览边挑边变。
+// - 和取色面板一样：后面不压暗、上沿停在预览下沿之下，上面那块预览边挑边变。
 // - 从上到下一行一件事：标题 + 一句说明 → （整套时）在挑哪一个的切换 → 取色器的芯 → 常用色 → 底部：取消（左）· 用这个（右，主操作）。
 // - 没动过任何东西时“用这个”是灰的；点取消、点外面、按返回都算取消，编辑器把草稿退回打开之前的样子。
 import 'package:lopicode/theme/tokens.dart';
@@ -12,20 +12,23 @@ import 'package:material_ui/material_ui.dart';
 
 /// 打开快捷生成面板。[full]＝从主色生成整套（否则只换强调色）。每次变化调 [onChanged]（强调色、底色倾向）。
 /// 返回 true＝用这个；别的都算取消。
-Future<bool?> showThemeGenerateSheet(BuildContext context, {required bool full, required int accent, required int tint, required void Function(int accent, int tint) onChanged}) =>
-    showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      barrierColor: Colors.transparent,
-      builder: (_) => ThemeGenerateSheet(full: full, accent: accent, tint: tint, onChanged: onChanged),
-    );
+Future<bool?> showThemeGenerateSheet(BuildContext context, {required bool full, required int accent, required int tint, required void Function(int accent, int tint) onChanged}) {
+  final maxHeight = themeSheetMaxHeight(context);
+  return showModalBottomSheet<bool>(
+    context: context,
+    isScrollControlled: true,
+    barrierColor: Colors.transparent,
+    builder: (_) => ThemeGenerateSheet(full: full, accent: accent, tint: tint, onChanged: onChanged, maxHeight: maxHeight),
+  );
+}
 
 class ThemeGenerateSheet extends StatefulWidget {
-  const ThemeGenerateSheet({super.key, required this.full, required this.accent, required this.tint, required this.onChanged});
+  const ThemeGenerateSheet({super.key, required this.full, required this.accent, required this.tint, required this.onChanged, this.maxHeight});
   final bool full;
   final int accent;
   final int tint;
   final void Function(int accent, int tint) onChanged;
+  final double? maxHeight;
 
   @override
   State<ThemeGenerateSheet> createState() => _ThemeGenerateSheetState();
@@ -61,7 +64,7 @@ class _ThemeGenerateSheetState extends State<ThemeGenerateSheet> {
       child: SafeArea(
         top: false,
         child: ConstrainedBox(
-          constraints: BoxConstraints(maxHeight: mq.size.height * 0.6),
+          constraints: BoxConstraints(maxHeight: widget.maxHeight ?? mq.size.height * 0.6),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,

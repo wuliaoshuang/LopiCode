@@ -355,8 +355,9 @@ class _ThemeEditorScreenState extends ConsumerState<ThemeEditorScreen> {
           titleText: _spec.name,
           subtitle: _readOnly ? '内置 · 只读' : (_spec.dark ? '深色主题' : '浅色主题'),
           actions: [
-            RoundIconButton(key: const Key('theme-undo'), icon: Icons.undo, tooltip: '撤销', onPressed: _h.canUndo ? () => setState(() => _h = _h.undo()) : null),
-            RoundIconButton(key: const Key('theme-redo'), icon: Icons.redo, tooltip: '重做', onPressed: _h.canRedo ? () => setState(() => _h = _h.redo()) : null),
+            // 顶栏会把这一页的操作装进一个胶囊，里面放普通的图标按钮（不要再套一层圆按钮：两个圆会叠在一起）。
+            IconButton(key: const Key('theme-undo'), icon: const Icon(Icons.undo), tooltip: '撤销', onPressed: _h.canUndo ? () => setState(() => _h = _h.undo()) : null),
+            IconButton(key: const Key('theme-redo'), icon: const Icon(Icons.redo), tooltip: '重做', onPressed: _h.canRedo ? () => setState(() => _h = _h.redo()) : null),
             if (!_readOnly)
               PopupMenuButton<String>(
                 key: const Key('theme-editor-more'),

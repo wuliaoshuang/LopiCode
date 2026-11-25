@@ -698,7 +698,7 @@ void main() {
       expect(viewOf(env).byId(t.id)!.name, '青绿');
       expect(viewOf(env).byId(t.id)!.ui[UiKey.accentFill], t.ui[UiKey.accentFill], reason: '改名不把没保存的颜色带进去');
       expect(find.text('青绿'), findsOneWidget);
-      expect(now().ui[UiKey.accentFill], 0xFF00897B);
+      expect(now(), made.copyWith(name: '青绿'), reason: '改名不动草稿里别的东西（按钮底是算过、压深了的青绿，不是输进去的原值）');
 
       // 全部恢复为起点。
       await tester.tap(k('theme-editor-more'));
@@ -711,7 +711,7 @@ void main() {
       expect(k('theme-save'), findsNothing);
       await tester.tap(k('theme-undo'));
       await tester.pumpAndSettle();
-      expect(now().ui[UiKey.accentFill], 0xFF00897B, reason: '恢复这一步也能撤销');
+      expect(now(), made.copyWith(name: '青绿'), reason: '恢复这一步也能撤销');
     });
   });
 

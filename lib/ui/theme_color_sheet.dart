@@ -1,5 +1,6 @@
 // 设计约束（主题编辑器的取色面板 · 底部面板 · 390×844）— 2026-11-26
-// - 只占屏幕下面六成左右、后面不压暗：上面那块实时预览要一直看得见，边拖边看效果。面板里的内容超出就自己滚。
+// - 只占屏幕下面一半多一点、后面不压暗：上沿停在编辑器那块实时预览的下沿之下（themeSheetMaxHeight），预览要一直整块看得见，
+//   边拖边看效果。面板里的内容超出就自己滚。
 // - 从上到下，一行只做一件事：
 //   这一项是什么（改之前 → 现在两个色块 + 名字 + 说明）→ 和它的底的对比度（达标 / 偏低）
 //   → 取色器的芯（方块、色相条、透明度条、十六进制输入，见 theme_color_picker.dart）
@@ -12,6 +13,8 @@ import 'package:lopicode/appearance/theme_edit_model.dart';
 import 'package:lopicode/state/theme_hooks.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/theme_color_picker.dart';
+import 'package:lopicode/ui/theme_preview.dart';
+import 'package:lopicode/ui/top_bar.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// 常用色（两排各八个：一排灰阶，一排彩色）。
@@ -37,18 +40,35 @@ List<int> themeOwnColors(ThemeSpec spec) {
 }
 
 /// 打开取色面板。[spec] 每次调用都要给出“现在这份草稿”；[onChanged] 在每次变化时调用（null＝高亮分类不单独上色）。
-Future<void> showThemeColorSheet(BuildContext context, {required ThemeItem item, required ThemeSpec Function() spec, required ValueChanged<int?> onChanged}) => showModalBottomSheet<void>(
-  context: context,
-  isScrollControlled: true,
-  barrierColor: Colors.transparent,
-  builder: (_) => ThemeColorSheet(item: item, spec: spec, onChanged: onChanged),
-);
+Future<void> showThemeColorSheet(BuildContext context, {required ThemeItem item, required ThemeSpec Function() spec, required ValueChanged<int?> onChanged}) {
+  final maxHeight = themeSheetMaxHeight(context);
+  return showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    barrierColor: Colors.transparent,
+    builder: (_) => ThemeColorSheet(item: item, spec: spec, onChanged: onChanged, maxHeight: maxHeight),
+  );
+}
+
+/// 面板上沿那一条（拖动手柄）大约占多高。
+const double kThemeSheetHandle = 48;
+
+/// 取色 / 快捷生成面板的内容最高多高：让面板的上沿正好停在编辑器那块预览的下沿之下（预览整块看得见）；
+/// 屏幕很矮时至少留屏幕的 45%（那时会盖住预览的下半截），最多不超过 60%。[context] 是编辑器页面的。
+double themeSheetMaxHeight(BuildContext context) {
+  final h = MediaQuery.sizeOf(context).height;
+  final fit = h - PageBar.insetOf(context) - kThemePreviewHeight - Space.x2 - kThemeSheetHandle;
+  return fit.clamp(h * 0.45, h * 0.6);
+}
 
 class ThemeColorSheet extends ConsumerStatefulWidget {
-  const ThemeColorSheet({super.key, required this.item, required this.spec, required this.onChanged});
+  const ThemeColorSheet({super.key, required this.item, required this.spec, required this.onChanged, this.maxHeight});
   final ThemeItem item;
   final ThemeSpec Function() spec;
   final ValueChanged<int?> onChanged;
+
+  /// 内容最高多高（见 [themeSheetMaxHeight]）；不给就是屏幕的六成。
+  final double? maxHeight;
 
   @override
   ConsumerState<ThemeColorSheet> createState() => _ThemeColorSheetState();
@@ -88,7 +108,7 @@ class _ThemeColorSheetState extends ConsumerState<ThemeColorSheet> {
       child: SafeArea(
         top: false,
         child: ConstrainedBox(
-          constraints: BoxConstraints(maxHeight: mq.size.height * 0.6),
+          constraints: BoxConstraints(maxHeight: widget.maxHeight ?? mq.size.height * 0.6),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
