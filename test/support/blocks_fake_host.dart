@@ -8,7 +8,7 @@ import 'package:lopicode/lowcode/logic_blocks.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 
 class FakeScript with LcBlockTree {
-  FakeScript(this.id, {List<LcBlock>? body, double? x, double? y}) : body = body ?? [] {
+  FakeScript(this.id, {List<LcBlock>? body, double? x, double? y, this.def}) : body = body ?? [] {
     this.x = x;
     this.y = y;
   }
@@ -18,16 +18,21 @@ class FakeScript with LcBlockTree {
   @override
   final List<LcBlock> body;
 
+  /// “定义”那种串才有（见 blocks_fake_fn_host.dart）：`{id, look, params}`。别的串没有这个键，存出来和以前一个字都不差。
+  Map<String, dynamic>? def;
+
   Map<String, dynamic> toJson() => {
     'id': id,
     'x': ?x,
     'y': ?y,
+    'def': ?def,
     'body': [for (final b in body) b.toJson()],
   };
 
   static FakeScript parse(Map<String, dynamic> j) {
     final x = j['x'], y = j['y'];
-    return FakeScript('${j['id']}', body: LcBlock.parseList(j['body'], 0), x: x is num ? x.toDouble() : null, y: y is num ? y.toDouble() : null);
+    final def = j['def'];
+    return FakeScript('${j['id']}', body: LcBlock.parseList(j['body'], 0), x: x is num ? x.toDouble() : null, y: y is num ? y.toDouble() : null, def: def is Map ? def.cast<String, dynamic>() : null);
   }
 }
 
@@ -160,6 +165,7 @@ const Map<String, List<String>> _variantAliases = {
 };
 
 Map<String, dynamic> _e(String kind, [Map<String, dynamic> more = const {}]) => {'e': kind, ...more};
+Map<String, dynamic> fxExpr(String kind, [Map<String, dynamic> more = const {}]) => _e(kind, more);
 Map<String, dynamic> fxNum(num v) => _e('num', {'v': v});
 Map<String, dynamic> fxText(String v) => _e('text', {'v': v});
 Map<String, dynamic> fxBool(bool v) => _e('bool', {'v': v});
@@ -176,6 +182,16 @@ class FakeHost extends BlockHost {
 
   /// 进了几次“统一改动入口”（＝几条撤销记录）。
   int edits = 0;
+
+  /// 给扩展出来的假宿主用：直接拿到那几串、领一个新的串名。
+  List<FakeScript> get fakeScripts => _scripts;
+  String nextScriptId() {
+    var id = 's${_nextId++}';
+    while (_scripts.any((s) => s.id == id)) {
+      id = 's${_nextId++}';
+    }
+    return id;
+  }
 
   String encode() => jsonEncode([for (final s in _scripts) s.toJson()]);
 

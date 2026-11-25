@@ -115,6 +115,12 @@ mixin BkEditorDrag on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Tick
     _begin(BkDragSession.fromPalette(host, engine, layout, BkPaletteSource(kind, item.id, preset: item.preset), item.layout), viewOf(global), grab);
   }
 
+  /// 拿着一样现成的东西开始拖（参数小块拿出来的那一份）。
+  void dragStartWith(BkDragSession session, Offset viewAt, Offset grab) {
+    if ((busy && !settleNow()) || _drag != null) return;
+    _begin(session, viewAt, grab);
+  }
+
   void dragMoveGlobal(Offset global) => dragMove(viewOf(global));
 
   void _begin(BkDragSession session, Offset viewAt, Offset grab) {

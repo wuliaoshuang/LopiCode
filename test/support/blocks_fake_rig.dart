@@ -38,6 +38,7 @@ LcBlock fxSampleSwitch() => LcBlock(
 );
 
 class FakeRig {
+  FakeRig.on(this.host);
   FakeRig([List<LcBlock>? body]) : host = FakeHost(scripts: body == null ? null : [FakeScript('s1', body: body, x: 0, y: 0)]);
 
   final FakeHost host;

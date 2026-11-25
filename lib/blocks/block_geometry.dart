@@ -160,7 +160,11 @@ enum BkSlotLook {
   empty,
 
   /// 一串值（`join` 的 items）末尾的小“＋”：点一下加一项。[BkSlot.exprPath] 的最后一步是“新的一项会在第几位”。
+  /// 参数小块后面的“＋”（加一个参数）也是它，这时 [BkSlot.param] 是“新参数会在第几位”。
   add,
+
+  /// 参数小块（定义帽子上的、匿名函数上的）：点一下改，长按拿出一份当值用。[BkSlot.param] 是第几个参数。
+  param,
 }
 
 /// 一个参数槽。
@@ -176,6 +180,8 @@ class BkSlot {
     this.hex = false,
     this.expr,
     this.hatSlotId,
+    this.param,
+    this.colorKey,
   });
 
   /// 属于积木的哪个参数（帽子的槽位是空字符串，看 [hatSlotId]）。多口积木某一段的参数是 `@<第几段>:<名字>`（见 `lcArmArg`）。
@@ -204,6 +210,12 @@ class BkSlot {
   /// 帽子上的槽位才有：宿主给的槽位名。
   final String? hatSlotId;
 
+  /// 参数小块 / 加参数的“＋”才有：第几个参数。在帽子上时 [arg] 是空的；在带参数表的值上时 [arg] / [exprPath] 指着那个值。
+  final int? param;
+
+  /// 参数小块画成什么颜色（＝它拖出来变成的那个值的颜色）。
+  final String? colorKey;
+
   /// 能不能把表达式拖进来（表达式槽、以及放着字面量表达式的槽）。
   bool get acceptsExpr => look != BkSlotLook.add && (spec?.kind == LcArgKind.expr || spec?.kind == LcArgKind.exprList || look == BkSlotLook.expr || look == BkSlotLook.empty);
 }
@@ -224,6 +236,13 @@ class BkExpr {
   final bool unknown;
   final List<BkLabel> labels = [];
   final List<BkSlot> slots = [];
+
+  /// “带口的值”才有：里面那个能放语句积木的口占的位置。
+  Rect? mouth;
+
+  /// 排版中途用：口里的积木和拼接点（相对这个值自己的左上角）。排完整块以后挪进整串的表里，这两张表就空了。
+  List<BkBlock> inner = [];
+  List<BkSnap> innerSnaps = [];
 }
 
 enum BkShape { hat, stack, mouth, expr }
@@ -369,6 +388,11 @@ class BkSnap {
 
   /// 表达式：这个槽是不是六边形（要“是 / 否”）。
   final bool hex;
+
+  /// 挪一下位置（别的都不变）。
+  BkSnap shifted(Offset d) => kind == BkSnapKind.statement
+      ? BkSnap.statement(parent: parent, inElse: inElse, arm: arm, index: index, anchor: anchor + d, width: width)
+      : BkSnap.expr(block: parent, arg: arg!, exprPath: exprPath, rect: rect.shift(d), hex: hex);
 
   /// 一个点离这个拼接点多远。语句看和 [anchor] 的距离（竖直方向算足，水平方向打对折——手指左右偏一点不该错过）；
   /// 表达式看离槽的矩形多远（在里面是 0）。

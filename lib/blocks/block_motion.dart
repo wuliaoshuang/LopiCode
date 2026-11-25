@@ -88,7 +88,7 @@ String bkMotionKey(String scriptId, LcBlockPath path, {bool hat = false}) {
   final sb = StringBuffer(scriptId)..write('/');
   for (var i = 0; i < path.length; i++) {
     sb
-      ..write(i == 0 ? 'b' : (path[i].arm >= 0 ? 'a${path[i].arm}_' : (path[i].inElse ? 'e' : 'b')))
+      ..write(i == 0 ? 'b' : (path[i].arm >= 0 ? 'a${path[i].arm}_' : (path[i].arm <= -2 ? 'x${-path[i].arm}_' : (path[i].inElse ? 'e' : 'b'))))
       ..write(path[i].index)
       ..write('.');
   }

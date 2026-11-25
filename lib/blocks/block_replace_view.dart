@@ -8,6 +8,7 @@ import 'dart:math' as math;
 
 import 'package:lopicode/blocks/block_geometry.dart';
 import 'package:lopicode/blocks/block_host.dart';
+import 'package:lopicode/blocks/block_palette_model.dart';
 import 'package:lopicode/blocks/block_script_view.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:material_ui/material_ui.dart';
@@ -59,7 +60,7 @@ class BlockReplaceView extends StatefulWidget {
 
 class _BlockReplaceViewState extends State<BlockReplaceView> {
   late final List<BlockCategory> _categories = [
-    for (final c in widget.host.categories)
+    for (final c in bkAllCategories(widget.host))
       if (c.allExprs.isNotEmpty) c,
   ];
   late String? _category = _first();
@@ -88,7 +89,7 @@ class _BlockReplaceViewState extends State<BlockReplaceView> {
         ..removeWhere(yes.contains)
         ..insertAll(0, yes);
     }
-    return [for (final k in kinds) (k, engine.layoutExpr(widget.host.newExpr(k)))];
+    return [for (final k in kinds) (k, engine.layoutExpr(widget.host.newExpr(k), controls: false))];
   }();
 
   @override

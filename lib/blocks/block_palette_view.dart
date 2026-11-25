@@ -59,6 +59,7 @@ class BlockPaletteView extends StatefulWidget {
     this.height = 300,
     this.stars,
     this.onNotice,
+    this.onCustom,
     this.handleLeading,
     this.handleTrailing,
     this.onHandleTap,
@@ -91,6 +92,9 @@ class BlockPaletteView extends StatefulWidget {
 
   /// 有话要告诉用户（“已加到常用”这种）：外面拿去显示成提示条。
   final void Function(String text)? onNotice;
+
+  /// “我的积木”的操作：[BkCustomAction.create]（`id` 是空的）/ edit / define / remove。不给＝那一页没有“新建积木”，长按只有加星。
+  final void Function(BkCustomAction action, String id)? onCustom;
 
   /// 面板现在多高（外面每一帧给；比 [headHeight] 矮时里面的东西被裁掉，不挤扁）。
   final double height;
@@ -199,7 +203,7 @@ class _BlockPaletteViewState extends State<BlockPaletteView> with BkKitHolder {
       case BlockPaletteKind.block:
         layout = engine.layoutStack([BkPaletteSource(BkDragKind.statement, ref.id, preset: ref.preset).newBlock(host)], controls: false);
       case BlockPaletteKind.expr:
-        layout = engine.layoutExpr(BkPaletteSource(BkDragKind.expr, ref.id, preset: ref.preset).newExpr(host));
+        layout = engine.layoutExpr(BkPaletteSource(BkDragKind.expr, ref.id, preset: ref.preset).newExpr(host), controls: false);
     }
     return _items[key] = BlockPaletteItem(ref.kind, ref.id, layout, preset: ref.preset);
   }
@@ -238,8 +242,11 @@ class _BlockPaletteViewState extends State<BlockPaletteView> with BkKitHolder {
   /// 按住没挪就松手：在样品旁边问要不要加星。
   Future<void> _askStar(BuildContext box, BlockPaletteItem item) async {
     final starred = _stars.contains(BlockItemRef(item.kind, item.id).token);
-    final picked = await showBkStarMenu(box, starred: starred);
-    if (picked == true && mounted) _toggleStar(item);
+    final mine = widget.onCustom != null && item.kind != BlockPaletteKind.hat && (widget.host.custom?.customs.any((c) => c.id == item.id) ?? false);
+    final picked = await showBkStarMenu(box, starred: starred, custom: mine);
+    if (!mounted || picked == null) return;
+    if (picked == BkCustomAction.star) return _toggleStar(item);
+    widget.onCustom?.call(picked, item.id);
   }
 
   @override
@@ -247,8 +254,8 @@ class _BlockPaletteViewState extends State<BlockPaletteView> with BkKitHolder {
     final theme = Theme.of(context);
     final c = context.colors;
     final categories = [
-      for (final c in widget.host.categories)
-        if (!c.isEmpty) c,
+      for (final c in bkAllCategories(widget.host))
+        if (!c.isEmpty || c.id == bkCustomCategoryId) c,
     ];
     final ids = [if (categories.isNotEmpty) bkCommonCategoryId, for (final c in categories) c.id];
     final currentId = ids.isEmpty ? null : (ids.contains(_category) ? _category! : ids.first);
@@ -263,6 +270,7 @@ class _BlockPaletteViewState extends State<BlockPaletteView> with BkKitHolder {
       pageId = currentId;
       sections = current != null ? bkCategorySections(current) : (currentId == null ? const [] : bkCommonSections(widget.host, _stars));
     }
+    final mine = pageId == bkCustomCategoryId && widget.onCustom != null;
     final handleColor = theme.dividerColor;
     final safeBottom = MediaQuery.paddingOf(context).bottom;
     // 收到只剩手柄条时，下面那两行淡出去（屏幕底部有系统手势条时不露半截分类）。
@@ -385,13 +393,14 @@ class _BlockPaletteViewState extends State<BlockPaletteView> with BkKitHolder {
                                   padding: EdgeInsets.fromLTRB(16, 14, 16, 20 + safeBottom),
                                   child: Align(
                                     alignment: Alignment.topLeft,
-                                    child: sections.isEmpty
+                                    child: sections.isEmpty && !mine
                                         ? (_searching ? BkPaletteSearchHint(query: _query.text) : const SizedBox.shrink())
                                         : Column(
                                             crossAxisAlignment: CrossAxisAlignment.start,
                                             children: [
+                                              if (mine) BkPaletteCustomHead(empty: sections.isEmpty, onNew: () => widget.onCustom?.call(BkCustomAction.create, '')),
                                               for (final (i, s) in sections.indexed) ...[
-                                                if (s.label != null) BkPaletteHeading(s.label!, first: i == 0, color: c.textMuted) else if (i > 0) const SizedBox(height: 12),
+                                                if (s.label != null) BkPaletteHeading(s.label!, first: i == 0 && !mine, color: c.textMuted) else if (i > 0 || mine) const SizedBox(height: 12),
                                                 Wrap(
                                                   spacing: 12,
                                                   runSpacing: 12,
