@@ -203,6 +203,17 @@ void main() {
       }
     });
 
+    test('换强调色：中等深浅的颜色（青绿、橙）配白字并把按钮底压深；很浅的（黄）才配黑字', () {
+      for (final accent in [0xFF00897B, 0xFFE8590C]) {
+        final t = reaccentTheme(kDefaultLightTheme, accent);
+        expect(t.ui[UiKey.onAccent], 0xFFFFFFFF, reason: accent.toRadixString(16));
+        expect(contrastRatio(0xFFFFFFFF, t.ui[UiKey.accentFill]!), greaterThanOrEqualTo(4.49));
+      }
+      final yellow = reaccentTheme(kDefaultLightTheme, 0xFFFFE068);
+      expect(yellow.ui[UiKey.onAccent], 0xFF000000);
+      expect(yellow.ui[UiKey.accentFill], 0xFFFFE068, reason: '本来就够，不动');
+    });
+
     test('从主色生成整套：每一套都过格式校验、对比度全部达标；底色带上了倾向；深浅关系没乱', () {
       const tints = [0xFF3355FF, 0xFFFF8800, 0xFF00AA88, 0xFF808080, 0xFFFF0066];
       for (final dark in [false, true]) {

@@ -207,10 +207,12 @@ class _UiPreview extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
                 for (final (i, (icon, label)) in const [(Icons.chat_bubble_outline, '对话'), (Icons.folder_outlined, '文件'), (Icons.terminal, '终端')].indexed)
-                  Column(
+                  // 图标和字排成一行：竖着叠会比这块预览高出一截，字被裁掉一半。
+                  Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(icon, size: 14, color: i == 0 ? c.navActive : c.navInactive),
+                      const SizedBox(width: 4),
                       Text(label, style: t.labelSmall?.copyWith(color: i == 0 ? c.navActive : c.navInactive, fontSize: 9)),
                     ],
                   ),
@@ -364,7 +366,14 @@ class _BlocksPreview extends StatelessWidget {
       margin: const EdgeInsets.only(left: 6),
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(color: tone.deep, borderRadius: BorderRadius.circular(6)),
-      child: Text('$text ▾', style: style.copyWith(color: tone.text)),
+      // 下拉的小三角用图标画：自带字体里没有“▾”这个字，会显示成方框。
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(text, style: style.copyWith(color: tone.text)),
+          Icon(Icons.arrow_drop_down, size: 14, color: tone.text),
+        ],
+      ),
     );
     Widget block(String key, String label, {List<Widget> parts = const [], bool selected = false, Color? badge, Color? onBadge, String mark = '!', double indent = 0}) {
       final tone = p.tone(key);

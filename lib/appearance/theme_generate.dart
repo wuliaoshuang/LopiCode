@@ -24,11 +24,14 @@ const double kTintOnDark = 0.35;
 const double kTintOnMid = 0.2;
 
 /// 跟着“换强调色”一起走的固定几项（另外：凡是原来和旧强调色、旧浅底同色的项也跟着换）。
+/// 白字放在强调色上的对比度到这个数，就坚持用白字（再把按钮底压深到 4.5:1）。
+const double kOnAccentKeepWhite = 3.0;
+
 const List<String> kAccentFamily = ['ui.accent', 'ui.accentFill', 'ui.onAccent', 'ui.accentSoft', 'ui.selectedBg'];
 
 /// 换强调色：重算强调色这一组，并把原来和旧强调色 / 旧实心按钮底 / 旧浅底同色的项一起换掉（各自的透明度不变）。
 ///
-/// - 实心按钮底＝[accent] 本身；上面的字取黑白里更清楚的；还不到 4.5:1 就把按钮底的亮度挪一挪。
+/// - 实心按钮底＝[accent] 本身；上面的字：白字已有 3:1 就用白，否则取黑白里更清楚的；还不到 4.5:1 就把按钮底的亮度挪一挪。
 /// - 强调色浅底＝[accent] 混进卡片色（浅色主题混 12%，深色 28%）；选中项的底同它。
 /// - 强调色（文字、图标）＝[accent] 调亮度，直到在主页面底色、卡片、浅底上都 ≥ 4.5:1。
 ThemeSpec reaccentTheme(ThemeSpec t, int accent) {
@@ -38,9 +41,10 @@ ThemeSpec reaccentTheme(ThemeSpec t, int accent) {
   final surface = ui[UiKey.surface] ?? (t.dark ? 0xFF1E1F25 : 0xFFFFFFFF);
   final bg = ui[UiKey.bg] ?? surface;
 
-  var on = bestOn(a0);
+  // 不太浅的强调色（白字在上面已有 3:1）一律配白字、把按钮底压深一点：
+  // 直接取“黑白里更清楚的”会让青绿、橙这类中等深浅的颜色配上黑字、黑色开关头，很难看。
+  final on = contrastRatio(0xFFFFFFFF, a0) >= kOnAccentKeepWhite ? 0xFFFFFFFF : bestOn(a0);
   final fill = ensureContrast(a0, [on], kContrastText);
-  on = bestOn(fill);
   final soft = mixArgb(surface, a0, t.dark ? kAccentSoftMixDark : kAccentSoftMixLight);
   final text = ensureContrast(a0, [bg, surface, soft], kContrastText);
 

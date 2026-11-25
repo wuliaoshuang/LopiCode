@@ -8,6 +8,7 @@
 // - 不加依赖：都是自己画的；颜色都是算出来的或取自当前主题。
 import 'dart:math' as math;
 
+import 'package:flutter/gestures.dart';
 import 'package:lopicode/appearance/theme_color_math.dart';
 import 'package:lopicode/appearance/theme_json.dart';
 import 'package:lopicode/theme/tokens.dart';
@@ -235,11 +236,16 @@ class _DragArea extends StatelessWidget {
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, box) {
       void at(Offset p) => onDrag((p.dx / box.maxWidth).clamp(0.0, 1.0), (p.dy / height).clamp(0.0, 1.0));
-      return GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onPanDown: (d) => at(d.localPosition),
-        onPanUpdate: (d) => at(d.localPosition),
-        child: CustomPaint(size: Size(box.maxWidth, height), painter: painter),
+      // 这块区域里手指一按下就归它（EagerGestureRecognizer 立刻赢），不和外面那层上下滚动抢：
+      // 不然在方块里上下拖（调明度）会变成滚面板。位置直接读原始的按下 / 移动事件。
+      return Listener(
+        onPointerDown: (e) => at(e.localPosition),
+        onPointerMove: (e) => at(e.localPosition),
+        child: RawGestureDetector(
+          behavior: HitTestBehavior.opaque,
+          gestures: {EagerGestureRecognizer: GestureRecognizerFactoryWithHandlers<EagerGestureRecognizer>(EagerGestureRecognizer.new, (_) {})},
+          child: CustomPaint(size: Size(box.maxWidth, height), painter: painter),
+        ),
       );
     },
   );

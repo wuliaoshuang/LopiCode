@@ -434,7 +434,7 @@ void main() {
       expect(k('theme-item-ui.bg'), findsNothing);
       await tester.tap(k('theme-section-metrics'));
       await tester.pumpAndSettle();
-      final key = MetricKey.radiusScale;
+      const key = MetricKey.radiusScale;
       final before = t.metric(key);
       await tester.tap(k('theme-metric-$key-plus'));
       await tester.pumpAndSettle();
@@ -599,15 +599,24 @@ void main() {
       expect(k('color-alpha'), findsOneWidget);
       await typeHex(tester, '#40102030');
       expect(previewSpec(tester, 'ui').ui[soft.key], 0x40102030);
-      // 点透明度条的最右边：变成不透明。
+      // 把透明度条拖到最右边（拖过头也算到头）：变成不透明。
       await tester.ensureVisible(k('color-alpha'));
       final bar = tester.getRect(k('color-alpha'));
-      await tester.tapAt(Offset(bar.right - 1, bar.center.dy));
+      await tester.dragFrom(bar.center, const Offset(400, 0));
       await tester.pump();
       expect(previewSpec(tester, 'ui').ui[soft.key]! >> 24, 0xFF);
+      // 在方块里上下拖是调明度，不是滚面板（方块在一个能上下滚的面板里，这里守着它不被抢走）。
+      await tester.ensureVisible(k('color-sv'));
+      final sv = tester.getRect(k('color-sv'));
+      await tester.dragFrom(sv.topRight + const Offset(-10, 10), const Offset(0, 300));
+      await tester.pump();
+      expect(previewSpec(tester, 'ui').ui[soft.key]! & 0xFFFFFF, 0, reason: '拖到方块最下面＝明度 0＝黑');
+      expect(tester.getRect(k('color-sv')), sv, reason: '面板没有跟着滚');
       await tester.tap(k('color-done'));
       await tester.pumpAndSettle();
 
+      tester.state<ScrollableState>(find.descendant(of: k('theme-editor-list'), matching: find.byType(Scrollable)).first).position.jumpTo(0);
+      await tester.pumpAndSettle();
       await tester.tap(k('theme-section-ui'));
       await tester.pumpAndSettle();
       await tester.tap(k('theme-section-tokens'));
@@ -664,7 +673,10 @@ void main() {
       await tester.tap(k('gen-apply'));
       await tester.pumpAndSettle();
       final made = now();
-      expect(made.ui[UiKey.accentFill], 0xFF00897B);
+      // 青绿配白字：按钮底是同一个色相、压深到白字够清楚为止。
+      expect(made.ui[UiKey.onAccent], 0xFFFFFFFF);
+      expect(made.ui[UiKey.accentFill], reaccentTheme(kDefaultLightTheme, 0xFF00897B).ui[UiKey.accentFill]);
+      expect(made.ui[UiKey.accentFill], isNot(t.ui[UiKey.accentFill]));
       expect(made.ui[UiKey.canvas], isNot(t.ui[UiKey.canvas]), reason: '底色带上了倾向');
       expect(decodeThemeText(encodeThemeText(made)).ok, isTrue, reason: '生成的整套能过格式校验');
       expect(made.id, t.id);
