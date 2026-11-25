@@ -30,6 +30,8 @@ import 'package:lopicode/session/chat_export.dart';
 import 'package:lopicode/session/chat_models.dart';
 import 'package:lopicode/session/compact_flow.dart';
 import 'package:lopicode/session/conversation.dart';
+import 'package:lopicode/session/message_actions.dart';
+import 'package:lopicode/session/message_branches.dart';
 import 'package:lopicode/session/send_flow.dart';
 import 'package:lopicode/session/session_core.dart';
 import 'package:lopicode/session/subagents.dart';
@@ -73,6 +75,17 @@ class ProjectSession {
   late final TurnRunner _turns = TurnRunner(_core, toolbox: _toolbox);
   late final Subagents _subagents = Subagents(_core, execute: _turns.execute);
   late final SendFlow _sending = SendFlow(_core, execute: _turns.execute, loadChat: loadChat);
+
+  /// 对当前对话里一条消息的操作（删除、导出、收藏；规矩在 lib/session/message_actions.dart）。
+  late final MessageOps messageOps = MessageOps(_core, dropConversations: _dropConversations);
+
+  /// 重试、编辑、分支（规矩在 lib/session/message_branches.dart）。
+  late final MessageBranches branches = MessageBranches(
+    _core,
+    send: (text, {images = const []}) => _sending.send(text, images: images),
+    loadChat: loadChat,
+    open: selectConversation,
+  );
 
   /// 测试用：换掉执行命令的环境、联网搜索的客户端。
   CommandRunner Function()? commandRunnerFactory;
@@ -244,7 +257,17 @@ class ProjectSession {
   Future<void> deleteConversation() async {
     if (agentBusy) return;
     final id = activeConversationId;
-    final doomed = [id, for (final c in descendantsOf(id)) c.id];
+    await _dropConversations([id]);
+    _core.queue.clear();
+    await _core.ensureLoaded(_active);
+    await _core.saveIndex();
+  }
+
+  /// 把 [ids] 这些对话和它们派出的子代理对话从目录和盘上拿掉（不存目录，调用方存）。
+  Future<void> _dropConversations(List<String> ids) async {
+    final doomed = <String>{
+      for (final id in ids) ...[id, for (final c in descendantsOf(id)) c.id],
+    };
     for (final d in doomed) {
       _core.runs.remove(d)?.runner?.cancel();
       for (final file in [_core.chatFileOf(d), _core.reserved('team-$d.json'), _core.dropJournal(d)]) {
@@ -260,10 +283,7 @@ class ProjectSession {
       _core.cards.clearAllowKeys(d);
       if (!app.disposed) app.container.invalidate(chatRunProvider((this, d)));
     }
-    _core.convs?.removeAll(doomed.toSet());
-    _core.queue.clear();
-    await _core.ensureLoaded(_active);
-    await _core.saveIndex();
+    _core.convs?.removeAll(doomed);
   }
 
   // ── 确认卡 / 提问卡（可能同时来自主智能体和几个子代理，排队一张一张出）────

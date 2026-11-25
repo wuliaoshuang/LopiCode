@@ -111,7 +111,19 @@ class ShellAppBar extends StatelessWidget implements PreferredSizeWidget {
 
 /// 侧边栏。没打开项目时（[session] 为空）只有“项目”和“设置”。
 class AppDrawer extends StatelessWidget {
-  const AppDrawer({super.key, this.project, this.session, this.current, this.onDest, this.onNewConversation, this.onConversation, this.onClose, required this.onProjects, required this.onSettings});
+  const AppDrawer({
+    super.key,
+    this.project,
+    this.session,
+    this.current,
+    this.onDest,
+    this.onNewConversation,
+    this.onConversation,
+    this.onFavorites,
+    this.onClose,
+    required this.onProjects,
+    required this.onSettings,
+  });
 
   final Project? project;
   final ProjectSession? session;
@@ -119,6 +131,9 @@ class AppDrawer extends StatelessWidget {
   final void Function(ShellDest dest)? onDest;
   final VoidCallback? onNewConversation;
   final void Function(String id)? onConversation;
+
+  /// 打开“收藏的消息”。
+  final VoidCallback? onFavorites;
   final VoidCallback onProjects;
   final VoidCallback onSettings;
 
@@ -182,11 +197,14 @@ class AppDrawer extends StatelessWidget {
                     ),
                     // 当前对话还是空的时候，“新对话”这一项就代表它，不另外列一行。
                     _DrawerItem(icon: Icons.add_comment_outlined, label: '新对话', selected: current == ShellDest.chat && s.activeConversation.title.isEmpty, enabled: !busy, onTap: onNewConversation),
+                    _DrawerItem(icon: Icons.bookmark_border, label: '收藏的消息', selected: false, onTap: onFavorites),
                     for (final conv in s.topConversations)
                       if (conv.title.isNotEmpty)
                         _DrawerItem(
-                          icon: conv.auto ? Icons.event_repeat : Icons.chat_bubble_outline,
+                          // 分出来的对话看得出来源：分支是分叉图标，重试 / 编辑留下的旧版本是时钟图标，名字后面跟小标签
+                          icon: conv.auto ? Icons.event_repeat : (conv.origin == null ? Icons.chat_bubble_outline : (conv.origin!.old ? Icons.history : Icons.call_split)),
                           label: conv.title,
+                          tag: conv.origin?.tag,
                           selected: current == ShellDest.chat && conv.id == s.activeConversationId,
                           enabled: !busy || conv.id == s.activeConversationId,
                           onTap: () => onConversation?.call(conv.id),
@@ -208,7 +226,10 @@ class AppDrawer extends StatelessWidget {
 }
 
 class _DrawerItem extends StatelessWidget {
-  const _DrawerItem({required this.icon, required this.label, required this.selected, required this.onTap, this.enabled = true});
+  const _DrawerItem({required this.icon, required this.label, required this.selected, required this.onTap, this.enabled = true, this.tag});
+
+  /// 名字后面的小标签（“分支”“旧版本”）。
+  final String? tag;
   final IconData icon;
   final String label;
   final bool selected;
@@ -243,6 +264,14 @@ class _DrawerItem extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
+                if (tag != null) ...[
+                  const SizedBox(width: Space.x2),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: Space.x2, vertical: 1),
+                    decoration: BoxDecoration(color: selected ? c.surface : c.surfaceMuted, borderRadius: BorderRadius.circular(Radii.sm)),
+                    child: Text(tag!, style: t.labelSmall?.copyWith(color: c.textMuted)),
+                  ),
+                ],
               ],
             ),
           ),

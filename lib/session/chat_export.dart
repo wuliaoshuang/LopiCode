@@ -1,10 +1,12 @@
-// /export：把一段对话写成 Markdown。
+// /export 和“分享这条消息”：把对话（或其中一条、一轮）写成 Markdown。
+// 出门前一律过一遍 [redactSecrets]：像密钥 / 令牌 / 密码的内容换成 ***（宁可多抹）。
 import 'dart:io';
 
+import 'package:lopicode/core/crash_log.dart';
 import 'package:lopicode/core/path_guard.dart';
 import 'package:lopicode/session/session_core.dart';
 
-/// 把接口格式的消息记录排成 Markdown 文本。纯计算。
+/// 把接口格式的消息记录排成 Markdown 文本。纯计算。像密钥的内容已经抹掉。
 String conversationMarkdown(String title, List<Map<String, dynamic>> messages) {
   final out = StringBuffer('# $title\n\n');
   for (final m in messages) {
@@ -29,14 +31,19 @@ String conversationMarkdown(String title, List<Map<String, dynamic>> messages) {
         out.writeln('> 工具结果：${clipText('${m['content'] ?? ''}'.replaceAll('\n', ' '), 300)}\n');
     }
   }
-  return out.toString();
+  return redactSecrets(out.toString());
 }
 
-/// 写进工作区的 exports/ 目录，返回相对路径。
-Future<String> writeConversationExport(PathGuard guard, String markdown, {DateTime? now}) async {
+/// 写进工作区的 exports/ 目录，返回相对路径。[prefix] 是文件名开头（整段对话叫“对话”，单条 / 一轮叫“消息”）。
+/// 同一秒里已经有同名文件就在后面加序号，不盖掉上一份。
+Future<String> writeConversationExport(PathGuard guard, String markdown, {DateTime? now, String prefix = '对话'}) async {
   final t = now ?? DateTime.now();
   String two(int v) => v.toString().padLeft(2, '0');
-  final rel = 'exports/对话-${t.year}${two(t.month)}${two(t.day)}-${two(t.hour)}${two(t.minute)}${two(t.second)}.md';
+  final base = 'exports/$prefix-${t.year}${two(t.month)}${two(t.day)}-${two(t.hour)}${two(t.minute)}${two(t.second)}';
+  var rel = '$base.md';
+  for (var n = 2; n < 100 && await File(guard.resolve(rel)).exists(); n++) {
+    rel = '$base-$n.md';
+  }
   final file = File(guard.resolve(rel));
   await file.parent.create(recursive: true);
   await file.writeAsString(markdown);

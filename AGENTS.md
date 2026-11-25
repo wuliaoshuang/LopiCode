@@ -169,6 +169,16 @@ tool/check.sh --fix    # 先自动排版
   不许自己另画顶栏（`test/topbar_unified_test.dart` 守着）。Scaffold 正文里的 `viewPadding.top` 是 0（被 Scaffold 拿掉了），别自己拿它算状态栏。
 - **代码字号全应用一个值**（`lib/state/code_font.dart`）：正式的代码区域（编辑器、看代码）读 `codeFontProvider`；改动对比、步骤详情、完整输出、后台日志这类次要内容读
   `compactCodeFontProvider`（小一号）。新加显示代码 / 日志的地方不要写死字号；要能捏合就在外面包**一层** `CodeZoom`（别套两层，`DiffView` 自己不包）。
+- **点输入框外面的空白收键盘，全应用只接一处**（`lib/ui/keyboard_tap_dismiss.dart` 的 `KeyboardTapDismiss`，在 `lib/app.dart` 里包着整个应用；
+  规则见 `lib/ui/tap_outside.dart`）。安卓上系统输入框默认“手指点外面不失焦”，所以要这一层。新页面照下面做，**不要**自己再写
+  `GestureDetector(onTap: unfocus)` 或给 `TextField` 传 `onTapOutside`（会把这套规则顶掉）：
+  - 普通表单页、对话框、底部面板：什么都不用做。轻点输入框外面就收；点按钮 / 列表项时它照常响应并顺带收键盘；拖动、长按、双指不收。
+  - 输入框旁边“帮着输入”的按钮（加减、插入符号、格式工具条）：用 `KeyboardKeep` 包起来，点它不收。
+  - 贴底输入区的页面（像聊天）：在那一列里、内容和输入区之间放一个 `const KeyboardDock()`。它下面的全部（附件条、候选列表、工具栏、发送）
+    点了不收；手指拖动它上面的内容滚动会收（程序自己滚不收）。**它必须紧跟在内容后面、和输入框在同一个 `Column` 里**，挪走就失效。
+  - 浮在输入框上方的候选浮层（放在 Overlay 里、不在那一列里的）：用 `KeyboardKeep` 包住。
+  - 终端（`terminal_input.dart`）和代码编辑器（re_editor）不是系统输入框，这套规则管不到它们，也不该管。
+  - 界面测试里点聊天输入框要点里面的 `EditableText`，别点整个 `chat-input` 的中心（展开时中心是工具栏，收放动画中途是留白）。
 - 手机上 `localhost` 指手机自己。
 - 第三方组件（PRoot 等二进制、图标）不许改内容；来源、版本、校验值、许可证记在 `third_party/` 和 `lib/core/third_party.dart`，有测试核对校验值。
 

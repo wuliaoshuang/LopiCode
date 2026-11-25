@@ -3,7 +3,7 @@
 //   不带胶囊底色和描边（2026-11-24 霜霜要求弱化），也不可点。
 //   聊天内容从它们下面滚过去，顶部渐隐。有子代理时，右上的圆变成胶囊，多一个子代理计数。
 // - 气泡：Agent 的回复是靠左的大圆角浅灰块（左上角小圆角），右边留出一截；我的消息是靠右的浅蓝块（右上角小圆角）。正文 16 号字。
-// - 输入区是贴底的白色圆角面板：上方多行输入，下方附件、权限、模型、语音、发送常驻。
+// - 输入区是贴底的白色圆角面板：上方多行输入，下方附件、权限、模型、发送常驻（语音入口暂时隐藏，开关 kChatVoiceEnabled）。
 // - 模型与权限直接可点；计划模式、图片、引用文件仍可进“＋”面板，每项一行并写着当前值；
 //   新对话、Agent 预设、团队、压缩、导出、删除都在右上“···”菜单里。项目规则在“设置”里。
 // - 胶囊上方按需叠几条窄条：自动允许中、计划模式、排队的消息、附件缩略图、/ 指令提示；确认卡和提问卡也钉在这里。
@@ -21,15 +21,22 @@ import 'package:lopicode/state/presets_state.dart';
 import 'package:lopicode/state/ui_prefs.dart';
 import 'package:lopicode/state/workspace_chat.dart';
 import 'package:lopicode/state/workspace_conversations.dart';
+import 'package:lopicode/state/workspace_favorites.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/chat_background.dart';
 import 'package:lopicode/ui/chat_composer.dart';
 import 'package:lopicode/ui/chat_extras.dart';
+import 'package:lopicode/ui/chat_jump.dart';
 import 'package:lopicode/ui/chat_panels.dart';
 import 'package:lopicode/ui/chat_row_view.dart';
 import 'package:lopicode/ui/chat_todos.dart';
 import 'package:lopicode/ui/chrome.dart';
+import 'package:lopicode/ui/favorites_screen.dart';
 import 'package:lopicode/ui/file_picker_sheet.dart';
+import 'package:lopicode/ui/keyboard_tap_dismiss.dart';
+import 'package:lopicode/ui/message_action_bar.dart';
+import 'package:lopicode/ui/message_branch_actions.dart';
+import 'package:lopicode/ui/message_edit_bar.dart';
 import 'package:lopicode/ui/model_setup.dart';
 import 'package:lopicode/ui/settings_ai.dart';
 import 'package:lopicode/ui/settings_quota.dart';
@@ -55,21 +62,30 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   final _input = TextEditingController();
   final _focus = FocusNode();
   final _scroll = ScrollController();
+  late final _jump = ChatJumper(_scroll);
   int _lastCount = 0;
+  String? _lastConv;
 
   /// 还没发出去的图片附件（`{path, mime}`，path 相对工作区）。
   final List<Map<String, dynamic>> _attachments = [];
 
   ProjectSession get s => widget.session;
+  late final _edit = ComposerEditBinding(session: s, input: _input, attachments: _attachments, focus: _focus, changed: _onInput);
 
   @override
   void initState() {
     super.initState();
+    _edit.attach(ref); // “编辑之前的消息”：文字和图片进出输入框（message_edit_bar.dart）
     // 对话目录、当前对话的条目和忙不忙、确认卡 / 提问卡、排队的消息：哪个变了都重画（页面销毁时自动取消订阅）
     ref.listenManual(conversationsProvider(s), (_, _) => _onSession());
     ref.listenManual(activeChatProvider(s), (_, _) => _onSession());
     ref.listenManual(pendingCardsProvider(s), (_, _) => _onSession());
     ref.listenManual(sendQueueProvider(s), (_, _) => _onSession());
+    // 聊天页搭起来时对话已经在内存里（切页回来、重建）：没有通知会来，自己贴到底一次，不然停在最上面。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _scroll.hasClients) _scroll.jumpTo(_scroll.position.maxScrollExtent);
+    });
+    ref.listenManual(chatJumpProvider(s), (_, id) => _jumpTo(id), fireImmediately: true);
     _input.addListener(_onInput);
     // 打开聊天时查一次余额（只对 DeepSeek 官方渠道有动作，最多每分钟一次）。
     s.loadChat().then((_) {
@@ -82,9 +98,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   @override
   void dispose() {
+    _edit.dispose();
     _input.dispose();
     _focus.dispose();
     _scroll.dispose();
+    _jump.dispose();
     super.dispose();
   }
 
@@ -100,13 +118,25 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       });
     }
     setState(() {});
-    // 有新内容时滚到底（用户自己往上翻时不打扰）。
-    final grew = s.chat.length != _lastCount;
+    // 有新内容、换了对话时滚到底（用户自己往上翻时不打扰；删掉消息变短了也留在原地）。
+    final grew = s.chat.length > _lastCount || s.activeConversationId != _lastConv;
     _lastCount = s.chat.length;
+    _lastConv = s.activeConversationId;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_scroll.hasClients) return;
+      if (!_scroll.hasClients || _jump.busy) return;
       final pos = _scroll.position;
       if (grew || pos.maxScrollExtent - pos.pixels < 120) _scroll.jumpTo(pos.maxScrollExtent);
+    });
+  }
+
+  /// 从收藏页跳回来：等这一帧搭完，滚到那条消息（它已经不在这段对话里就说一声）。
+  void _jumpTo(String? id) {
+    if (id == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      ref.read(chatJumpProvider(s).notifier).clear();
+      if (!_jump.has(id)) return showSnack(context, '已经打开那段对话，但那条消息不在了（被删掉，或已经收进步骤里）。');
+      await _jump.jumpTo(id);
     });
   }
 
@@ -115,6 +145,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   Future<void> _send([String? preset, SendMode mode = SendMode.queue]) async {
     final text = (preset ?? _input.text).trim();
     if (text.isEmpty && _attachments.isEmpty) return;
+    if (preset == null && await _edit.sendIfEditing(context, text) || !mounted) return; // 正在编辑之前的消息：改走“从这条重新来”
     if (preset == null && _attachments.isEmpty && _runSlash(text)) {
       _input.clear();
       return;
@@ -341,6 +372,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final slash = text.startsWith('/') && !text.contains(RegExp(r'\s')) ? kSlashCommands.where((k) => k.$1.startsWith(text.toLowerCase())).toList() : const <(String, String)>[];
     final topInset = PageBar.insetOf(context);
     final rows = deriveChatRows(s.chat, busy: s.agentBusy, showThinking: prefs.thinking);
+    _jump.sync(rows);
     final todos = latestTodos(s.chat);
     // 最后一行已经是“进行中”的步骤组（它自己在转圈）或正在往外冒的回复时，不再另起一行“处理中”。
     final last = rows.lastOrNull;
@@ -366,15 +398,19 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => TeamScreen(session: s)));
               }
               if (v == 'usage') _showUsage();
+              if (v == 'favorites') openFavorites(context, s);
               if (v == 'compact') _compact();
               if (v == 'export') _export();
               if (v == 'delete') _deleteConversation();
+              if (v == 'origin') openBranchOrigin(context, s);
             },
             itemBuilder: (_) => [
               PopupMenuItem(value: 'new', enabled: !s.agentBusy, child: const Text('新对话')),
+              ...originMenuItems(s),
               PopupMenuItem(value: 'preset', child: Text('Agent 预设：${s.preset.name}')),
               if (s.teamEnabled) const PopupMenuItem(value: 'team', child: Text('智能体团队')),
               const PopupMenuItem(value: 'usage', child: Text('用量')),
+              const PopupMenuItem(value: 'favorites', child: Text('收藏的消息')),
               PopupMenuItem(value: 'compact', enabled: !s.agentBusy && s.chat.isNotEmpty, child: const Text('压缩对话')),
               PopupMenuItem(value: 'export', enabled: s.chat.isNotEmpty, child: const Text('导出对话')),
               PopupMenuItem(
@@ -400,17 +436,22 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       readOutput: s.readCommandOutput,
                       onResume: s.resumeInterrupted,
                       onDismissInterrupted: s.dismissInterrupted,
-                      child: ListView.builder(
-                        controller: _scroll,
-                        padding: EdgeInsets.fromLTRB(Space.x4, topInset + Space.x2, Space.x4, Space.x4),
-                        itemCount: rows.length + (working ? 1 : 0),
-                        itemBuilder: (context, i) {
-                          if (i >= rows.length) return const _Working();
-                          return ChatRowView(row: rows[i], onOpenChild: _openChild, onOpenQuota: _openQuota, onOpenTurn: _showTurn);
-                        },
+                      child: MessageOpsHost(
+                        session: s,
+                        flash: _jump.flash,
+                        child: ListView.builder(
+                          controller: _scroll,
+                          padding: EdgeInsets.fromLTRB(Space.x4, topInset + Space.x2, Space.x4, Space.x4),
+                          itemCount: rows.length + (working ? 1 : 0),
+                          itemBuilder: (context, i) {
+                            if (i >= rows.length) return const _Working();
+                            return _jump.wrap(rows[i], ChatRowView(row: rows[i], onOpenChild: _openChild, onOpenQuota: _openQuota, onOpenTurn: _showTurn));
+                          },
+                        ),
                       ),
                     ),
             ),
+            const KeyboardDock(), // 这条线以下是输入区：点了不收键盘；拖动线以上的聊天内容会收（见 keyboard_tap_dismiss.dart）
             if (todos != null && todos.isNotEmpty) TodoBar(todos: todos),
             BackgroundBar(session: s),
             PendingArea(session: s),
@@ -427,6 +468,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 onTap: s.clearMcpAllow,
               ),
             if (s.planMode) StatusChipRow(key: const ValueKey('plan-chip'), icon: Icons.map_outlined, text: '计划模式：只出计划，不改文件、不跑命令', action: '退出', tone: BannerTone.info, onTap: _togglePlan),
+            MessageEditBar(session: s),
             if (_attachments.isNotEmpty)
               AttachmentStrip(paths: [for (final a in _attachments) '${s.project.dir}/${a['path']}'], canSee: model?.model.vision ?? false, onRemove: (i) => setState(() => _attachments.removeAt(i))),
             if (slash.isNotEmpty)
@@ -443,6 +485,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               onContext: _showUsage,
               controller: _input,
               focusNode: _focus,
+              mentionGuard: s.guard,
               busy: s.agentBusy,
               canSend: _canSend,
               modelName: model == null ? '选择模型' : model.model.name,

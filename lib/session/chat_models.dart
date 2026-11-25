@@ -13,19 +13,25 @@ sealed class ChatItem {
 }
 
 class UserItem extends ChatItem {
-  const UserItem(this.text, {this.images = const []});
+  const UserItem(this.text, {this.images = const [], this.id});
   final String text;
+
+  /// 这条消息在消息记录里的稳定标识（`_id`，见 lib/agent/message_ids.dart）。消息操作（复制、删除、收藏……）靠它认消息。
+  final String? id;
 
   /// 图片附件在手机上的完整路径。
   final List<String> images;
 }
 
 class AssistantItem extends ChatItem {
-  const AssistantItem(this.text, {this.streaming = false});
+  const AssistantItem(this.text, {this.streaming = false, this.id});
   final String text;
   final bool streaming;
 
-  AssistantItem copyWith({String? text, bool? streaming}) => AssistantItem(text ?? this.text, streaming: streaming ?? this.streaming);
+  /// 这段回复在消息记录里的稳定标识（`_id`）。还在往外冒、还没存进记录时是 null。
+  final String? id;
+
+  AssistantItem copyWith({String? text, bool? streaming, String? id}) => AssistantItem(text ?? this.text, streaming: streaming ?? this.streaming, id: id ?? this.id);
 }
 
 class ToolItem extends ChatItem {

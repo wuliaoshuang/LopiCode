@@ -3,6 +3,37 @@
 import 'package:lopicode/agent/model_config.dart';
 import 'package:lopicode/agent/usage.dart';
 
+/// 这段对话是从哪分出来的（“从这里分支”、重试 / 编辑时另存的旧版本）。只是一个出处的记号：
+/// 两段对话各有各的记录文件，互不影响；原对话后来被删了，这里的名字还在。
+class BranchOrigin {
+  const BranchOrigin({required this.convId, required this.title, this.messageId, this.old = false});
+
+  /// 原对话的 id。
+  final String convId;
+
+  /// 从原对话的哪条消息分出来的（跳回去时滚到它）；原对话在那之前没有消息时是 null。
+  final String? messageId;
+
+  /// 分出来那一刻原对话的名字。
+  final String title;
+
+  /// true＝重试 / 编辑时另存下来的旧版本；false＝她自己点的“从这里分支”。
+  final bool old;
+
+  /// 列表里跟在名字后面的小标签。
+  String get tag => old ? '旧版本' : '分支';
+
+  Map<String, dynamic> toJson() => {'conv': convId, 'msg': ?messageId, 'title': title, if (old) 'old': true};
+
+  /// 形状不对（没有合法的原对话 id）返回 null：当成普通对话，不影响打开。
+  static BranchOrigin? fromJson(Object? j) {
+    if (j is! Map) return null;
+    final conv = j['conv'], msg = j['msg'], title = j['title'];
+    if (conv is! String || !RegExp(r'^[a-z0-9]{1,24}$').hasMatch(conv)) return null;
+    return BranchOrigin(convId: conv, messageId: msg is String && msg.isNotEmpty ? msg : null, title: title is String ? title : '', old: j['old'] == true);
+  }
+}
+
 /// 工作区里的一段对话。子代理的对话也是一段对话，只是有上级（[parentId]）。
 class Conversation {
   Conversation(
@@ -19,6 +50,7 @@ class Conversation {
     this.auto = false,
     UsageTotals? usage,
     this.lastInput,
+    this.origin,
   }) : usage = usage ?? UsageTotals();
   final String id;
   final String title;
@@ -51,7 +83,39 @@ class Conversation {
   /// 最近一次请求的输入 token 数（接口给的），用来算上下文占用；还没有是 null。
   final int? lastInput;
 
-  Conversation copyWith({String? title, DateTime? updatedAt, ModelSelection? selection, String? permission, bool? planMode, String? presetId, UsageTotals? usage, int? lastInput}) => Conversation(
+  /// 从别的对话分出来的（分支 / 旧版本）才有；旧的目录文件里没有这一项，就是 null。
+  final BranchOrigin? origin;
+
+  /// 换个上级（重试 / 编辑时，被移走的那几轮派出的子代理跟着旧版本走）。别的都不变。
+  Conversation movedUnder(String parent) => Conversation(
+    id,
+    title,
+    updatedAt,
+    parentId: parent,
+    depth: depth,
+    agentName: agentName,
+    selection: selection,
+    permission: permission,
+    planMode: planMode,
+    presetId: presetId,
+    auto: auto,
+    usage: usage,
+    lastInput: lastInput,
+    origin: origin,
+  );
+
+  /// [clearLastInput]：消息记录被删改过，“上次请求的输入 token 数”不再作数（上下文占用改回按字数估）。
+  Conversation copyWith({
+    String? title,
+    DateTime? updatedAt,
+    ModelSelection? selection,
+    String? permission,
+    bool? planMode,
+    String? presetId,
+    UsageTotals? usage,
+    int? lastInput,
+    bool clearLastInput = false,
+  }) => Conversation(
     id,
     title ?? this.title,
     updatedAt ?? this.updatedAt,
@@ -64,7 +128,8 @@ class Conversation {
     presetId: presetId ?? this.presetId,
     auto: auto,
     usage: usage ?? this.usage,
-    lastInput: lastInput ?? this.lastInput,
+    lastInput: clearLastInput ? null : lastInput ?? this.lastInput,
+    origin: origin,
   );
 
   /// 把一轮的用量累计进来（轮数加一），得到一份新的。
@@ -89,6 +154,7 @@ class Conversation {
     'auto': auto,
     if (usage.requests > 0) 'usage': usage.toJson(),
     'lastInput': ?lastInput,
+    'from': ?origin?.toJson(),
   };
 
   /// 从目录文件里的一条读回来；形状不对（没有合法 id）返回 null。
@@ -110,6 +176,7 @@ class Conversation {
       auto: m['auto'] == true,
       usage: UsageTotals.fromJson(m['usage']),
       lastInput: m['lastInput'] is int ? m['lastInput'] as int : null,
+      origin: BranchOrigin.fromJson(m['from']),
     );
   }
 }

@@ -142,6 +142,8 @@ Future<({TextEditingController text, FocusNode focus, _Voice voice})> _pump(Widg
                           modelName: 'DeepSeek Chat',
                           permission: PermissionLevel.workspace,
                           voiceInput: voice,
+                          // 语音入口默认藏着；打开开关继续测“语音输入中键盘收起”。
+                          showVoice: true,
                           onPlus: () {},
                           onModel: () {},
                           onPermission: () {},

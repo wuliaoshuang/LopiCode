@@ -22,7 +22,7 @@ typedef PtyArgsSpawner = PtyProcess Function(
 ///   给出重试、兼容模式重试、一键诊断、连接 SSH 四条出路；**不退回手机自带的 sh**。
 /// - 桌面 / 宿主机测试（允许本机 shell，开发调试用）：和以前一样——第一次失败提示按回车重试（改用兼容模式），
 ///   连续失败到上限退回本机 shell。
-class LinuxShellBackend implements TerminalBackend {
+class LinuxShellBackend implements TerminalBackend, LineEditingShell {
   LinuxShellBackend({
     required this.runtime,
     required this.projectDir,
@@ -84,6 +84,10 @@ class LinuxShellBackend implements TerminalBackend {
 
   /// 现在是不是已经退回本机 shell 了。
   bool get usingFallback => _fallback != null;
+
+  /// 进的是 Ubuntu 的 bash：认 Ctrl+L（清屏并重画提示符）。退回本机 sh 以后不认。
+  @override
+  bool get redrawsOnCtrlL => _pty != null && _fallback == null;
 
   @override
   String get label => usingFallback ? '本机' : 'Ubuntu';

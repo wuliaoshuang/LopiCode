@@ -2,6 +2,7 @@
 // - 一行只放一样东西：我的消息（靠右浅蓝块）、Agent 的正式回复（靠左浅灰块）、一组步骤（一行摘要，见 chat_steps.dart）、
 //   这一轮的用量脚注、应用自己的提示、一段思考（一行）、“已压缩较早的对话”（一行）、“上一轮没正常结束”（一张卡）。
 // - 正式回复最重（16 号字、有底色）；步骤组和脚注是次要内容（小一号、灰色、无底）。
+// - 我的消息和正式回复下面各有一排很淡的小图标（复制、更多……），见 message_action_bar.dart；这里只负责把气泡交给它。
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lopicode/agent/quota.dart';
 import 'package:lopicode/agent/usage.dart';
@@ -13,6 +14,7 @@ import 'package:lopicode/ui/changed_files.dart';
 import 'package:lopicode/ui/chat_extras.dart';
 import 'package:lopicode/ui/chat_panels.dart';
 import 'package:lopicode/ui/chat_steps.dart';
+import 'package:lopicode/ui/message_action_bar.dart';
 import 'package:lopicode/ui/usage_ui.dart';
 import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
@@ -57,55 +59,61 @@ class ChatItemView extends ConsumerWidget {
     final t = Theme.of(context).textTheme;
     switch (item) {
       case UserItem(:final text, :final images):
-        return Align(
-          alignment: Alignment.centerRight,
-          child: Container(
-            margin: const EdgeInsets.only(top: Space.x2, bottom: Space.x1, left: Space.x8),
-            padding: const EdgeInsets.symmetric(horizontal: Space.x4, vertical: Space.x3),
-            decoration: BoxDecoration(
-              color: c.accentSoft,
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(Radii.bubble),
-                topRight: Radius.circular(Radii.sm),
-                bottomLeft: Radius.circular(Radii.bubble),
-                bottomRight: Radius.circular(Radii.bubble),
+        return MessageFrame(
+          item: item,
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: Container(
+              margin: const EdgeInsets.only(top: Space.x2, bottom: Space.x1, left: Space.x8),
+              padding: const EdgeInsets.symmetric(horizontal: Space.x4, vertical: Space.x3),
+              decoration: BoxDecoration(
+                color: c.accentSoft,
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(Radii.bubble),
+                  topRight: Radius.circular(Radii.sm),
+                  bottomLeft: Radius.circular(Radii.bubble),
+                  bottomRight: Radius.circular(Radii.bubble),
+                ),
               ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (images.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: Space.x2),
-                    child: Wrap(
-                      spacing: Space.x1,
-                      runSpacing: Space.x1,
-                      alignment: WrapAlignment.end,
-                      children: [for (final path in images) ImageThumb(path: path, size: 64)],
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (images.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: Space.x2),
+                      child: Wrap(
+                        spacing: Space.x1,
+                        runSpacing: Space.x1,
+                        alignment: WrapAlignment.end,
+                        children: [for (final path in images) ImageThumb(path: path, size: 64)],
+                      ),
                     ),
-                  ),
-                SelectableText(text, style: t.bodyLarge),
-              ],
+                  SelectableText(text, style: t.bodyLarge),
+                ],
+              ),
             ),
           ),
         );
       case AssistantItem(:final text, :final streaming):
-        return Align(
-          alignment: Alignment.centerLeft,
-          child: Container(
-            margin: const EdgeInsets.only(top: Space.x1, bottom: Space.x1, right: Space.x6),
-            padding: const EdgeInsets.symmetric(horizontal: Space.x4, vertical: Space.x3),
-            decoration: BoxDecoration(
-              color: c.surfaceMuted,
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(Radii.sm),
-                topRight: Radius.circular(Radii.bubble),
-                bottomLeft: Radius.circular(Radii.bubble),
-                bottomRight: Radius.circular(Radii.bubble),
+        return MessageFrame(
+          item: item,
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Container(
+              margin: const EdgeInsets.only(top: Space.x1, bottom: Space.x1, right: Space.x6),
+              padding: const EdgeInsets.symmetric(horizontal: Space.x4, vertical: Space.x3),
+              decoration: BoxDecoration(
+                color: c.surfaceMuted,
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(Radii.sm),
+                  topRight: Radius.circular(Radii.bubble),
+                  bottomLeft: Radius.circular(Radii.bubble),
+                  bottomRight: Radius.circular(Radii.bubble),
+                ),
               ),
+              child: SelectableText(streaming ? '$text▍' : text, style: t.bodyLarge),
             ),
-            child: SelectableText(streaming ? '$text▍' : text, style: t.bodyLarge),
           ),
         );
       case final ToolItem tool:

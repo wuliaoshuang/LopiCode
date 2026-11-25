@@ -229,7 +229,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
       expect(tester.getRect(find.byType(IconBottomNav)).bottom, 844, reason: '键盘弹出时导航留在屏幕底部原位（键盘盖在它上面）');
       expect(find.byKey(const ValueKey('model-button')), findsOneWidget);
-      expect(find.byKey(const ValueKey('voice-button')), findsOneWidget);
+      expect(find.byKey(const ValueKey('voice-button')), findsNothing, reason: '语音输入暂时隐藏（2026-11-25）');
       await shot(tester, '04b-chat-keyboard-$suffix');
       tester.view.resetViewInsets();
       FocusManager.instance.primaryFocus?.unfocus();

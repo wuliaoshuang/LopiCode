@@ -9,7 +9,15 @@ import 'package:lopicode/state/app_providers.dart';
 import 'package:riverpod/riverpod.dart';
 
 class ModelsState {
-  ModelsState({required List<Channel> channels, required this.lastSelection, required this.fixedSelection, required this.newChatUsesFixed, this.keyRev = 0}) : channels = List.unmodifiable(channels);
+  ModelsState({
+    required List<Channel> channels,
+    required this.lastSelection,
+    required this.fixedSelection,
+    required this.newChatUsesFixed,
+    this.keyRev = 0,
+    Map<String, String> thinkingLevels = const {},
+  }) : channels = List.unmodifiable(channels),
+       thinkingLevels = Map.unmodifiable(thinkingLevels);
 
   final List<Channel> channels;
 
@@ -23,13 +31,19 @@ class ModelsState {
   /// 某个渠道的 Key 存了、换了、清了的次数（Key 本身不进状态；“有没有 Key”要问 [ModelConfigStore.hasKey]）。
   final int keyRev;
 
+  /// 每个模型上次设的思考档位（键是 `渠道 id/模型 id`）。
+  final Map<String, String> thinkingLevels;
+
+  /// 这个模型上次设的档位；没设过是 null。
+  String? thinkingLevelOf(String channelId, String modelId) => thinkingLevels[thinkingLevelKey(channelId, modelId)];
+
   Channel? channel(String? id) => channels.where((c) => c.id == id).firstOrNull;
 
   /// 把一个选择落到真实存在的渠道和模型上；指向的东西被删了就是 null。
-  ResolvedModel? resolve(ModelSelection? s) => resolveSelection(channels, s);
+  ResolvedModel? resolve(ModelSelection? s) => resolveSelection(channels, s, remembered: thinkingLevels);
 
   /// 第一个能用的模型（兜底）。
-  ResolvedModel? get firstAvailable => firstAvailableModel(channels);
+  ResolvedModel? get firstAvailable => firstAvailableModel(channels, remembered: thinkingLevels);
 
   /// 新对话用哪个模型：固定默认 → 上次用的 → 第一个能用的。
   ResolvedModel? get defaultForNewChat => (newChatUsesFixed ? resolve(fixedSelection) : null) ?? resolve(lastSelection) ?? resolve(fixedSelection) ?? firstAvailable;
@@ -43,8 +57,8 @@ class ModelsNotifier extends Notifier<ModelsState> {
   @override
   ModelsState build() {
     final store = ref.watch(appServicesProvider).models;
-    // 这四个键任何一个被写了，就重新读一份
-    for (final key in const [ModelConfigStore.kChannels, ModelConfigStore.kLast, ModelConfigStore.kFixed, ModelConfigStore.kDefaultMode]) {
+    // 这五个键任何一个被写了，就重新读一份
+    for (final key in const [ModelConfigStore.kChannels, ModelConfigStore.kLast, ModelConfigStore.kFixed, ModelConfigStore.kDefaultMode, ModelConfigStore.kLevels]) {
       ref.watch(settingRevProvider(key));
     }
     // 渠道清单在内存里换了（启动时从盘上读出来那一次不写设置文件，所以单独听）
@@ -61,7 +75,14 @@ class ModelsNotifier extends Notifier<ModelsState> {
       store.channelListeners.remove(onChannels);
       store.keyListeners.remove(onKey);
     });
-    return ModelsState(channels: store.channels, lastSelection: store.lastSelection, fixedSelection: store.fixedSelection, newChatUsesFixed: store.newChatUsesFixed, keyRev: store.keyRev);
+    return ModelsState(
+      channels: store.channels,
+      lastSelection: store.lastSelection,
+      fixedSelection: store.fixedSelection,
+      newChatUsesFixed: store.newChatUsesFixed,
+      keyRev: store.keyRev,
+      thinkingLevels: store.thinkingLevels,
+    );
   }
 
   /// 新建（不传 id）或修改一个渠道，返回存好的那一份。[apiKey] 留空表示不动已保存的 Key；[models] 不传表示不动模型。
@@ -76,6 +97,25 @@ class ModelsNotifier extends Notifier<ModelsState> {
   Future<void> setNewChatUsesFixed(bool fixed) => _store.setNewChatUsesFixed(fixed);
 
   Future<void> setFixedSelection(ModelSelection? s) => _store.setFixedSelection(s);
+
+  /// 记住某个模型的思考档位。
+  Future<void> setThinkingLevel(String channelId, String modelId, String level) => _store.setThinkingLevel(channelId, modelId, level);
+
+  /// 把一个模型标成“可思考”（或取消）。返回存好的那份渠道；渠道或模型不在了返回 null。
+  Future<Channel?> setModelThinking(String channelId, String modelId, bool thinking) async {
+    final ch = _store.channel(channelId);
+    if (ch == null || ch.model(modelId) == null) return null;
+    return _store.upsert(
+      id: ch.id,
+      name: ch.name,
+      protocol: ch.protocol,
+      baseUrl: ch.baseUrl,
+      models: [
+        for (final m in ch.models)
+          if (m.id == modelId) m.copyWith(thinking: thinking, levels: m.levels.isEmpty ? kThinkingLevels : null) else m,
+      ],
+    );
+  }
 }
 
 final modelsProvider = NotifierProvider<ModelsNotifier, ModelsState>(ModelsNotifier.new);

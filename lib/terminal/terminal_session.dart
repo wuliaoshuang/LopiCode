@@ -19,6 +19,23 @@ abstract class TerminalBackend {
   bool get isRunning;
 }
 
+/// 后端里跑的是带行编辑的 shell（Ubuntu 里的 bash）时实现这个：“清屏”就可以发 Ctrl+L，
+/// 让 shell 自己在第一行重画提示符，正打到一半的命令原样留着、不会被执行。
+abstract interface class LineEditingShell {
+  /// 现在是不是真的在跑这种 shell（退回本机 sh 以后不是）。
+  bool get redrawsOnCtrlL;
+}
+
+/// 去掉开头的回车、换行（只认 `\r`、`\n` 两个字符，别的一律不动）。
+/// 屏幕上还一个字都没有的时候，开头的空行没有任何意义，只会把第一行提示符往下顶。
+String dropLeadingLineBreaks(String text) {
+  var i = 0;
+  while (i < text.length && (text.codeUnitAt(i) == 0x0d || text.codeUnitAt(i) == 0x0a)) {
+    i++;
+  }
+  return i == 0 ? text : text.substring(i);
+}
+
 /// 一个跑在伪终端里的进程（flutter_pty 的抽象，测试里可以换成假的）。
 abstract class PtyProcess {
   Stream<List<int>> get output;
@@ -183,6 +200,9 @@ class LocalShellBackend implements TerminalBackend {
           unawaited(_startPipe());
         case 0x04:
           unawaited(_pipe?.stdin.close());
+        case 0x0c:
+          // Ctrl+L：清屏，在第一行重画提示符和正打到一半的那行
+          _emit('\x1b[H\x1b[2J\$ $_line');
         case 0x1b:
           return; // 方向键等转义序列在基础模式下不处理
         default:
@@ -251,16 +271,29 @@ class TerminalSession {
   /// 屏幕上（含回滚区）的纯文字，测试和“复制全部”用。
   String get text => terminal.buffer.getText().trimRight();
 
+  /// 屏幕还是空的（刚开、或刚点过“清屏”）：这时后端送来的开头空行不上屏，第一行就是提示符。
+  bool _blank = true;
+
+  void _fromBackend(String data) {
+    if (_blank) {
+      data = dropLeadingLineBreaks(data);
+      if (data.isEmpty) return;
+      _blank = false;
+    }
+    terminal.write(data);
+  }
+
   Future<void> ensureStarted() async {
     if (_started) return;
     _started = true;
-    _sub = backend.output.listen(terminal.write, onError: (_) {});
+    _sub = backend.output.listen(_fromBackend, onError: (_) {});
     await backend.start(columns: terminal.viewWidth, rows: terminal.viewHeight);
   }
 
   /// 直接往屏幕上写文字（说明、Agent 命令的回显），不经过后端。
   void append(String raw) {
     if (raw.isEmpty) return;
+    _blank = false;
     terminal.write(raw.replaceAll('\r\n', '\n').replaceAll('\n', '\r\n'));
   }
 
@@ -304,9 +337,15 @@ class TerminalSession {
     unawaited(ensureStarted().then((_) => backend.write('$line\r')));
   }
 
+  /// 清屏：屏幕和回滚区都清掉，光标回第一行，再让 shell 把提示符重画出来。
+  /// - Ubuntu 的 bash：发 Ctrl+L，它自己在第一行重画，正打到一半的命令还在、不会被执行；
+  /// - 其他后端（SSH、桌面调试的本机 shell）不确定认不认 Ctrl+L，照旧发回车；回车带出来的那个空行不上屏。
   void clear() {
     terminal.write('\x1b[2J\x1b[3J\x1b[H');
-    if (backend.isRunning) backend.write('\r');
+    _blank = true;
+    if (!backend.isRunning) return;
+    final Object b = backend;
+    backend.write(b is LineEditingShell && b.redrawsOnCtrlL ? '\x0c' : '\r');
   }
 
   void dispose() {
