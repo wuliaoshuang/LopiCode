@@ -48,6 +48,14 @@ Set<int> paintedColors(WidgetTester tester) {
       if (b is Border) out.add(b.top.color.toARGB32());
     }
   }
+  for (final w in tester.widgetList<DecoratedBox>(find.descendant(of: root, matching: find.byType(DecoratedBox)))) {
+    final d = w.decoration;
+    if (d is BoxDecoration) {
+      if (d.color != null) out.add(d.color!.toARGB32());
+      final b = d.border;
+      if (b is Border) out.add(b.top.color.toARGB32());
+    }
+  }
   for (final w in tester.widgetList<Text>(find.descendant(of: root, matching: find.byType(Text)))) {
     final c = w.style?.color;
     if (c != null) out.add(c.toARGB32());
@@ -147,7 +155,7 @@ void main() {
     await tester.ensureVisible(k('color-hex'));
     await tester.enterText(k('color-hex'), '#E0457B');
     await tester.pump();
-    final box = tester.widget<Container>(k('lc-preview-selection')).decoration! as BoxDecoration;
+    final box = tester.widget<DecoratedBox>(k('lc-preview-selection')).decoration as BoxDecoration;
     expect((box.border! as Border).top.color.toARGB32(), 0xFFE0457B);
     expect(tester.widget<Container>(k('lc-preview-name-tag')).color!.toARGB32(), 0xFFE0457B);
     await shot(tester, 'editor-lowcode-color-sheet');

@@ -6,7 +6,6 @@
 //   可放进去的容器的描边 + 拖着的小牌子、“组件不见了”的占位。
 // - 21 项每一项都至少露一处。底下那张“页面”用这份主题的卡片色，旁边的留白用分组页面底色（都是主题里的，不写死）。
 // - 只是样子：不接手指、不进读屏（外面的 ThemePreview 已经包了）。
-import 'package:lopicode/appearance/theme_fields.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -48,7 +47,7 @@ class ThemeLowcodePreview extends StatelessWidget {
           child: Stack(
             clipBehavior: Clip.none,
             children: [
-              Container(
+              DecoratedBox(
                 key: const Key('lc-preview-selection'),
                 decoration: BoxDecoration(
                   color: ui.surface,
