@@ -248,7 +248,7 @@ class LcDocument {
       props: Map.of(lcSpecs['page']!.defaults),
       children: [
         LcNode(id: '', type: 'text', props: {'text': title, 'fontSize': 24, 'bold': true, 'color': '#222435'}),
-        LcNode(id: '', type: 'text', props: {'text': '从下方组件栏拖一个组件上来，或点一下直接添加。', 'fontSize': 16, 'color': '#5C6479'}),
+        LcNode(id: '', type: 'text', props: {'text': '点左下角的“添加”选一个组件放进来；长按组件可以拖动。', 'fontSize': 16, 'color': '#5C6479'}),
         LcNode(
           id: '',
           type: 'card',

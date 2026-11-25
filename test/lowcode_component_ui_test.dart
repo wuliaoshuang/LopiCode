@@ -64,8 +64,7 @@ Future<ProjectSession> openBuilder(WidgetTester tester, {LcDocument? doc, ThemeM
 
 Future<LcDocument> savedDoc(WidgetTester tester, ProjectSession session) async {
   // 搭建页改完停手 0.4 秒才存：先把这段时间走完。
-  await tester.pump(const Duration(milliseconds: 500));
-  await settle(tester, rounds: 3);
+  await waitLowcodeSaved(tester);
   late LcDocument doc;
   await tester.runAsync(() async => doc = LcDocument.parse(File(session.guard.resolve(kLowcodePageFile)).readAsStringSync()));
   return doc;

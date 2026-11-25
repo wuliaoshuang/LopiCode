@@ -125,8 +125,7 @@ LcDocument bigDoc() {
 
 /// 存盘里的页面（改完停手 0.4 秒才存：先把这段时间走完）。
 Future<LcDocument> savedDoc(WidgetTester tester, ProjectSession session) async {
-  await tester.pump(const Duration(milliseconds: 500));
-  await settle(tester, rounds: 3);
+  await waitLowcodeSaved(tester);
   late LcDocument doc;
   await tester.runAsync(() async => doc = LcDocument.parse(File(session.guard.resolve(kLowcodePageFile)).readAsStringSync()));
   return doc;
@@ -554,6 +553,25 @@ void main() {
   });
 
   group('拖动：蓝线落点', () {
+    testWidgets('拖动时选中条留在原地（不收走、页面不跳），只是变淡、点不了；松手恢复', (tester) async {
+      await openBuilder(tester);
+      await select(tester, 'n5');
+      double opacity() => tester.widget<Opacity>(k('lc-selection-bar-wrap')).opacity;
+      final bar = tester.getRect(k('lc-selection-bar'));
+      final page = canvas(tester).pageRect;
+      expect(opacity(), 1);
+      final g = await lift(tester, tester.getCenter(node('n1')));
+      expect(tester.getRect(k('lc-selection-bar')), bar);
+      expect(canvas(tester).pageRect, page);
+      expect(opacity(), 0.4);
+      expect(find.text('属性').hitTestable(), findsNothing, reason: '拖动中选中条点不了');
+      await g.cancel();
+      await settle(tester, rounds: 2);
+      expect(opacity(), 1);
+      expect(find.text('属性').hitTestable(), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('拖动时页面一动不动（不撑开、不跳）；蓝线 3 像素；标签说放到哪、第几个；手指上面有缩略图；工具条换成删除区', (tester) async {
       final haptics = recordHaptics(tester);
       final session = await openBuilder(tester);
@@ -842,8 +860,8 @@ void main() {
       });
       await openPalette(tester);
       await tester.tap(item('text'));
-      await tester.pump(const Duration(milliseconds: 500));
-      await settle(tester, rounds: 4);
+      await waitLowcodeSaved(tester);
+      await settle(tester, rounds: 1);
       expect(find.textContaining('保存失败：'), findsOneWidget);
       final message = tester.widget<Text>(find.textContaining('保存失败：')).data!;
       expect(message, contains('index.html'), reason: '写了是哪个文件');
@@ -915,7 +933,7 @@ void main() {
       expect(debugResolvedStyleCalls - styles, 6 + 1);
     });
 
-    testWidgets('500 个组件的页面：平移 60 下，整页不重搭，平均每下远低于上限', (tester) async {
+    testWidgets('500 个组件的页面：平移 60 下，整页不重搭，每下（中位数）远低于上限', (tester) async {
       await openBuilder(tester, doc: bigDoc());
       expect(canvas(tester).widget.doc.root.children.length, 50);
       // 先滚几下热身（第一次会编译着色器、填文字缓存，不算数）
@@ -932,30 +950,38 @@ void main() {
       final g = await tester.startGesture(const Offset(195, 500));
       await g.moveBy(const Offset(0, -20)); // 先越过“这是拖动”的界线
       await tester.pump(const Duration(milliseconds: 16));
-      final watch = Stopwatch()..start();
+      // 每一下单独计时，取中位数：机器偶尔卡一下（别的任务抢 CPU、回收内存）只会拖慢其中几下，不会把结果带歪。
+      final panMs = <double>[];
+      final watch = Stopwatch();
       for (var i = 0; i < frames; i++) {
+        watch
+          ..reset()
+          ..start();
         await g.moveBy(const Offset(0, -8));
         await tester.pump(const Duration(milliseconds: 16));
+        panMs.add(watch.elapsedMicroseconds / 1000);
       }
-      watch.stop();
       await g.up();
       await tester.pump(const Duration(seconds: 2));
       expect(CanvasPage.debugBuilds, builds, reason: '平移不重搭整页（这是快的原因，和机器快慢无关）');
       expect(start - canvas(tester).view.value.offset.dy, greaterThan(frames * 8 - 1), reason: '真的平移了这么多');
-      final perFrame = watch.elapsedMicroseconds / frames / 1000;
+      final perFrame = median(panMs);
       // 同一次运行里再量一下“整页重搭一帧”要多久（换选中会重搭整页），拿来当参照：机器忙的时候两个数一起变慢。
       const rebuilds = 10;
-      final again = Stopwatch()..start();
+      final rebuildMs = <double>[];
       for (var i = 0; i < rebuilds; i++) {
+        watch
+          ..reset()
+          ..start();
         canvas(tester).widget.onSelect(i.isEven ? 'b0' : null);
         await tester.pump(const Duration(milliseconds: 16));
+        rebuildMs.add(watch.elapsedMicroseconds / 1000);
       }
-      again.stop();
       expect(CanvasPage.debugBuilds, greaterThanOrEqualTo(builds + rebuilds));
-      final perRebuild = again.elapsedMicroseconds / rebuilds / 1000;
+      final perRebuild = median(rebuildMs);
       recordPanTiming(perFrame, perRebuild);
       // 上限怎么定的：见文件末尾 kPanBudgetMs / kPanVsRebuild 的说明。
-      expect(perFrame, lessThan(kPanBudgetMs), reason: '平移一下平均 ${perFrame.toStringAsFixed(2)} 毫秒');
+      expect(perFrame, lessThan(kPanBudgetMs), reason: '平移一下（中位数）${perFrame.toStringAsFixed(2)} 毫秒');
       expect(perFrame * kPanVsRebuild, lessThan(perRebuild), reason: '平移一下 ${perFrame.toStringAsFixed(2)} 毫秒，整页重搭一帧 ${perRebuild.toStringAsFixed(2)} 毫秒');
     }, semanticsEnabled: false);
   });
@@ -987,7 +1013,7 @@ void main() {
   });
 }
 
-/// “500 个组件平移一下”的两道时间上限（测试环境里一次 pump 的平均耗时）。
+/// “500 个组件平移一下”的两道时间上限（测试环境里一次 pump 的耗时，60 下取中位数——偶尔卡一下不影响结果）。
 ///
 /// 怎么定的：2026-11-26 在开发机上量了三次（1.5 核，同时有别的任务在抢 CPU，负载 3–12）：
 ///   平移一下 2.07 / 10.16 / 30.20 毫秒；同一次运行里“整页重搭一帧”776 / 1463 / 2222 毫秒。
@@ -998,6 +1024,11 @@ void main() {
 /// 这条测试关掉了读屏用的语义树（semanticsEnabled: false）：手机上不开读屏时就没有它，开着量会把它的开销算进来。
 const double kPanBudgetMs = 200;
 const double kPanVsRebuild = 10;
+
+double median(List<double> values) {
+  final sorted = [...values]..sort();
+  return sorted[sorted.length ~/ 2];
+}
 
 void recordPanTiming(double perFrameMs, double perRebuildMs) {
   final file = File('.tmp/pan-timing.log');

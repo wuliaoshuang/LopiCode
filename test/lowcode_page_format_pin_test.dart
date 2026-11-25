@@ -44,8 +44,7 @@ Future<ProjectSession> openWith(WidgetTester tester, String source) async {
 
 /// 等“停手才存”那一段走完，读回页面文件的原文。
 Future<String> savedText(WidgetTester tester, ProjectSession session) async {
-  await tester.pump(const Duration(milliseconds: 500));
-  await settle(tester, rounds: 3);
+  await waitLowcodeSaved(tester);
   late String text;
   await tester.runAsync(() async => text = File(session.guard.resolve(kLowcodePageFile)).readAsStringSync());
   return text;

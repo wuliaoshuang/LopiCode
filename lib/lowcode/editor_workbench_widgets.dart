@@ -7,7 +7,7 @@
 //     画布只负责算落点、画蓝线；手指下面的半透明缩略图画在最上面一层；
 //     拖动时工具条换成“拖到这里删除”（从组件盒拖出来的新组件是“拖到这里取消”），手指进去变红；
 //     经过一个新的可放位置轻震一下，放下轻震，丢进删除区重震。
-//   拖动时别的都不动：选中条不收、画布不变高——页面一个像素都不跳。
+//   拖动时别的都不动：选中条不收（只是变淡、点不了）、画布不变高——页面一个像素都不跳。
 // - 第 2 期往这里加东西的口子：选中条的按钮是传进来的一串控件；工具条右边那排图标可以加 [toolbarExtra]。
 import 'package:lopicode/lowcode/canvas_drag_widgets.dart';
 import 'package:lopicode/lowcode/canvas_view.dart';
@@ -261,7 +261,12 @@ class EditorWorkbenchState extends State<EditorWorkbench> {
                 ),
               ),
             ),
-            ?widget.selectionBar,
+            // 拖动时选中条留在原地（页面不跳），但变淡、点不了：手里拿着东西时它那几个按钮用不上
+            if (widget.selectionBar != null)
+              IgnorePointer(
+                ignoring: drag != null,
+                child: Opacity(key: const ValueKey('lc-selection-bar-wrap'), opacity: drag == null ? 1 : 0.4, child: widget.selectionBar),
+              ),
             KeyedSubtree(key: _zoneKey, child: drag == null ? _toolbar(context) : _dropZone(context, drag)),
           ],
         ),
