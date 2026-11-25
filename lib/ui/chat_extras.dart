@@ -282,7 +282,7 @@ class InterruptedCard extends StatelessWidget {
   }
 }
 
-/// 整页看一份转存的命令输出。
+/// 整页看一份转存的完整输出（命令输出，或别的工具的超长结果）。
 class CommandOutputPage extends StatelessWidget {
   const CommandOutputPage({super.key, required this.path, required this.load});
   final String path;
@@ -307,7 +307,7 @@ class CommandOutputPage extends StatelessWidget {
           if (text == null) {
             return Padding(
               padding: EdgeInsets.fromLTRB(Space.x6, PageBar.insetOf(context) + Space.x6, Space.x6, Space.x6),
-              child: Text('这份完整输出已经不在了（转存的输出只留最近 20 份）。需要的话让 Agent 重新执行一次这条命令。', style: t.bodyMedium?.copyWith(color: c.textMuted, height: 1.6)),
+              child: Text('这份完整输出已经不在了（转存的输出只留最近 20 份）。需要的话让 Agent 把这一步重新做一次。', style: t.bodyMedium?.copyWith(color: c.textMuted, height: 1.6)),
             );
           }
           final shown = text.length <= maxShown ? text : '${text.substring(0, maxShown ~/ 2)}\n\n…（太长，中间 ${text.length - maxShown} 字没显示；文件在 $path）…\n\n${text.substring(text.length - maxShown ~/ 2)}';

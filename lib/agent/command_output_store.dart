@@ -1,4 +1,5 @@
 // 命令输出太长时转存成文件：完整输出放到工作区的 `.lopicode/outputs/` 里，回给模型的只有开头 + 结尾 + 文件路径。
+// 别的工具的超长结果也存在这里（文件名以 `tool-` 开头，见 tool_output_spill.dart）；后台命令的日志（`bg-`）有自己的规矩，这里不碰。
 //
 // 规矩：
 // - 文件只由应用自己写（原子写）；Agent 只能用 read_file 读这个目录，不能写、不能删（见 agent_tools.dart 的 _read）。
@@ -26,7 +27,7 @@ const int kOutputTailChars = 6000;
 /// [rel]（已经规范化的工作区内相对路径）是不是转存目录里的文件。
 bool isCommandOutputPath(String rel) => rel.startsWith('$kOutputsDir/') && rel.endsWith('.txt') && !rel.substring(kOutputsDir.length + 1).contains('/');
 
-final RegExp _pathInResult = RegExp('${RegExp.escape(kOutputsDir)}/cmd-[0-9a-z-]+\\.txt');
+final RegExp _pathInResult = RegExp('${RegExp.escape(kOutputsDir)}/(?:cmd|tool)-[0-9a-z-]+\\.txt');
 
 /// 从工具结果的文字里找出转存文件的路径（步骤详情的“查看完整输出”用）；没有转存过是 null。
 String? spilledOutputPathOf(String? result) => result == null ? null : _pathInResult.firstMatch(result)?.group(0);
@@ -51,12 +52,17 @@ class CommandOutputStore {
   Directory get _dir => Directory(guard.resolve(kOutputsDir, allowReserved: true));
 
   /// 把完整输出存成文件，返回工作区内的相对路径；存不了返回 null。
-  Future<String?> save(String command, String output) async {
+  Future<String?> save(String command, String output) => _write('cmd', '\$ $command\n\n$output');
+
+  /// 把别的工具的完整结果原样存成文件（不加抬头：行号和结果里的一致），返回相对路径；存不了返回 null。
+  Future<String?> saveToolResult(String text) => _write('tool', text);
+
+  Future<String?> _write(String kind, String content) async {
     try {
       final stamp = DateTime.now().toUtc().toIso8601String().replaceAll(RegExp('[^0-9]'), '').substring(0, 14);
-      final name = 'cmd-$stamp-${(_seq++).toRadixString(36)}.txt';
+      final name = '$kind-$stamp-${(_seq++).toRadixString(36)}.txt';
       final file = File(p.join(_dir.path, name));
-      await writeStringAtomic(file, '\$ $command\n\n$output');
+      await writeStringAtomic(file, content);
       await cleanup();
       return '$kOutputsDir/$name';
     } on FileSystemException {
@@ -83,16 +89,31 @@ class CommandOutputStore {
     }
   }
 
-  /// 清理：只留最近 [kKeepOutputFiles] 份，合计不超过 [kMaxOutputsBytes]；最新的一份总是留着。
+  /// 文件名（`cmd-时间-序号.txt` / `tool-时间-序号.txt`）里的先后：时间，再按序号的数值（序号是 36 进制，不能按字面比）。
+  static (String, int)? _orderOf(String name) {
+    final m = RegExp(r'^(?:cmd|tool)-(\d{14})-([0-9a-z]+)\.txt$').firstMatch(name);
+    return m == null ? null : (m.group(1)!, int.parse(m.group(2)!, radix: 36));
+  }
+
+  /// 清理：命令输出和别的工具的结果合在一起算，只留最近 [kKeepOutputFiles] 份，合计不超过 [kMaxOutputsBytes]；最新的一份总是留着。
+  /// 后台命令的日志（bg-）不归这里管。
   Future<void> cleanup() async {
     final dir = _dir;
     if (!await dir.exists()) return;
     final files = <(File, FileStat)>[];
+    final order = <String, (String, int)>{};
     await for (final e in dir.list(followLinks: false)) {
-      if (e is File && p.basename(e.path).startsWith('cmd-') && e.path.endsWith('.txt')) files.add((e, await e.stat()));
+      final at = e is File ? _orderOf(p.basename(e.path)) : null;
+      if (e is! File || at == null) continue;
+      order[e.path] = at;
+      files.add((e, await e.stat()));
     }
-    // 文件名里带时间和序号：按名字倒序就是新的在前。
-    files.sort((a, b) => p.basename(b.$1.path).compareTo(p.basename(a.$1.path)));
+    // 新的在前。
+    files.sort((a, b) {
+      final x = order[a.$1.path]!, y = order[b.$1.path]!;
+      final byTime = y.$1.compareTo(x.$1);
+      return byTime != 0 ? byTime : y.$2.compareTo(x.$2);
+    });
     var total = 0;
     for (var i = 0; i < files.length; i++) {
       total += files[i].$2.size;

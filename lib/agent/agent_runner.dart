@@ -4,7 +4,9 @@ import 'dart:convert';
 import 'package:lopicode/agent/agent_tools.dart';
 import 'package:lopicode/agent/auto_compact.dart';
 import 'package:lopicode/agent/chat_client.dart';
+import 'package:lopicode/agent/context_relief.dart';
 import 'package:lopicode/agent/loop_guard.dart';
+import 'package:lopicode/agent/tool_output_spill.dart';
 import 'package:lopicode/agent/usage.dart';
 
 export 'package:lopicode/agent/auto_compact.dart' show compactHistory;
@@ -246,12 +248,12 @@ class AgentRunner {
     return chars ~/ 3;
   }
 
-  /// 把存盘格式的消息变成这一次请求要发的样子：图片附件按模型能力展开。
-  Future<List<Map<String, dynamic>>> buildRequest() async {
+  /// 把存盘格式的消息（默认是 [messages]）变成这一次请求要发的样子：图片附件按模型能力展开。
+  Future<List<Map<String, dynamic>>> buildRequest([List<Map<String, dynamic>>? from]) async {
     final out = <Map<String, dynamic>>[
       {'role': 'system', 'content': systemPrompt},
     ];
-    for (final m in messages) {
+    for (final m in from ?? messages) {
       if (isArchived(m)) continue; // 已经被摘要顶替，只留着给聊天页看
       final images = m['_images'];
       if (m['role'] != 'user' || images is! List || images.isEmpty) {
@@ -331,27 +333,20 @@ class AgentRunner {
         yield NoticeInjected(note);
       }
 
-      // 上下文快满了：先把较早的工具结果换成一句占位（不删消息，接口要求的配对不受影响）。
-      final limit = contextLimit;
-      if (limit != null && estimateTokens(messages) > limit * pruneAt) {
-        final pruned = pruneOldToolResults(messages);
-        if (pruned > 0) yield AgentNotice('对话快把模型的上下文占满了，已省略 $pruned 条较早的工具结果（需要时 Agent 会重新读取）。');
-        // 第二道：裁完还是超过这条线，就把较早的对话压成摘要（多调用一次模型），这一轮不中断。
-        if (autoCompact && !_compactGaveUp && estimateTokens(messages) > limit * pruneAt) {
-          final r = await compactOlder(client, messages, keepRecent: kCompactKeepRecent, archive: true, keepLastRequest: true, contextLimit: limit);
-          if (r.requested) yield RequestFinished(r.usage, r.ms, startedAt: r.startedAt, compaction: true);
-          if (r.ok) {
-            yield ContextCompacted(r.summary, r.replaced);
-          } else if (!r.skipped) {
-            // 失败：记录一个字没动。这一轮里不再试（免得每一步都白花一次请求）。
-            _compactGaveUp = true;
-            yield AgentNotice('想把较早的对话自动压缩成摘要，但没成功（${r.error}）。对话记录没有丢，先只省略较早的工具结果继续。');
-          }
-          if (_cancelled) {
-            yield AgentNotice('已停止。');
-            return;
-          }
-        }
+      // 上下文快满了：省略较早的工具结果，不够再把较早的对话压成摘要（多调用一次模型），这一轮不中断。见 context_relief.dart。
+      final relief = await relieveContext(this, compact: autoCompact && !_compactGaveUp);
+      final r = relief.compact;
+      if (r != null && r.requested) yield RequestFinished(r.usage, r.ms, startedAt: r.startedAt, compaction: true);
+      if (r != null && r.ok) yield ContextCompacted(r.summary, r.replaced);
+      if (relief.pruned > 0) yield AgentNotice('对话快把模型的上下文占满了，已省略 ${relief.pruned} 条较早的工具结果（需要时 Agent 会重新读取）。');
+      if (r != null && !r.ok && !r.skipped) {
+        // 失败：记录一个字没动。这一轮里不再试（免得每一步都白花一次请求）。
+        _compactGaveUp = true;
+        yield AgentNotice('想把较早的对话自动压缩成摘要，但没成功（${r.error}）。对话记录没有丢，先只省略较早的工具结果继续。');
+      }
+      if (r != null && _cancelled) {
+        yield AgentNotice('已停止。');
+        return;
       }
 
       final text = StringBuffer();
@@ -558,10 +553,8 @@ class AgentRunner {
     }
     // 参数解析不了：把错在哪、该怎么改说清楚回给模型，让它自己重来，不让整轮失败。
     if (args is! Map<String, dynamic>) return ToolOutcome(badArgumentsMessage(call.name, rawArgs, error: error), ok: false);
-    final outcome = await toolbox.execute(call.name, args);
-    // 兜底：任何工具的结果都不许无限长（各工具自己还有更小的上限）。
-    final clipped = clipToolResult(outcome.text);
-    return identical(clipped, outcome.text) ? outcome : outcome.withText(clipped);
+    // 兜底：任何工具的结果都不许无限长（各工具自己还有更小的上限）；超了全文存成文件，只回头尾和路径。
+    return spillLongResult(toolbox.guard, call.name, args, await toolbox.execute(call.name, args));
   }
 
   /// 请求失败时：模型已经说了一些就留下这半截；一个字都没回且上一条是用户消息，

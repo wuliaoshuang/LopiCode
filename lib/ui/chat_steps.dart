@@ -388,7 +388,7 @@ class _StepDetailState extends State<_StepDetail> {
     final sections = stepDetailSections(widget.tool);
     final limit = _full ? kStepResultMax : kStepResultPreview;
     final clipped = sections.any((s) => s.$2.length > kStepResultPreview);
-    // 命令输出太长、完整的转存成了文件：给一个整页查看的入口。
+    // 命令输出或任何工具的结果太长、完整的转存成了文件（cmd- / tool-）：给一个整页查看的入口。
     final spilled = spilledOutputPathOf(widget.tool.result);
     final readOutput = ChatRowActions.maybeOf(context)?.readOutput;
     return Container(

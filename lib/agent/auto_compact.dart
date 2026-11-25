@@ -1,13 +1,18 @@
 // 把较早的对话压成摘要：/compact（手动，整段压）和“上下文快满时自动压缩”（只压较早的部分）共用这一份。
 //
 // 规矩：
-// - 发给模型的是**一段纯文字的对话记录**，不是原来的消息列表：这样不带工具定义也合法（Anthropic 等接口不许消息里有
-//   工具调用却不带工具定义），思考内容之类的协议细节也不用管。
-// - 失败（接口报错、被额度拦下、模型没给摘要）时消息记录**一个字都不动**，把原因交回去。
+// - 压缩请求有两种样子，都是**一次请求**：
+//   1. 同前缀（给了 [compactOlder] 的 `prefix`）：和正常对话发的一模一样——同样的系统提示词、工具定义、历史消息顺序，
+//      只在末尾追加一条“请按栏目写摘要”的指令。前缀没变，服务商的前缀缓存能命中（各家规则见 docs/api-notes.md）。
+//   2. 纯文字记录（没给 `prefix`，或者同前缀的请求放不进上下文时由调用方选它）：把对话写成一段纯文字另发，不带工具定义。
+// - 摘要有固定栏目（compact_summary.dart）；模型漏写的栏目由代码补齐。
+// - 压缩请求里模型反而去调工具：不执行，按失败处理（那段话不是摘要）。不会为此再发第二次请求。
+// - 失败（接口报错、被额度拦下、模型没给摘要、模型去调工具）时消息记录**一个字都不动**，把原因交回去。
 // - 自动压缩时：最近 [keepRecent] 条原样留着（切口不落在工具结果上，保证调用和结果成对）；
 //   被压掉的不删，打上 `_archived` 标记留在记录里——聊天页照样能看，只是不再发给模型。
 // - 自动压缩发生在一轮中间，用户最近一次的要求要是在被压掉的那段里，就把原话附在摘要后面（不靠模型自觉）。
 import 'package:lopicode/agent/chat_client.dart';
+import 'package:lopicode/agent/compact_summary.dart';
 import 'package:lopicode/agent/usage.dart';
 
 /// 自动压缩时原样保留最近几条消息。
@@ -33,7 +38,10 @@ String compactSummaryOf(Map<String, dynamic> m) {
 }
 
 class CompactOutcome {
-  const CompactOutcome({this.error, this.skipped = false, this.summary = '', this.usage, this.ms = 0, this.startedAt, this.requested = false, this.replaced = 0});
+  const CompactOutcome({this.error, this.skipped = false, this.summary = '', this.usage, this.ms = 0, this.startedAt, this.requested = false, this.replaced = 0, this.samePrefix = false});
+
+  /// 这次压缩请求是不是“和正常对话同前缀”的样子。
+  final bool samePrefix;
 
   /// 失败原因；成功是 null。
   final String? error;
@@ -86,17 +94,24 @@ String renderTranscript(List<Map<String, dynamic>> messages, {int maxChars = kCo
   return '${all.substring(0, head)}\n…（中间省略 ${all.length - maxChars} 字）…\n${all.substring(all.length - (maxChars - head))}';
 }
 
-const String _ask =
-    '请把上面这段对话记录压缩成一份摘要，之后会用它顶替原来的记录接着干活。写清楚：用户的目标和要求、已经做完的事（改了哪些文件）、'
-    '还没做完的事、要注意的约定。只输出摘要本身，用简体中文。';
-
 /// 把 [messages] 里较早的部分压成摘要，就地改写。
 ///
 /// - [keepRecent]：最近几条原样保留（0＝整段都压）。
 /// - [archive]：被压掉的消息留在记录里并标成已归档（聊天页还能看）；false 则直接去掉。
 /// - [keepLastRequest]：把被压掉那段里用户最近一次的原话附在摘要后面。
-/// - [contextLimit]：模型的上下文长度（token），用来限制交给它的记录长度。
-Future<CompactOutcome> compactOlder(ChatClient client, List<Map<String, dynamic>> messages, {int keepRecent = 0, bool archive = false, bool keepLastRequest = false, int? contextLimit}) async {
+/// - [contextLimit]：模型的上下文长度（token），用来限制交给它的记录长度（只管纯文字记录那种）。
+/// - [prefix]：正常对话此刻会发出去的整份请求消息（系统提示词 + 没归档的历史）。给了就用“同前缀”的样子：
+///   原样发它 + [tools]，末尾加一条压缩指令。不给就是纯文字记录的老办法。
+Future<CompactOutcome> compactOlder(
+  ChatClient client,
+  List<Map<String, dynamic>> messages, {
+  int keepRecent = 0,
+  bool archive = false,
+  bool keepLastRequest = false,
+  int? contextLimit,
+  List<Map<String, dynamic>>? prefix,
+  List<Map<String, dynamic>> tools = const [],
+}) async {
   var first = messages.indexWhere((m) => !isArchived(m));
   if (first < 0) first = messages.length;
   var cut = messages.length - keepRecent;
@@ -109,29 +124,41 @@ Future<CompactOutcome> compactOlder(ChatClient client, List<Map<String, dynamic>
   if (older.length < 2 || older.every((m) => m[kCompactMark] == true || m[kCompactAckMark] == true)) return const CompactOutcome(skipped: true);
 
   final maxChars = contextLimit == null ? kCompactMaxTranscriptChars : (contextLimit * 3 * 0.6).floor().clamp(6000, kCompactMaxTranscriptChars);
+  final samePrefix = prefix != null;
   final request = <Map<String, dynamic>>[
-    {'role': 'system', 'content': '你是对话记录整理员。'},
-    {'role': 'user', 'content': '下面是一段编程助手和用户的对话记录：\n<<<\n${renderTranscript(older, maxChars: maxChars)}>>>\n\n$_ask'},
+    if (prefix != null) ...[
+      ...prefix,
+      {'role': 'user', 'content': compactInstruction()},
+    ] else ...[
+      {'role': 'system', 'content': '你是对话记录整理员。'},
+      {'role': 'user', 'content': '下面是一段编程助手和用户的对话记录：\n<<<\n${renderTranscript(older, maxChars: maxChars)}>>>\n\n${compactInstruction(transcript: true)}'},
+    ],
   ];
   final text = StringBuffer();
   TokenUsage? usage;
   var requested = false;
+  var calledTool = false;
   final startedAt = DateTime.now();
   final clock = Stopwatch()..start();
-  CompactOutcome failed(String why) => CompactOutcome(error: why, usage: usage, ms: clock.elapsedMilliseconds, startedAt: startedAt, requested: requested);
+  CompactOutcome failed(String why) => CompactOutcome(error: why, usage: usage, ms: clock.elapsedMilliseconds, startedAt: startedAt, requested: requested, samePrefix: samePrefix);
   try {
-    await for (final d in client.streamChat(messages: request)) {
+    // 流读到底（不提前断开）：用量在最后一块里，要如实记。
+    await for (final d in client.streamChat(messages: request, tools: samePrefix ? tools : const [])) {
       requested = true;
       if (d.usage != null) usage = d.usage;
       if (d.content != null) text.write(d.content);
+      if (d.toolCalls.isNotEmpty) calledTool = true;
     }
   } on ChatApiException catch (e) {
     return failed(e.message);
   } on Exception catch (e) {
     return failed('和模型的连接中断了：${shortError(e)}');
   }
-  final summary = text.toString().trim();
-  if (summary.isEmpty) return failed('模型没有给出摘要，对话记录没有动');
+  // 模型没写摘要、反而要调工具：不执行，也不把它说的那句话当摘要。
+  if (calledTool) return failed('模型没有写摘要，而是想去调用工具（没有执行），对话记录没有动');
+  if (text.toString().trim().isEmpty) return failed('模型没有给出摘要，对话记录没有动');
+  // 栏目补齐：模型漏写的栏目由代码接在后面。
+  final summary = completeSummary(text.toString().trim(), older);
 
   var content = '$kCompactPrefix$summary';
   if (keepLastRequest) {
@@ -152,14 +179,15 @@ Future<CompactOutcome> compactOlder(ChatClient client, List<Map<String, dynamic>
   messages
     ..clear()
     ..addAll(next);
-  return CompactOutcome(summary: summary, usage: usage, ms: clock.elapsedMilliseconds, startedAt: startedAt, requested: true, replaced: older.length);
+  return CompactOutcome(summary: summary, usage: usage, ms: clock.elapsedMilliseconds, startedAt: startedAt, requested: true, replaced: older.length, samePrefix: samePrefix);
 }
 
 /// /compact：让模型把到目前为止的对话压成一段摘要，然后用摘要顶替原来的记录。
 /// 成功返回 null 并就地改写 [messages]；失败返回原因，记录不动。
-Future<String?> compactHistory(ChatClient client, List<Map<String, dynamic>> messages) async {
+/// [prefix] / [tools] 见 [compactOlder]（给了就是同前缀的样子）。
+Future<String?> compactHistory(ChatClient client, List<Map<String, dynamic>> messages, {List<Map<String, dynamic>>? prefix, List<Map<String, dynamic>> tools = const [], int? contextLimit}) async {
   if (messages.where((m) => !isArchived(m)).length < 2) return '对话还很短，不需要压缩';
-  final r = await compactOlder(client, messages);
+  final r = await compactOlder(client, messages, prefix: prefix, tools: tools, contextLimit: contextLimit);
   return r.skipped ? '对话还很短，不需要压缩' : r.error;
 }
 

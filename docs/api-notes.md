@@ -331,3 +331,26 @@ PHP 估计 7.4+（PHP 那份代码从没运行过）。下面选的版本都够�
   认不出来时归到“别的原因”，把退出码和最后三行输出原样给她。
 - 取消安装是杀掉 PRoot 进程（带 `--kill-on-exit`）；apt 的子进程是不是都跟着停、被打断后 dpkg 的状态要不要收拾，没实测。
   脚本开头加了 `dpkg --configure -a`（失败不管）来收拾上次被打断的安装。
+
+## 各家的提示词缓存规则（压缩请求“同前缀”依据的就是这些；`lib/agent/context_relief.dart`、`lib/agent/auto_compact.dart`）
+
+2026-11-25 核对。压缩对话的那一次请求现在和正常对话发的一模一样（同样的系统提示词、工具定义、历史消息顺序），只在末尾多一条“按栏目写摘要”的指令，
+为的是让下面这些缓存能命中。**这一轮没有往请求里加任何缓存参数**（没有 `cache_control`、没有 `prompt_cache_key`），只保证前缀一致。
+
+| 哪家 | 规则（只记和我们有关的） | 来源网址 | 核对日期 | 状态 |
+| --- | --- | --- | --- | --- |
+| DeepSeek | 磁盘缓存默认对所有人开着，不用改代码。命中的条件：请求的开头要和已经存下来的“缓存前缀单元”**完全一样**。单元在这些位置存：一次请求的边界（用户输入结束、模型输出结束）、检测到多次请求的公共前缀、长内容里每隔固定 token 数。文档的例子：先发 A+B，再发 A+B+C，第二次能命中 A+B。用量里 `prompt_cache_hit_tokens` / `prompt_cache_miss_tokens` 分别是命中 / 没命中的输入。缓存是“尽力而为”，不保证命中；建好要几秒，不用了几小时到几天后清掉 | https://api-docs.deepseek.com/guides/kv_cache/ | 2026-11-25 | 已核对 |
+| OpenAI（Chat Completions / Responses） | 支持的模型自动缓存，不用加参数。要求整段渲染出来的前缀一致——**工具定义、系统 / 开发者消息、历史消息都算在前缀里**。有最小长度（文档写较新的模型是 1,024 token，早先的模型各不相同）。命中数在用量的 `cached_tokens` 里。`prompt_cache_key` 是可选参数，我们没用 | https://developers.openai.com/api/docs/guides/prompt-caching?site_locale=en | 2026-11-25 | 已核对 |
+| OpenAI Responses 的 `instructions` | 文档写：较新的模型上，顶层的 `instructions` 会被接在 `input` 后面并且按没缓存计费。我们的 `OpenAiResponsesClient` 是用 `instructions` 发系统提示词的——这一轮**没有改**，只记下来 | 同上 | 2026-11-25 | 已核对文档；对我们实际命中率的影响**未实测** |
+| Anthropic | **要显式加 `cache_control` 才缓存**（顶层自动式，或者在内容块上逐块标）。前缀的顺序是 tools → system → messages；默认存 5 分钟；回看最多 20 个块；改工具定义会让全部缓存失效，改 `tool_choice` 会让消息部分的缓存失效；最小可缓存长度随模型不同（512 或 1,024 token 起） | https://platform.claude.com/docs/en/build-with-claude/prompt-caching | 2026-11-25 | 已核对 |
+| 别家的 OpenAI 兼容接口、中转站 | 有没有前缀缓存、规则是什么 | — | — | **未核对**（各家不一样；前缀一致对它们没有坏处） |
+
+对我们意味着什么：
+
+- DeepSeek、OpenAI：压缩请求的前缀和上一条正常请求逐字节一致（`test/context_compact_test.dart` 用假模型服务器守着：消息数组前 N 项、`tools`、system、其余参数），
+  所以按文档这次请求的大部分输入应当按“缓存命中”计。**真实接口上命中了多少没有实测**（要真 Key、要花钱）。
+- Anthropic：这一轮**没有加 `cache_control`**，所以在 Anthropic 上压缩请求（和正常请求一样）**不会被缓存**；我们只做到了“以后加上 `cache_control` 时前缀已经是一致的”。
+  压缩请求特意不改 `tool_choice`、不去掉工具定义（去掉会让前缀变样）；模型要是在压缩请求里调了工具，由代码按失败处理、不执行。
+- 上下文快满时“省略较早的工具结果”会改动前面的消息，前缀从第一处被改的地方断开。所以现在的顺序是：省略就够用时只省略（不发请求）；
+  要压缩时用**没省略过**的原样历史发；原样的加上余量放不进上下文才退到省略过的，再放不下退到纯文字记录的老办法（那种没有前缀可言）。三种都只发一次请求。
+- DeepSeek 思考模式的规矩不变：`reasoning_content` 照旧随 assistant 消息带回（压缩请求走的是同一个客户端、同一个 `withReasoningContent`）。
