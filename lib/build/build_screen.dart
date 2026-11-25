@@ -277,6 +277,7 @@ class _BuildScreenState extends ConsumerState<BuildScreen> {
         title: flutter ? '工作流模板 · Flutter 项目' : '工作流模板 · 网页套壳',
         note: '放到仓库的 $kWorkflowPath。这份模板还没在真实的 GitHub Actions 上跑过。',
         code: code,
+        language: 'yaml',
         extraAction: OutlinedButton(
           onPressed: () async {
             final file = File(widget.session.guard.resolve(kWorkflowPath));

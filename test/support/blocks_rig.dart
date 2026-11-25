@@ -66,19 +66,21 @@ class Rig {
     await tester.pumpWidget(
       RepaintBoundary(
         key: shotKey,
-        child: MaterialApp(
-          navigatorKey: nav,
-          debugShowCheckedModeBanner: false,
-          theme: buildAppTheme(Brightness.light, fontFamily: fontsLoaded ? kTestFont : null),
-          darkTheme: buildAppTheme(Brightness.dark, fontFamily: fontsLoaded ? kTestFont : null),
-          themeMode: mode,
-          builder: safe == null
-              ? null
-              : (context, child) => MediaQuery(
-                  data: MediaQuery.of(context).copyWith(padding: safe, viewPadding: safe),
-                  child: child!,
-                ),
-          home: const Scaffold(),
+        child: bareScope(
+          MaterialApp(
+            navigatorKey: nav,
+            debugShowCheckedModeBanner: false,
+            theme: buildAppTheme(Brightness.light, fontFamily: fontsLoaded ? kTestFont : null),
+            darkTheme: buildAppTheme(Brightness.dark, fontFamily: fontsLoaded ? kTestFont : null),
+            themeMode: mode,
+            builder: safe == null
+                ? null
+                : (context, child) => MediaQuery(
+                    data: MediaQuery.of(context).copyWith(padding: safe, viewPadding: safe),
+                    child: child!,
+                  ),
+            home: const Scaffold(),
+          ),
         ),
       ),
     );
@@ -113,18 +115,20 @@ class Rig {
     await tester.pumpWidget(
       RepaintBoundary(
         key: shotKey,
-        child: MaterialApp(
-          debugShowCheckedModeBanner: false,
-          theme: buildAppTheme(Brightness.light, fontFamily: fontsLoaded ? kTestFont : null),
-          darkTheme: buildAppTheme(Brightness.dark, fontFamily: fontsLoaded ? kTestFont : null),
-          themeMode: mode,
-          builder: reduceMotion || safe != null
-              ? (context, child) => MediaQuery(
-                  data: MediaQuery.of(context).copyWith(disableAnimations: reduceMotion, padding: safe, viewPadding: safe),
-                  child: child!,
-                )
-              : null,
-          home: BlockEditorView(key: key, host: host, title: '逻辑', focusScriptId: focus),
+        child: bareScope(
+          MaterialApp(
+            debugShowCheckedModeBanner: false,
+            theme: buildAppTheme(Brightness.light, fontFamily: fontsLoaded ? kTestFont : null),
+            darkTheme: buildAppTheme(Brightness.dark, fontFamily: fontsLoaded ? kTestFont : null),
+            themeMode: mode,
+            builder: reduceMotion || safe != null
+                ? (context, child) => MediaQuery(
+                    data: MediaQuery.of(context).copyWith(disableAnimations: reduceMotion, padding: safe, viewPadding: safe),
+                    child: child!,
+                  )
+                : null,
+            home: BlockEditorView(key: key, host: host, title: '逻辑', focusScriptId: focus),
+          ),
         ),
       ),
     );

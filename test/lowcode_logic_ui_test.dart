@@ -138,7 +138,7 @@ void main() {
     final js = exportLogicJs(rig.doc);
     expect(js, contains('count'));
     expect(js, contains('2'));
-    expect(find.textContaining(js.trim().split('\n').first), findsWidgets, reason: '面板里就是翻出来的那份脚本');
+    expect(find.textContaining(js.trim().split('\n').first, findRichText: true), findsWidgets, reason: '面板里就是翻出来的那份脚本');
     await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
 

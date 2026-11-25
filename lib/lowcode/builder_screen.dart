@@ -219,7 +219,7 @@ class _BuilderScreenState extends State<BuilderScreen> {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      builder: (context) => CodeSheetBody(title: 'Flutter 代码', note: '已保存到项目的 $path', code: code),
+      builder: (context) => CodeSheetBody(title: 'Flutter 代码', note: '已保存到项目的 $path', code: code, language: 'dart'),
     );
   }
 

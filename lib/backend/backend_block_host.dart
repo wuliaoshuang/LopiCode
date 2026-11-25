@@ -380,6 +380,10 @@ class BeBlockHost extends BlockHost with BeFuncHost {
   @override
   String get codeLanguage => target?.label ?? _doc.language;
 
+  /// 看的就是入口文件，高亮按它的文件名来；这种语言没有生成器时不高亮。
+  @override
+  String get codeFileName => target?.entryFile ?? '';
+
   // —— 改动、撤销 ——
 
   /// 一次改动＝一条撤销记录。`change` 跑完内容其实没变（比如路径格式不对被拒绝了）就不记、也不通知落盘。

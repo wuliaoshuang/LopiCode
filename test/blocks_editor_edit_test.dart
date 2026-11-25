@@ -321,7 +321,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('bk-code')));
     await tester.pumpAndSettle();
     expect(find.textContaining('JavaScript'), findsWidgets);
-    expect(find.textContaining('addEventListener'), findsWidgets);
+    expect(find.textContaining('addEventListener', findRichText: true), findsWidgets);
   });
 
   for (final mode in [ThemeMode.light, ThemeMode.dark]) {

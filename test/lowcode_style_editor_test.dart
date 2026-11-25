@@ -61,41 +61,43 @@ Future<Host> openEditor(WidgetTester tester, {String nodeId = 'b1', ThemeMode mo
   await tester.pumpWidget(
     RepaintBoundary(
       key: shotKey,
-      child: MaterialApp(
-        debugShowCheckedModeBanner: false,
-        theme: buildAppTheme(Brightness.light, fontFamily: font),
-        darkTheme: buildAppTheme(Brightness.dark, fontFamily: font),
-        themeMode: mode,
-        home: StatefulBuilder(
-          builder: (context, setState) {
-            final n = host.node(nodeId);
-            return Scaffold(
-              body: SafeArea(
-                child: ListView(
-                  padding: const EdgeInsets.all(Space.x4),
-                  children: [
-                    Text('画布（测试宿主）· 改了 ${host.edits} 次', style: Theme.of(context).textTheme.titleSmall),
-                    const SizedBox(height: Space.x2),
-                    Text(n == null ? '（组件不在了）' : declarationsToCss(resolvedStyle(n, host.doc.parentOf(nodeId))), key: const Key('host-css'), style: Theme.of(context).textTheme.bodySmall),
-                    TextButton(
-                      key: const Key('host-open'),
-                      onPressed: () => showStyleEditor(
-                        context,
-                        doc: host.doc,
-                        nodeId: nodeId,
-                        onEdit: (change) => setState(() {
-                          if (host.swapDoc) host.doc = LcDocument.parse(host.doc.encode());
-                          change(host.doc);
-                          host.edits++;
-                        }),
+      child: bareScope(
+        MaterialApp(
+          debugShowCheckedModeBanner: false,
+          theme: buildAppTheme(Brightness.light, fontFamily: font),
+          darkTheme: buildAppTheme(Brightness.dark, fontFamily: font),
+          themeMode: mode,
+          home: StatefulBuilder(
+            builder: (context, setState) {
+              final n = host.node(nodeId);
+              return Scaffold(
+                body: SafeArea(
+                  child: ListView(
+                    padding: const EdgeInsets.all(Space.x4),
+                    children: [
+                      Text('画布（测试宿主）· 改了 ${host.edits} 次', style: Theme.of(context).textTheme.titleSmall),
+                      const SizedBox(height: Space.x2),
+                      Text(n == null ? '（组件不在了）' : declarationsToCss(resolvedStyle(n, host.doc.parentOf(nodeId))), key: const Key('host-css'), style: Theme.of(context).textTheme.bodySmall),
+                      TextButton(
+                        key: const Key('host-open'),
+                        onPressed: () => showStyleEditor(
+                          context,
+                          doc: host.doc,
+                          nodeId: nodeId,
+                          onEdit: (change) => setState(() {
+                            if (host.swapDoc) host.doc = LcDocument.parse(host.doc.encode());
+                            change(host.doc);
+                            host.edits++;
+                          }),
+                        ),
+                        child: const Text('打开样式面板'),
                       ),
-                      child: const Text('打开样式面板'),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-            );
-          },
+              );
+            },
+          ),
         ),
       ),
     ),

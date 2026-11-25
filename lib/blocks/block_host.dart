@@ -458,6 +458,10 @@ abstract class BlockHost {
   String get codeText;
   String get codeLanguage;
 
+  /// “看代码”里那段代码算哪个文件（只用来按文件名判断高亮语言，走 `CodeHighlighter.languageFor`）。
+  /// 默认空串＝不高亮。可覆盖。
+  String get codeFileName => '';
+
   // —— 改动、撤销、通知 ——
 
   /// 做一次改动：宿主先记撤销快照，再跑 `change`（里面用 [scripts] / [script] 取到的就是可以直接改的对象），

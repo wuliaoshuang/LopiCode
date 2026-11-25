@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:lopicode/agent/chat_client.dart';
@@ -9,6 +10,7 @@ import 'package:lopicode/app_services.dart';
 import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/core/safe_file.dart';
 import 'package:lopicode/core/stores.dart';
+import 'package:lopicode/state/app_providers.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:path/path.dart' as p;
 
@@ -73,6 +75,11 @@ Widget appFor(TestEnv env, Widget home, {ThemeMode mode = ThemeMode.light, Strin
   key: shotKey,
   child: LopiCodeApp(services: env.services, home: home, fontFamily: font, forceThemeMode: mode),
 );
+
+/// 不带应用外壳的小测试台（直接用 MaterialApp 的那几个）用：代码区域（看代码、原始 CSS）要读“代码字号”，
+/// 这里给一份没有文件的空设置，读到的全是默认值。应用里永远有外壳给的那一份。
+Widget bareScope(Widget child) =>
+    ProviderScope(overrides: [settingsStoreProvider.overrideWithValue(SettingsStore(File(p.join(Directory.systemTemp.path, 'lopicode-bare-settings-does-not-exist.json'))))], child: child);
 
 /// 界面里有真实的文件 / 进程 IO：让真实异步跑一会儿，再推几帧。
 Future<void> settle(WidgetTester tester, {int rounds = 4, int ms = 60}) async {
