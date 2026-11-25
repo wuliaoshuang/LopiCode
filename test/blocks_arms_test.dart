@@ -289,7 +289,7 @@ void main() {
       expect(blk.head.contains(own[0].rect.center), isTrue);
       expect(blk.mouths[1].bar!.contains(own[1].rect.center), isTrue);
       expect(blk.mouths[2].bar!.contains(own[2].rect.center), isTrue);
-      expect(blk.mouths[1].labels.map((l) => l.text), ['否则如果', '那么']);
+      expect(blk.mouths[1].labels.map((l) => l.text), ['否则如果']);
       // 口里的积木缩进在各自的口里。
       final inArm = b.script.blockAt([lcStep(0), lcStep(0, arm: 0)])!;
       expect(blk.mouths[1].rect.contains(inArm.rect.center), isTrue);

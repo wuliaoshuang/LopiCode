@@ -100,7 +100,10 @@ void main() {
       final host = LogicBlockHost(doc: sampleDoc(), onEdit: (change) => fail('不该改文档'));
       final picked = <BlockPaletteItem>[];
       await pump(tester, editor(host, onPick: picked.add), mode: mode);
-      // 第一页是事件：三个帽子模板。
+      // 第 4 版起第一页是“常用”；事件页排第二：三个帽子模板。
+      expect(find.byKey(const ValueKey('bk-palette-page-@common')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('bk-palette-tab-event')));
+      await tester.pumpAndSettle();
       for (final e in LcHandler.events) {
         expect(find.byKey(ValueKey('bk-palette-item-hat-$e')), findsOneWidget);
       }

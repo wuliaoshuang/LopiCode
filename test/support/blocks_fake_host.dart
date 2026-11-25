@@ -115,7 +115,7 @@ const Map<String, String> _blockSentences = {
   'throw': '报错 {message}',
 };
 
-const Map<String, String> _armSentences = {'if': '否则如果 {cond} 那么', 'switch': '是 {value} 时', 'try': '出错了'};
+const Map<String, String> _armSentences = {'if': '否则如果 {cond}', 'switch': '是 {value} 时', 'try': '出错了'};
 
 const Map<String, String> _exprSentences = {
   'var': '{name}',
@@ -141,9 +141,22 @@ const Map<String, List<String>> _aliases = {
   'block:if': ['判断', '条件', 'if', 'else'],
   'block:switch': ['switch', 'case', '多选一'],
   'block:try': ['try', 'catch', '异常'],
-  'expr:arith': ['加减乘除', '计算', '加', '减', '乘', '除'],
-  'expr:cmp': ['等于', '大于', '小于'],
-  'expr:textCase': ['大写', '小写', 'upper', 'lower'],
+  'expr:arith': ['四则运算', '计算'],
+  'expr:textCase': ['case'],
+};
+
+/// 每一种变体自己的别名（`表达式:选项值`）。
+const Map<String, List<String>> _variantAliases = {
+  'arith:+': ['加', 'plus'],
+  'arith:-': ['减'],
+  'arith:*': ['乘', '倍'],
+  'arith:/': ['除'],
+  'cmp:==': ['等于'],
+  'cmp:!=': ['不等于'],
+  'cmp:<': ['小于'],
+  'cmp:>': ['大于'],
+  'textCase:upper': ['upper'],
+  'textCase:lower': ['lower'],
 };
 
 Map<String, dynamic> _e(String kind, [Map<String, dynamic> more = const {}]) => {'e': kind, ...more};
@@ -219,7 +232,22 @@ class FakeHost extends BlockHost {
   ];
 
   @override
-  List<String> aliasesOf(BlockItemRef item) => _aliases[item.token] ?? const [];
+  List<String> aliasesOf(BlockItemRef item) => item.preset.isEmpty ? (_aliases[item.token] ?? const []) : (_variantAliases['${item.id}:${item.preset.values.first}'] ?? const []);
+
+  /// 一块顶多块：算术、比较、并且 / 或者、转大小写各占一个位置，每一种都能单独搜到。
+  @override
+  List<BlockItemRef> variantsOf(BlockItemRef item) {
+    if (item.kind != BlockPaletteKind.expr) return const [];
+    final arg = switch (item.id) {
+      'arith' || 'cmp' || 'logic' => 'op',
+      'textCase' => 'mode',
+      _ => null,
+    };
+    if (arg == null) return const [];
+    return [
+      for (final c in fakeExprSpecs[item.id]!.arg(arg)!.choices) BlockItemRef.expr(item.id, preset: {arg: c}),
+    ];
+  }
 
   @override
   List<BlockItemRef> get starterItems => const [
