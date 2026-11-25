@@ -11,7 +11,6 @@ import 'package:lopicode/appearance/theme_fields.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/state/themes_state.dart';
 import 'package:lopicode/theme/tokens.dart';
-import 'package:lopicode/ui/settings_theme.dart';
 import 'package:lopicode/ui/settings_widgets.dart';
 import 'package:lopicode/ui/theme_editor_screen.dart';
 import 'package:lopicode/ui/theme_export_sheet.dart';
@@ -19,6 +18,9 @@ import 'package:lopicode/ui/theme_import_screen.dart';
 import 'package:lopicode/ui/top_bar.dart';
 import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
+
+/// 一套主题的来源，管理页里统一这么写：内置 / 我的 / 我的 · 作者 某某。
+String themeSourceLabel(ThemeSpec t) => t.builtin ? '内置' : (t.author == null || t.author!.isEmpty ? '我的' : '我的 · 作者 ${t.author}');
 
 class ThemesScreen extends ConsumerStatefulWidget {
   const ThemesScreen({super.key, this.session});
@@ -149,6 +151,7 @@ class _ThemesScreenState extends ConsumerState<ThemesScreen> {
               ),
               Flexible(
                 child: ListView(
+                  key: const Key('themes-from-list'),
                   shrinkWrap: true,
                   children: [
                     for (final t in choices)
@@ -156,7 +159,7 @@ class _ThemesScreenState extends ConsumerState<ThemesScreen> {
                         key: Key('themes-from-${t.id}'),
                         leading: ThemeMiniLook(theme: t, width: 48, height: 34),
                         title: Text(t.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-                        subtitle: Text(ThemePickScreen.sourceLabel(t)),
+                        subtitle: Text(themeSourceLabel(t)),
                         onTap: () => Navigator.pop(context, t),
                       ),
                   ],
@@ -273,7 +276,7 @@ class _ThemeCard extends StatelessWidget {
                       Text(theme.name, style: t.titleSmall, maxLines: 1, overflow: TextOverflow.ellipsis),
                       const SizedBox(height: 2),
                       Text(
-                        theme.builtin ? '内置' : (theme.author == null || theme.author!.isEmpty ? '我的' : '我的 · 作者 ${theme.author}'),
+                        themeSourceLabel(theme),
                         key: Key('themes-source-${theme.id}'),
                         style: t.bodySmall?.copyWith(color: c.textMuted),
                         maxLines: 1,

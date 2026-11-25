@@ -667,7 +667,7 @@ ThemeSpec
 - 两个去处：复制到剪贴板；存成文件——工作区的 `exports/主题-〈名字〉-YYYYMMDD-HHMMSS.lopitheme.json`（和“整段对话导出”“消息存成文件”同一个目录，
   在“文件”页能看到；同一秒重名加 `-2`、`-3`，不盖掉上一份；名字里不能进文件名的字符去掉，最多 24 个字）。
   现在开着工作区就存它里面；没开着就从工作区列表里挑一个（只有一个就直接用）；一个工作区都没有时只能复制，并说明原因。
-- 面板上写大小；存好以后写存在哪个工作区的哪个路径。一套主题不带图约 12–14 KB。
+- 面板上写大小；存好以后写存在哪个工作区的哪个路径。一套主题不带图约 10 KB（实测 9.9 KB）。
 - “附带背景图”只在 `themeBackgroundBridgeProvider` 不是 null 且 `hasImage()` 为真时出现。打开后向背景图那边要一个 `background` 对象并进文本；
   带上以后超过 12MB（`kThemeImportMaxBytes`，导入能收的上限）就不带并说明；取不出来也说明原因。
 - 不调系统分享面板，不加插件，不联网。
@@ -698,7 +698,7 @@ ThemeSpec
 | 列表行高 | 56 | `kThemeRowHeight` |
 | 撤销最多几步 | 100 | `ThemeHistory.maxSteps` |
 | 数值每步 | 圆角 0.1、阴影 0.1、分隔线 0.5、其余 0.05 | `metricStep` |
-| 取色面板最高占屏 | 60% | `theme_color_sheet.dart` |
+| 取色 / 快捷生成面板的内容最高 | 上沿停在预览下沿之下；夹在屏幕高的 45%–60% 之间（390×844 上约 58%） | `themeSheetMaxHeight`（`theme_color_sheet.dart`） |
 | 方块高 / 条的可拖高度 / 色块边长 | 132 / 36 / 36 | `theme_color_picker.dart` |
 | 主题里已有的颜色最多列 | 16 | `kThemeOwnColorsMax` |
 | 常用色 | 16 个 | `kThemeCommonColors` |

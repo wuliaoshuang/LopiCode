@@ -118,7 +118,7 @@ void main() {
     await tester.tap(k('themes-new'));
     await tester.pumpAndSettle();
     expect(k('themes-from-$kDefaultDarkThemeId'), findsOneWidget);
-    final sheetScroll = find.ancestor(of: k('themes-from-$kDefaultDarkThemeId'), matching: find.byType(Scrollable)).first;
+    final sheetScroll = find.descendant(of: k('themes-from-list'), matching: find.byType(Scrollable)).first;
     await tester.scrollUntilVisible(k('themes-from-${made.last.id}'), 200, scrollable: sheetScroll);
     await tester.pumpAndSettle();
     expect(k('themes-from-${made.last.id}'), findsOneWidget);
