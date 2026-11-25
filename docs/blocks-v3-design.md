@@ -335,9 +335,9 @@ BlockEditorView(
 | --- | --- | --- |
 | Node.js | `node:http` | 能（node 24）——**已做，一致性测试通过** |
 | Python | `http.server` | 能（python 3.12）——**已做，一致性测试通过** |
-| Go | `net/http`；值是 `any`，数字一律 `float64`；JSON 编码自己写（解析用 `encoding/json` 再按规矩收拾）；生成 `go.mod`（模块名写死 `lcbackend`、`go 1.18`） | 能（`~/workspace/tools/gosdk/go/bin/go` 1.25）——**已做，一致性测试通过**，生成物是 gofmt 规范格式、`go vet` 通过 |
+| Go | `net/http`；值是 `any`，数字一律 `float64`，列表是 `*lc.List`（积木第 4 版阶段 1 从 `[]any` 改的，为了“原地改列表”是同一个）；JSON 编码自己写（解析用 `encoding/json` 再按规矩收拾）；生成 `go.mod`（模块名写死 `lcbackend`、`go 1.18`） | 能（`~/workspace/tools/gosdk/go/bin/go` 1.25）——**已做，一致性测试通过**，生成物是 gofmt 规范格式、`go vet` 通过 |
 | Java | `java.net.ServerSocket` 上自己读 HTTP（JSON 也自己带一个小实现）；值是 `Object`，数字一律 `Double`；`javac` 直接编译，不用 Maven / Gradle | 能（`~/workspace/tools/jdk`，JDK 21）——**已做，一致性测试通过** |
-| PHP | 自带开发服务器 `php -S 0.0.0.0:端口 server.php` 的路由脚本；值是 null / bool / float / string / 数组（列表）/ `LcObj`（对象）；JSON 解析自己写 | 不能（本机没有 php）——**已做，只做了结构检查，未实际运行**（`verified: false`） |
+| PHP | 自带开发服务器 `php -S 0.0.0.0:端口 server.php` 的路由脚本；值是 null / bool / float / string / `LcList`（列表；积木第 4 版阶段 1 从 PHP 数组改成对象，为了“原地改列表”是同一个）/ `LcObj`（对象）；JSON 解析自己写 | 不能（本机没有 php）——**已做，只做了结构检查，未实际运行**（`verified: false`） |
 | C# / Ruby / Kotlin / Rust、框架版（Express / FastAPI / Flask） | 没做 | —— |
 
 实现时定的几件事：

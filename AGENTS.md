@@ -28,6 +28,7 @@ tool/check.sh --fix    # 先自动排版
 | `lib/agent/` | Agent：各协议的客户端、工具、模型与渠道配置、服务商预设、额度与用量、自动化、团队、技能、联网搜索 | `core`、`agent` |
 | `lib/preview/` | 本机预览服务器 | `core` |
 | `lib/format/` | 代码格式化器（JSON / CSS / JS·JSX / HTML / Vue），纯 Dart，排完和原文对不上就原样返回 | 只依赖自己 |
+| `lib/lang/` | 积木第 4 版的语言核心：语法树、名字与类型检查、小库函数表、五种语言的生成器（纯 Dart；小库的源码文本在 `lib/backend/runtime_*_lang.dart`） | `core`、`lang` |
 | `lib/terminal/` | 终端会话与后端接口、原生伪终端的封装 | `core`、`terminal` |
 | `lib/runtime/` | Ubuntu 运行环境：下载、解压、PRoot 启动、诊断 | 下面各层 |
 | `lib/ssh/`、`lib/build/`、`lib/lowcode/` | SSH、打包、低代码（各自的逻辑 + 自己的 `*_screen.dart`） | 下面各层 |

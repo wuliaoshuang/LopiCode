@@ -153,6 +153,8 @@ Go 和 Java 要类型。办法是三档，从松到严（第 4.3 节细说）：
 | `[把 [n▾] 加上 (1)]` | 两边先转数字（沿用） | `n = lc.add(n, 1);` | 同理 | 同理 | 同理 | 同理 |
 | `(n)` | 读变量；下拉里只列“这里看得见的” | `n` | `n` | `n` | `n` | `$n` |
 
+> 实施时的改动（阶段 1）：上表的生成写法是示意。实际所有声明都提到函数开头，原处只赋值；常量在生成的代码里和变量一样，“不许再改”只靠校验 L11 拦。见第 10 节“实施记录·阶段 1”。
+
 **作用域的规矩（五种语言统一成一种）**：
 
 - 三层：**模块级**（整个文件看得见）、**函数级**（这个函数里，从“新建变量”那一块往下看得见）、**参数 / 循环变量**（只在那个函数 / 那个循环里）。
@@ -171,7 +173,7 @@ Go 和 Java 要类型。办法是三档，从松到严（第 4.3 节细说）：
 | `<(a) [＝▾] (b)>` | ＝ ≠ ＜ ≤ ＞ ≥；“等于”的规矩沿用第 3 版 | 都是数字 / 都是文字：原生比较；否则 `lc.eq(a, b)` 等 |
 | `<<a> [并且▾] <b>>` | 并且 / 或者。**前面已经能定结果时，后面的不算**（短路）——现在后端是两边都算，但旧积木的值都没有副作用，看不出区别 | `lc.truthy(a) && lc.truthy(b)`；已经是布尔就不包。Python 用 `and` / `or` |
 | `<不是 <a>>` | | `!lc.truthy(a)` |
-| `(如果 <c> 就是 (a) 否则是 (b))` | 值版本的“如果” | JS / Java / PHP `c ? a : b`；Python `a if c else b`；Go 没有这种写法 → 生成器先用一个临时变量加 `if` 算好，再用它（降级，未验证） |
+| `(如果 <c> 就是 (a) 否则是 (b))` | 值版本的“如果” | JS / Java / PHP `c ? a : b`；Python `a if c else b`；Go 没有这种写法 → 小库的 `lc.Pick(c, func() any { return a }, func() any { return b })`，两边包成函数、只算选中的那一边（阶段 1 实施时定的，已真跑验证；原方案“临时变量加 `if`”在式子套式子时要拆句，没用） |
 
 ### 3.4 条件
 
@@ -192,6 +194,8 @@ Go 和 Java 要类型。办法是三档，从松到严（第 4.3 节细说）：
 | `[对 (字典) 的每一对 [键] [值] { }]` | **新**。顺序见 3.1 | 小库先给出排好序的键列表，再按上一行的办法循环 | 同理 | 同理 | 同理 | 同理 |
 | `[跳出循环]` | **新** | `break;` | `break` | `break` | `break;` | `break;` |
 | `[跳过这一轮]` | **新** | `continue;` | `continue` | `continue` | `continue;` | `continue;` |
+
+> 实施时的改动（阶段 1）：上表的循环写法是示意。实际“重复 / 从…数到… / 对每一项 / 对每一对”都生成成“按遍数的循环”（遍数、列表的拷贝、排好序的键先存进临时变量），不用各语言的 `for…of` / `range`。见第 10 节“实施记录·阶段 1”。
 
 “当…时重复”和“一直重复”带来了现在没有的风险：**死循环**。两道防线：校验（“一直重复”里没有“跳出 / 返回 / 抛出”、
 “当 `<是>` 时重复”——新规则 L13，警告）；“运行”时可选的“防卡死”——同一个循环转满 100 万圈就停下并报错（由小库计数，默认开，设置里能关，自定）。
@@ -820,6 +824,168 @@ S08“被前面的挡住”这种要算的规则，由内置库用 Dart 写（�
 - 第 3 阶段是风险最大的一步（动现有后端的根）。它前面两个阶段只加不改，万一第 3 阶段卡住，前两个阶段的成果照样能用。
 
 **工作量的粗估（只是估计，不是承诺）**：按之前几轮的节奏，每个阶段大约是“低代码第 2 版”那样一轮多代理工作的量；第 3、5 阶段更大。
+
+### 实施记录·阶段 1（语言核心这一半，2026-11-25）
+
+阶段 1 分两半并行做：这里记的是**语言核心**（`lib/lang/`、小库、后端流水线的接法）；编辑器界面那一半另记。把两边接起来（积木规格、“积木 → 语法树”的降级、校验接进 `backend_validate.dart`）是第三步，照下面的对照表做。
+
+#### 一、交付了什么
+
+| 东西 | 在哪 |
+| --- | --- |
+| 语法树（每个节点带“来源” `src` 和“类型” `type`） | `lib/lang/ast.dart`；小工具 `lib/lang/ast_util.dart`（`lSwitch`、`lAlwaysReturns`、`lDeclaredNames`、`lWalk`…） |
+| 类型 | `lib/lang/types.dart` |
+| 名字解析、作用域、类型推断、检查结果（纯函数，不抛异常） | `lib/lang/analyze.dart`：`analyzeBody`、`analyzeModule` → `LangAnalysis` |
+| 小库函数表（名字、参数、返回、规矩、第几阶段） | `lib/lang/rt.dart`：`kLangCoreFns`（20 个，第 3 版小库里本来就有）、`kLangRtFns`（新加的） |
+| 生成器骨架、能力表、“未支持” | `lib/lang/gen.dart`：`LangGen`、`LCap`、`kLangFeatures`、`LangUnsupported` |
+| 五个生成器 | `lib/lang/gen_node.dart`、`gen_python.dart`、`gen_go.dart`、`gen_java.dart`、`gen_php.dart` |
+| 入口 | `lib/lang/lang.dart`：`langFragment`、`langGenFor` |
+| 五份语言核心小库 | `lib/backend/runtime_node_lang.dart`（生成 `lc_lang.js`）、`runtime_python_lang.dart`（`lc_lang.py`）、`runtime_go_lang.dart`（`lc/lang.go`）、`runtime_java_lang.dart`（`LcLang.java`）、`runtime_php_lang.dart`（`lc_lang.php`） |
+| 新旧之间的桥 | `lib/backend/backend_lang.dart`；`backend_ir.dart` 里的 `BeSLang`、`BeXLang` |
+
+`lib/lang/` 只依赖自己和 `core`（守门测试 `test/architecture_test.dart` 里登记成 `'lang': {'core', 'lang'}`，没有加例外）。小库的**源码文本**放在 `lib/backend/`（和第 3 版的小库放一起，由各语言的 `BeCodeTarget.langRuntimeSource` 给出）；`lib/lang/` 只管“调哪个函数、怎么写这一句”。
+
+#### 二、入口函数（给第三步）
+
+```dart
+// package:lopicode/lang/lang.dart
+LangFragment langFragment(String language, List<LStmt> body, {LangHost host = const LangHost(), LangCtx? ctx});
+
+class LangFragment {
+  final List<String> declares; // 要在函数开头声明的名字（用户起的原名）：变量、常量、循环变量
+  final List<String> lines;    // 代码，一行一项，不带这一层的缩进
+}
+
+// package:lopicode/lang/analyze.dart —— 生成前先检查；有错误（isError）就不要生成
+LangAnalysis analyzeBody(List<LStmt> body, {Set<String> outer, Set<String> outerConsts, bool inFunction = true});
+```
+
+- `language`：`node` / `python` / `go` / `java` / `php`（`kLangTargets`）。不认识的语言、这一阶段不支持的节点抛 `LangUnsupported`（`message` 是给人看的整句话，带“第几阶段才有”）。
+- 同一个函数体里分几段生成，要传同一个 `LangCtx`（循环用的临时名字才不会重）。
+- `LangHost`：宿主接进来的两样东西——`call`（`LNative` 怎么写）、`stmt`（`LHost` 怎么写），以及 `allowReturn`（后端的接口函数里不许直接 `LReturn`，要用“返回响应”）。
+- **在后端里不用直接调它**：把新积木降级成 `BeSLang(语句表)` / `BeXLang(式子)` 放进现有的 `BeS` / `BeX` 里就行，`BeCodeTarget` 会自己调生成器、在接口函数开头声明新名字、按需带上语言核心的小库文件。详见下面“四”。
+
+#### 三、对照表：新积木 op ／ 表达式 e → 语法树节点 ／ 小库函数
+
+op 名的风格跟 `backend_blocks.dart` 一致。**这些名字是这边提议的**，第三步写积木规格时照这张表；要改名只改规格那一头，语法树不受影响。
+
+**语句（op）**
+
+| op | 积木 | 参数（args）／口 | 降级成 |
+| --- | --- | --- | --- |
+| `let` | 新建变量 [n] ＝ (值) | `name`、`value` | `LLet(name, value)` |
+| `const` | 新建常量 [N] ＝ (值) | `name`、`value` | `LLet(name, value, isConst: true)` |
+| `setVar`（沿用） | 把 [n] 设为 (值) | `name`、`value` | 旧变量照旧 `BeSSet`；新变量 `LAssign(LTName(name), value)` |
+| `setItem` | 把 (列表／字典) 的第 (k) 项设为 (值) | `of`、`key`、`value` | `LAssign(LTIndex(of, key), value)` |
+| `do` | 只为了效果算一个式子（比如“末尾加一项”） | `value` | `LExprStmt(value)` |
+| `if`（沿用，扩展） | 如果 … 否则如果 … 否则 | `cond`、口 `body`；**否则如果链存在 `args['elseIfs']`**：一个列表，每项 `{'cond': 式子, 'body': [积木…]}`；口 `orElse` | `LIf([LIfArm(cond, body), …每段否则如果一个 LIfArm], orElse: …)`。没有 `elseIfs` 的旧积木照旧走 `BeSIf` |
+| `switch` | 按 (x) 分情况 | `value`；`args['cases']`：列表，每项 `{'is': 式子, 'body': [积木…]}`；口 `orElse` | `lSwitch(临时名, value, [LIfArm(is, body)…], orElse: …)`——x 存进一个临时值、只算一次，然后是一串 `LIf`，比法是“等于”（`eq`）。**临时名在一个函数里不许重**（建议用积木的 id） |
+| `while` | 当 <c> 时重复 | `cond`、口 `body` | `LWhile(cond, body)` |
+| `forever` | 一直重复 | 口 `body` | `LWhile(null, body)` |
+| `forCount` | [i] 从 (a) 数到 (b) 每次加 (s) | `name`、`from`、`to`、`step`、口 `body` | `LForCount(name, from, to, step, body)` |
+| `forEach`（沿用，扩展） | 对 (列表) 的每一项 [x]（序号 [i]） | `list`、`name`、可选 `index`、口 `body` | `LForEach(list, name, body, index: index)`。旧的（把每一项赋给已声明的变量）照旧走 `BeSForEach`；要用新路又想沿用“赋给已有变量”，传 `reuse: true` |
+| `forPairs` | 对 (字典) 的每一对 [键] [值] | `dict`、`key`、`value`、口 `body` | `LForPairs(dict, key, value, body)` |
+| `repeat`（沿用） | 重复 (n) 次 | `times`、口 `body` | 旧路 `BeSRepeat`；口里有新积木（尤其“跳出／跳过”）时走新路 `LRepeat(times, body)`，“跳出／跳过在不在循环里”的检查才算得对 |
+| `break` | 跳出循环 | — | `LBreak()` |
+| `continue` | 跳过这一轮 | — | `LContinue()` |
+| `note`（沿用） | 注释 | `text` | `LNote(text)` |
+| `listPush`、`listInsert`、`listRemove`、`listSet`、`dictSet`、`dictRemove` | 原地改列表／字典 | 同小库函数的参数名 | `LExprStmt(LRt(同名函数, 参数))` |
+
+**式子（e）**
+
+| e | 积木 | 降级成 |
+| --- | --- | --- |
+| `listLit` | 列表 [ … ] | `LListLit(items)` |
+| `dictLit` | 字典 { 键: 值 … } | `LDictLit([LDictEntry(键, 值)…])`（键可以是任何式子，文字化后当键；重复的后面盖前面） |
+| `index` | (x) 的第 (k) 项／键 | `LIndex(of, key)` → 小库 `item` |
+| `and`、`or` | 并且／或者（短路） | `LLogic('and' ｜ 'or', l, r)`。**注意**：旧积木的 `bin` 里 `and`／`or` 是两边都算（`allOf`／`anyOf`），照旧；新积木用这两个 |
+| `cond` | 如果 <c> 就是 (a) 否则是 (b) | `LCond(cond, then, orElse)` |
+| `neg` | 负 (x) | `LUnary('neg', x)` |
+| `not`（沿用） | 不是 <a> | 旧路 `isNot`；新路 `LUnary('not', x)` |
+| `bin`（沿用）＋ `**` | ＋ − × ÷ 余数 乘方、比较 | 旧路照旧；新路 `LBinary(op, l, r)`，op 是 `+ - * / % ** == != < <= > >=` → 小库 `add sub mul div mod pow eq ne lt le gt ge` |
+| `var`（沿用） | 读变量 | 旧变量 `BeXVar`；新变量 `LName(name)` |
+| 字面量 | 数字、文字、是否、空 | `LLit(值)` |
+| 其余每个小库函数一个 e，名字就是函数名 | 见下表 | `LRt(函数名, 参数)` |
+
+**小库函数（`LRt`）**——55 个第 1 阶段的 ＋ 8 个先占位的。规矩的全文在 `lib/lang/rt.dart` 每个函数的说明里。
+
+| 类别 | 函数 |
+| --- | --- |
+| 类型（5） | `isType(x, 类型名)`（number／text／bool／null／list／dict）、`toNumber`、`toText`、`toBool`、`copy` |
+| 数学（9） | `pow`、`round`、`floor`、`ceil`、`abs`、`sqrt`、`max`、`min`、`random(a, b)` |
+| 文字（13，加上沿用的 `join`、`size` 共 15） | `charAt`、`substring(s, from, to)`、`contains`、`startsWith`、`endsWith`、`indexOf`、`replace`、`split`、`trim`、`upper`、`lower`、`repeatText`、`template(s, 字典)` |
+| 列表（15） | `listOf(…)`、`listGet`、`listSet`⚠、`listPush`⚠、`listInsert`⚠、`listRemove`⚠、`listPop`、`listContains`、`listIndexOf`、`listSlice`、`listConcat`、`listReverse`、`listSort`、`listJoin`、`range(a, b, step)` |
+| 列表：要拿函数当参数的（8，**第 2 阶段**，名字和签名先定，小库里还没有，生成器碰到报“未支持”） | `listSortBy(xs, fn)`、`listMap(xs, fn)`、`listFilter(xs, fn)`、`listReduce(xs, fn, init)`、`listFind(xs, fn)`、`listEvery(xs, fn)`、`listSome(xs, fn)`、`listEach(xs, fn)` |
+| 字典（9） | `dictOf(键, 值, …)`、`dictGet`、`dictSet`⚠、`dictRemove`⚠、`dictHas`、`dictKeys`、`dictValues`、`dictPairs`、`dictMerge` |
+| 通用（2） | `item(x, k)`、`setItem(x, k, v)`⚠ |
+| JSON（2） | `toJson`、`fromJson` |
+| 沿用第 3 版的（`kLangCoreFns`） | `add sub mul div mod eq ne lt le gt ge isNot truthy join size isNull now log`，生成器内部用的 `times`、`items`、`countSteps` |
+
+⚠＝会抛错。四句话五种语言一样（`kLangErrors`）：“这不是列表，改不了”“这不是字典，改不了”“列表里没有这个位置”“这个值不能按位置或键来改”。
+
+**检查规则**（`analyzeBody` 给出，规则号照本稿）：G03 用了看不见的变量（错误）、L03 “返回”不在函数里（错误）、L04 “跳出／跳过”不在循环里（错误）、L09 同层重名（错误）、L11 给常量赋值（错误）、L13 可能的死循环（警告）、S10 返回／跳出／跳过后面还有语句（警告，一串只报一次）；检查自己出了岔子报 G07，不抛异常。
+
+#### 四、现有后端流水线怎么接的（取舍）
+
+**取舍：新旧并存，不一步到位替换（按稳妥的办法先做，可改）。** 理由：现有一致性测试逐字节比对 135 条请求的响应，还有测试直接调 `target.literal(…)`、`target.call(…)`、核对文件清单；一步到位把旧 IR 全换成新树，生成文本一定会变，风险和收益不成比例。第 3 阶段把后端积木改写成库时再整体换。
+
+- 旧积木：照旧翻成 `BeS`／`BeX`，由各语言的 `BeCodeTarget` 写代码。**没用到新节点的文档，生成的入口文件、README 一个字都没变**（拿 master `a63f47c` 的生成结果逐文件比过：一致性样本和空文档、五种语言，入口文件和 README 全部相同；变的只有下面“六”里列的小库文件）。
+- 新积木：翻成本目录的语法树，包进 `BeSLang(List<LStmt>)`（语句）或 `BeXLang(LExpr)`（式子），夹在同一串 `BeS`／`BeX` 里。
+- 两边可以互相套（`lib/backend/backend_lang.dart`）：
+  - 新节点里放旧语句：`beHostStmts(旧语句表)` 包成 `LHost`，生成时交回给后端照旧路写；
+  - 新式子里放旧式子（网址参数、数据库…）：`beToLangExpr(旧式子, request: target.request)`，小库调用变成 `LNative`，生成时交回给后端的 `call`；
+  - 旧语句（如果／重复／对每一项）的口里放新节点：直接把 `BeSLang` 放进语句表；旧式子里放新式子：`BeXLang`。
+- `BeSLang`／`BeXLang` 做成了 `BeSNote`／`BeXLit` 的**子类**，不是 `BeS`／`BeX` 的新分支：`BeS`、`BeX` 是 sealed，现有测试（`_collectFns`）对它们做了穷尽的 switch，加分支就要改测试，而现有测试一条都不许改。第 3 阶段整体换的时候去掉这个绕法。
+- 接口函数开头会多声明新节点新建的名字（`beLangDeclares`），初值是空；文档里已经声明的变量不重复声明。
+- 用到新节点的工程多带一个语言核心的小库文件；没用到的工程文件清单和以前一样。
+- 碰到这一阶段不支持的节点（函数、类…），后端**不让整份生成失败**：那一段留一行说明；这一段本来“怎么走都会返回”的话补一个 500 的响应，生成的代码照样能编译。
+
+#### 五、生成时的做法和自定的数值（都可改）
+
+- **运算全走小库**（第 11 节问题 1 的建议 A，**按建议先做，可改**）：`a + b` 生成成 `lc.add(a, b)`。只有两处用语言自己的写法：条件已经是布尔时不再包 `truthy`；“并且／或者”用 `&&`／`||`（Python `and`／`or`）保证短路。
+- **Go／Java 里值一律是 `any`／`Object`**（问题 2 的建议，**按建议先做，可改**）：标的类型只用于校验，不进生成的代码。
+- **声明一律提到函数开头，原处只赋值**；常量在生成的代码里和变量一样，“不许再改”只靠 L11 拦。（3.2 的表里常量写成 `const`／`final`、变量在原处声明，那是提到函数开头之前的示意；提上去以后 `const` 没法先声明后赋值，所以统一成普通变量。3.2 已加注。）
+- “一定退出”的语句（返回／跳出／跳过）后面的语句不生成（Java、Go 不许有执行不到的代码）；校验给 S10 警告。
+- 值版的“如果”：JS／Java／PHP 三目、Python `a if c else b`；**Go 用小库的 `lc.Pick(条件, func() any {…}, func() any {…})`**，两边包成函数、只算选中的那一边（3.3 原来写的是“临时变量加 if”，那样式子里套式子时要把整句拆开，改成了这个；3.3 已改）。
+- 循环一律生成成“按遍数的循环”，不用各语言的 `for…of`／`range`（3.5 的表是示意，已加注）：
+  - 从…数到…：三个数进循环前各算一次；第 k 遍的值是 `a + k×s`（不是一路累加，0.1 这种步长不走样）；遍数 `⌊(b − a) ÷ s + 1e-9⌋ + 1`，步长 0、方向不对是 0 遍，最多 2147483647 遍。
+  - 对每一项：先取列表当时的一份拷贝，循环中途改列表不影响这一轮。
+  - 对每一对：先取排好序的键，再逐个取值；循环中途删掉的键取到空。
+  - 重复 N 次：沿用封顶 10000。
+- 循环用的临时名字 `lcv<字母><编号>`；“分情况”的临时值 `lcT<名>`；变量 `v_名`（沿用）。
+- 列表和字典是“同一个”，不是复制（赋给另一个变量、放进别的列表、当参数，改一处都变）；要复制用 `copy`。
+- 小库里自定的规矩：位置数字化后去掉小数；`upper`／`lower` **只转 a–z／A–Z**（各语言的 Unicode 大小写表不一样）；`trim` 只去空格／制表／回车／换行四种；`template` 的 `{键}` 字典里没有、或花括号没配上就原样留着；`listSort` 数字在前按大小、其余文字化后按码点、一样的保持原来先后；`sqrt` 负数得 0；`pow` 结果不是有限的数得 0；`random` 两边去掉小数后含两头，反着给也行；`repeatText`／`range` 封顶 10000；`dictOf` 最后落单的键丢掉；`fromJson` 解析失败、套超过 64 层得空；数字写出来的样子沿用第 3 版（12 位有效数字，所以 `0.1 + 0.2` 是 `0.3`）。
+- 3.11 说“写到不存在的位置抛错（能被‘试着做’接住）”：现在会抛，但“试着做”第 6 阶段才有，所以这一阶段抛了就是整个程序／这次请求出错收场。
+
+#### 六、行为变化
+
+- **Go 小库**：列表从 `[]any` 改成 `*lc.List`（引用），`lc/values.go`、`lc/server.go` 跟着改。为的是“原地改列表”五种语言一致（Go 的切片追加以后可能换底层数组，别处拿着的就不是同一个了）。响应、JSON、日志的输出不变（现有 135 条一致性用例全过）。
+- **PHP 小库**：列表从 PHP 数组改成 `LcList` 对象（PHP 数组是值，传来传去会复制），`lc_runtime.php`、`lc_json.php`、`lc_data.php` 跟着改。**未实测**（本机没有 php）。
+- **Node 小库**：`lc_runtime.js` 的导出表多了 `kind`、`cmpKeys`、`parseBody` 三个名字（语言核心的小库要用）。
+- Python、Java 的第 3 版小库没动。
+- 界面上还看不到变化：新积木的规格和降级是第三步的事。
+
+#### 七、测试
+
+`test/lang_*.dart`（支撑和用例在 `test/support/lang_*.dart`）：
+
+- `lang_conformance_flow_test.dart`：语法树每种节点，18 组用例；`lang_conformance_rt_test.dart`：小库函数 11 组用例 ＋ 9 个抛错用例，并核对“每个第 1 阶段的小库函数都有用例”。Node／Python／Go／Java 四种语言真跑，输出等于写死的预期、四种语言逐字节相同。
+- `lang_backend_test.dart`：新旧混在同一个接口函数体里，四种语言的后端真的起起来发 7 条请求；Go 的工程过 gofmt、go vet。
+- `lang_analyze_test.dart`：名字、作用域、类型推断、七条规则、不抛异常。
+- `lang_gen_test.dart`：入口、能力表、“未支持”的报错、小库函数表和五份小库对得上、Go 的 gofmt／go vet、PHP 的文本检查。
+- **PHP 一行都没跑过**：生成器、`lc_lang.php`、`LcList` 的改动都只做了文本检查（引号括号配对、调的函数都有定义、每句以分号结尾），测试名里都写了“未实测”。
+
+#### 八、测试里查出来、当场修掉的问题
+
+- 检查器：一个循环的两个变量起同一个名字（“对每一对 [k] [k]”）没报 L09——循环变量原来用字典存，同名的被合并了。改成列表，补了测试。
+- Go 生成器：条件最外面是“并且／或者”时带了一对多余的括号，不是 gofmt 的规范格式（现有后端测试要求生成的 Go 工程过 gofmt）。改成去掉最外面那对，补了用例。
+- 没有发现现有代码（第 3 版后端）的 bug。
+
+#### 九、没验证的
+
+- PHP：全部（见上）。
+- 手机上的运行环境里没跑过（只在开发机上跑了 Node／Python／Go／Java）。
+- 大数据量下的速度没量过（运算全走小库，会比原生写法慢）。
 
 ---
 
