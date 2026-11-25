@@ -1,7 +1,6 @@
 // 背景图片的逻辑测试：裁剪数学、文件头、入库与清理、选图通道（假通道）、设置状态。
 // 图片都是代码生成的小图；绝不拉起真的系统选择器。
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -13,6 +12,7 @@ import 'package:lopicode/core/safe_file.dart';
 import 'package:lopicode/core/stores.dart';
 import 'package:lopicode/state/app_providers.dart';
 import 'package:lopicode/state/backdrop_state.dart';
+import 'package:lopicode/ui/backdrop_images.dart';
 import 'package:path/path.dart' as p;
 import 'package:riverpod/riverpod.dart';
 
@@ -95,7 +95,10 @@ void main() {
       expect((fy - r1.top) / r1.height, closeTo(0.7, 1e-9));
       // 缩小回去时碰到边：还是合法的
       final back = m.zoomTo(m.pan(r1, -9, -9), 1, focalX: 0, focalY: 0);
-      expect(back, m.initial());
+      expectInside(back);
+      expect(m.zoomOf(back), closeTo(1, 1e-9));
+      expect(back.width, closeTo(m.initial().width, 1e-9));
+      expect(back.left, closeTo(0, 1e-9), reason: '横向还有余量：焦点在左上角，就贴着左边');
     });
 
     test('换了屏幕比例再打开（refit）：比例收对、中心尽量不动、不出图', () {
@@ -195,6 +198,50 @@ void main() {
       expect(sniffBackdropFormat('<svg xmlns="http://www.w3.org/2000/svg"/>'.codeUnits), isNull);
       expect(sniffBackdropFormat('RIFF____WAVE'.codeUnits), isNull);
       expect(sniffBackdropFormat(const [0xFF, 0xD8]), isNull);
+    });
+  });
+
+  group('解码缓存（BackdropImages）', () {
+    late Directory tmp;
+    setUp(() => tmp = Directory.systemTemp.createTempSync('lopi_bgi_'));
+    tearDown(() {
+      BackdropImages.instance.clear();
+      tmp.deleteSync(recursive: true);
+    });
+
+    test('第一次 load 会完成（回归：以前它等自己、永远不回来）；同时叫两次只解一次；之后直接拿缓存', () async {
+      final path = writePick(tmp, 'a.png', await makePng(40, 30));
+      final images = BackdropImages.instance;
+      expect(images.peek(path), isNull);
+      final both = await Future.wait([images.load(path), images.load(path)]).timeout(const Duration(seconds: 20));
+      expect(both[0], isNotNull);
+      expect(identical(both[0], both[1]), isTrue);
+      expect((both[0]!.width, both[0]!.height), (40, 30));
+      expect(images.decodeCount, 1);
+      expect(images.peek(path), same(both[0]));
+      expect(await images.load(path).timeout(const Duration(seconds: 5)), same(both[0]));
+      expect(images.decodeCount, 1);
+      images.forget(path);
+      expect(images.peek(path), isNull);
+    });
+
+    test('文件没了 / 不是图片：回 null，不抛错，也不卡住', () async {
+      final images = BackdropImages.instance;
+      expect(await images.load(p.join(tmp.path, 'nope.png')).timeout(const Duration(seconds: 20)), isNull);
+      final bad = writePick(tmp, 'bad.png', 'not an image'.codeUnits);
+      expect(await images.load(bad).timeout(const Duration(seconds: 20)), isNull);
+      // 失败以后还能再试（没有卡在“正在解”）
+      expect(await images.load(bad).timeout(const Duration(seconds: 20)), isNull);
+    });
+
+    test('最多记 ${BackdropImages.kMaxSources} 张，多了丢最久没用的', () async {
+      final images = BackdropImages.instance;
+      final paths = [for (var i = 0; i < BackdropImages.kMaxSources + 1; i++) writePick(tmp, 'i$i.png', await makePng(8 + i, 8))];
+      for (final path in paths) {
+        await images.load(path).timeout(const Duration(seconds: 20));
+      }
+      expect(images.peek(paths.first), isNull);
+      expect(images.peek(paths.last), isNotNull);
     });
   });
 
@@ -507,9 +554,10 @@ void main() {
       await n().ready;
       final img = await pickOne(30, 30);
       await n().setImage(dark: false, image: img, crop: CropRect.full);
+      final file = store().imageFile(img.file);
       container.dispose();
       await pendingWrites();
-      store().imageFile(img.file).deleteSync();
+      file.deleteSync();
       container = open();
       await n().ready;
       expect(s().light.hasImage, isFalse);

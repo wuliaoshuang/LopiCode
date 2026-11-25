@@ -474,3 +474,22 @@ PHP 估计 7.4+（PHP 那份代码从没运行过）。下面选的版本都够�
 添加模型时自动标“可思考”的规则（`knownThinkingModel`，只标上表核对到的）：DeepSeek 官方地址的 `deepseek-*`；Anthropic 协议下认得出版本的 Opus 4 / 4.1 / 4.5、Sonnet 4 / 4.5、Haiku 4.5、4.6 及以后、Fable、Mythos；Gemini 官方地址的 `gemini-2.5 / 3 / 4`；智谱地址的 `glm-4.5 / 4.6 / 4.7 / 5*`；Kimi 地址的 `kimi-k3*`、`kimi-k2.7-code*`、`kimi-k2.6*`；OpenRouter 模型列表里带 `reasoning` 对象的。其余一律不自动标；思考参数核对过的服务商 / 模型，用户可以在选模型的面板里自己打开，没核对过的打不开。
 
 每个模型上次设的档位存在设置键 `ai.thinkingLevels`（`{"渠道 id/模型 id": 档位}`）；档位值有 `off / on / low / medium / high / max`。旧存盘里某个模型现在不支持的档位，按“先往高找最近的一档”落（例如 DeepSeek 的 `medium` → `high`，和官方的映射一致）。
+
+## 2026-11-26 背景图片：系统选图不需要权限（`android/app/src/main/kotlin/com/lopicode/app/BackdropPicker.kt`、`lib/backdrop/backdrop_picker.dart`）
+
+选背景图不用 `image_picker`，自己写了一个平台通道（`lopicode/backdrop`，方法 `pickImage`），直接拉起系统自带的选择器。`AndroidManifest.xml` 没有新增任何权限。
+
+| 用的接口 | 官方怎么写 | 来源 | 状态 | 我们怎么用 |
+|---|---|---|---|---|
+| 系统照片选择器 `MediaStore.ACTION_PICK_IMAGES`（Intent 动作 `android.provider.action.PICK_IMAGES`） | Android 13（API 33）进公共 SDK；Android 11（API 30）起、带 R Extensions 第 2 版的设备上也有。运行时用 `SdkExtensions.getExtensionVersion(Build.VERSION_CODES.R) >= 2` 判断 | https://developer.android.com/guide/sdk-extensions | 已核对（2026-11-26） | 优先用它：SDK ≥ 33，或 SDK ≥ 30 且 R 扩展 ≥ 2；并且系统里确实有能接这个 Intent 的界面才用 |
+| 照片选择器要不要权限 | 不需要任何运行时权限；系统只对用户选中的那几个媒体给临时读取权 | https://developer.android.com/privacy-and-security/minimize-permission-requests | 已核对（2026-11-26） | 不声明 `READ_MEDIA_IMAGES` / `READ_EXTERNAL_STORAGE` |
+| Storage Access Framework `Intent.ACTION_OPEN_DOCUMENT`（配 `CATEGORY_OPENABLE`、类型 `image/*`） | Android 4.4（API 19）起可用；文件由用户亲手在系统界面里选，应用不需要任何系统权限就能读选中的那个文件 | https://developer.android.com/training/data-storage/shared/documents-files | 已核对（2026-11-26） | 照片选择器不可用时退到它；两个都没有时回 `no_picker` |
+
+做法和上限（自己定的，不是官方规定）：
+
+- 拿到 `content://` 地址后**在原生那头**读：不把图片字节塞过通道，只交回应用缓存目录（`cacheDir/backdrop_pick/`）里一个副本的路径。
+- 文件 ≤ 20MB、长边 ≤ 2560、而且是 JPG / PNG / WebP 的，原样流式复制（边复制边数字节，超了就停）；否则用 `BitmapFactory` 的 `inSampleSize` 降采样解码、按 EXIF 摆正、缩到长边 ≤ 2560，再存成 JPEG（质量 90）；有透明的存 PNG。GIF、HEIC 这类在安卓上走的也是这条路（取第一帧）。
+- 结果只有三种：成功（路径）、取消、失败（代号 `too_large` / `unsupported` / `read_failed` / `no_picker` / `no_space` / `busy`，Dart 那头换成人话，系统原始报错不给用户看）。
+- Dart 那头再校验一遍文件头（只收 JPG / PNG / WebP；GIF 拒收）和两个上限，搬进应用私有目录 `<设置所在目录>/appearance/background/`，缓存副本用完就删。
+
+没验证的：真机上两种选择器的实际样子、`inSampleSize` 降采样和 EXIF 摆正的效果（开发机上没有安卓环境可跑，只确认了 release 配置下 Kotlin 编译通过）。

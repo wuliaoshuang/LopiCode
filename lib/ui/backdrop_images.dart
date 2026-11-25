@@ -44,7 +44,10 @@ class BackdropImages {
   Future<ui.Image?> load(String path) {
     final have = peek(path);
     if (have != null) return Future.value(have);
-    return _loading[path] ??= _decode(path).whenComplete(() => _loading.remove(path));
+    // whenComplete 的回调不能把 remove 的返回值（就是这个 Future 自己）交回去，否则它会等自己、永远完不成
+    return _loading[path] ??= _decode(path).whenComplete(() {
+      _loading.remove(path);
+    });
   }
 
   Future<ui.Image?> _decode(String path) async {
