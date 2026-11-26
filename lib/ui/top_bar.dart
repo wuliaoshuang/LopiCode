@@ -18,11 +18,11 @@ import 'package:material_ui/material_ui.dart';
 
 /// 圆按钮 / 胶囊共用的外观：卡片色底、细边、很轻的阴影。
 BoxDecoration floatingDecoration(AppColors c, {BorderRadius? radius}) => BoxDecoration(
-  color: c.surface,
+  color: c.barButtonBg,
   shape: radius == null ? BoxShape.circle : BoxShape.rectangle,
   borderRadius: radius,
-  border: Border.all(color: c.border),
-  boxShadow: const [BoxShadow(color: Color(0x0F000000), blurRadius: 12, offset: Offset(0, 2))],
+  border: Border.all(color: c.border, width: c.hairline),
+  boxShadow: [BoxShadow(color: c.shadowOf(0x0F / 255), blurRadius: 12, offset: const Offset(0, 2))],
 );
 
 /// 顶栏里所有图标按钮共用的样子：一个 44 的圆，按下的反馈正好盖住这个圆。

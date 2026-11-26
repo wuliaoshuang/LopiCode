@@ -12,7 +12,11 @@
 //   分组标题里的 ①②③ 留着（小字），告诉人从上往下做；它们不再是和正文抢戏的大标题。
 // 颜色：强调色只给三样——选中的方式、主按钮、“完成”；红色只给失败和危险操作；其余是正文色和两档弱色。
 // 顶栏：全应用那一套（ShellAppBar → PageBar），内容从顶栏下面滚过去。
+// 背景图片（2026-11-26 合并主题后接上）：这一页算“其它页面”。有背景时页面底色让开；卡片、三选一的轨道按“表面不透明度”变半透明；
+//   直接写在页面底上的小字（方式下面那句说明、各组的小标题和脚注、底部的提示）各垫一块半透明的页面底色（BackdropPlate），
+//   不直接压在图上。没背景时和原来逐像素一样。
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lopicode/backdrop/backdrop_model.dart';
 import 'package:lopicode/build/build_controller.dart';
 import 'package:lopicode/build/build_widgets.dart';
 import 'package:lopicode/build/github_build_view.dart';
@@ -25,6 +29,7 @@ import 'package:lopicode/project_session.dart';
 import 'package:lopicode/ssh/ssh_config.dart';
 import 'package:lopicode/state/local_pack.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/app_backdrop.dart';
 import 'package:lopicode/ui/app_ref.dart';
 import 'package:lopicode/ui/shell.dart';
 import 'package:lopicode/ui/top_bar.dart';
@@ -97,51 +102,61 @@ class _BuildScreenState extends ConsumerState<BuildScreen> {
       offstage: _mode != mode,
       child: TickerMode(enabled: _mode == mode, child: child),
     );
-    return Scaffold(
-      backgroundColor: c.canvas,
-      extendBodyBehindAppBar: true,
-      appBar: ShellAppBar(title: 'APK 打包', background: c.canvas),
-      body: ListView(
-        padding: EdgeInsets.fromLTRB(Space.x4, PageBar.insetOf(context) + Space.x2, Space.x4, Space.x8),
-        children: [
-          BuildModePicker(mode: _mode, onChanged: busy ? null : _setMode),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(Space.x1, Space.x3, Space.x1, Space.x6),
-            child: Text(
-              about,
-              key: const Key('pack-mode-about'),
-              style: t.bodySmall?.copyWith(color: c.textFaint, height: 1.6),
-            ),
+    return AppBackdrop(
+      area: BackdropArea.pages,
+      builder: (context, on) => Scaffold(
+        backgroundColor: on ? Colors.transparent : c.canvas,
+        extendBodyBehindAppBar: true,
+        appBar: ShellAppBar(title: 'APK 打包', background: c.canvas),
+        // 有背景图片时，这一页里各组的小标题和脚注也垫底（见 SettingsGroup）。
+        body: BackdropPlates(
+          child: ListView(
+            padding: EdgeInsets.fromLTRB(Space.x4, PageBar.insetOf(context) + Space.x2, Space.x4, Space.x8),
+            children: [
+              BuildModePicker(mode: _mode, onChanged: busy ? null : _setMode),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(Space.x1, Space.x3, Space.x1, Space.x6),
+                child: BackdropPlate(
+                  child: Text(
+                    about,
+                    key: const Key('pack-mode-about'),
+                    style: t.bodySmall?.copyWith(color: c.textFaint, height: 1.6),
+                  ),
+                ),
+              ),
+              section(BuildMode.local, LocalPackView(session: widget.session, onUseRemote: _useRemote)),
+              section(
+                BuildMode.github,
+                GithubBuildView(
+                  session: widget.session,
+                  job: _githubJob,
+                  onJob: (job) {
+                    _githubJob?.onChanged = null;
+                    setState(() => _githubJob = job..onChanged = _onJob);
+                  },
+                ),
+              ),
+              section(
+                BuildMode.ssh,
+                SshBuildView(
+                  session: widget.session,
+                  job: _sshJob,
+                  onJob: (job) {
+                    _sshJob?.onChanged = null;
+                    setState(() => _sshJob = job..onChanged = _onJob);
+                  },
+                ),
+              ),
+              if (_mode != BuildMode.local && widget.session.project.template == ProjectTemplate.lowcode)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(Space.x1, Space.x3, Space.x1, 0),
+                  child: BackdropPlate(
+                    child: Text('低代码页面会按“网页套壳”的方式打包（用导出的 index.html）。', style: t.bodySmall?.copyWith(color: c.textFaint)),
+                  ),
+                ),
+            ],
           ),
-          section(BuildMode.local, LocalPackView(session: widget.session, onUseRemote: _useRemote)),
-          section(
-            BuildMode.github,
-            GithubBuildView(
-              session: widget.session,
-              job: _githubJob,
-              onJob: (job) {
-                _githubJob?.onChanged = null;
-                setState(() => _githubJob = job..onChanged = _onJob);
-              },
-            ),
-          ),
-          section(
-            BuildMode.ssh,
-            SshBuildView(
-              session: widget.session,
-              job: _sshJob,
-              onJob: (job) {
-                _sshJob?.onChanged = null;
-                setState(() => _sshJob = job..onChanged = _onJob);
-              },
-            ),
-          ),
-          if (_mode != BuildMode.local && widget.session.project.template == ProjectTemplate.lowcode)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(Space.x1, Space.x3, Space.x1, 0),
-              child: Text('低代码页面会按“网页套壳”的方式打包（用导出的 index.html）。', style: t.bodySmall?.copyWith(color: c.textFaint)),
-            ),
-        ],
+        ),
       ),
     );
   }

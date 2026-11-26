@@ -175,7 +175,13 @@ class SettingsScreen extends ConsumerWidget {
           title: '界面',
           children: [
             SettingsRow(key: const Key('settings-chat'), icon: Icons.chat_bubble_outline, title: '对话显示', onTap: () => go(const ChatDisplayScreen())),
-            SettingsRow(key: const Key('settings-appearance'), icon: Icons.contrast, title: '外观', value: themeModeLabel(ref.watch(themeModeProvider)), onTap: () => go(const AppearanceScreen())),
+            SettingsRow(
+              key: const Key('settings-appearance'),
+              icon: Icons.contrast,
+              title: '外观',
+              value: themeModeLabel(ref.watch(themeModeProvider)),
+              onTap: () => go(AppearanceScreen(session: session)),
+            ),
           ],
         ),
         SettingsGroup(

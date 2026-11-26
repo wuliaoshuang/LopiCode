@@ -12,6 +12,13 @@ import 'package:lopicode/agent/memory_store.dart';
 import 'package:lopicode/agent/model_config.dart';
 import 'package:lopicode/agent/team.dart';
 import 'package:lopicode/apkpack/apk_pack_contract.dart';
+import 'package:lopicode/appearance/theme_builtin.dart';
+import 'package:lopicode/appearance/theme_fields.dart';
+import 'package:lopicode/appearance/theme_json.dart';
+import 'package:lopicode/appearance/theme_store.dart';
+import 'package:lopicode/backdrop/backdrop_model.dart';
+import 'package:lopicode/backdrop/backdrop_store.dart';
+import 'package:lopicode/backdrop/crop_math.dart';
 import 'package:lopicode/backend/backend_model.dart';
 import 'package:lopicode/backend/backend_project.dart';
 import 'package:lopicode/backend/backend_validate.dart';
@@ -633,6 +640,98 @@ void main() {
     });
   });
 
+  group('用户主题 themes/<标识>.json', () {
+    Directory dir() => Directory(p.join(tmp.path, 'themes'));
+    File fileOf(String id) => File(p.join(dir().path, '$id.json'));
+
+    test('没有目录：空的，不建目录', () async {
+      final store = ThemeStore(dir());
+      await store.load();
+      expect(store.user, isEmpty);
+      expect(store.loaded, isTrue);
+      expect(dir().existsSync(), isFalse);
+    });
+
+    test('存了再读：原样回来；原子写不留临时文件', () async {
+      final store = ThemeStore(dir());
+      final t = kDefaultDarkTheme.copyWith(id: 'u-a-0', name: '夜里', builtin: false).withColors('ui', {UiKey.accent: 0xFF123456});
+      await store.save(t);
+      final again = ThemeStore(dir());
+      await again.load();
+      expect(again.user.single, t);
+      expect(again.byId('u-a-0')!.ui[UiKey.accent], 0xFF123456);
+      expect(dir().listSync().where((e) => e.path.endsWith('.tmp')), isEmpty);
+    });
+
+    for (final entry in corruptSamples.entries) {
+      test('坏内容（${entry.key}）：跳过这一套，不抛异常，别的照常读', () async {
+        final store = ThemeStore(dir());
+        await store.save(kDefaultLightTheme.copyWith(id: 'u-good-0', name: '好的', builtin: false));
+        fileOf('u-bad-0').writeAsStringSync(entry.value);
+        final again = ThemeStore(dir());
+        await again.load();
+        expect(again.user.map((t) => t.id), ['u-good-0']);
+      });
+    }
+
+    test('半截的文件：留一份 .bad 备份', () async {
+      dir().createSync(recursive: true);
+      fileOf('u-bad-0').writeAsStringSync(corruptSamples['半截']!);
+      await ThemeStore(dir()).load();
+      expect(badBackups(fileOf('u-bad-0')), hasLength(1));
+    });
+
+    test('是 JSON 但不是主题（形状不对、颜色写错、版本是以后的）：跳过，不崩', () async {
+      dir().createSync(recursive: true);
+      fileOf('u-x-0').writeAsStringSync(jsonEncode({'hello': 'world'}));
+      fileOf('u-x-1').writeAsStringSync(
+        jsonEncode({
+          'format': 'lopicode-theme',
+          'version': 99,
+          'theme': {'name': 'a', 'dark': false},
+        }),
+      );
+      fileOf('u-x-2').writeAsStringSync(
+        jsonEncode({
+          'format': 'lopicode-theme',
+          'version': 1,
+          'theme': {
+            'name': 'a',
+            'dark': false,
+            'ui': {'bg': 'red'},
+          },
+        }),
+      );
+      fileOf('u-ok-0').writeAsStringSync(
+        jsonEncode({
+          'format': 'lopicode-theme',
+          'version': 1,
+          'theme': {'name': '只有名字', 'dark': true},
+        }),
+      );
+      final store = ThemeStore(dir());
+      await store.load();
+      expect(store.user.map((t) => t.id), ['u-ok-0']);
+      expect(store.user.single.ui, kDefaultDarkTheme.ui, reason: '缺的字段从同明暗的默认主题补');
+    });
+
+    test('文件里写的标识和文件名对不上：以文件名为准', () async {
+      dir().createSync(recursive: true);
+      fileOf('u-name-0').writeAsStringSync(encodeThemeText(kDefaultLightTheme.copyWith(id: 'u-other-9', name: '甲', builtin: false)));
+      final store = ThemeStore(dir());
+      await store.load();
+      expect(store.user.single.id, 'u-name-0');
+    });
+
+    test('标识不合规矩的不写（不会写到 themes 目录外面去）；删除不存在的不报错', () async {
+      final store = ThemeStore(dir());
+      expect(() => store.save(kDefaultLightTheme.copyWith(id: '../escape', builtin: false)), throwsArgumentError);
+      await store.delete('../escape');
+      await store.delete('u-none-0');
+      expect(File(p.join(tmp.path, 'escape.json')).existsSync(), isFalse);
+    });
+  });
+
   group('收藏的消息 favorites.json', () {
     File file() => File(p.join(tmp.path, 'favorites.json'));
 
@@ -753,6 +852,96 @@ void main() {
       expect(await store().readIcons(), isEmpty);
       await store().clearIcons();
       expect(store().iconDir.existsSync(), isFalse);
+    });
+  });
+
+  group('背景图片设置 appearance/background.json', () {
+    BackdropStore store() => BackdropStore(p.join(tmp.path, 'appearance'));
+
+    test('没有文件：默认值（没有图、算读完了），不建文件', () async {
+      final s = await store().load();
+      expect(s.loaded, isTrue);
+      expect(s.light.hasImage, isFalse);
+      expect(store().settingsFile.existsSync(), isFalse);
+    });
+
+    for (final entry in corruptSamples.entries) {
+      test('坏内容（${entry.key}）：默认值，不抛异常', () async {
+        store().settingsFile
+          ..parent.createSync(recursive: true)
+          ..writeAsStringSync(entry.value);
+        final s = await store().load();
+        expect(s.loaded, isTrue);
+        expect(s.light.hasImage, isFalse);
+      });
+    }
+
+    test('半截的文件：留一份 .bad 备份', () async {
+      store().settingsFile
+        ..parent.createSync(recursive: true)
+        ..writeAsStringSync(corruptSamples['半截']!);
+      await store().load();
+      expect(badBackups(store().settingsFile), hasLength(1));
+    });
+
+    test('形状对、字段类型全错 / 越界 / 想指到外面去的文件名：逐项回默认，不算坏文件', () async {
+      store().settingsFile
+        ..parent.createSync(recursive: true)
+        ..writeAsStringSync(
+          jsonEncode({
+            'enabled': 'yes',
+            'light': {
+              'file': '../../etc/passwd',
+              'width': 100,
+              'height': 100,
+              'crop': {'l': -3, 't': 'x', 'w': 9, 'h': 0},
+              'fit': 42,
+              'blur': 9999,
+              'maskOpacity': -5,
+              'brightness': 'bright',
+              'turns': 7,
+            },
+            'dark': [1, 2, 3],
+            'darkSeparate': 1,
+            'onChat': null,
+            'surfaceOpacity': 3,
+          }),
+        );
+      final s = await store().load();
+      expect(s.enabled, isTrue);
+      expect(s.light.file, isNull);
+      expect(s.light.hasImage, isFalse);
+      expect(s.light.crop, CropRect.full);
+      expect(s.light.fit, BackdropFit.cover);
+      expect(s.light.blur, kBackdropBlurMax);
+      expect(s.light.maskOpacity, 0);
+      expect(s.light.brightness, 0);
+      expect(s.light.turns, 3);
+      expect(s.dark.hasImage, isFalse);
+      expect(s.darkSeparate, isFalse);
+      expect(s.onChat, isTrue);
+      expect(s.surfaceOpacity, kBackdropSurfaceMin);
+      expect(badBackups(store().settingsFile), isEmpty);
+    });
+
+    test('存了再读：原样回来', () async {
+      const look = BackdropLook(
+        file: 'bg-abc.png',
+        width: 800,
+        height: 600,
+        turns: 1,
+        crop: CropRect(0.1, 0.2, 0.3, 0.4),
+        fit: BackdropFit.tile,
+        tilePercent: 35,
+        maskFollowsTheme: false,
+        maskColor: 0xFF1B2A4A,
+        maskOpacity: 45,
+        blur: 12,
+        brightness: -20,
+      );
+      const s = BackdropSettings(enabled: false, light: look, darkSeparate: true, onPages: true, terminal: true, lowcode: true, surfaceOpacity: 70, loaded: true);
+      await store().save(s);
+      expect(await store().load(), s);
     });
   });
 }

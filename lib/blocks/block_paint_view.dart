@@ -45,7 +45,7 @@ class BkText {
   }
 
   /// 积木上的字有多宽（排版引擎的 [BkMeasure] 用这个）。往上取整，免得画的时候差零点几像素被省略成“…”。
-  double measure(String text) => text.isEmpty ? 0 : _painter(text, const Color(0xFFFFFFFF), FontWeight.w600, metrics.fontSize, double.infinity).width.ceilToDouble();
+  double measure(String text) => text.isEmpty ? 0 : _painter(text, kBkMeasureInk, FontWeight.w600, metrics.fontSize, double.infinity).width.ceilToDouble();
 
   /// 把字画进 `rect`：竖直居中，水平靠左（`center`＝居中），放不下就省略。
   void paint(Canvas canvas, String text, Rect rect, Color color, {FontWeight weight = FontWeight.w600, double? size, bool center = false}) {
@@ -200,7 +200,7 @@ class BkScriptPainter {
               ..style = PaintingStyle.stroke
               ..strokeWidth = 2 + 5 * pulse!
               ..strokeJoin = StrokeJoin.round
-              ..color = const Color(0xFFFFFFFF).withValues(alpha: 0.75 * (1 - pulse)),
+              ..color = palette.gloss.withValues(alpha: 0.75 * (1 - pulse)),
           );
         });
       } else {
@@ -287,7 +287,7 @@ class BkScriptPainter {
       Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.4
-        ..color = const Color(0xFFFFFFFF).withValues(alpha: palette.dark ? 0.16 : 0.30),
+        ..color = palette.gloss.withValues(alpha: palette.dark ? 0.16 : 0.30),
     );
     canvas.restore();
   }
@@ -375,7 +375,7 @@ class BkScriptPainter {
       Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.6
-        ..color = const Color(0xFF000000).withValues(alpha: alpha),
+        ..color = palette.shade.withValues(alpha: alpha),
     );
     canvas.restore();
   }
@@ -439,7 +439,7 @@ class BkScriptPainter {
     }
     final ps = state.pulseSlot, pp = state.pulse;
     if (ps != null && pp != null && ps.arg == s.arg && bkSameBlockPath(ps.block, block) && bkSameExprPath(ps.path, s.exprPath) && s.hatSlotId == null && s.look != BkSlotLook.add && s.param == null) {
-      _outline(canvas, path, color: const Color(0xFFFFFFFF), alpha: 1 - pp);
+      _outline(canvas, path, color: palette.gloss, alpha: 1 - pp);
     }
   }
 

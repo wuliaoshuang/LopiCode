@@ -9,7 +9,13 @@
 // - 间距阶：4 / 8 / 12 / 16 / 24 / 32 / 48。
 // - 圆角：6（小控件）/ 10（按钮、输入框）/ 16（底部面板）/ 20（气泡）/ 24（旧卡片）/ 28（分组大卡片）；胶囊和圆按钮是全圆。
 // - 层级靠字重和颜色深浅拉开，不靠加大字号；次要信息用 muted 色。
+import 'package:lopicode/appearance/theme_builtin.dart';
+import 'package:lopicode/appearance/theme_fields.dart';
+import 'package:lopicode/appearance/theme_spec.dart';
 import 'package:material_ui/material_ui.dart';
+
+export 'package:lopicode/appearance/theme_fields.dart' show BlockKey, CodeKey, LowcodeKey, MetricKey, UiKey;
+export 'package:lopicode/appearance/theme_spec.dart' show ThemeSpec;
 
 abstract final class Palette {
   static const primary100 = Color(0xFFEBF9FF);
@@ -81,27 +87,60 @@ abstract final class FontSize {
 }
 
 /// 语义色：界面代码只用这一层，不直接碰 [Palette]。
+///
+/// 颜色都从当前主题（[ThemeSpec]）来：`context.colors.xxx`。前 17 个是原来就有的名字，没改；
+/// 后面是加主题系统时补的。别的几节（代码、终端、积木、低代码编辑器）用 `context.themeSpec` 取，见下面的 [ThemeSpecColors]。
 @immutable
 class AppColors extends ThemeExtension<AppColors> {
-  const AppColors({
-    required this.bg,
-    required this.canvas,
-    required this.surface,
-    required this.surfaceMuted,
-    required this.text,
-    required this.textMuted,
-    required this.textFaint,
-    required this.border,
-    required this.accent,
-    required this.accentSoft,
-    required this.onAccent,
-    required this.accentFill,
-    required this.danger,
-    required this.dangerSoft,
-    required this.warning,
-    required this.warningSoft,
-    required this.codeBg,
-  });
+  AppColors.fromSpec(this.spec)
+    : bg = spec.uiColor(UiKey.bg),
+      canvas = spec.uiColor(UiKey.canvas),
+      surface = spec.uiColor(UiKey.surface),
+      surfaceMuted = spec.uiColor(UiKey.surfaceMuted),
+      text = spec.uiColor(UiKey.text),
+      textMuted = spec.uiColor(UiKey.textMuted),
+      textFaint = spec.uiColor(UiKey.textFaint),
+      border = spec.uiColor(UiKey.border),
+      accent = spec.uiColor(UiKey.accent),
+      accentSoft = spec.uiColor(UiKey.accentSoft),
+      accentFill = spec.uiColor(UiKey.accentFill),
+      onAccent = spec.uiColor(UiKey.onAccent),
+      danger = spec.uiColor(UiKey.danger),
+      dangerSoft = spec.uiColor(UiKey.dangerSoft),
+      warning = spec.uiColor(UiKey.warning),
+      warningSoft = spec.uiColor(UiKey.warningSoft),
+      codeBg = spec.uiColor(UiKey.codeBg),
+      onDanger = spec.uiColor(UiKey.onDanger),
+      success = spec.uiColor(UiKey.success),
+      successSoft = spec.uiColor(UiKey.successSoft),
+      info = spec.uiColor(UiKey.info),
+      infoSoft = spec.uiColor(UiKey.infoSoft),
+      link = spec.uiColor(UiKey.link),
+      selectedBg = spec.uiColor(UiKey.selectedBg),
+      navBg = spec.uiColor(UiKey.navBg),
+      navActive = spec.uiColor(UiKey.navActive),
+      navInactive = spec.uiColor(UiKey.navInactive),
+      barButtonBg = spec.uiColor(UiKey.barButtonBg),
+      bubbleMineBg = spec.uiColor(UiKey.bubbleMineBg),
+      bubbleMineText = spec.uiColor(UiKey.bubbleMineText),
+      bubbleAgentBg = spec.uiColor(UiKey.bubbleAgentBg),
+      bubbleAgentText = spec.uiColor(UiKey.bubbleAgentText),
+      cardBg = spec.uiColor(UiKey.cardBg),
+      inputBg = spec.uiColor(UiKey.inputBg),
+      snackBg = spec.uiColor(UiKey.snackBg),
+      snackText = spec.uiColor(UiKey.snackText),
+      noticeBg = spec.uiColor(UiKey.noticeBg),
+      noticeText = spec.uiColor(UiKey.noticeText),
+      scrim = spec.uiColor(UiKey.scrim),
+      shadow = spec.uiColor(UiKey.shadow),
+      backdropScrim = spec.uiColor(UiKey.backdropScrim),
+      chart1 = spec.uiColor(UiKey.chart1),
+      chart2 = spec.uiColor(UiKey.chart2),
+      chart3 = spec.uiColor(UiKey.chart3),
+      chart4 = spec.uiColor(UiKey.chart4);
+
+  /// 这些颜色出自哪份主题。
+  final ThemeSpec spec;
 
   /// 主页面底色（对话、文件、终端……）。
   final Color bg;
@@ -129,48 +168,65 @@ class AppColors extends ThemeExtension<AppColors> {
   final Color warning;
   final Color warningSoft;
 
-  /// 代码、终端、日志的底色。
+  /// 代码块、日志的底色。
   final Color codeBg;
 
-  static const light = AppColors(
-    bg: Color(0xFFFCFCFC),
-    canvas: Color(0xFFF3F4F6),
-    surface: Color(0xFFFFFFFF),
-    surfaceMuted: Color(0xFFE9EAEC),
-    text: Palette.neutral950,
-    textMuted: Palette.neutral700,
-    textFaint: Palette.neutral600,
-    border: Color(0xFFE4E5E7),
-    accent: Palette.primary500,
-    accentSoft: Color(0xFFE6EEFB),
-    accentFill: Palette.primary500,
-    onAccent: Color(0xFFFFFFFF),
-    danger: Palette.danger600,
-    dangerSoft: Palette.danger100,
-    warning: Palette.warning800,
-    warningSoft: Palette.warning100,
-    codeBg: Color(0xFFF3F4F6),
-  );
+  // —— 下面是加主题系统时补的（各是什么见 lib/appearance/theme_fields.dart 的 kUiFields）——
+  final Color onDanger;
+  final Color success;
+  final Color successSoft;
+  final Color info;
+  final Color infoSoft;
+  final Color link;
+  final Color selectedBg;
+  final Color navBg;
+  final Color navActive;
+  final Color navInactive;
+  final Color barButtonBg;
+  final Color bubbleMineBg;
+  final Color bubbleMineText;
+  final Color bubbleAgentBg;
+  final Color bubbleAgentText;
+  final Color cardBg;
+  final Color inputBg;
+  final Color snackBg;
+  final Color snackText;
+  final Color noticeBg;
+  final Color noticeText;
 
-  static const dark = AppColors(
-    bg: Palette.neutral950,
-    canvas: Color(0xFF0F0F14),
-    surface: Color(0xFF1E1F25),
-    surfaceMuted: Color(0xFF2C2D35),
-    text: Palette.neutral100,
-    textMuted: Palette.neutral300,
-    textFaint: Palette.neutral400,
-    border: Palette.neutral800,
-    accent: Color(0xFF8FB4F5),
-    accentSoft: Color(0xFF1B2A4A),
-    accentFill: Color(0xFF3A72DC),
-    onAccent: Color(0xFFFFFFFF),
-    danger: Palette.danger300,
-    dangerSoft: Color(0xFF3A1420),
-    warning: Palette.warning300,
-    warningSoft: Color(0xFF3A2A0C),
-    codeBg: Color(0xFF1A1A21),
-  );
+  /// 遮罩、阴影只定色相；深浅用 [scrimOf] / [shadowOf] 给。
+  final Color scrim;
+  final Color shadow;
+  final Color backdropScrim;
+  final Color chart1;
+  final Color chart2;
+  final Color chart3;
+  final Color chart4;
+
+  /// 阴影色：[alpha] 是这一处原本想要的深浅（0–1），再乘上主题的“阴影强弱”。
+  Color shadowOf(double alpha) => shadow.withValues(alpha: (alpha * spec.metric(MetricKey.shadowStrength)).clamp(0.0, 1.0));
+
+  /// 遮罩色：[alpha] 是这一处想要的深浅（0–1）。
+  Color scrimOf(double alpha) => scrim.withValues(alpha: alpha);
+
+  /// 圆角：把 [Radii] 里的档位按主题的圆角倍率算（默认主题倍率是 1，原样返回）。
+  double radius(double base) => base * spec.metric(MetricKey.radiusScale);
+
+  /// 间距：把 [Space] 里的档位按主题的密度倍率算。
+  double space(double base) => base * spec.metric(MetricKey.spaceScale);
+
+  /// 分隔线 / 细边的粗细。
+  double get hairline => spec.metric(MetricKey.dividerWidth);
+
+  /// 默认浅色 / 默认深色主题的颜色（不在主题里的地方、测试里用）。
+  static final AppColors light = AppColors.fromSpec(kDefaultLightTheme);
+  static final AppColors dark = AppColors.fromSpec(kDefaultDarkTheme);
+
+  /// 外面可能没有应用主题的地方用（比如很靠外的出错提示）：有就用，没有就按明暗退回默认主题。
+  static AppColors resolve(BuildContext context) {
+    final theme = Theme.of(context);
+    return theme.extension<AppColors>() ?? (theme.brightness == Brightness.dark ? dark : light);
+  }
 
   @override
   AppColors copyWith() => this;
@@ -181,6 +237,21 @@ class AppColors extends ThemeExtension<AppColors> {
 
 extension AppColorsX on BuildContext {
   AppColors get colors => Theme.of(this).extension<AppColors>()!;
+
+  /// 当前生效的整份主题（代码、终端、积木、低代码编辑器的颜色从这里取）。
+  ThemeSpec get themeSpec => AppColors.resolve(this).spec;
+}
+
+/// 从主题里按键取颜色。键在 lib/appearance/theme_fields.dart（[UiKey]、[CodeKey]、[BlockKey]、[LowcodeKey]…）。
+/// 主题里万一缺了某个键（不该发生：读文件时都补齐了），退回同明暗默认主题的值。
+extension ThemeSpecColors on ThemeSpec {
+  Color _pick(String section, String key) => Color(this.section(section)[key] ?? defaultThemeFor(dark: dark).section(section)[key] ?? 0xFFFF00FF);
+
+  Color uiColor(String key) => _pick('ui', key);
+  Color codeColor(String key) => _pick('code', key);
+  Color terminalColor(String key) => _pick('terminal', key);
+  Color blockColor(String key) => _pick('blocks', key);
+  Color lowcodeColor(String key) => _pick('lowcode', key);
 }
 
 /// 等宽字体族（代码、终端）。Android 自带 monospace；CJK 走系统回退。

@@ -3,8 +3,8 @@
 //   （默认 14 → 这里 12）；双指捏合由外面包的 CodeZoom 管（步骤详情、确认卡预览、改过的文件各包一层），这里不再包。
 // - 一行只有三样，固定顺序：行号（淡灰，靠右对齐）｜ 标记（+ / −）｜ 这一行的内容。
 //   行号只占一列：增的行和不变的行写新文件里的行号，删的行写旧文件里的行号。
-// - 颜色只表示“增 / 删”：增＝浅绿底，删＝浅红底，不变的行没有底色。绿色是这个应用色板里原来没有的，
-//   只在对比里用（浅色 / 深色各一组，写在 [DiffColors] 里，正文和标记在各自底色上对比度都 ≥ 4.5:1）。
+// - 颜色只表示“增 / 删”：增＝浅绿底，删＝浅红底，不变的行没有底色。四个颜色从当前主题来
+//   （主题的“代码 › 改动对比”，[DiffColors]；默认主题里正文和标记在各自底色上对比度都 ≥ 4.5:1）。
 // - 长行不折行：整块可以横向滑动，底色铺到最宽那一行。
 // - 隔得远的不变行不显示，中间放一行淡字“… 省略 N 行”。
 // - 默认最多露 [kDiffCollapsedLines] 行，其余收在“显示其余 N 行”里（点了才展开）。
@@ -26,10 +26,14 @@ class DiffColors {
   final Color delBg;
   final Color delFg;
 
-  static const light = DiffColors(addBg: Color(0xFFE3F3E7), addFg: Color(0xFF1A6E2E), delBg: Color(0xFFFCE8E8), delFg: Color(0xFFB3261E));
-  static const dark = DiffColors(addBg: Color(0xFF12301C), addFg: Color(0xFF7FD18F), delBg: Color(0xFF3A1518), delFg: Color(0xFFF2A0A0));
+  /// 从一份主题里取（主题的“代码 › 改动对比”那四个颜色）。
+  DiffColors.fromTheme(ThemeSpec t) : addBg = t.codeColor(CodeKey.diffAddBg), addFg = t.codeColor(CodeKey.diffAddFg), delBg = t.codeColor(CodeKey.diffDelBg), delFg = t.codeColor(CodeKey.diffDelFg);
 
-  static DiffColors of(BuildContext context) => Theme.of(context).brightness == Brightness.dark ? dark : light;
+  /// 默认浅色 / 默认深色主题的。
+  static final DiffColors light = DiffColors.fromTheme(AppColors.light.spec);
+  static final DiffColors dark = DiffColors.fromTheme(AppColors.dark.spec);
+
+  static DiffColors of(BuildContext context) => DiffColors.fromTheme(context.themeSpec);
 }
 
 /// “+3 −1”：加号绿、减号红，数字等宽。没有增删时什么都不画。
@@ -147,7 +151,7 @@ class _DiffViewState extends ConsumerState<DiffView> {
         DiffOp.same => (null, c.textFaint, ' '),
       };
       return ColoredBox(
-        color: bg ?? const Color(0x00000000),
+        color: bg ?? Colors.transparent,
         child: Row(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,

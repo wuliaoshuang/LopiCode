@@ -7,8 +7,11 @@
 //   第二行（替换模式才有）只做“替换”：输入框 + 替换 + 全部。
 //   大小写 / 正则是输入框里的两个小开关，不另占一行。
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lopicode/backdrop/backdrop_model.dart';
 import 'package:lopicode/state/code_font.dart';
+import 'package:lopicode/theme/text_scale.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/app_backdrop.dart';
 import 'package:lopicode/ui/code_langs.dart';
 import 'package:lopicode/ui/code_view.dart';
 import 'package:material_ui/material_ui.dart';
@@ -26,47 +29,49 @@ class LopiCodeEditor extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final c = context.colors;
-    final dark = Theme.of(context).brightness == Brightness.dark;
+    final theme = context.themeSpec;
     final mode = highlightModeFor(path);
     final size = ref.watch(codeFontProvider);
-    final numberStyle = TextStyle(fontFamily: kMonoFont, fontFamilyFallback: kMonoFallback, fontSize: size - 2, color: c.textFaint);
-    return CodeZoom(
-      child: CodeEditor(
-        controller: controller,
-        findController: findController,
-        wordWrap: wordWrap,
-        autocompleteSymbols: false,
-        padding: const EdgeInsets.symmetric(horizontal: Space.x2, vertical: Space.x2),
-        style: CodeEditorStyle(
-          fontSize: size,
-          fontHeight: 1.5,
-          fontFamily: kMonoFont,
-          fontFamilyFallback: kMonoFallback,
-          textColor: c.text,
-          backgroundColor: c.codeBg,
-          cursorColor: c.accent,
-          cursorLineColor: c.surfaceMuted.withValues(alpha: 0.5),
-          selectionColor: c.accent.withValues(alpha: 0.25),
-          highlightColor: c.warning.withValues(alpha: 0.3),
-          codeTheme: mode == null
-              ? null
-              : CodeHighlightTheme(
-                  languages: {mode.$1: CodeHighlightThemeMode(mode: mode.$2)},
-                  theme: codeThemeFor(dark: dark),
-                ),
-        ),
-        indicatorBuilder: (context, editingController, chunkController, notifier) => Padding(
-          padding: const EdgeInsets.only(left: Space.x1, right: Space.x1),
-          child: DefaultCodeLineNumber(
-            controller: editingController,
-            notifier: notifier,
-            minNumberCount: 2,
-            textStyle: numberStyle,
-            focusedTextStyle: numberStyle.copyWith(color: c.text),
+    final numberStyle = TextStyle(fontFamily: kMonoFont, fontFamilyFallback: kMonoFallback, fontSize: size - 2, color: theme.codeColor(CodeKey.lineNumber));
+    // 代码字号是独立的设置：不吃主题的“界面字号”倍率（SystemTextScale）。
+    return SystemTextScale(
+      child: CodeZoom(
+        child: CodeEditor(
+          controller: controller,
+          findController: findController,
+          wordWrap: wordWrap,
+          autocompleteSymbols: false,
+          padding: const EdgeInsets.symmetric(horizontal: Space.x2, vertical: Space.x2),
+          style: CodeEditorStyle(
+            fontSize: size,
+            fontHeight: 1.5,
+            fontFamily: kMonoFont,
+            fontFamilyFallback: kMonoFallback,
+            textColor: theme.codeColor(CodeKey.fg),
+            backgroundColor: BackdropScope.surface(context, theme.codeColor(CodeKey.bg), seeThrough: BackdropArea.code),
+            cursorColor: theme.codeColor(CodeKey.cursor),
+            cursorLineColor: theme.codeColor(CodeKey.currentLine),
+            selectionColor: theme.codeColor(CodeKey.selection),
+            highlightColor: theme.codeColor(CodeKey.searchHit),
+            codeTheme: mode == null
+                ? null
+                : CodeHighlightTheme(
+                    languages: {mode.$1: CodeHighlightThemeMode(mode: mode.$2)},
+                    theme: codeThemeFor(theme: theme),
+                  ),
           ),
+          indicatorBuilder: (context, editingController, chunkController, notifier) => Padding(
+            padding: const EdgeInsets.only(left: Space.x1, right: Space.x1),
+            child: DefaultCodeLineNumber(
+              controller: editingController,
+              notifier: notifier,
+              minNumberCount: 2,
+              textStyle: numberStyle,
+              focusedTextStyle: numberStyle.copyWith(color: theme.codeColor(CodeKey.lineNumberActive)),
+            ),
+          ),
+          findBuilder: (context, controller, readOnly) => CodeFindPanel(controller: controller),
         ),
-        findBuilder: (context, controller, readOnly) => CodeFindPanel(controller: controller),
       ),
     );
   }

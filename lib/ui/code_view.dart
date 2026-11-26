@@ -8,6 +8,7 @@ import 'dart:math' as math;
 import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lopicode/state/code_font.dart';
+import 'package:lopicode/theme/text_scale.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/code_langs.dart';
 import 'package:material_ui/material_ui.dart';
@@ -148,22 +149,25 @@ class _CodeViewState extends ConsumerState<CodeView> {
 
   @override
   Widget build(BuildContext context) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
+    final theme = context.themeSpec;
     final size = ref.watch(codeFontProvider);
-    final base = TextStyle(fontFamily: kMonoFont, fontFamilyFallback: kMonoFallback, fontSize: size, height: 1.5, color: widget.color ?? context.colors.text);
-    // 上色只跟代码、语言、深浅色有关：字号变了不用重算（字号在外层样式里）。
-    final key = (widget.code, widget.language, dark, base.color);
+    final base = TextStyle(fontFamily: kMonoFont, fontFamilyFallback: kMonoFallback, fontSize: size, height: 1.5, color: widget.color ?? theme.codeColor(CodeKey.fg));
+    // 上色只跟代码、语言、主题有关：字号变了不用重算（字号在外层样式里）。
+    final key = (widget.code, widget.language, theme, base.color);
     if (_spanFor != key) {
       // 制表符在普通文字控件里只有一个空格宽，缩进会看不出来：显示时换成 4 个空格（“复制全部”拿的是原文，不受影响）。
       _span = highlightCode(
         widget.code.replaceAll('\t', '    '),
         widget.language,
-        dark: dark,
+        theme: theme,
         base: TextStyle(color: base.color),
       );
       _spanFor = key;
     }
-    return SelectableText.rich(_span!, key: const Key('code-view-text'), style: base);
+    // 代码字号是独立的设置：不吃主题的“界面字号”倍率。
+    return SystemTextScale(
+      child: SelectableText.rich(_span!, key: const Key('code-view-text'), style: base),
+    );
   }
 }
 
@@ -175,11 +179,10 @@ class CodeTextController extends TextEditingController {
   @override
   TextSpan buildTextSpan({required BuildContext context, TextStyle? style, required bool withComposing}) {
     if (withComposing && value.isComposingRangeValid) return super.buildTextSpan(context: context, style: style, withComposing: withComposing);
-    final dark = Theme.of(context).brightness == Brightness.dark;
     final span = highlightCode(
       text,
       language,
-      dark: dark,
+      theme: context.themeSpec,
       base: TextStyle(color: style?.color),
     );
     return TextSpan(style: style, children: [span]);

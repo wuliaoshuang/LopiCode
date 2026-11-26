@@ -20,6 +20,7 @@ import 'package:lopicode/project_session.dart';
 import 'package:lopicode/state/local_pack.dart';
 import 'package:lopicode/state/signing_key.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/app_backdrop.dart';
 import 'package:lopicode/ui/settings_widgets.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -42,6 +43,7 @@ class _LocalPackViewState extends ConsumerState<LocalPackView> {
   final _focus = {for (final f in _fields) f: FocusNode()};
   final _keys = {for (final f in _fields) f: GlobalKey()};
   final _runKey = GlobalKey();
+  final _startKey = GlobalKey();
   final _iconKey = GlobalKey();
   final _keyRowKey = GlobalKey();
   bool _filled = false;
@@ -136,9 +138,11 @@ class _LocalPackViewState extends ConsumerState<LocalPackView> {
     final provider = localPackProvider(widget.session);
     final s = ref.watch(provider);
     final key = ref.watch(signingKeyProvider);
-    // 一开始打、打完 / 没成：把进度卡滚进视野（主按钮在表单最下面，卡片在它下面，不滚看不到）。
+    // 一开始打、打完 / 没成：把主按钮连同它下面的进度卡一起滚进视野（主按钮在表单最下面，卡片在它下面，不滚看不到）。
+    // 对齐的是主按钮而不是卡片：只把卡片顶到顶栏下沿的话，紧挨在卡片上面的主按钮正好落在顶栏的渐隐里，
+    // 透出半截“重新打包”和标题叠在一起（2026-11-26 修）。
     ref.listen(provider.select((v) => v.phase), (before, now) {
-      if (now != LocalPackPhase.idle && now != before) _reveal(_runKey);
+      if (now != LocalPackPhase.idle && now != before) _reveal(_startKey);
     });
     final c = context.colors;
     final t = Theme.of(context).textTheme;
@@ -154,7 +158,7 @@ class _LocalPackViewState extends ConsumerState<LocalPackView> {
           children: [
             const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
             const SizedBox(width: Space.x3),
-            Text('正在看这个项目能不能本地打包…', style: t.bodyMedium?.copyWith(color: c.textMuted)),
+            BackdropPlate(child: Text('正在看这个项目能不能本地打包…', style: t.bodyMedium?.copyWith(color: c.textMuted))),
           ],
         ),
       );
@@ -266,6 +270,7 @@ class _LocalPackViewState extends ConsumerState<LocalPackView> {
           ],
         ),
         PrimaryBuildButton(
+          key: _startKey,
           buttonKey: const Key('pack-start'),
           label: busy ? '正在打包…' : (s.phase == LocalPackPhase.done || s.phase == LocalPackPhase.failed ? '重新打包' : '开始打包'),
           onPressed: busy ? null : _start,

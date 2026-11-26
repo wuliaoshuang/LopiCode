@@ -18,11 +18,16 @@ import 'package:material_ui/material_ui.dart';
 typedef ContextSegment = ({String id, String label, int tokens, Color color});
 
 /// 把估算结果排成五段（顺序固定）。
-List<ContextSegment> contextSegmentsOf(ContextSegments s, {required bool dark, required Color restColor}) => [
-  (id: 'system', label: '系统提示词', tokens: s.system, color: dark ? Palette.primary400 : Palette.primary700),
-  (id: 'tools', label: '工具定义', tokens: s.tools, color: dark ? Palette.primary200 : Palette.primary300),
-  (id: 'messages', label: '对话消息', tokens: s.messages, color: Palette.warning700),
-  (id: 'results', label: '工具结果', tokens: s.toolResults, color: dark ? Palette.warning300 : Palette.warning400),
+///
+/// 四段的颜色从主题来（[colors]）；不传就按 [dark] 用默认浅色 / 默认深色主题的。
+List<ContextSegment> contextSegmentsOf(ContextSegments s, {required bool dark, required Color restColor, AppColors? colors}) =>
+    _segments(s, colors ?? (dark ? AppColors.dark : AppColors.light), restColor);
+
+List<ContextSegment> _segments(ContextSegments s, AppColors c, Color restColor) => [
+  (id: 'system', label: '系统提示词', tokens: s.system, color: c.chart1),
+  (id: 'tools', label: '工具定义', tokens: s.tools, color: c.chart2),
+  (id: 'messages', label: '对话消息', tokens: s.messages, color: c.chart3),
+  (id: 'results', label: '工具结果', tokens: s.toolResults, color: c.chart4),
   (id: 'rest', label: '剩余', tokens: s.remaining, color: restColor),
 ];
 
@@ -59,7 +64,7 @@ class ContextSegmentBar extends StatelessWidget {
         ],
       );
     }
-    final parts = contextSegmentsOf(s, dark: Theme.of(context).brightness == Brightness.dark, restColor: c.border);
+    final parts = contextSegmentsOf(s, dark: Theme.of(context).brightness == Brightness.dark, restColor: c.border, colors: c);
     final shown = [
       for (final p in parts)
         if (p.tokens > 0) p,

@@ -55,9 +55,9 @@ class BrokenBlock extends StatelessWidget {
   Widget build(BuildContext context) {
     // 这里不能假设外面有主题 / 方向信息（出错的地方可能很靠外）。
     // 在应用里（有主题）跟应用的深浅色；更靠外的地方 Theme.of 会给默认的浅色主题。
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    final bg = dark ? const Color(0xFF3A1D22) : const Color(0xFFFFEBF3);
-    final fg = dark ? const Color(0xFFFFB3C7) : const Color(0xFFAB131E);
+    final colors = AppColors.resolve(context);
+    final bg = colors.noticeBg;
+    final fg = colors.noticeText;
     return Directionality(
       textDirection: TextDirection.ltr,
       child: Container(
@@ -167,7 +167,7 @@ class _NoticeBar extends StatelessWidget {
       key: const Key('error-notice'),
       color: c.dangerSoft,
       elevation: 3,
-      shadowColor: Colors.black26,
+      shadowColor: c.shadowOf(0x42 / 255),
       borderRadius: BorderRadius.circular(Radii.md),
       child: Padding(
         padding: const EdgeInsets.only(left: Space.x3),

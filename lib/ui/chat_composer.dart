@@ -15,6 +15,7 @@ import 'package:lopicode/agent/agent_tools.dart';
 import 'package:lopicode/core/path_guard.dart';
 import 'package:lopicode/session/chat_models.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/app_backdrop.dart';
 import 'package:lopicode/ui/file_mention.dart';
 import 'package:lopicode/ui/keyboard_dismiss.dart';
 import 'package:lopicode/ui/model_level_mark.dart';
@@ -437,9 +438,9 @@ class _ChatComposerState extends State<ChatComposer> with WidgetsBindingObserver
       margin: const EdgeInsets.fromLTRB(Space.x3, 0, Space.x3, Space.x2),
       padding: collapsed ? const EdgeInsets.symmetric(horizontal: 2, vertical: 1) : const EdgeInsets.fromLTRB(Space.x1, Space.x2, Space.x1, Space.x1),
       decoration: BoxDecoration(
-        color: c.surface,
-        borderRadius: BorderRadius.circular(collapsed ? 24 : 28),
-        border: Border.all(color: c.border),
+        color: BackdropScope.surface(context, c.inputBg), // 有背景图片时按“表面不透明度”变透
+        borderRadius: BorderRadius.circular(c.radius(collapsed ? 24 : 28)),
+        border: Border.all(color: c.border, width: c.hairline),
       ),
       child: AnimatedSize(duration: const Duration(milliseconds: 140), curve: Curves.easeOut, alignment: Alignment.bottomCenter, child: body),
     );

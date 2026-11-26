@@ -4,6 +4,7 @@
 // - 卡片里一行只做一件事：左线性图标 + 名称（可带一行弱化的说明或右侧的当前值）+ 右箭头；行间是缩进的细分隔线。
 // - 底部导航图标配短标签：选中 = 强调色实心图标，未选中 = 弱化描边。没有底色分界线。
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/app_backdrop.dart';
 import 'package:lopicode/ui/nav_haptics.dart';
 import 'package:lopicode/ui/top_bar.dart';
 import 'package:lopicode/ui/widgets.dart';
@@ -29,7 +30,7 @@ class GroupCard extends StatelessWidget {
     }
     return Container(
       margin: margin ?? const EdgeInsets.only(bottom: Space.x4),
-      decoration: BoxDecoration(color: c.surface, borderRadius: BorderRadius.circular(Radii.card)),
+      decoration: BoxDecoration(color: BackdropScope.surface(context, c.surface), borderRadius: BorderRadius.circular(Radii.card)),
       clipBehavior: Clip.antiAlias,
       child: Material(
         type: MaterialType.transparency,
@@ -155,7 +156,7 @@ class IconBottomNav extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.colors;
     return ColoredBox(
-      color: c.bg,
+      color: c.navBg,
       child: SafeArea(
         top: false,
         child: SizedBox(
@@ -185,7 +186,7 @@ class IconBottomNav extends StatelessWidget {
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 IconTheme(
-                                  data: IconThemeData(size: 24, color: i == current ? c.text : c.textFaint),
+                                  data: IconThemeData(size: 24, color: i == current ? c.navActive : c.navInactive),
                                   child: Center(child: i == current ? items[i].selectedIcon : items[i].icon),
                                 ),
                                 const SizedBox(height: 2),
@@ -193,7 +194,7 @@ class IconBottomNav extends StatelessWidget {
                                   items[i].label,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(fontSize: FontSize.xs, height: 1.1, color: i == current ? c.text : c.textFaint, fontWeight: i == current ? FontWeight.w600 : FontWeight.w400),
+                                  style: TextStyle(fontSize: FontSize.xs, height: 1.1, color: i == current ? c.navActive : c.navInactive, fontWeight: i == current ? FontWeight.w600 : FontWeight.w400),
                                 ),
                               ],
                             ),

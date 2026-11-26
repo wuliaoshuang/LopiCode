@@ -12,3 +12,6 @@ GeneratedPluginRegistrant.java
 key.properties
 **/*.keystore
 **/*.jks
+
+# Kotlin 编译守护进程留下的会话文件（不进仓库）
+.kotlin/

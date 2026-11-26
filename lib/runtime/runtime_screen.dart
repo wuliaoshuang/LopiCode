@@ -15,12 +15,14 @@
 // 颜色：强调蓝只给主按钮、对勾、进度条和“开始诊断”；红色只给失败原因和卸载；其余全是正文色 / 弱色。
 // 一行只做一件事；功能对照清单见 test/runtime_redesign_test.dart 开头。
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lopicode/backdrop/backdrop_model.dart';
 import 'package:lopicode/runtime/runtime_packs_view.dart';
 import 'package:lopicode/runtime/runtime_screen_widgets.dart';
 import 'package:lopicode/runtime/runtime_sources.dart';
 import 'package:lopicode/runtime/runtime_status_view.dart';
 import 'package:lopicode/state/runtime_state.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/app_backdrop.dart';
 import 'package:lopicode/ui/settings_widgets.dart';
 import 'package:lopicode/ui/shell.dart';
 import 'package:lopicode/ui/top_bar.dart';
@@ -43,77 +45,80 @@ class RuntimeScreen extends ConsumerWidget {
     final launchFailing = runtime.installed && runtime.usable && !runtime.shouldUseLinux;
     final diagnostics = RuntimeDiagnosticsGroup(runtimeBusy: runtime.busy, projectDir: projectDir);
     final removable = !runtime.busy && runtime.runningPack == null;
-    return Scaffold(
-      backgroundColor: c.canvas,
-      extendBodyBehindAppBar: true,
-      appBar: ShellAppBar(title: '运行环境', background: c.canvas),
-      body: Builder(
-        // 不用懒加载的列表：这一页不长，一次排完，滚到哪儿都不会把诊断报告、日志的滚动位置丢掉
-        builder: (context) => SingleChildScrollView(
-          key: const Key('runtime-page'),
-          padding: EdgeInsets.fromLTRB(Space.x4, PageBar.insetOf(context) + Space.x2, Space.x4, Space.x12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(bottom: SettingsMetrics.groupGap),
-                child: RuntimeStatusCard(runtime: runtime, ctl: ctl),
-              ),
-              if (launchFailing) diagnostics,
-              if (runtime.installed) RuntimePacksGroup(runtime: runtime, ctl: ctl),
-              SettingsGroup(
-                title: '下载源',
-                children: [
-                  _mirrorRow(
-                    context,
-                    keyName: 'rootfs-source',
-                    label: '系统包',
-                    note: '下载 Ubuntu 本体从哪儿下',
-                    options: rootfsSources,
-                    value: runtime.rootfsSourceId,
-                    enabled: !runtime.busy,
-                    onChanged: ctl.setRootfsSource,
-                  ),
-                  _mirrorRow(
-                    context,
-                    keyName: 'apt-mirror',
-                    label: '装软件（apt）',
-                    note: '在 Ubuntu 里装软件从哪儿下',
-                    options: aptMirrors,
-                    value: runtime.aptMirrorId,
-                    enabled: !runtime.busy,
-                    onChanged: ctl.setAptMirror,
-                  ),
-                ],
-              ),
-              if (runtime.installed && !launchFailing) diagnostics,
-              SettingsGroup(
-                title: '日志',
-                padded: true,
-                children: [
-                  if (runtime.logLines.isEmpty)
-                    Text('还没有记录。安装和每次启动失败的原因会记在这里。', style: t.bodySmall?.copyWith(color: c.textFaint, height: 1.5))
-                  else
-                    RuntimeLogBox(lines: runtime.logLines, keyName: 'runtime-log', copyLabel: '复制日志', copiedHint: '日志已复制', copyKey: const Key('runtime-log-copy')),
-                ],
-              ),
-              if (runtime.installed || runtime.partialBytes > 0)
+    return AppBackdrop(
+      area: BackdropArea.pages,
+      builder: (context, on) => Scaffold(
+        backgroundColor: on ? Colors.transparent : c.canvas,
+        extendBodyBehindAppBar: true,
+        appBar: ShellAppBar(title: '运行环境', background: c.canvas),
+        body: Builder(
+          // 不用懒加载的列表：这一页不长，一次排完，滚到哪儿都不会把诊断报告、日志的滚动位置丢掉
+          builder: (context) => SingleChildScrollView(
+            key: const Key('runtime-page'),
+            padding: EdgeInsets.fromLTRB(Space.x4, PageBar.insetOf(context) + Space.x2, Space.x4, Space.x12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(bottom: SettingsMetrics.groupGap),
+                  child: RuntimeStatusCard(runtime: runtime, ctl: ctl),
+                ),
+                if (launchFailing) diagnostics,
+                if (runtime.installed) RuntimePacksGroup(runtime: runtime, ctl: ctl),
                 SettingsGroup(
+                  title: '下载源',
                   children: [
-                    SettingsRow(
-                      key: const Key('runtime-uninstall'),
-                      title: runtime.installed ? '卸载运行环境' : '删除没下完的文件',
-                      subtitle: '删掉整个 Ubuntu 环境和里面装的所有软件。项目文件不受影响。',
-                      danger: removable,
-                      enabled: removable,
-                      // 不能点的时候不画箭头
-                      trailing: removable ? null : const SizedBox.shrink(),
-                      onTap: () => _confirmUninstall(context, ctl),
+                    _mirrorRow(
+                      context,
+                      keyName: 'rootfs-source',
+                      label: '系统包',
+                      note: '下载 Ubuntu 本体从哪儿下',
+                      options: rootfsSources,
+                      value: runtime.rootfsSourceId,
+                      enabled: !runtime.busy,
+                      onChanged: ctl.setRootfsSource,
+                    ),
+                    _mirrorRow(
+                      context,
+                      keyName: 'apt-mirror',
+                      label: '装软件（apt）',
+                      note: '在 Ubuntu 里装软件从哪儿下',
+                      options: aptMirrors,
+                      value: runtime.aptMirrorId,
+                      enabled: !runtime.busy,
+                      onChanged: ctl.setAptMirror,
                     ),
                   ],
                 ),
-            ],
+                if (runtime.installed && !launchFailing) diagnostics,
+                SettingsGroup(
+                  title: '日志',
+                  padded: true,
+                  children: [
+                    if (runtime.logLines.isEmpty)
+                      Text('还没有记录。安装和每次启动失败的原因会记在这里。', style: t.bodySmall?.copyWith(color: c.textFaint, height: 1.5))
+                    else
+                      RuntimeLogBox(lines: runtime.logLines, keyName: 'runtime-log', copyLabel: '复制日志', copiedHint: '日志已复制', copyKey: const Key('runtime-log-copy')),
+                  ],
+                ),
+                if (runtime.installed || runtime.partialBytes > 0)
+                  SettingsGroup(
+                    children: [
+                      SettingsRow(
+                        key: const Key('runtime-uninstall'),
+                        title: runtime.installed ? '卸载运行环境' : '删除没下完的文件',
+                        subtitle: '删掉整个 Ubuntu 环境和里面装的所有软件。项目文件不受影响。',
+                        danger: removable,
+                        enabled: removable,
+                        // 不能点的时候不画箭头
+                        trailing: removable ? null : const SizedBox.shrink(),
+                        onTap: () => _confirmUninstall(context, ctl),
+                      ),
+                    ],
+                  ),
+              ],
+            ),
           ),
         ),
       ),

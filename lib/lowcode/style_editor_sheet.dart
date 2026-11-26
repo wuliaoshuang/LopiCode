@@ -28,7 +28,7 @@ Future<void> showStyleEditor(BuildContext context, {required LcDocument doc, req
   context: context,
   isScrollControlled: true,
   // 遮罩要淡：用户是看着上面的画布调样式的。
-  barrierColor: const Color(0x14000000),
+  barrierColor: context.colors.scrimOf(0x14 / 255),
   builder: (_) => _StyleEditorSheet(doc: doc, nodeId: nodeId, onEdit: onEdit),
 );
 

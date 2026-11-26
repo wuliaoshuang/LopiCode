@@ -32,7 +32,7 @@ class BkToastBar extends StatelessWidget {
           decoration: BoxDecoration(
             color: c.text,
             borderRadius: BorderRadius.circular(20),
-            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.18), blurRadius: 10, offset: const Offset(0, 3))],
+            boxShadow: [BoxShadow(color: c.shadowOf(0.18), blurRadius: 10, offset: const Offset(0, 3))],
           ),
           child: Padding(
             padding: EdgeInsets.fromLTRB(16, label == null ? 9 : 2, label == null ? 16 : 4, label == null ? 9 : 2),

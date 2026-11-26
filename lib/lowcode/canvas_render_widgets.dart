@@ -142,7 +142,8 @@ class CanvasPage extends StatelessWidget {
       buttonText: Theme.of(context).textTheme.labelLarge,
     );
     return Theme(
-      data: ThemeData(useMaterial3: true, colorSchemeSeed: Palette.primary700, fontFamily: font),
+      // 页面内容用自己的一套 Material 外观（不跟应用主题走）；只把应用主题的颜色表带进去，给选中框、插入位这些编辑器界面色用。
+      data: ThemeData(useMaterial3: true, colorSchemeSeed: Palette.primary700, fontFamily: font, extensions: [AppColors.resolve(context)]),
       child: Builder(
         builder: (context) => DefaultTextStyle(
           style: TextStyle(fontSize: 16, color: Palette.neutral900, height: 1.5, fontFamily: font).merge(_textStyle(s, scale)),
@@ -155,7 +156,7 @@ class CanvasPage extends StatelessWidget {
               width: pageWidth,
               constraints: BoxConstraints(minHeight: minHeight),
               decoration: BoxDecoration(color: _argb(s['background-color']) ?? Colors.white, border: _border(s, scale, Palette.neutral900, false)),
-              foregroundDecoration: selected == root.id ? BoxDecoration(border: Border.all(color: Palette.primary500, width: 2)) : null,
+              foregroundDecoration: selected == root.id ? BoxDecoration(border: Border.all(color: context.themeSpec.lowcodeColor(LowcodeKey.selection), width: 2)) : null,
               padding: EdgeInsets.fromLTRB(padding.left, padding.top, padding.right, padding.bottom),
               child: _flex(context, root, s, ctx, tightW: true, tightH: false),
             ),
@@ -531,12 +532,12 @@ class CanvasPage extends StatelessWidget {
             behavior: HitTestBehavior.opaque,
             onTap: () => onSelect(n.id),
             child: Container(
-              foregroundDecoration: dragging && droppable && selected != n.id ? BoxDecoration(border: Border.all(color: Palette.neutral300)) : null,
+              foregroundDecoration: dragging && droppable && selected != n.id ? BoxDecoration(border: Border.all(color: context.themeSpec.lowcodeColor(LowcodeKey.dropOutline))) : null,
               child: droppable ? box : IgnorePointer(child: box),
             ),
           );
     if (!inert) {
-      wrapped = _draggable(node, wrapped);
+      wrapped = _draggable(node, wrapped, context.themeSpec);
     }
     if (position == 'relative') {
       final shift = cssRelativeShift(s, scale, availWidth: ctx.availW, availHeight: ctx.availH);
@@ -560,7 +561,7 @@ class CanvasPage extends StatelessWidget {
     return KeyedSubtree(key: key, child: wrapped);
   }
 
-  Widget _draggable(LcNode n, Widget child) => LongPressDraggable<LcDrag>(
+  Widget _draggable(LcNode n, Widget child, ThemeSpec ui) => LongPressDraggable<LcDrag>(
     data: LcDrag.move(n.id),
     delay: const Duration(milliseconds: 350),
     onDragStarted: () {
@@ -573,8 +574,8 @@ class CanvasPage extends StatelessWidget {
       color: Colors.transparent,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(color: Palette.primary700, borderRadius: BorderRadius.circular(Radii.md)),
-        child: Text('移动 ${n.type == 'component' ? componentLabel(doc, n) : n.spec.label}', style: const TextStyle(color: Colors.white, fontSize: 14)),
+        decoration: BoxDecoration(color: ui.lowcodeColor(LowcodeKey.dragChipBg), borderRadius: BorderRadius.circular(Radii.md)),
+        child: Text('移动 ${n.type == 'component' ? componentLabel(doc, n) : n.spec.label}', style: TextStyle(color: ui.lowcodeColor(LowcodeKey.dragChipText), fontSize: 14)),
       ),
     ),
     childWhenDragging: Opacity(opacity: 0.35, child: child),

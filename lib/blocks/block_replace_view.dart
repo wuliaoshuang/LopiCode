@@ -31,7 +31,7 @@ Future<BkReplaceChoice?> showBlockReplace(
     context: context,
     barrierDismissible: true,
     barrierLabel: '关闭',
-    barrierColor: Colors.black.withValues(alpha: 0.18),
+    barrierColor: context.colors.scrimOf(0.18),
     transitionDuration: const Duration(milliseconds: 140),
     transitionBuilder: (context, anim, _, child) => FadeTransition(
       opacity: anim,

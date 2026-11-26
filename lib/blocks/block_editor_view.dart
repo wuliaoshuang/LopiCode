@@ -14,6 +14,7 @@
 // - 一块积木都没有时，画布中间一句话 + 一个往上走的箭头教第一步：从下面拿一块“事件”拖上来（画布露出来不够高时不显示）。
 import 'dart:async';
 
+import 'package:lopicode/backdrop/backdrop_model.dart';
 import 'package:lopicode/blocks/block_canvas_layout.dart';
 import 'package:lopicode/blocks/block_canvas_view.dart';
 import 'package:lopicode/blocks/block_editor_arms_view.dart';
@@ -31,6 +32,7 @@ import 'package:lopicode/blocks/block_panels_sheet.dart';
 import 'package:lopicode/blocks/block_script_view.dart';
 import 'package:lopicode/lowcode/logic_blocks.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/app_backdrop.dart';
 import 'package:lopicode/ui/shell.dart';
 import 'package:lopicode/ui/top_bar.dart';
 import 'package:material_ui/material_ui.dart';
@@ -225,7 +227,7 @@ class BlockEditorViewState extends State<BlockEditorView> with TickerProviderSta
       ],
     );
     return Scaffold(
-      backgroundColor: kit.palette.canvas,
+      backgroundColor: BackdropScope.clear(context, kit.palette.canvas, seeThrough: BackdropArea.blocks), // “透出背景 › 积木画布”开着时让开，画布自己铺半透明的底
       body: LayoutBuilder(
         builder: (context, page) {
           final safe = MediaQuery.paddingOf(context);
@@ -344,7 +346,13 @@ class BlockEditorViewState extends State<BlockEditorView> with TickerProviderSta
           fit: StackFit.expand,
           clipBehavior: Clip.hardEdge,
           children: [
-            Positioned.fill(key: const ValueKey('bk-canvas-layer'), child: buildCanvas(context)),
+            Positioned.fill(
+              key: const ValueKey('bk-canvas-layer'),
+              child: ColoredBox(
+                color: BackdropScope.surface(context, kit.palette.canvas, seeThrough: BackdropArea.blocks),
+                child: buildCanvas(context),
+              ),
+            ),
             if (all.scripts.isEmpty && !dragging && box.maxHeight - coveredTop - dock >= BkEditorDock.guideRoom)
               Positioned(
                 key: const ValueKey('bk-empty-layer'),
@@ -371,7 +379,7 @@ class BlockEditorViewState extends State<BlockEditorView> with TickerProviderSta
     return Material(
       color: c.surface,
       elevation: 2,
-      shadowColor: Colors.black.withValues(alpha: 0.25),
+      shadowColor: c.shadowOf(0.25),
       shape: const StadiumBorder(),
       clipBehavior: Clip.antiAlias,
       child: Row(mainAxisSize: MainAxisSize.min, children: children),

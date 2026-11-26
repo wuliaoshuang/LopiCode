@@ -41,17 +41,18 @@ class CanvasSlot extends StatelessWidget {
       onAcceptWithDetails: (d) => onDrop(d.data, parentId, index),
       builder: (context, candidates, _) {
         final hover = candidates.isNotEmpty;
+        final ui = context.themeSpec;
         if (emptyHint) {
           return Container(
             height: 48,
             constraints: const BoxConstraints(minWidth: 48),
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: hover ? Palette.primary200 : const Color(0x0F000000),
+              color: ui.lowcodeColor(hover ? LowcodeKey.dropHoverBg : LowcodeKey.dropIdleBg),
               borderRadius: BorderRadius.circular(Radii.sm),
-              border: Border.all(color: hover ? Palette.primary500 : Palette.neutral300),
+              border: Border.all(color: ui.lowcodeColor(hover ? LowcodeKey.dropHoverBorder : LowcodeKey.dropIdleBorder)),
             ),
-            child: Text(hover ? '松手放进来' : '空的 · 拖组件到这里', style: const TextStyle(fontSize: 12, color: Palette.neutral600)),
+            child: Text(hover ? '松手放进来' : '空的 · 拖组件到这里', style: TextStyle(fontSize: 12, color: ui.lowcodeColor(LowcodeKey.dropText))),
           );
         }
         final size = dragging ? (idle < 20 ? 20.0 : idle) : idle;
@@ -66,7 +67,7 @@ class CanvasSlot extends StatelessWidget {
                   width: vertical ? (hover ? 6 : 2) : double.infinity,
                   height: vertical ? double.infinity : (hover ? 6 : 2),
                   constraints: vertical ? const BoxConstraints(minHeight: 24, maxHeight: 64) : null,
-                  decoration: BoxDecoration(color: hover ? Palette.primary500 : Palette.primary200, borderRadius: BorderRadius.circular(3)),
+                  decoration: BoxDecoration(color: ui.lowcodeColor(hover ? LowcodeKey.insertBar : LowcodeKey.insertBarIdle), borderRadius: BorderRadius.circular(3)),
                 )
               : null,
         );
@@ -85,13 +86,13 @@ class CanvasBadge extends StatelessWidget {
   Widget build(BuildContext context) => IgnorePointer(
     child: Container(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-      decoration: const BoxDecoration(
-        color: Color(0xCC27282F),
-        borderRadius: BorderRadius.only(bottomRight: Radius.circular(4)),
+      decoration: BoxDecoration(
+        color: context.themeSpec.lowcodeColor(LowcodeKey.sizeTagBg),
+        borderRadius: const BorderRadius.only(bottomRight: Radius.circular(4)),
       ),
       child: Text(
         label,
-        style: const TextStyle(fontSize: 10, height: 1.3, color: Colors.white, fontWeight: FontWeight.w400, decoration: TextDecoration.none, letterSpacing: 0),
+        style: TextStyle(fontSize: 10, height: 1.3, color: context.themeSpec.lowcodeColor(LowcodeKey.sizeTagText), fontWeight: FontWeight.w400, decoration: TextDecoration.none, letterSpacing: 0),
       ),
     ),
   );

@@ -128,7 +128,16 @@ class ImeTranslator {
 /// xterm 的 [TerminalView] 只负责画和处理实体键盘；软键盘 / 输入法这条路由这里接管
 /// （原因见 [ImeTranslator]）。
 class TerminalInputView extends StatefulWidget {
-  const TerminalInputView({super.key, required this.session, required this.focusNode, required this.theme, required this.textStyle, required this.padding, this.mode = TerminalImeMode.direct});
+  const TerminalInputView({
+    super.key,
+    required this.session,
+    required this.focusNode,
+    required this.theme,
+    required this.textStyle,
+    required this.padding,
+    this.mode = TerminalImeMode.direct,
+    this.backgroundOpacity = 1,
+  });
 
   final TerminalSession session;
   final FocusNode focusNode;
@@ -136,6 +145,9 @@ class TerminalInputView extends StatefulWidget {
   final TerminalStyle textStyle;
   final EdgeInsets padding;
   final TerminalImeMode mode;
+
+  /// xterm 自己铺的那层底有多不透明：外面已经铺了半透明的底（透出背景图片）时给 0，免得叠两层。
+  final double backgroundOpacity;
 
   @override
   State<TerminalInputView> createState() => TerminalInputViewState();
@@ -359,6 +371,7 @@ class TerminalInputViewState extends State<TerminalInputView> with TextInputClie
                   theme: widget.theme,
                   textStyle: widget.textStyle,
                   padding: widget.padding,
+                  backgroundOpacity: widget.backgroundOpacity,
                   // 软键盘由我们自己接；xterm 只管实体键盘和画面。
                   hardwareKeyboardOnly: true,
                 ),

@@ -8,9 +8,11 @@ import 'dart:convert';
 
 import 'package:lopicode/agent/edit_file_tool.dart';
 import 'package:lopicode/agent/line_diff.dart';
+import 'package:lopicode/backdrop/backdrop_model.dart';
 import 'package:lopicode/session/chat_models.dart';
 import 'package:lopicode/session/chat_rows.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/app_backdrop.dart';
 import 'package:lopicode/ui/code_view.dart';
 import 'package:lopicode/ui/diff_view.dart';
 import 'package:material_ui/material_ui.dart';
@@ -151,7 +153,10 @@ class _ApprovalPreviewState extends State<ApprovalPreview> {
               key: const ValueKey('approval-preview-body'),
               constraints: const BoxConstraints(maxHeight: kApprovalPreviewMaxHeight),
               padding: const EdgeInsets.all(Space.x2),
-              decoration: BoxDecoration(color: c.codeBg, borderRadius: BorderRadius.circular(Radii.md)),
+              decoration: BoxDecoration(
+                color: BackdropScope.surface(context, c.codeBg, seeThrough: BackdropArea.code),
+                borderRadius: BorderRadius.circular(Radii.md),
+              ),
               child: CodeZoom(
                 child: SingleChildScrollView(child: FileChangeBody(change: change)),
               ),

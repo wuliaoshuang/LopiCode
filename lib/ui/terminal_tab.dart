@@ -16,6 +16,7 @@
 //   安装的输出就在下面的终端里；没事的时候这条不出现。
 // - 没有单独的输入行：真正的终端里输入就在光标处。
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lopicode/backdrop/backdrop_model.dart';
 import 'package:lopicode/core/stores.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/runtime/linux_shell_backend.dart';
@@ -26,7 +27,9 @@ import 'package:lopicode/state/runtime_state.dart';
 import 'package:lopicode/state/workspace_terminals.dart';
 import 'package:lopicode/terminal/terminal_input.dart';
 import 'package:lopicode/terminal/terminal_session.dart';
+import 'package:lopicode/theme/text_scale.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/app_backdrop.dart';
 import 'package:lopicode/ui/app_ref.dart';
 import 'package:lopicode/ui/backend_run_bar.dart';
 import 'package:lopicode/ui/shell.dart';
@@ -142,30 +145,31 @@ class _TerminalTabState extends ConsumerState<TerminalTab> {
     );
   }
 
-  TerminalTheme _theme(AppColors c, bool dark) => TerminalTheme(
-    cursor: c.accent,
-    selection: c.accent.withValues(alpha: 0.3),
-    foreground: c.text,
-    background: c.codeBg,
-    black: dark ? const Color(0xFF35394C) : const Color(0xFF222435),
-    red: dark ? const Color(0xFFFE7FB6) : const Color(0xFFC6212F),
-    green: dark ? const Color(0xFF5DEEDB) : const Color(0xFF017B43),
-    yellow: dark ? const Color(0xFFFFE068) : const Color(0xFF893300),
-    blue: dark ? const Color(0xFF8AB4F8) : const Color(0xFF1F5FBF),
-    magenta: dark ? const Color(0xFFD7A6F5) : const Color(0xFF8A3FBF),
-    cyan: dark ? const Color(0xFF9BFFF8) : const Color(0xFF0A7C8C),
-    white: dark ? const Color(0xFFD3DEE4) : const Color(0xFF5C6479),
-    brightBlack: dark ? const Color(0xFF707A8F) : const Color(0xFF5C6479),
-    brightRed: dark ? const Color(0xFFFE7FB6) : const Color(0xFFAB131E),
-    brightGreen: dark ? const Color(0xFF9BFFF8) : const Color(0xFF058654),
-    brightYellow: dark ? const Color(0xFFFFE068) : const Color(0xFFA84C00),
-    brightBlue: dark ? const Color(0xFFAECBFA) : const Color(0xFF1F5FBF),
-    brightMagenta: dark ? const Color(0xFFE5C4FA) : const Color(0xFF8A3FBF),
-    brightCyan: dark ? const Color(0xFFEBFFFF) : const Color(0xFF0A7C8C),
-    brightWhite: dark ? const Color(0xFFF6FBFD) : const Color(0xFF222435),
-    searchHitBackground: c.warningSoft,
-    searchHitBackgroundCurrent: c.warning,
-    searchHitForeground: c.text,
+  /// 终端的配色：全部从当前主题的“终端”一节来（前景、背景、光标、选区、查找命中 + 16 色）。
+  TerminalTheme _theme(ThemeSpec t) => TerminalTheme(
+    cursor: t.terminalColor('cursor'),
+    selection: t.terminalColor('selection'),
+    foreground: t.terminalColor('fg'),
+    background: t.terminalColor('bg'),
+    black: t.terminalColor('black'),
+    red: t.terminalColor('red'),
+    green: t.terminalColor('green'),
+    yellow: t.terminalColor('yellow'),
+    blue: t.terminalColor('blue'),
+    magenta: t.terminalColor('magenta'),
+    cyan: t.terminalColor('cyan'),
+    white: t.terminalColor('white'),
+    brightBlack: t.terminalColor('brightBlack'),
+    brightRed: t.terminalColor('brightRed'),
+    brightGreen: t.terminalColor('brightGreen'),
+    brightYellow: t.terminalColor('brightYellow'),
+    brightBlue: t.terminalColor('brightBlue'),
+    brightMagenta: t.terminalColor('brightMagenta'),
+    brightCyan: t.terminalColor('brightCyan'),
+    brightWhite: t.terminalColor('brightWhite'),
+    searchHitBackground: t.terminalColor('searchHitBg'),
+    searchHitBackgroundCurrent: t.terminalColor('searchHitBgCurrent'),
+    searchHitForeground: t.terminalColor('searchHitFg'),
   );
 
   @override
@@ -177,8 +181,9 @@ class _TerminalTabState extends ConsumerState<TerminalTab> {
     final term = _term;
     if (term == null) return runtime.needsSetup ? TerminalSetupView(onConnectSsh: _newSsh, notice: backendRunSetupNotice(ref.watch(backendRunProvider(s)))) : const SizedBox.expand();
     final c = context.colors;
+    final solidTermBg = context.themeSpec.terminalColor('bg');
+    final termBg = BackdropScope.surface(context, solidTermBg, seeThrough: BackdropArea.terminal);
     final t = Theme.of(context).textTheme;
-    final dark = Theme.of(context).brightness == Brightness.dark;
     final settings = appOf(context).settings;
     final chinese = settings.getBool(SettingKeys.terminalChineseIme);
     final backend = term.backend;
@@ -256,15 +261,20 @@ class _TerminalTabState extends ConsumerState<TerminalTab> {
         else ...[
           Expanded(
             child: ColoredBox(
-              color: c.codeBg,
-              child: TerminalInputView(
-                key: ObjectKey(term),
-                session: term,
-                focusNode: _focus,
-                theme: _theme(c, dark),
-                textStyle: const TerminalStyle(fontSize: 13, height: 1.3, fontFamily: kMonoFont, fontFamilyFallback: kMonoFallback),
-                padding: const EdgeInsets.symmetric(horizontal: Space.x2, vertical: Space.x1),
-                mode: chinese ? TerminalImeMode.chinese : TerminalImeMode.direct,
+              // “透出背景 › 终端”开着、这一页又画着背景时：底色按“表面不透明度”变透（整块只铺这一层；xterm 自己那层底用它的 backgroundOpacity 关掉，主题里的底色保持原值）
+              color: termBg,
+              // 终端的字号不吃主题的“界面字号”倍率（和代码区域一样）。
+              child: SystemTextScale(
+                child: TerminalInputView(
+                  key: ObjectKey(term),
+                  session: term,
+                  focusNode: _focus,
+                  theme: _theme(context.themeSpec),
+                  backgroundOpacity: termBg == solidTermBg ? 1 : 0,
+                  textStyle: const TerminalStyle(fontSize: 13, height: 1.3, fontFamily: kMonoFont, fontFamilyFallback: kMonoFallback),
+                  padding: const EdgeInsets.symmetric(horizontal: Space.x2, vertical: Space.x1),
+                  mode: chinese ? TerminalImeMode.chinese : TerminalImeMode.direct,
+                ),
               ),
             ),
           ),

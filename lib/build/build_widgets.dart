@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lopicode/state/code_font.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/app_backdrop.dart';
 import 'package:lopicode/ui/top_bar.dart';
 import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
@@ -52,7 +53,7 @@ class BuildModePicker extends StatelessWidget {
     return Container(
       height: 44,
       padding: const EdgeInsets.all(Space.x1),
-      decoration: BoxDecoration(color: c.surfaceMuted, borderRadius: BorderRadius.circular(Radii.lg)),
+      decoration: BoxDecoration(color: BackdropScope.surface(context, c.surfaceMuted), borderRadius: BorderRadius.circular(Radii.lg)), // 有背景图片时轨道按“表面不透明度”变透
       child: Row(
         children: [
           for (final m in BuildMode.values)
@@ -254,7 +255,7 @@ class RunCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.all(Space.x4),
-    decoration: BoxDecoration(color: context.colors.surface, borderRadius: BorderRadius.circular(Radii.card)),
+    decoration: BoxDecoration(color: BackdropScope.surface(context, context.colors.surface), borderRadius: BorderRadius.circular(Radii.card)), // 有背景图片时和分组卡片一样变透
     child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: children),
   );
 }

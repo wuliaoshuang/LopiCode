@@ -514,7 +514,7 @@ class BkWorkspacePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final palette = kit.palette;
-    canvas.drawRect(Offset.zero & size, Paint()..color = palette.canvas);
+    // 画布的底色不在这里铺：由外面那一层（block_editor_view 的 bk-canvas-layer）铺，有背景图片且“透出 › 积木画布”开着时它是半透明的。
     _dots(canvas, size, palette);
     canvas.save();
     canvas.clipRect(Offset.zero & size);
@@ -559,11 +559,11 @@ class BkWorkspacePainter extends CustomPainter {
     final mt = kit.metrics;
     final a = motion == null ? 1.0 : motionT;
     if (a <= 0) return;
-    final dot = Paint()..color = const Color(0xFFFFFFFF).withValues(alpha: 0.6 * a);
+    final dot = Paint()..color = kit.palette.gloss.withValues(alpha: 0.6 * a);
     final ring = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.2
-      ..color = const Color(0xFFFFFFFF).withValues(alpha: 0.5 * a);
+      ..color = kit.palette.gloss.withValues(alpha: 0.5 * a);
     for (final snap in s.layout.snaps) {
       if (snap.kind != hints) continue;
       if (room != null) {

@@ -179,7 +179,7 @@ class _PushDrawerState extends State<PushDrawer> with SingleTickerProviderStateM
                           key: const ValueKey('push-drawer-scrim'),
                           behavior: HitTestBehavior.opaque,
                           onTap: () => _animateTo(0),
-                          child: ColoredBox(color: Colors.black.withValues(alpha: (dark ? 0.45 : 0.2) * v)),
+                          child: ColoredBox(color: context.colors.scrimOf((dark ? 0.45 : 0.2) * v)),
                         ),
                       ),
                   ],

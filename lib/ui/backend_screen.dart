@@ -30,6 +30,7 @@ import 'package:lopicode/project_session.dart';
 import 'package:lopicode/state/backend_run.dart';
 import 'package:lopicode/state/workspace_files.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/app_backdrop.dart';
 import 'package:lopicode/ui/app_ref.dart';
 import 'package:lopicode/ui/backend_panels_sheet.dart';
 import 'package:lopicode/ui/backend_run_sheet.dart';
@@ -442,6 +443,7 @@ class BackendScreenState extends ConsumerState<BackendScreen> {
     final host = _host;
     if (host == null) {
       return Scaffold(
+        backgroundColor: BackdropScope.onOf(context) ? Colors.transparent : null,
         extendBodyBehindAppBar: true,
         appBar: const ShellAppBar(title: '后端积木'),
         body: _loading

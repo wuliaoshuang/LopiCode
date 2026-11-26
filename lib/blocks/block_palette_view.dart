@@ -279,13 +279,7 @@ class _BlockPaletteViewState extends State<BlockPaletteView> with BkKitHolder {
       height: widget.height,
       decoration: BoxDecoration(
         borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: kit.palette.dark ? 0.5 : 0.12),
-            blurRadius: 16,
-            offset: const Offset(0, -2),
-          ),
-        ],
+        boxShadow: [BoxShadow(color: context.colors.shadowOf(kit.palette.dark ? 0.5 : 0.12), blurRadius: 16, offset: const Offset(0, -2))],
       ),
       child: Material(
         color: theme.colorScheme.surface,

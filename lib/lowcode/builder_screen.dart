@@ -11,6 +11,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:lopicode/agent/agent_tools.dart';
+import 'package:lopicode/backdrop/backdrop_model.dart';
 import 'package:lopicode/core/templates.dart';
 import 'package:lopicode/lowcode/canvas_view.dart';
 import 'package:lopicode/lowcode/code_sheet.dart';
@@ -27,6 +28,7 @@ import 'package:lopicode/lowcode/style_editor_sheet.dart';
 import 'package:lopicode/lowcode/style_model.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/app_backdrop.dart';
 import 'package:lopicode/ui/shell.dart';
 import 'package:lopicode/ui/top_bar.dart';
 import 'package:lopicode/ui/widgets.dart';
@@ -171,7 +173,7 @@ class _BuilderScreenState extends State<BuilderScreen> {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      barrierColor: Colors.black26,
+      barrierColor: context.colors.scrimOf(0x42 / 255),
       builder: (_) => PropertySheet(
         node: node,
         doc: _doc,
@@ -280,7 +282,11 @@ class _BuilderScreenState extends State<BuilderScreen> {
     await Navigator.push(
       context,
       MaterialPageRoute<void>(
-        builder: (_) => LogicScreen(doc: _doc!, onEdit: _apply, initialNodeId: nodeId, history: _history, onRestore: _restore),
+        // 逻辑页是另开的一页：也接上背景（跟“其它页面”开关走），不然“透出背景 › 积木画布”在这页不起作用
+        builder: (_) => AppBackdrop(
+          area: BackdropArea.pages,
+          builder: (_, _) => LogicScreen(doc: _doc!, onEdit: _apply, initialNodeId: nodeId, history: _history, onRestore: _restore),
+        ),
       ),
     );
     _refresh();
@@ -341,6 +347,7 @@ class _BuilderScreenState extends State<BuilderScreen> {
     final history = _history;
     final node = doc == null || _selected == null ? null : doc.find(_selected!);
     return Scaffold(
+      backgroundColor: BackdropScope.onOf(context) ? Colors.transparent : null, // 有背景图片时页面底色让开（画布自己还有底）
       extendBodyBehindAppBar: true,
       appBar: ShellAppBar(
         background: context.colors.surfaceMuted,

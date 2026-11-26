@@ -3,22 +3,25 @@
 // - 权限与执行：〔权限〕新对话的权限（跳转行，点开底部弹层选档；选“完全权限”要先确认）
 //               〔执行〕连续执行多少步后问我（跳转行，底部弹层选档）· 上下文快满时自动压缩（开关，副标题写明代价）
 // - 对话显示：〔新对话〕开场建议（开关）〔回复里〕用量（开关）· 思考过程（开关）
-// - 外观：三行单选（跟随系统 / 浅色 / 深色），点了立刻生效。
+// - 外观：三行单选（跟随系统 / 浅色 / 深色），点了立刻生效；下面〔主题〕两行（浅色主题 / 深色主题，见 settings_theme.dart）；再下面代码字号。
 // - 额度与余额：只有不止一个 DeepSeek 官方渠道时才有这一页，一行一个渠道，点进各自的额度页。
 // - 这些页面可能被留在后面（上面又盖了一页），所以各自订阅自己那几个设置键，回来时数是新的。
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lopicode/agent/agent_tools.dart';
 import 'package:lopicode/agent/quota.dart';
 import 'package:lopicode/core/stores.dart';
+import 'package:lopicode/project_session.dart';
 import 'package:lopicode/state/app_providers.dart';
 import 'package:lopicode/state/models_state.dart';
 import 'package:lopicode/state/ui_prefs.dart';
 import 'package:lopicode/ui/app_ref.dart';
+import 'package:lopicode/ui/appearance_background_entry.dart';
 import 'package:lopicode/ui/chat_panels.dart';
 import 'package:lopicode/ui/provider_icon.dart';
 import 'package:lopicode/ui/settings_chat.dart';
 import 'package:lopicode/ui/settings_code_font.dart';
 import 'package:lopicode/ui/settings_quota.dart';
+import 'package:lopicode/ui/settings_theme.dart';
 import 'package:lopicode/ui/settings_widgets.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -150,8 +153,13 @@ class ChatDisplayScreen extends ConsumerWidget {
 }
 
 /// 设置 › 界面 › 外观。
+///
+/// 从上到下：颜色模式 → 主题（浅色用哪套、深色用哪套、管理主题）→ 背景图（那部分接上了才有，见 appearance_background_entry.dart）→ 代码字号。
 class AppearanceScreen extends ConsumerWidget {
-  const AppearanceScreen({super.key});
+  const AppearanceScreen({super.key, this.session});
+
+  /// 现在开着的工作区（主题导出存文件、导入选文件用）；没有也行。
+  final ProjectSession? session;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -167,6 +175,8 @@ class AppearanceScreen extends ConsumerWidget {
               SettingsChoiceRow(key: Key('appearance-${m.name}'), title: themeModeLabel(m), selected: m == mode, onTap: () => ref.read(themeModeProvider.notifier).set(m)),
           ],
         ),
+        ThemeSlotsGroup(session: session),
+        ?buildAppearanceBackgroundEntry(context),
         const CodeFontGroup(),
       ],
     );
