@@ -5,6 +5,7 @@ import 'package:lopicode/agent/line_diff.dart';
 import 'package:lopicode/agent/message_ids.dart';
 import 'package:lopicode/agent/usage.dart';
 import 'package:lopicode/session/chat_models.dart';
+import 'package:lopicode/session/reply_edit.dart';
 
 /// 分支 / 旧版本里：带工具调用的那条消息上记着“哪次 spawn_agent 调用 → 原来那段子对话的 id”。
 /// 子对话不复制，卡片点开的还是原来那段。以 `_` 开头，不会发给模型。
@@ -51,7 +52,7 @@ List<ChatItem> chatItemsFromMessages(
         final thoughtMs = m['_reasoningMs'];
         if (thought is String && thought.trim().isNotEmpty) items.add(ThinkingItem(thought, ms: thoughtMs is int ? thoughtMs : null));
         final text = m['content'];
-        if (text is String && text.isNotEmpty) items.add(AssistantItem(text, id: messageIdOf(m)));
+        if (text is String && text.isNotEmpty) items.add(AssistantItem(text, id: messageIdOf(m), edited: isEditedMessage(m)));
         final calls = m['tool_calls'];
         final links = m[kChildLinksKey];
         for (final c in calls is List ? calls : const []) {

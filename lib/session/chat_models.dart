@@ -24,14 +24,18 @@ class UserItem extends ChatItem {
 }
 
 class AssistantItem extends ChatItem {
-  const AssistantItem(this.text, {this.streaming = false, this.id});
+  const AssistantItem(this.text, {this.streaming = false, this.id, this.edited = false});
   final String text;
   final bool streaming;
+
+  /// 这段回复的文字被用户改过（消息记录里的 `_edited`，见 lib/session/reply_edit.dart）。
+  final bool edited;
 
   /// 这段回复在消息记录里的稳定标识（`_id`）。还在往外冒、还没存进记录时是 null。
   final String? id;
 
-  AssistantItem copyWith({String? text, bool? streaming, String? id}) => AssistantItem(text ?? this.text, streaming: streaming ?? this.streaming, id: id ?? this.id);
+  AssistantItem copyWith({String? text, bool? streaming, String? id, bool? edited}) =>
+      AssistantItem(text ?? this.text, streaming: streaming ?? this.streaming, id: id ?? this.id, edited: edited ?? this.edited);
 }
 
 class ToolItem extends ChatItem {

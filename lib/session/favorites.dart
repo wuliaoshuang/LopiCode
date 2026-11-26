@@ -9,6 +9,9 @@ import 'package:lopicode/core/safe_file.dart';
 /// 文字快照最多留这么多字（再长的只留开头；原消息还在时可以跳回去看全文）。
 const int kFavoriteSnapshotChars = 4000;
 
+/// 收藏里留的文字：太长只留开头。
+String favoriteSnapshotOf(String text) => text.length > kFavoriteSnapshotChars ? '${text.substring(0, kFavoriteSnapshotChars)}…' : text;
+
 class FavoriteMessage {
   const FavoriteMessage({required this.convId, required this.messageId, required this.role, required this.text, required this.convTitle, required this.savedAt, this.gone = false});
 
@@ -31,7 +34,8 @@ class FavoriteMessage {
   String get key => '$convId/$messageId';
   bool get mine => role == 'user';
 
-  FavoriteMessage copyWith({bool? gone}) => FavoriteMessage(convId: convId, messageId: messageId, role: role, text: text, convTitle: convTitle, savedAt: savedAt, gone: gone ?? this.gone);
+  FavoriteMessage copyWith({bool? gone, String? text}) =>
+      FavoriteMessage(convId: convId, messageId: messageId, role: role, text: text ?? this.text, convTitle: convTitle, savedAt: savedAt, gone: gone ?? this.gone);
 
   Map<String, dynamic> toJson() => {'conv': convId, 'msg': messageId, 'role': role, 'text': text, 'title': convTitle, 'at': savedAt.toIso8601String(), if (gone) 'gone': true};
 

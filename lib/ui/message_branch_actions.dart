@@ -1,8 +1,8 @@
 // 设计约束（重试 / 编辑 / 分支 · 390×844）
 // 层级：这三个都是“改这段对话走向”的动作，后果要说在前面，但不吓人——旧内容都另存着，没有红色。
-// - 操作栏（一排最多 4 个图标）：我的消息常驻“复制、编辑、更多”；Agent 的回复常驻“复制、重试、更多”（重试只在这一轮最后一段回复下面）。
-//   “从这里分支”“重新发送”（我的消息上的重试）在“更多”里。这条消息上分出去过对话时多一个分叉图标（强调色，点开列表）；
-//   这条同时还收藏着、一排要超过 4 个时，分叉图标让位，进“更多”。
+// - 操作栏（常驻四个按钮，排法见 message_action_bar.dart）：我的消息“复制、编辑、重新发送、更多”；Agent 的回复“复制、编辑、重试、更多”。
+//   “从这里分支”在“更多”里。这条消息上分出去过对话时，四个按钮外侧多一个分叉记号（强调色，点开列表）。
+//   Agent 回复上的“编辑”是直接改文字（message_reply_editor.dart），不走这里的“从这条重新来”。
 // - “重试”确认面板：标题一行；下面一条一行说清后果（移走什么、存到哪、文件不撤销、用量照算）；最下面一排：取消（弱）、重试（实心，唯一主操作）。
 //   这一轮没有任何 Agent 的内容、后面也没有别的轮时不弹面板，直接重发（没有东西会被移走）。
 // - “分出去的对话”面板：一行一段对话——图标（分支 / 旧版本）+ 名称 + 小标签，下面一行灰字是时间；点一行就切过去。
@@ -28,7 +28,7 @@ String rewindDoneText(RewindStart start, {required bool edited}) => start.error 
 bool onReply(MessageTarget t) => !t.mine;
 bool onMine(MessageTarget t) => t.mine;
 bool hasBranches(MessageTarget t) => t.branches.isNotEmpty;
-bool branchesPinned(MessageTarget t) => !t.favorited;
+bool branchesPinned(MessageTarget t) => true;
 String? rewindBlocked(MessageTarget t) => t.busy ? kRewindWhileBusy : null;
 String? branchBlocked(MessageTarget t) => t.session.branches.branchBlocked(t.id);
 
@@ -48,7 +48,8 @@ IconData branchesIcon(MessageTarget t) => Icons.account_tree_outlined;
 Future<void> runRetry(BuildContext context, MessageTarget t) async {
   final s = t.session;
   final plan = s.branches.previewRewind(t.id);
-  if (plan == null) return showSnack(context, kMessageGone);
+  // 记录里有这条、却算不出从哪重新来：它前面没有我的消息（比如压缩摘要后面直接跟着的回复）
+  if (plan == null) return showSnack(context, s.messageOps.messageById(t.id) == null ? kMessageGone : '这段回复前面找不到你的那条消息，没法重试。');
   // 这一行重发以后就不在了（context 跟着失效），提示用的东西先拿好
   final messenger = ScaffoldMessenger.of(context);
   if (plan.worthKeeping) {
