@@ -10,6 +10,7 @@
 // - 选中框、拖柄、间距示意叠在页面上面画（canvas_overlay_widgets.dart），不改页面本身的排版。
 import 'package:flutter/physics.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:lopicode/backdrop/backdrop_model.dart';
 import 'package:lopicode/lowcode/canvas_css.dart';
 import 'package:lopicode/lowcode/canvas_overlay_widgets.dart';
 import 'package:lopicode/lowcode/canvas_render_widgets.dart';
@@ -17,6 +18,7 @@ import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/lowcode/palette_widgets.dart';
 import 'package:lopicode/lowcode/style_resolve.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/app_backdrop.dart';
 import 'package:lopicode/ui/chrome.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -284,7 +286,7 @@ class CanvasViewState extends State<CanvasView> with SingleTickerProviderStateMi
           children: [
             ClipRect(
               child: ColoredBox(
-                color: c.surfaceMuted,
+                color: BackdropScope.surface(context, c.surfaceMuted, seeThrough: BackdropArea.lowcode),
                 child: GestureDetector(
                   key: const ValueKey('lowcode-canvas'),
                   behavior: HitTestBehavior.opaque,

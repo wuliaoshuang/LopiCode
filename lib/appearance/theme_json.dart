@@ -49,8 +49,25 @@ String formatThemeColor(int argb) {
 }
 
 /// 导出文件里附带的背景图（可选）。主题本身不带图；图怎么存、怎么显示由背景图那部分管。
+///
+/// [fit]、[tile]、[maskFollowsTheme] / [maskColor]、[brightness] 是后加的可选项：文件里没写就是 null，
+/// 导入的人那边这几项保持原样。
 class ThemeBackground {
-  const ThemeBackground({required this.mime, required this.bytes, this.cropX = 0, this.cropY = 0, this.cropW = 1, this.cropH = 1, this.dim = 0, this.blur = 0});
+  const ThemeBackground({
+    required this.mime,
+    required this.bytes,
+    this.cropX = 0,
+    this.cropY = 0,
+    this.cropW = 1,
+    this.cropH = 1,
+    this.dim = 0,
+    this.blur = 0,
+    this.fit,
+    this.tile,
+    this.maskFollowsTheme,
+    this.maskColor,
+    this.brightness,
+  });
 
   /// image/jpeg、image/png、image/webp 之一。
   final String mime;
@@ -65,7 +82,42 @@ class ThemeBackground {
   /// 压暗多少（0–1）和模糊多少（0–40）。
   final double dim;
   final double blur;
+
+  /// 适配方式：[kThemeBackgroundFits] 之一（铺满 / 完整显示 / 平铺）。
+  final String? fit;
+
+  /// 平铺时一格占屏幕宽的百分之几（10–100）。
+  final int? tile;
+
+  /// 遮罩颜色：true＝跟随主题；false＝用 [maskColor]（0xRRGGBB）；null＝文件里没写。
+  final bool? maskFollowsTheme;
+  final int? maskColor;
+
+  /// 亮度：−100（全黑）…100（全白）。
+  final int? brightness;
 }
+
+/// `background.fit` 认的三种写法。
+const Set<String> kThemeBackgroundFits = {'cover', 'contain', 'tile'};
+
+/// `background.maskColor` 写这个词表示“跟随主题”。
+const String kThemeBackgroundMaskTheme = 'theme';
+
+/// 背景图那一节写成 JSON 对象（导出用）。
+Map<String, Object?> encodeThemeBackground(ThemeBackground b) => {
+  'mime': b.mime,
+  'data': base64Encode(b.bytes),
+  'crop': {'x': b.cropX, 'y': b.cropY, 'w': b.cropW, 'h': b.cropH},
+  'dim': b.dim,
+  'blur': b.blur,
+  if (b.fit != null) 'fit': b.fit,
+  if (b.tile != null) 'tile': b.tile,
+  if (b.maskFollowsTheme == true) 'maskColor': kThemeBackgroundMaskTheme else if (b.maskColor != null) 'maskColor': formatThemeColor(0xFF000000 | (b.maskColor! & 0xFFFFFF)),
+  if (b.brightness != null) 'brightness': b.brightness,
+};
+
+/// 读背景图那一节。成功时第一项有值；用不了时第二项是原因（人话）。
+(ThemeBackground?, String?) decodeThemeBackground(Object? raw) => _decodeBackground(raw);
 
 const Set<String> kThemeBackgroundMimes = {'image/jpeg', 'image/png', 'image/webp'};
 
@@ -108,14 +160,7 @@ Map<String, Object?> encodeTheme(ThemeSpec t, {ThemeBackground? background}) => 
         if (t.metrics[f.key] != null) f.key: t.metrics[f.key],
     },
   },
-  if (background != null)
-    'background': {
-      'mime': background.mime,
-      'data': base64Encode(background.bytes),
-      'crop': {'x': background.cropX, 'y': background.cropY, 'w': background.cropW, 'h': background.cropH},
-      'dim': background.dim,
-      'blur': background.blur,
-    },
+  if (background != null) 'background': encodeThemeBackground(background),
 };
 
 /// 导出成文本（给别人导入用）。
@@ -291,8 +336,53 @@ ThemeDecodeResult decodeThemeJson(Object? json) {
       h = 1;
     }
   }
+  // 后加的四个可选项：没写＝null（导入的人那边保持原样）；写了就严格查，不对就整张图不用并说原因。
+  String? fit;
+  if (raw.containsKey('fit')) {
+    final v = raw['fit'];
+    if (v is! String || !kThemeBackgroundFits.contains(v)) return (null, '适配方式（fit）只能是 cover、contain、tile 之一。');
+    fit = v;
+  }
+  int? whole(Object? v, int min, int max) => v is num && v.isFinite && v == v.roundToDouble() && v >= min && v <= max ? v.toInt() : null;
+  int? tile;
+  if (raw.containsKey('tile')) {
+    tile = whole(raw['tile'], 10, 100);
+    if (tile == null) return (null, '平铺大小（tile）应该是 10–100 的整数。');
+  }
+  bool? maskFollowsTheme;
+  int? maskColor;
+  if (raw.containsKey('maskColor')) {
+    final v = raw['maskColor'];
+    if (v == kThemeBackgroundMaskTheme) {
+      maskFollowsTheme = true;
+    } else {
+      final argb = v is String && RegExp(r'^#[0-9A-Fa-f]{6}$').hasMatch(v) ? parseThemeColor(v) : null;
+      if (argb == null) return (null, '遮罩颜色（maskColor）应该是 #RRGGBB，或者写 theme 表示跟随主题。');
+      maskFollowsTheme = false;
+      maskColor = argb & 0xFFFFFF;
+    }
+  }
+  int? brightness;
+  if (raw.containsKey('brightness')) {
+    brightness = whole(raw['brightness'], -100, 100);
+    if (brightness == null) return (null, '亮度（brightness）应该是 −100 到 100 的整数。');
+  }
   return (
-    ThemeBackground(mime: mime, bytes: bytes, cropX: x, cropY: y, cropW: w, cropH: h, dim: numOr(raw['dim'], 0).clamp(0, 1).toDouble(), blur: numOr(raw['blur'], 0).clamp(0, 40).toDouble()),
+    ThemeBackground(
+      mime: mime,
+      bytes: bytes,
+      cropX: x,
+      cropY: y,
+      cropW: w,
+      cropH: h,
+      dim: numOr(raw['dim'], 0).clamp(0, 1).toDouble(),
+      blur: numOr(raw['blur'], 0).clamp(0, 40).toDouble(),
+      fit: fit,
+      tile: tile,
+      maskFollowsTheme: maskFollowsTheme,
+      maskColor: maskColor,
+      brightness: brightness,
+    ),
     null,
   );
 }

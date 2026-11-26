@@ -5,6 +5,7 @@
 // - 内容跟着宿主的 revision 走：外面在宿主变了以后重建这个控件就行，这里不占宿主的 onChanged。
 import 'dart:math' as math;
 
+import 'package:lopicode/backdrop/backdrop_model.dart';
 import 'package:lopicode/blocks/block_canvas_layout.dart';
 import 'package:lopicode/blocks/block_colors.dart';
 import 'package:lopicode/blocks/block_geometry.dart';
@@ -12,6 +13,7 @@ import 'package:lopicode/blocks/block_host.dart';
 import 'package:lopicode/blocks/block_paint_view.dart';
 import 'package:lopicode/blocks/block_script_view.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
+import 'package:lopicode/ui/app_backdrop.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// 选中了哪一串的哪块积木。`path` 为空＝帽子（这一串本身）。
@@ -103,7 +105,7 @@ class BlockCanvasViewState extends State<BlockCanvasView> with BkKitHolder {
     final palette = kit.palette;
     if (layout.scripts.isEmpty) {
       return ColoredBox(
-        color: palette.canvas,
+        color: BackdropScope.surface(context, palette.canvas, seeThrough: BackdropArea.blocks),
         child: Center(
           child: Padding(
             padding: const EdgeInsets.all(32),
@@ -120,7 +122,7 @@ class BlockCanvasViewState extends State<BlockCanvasView> with BkKitHolder {
       builder: (context, box) {
         final size = Size(math.max(layout.extent.width + 120, box.maxWidth), math.max(layout.extent.height + 160, box.maxHeight));
         return ColoredBox(
-          color: palette.canvas,
+          color: BackdropScope.surface(context, palette.canvas, seeThrough: BackdropArea.blocks),
           child: InteractiveViewer(
             transformationController: _transform,
             constrained: false,

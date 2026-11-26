@@ -7,6 +7,7 @@ import 'package:lopicode/appearance/theme_json.dart';
 import 'package:lopicode/core/path_guard.dart';
 import 'package:lopicode/core/safe_file.dart';
 import 'package:lopicode/state/app_providers.dart';
+import 'package:lopicode/state/backdrop_state.dart';
 import 'package:lopicode/state/theme_hooks.dart';
 import 'package:lopicode/ui/theme_import_screen.dart';
 import 'package:riverpod/riverpod.dart';
@@ -57,8 +58,13 @@ void main() {
       expect(box.read(recentColorsProvider), [0xFFABCDEF, 0xFF010203]);
     });
 
-    test('背景图的对接口现在是“没接上”', () {
-      expect(box.read(themeBackgroundBridgeProvider), isNull);
+    // 2026-11-26 合并背景图片功能后接上了（原来这里断言的是“没接上”）；细的用例在 test/theme_background_fields_test.dart。
+    test('背景图的对接口已经接上；还没设背景图时说“没有图”', () async {
+      final bridge = box.read(themeBackgroundBridgeProvider);
+      expect(bridge, isNotNull);
+      await box.read(backdropProvider.notifier).ready;
+      expect(box.read(themeBackgroundBridgeProvider)!.hasImage(dark: false), isFalse);
+      expect(box.read(themeBackgroundBridgeProvider)!.hasImage(dark: true), isFalse);
     });
   });
 

@@ -23,6 +23,7 @@ import 'package:lopicode/core/templates.dart';
 import 'package:lopicode/state/theme_hooks.dart';
 import 'package:lopicode/state/themes_state.dart';
 import 'package:lopicode/theme/tokens.dart' hide ThemeSpec;
+import 'package:lopicode/ui/settings_code_font.dart';
 import 'package:lopicode/ui/settings_pages.dart';
 import 'package:lopicode/ui/theme_editor_screen.dart';
 import 'package:lopicode/ui/theme_export_sheet.dart';
@@ -132,12 +133,15 @@ void main() {
   }
 
   group('外观页', () {
-    testWidgets('顺序：颜色模式 → 主题（含“管理主题”）→ 代码字号；背景图没接上时不出现；点“管理主题”进管理页', (tester) async {
+    testWidgets('顺序：颜色模式 → 主题（含“管理主题”）→ 背景图片 → 代码字号；点“管理主题”进管理页', (tester) async {
       await boot(tester, (_) => const AppearanceScreen());
       expect(k('appearance-themes-manage'), findsOneWidget);
       expect(tester.getTopLeft(k('appearance-themes-manage')).dy, greaterThan(tester.getTopLeft(k('appearance-theme-dark')).dy));
-      expect(k('appearance-background'), findsNothing);
-      expect(find.textContaining('背景图'), findsNothing, reason: '背景图没接上时外观页不该出现点了没反应的东西');
+      // 背景图片已经接上（2026-11-26 合并）：一行“背景图片”，排在主题和代码字号之间，右边是当前状态
+      expect(k('appearance-background'), findsOneWidget);
+      expect(tester.getTopLeft(k('appearance-background')).dy, greaterThan(tester.getTopLeft(k('appearance-themes-manage')).dy));
+      expect(tester.getTopLeft(k('appearance-background')).dy, lessThan(tester.getTopLeft(find.byType(CodeFontGroup)).dy));
+      expect(find.descendant(of: k('appearance-background'), matching: find.text('未设置')), findsOneWidget);
       await shot(tester, 'appearance-light');
       await tester.tap(k('appearance-themes-manage'));
       await tester.pumpAndSettle();
@@ -788,9 +792,9 @@ void main() {
       // 1×1 的 PNG。
       const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
       final bridge = ThemeBackgroundBridge(
-        hasImage: () => true,
-        export: () async => fail ? const ThemeBackgroundExport(error: '图片文件不见了') : const ThemeBackgroundExport(data: {'mime': 'image/png', 'data': png, 'dim': 0.2, 'turns': 1}),
-        import: (_) async => null,
+        hasImage: ({required dark}) => true,
+        export: ({required dark}) async => fail ? const ThemeBackgroundExport(error: '图片文件不见了') : const ThemeBackgroundExport(data: {'mime': 'image/png', 'data': png, 'dim': 0.2, 'turns': 1}),
+        import: (_, {required dark}) async => null,
       );
       await boot(
         tester,
@@ -1031,9 +1035,9 @@ void main() {
       expect(decoded.background, isNotNull, reason: decoded.error ?? decoded.notes.join());
       Map<String, Object?>? got;
       final bridge = ThemeBackgroundBridge(
-        hasImage: () => false,
-        export: () async => const ThemeBackgroundExport(),
-        import: (m) async {
+        hasImage: ({required dark}) => false,
+        export: ({required dark}) async => const ThemeBackgroundExport(),
+        import: (m, {required dark}) async {
           got = m;
           return null;
         },

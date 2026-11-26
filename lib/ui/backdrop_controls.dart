@@ -119,6 +119,7 @@ class BackdropPreview extends StatelessWidget {
           builder: (context, ready) => BackdropScope(
             on: ready,
             settings: settings,
+            surfaceAlpha: backdropSurfaceAlpha(context, settings),
             child: const IgnorePointer(child: BackdropSample()),
           ),
         ),

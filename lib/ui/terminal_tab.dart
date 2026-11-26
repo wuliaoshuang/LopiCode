@@ -16,6 +16,7 @@
 //   安装的输出就在下面的终端里；没事的时候这条不出现。
 // - 没有单独的输入行：真正的终端里输入就在光标处。
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lopicode/backdrop/backdrop_model.dart';
 import 'package:lopicode/core/stores.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/runtime/linux_shell_backend.dart';
@@ -28,6 +29,7 @@ import 'package:lopicode/terminal/terminal_input.dart';
 import 'package:lopicode/terminal/terminal_session.dart';
 import 'package:lopicode/theme/text_scale.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/app_backdrop.dart';
 import 'package:lopicode/ui/app_ref.dart';
 import 'package:lopicode/ui/backend_run_bar.dart';
 import 'package:lopicode/ui/shell.dart';
@@ -144,11 +146,11 @@ class _TerminalTabState extends ConsumerState<TerminalTab> {
   }
 
   /// 终端的配色：全部从当前主题的“终端”一节来（前景、背景、光标、选区、查找命中 + 16 色）。
-  TerminalTheme _theme(ThemeSpec t) => TerminalTheme(
+  TerminalTheme _theme(ThemeSpec t, Color background) => TerminalTheme(
     cursor: t.terminalColor('cursor'),
     selection: t.terminalColor('selection'),
     foreground: t.terminalColor('fg'),
-    background: t.terminalColor('bg'),
+    background: background,
     black: t.terminalColor('black'),
     red: t.terminalColor('red'),
     green: t.terminalColor('green'),
@@ -179,6 +181,8 @@ class _TerminalTabState extends ConsumerState<TerminalTab> {
     final term = _term;
     if (term == null) return runtime.needsSetup ? TerminalSetupView(onConnectSsh: _newSsh, notice: backendRunSetupNotice(ref.watch(backendRunProvider(s)))) : const SizedBox.expand();
     final c = context.colors;
+    final solidTermBg = context.themeSpec.terminalColor('bg');
+    final termBg = BackdropScope.surface(context, solidTermBg, seeThrough: BackdropArea.terminal);
     final t = Theme.of(context).textTheme;
     final settings = appOf(context).settings;
     final chinese = settings.getBool(SettingKeys.terminalChineseIme);
@@ -257,14 +261,15 @@ class _TerminalTabState extends ConsumerState<TerminalTab> {
         else ...[
           Expanded(
             child: ColoredBox(
-              color: context.themeSpec.terminalColor('bg'),
+              // “透出背景 › 终端”开着、这一页又画着背景时：底色按“表面不透明度”变透（整块只铺这一层，xterm 自己不再铺底）
+              color: termBg,
               // 终端的字号不吃主题的“界面字号”倍率（和代码区域一样）。
               child: SystemTextScale(
                 child: TerminalInputView(
                   key: ObjectKey(term),
                   session: term,
                   focusNode: _focus,
-                  theme: _theme(context.themeSpec),
+                  theme: _theme(context.themeSpec, termBg == solidTermBg ? solidTermBg : Colors.transparent),
                   textStyle: const TerminalStyle(fontSize: 13, height: 1.3, fontFamily: kMonoFont, fontFamilyFallback: kMonoFallback),
                   padding: const EdgeInsets.symmetric(horizontal: Space.x2, vertical: Space.x1),
                   mode: chinese ? TerminalImeMode.chinese : TerminalImeMode.direct,

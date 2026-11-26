@@ -8,9 +8,11 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lopicode/backdrop/backdrop_model.dart';
 import 'package:lopicode/session/chat_models.dart';
 import 'package:lopicode/state/code_font.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/app_backdrop.dart';
 import 'package:lopicode/ui/chrome.dart';
 import 'package:lopicode/ui/code_view.dart';
 import 'package:material_ui/material_ui.dart';
@@ -138,7 +140,10 @@ class _ThinkingRowState extends State<ThinkingRow> {
             key: const ValueKey('thinking-text'),
             margin: const EdgeInsets.only(left: Space.x8, bottom: Space.x2),
             constraints: const BoxConstraints(maxHeight: 280),
-            decoration: BoxDecoration(color: c.codeBg, borderRadius: BorderRadius.circular(Radii.md)),
+            decoration: BoxDecoration(
+              color: BackdropScope.surface(context, c.codeBg, seeThrough: BackdropArea.code),
+              borderRadius: BorderRadius.circular(Radii.md),
+            ),
             child: SingleChildScrollView(
               // 还在想：贴着底看最新的
               reverse: item.streaming,
@@ -200,7 +205,10 @@ class _CompactionRowState extends State<CompactionRow> {
             key: const ValueKey('compaction-summary'),
             margin: const EdgeInsets.only(bottom: Space.x2),
             constraints: const BoxConstraints(maxHeight: 320),
-            decoration: BoxDecoration(color: c.codeBg, borderRadius: BorderRadius.circular(Radii.md)),
+            decoration: BoxDecoration(
+              color: BackdropScope.surface(context, c.codeBg, seeThrough: BackdropArea.code),
+              borderRadius: BorderRadius.circular(Radii.md),
+            ),
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(Space.x3),
               child: Column(

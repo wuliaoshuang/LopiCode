@@ -109,6 +109,8 @@ final List<ContrastCheck> kContrastChecks = List.unmodifiable([
   _pair('terminal', 'fg', 'terminal', 'bg', kContrastText),
   _pair('terminal', 'cursor', 'terminal', 'bg', kContrastLarge),
   _pair('terminal', 'searchHitFg', 'terminal', 'searchHitBg', kContrastText),
+  // 查找时“当前这一处”的底色上写的也是查找命中文字（2026-11-26 加：默认深色是亮黄底配近白字，几乎看不清）
+  _pair('terminal', 'searchHitFg', 'terminal', 'searchHitBgCurrent', kContrastText),
   for (final f in kTerminalFields.where((f) => f.group != '基本')) _pair('terminal', f.key, 'terminal', 'bg', kContrastLarge),
   // 积木
   for (final f in kBlockCategoryFields) _pair('blocks', BlockKey.text, 'blocks', f.key, kContrastText),
@@ -149,6 +151,7 @@ const Map<String, Map<String, String>> kKnownContrastGaps = {kDefaultLightThemeI
 const String _atom = '高亮沿用 Atom One 配色，原样保留';
 const String _ansi = '终端 16 色里的“黑 / 白”本来就贴近底色';
 const String _chart = '占用条的色块是装饰，旁边有文字图例';
+const String _termHit = '终端查找“当前命中”的底和字是加主题系统之前就有的配色，默认主题一个颜色都不能动；别的内置主题在这一对上都达标';
 const String _block = '积木画布上的选中描边、警告标记和报错符号是原来的配色，靠形状（描边、角标）也认得出';
 
 const Map<String, String> _lightGaps = {
@@ -181,6 +184,7 @@ const Map<String, String> _lightGaps = {
   'tokens.link/code.bg': _atom, // 3.68:1（要 4.5）
   'tokens.addition/code.bg': _atom, // 2.91:1（要 4.5）
   'tokens.deletion/code.bg': _atom, // 3.33:1（要 4.5）
+  'terminal.searchHitFg/terminal.searchHitBgCurrent': _termHit, // 2.20:1（要 4.5）
   'blocks._selection/blocks._canvas': _block, // 1.43:1（要 3.0）
   'blocks._warning/blocks._canvas': _block, // 1.94:1（要 3.0）
 };
@@ -189,6 +193,7 @@ const Map<String, String> _darkGaps = {
   'tokens.comment/code.bg': _atom, // 2.86:1（要 4.5）
   'tokens.quote/code.bg': _atom, // 2.86:1（要 4.5）
   'terminal.black/terminal.bg': _ansi, // 1.52:1（要 3.0）
+  'terminal.searchHitFg/terminal.searchHitBgCurrent': _termHit, // 1.24:1（要 4.5）：亮黄底配近白字，几乎看不清
   'blocks._onError/blocks._error': _block, // 2.78:1（要 3.0）
 };
 

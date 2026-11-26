@@ -3,8 +3,10 @@
 // - 不用滑块（手机上拖不准）；范围 10–24、一步 1、默认 14。到头的那个按钮灰掉。
 // - 同一个值也能在任何代码区域里双指捏合来改，组下面的说明里写明。
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lopicode/backdrop/backdrop_model.dart';
 import 'package:lopicode/state/code_font.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/app_backdrop.dart';
 import 'package:lopicode/ui/code_view.dart';
 import 'package:lopicode/ui/settings_widgets.dart';
 import 'package:material_ui/material_ui.dart';
@@ -47,7 +49,10 @@ class CodeFontGroup extends ConsumerWidget {
         Container(
           width: double.infinity,
           padding: const EdgeInsets.all(Space.x3),
-          decoration: BoxDecoration(color: c.codeBg, borderRadius: BorderRadius.circular(Radii.md)),
+          decoration: BoxDecoration(
+            color: BackdropScope.surface(context, c.codeBg, seeThrough: BackdropArea.code),
+            borderRadius: BorderRadius.circular(Radii.md),
+          ),
           child: const CodeView(key: Key('code-font-sample'), code: _sample, language: 'js'),
         ),
         const SizedBox(height: Space.x1),

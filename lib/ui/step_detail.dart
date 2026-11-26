@@ -13,10 +13,12 @@ import 'dart:convert';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lopicode/agent/command_output_store.dart';
+import 'package:lopicode/backdrop/backdrop_model.dart';
 import 'package:lopicode/session/chat_models.dart';
 import 'package:lopicode/session/step_digest.dart';
 import 'package:lopicode/state/code_font.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/app_backdrop.dart';
 import 'package:lopicode/ui/chat_extras.dart';
 import 'package:lopicode/ui/code_view.dart';
 import 'package:lopicode/ui/step_diff.dart';
@@ -135,7 +137,10 @@ class _StepDetailState extends ConsumerState<StepDetail> {
     return Container(
       margin: const EdgeInsets.only(left: Space.x8, bottom: Space.x2),
       constraints: BoxConstraints(maxHeight: _full ? kStepDetailFullHeight : kStepDetailHeight),
-      decoration: BoxDecoration(color: c.codeBg, borderRadius: BorderRadius.circular(Radii.md)),
+      decoration: BoxDecoration(
+        color: BackdropScope.surface(context, c.codeBg, seeThrough: BackdropArea.code),
+        borderRadius: BorderRadius.circular(Radii.md),
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,

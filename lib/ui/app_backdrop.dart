@@ -23,18 +23,21 @@ import 'package:material_ui/material_ui.dart';
 
 /// 有背景时表面（气泡、卡片、输入框）的不透明度，0–1。**全应用只有这一个入口。**
 ///
-/// 现在取背景设置里的“表面不透明度”；合并主题分支后如果要改成主题的 `metrics.surfaceOpacity`，只改这里。
-double backdropSurfaceAlpha(BackdropSettings settings) => settings.surfaceOpacity / 100;
+/// 背景设置页的“表面不透明度”滑杆说了算；用户没动过滑杆时用当前主题的 `metrics.surfaceOpacity`。
+double backdropSurfaceAlpha(BuildContext context, BackdropSettings settings) => settings.surfaceAlpha(context.themeSpec.metric(MetricKey.surfaceOpacity));
 
-/// “遮罩颜色跟随主题”时用的颜色（不带深浅）。现在是主题底色；合并主题分支后可以换成主题的 `backdropScrim`，只改这里。
-Color backdropMaskBase(BuildContext context) => context.colors.bg;
+/// “遮罩颜色跟随主题”时用的颜色（不带深浅）：主题的“背景图上的遮罩”那一项，只取色相，深浅由背景设置的“遮罩”滑杆定。
+Color backdropMaskBase(BuildContext context) => context.colors.backdropScrim.withValues(alpha: 1);
 
 /// 告诉下面的控件：这一页有没有背景、表面该多透。
 class BackdropScope extends InheritedWidget {
-  const BackdropScope({super.key, required this.on, required this.settings, required super.child});
+  const BackdropScope({super.key, required this.on, required this.settings, required this.surfaceAlpha, required super.child});
 
   final bool on;
   final BackdropSettings settings;
+
+  /// 表面有多不透明（已经按“滑杆动过没有 / 当前主题”算好）。
+  final double surfaceAlpha;
 
   static BackdropScope? maybeOf(BuildContext context) => context.dependOnInheritedWidgetOfExactType<BackdropScope>();
 
@@ -46,11 +49,18 @@ class BackdropScope extends InheritedWidget {
     final scope = maybeOf(context);
     if (scope == null || !scope.on) return color;
     if (seeThrough != null && !scope.settings.area(seeThrough)) return color;
-    return color.withValues(alpha: color.a * backdropSurfaceAlpha(scope.settings));
+    return color.withValues(alpha: color.a * scope.surfaceAlpha);
+  }
+
+  /// 整页的底色（Scaffold）在“透出”时让开：[seeThrough] 那个开关开着、这一页又画着背景，就返回透明，
+  /// 由上面那层用 [surface] 铺半透明的底（免得两层叠起来比设定的更不透）。别的时候原样返回。
+  static Color clear(BuildContext context, Color color, {required BackdropArea seeThrough}) {
+    final scope = maybeOf(context);
+    return scope != null && scope.on && scope.settings.area(seeThrough) ? Colors.transparent : color;
   }
 
   @override
-  bool updateShouldNotify(BackdropScope old) => old.on != on || old.settings != settings;
+  bool updateShouldNotify(BackdropScope old) => old.on != on || old.settings != settings || old.surfaceAlpha != surfaceAlpha;
 }
 
 /// 把一页包起来，在它后面画背景。
@@ -67,10 +77,12 @@ class AppBackdrop extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final settings = ref.watch(backdropProvider);
     final dark = Theme.of(context).brightness == Brightness.dark;
+    final alpha = backdropSurfaceAlpha(context, settings);
     if (!settings.showsOn(area, dark: dark)) {
       return BackdropScope(
         on: false,
         settings: settings,
+        surfaceAlpha: alpha,
         child: Builder(builder: (context) => builder(context, false)),
       );
     }
@@ -83,6 +95,7 @@ class AppBackdrop extends ConsumerWidget {
       builder: (context, ready) => BackdropScope(
         on: ready,
         settings: settings,
+        surfaceAlpha: alpha,
         child: Builder(builder: (context) => builder(context, ready)),
       ),
     );
@@ -225,7 +238,7 @@ class BackdropPainter extends CustomPainter {
       paintBackdropRegion(canvas, src, turns: srcTurns, region: srcRegion, dst: first);
     }
     if (look.brightness != 0) {
-      final base = look.brightness < 0 ? const Color(0xFF000000) : const Color(0xFFFFFFFF);
+      final base = look.brightness < 0 ? const Color(0xFF000000) : const Color(0xFFFFFFFF); // 亮度＝往纯黑 / 纯白里混，是算法不是配色
       canvas.drawRect(visible, Paint()..color = base.withValues(alpha: look.brightness.abs() / 100));
     }
     if (mask.a > 0) canvas.drawRect(visible, Paint()..color = mask);

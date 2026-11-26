@@ -6,10 +6,12 @@
 // - 顶栏和别的页面一样：没打开工作区时左边是汉堡按钮；从工作区里进来切换时是返回箭头。
 // - “移除”只是从列表去掉，文件不动；“删除”才会删文件，而且只对应用目录里的项目开放。
 // - 没有工作区时给真正的空状态和同一个主操作，不放假数据。
+import 'package:lopicode/backdrop/backdrop_model.dart';
 import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/core/templates.dart';
 import 'package:lopicode/templates/project_templates.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/app_backdrop.dart';
 import 'package:lopicode/ui/app_ref.dart';
 import 'package:lopicode/ui/new_project_sheet.dart';
 import 'package:lopicode/ui/push_drawer.dart';
@@ -194,65 +196,69 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
           if (p.group.isNotEmpty) p.group,
       }.toList()..sort(),
     ];
-    final page = Scaffold(
-      extendBodyBehindAppBar: true,
-      appBar: ShellAppBar(title: '工作区', subtitle: projects == null || projects.isEmpty ? 'LopiCode' : '${projects.length} 个工作区'),
-      floatingActionButton: projects != null && projects.isNotEmpty
-          ? FloatingActionButton.extended(onPressed: _add, elevation: 2, shape: const StadiumBorder(), icon: const Icon(Icons.add), label: const Text('添加工作区'))
-          : null,
-      body: _error != null
-          ? BelowBar(
-              child: EmptyState(icon: Icons.error_outline, title: '读取工作区失败', message: _error!),
-            )
-          : projects == null
-          ? const Center(child: CircularProgressIndicator())
-          : projects.isEmpty
-          ? BelowBar(
-              child: EmptyState(
-                icon: Icons.rocket_launch_outlined,
-                title: '还没有工作区',
-                message: '工作区就是一个放代码的目录。添加一个，\n然后让 Agent 帮你写代码、拖拽搭页面、实时预览。',
-                action: FilledButton.icon(onPressed: _add, icon: const Icon(Icons.add), label: const Text('添加工作区')),
-              ),
-            )
-          : ListView(
-              padding: EdgeInsets.fromLTRB(Space.x4, PageBar.insetOf(context) + Space.x2, Space.x4, 96),
-              children: [
-                for (final g in groups) ...[
-                  if (g.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(0, Space.x4, 0, Space.x2),
-                      child: Text(g, style: Theme.of(context).textTheme.labelMedium),
-                    ),
-                  for (final p in projects.where((p) => p.group == g))
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: Space.x3),
-                      child: _ProjectCard(
-                        project: p,
-                        count: _counts[p.id] ?? 0,
-                        current: p.id == widget.currentProjectId,
-                        onOpen: () => _open(p),
-                        onAction: (v) {
-                          switch (v) {
-                            case 'chat':
-                              _open(p, newConversation: true);
-                            case 'pin':
-                              _guard(() => store.setPinned(p, !p.pinned));
-                            case 'group':
-                              _group(p);
-                            case 'rename':
-                              _rename(p);
-                            case 'remove':
-                              _remove(p);
-                            case 'delete':
-                              _delete(p);
-                          }
-                        },
+    final page = AppBackdrop(
+      area: BackdropArea.pages,
+      builder: (context, on) => Scaffold(
+        backgroundColor: on ? Colors.transparent : null,
+        extendBodyBehindAppBar: true,
+        appBar: ShellAppBar(title: '工作区', subtitle: projects == null || projects.isEmpty ? 'LopiCode' : '${projects.length} 个工作区'),
+        floatingActionButton: projects != null && projects.isNotEmpty
+            ? FloatingActionButton.extended(onPressed: _add, elevation: 2, shape: const StadiumBorder(), icon: const Icon(Icons.add), label: const Text('添加工作区'))
+            : null,
+        body: _error != null
+            ? BelowBar(
+                child: EmptyState(icon: Icons.error_outline, title: '读取工作区失败', message: _error!),
+              )
+            : projects == null
+            ? const Center(child: CircularProgressIndicator())
+            : projects.isEmpty
+            ? BelowBar(
+                child: EmptyState(
+                  icon: Icons.rocket_launch_outlined,
+                  title: '还没有工作区',
+                  message: '工作区就是一个放代码的目录。添加一个，\n然后让 Agent 帮你写代码、拖拽搭页面、实时预览。',
+                  action: FilledButton.icon(onPressed: _add, icon: const Icon(Icons.add), label: const Text('添加工作区')),
+                ),
+              )
+            : ListView(
+                padding: EdgeInsets.fromLTRB(Space.x4, PageBar.insetOf(context) + Space.x2, Space.x4, 96),
+                children: [
+                  for (final g in groups) ...[
+                    if (g.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(0, Space.x4, 0, Space.x2),
+                        child: Text(g, style: Theme.of(context).textTheme.labelMedium),
                       ),
-                    ),
+                    for (final p in projects.where((p) => p.group == g))
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: Space.x3),
+                        child: _ProjectCard(
+                          project: p,
+                          count: _counts[p.id] ?? 0,
+                          current: p.id == widget.currentProjectId,
+                          onOpen: () => _open(p),
+                          onAction: (v) {
+                            switch (v) {
+                              case 'chat':
+                                _open(p, newConversation: true);
+                              case 'pin':
+                                _guard(() => store.setPinned(p, !p.pinned));
+                              case 'group':
+                                _group(p);
+                              case 'rename':
+                                _rename(p);
+                              case 'remove':
+                                _remove(p);
+                              case 'delete':
+                                _delete(p);
+                            }
+                          },
+                        ),
+                      ),
+                  ],
                 ],
-              ],
-            ),
+              ),
+      ),
     );
     // 从别的页面点进来挑工作区时（能返回）不带侧边栏。
     if (widget.onOpen == null) return page;
@@ -284,6 +290,7 @@ class _ProjectCard extends StatelessWidget {
     final c = context.colors;
     final t = Theme.of(context).textTheme;
     return Card(
+      color: BackdropScope.surface(context, c.surface), // 有背景图片时按“表面不透明度”变透（没背景时就是卡片原来的底色）
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onOpen,

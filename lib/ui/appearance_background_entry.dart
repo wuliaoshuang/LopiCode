@@ -1,12 +1,20 @@
-// 设计约束（设置 › 界面 › 外观 里“背景图”那一行的挂载点）— 2026-11-26
-// - 背景图是另一块功能。外观页在〔主题〕和〔代码字号〕之间给它留了一个位置，放什么由下面这个函数决定。
-// - **现在返回 null＝没接上，外观页里不出现这一行**（不放点了没反应的东西）。
-// - 接上的办法（合并背景图功能时只改这一行）：让它返回背景图那边的设置入口，比如
-//     Widget? buildAppearanceBackgroundEntry(BuildContext context) => SettingsGroup(title: '背景图', children: [
-//       SettingsRow(key: const Key('appearance-background'), title: '背景图', onTap: () => pushSettingsPage<void>(context, const BackdropSettingsScreen())),
-//     ]);
-//   或者直接返回背景图那边自己做好的一组控件。排在外观页的位置不用再动。
+// 设计约束（设置 › 界面 › 外观 里“背景图片”那一行）— 2026-11-26
+// - 外观页在〔主题〕和〔代码字号〕之间放这一组，只有一行：名称“背景图片”，右侧一句当前状态
+//   （未设置 / 已启用 / 已关闭），点了进背景图片设置页。具体怎么设都在那一页里，这里不放开关。
+// - 状态文字订阅 backdropStatusProvider：在设置页里改完退回来，这一行跟着变。
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lopicode/state/backdrop_state.dart';
+import 'package:lopicode/ui/backdrop_settings_screen.dart';
+import 'package:lopicode/ui/settings_widgets.dart';
 import 'package:material_ui/material_ui.dart';
 
-/// 外观页里“背景图”那一组；null＝不显示。
-Widget? buildAppearanceBackgroundEntry(BuildContext context) => null;
+/// 外观页里“背景图片”那一组。
+Widget? buildAppearanceBackgroundEntry(BuildContext context) => SettingsGroup(
+  title: '背景',
+  children: [
+    Consumer(
+      builder: (context, ref, _) =>
+          SettingsRow(key: const Key('appearance-background'), title: '背景图片', value: ref.watch(backdropStatusProvider), onTap: () => pushSettingsPage<void>(context, const BackdropSettingsScreen())),
+    ),
+  ],
+);

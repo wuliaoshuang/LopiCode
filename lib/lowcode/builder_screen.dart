@@ -27,6 +27,7 @@ import 'package:lopicode/lowcode/style_editor_sheet.dart';
 import 'package:lopicode/lowcode/style_model.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/app_backdrop.dart';
 import 'package:lopicode/ui/shell.dart';
 import 'package:lopicode/ui/top_bar.dart';
 import 'package:lopicode/ui/widgets.dart';
@@ -341,6 +342,7 @@ class _BuilderScreenState extends State<BuilderScreen> {
     final history = _history;
     final node = doc == null || _selected == null ? null : doc.find(_selected!);
     return Scaffold(
+      backgroundColor: BackdropScope.onOf(context) ? Colors.transparent : null, // 有背景图片时页面底色让开（画布自己还有底）
       extendBodyBehindAppBar: true,
       appBar: ShellAppBar(
         background: context.colors.surfaceMuted,

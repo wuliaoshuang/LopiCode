@@ -8,6 +8,7 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lopicode/backdrop/backdrop_model.dart';
 import 'package:lopicode/build/build_controller.dart';
 import 'package:lopicode/build/github_client.dart';
 import 'package:lopicode/build/remote_exec.dart';
@@ -22,6 +23,7 @@ import 'package:lopicode/ssh/ssh_connect_screen.dart';
 import 'package:lopicode/ssh/ssh_connector.dart';
 import 'package:lopicode/state/config_providers.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/app_backdrop.dart';
 import 'package:lopicode/ui/app_ref.dart';
 import 'package:lopicode/ui/shell.dart';
 import 'package:lopicode/ui/top_bar.dart';
@@ -299,88 +301,96 @@ class _BuildScreenState extends ConsumerState<BuildScreen> {
     final t = Theme.of(context).textTheme;
     final job = _job;
     final busy = job?.busy ?? false;
-    return Scaffold(
-      extendBodyBehindAppBar: true,
-      appBar: const ShellAppBar(title: 'APK 打包'),
-      body: ListView(
-        padding: EdgeInsets.fromLTRB(Space.x4, PageBar.insetOf(context) + Space.x2, Space.x4, Space.x8),
-        children: [
-          InfoBanner(
-            _ssh
-                ? '手机上跑不了 Android SDK 和 Gradle，所以不是在手机里打包：LopiCode 通过 SSH 连到你的服务器，在上面运行构建命令，再把 APK 拉回手机。'
-                : '手机上跑不了 Android SDK 和 Gradle，所以不是在手机里打包：LopiCode 把项目推到你的 GitHub 仓库，让 GitHub Actions 打包，再把 APK 下载回来。',
-          ),
-          const SizedBox(height: Space.x4),
-          SegmentedButton<bool>(
-            showSelectedIcon: false,
-            segments: const [
-              ButtonSegment(value: false, label: Text('GitHub Actions')),
-              ButtonSegment(value: true, label: Text('SSH 构建机')),
-            ],
-            selected: {_ssh},
-            onSelectionChanged: busy ? null : (s) => _setMode(s.first),
-          ),
-          const SizedBox(height: Space.x6),
-          if (_ssh)
-            ..._sshForm(context, busy)
-          else ...[
-            Text('① 仓库', style: t.titleMedium),
-            const SizedBox(height: Space.x3),
-            TextField(
-              controller: _repo,
-              enabled: !busy,
-              autocorrect: false,
-              decoration: const InputDecoration(labelText: '仓库', hintText: '用户名/仓库名'),
-            ),
-            const SizedBox(height: Space.x3),
-            TextField(
-              controller: _ref,
-              enabled: !busy,
-              autocorrect: false,
-              decoration: const InputDecoration(labelText: '分支', hintText: 'main'),
-            ),
-            const SizedBox(height: Space.x3),
-            TextField(
-              controller: _token,
-              enabled: !busy,
-              obscureText: true,
-              autocorrect: false,
-              enableSuggestions: false,
-              decoration: InputDecoration(labelText: 'GitHub Token', hintText: _hasToken ? '已保存，留空表示不改' : '粘贴 Token', helperText: '需要这个仓库的 Contents 和 Actions 读写权限；要推送工作流文件还得有 Workflows 权限。加密保存在本机。'),
-            ),
-            const SizedBox(height: Space.x6),
-            Text('② 工作流', style: t.titleMedium),
-            const SizedBox(height: Space.x3),
-            TextField(
-              controller: _workflow,
-              enabled: !busy,
-              autocorrect: false,
-              decoration: const InputDecoration(labelText: '工作流文件名', hintText: 'android.yml'),
-            ),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton.icon(onPressed: _showTemplate, icon: const Icon(Icons.description_outlined, size: 18), label: Text(_isFlutterProject ? '查看现成模板（Flutter 项目）' : '查看现成模板（网页套壳成 App）')),
+    return AppBackdrop(
+      area: BackdropArea.pages,
+      builder: (context, on) => Scaffold(
+        backgroundColor: on ? Colors.transparent : null,
+        extendBodyBehindAppBar: true,
+        appBar: const ShellAppBar(title: 'APK 打包'),
+        body: ListView(
+          padding: EdgeInsets.fromLTRB(Space.x4, PageBar.insetOf(context) + Space.x2, Space.x4, Space.x8),
+          children: [
+            InfoBanner(
+              _ssh
+                  ? '手机上跑不了 Android SDK 和 Gradle，所以不是在手机里打包：LopiCode 通过 SSH 连到你的服务器，在上面运行构建命令，再把 APK 拉回手机。'
+                  : '手机上跑不了 Android SDK 和 Gradle，所以不是在手机里打包：LopiCode 把项目推到你的 GitHub 仓库，让 GitHub Actions 打包，再把 APK 下载回来。',
             ),
             const SizedBox(height: Space.x4),
-            Text('③ 打包', style: t.titleMedium),
-            const SizedBox(height: Space.x1),
-            Row(
-              children: [
-                Expanded(child: Text('先把项目文件推送到仓库', style: t.bodyMedium)),
-                Switch(value: _pushFirst, onChanged: busy ? null : (v) => setState(() => _pushFirst = v)),
+            SegmentedButton<bool>(
+              showSelectedIcon: false,
+              segments: const [
+                ButtonSegment(value: false, label: Text('GitHub Actions')),
+                ButtonSegment(value: true, label: Text('SSH 构建机')),
               ],
+              selected: {_ssh},
+              onSelectionChanged: busy ? null : (s) => _setMode(s.first),
             ),
-            const SizedBox(height: Space.x2),
-            busy
-                ? OutlinedButton(onPressed: job!.cancel, child: const Text('停止等待'))
-                : FilledButton.icon(onPressed: _start, icon: const Icon(Icons.rocket_launch_outlined, size: 18), label: Text(job == null ? '开始打包' : '重新打包')),
-            if (job != null) ...[const SizedBox(height: Space.x4), _JobCard(job: job)],
+            const SizedBox(height: Space.x6),
+            if (_ssh)
+              ..._sshForm(context, busy)
+            else ...[
+              Text('① 仓库', style: t.titleMedium),
+              const SizedBox(height: Space.x3),
+              TextField(
+                controller: _repo,
+                enabled: !busy,
+                autocorrect: false,
+                decoration: const InputDecoration(labelText: '仓库', hintText: '用户名/仓库名'),
+              ),
+              const SizedBox(height: Space.x3),
+              TextField(
+                controller: _ref,
+                enabled: !busy,
+                autocorrect: false,
+                decoration: const InputDecoration(labelText: '分支', hintText: 'main'),
+              ),
+              const SizedBox(height: Space.x3),
+              TextField(
+                controller: _token,
+                enabled: !busy,
+                obscureText: true,
+                autocorrect: false,
+                enableSuggestions: false,
+                decoration: InputDecoration(
+                  labelText: 'GitHub Token',
+                  hintText: _hasToken ? '已保存，留空表示不改' : '粘贴 Token',
+                  helperText: '需要这个仓库的 Contents 和 Actions 读写权限；要推送工作流文件还得有 Workflows 权限。加密保存在本机。',
+                ),
+              ),
+              const SizedBox(height: Space.x6),
+              Text('② 工作流', style: t.titleMedium),
+              const SizedBox(height: Space.x3),
+              TextField(
+                controller: _workflow,
+                enabled: !busy,
+                autocorrect: false,
+                decoration: const InputDecoration(labelText: '工作流文件名', hintText: 'android.yml'),
+              ),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(onPressed: _showTemplate, icon: const Icon(Icons.description_outlined, size: 18), label: Text(_isFlutterProject ? '查看现成模板（Flutter 项目）' : '查看现成模板（网页套壳成 App）')),
+              ),
+              const SizedBox(height: Space.x4),
+              Text('③ 打包', style: t.titleMedium),
+              const SizedBox(height: Space.x1),
+              Row(
+                children: [
+                  Expanded(child: Text('先把项目文件推送到仓库', style: t.bodyMedium)),
+                  Switch(value: _pushFirst, onChanged: busy ? null : (v) => setState(() => _pushFirst = v)),
+                ],
+              ),
+              const SizedBox(height: Space.x2),
+              busy
+                  ? OutlinedButton(onPressed: job!.cancel, child: const Text('停止等待'))
+                  : FilledButton.icon(onPressed: _start, icon: const Icon(Icons.rocket_launch_outlined, size: 18), label: Text(job == null ? '开始打包' : '重新打包')),
+              if (job != null) ...[const SizedBox(height: Space.x4), _JobCard(job: job)],
+            ],
+            if (widget.session.project.template == ProjectTemplate.lowcode) ...[
+              const SizedBox(height: Space.x2),
+              Text('低代码页面会按“网页套壳”的方式打包（用导出的 index.html）。', style: t.bodySmall?.copyWith(color: c.textMuted)),
+            ],
           ],
-          if (widget.session.project.template == ProjectTemplate.lowcode) ...[
-            const SizedBox(height: Space.x2),
-            Text('低代码页面会按“网页套壳”的方式打包（用导出的 index.html）。', style: t.bodySmall?.copyWith(color: c.textMuted)),
-          ],
-        ],
+        ),
       ),
     );
   }

@@ -8,12 +8,14 @@
 import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lopicode/backdrop/backdrop_model.dart';
 import 'package:lopicode/build/build_screen.dart';
 import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/runtime/runtime_screen.dart';
 import 'package:lopicode/state/workspace_chat.dart';
 import 'package:lopicode/state/workspace_conversations.dart';
+import 'package:lopicode/ui/app_backdrop.dart';
 import 'package:lopicode/ui/app_ref.dart';
 import 'package:lopicode/ui/builder_hub_screen.dart';
 import 'package:lopicode/ui/chat_screen.dart';
@@ -139,10 +141,14 @@ class _ProjectShellState extends ConsumerState<ProjectShell> {
     ref.watch(activeChatProvider(session).select((v) => v.busy));
     Widget lazy(ShellDest d, Widget Function() build) => _visited.contains(d) ? build() : const SizedBox.shrink();
     // 文件、终端、预览的正文不是能滚的一列（页签条 + 编辑器 / 终端 / 网页）：整块摆在悬浮顶栏下沿之下，不钻到按钮下面。
-    Widget page(ShellDest d, Widget body) => Scaffold(
-      extendBodyBehindAppBar: true,
-      appBar: ShellAppBar(title: d.label),
-      body: body,
+    Widget page(ShellDest d, Widget body) => AppBackdrop(
+      area: BackdropArea.pages,
+      builder: (context, on) => Scaffold(
+        backgroundColor: on ? Colors.transparent : null,
+        extendBodyBehindAppBar: true,
+        appBar: ShellAppBar(title: d.label),
+        body: body,
+      ),
     );
     Widget build1(ShellDest d) => switch (d) {
       ShellDest.chat => ChatScreen(session: session),

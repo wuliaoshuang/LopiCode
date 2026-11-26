@@ -8,10 +8,12 @@ import 'dart:async';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lopicode/backdrop/backdrop_model.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/session/favorites.dart';
 import 'package:lopicode/state/workspace_favorites.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/app_backdrop.dart';
 import 'package:lopicode/ui/top_bar.dart';
 import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
@@ -74,30 +76,34 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
   Widget build(BuildContext context) {
     final state = ref.watch(favoritesProvider(s));
     final items = state.items;
-    return Scaffold(
-      extendBodyBehindAppBar: true,
-      appBar: const PageBar(titleText: '收藏的消息'),
-      body: !state.loaded
-          ? const SizedBox.shrink()
-          : items.isEmpty
-          ? const BelowBar(
-              child: EmptyState(icon: Icons.bookmark_border, title: '还没有收藏', message: '在聊天里点一条消息下面的“⋯”，选“收藏”，\n它就会出现在这里。'),
-            )
-          : ListView.separated(
-              padding: EdgeInsets.fromLTRB(Space.x4, PageBar.insetOf(context) + Space.x2, Space.x4, Space.x8),
-              itemCount: items.length,
-              separatorBuilder: (_, _) => const SizedBox(height: Space.x3),
-              itemBuilder: (context, i) {
-                final f = items[i];
-                return _FavoriteCard(
-                  key: ValueKey('favorite-${f.key}'),
-                  item: f,
-                  missing: s.messageOps.favoriteMissing(f),
-                  onTap: () => _open(f),
-                  onRemove: () => ref.read(favoritesProvider(s).notifier).remove(f.key),
-                );
-              },
-            ),
+    return AppBackdrop(
+      area: BackdropArea.pages,
+      builder: (context, on) => Scaffold(
+        backgroundColor: on ? Colors.transparent : null,
+        extendBodyBehindAppBar: true,
+        appBar: const PageBar(titleText: '收藏的消息'),
+        body: !state.loaded
+            ? const SizedBox.shrink()
+            : items.isEmpty
+            ? const BelowBar(
+                child: EmptyState(icon: Icons.bookmark_border, title: '还没有收藏', message: '在聊天里点一条消息下面的“⋯”，选“收藏”，\n它就会出现在这里。'),
+              )
+            : ListView.separated(
+                padding: EdgeInsets.fromLTRB(Space.x4, PageBar.insetOf(context) + Space.x2, Space.x4, Space.x8),
+                itemCount: items.length,
+                separatorBuilder: (_, _) => const SizedBox(height: Space.x3),
+                itemBuilder: (context, i) {
+                  final f = items[i];
+                  return _FavoriteCard(
+                    key: ValueKey('favorite-${f.key}'),
+                    item: f,
+                    missing: s.messageOps.favoriteMissing(f),
+                    onTap: () => _open(f),
+                    onRemove: () => ref.read(favoritesProvider(s).notifier).remove(f.key),
+                  );
+                },
+              ),
+      ),
     );
   }
 }
@@ -115,7 +121,7 @@ class _FavoriteCard extends StatelessWidget {
     final t = Theme.of(context).textTheme;
     final title = item.convTitle.isEmpty ? '未命名的对话' : item.convTitle;
     return Material(
-      color: c.surfaceMuted,
+      color: BackdropScope.surface(context, c.surfaceMuted),
       borderRadius: BorderRadius.circular(Radii.lg),
       clipBehavior: Clip.antiAlias,
       child: InkWell(

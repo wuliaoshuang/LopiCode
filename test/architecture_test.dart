@@ -36,6 +36,8 @@ const _allowedLayers = {
   // 主题的数据（纯 Dart：字段目录、内置主题、读写、对比度、存盘），不碰界面库。
   'appearance': {'core', 'appearance'},
   'theme': {'theme', 'appearance'},
+  // 背景图片的数据（设置模型、入库、裁剪换算、和主题文件对接的换算）：不碰界面库，也不引用主题那边的类型。
+  'backdrop': {'core', 'backdrop'},
   'preview': {'core', 'preview'},
   'agent': {'core', 'agent'},
   'terminal': {'core', 'terminal'},
@@ -101,7 +103,7 @@ void main() {
     expect(bad, isEmpty, reason: bad.join('\n'));
   });
 
-  test('分层：core / appearance / theme / preview / agent / terminal 只依赖允许的层', () {
+  test('分层：core / appearance / theme / backdrop / preview / agent / terminal 只依赖允许的层', () {
     final found = <String>{};
     for (final f in files) {
       final layer = f.split('/')[1];

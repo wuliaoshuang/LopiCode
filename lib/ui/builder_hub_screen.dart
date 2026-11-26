@@ -12,6 +12,7 @@ import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lopicode/agent/agent_tools.dart';
+import 'package:lopicode/backdrop/backdrop_model.dart';
 import 'package:lopicode/backend/backend_model.dart';
 import 'package:lopicode/backend/backend_project.dart';
 import 'package:lopicode/core/path_guard.dart';
@@ -21,6 +22,7 @@ import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/state/workspace_files.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/app_backdrop.dart';
 import 'package:lopicode/ui/backend_screen.dart';
 import 'package:lopicode/ui/shell.dart';
 import 'package:lopicode/ui/top_bar.dart';
@@ -112,18 +114,23 @@ class _BuilderHubScreenState extends ConsumerState<BuilderHubScreen> {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => AppBackdrop(area: BackdropArea.pages, builder: _page);
+
+  /// [on]＝这一页现在画着背景图片：各层的页面底色让开。
+  Widget _page(BuildContext context, bool on) {
     final c = context.colors;
     final backend = _backendFile;
     if (!_probed) {
-      return const Scaffold(
+      return Scaffold(
+        backgroundColor: on ? Colors.transparent : null,
         extendBodyBehindAppBar: true,
-        appBar: ShellAppBar(title: '搭建'),
-        body: Center(child: CircularProgressIndicator()),
+        appBar: const ShellAppBar(title: '搭建'),
+        body: const Center(child: CircularProgressIndicator()),
       );
     }
     if (!_hasPage && backend == null) {
       return Scaffold(
+        backgroundColor: on ? Colors.transparent : null,
         extendBodyBehindAppBar: true,
         appBar: const ShellAppBar(title: '搭建'),
         body: BelowBar(
@@ -156,7 +163,7 @@ class _BuilderHubScreenState extends ConsumerState<BuilderHubScreen> {
     final mq = MediaQuery.of(context);
     const lift = kHubSwitchHeight + Space.x2;
     return ColoredBox(
-      color: c.bg,
+      color: on ? Colors.transparent : c.bg,
       child: Stack(
         fit: StackFit.expand,
         children: [

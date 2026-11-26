@@ -12,7 +12,9 @@ const int kBackdropBlurMax = 30;
 /// 亮度：−100（全黑）到 +100（全白），0＝不动，一步 5。
 const int kBackdropBrightnessRange = 100;
 
-/// 表面（气泡、卡片、输入框）在有背景时的不透明度：40–100（%），一步 5，默认 90。
+/// 表面（气泡、卡片、输入框）在有背景时的不透明度：40–100（%），一步 5。
+/// 用户没动过滑杆时这一项是空的，用当前主题的“有背景图时卡片的不透明度”（metrics.surfaceOpacity）；
+/// 动过以后滑杆说了算。[kBackdropSurfaceDefault] 只是不知道主题时的兜底值。
 const int kBackdropSurfaceMin = 40;
 const int kBackdropSurfaceDefault = 90;
 
@@ -190,9 +192,9 @@ class BackdropSettings {
     this.code = false,
     this.blocks = false,
     this.lowcode = false,
-    this.surfaceOpacity = kBackdropSurfaceDefault,
+    int? surfaceOpacity,
     this.loaded = false,
-  });
+  }) : surfaceOverride = surfaceOpacity;
 
   /// 总开关（有图也可以先关掉，不用删图）。
   final bool enabled;
@@ -213,7 +215,18 @@ class BackdropSettings {
   final bool code;
   final bool blocks;
   final bool lowcode;
-  final int surfaceOpacity;
+
+  /// 用户用滑杆定的表面不透明度（40–100）。null＝没动过，跟随当前主题的数。
+  final int? surfaceOverride;
+
+  /// 不看主题时的值（没动过滑杆就是兜底的 [kBackdropSurfaceDefault]）。界面上要用 [surfaceAlpha]。
+  int get surfaceOpacity => surfaceOverride ?? kBackdropSurfaceDefault;
+
+  /// 表面有多不透明（0–1）：滑杆动过就用滑杆的；没动过用 [themeOpacity]（当前主题的数，0–1）。
+  double surfaceAlpha(double themeOpacity) => surfaceOverride != null ? surfaceOverride! / 100 : themeOpacity.clamp(0.0, 1.0);
+
+  /// 滑杆上该显示几（没动过时把主题的数凑到滑杆的档位上）。
+  int surfaceShown(double themeOpacity) => surfaceOverride ?? ((themeOpacity * 100 / 5).round() * 5).clamp(kBackdropSurfaceMin, 100);
 
   /// 存盘文件读完了没有（没读完之前一律当“没有背景”，免得先闪一下默认值）。
   final bool loaded;
@@ -248,6 +261,7 @@ class BackdropSettings {
     bool? blocks,
     bool? lowcode,
     int? surfaceOpacity,
+    bool surfaceFromTheme = false,
     bool? loaded,
   }) => BackdropSettings(
     enabled: enabled ?? this.enabled,
@@ -260,7 +274,7 @@ class BackdropSettings {
     code: code ?? this.code,
     blocks: blocks ?? this.blocks,
     lowcode: lowcode ?? this.lowcode,
-    surfaceOpacity: (surfaceOpacity ?? this.surfaceOpacity).clamp(kBackdropSurfaceMin, 100),
+    surfaceOpacity: surfaceFromTheme ? null : (surfaceOpacity ?? surfaceOverride)?.clamp(kBackdropSurfaceMin, 100),
     loaded: loaded ?? this.loaded,
   );
 
@@ -287,7 +301,7 @@ class BackdropSettings {
     'code': code,
     'blocks': blocks,
     'lowcode': lowcode,
-    'surfaceOpacity': surfaceOpacity,
+    'surfaceOpacity': ?surfaceOverride,
   };
 
   /// 从存盘读；每个字段类型不对就用默认值，绝不抛错。读出来的一律算“已读完”。
@@ -304,7 +318,7 @@ class BackdropSettings {
       code: _bool(j['code'], false),
       blocks: _bool(j['blocks'], false),
       lowcode: _bool(j['lowcode'], false),
-      surfaceOpacity: _int(j['surfaceOpacity'], kBackdropSurfaceDefault, kBackdropSurfaceMin, 100),
+      surfaceOpacity: j['surfaceOpacity'] is num ? _int(j['surfaceOpacity'], kBackdropSurfaceDefault, kBackdropSurfaceMin, 100) : null,
       loaded: true,
     );
   }
@@ -322,9 +336,9 @@ class BackdropSettings {
       other.code == code &&
       other.blocks == blocks &&
       other.lowcode == lowcode &&
-      other.surfaceOpacity == surfaceOpacity &&
+      other.surfaceOverride == surfaceOverride &&
       other.loaded == loaded;
 
   @override
-  int get hashCode => Object.hash(enabled, light, dark, darkSeparate, onChat, onPages, terminal, code, blocks, lowcode, surfaceOpacity, loaded);
+  int get hashCode => Object.hash(enabled, light, dark, darkSeparate, onChat, onPages, terminal, code, blocks, lowcode, surfaceOverride, loaded);
 }

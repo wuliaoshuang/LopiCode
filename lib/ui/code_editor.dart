@@ -7,9 +7,11 @@
 //   第二行（替换模式才有）只做“替换”：输入框 + 替换 + 全部。
 //   大小写 / 正则是输入框里的两个小开关，不另占一行。
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lopicode/backdrop/backdrop_model.dart';
 import 'package:lopicode/state/code_font.dart';
 import 'package:lopicode/theme/text_scale.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/app_backdrop.dart';
 import 'package:lopicode/ui/code_langs.dart';
 import 'package:lopicode/ui/code_view.dart';
 import 'package:material_ui/material_ui.dart';
@@ -46,7 +48,7 @@ class LopiCodeEditor extends ConsumerWidget {
             fontFamily: kMonoFont,
             fontFamilyFallback: kMonoFallback,
             textColor: theme.codeColor(CodeKey.fg),
-            backgroundColor: theme.codeColor(CodeKey.bg),
+            backgroundColor: BackdropScope.surface(context, theme.codeColor(CodeKey.bg), seeThrough: BackdropArea.code),
             cursorColor: theme.codeColor(CodeKey.cursor),
             cursorLineColor: theme.codeColor(CodeKey.currentLine),
             selectionColor: theme.codeColor(CodeKey.selection),

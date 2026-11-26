@@ -12,8 +12,10 @@
 //   直接点“拒绝”和以前一样，一下就完。多个问题的提问卡在 chat_question_multi.dart（一页一问）。
 // - 安全规则不在这里：哪些要确认、能不能“都允许”由传进来的请求决定，这里只管画。
 import 'package:lopicode/agent/approval_risk.dart';
+import 'package:lopicode/backdrop/backdrop_model.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/app_backdrop.dart';
 import 'package:lopicode/ui/chat_question_multi.dart';
 import 'package:lopicode/ui/chat_reject_reason.dart';
 import 'package:lopicode/ui/step_diff.dart';
@@ -160,7 +162,10 @@ class _ApprovalCardState extends State<ApprovalCard> {
         Container(
           constraints: BoxConstraints(maxHeight: isSchedule || isMcp ? 220 : 104),
           padding: const EdgeInsets.all(Space.x3),
-          decoration: BoxDecoration(color: c.codeBg, borderRadius: BorderRadius.circular(Radii.md)),
+          decoration: BoxDecoration(
+            color: BackdropScope.surface(context, c.codeBg, seeThrough: BackdropArea.code),
+            borderRadius: BorderRadius.circular(Radii.md),
+          ),
           child: SingleChildScrollView(
             child: SelectableText(
               req.tool == 'run_command' ? '\$ ${req.detail}' : req.detail,

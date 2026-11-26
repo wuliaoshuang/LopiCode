@@ -6,11 +6,13 @@
 import 'package:lopicode/backdrop/backdrop_model.dart';
 import 'package:lopicode/state/backdrop_state.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/app_backdrop.dart';
 import 'package:lopicode/ui/backdrop_controls.dart';
 import 'package:lopicode/ui/settings_widgets.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// 自选遮罩颜色的候选（黑、白，加几种压得住图的深色和柔和的浅色）。
+/// 这是“给用户挑的固定色表”，选哪个存进背景设置，不是界面配色，所以不从主题取（theme_guard_test 的说明里记了这一条）。
 const List<int> kBackdropMaskSwatches = [0xFF000000, 0xFFFFFFFF, 0xFF1B2A4A, 0xFF2B1B3D, 0xFF12302A, 0xFF3A1420, 0xFFF6EAD8, 0xFFE6EEFB];
 
 /// 显示：总开关、适配方式、平铺时一格多大。
@@ -74,7 +76,7 @@ class BackdropEffectGroup extends StatelessWidget {
   final bool dark;
   final BackdropNotifier notifier;
 
-  bool get _isDefault => look.maskFollowsTheme && look.maskOpacity == kBackdropMaskDefault && look.blur == 0 && look.brightness == 0 && settings.surfaceOpacity == kBackdropSurfaceDefault;
+  bool get _isDefault => look.maskFollowsTheme && look.maskOpacity == kBackdropMaskDefault && look.blur == 0 && look.brightness == 0 && settings.surfaceOverride == null;
 
   @override
   Widget build(BuildContext context) {
@@ -114,7 +116,7 @@ class BackdropEffectGroup extends StatelessWidget {
     );
     return SettingsGroup(
       title: '效果',
-      footer: '遮罩越深字越清楚、图越淡。表面指气泡、卡片和输入框：越低越透。',
+      footer: '遮罩越深字越清楚、图越淡。表面指气泡、卡片和输入框：越低越透；没动过这根滑杆时用当前主题定的值，“恢复默认效果”会回到跟随主题。',
       children: [
         BackdropValueRow(
           id: 'bg-mask',
@@ -149,9 +151,9 @@ class BackdropEffectGroup extends StatelessWidget {
                   children: [
                     swatch(
                       key: const Key('bg-mask-theme'),
-                      color: c.bg,
+                      color: backdropMaskBase(context),
                       selected: look.maskFollowsTheme,
-                      tip: '跟随主题底色',
+                      tip: '跟随主题（用主题里“背景图上的遮罩”的颜色）',
                       icon: Icons.auto_awesome_outlined,
                       onTap: () => look_((l) => l.copyWith(maskFollowsTheme: true), true),
                     ),
@@ -192,7 +194,7 @@ class BackdropEffectGroup extends StatelessWidget {
         BackdropValueRow(
           id: 'bg-surface',
           title: '表面不透明度',
-          value: settings.surfaceOpacity,
+          value: settings.surfaceShown(context.themeSpec.metric(MetricKey.surfaceOpacity)),
           min: kBackdropSurfaceMin,
           max: 100,
           step: 5,
@@ -213,7 +215,7 @@ class BackdropEffectGroup extends StatelessWidget {
                         change: (l) => l.copyWith(maskFollowsTheme: true, maskOpacity: kBackdropMaskDefault, blur: 0, brightness: 0),
                         persist: false,
                       );
-                      notifier.update((s) => s.copyWith(surfaceOpacity: kBackdropSurfaceDefault));
+                      notifier.update((s) => s.copyWith(surfaceFromTheme: true));
                     },
               child: const Text('恢复默认效果'),
             ),

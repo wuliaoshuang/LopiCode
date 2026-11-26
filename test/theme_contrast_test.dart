@@ -93,8 +93,8 @@ void main() {
 
     test('已知例外只属于两套默认主题（默认外观不能动，所以只登记不改）', () {
       expect(kKnownContrastGaps.keys.toSet(), {kDefaultLightThemeId, kDefaultDarkThemeId});
-      expect(kKnownContrastGaps[kDefaultLightThemeId]!.length, 31);
-      expect(kKnownContrastGaps[kDefaultDarkThemeId]!.length, 5);
+      expect(kKnownContrastGaps[kDefaultLightThemeId]!.length, 32); // 31 + 终端“当前命中”的底与字（2026-11-26 加进检查清单）
+      expect(kKnownContrastGaps[kDefaultDarkThemeId]!.length, 6); // 5 + 终端“当前命中”的底与字
     });
 
     test('默认主题里最要紧的几对是达标的', () {

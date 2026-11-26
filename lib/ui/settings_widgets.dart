@@ -9,7 +9,9 @@
 // - 图标 22，放在 24 宽的格子里，和名称相隔 12；行间细线从名称的起点画到右边 16，图标下面不画线。
 // - 名称 16 / 400；副标题 12 弱色，最多两行；右侧当前值 14 弱色，最多占行宽的一半，超出省略。
 // 颜色：图标和名称用正文色，副标题 / 值 / 箭头用弱色；强调色只留给开关和选中态；红色只给危险行。
+import 'package:lopicode/backdrop/backdrop_model.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/app_backdrop.dart';
 import 'package:lopicode/ui/chrome.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -38,16 +40,19 @@ class SettingsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    return Scaffold(
-      backgroundColor: c.canvas,
-      extendBodyBehindAppBar: true,
-      appBar: PageBar(background: c.canvas, titleText: title, subtitle: subtitle, actions: actions),
-      floatingActionButton: floatingActionButton,
-      // 不用懒加载的 ListView：设置页都不长，一次排完，滚出屏幕的输入框不会被拆掉重建，底部的“保存”也一直在。
-      body: SingleChildScrollView(
-        key: listKey,
-        padding: EdgeInsets.fromLTRB(Space.x4, PageBar.insetOf(context) + Space.x2, Space.x4, bottom),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: children),
+    return AppBackdrop(
+      area: BackdropArea.pages,
+      builder: (context, on) => Scaffold(
+        backgroundColor: on ? Colors.transparent : c.canvas,
+        extendBodyBehindAppBar: true,
+        appBar: PageBar(background: c.canvas, titleText: title, subtitle: subtitle, actions: actions),
+        floatingActionButton: floatingActionButton,
+        // 不用懒加载的 ListView：设置页都不长，一次排完，滚出屏幕的输入框不会被拆掉重建，底部的“保存”也一直在。
+        body: SingleChildScrollView(
+          key: listKey,
+          padding: EdgeInsets.fromLTRB(Space.x4, PageBar.insetOf(context) + Space.x2, Space.x4, bottom),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: children),
+        ),
       ),
     );
   }

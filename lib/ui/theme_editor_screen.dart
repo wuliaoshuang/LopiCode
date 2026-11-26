@@ -17,9 +17,11 @@ import 'package:lopicode/appearance/theme_edit_model.dart';
 import 'package:lopicode/appearance/theme_fields.dart';
 import 'package:lopicode/appearance/theme_generate.dart';
 import 'package:lopicode/appearance/theme_spec.dart';
+import 'package:lopicode/backdrop/backdrop_model.dart';
 import 'package:lopicode/state/theme_hooks.dart';
 import 'package:lopicode/state/themes_state.dart';
 import 'package:lopicode/theme/tokens.dart' hide ThemeSpec;
+import 'package:lopicode/ui/app_backdrop.dart';
 import 'package:lopicode/ui/keyboard_tap_dismiss.dart';
 import 'package:lopicode/ui/theme_color_sheet.dart';
 import 'package:lopicode/ui/theme_editor_rows.dart';
@@ -348,140 +350,143 @@ class _ThemeEditorScreenState extends ConsumerState<ThemeEditorScreen> {
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) _askLeave();
       },
-      child: Scaffold(
-        backgroundColor: c.bg,
-        extendBodyBehindAppBar: true,
-        appBar: PageBar(
-          background: c.bg,
-          titleText: _spec.name,
-          subtitle: _readOnly ? '内置 · 只读' : (_spec.dark ? '深色主题' : '浅色主题'),
-          actions: [
-            // 顶栏会把这一页的操作装进一个胶囊，里面放普通的图标按钮（不要再套一层圆按钮：两个圆会叠在一起）。
-            IconButton(key: const Key('theme-undo'), icon: const Icon(Icons.undo), tooltip: '撤销', onPressed: _h.canUndo ? () => setState(() => _h = _h.undo()) : null),
-            IconButton(key: const Key('theme-redo'), icon: const Icon(Icons.redo), tooltip: '重做', onPressed: _h.canRedo ? () => setState(() => _h = _h.redo()) : null),
-            if (!_readOnly)
-              PopupMenuButton<String>(
-                key: const Key('theme-editor-more'),
-                tooltip: '更多',
-                icon: const Icon(Icons.more_horiz),
-                onSelected: (v) => switch (v) {
-                  'rename' => _rename(),
-                  'accent' => _generate(full: false),
-                  'generate' => _generate(full: true),
-                  _ => _resetAll(),
-                },
-                itemBuilder: (_) => const [
-                  PopupMenuItem(value: 'rename', child: Text('改名')),
-                  PopupMenuItem(value: 'accent', child: Text('换强调色')),
-                  PopupMenuItem(value: 'generate', child: Text('从主色生成整套')),
-                  PopupMenuItem(value: 'reset', child: Text('全部恢复为起点')),
-                ],
-              ),
-          ],
-        ),
-        bottomNavigationBar: _h.dirty && !_readOnly && !typing
-            ? SafeArea(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(Space.x4, Space.x2, Space.x4, Space.x2),
-                  child: FilledButton(key: const Key('theme-save'), onPressed: _saving ? null : _save, child: Text('保存（改了 ${changed.length} 项）')),
+      child: AppBackdrop(
+        area: BackdropArea.pages,
+        builder: (context, on) => Scaffold(
+          backgroundColor: on ? Colors.transparent : c.bg,
+          extendBodyBehindAppBar: true,
+          appBar: PageBar(
+            background: c.bg,
+            titleText: _spec.name,
+            subtitle: _readOnly ? '内置 · 只读' : (_spec.dark ? '深色主题' : '浅色主题'),
+            actions: [
+              // 顶栏会把这一页的操作装进一个胶囊，里面放普通的图标按钮（不要再套一层圆按钮：两个圆会叠在一起）。
+              IconButton(key: const Key('theme-undo'), icon: const Icon(Icons.undo), tooltip: '撤销', onPressed: _h.canUndo ? () => setState(() => _h = _h.undo()) : null),
+              IconButton(key: const Key('theme-redo'), icon: const Icon(Icons.redo), tooltip: '重做', onPressed: _h.canRedo ? () => setState(() => _h = _h.redo()) : null),
+              if (!_readOnly)
+                PopupMenuButton<String>(
+                  key: const Key('theme-editor-more'),
+                  tooltip: '更多',
+                  icon: const Icon(Icons.more_horiz),
+                  onSelected: (v) => switch (v) {
+                    'rename' => _rename(),
+                    'accent' => _generate(full: false),
+                    'generate' => _generate(full: true),
+                    _ => _resetAll(),
+                  },
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(value: 'rename', child: Text('改名')),
+                    PopupMenuItem(value: 'accent', child: Text('换强调色')),
+                    PopupMenuItem(value: 'generate', child: Text('从主色生成整套')),
+                    PopupMenuItem(value: 'reset', child: Text('全部恢复为起点')),
+                  ],
                 ),
-              )
-            : null,
-        body: BelowBar(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (!typing) ...[
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: Space.x4),
-                  child: ThemePreview(spec: _spec, kind: _kind),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(Space.x4, Space.x2, Space.x4, 0),
-                  child: SegmentedButton<ThemePreviewKind>(
-                    key: const Key('theme-preview-kind'),
-                    showSelectedIcon: false,
-                    style: const ButtonStyle(visualDensity: VisualDensity.compact),
-                    segments: [for (final k in ThemePreviewKind.values) ButtonSegment(value: k, label: Text(k.label))],
-                    selected: {_kind},
-                    onSelectionChanged: (s) => setState(() => _kind = s.first),
+            ],
+          ),
+          bottomNavigationBar: _h.dirty && !_readOnly && !typing
+              ? SafeArea(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(Space.x4, Space.x2, Space.x4, Space.x2),
+                    child: FilledButton(key: const Key('theme-save'), onPressed: _saving ? null : _save, child: Text('保存（改了 ${changed.length} 项）')),
                   ),
-                ),
-              ],
-              if (_readOnly)
+                )
+              : null,
+          body: BelowBar(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (!typing) ...[
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: Space.x4),
+                    child: ThemePreview(spec: _spec, kind: _kind),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(Space.x4, Space.x2, Space.x4, 0),
+                    child: SegmentedButton<ThemePreviewKind>(
+                      key: const Key('theme-preview-kind'),
+                      showSelectedIcon: false,
+                      style: const ButtonStyle(visualDensity: VisualDensity.compact),
+                      segments: [for (final k in ThemePreviewKind.values) ButtonSegment(value: k, label: Text(k.label))],
+                      selected: {_kind},
+                      onSelectionChanged: (s) => setState(() => _kind = s.first),
+                    ),
+                  ),
+                ],
+                if (_readOnly)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(Space.x4, Space.x2, Space.x2, 0),
+                    child: Row(
+                      key: const Key('theme-readonly-banner'),
+                      children: [
+                        Icon(Icons.lock_outline, size: 16, color: c.textMuted),
+                        const SizedBox(width: Space.x2),
+                        Expanded(
+                          child: Text('内置主题只能看，不能改。', style: t.bodySmall?.copyWith(color: c.textMuted)),
+                        ),
+                        TextButton(key: const Key('theme-copy-to-edit'), onPressed: _copyToEdit, child: const Text('复制一份来改')),
+                      ],
+                    ),
+                  ),
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(Space.x4, Space.x2, Space.x2, 0),
+                  padding: const EdgeInsets.fromLTRB(Space.x4, Space.x2, Space.x4, Space.x2),
                   child: Row(
-                    key: const Key('theme-readonly-banner'),
                     children: [
-                      Icon(Icons.lock_outline, size: 16, color: c.textMuted),
-                      const SizedBox(width: Space.x2),
                       Expanded(
-                        child: Text('内置主题只能看，不能改。', style: t.bodySmall?.copyWith(color: c.textMuted)),
+                        child: TextField(
+                          key: const Key('theme-search'),
+                          controller: _search,
+                          textInputAction: TextInputAction.search,
+                          decoration: InputDecoration(
+                            isDense: true,
+                            hintText: '按名字找一项，比如“按钮”“注释”',
+                            prefixIcon: const Icon(Icons.search, size: 20),
+                            suffixIcon: _search.text.isEmpty
+                                ? null
+                                : KeyboardKeep(
+                                    child: IconButton(key: const Key('theme-search-clear'), icon: const Icon(Icons.close, size: 18), tooltip: '清空', onPressed: () => setState(_search.clear)),
+                                  ),
+                          ),
+                          onChanged: (_) => setState(() {}),
+                        ),
                       ),
-                      TextButton(key: const Key('theme-copy-to-edit'), onPressed: _copyToEdit, child: const Text('复制一份来改')),
+                      const SizedBox(width: Space.x2),
+                      KeyboardKeep(
+                        child: FilterChip(
+                          key: const Key('theme-only-changed'),
+                          label: Text(changed.isEmpty ? '改过的' : '改过的 ${changed.length}'),
+                          selected: _onlyChanged,
+                          showCheckmark: false,
+                          onSelected: (v) => setState(() => _onlyChanged = v),
+                        ),
+                      ),
                     ],
                   ),
                 ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(Space.x4, Space.x2, Space.x4, Space.x2),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        key: const Key('theme-search'),
-                        controller: _search,
-                        textInputAction: TextInputAction.search,
-                        decoration: InputDecoration(
-                          isDense: true,
-                          hintText: '按名字找一项，比如“按钮”“注释”',
-                          prefixIcon: const Icon(Icons.search, size: 20),
-                          suffixIcon: _search.text.isEmpty
-                              ? null
-                              : KeyboardKeep(
-                                  child: IconButton(key: const Key('theme-search-clear'), icon: const Icon(Icons.close, size: 18), tooltip: '清空', onPressed: () => setState(_search.clear)),
-                                ),
-                        ),
-                        onChanged: (_) => setState(() {}),
-                      ),
-                    ),
-                    const SizedBox(width: Space.x2),
-                    KeyboardKeep(
-                      child: FilterChip(
-                        key: const Key('theme-only-changed'),
-                        label: Text(changed.isEmpty ? '改过的' : '改过的 ${changed.length}'),
-                        selected: _onlyChanged,
-                        showCheckmark: false,
-                        onSelected: (v) => setState(() => _onlyChanged = v),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (issues.isNotEmpty && !typing) ThemeContrastBanner(count: issues.length, onTap: () => _showIssues(issues)),
-              Expanded(
-                child: entries.isEmpty
-                    ? Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(Space.x6),
-                          child: Text(
-                            _onlyChanged && _search.text.trim().isEmpty ? '还没有改过任何一项。' : '没有找到对得上的项。换个词试试，或者关掉“改过的”。',
-                            key: const Key('theme-empty'),
-                            textAlign: TextAlign.center,
-                            style: t.bodyMedium?.copyWith(color: c.textMuted),
+                if (issues.isNotEmpty && !typing) ThemeContrastBanner(count: issues.length, onTap: () => _showIssues(issues)),
+                Expanded(
+                  child: entries.isEmpty
+                      ? Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(Space.x6),
+                            child: Text(
+                              _onlyChanged && _search.text.trim().isEmpty ? '还没有改过任何一项。' : '没有找到对得上的项。换个词试试，或者关掉“改过的”。',
+                              key: const Key('theme-empty'),
+                              textAlign: TextAlign.center,
+                              style: t.bodyMedium?.copyWith(color: c.textMuted),
+                            ),
                           ),
+                        )
+                      : ListView.builder(
+                          key: const Key('theme-editor-list'),
+                          controller: _scroll,
+                          padding: const EdgeInsets.only(bottom: Space.x6),
+                          itemExtent: kThemeRowHeight,
+                          itemCount: entries.length,
+                          itemBuilder: (context, i) => row(entries[i]),
                         ),
-                      )
-                    : ListView.builder(
-                        key: const Key('theme-editor-list'),
-                        controller: _scroll,
-                        padding: const EdgeInsets.only(bottom: Space.x6),
-                        itemExtent: kThemeRowHeight,
-                        itemCount: entries.length,
-                        itemBuilder: (context, i) => row(entries[i]),
-                      ),
-              ),
-            ],
+                ),
+              ],
+            ),
           ),
         ),
       ),

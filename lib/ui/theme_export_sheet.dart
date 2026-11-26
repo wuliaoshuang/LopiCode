@@ -103,7 +103,7 @@ class _ThemeExportSheetState extends ConsumerState<ThemeExportSheet> {
     _noteBad = bad;
   });
 
-  Future<void> _toggleImage(bool on, ThemeBackgroundBridge bridge) async {
+  Future<void> _toggleImage(bool on, ThemeBackgroundBridge bridge, {required bool dark}) async {
     if (!on) {
       return setState(() {
         _withImage = false;
@@ -114,7 +114,7 @@ class _ThemeExportSheetState extends ConsumerState<ThemeExportSheet> {
     setState(() => _busy = true);
     ThemeBackgroundExport got;
     try {
-      got = await bridge.export();
+      got = await bridge.export(dark: dark);
     } on Exception catch (e) {
       got = ThemeBackgroundExport(error: '背景图取不出来：$e');
     }
@@ -164,7 +164,9 @@ class _ThemeExportSheetState extends ConsumerState<ThemeExportSheet> {
     final c = context.colors;
     final t = Theme.of(context).textTheme;
     final bridge = ref.watch(themeBackgroundBridgeProvider);
-    final canImage = bridge != null && bridge.hasImage();
+    // 主题文件只带一张图：带现在这个外观（浅色 / 深色）正在用的那一张
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final canImage = bridge != null && bridge.hasImage(dark: dark);
     Widget row(String id, IconData icon, String title, String subtitle, VoidCallback onTap) =>
         ListTile(key: Key('theme-export-$id'), enabled: !_busy, leading: Icon(icon), title: Text(title), subtitle: Text(subtitle), onTap: onTap);
     return SafeArea(
@@ -190,9 +192,9 @@ class _ThemeExportSheetState extends ConsumerState<ThemeExportSheet> {
               SwitchListTile(
                 key: const Key('theme-export-with-image'),
                 title: const Text('附带背景图'),
-                subtitle: const Text('把现在的背景图一起放进去，文件会大很多'),
+                subtitle: Text('主题文件只能带一张图：带的是现在${dark ? '深色' : '浅色'}外观正在用的那一张。文件会大很多'),
                 value: _withImage,
-                onChanged: _busy ? null : (v) => _toggleImage(v, bridge),
+                onChanged: _busy ? null : (v) => _toggleImage(v, bridge, dark: dark),
               ),
             row('copy', Icons.content_copy_outlined, '复制到剪贴板', '粘贴到聊天软件里发给别人', _copy),
             row('save', Icons.save_alt, '存成文件', '存到工作区的 exports/ 里，在“文件”页能看到', _save),

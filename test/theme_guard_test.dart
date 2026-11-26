@@ -28,6 +28,10 @@ final _alwaysOk = [
   RegExp(r'Colors\.transparent\b'),
 ];
 
+// 另有一处不在这条守门的查找范围里、但同样是“写死的颜色值”，在这里记一笔免得以后被当成漏网的：
+// lib/ui/backdrop_settings_groups.dart 的 kBackdropMaskSwatches——背景图片遮罩的 8 个固定可选色（整数表）。
+// 它是“给用户挑的色表”，挑中的值存进背景设置，跟主题无关；“跟随主题”那一格才用主题的颜色。
+
 /// 逐条登记的例外：`文件` ⇒ {`这一行里包含的片段`: 原因}。
 const _exceptions = <String, Map<String, String>>{
   'lib/blocks/block_colors.dart': {
@@ -56,6 +60,7 @@ const _exceptions = <String, Map<String, String>>{
     'color: const Color(0xFFFFFFFF),': '取色器的滑块圆点：要在任何颜色的条上都看得见',
     'const CheckerPainter(Color(0xFFFFFFFF), Color(0xFFCFD2D6))': '颜色小方块底下的透明棋盘格',
   },
+  'lib/ui/app_backdrop.dart': {'final base = look.brightness < 0 ? const Color(0xFF000000) : const Color(0xFFFFFFFF);': '背景图片的“亮度”：往纯黑 / 纯白里混是这一项本身的含义（算法里的参照），不是界面配色'},
   'lib/ui/preview_tab.dart': {'color: Colors.white,': '网页预览的底：网页没写背景时浏览器就是白的，跟应用主题无关'},
 };
 
