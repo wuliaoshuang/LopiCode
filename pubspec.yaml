@@ -41,6 +41,9 @@ dependencies:
   path: ^1.9.1
   path_provider: ^2.1.6
   webview_flutter: ^4.14.1
+  # 消息里的 HTML 预览要关掉网页视图的“读本机文件 / 读内容”，这两个开关只有安卓这一层有。
+  # 它本来就是 webview_flutter 带进来的（版本没变），这里只是点名直接用。
+  webview_flutter_android: ^4.14.1
   archive: ^3.6.1
   xterm: ^4.0.0
   flutter_pty: ^0.4.2
@@ -54,6 +57,7 @@ dependencies:
   flutter_riverpod: ^3.5.0
   riverpod: ^3.5.0
   speech_to_text: 7.5.0
+  markdown: ^7.3.1
 
 dev_dependencies:
   flutter_test:

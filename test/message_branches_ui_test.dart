@@ -11,6 +11,7 @@ import 'package:lopicode/session/message_branches.dart';
 import 'package:lopicode/ui/chat_panels.dart';
 import 'package:lopicode/ui/keyboard_tap_dismiss.dart';
 import 'package:lopicode/ui/message_action_bar.dart';
+import 'package:lopicode/ui/message_text.dart';
 import 'package:lopicode/ui/project_shell.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -164,7 +165,7 @@ void main() {
       }
     }
 
-    Finder bubble(String text) => find.byWidgetPredicate((w) => w is SelectableText && w.data == text);
+    Finder bubble(String text) => find.byWidgetPredicate((w) => w is MessageText && w.text == text);
     Finder bar(String id) => find.byKey(ValueKey('message-actions-$id'));
     Finder icon(String kind, String id) => find.byKey(ValueKey('message-$kind-$id'));
     Finder more(String kind) => find.byKey(ValueKey('more-$kind'));

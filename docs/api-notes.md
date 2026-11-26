@@ -541,3 +541,30 @@ PHP 估计 7.4+（PHP 那份代码从没运行过）。下面选的版本都够�
 | `workflow_dispatch` 的 `inputs` 可以是 `type: boolean`；接口里传字符串 `"true"` / `"false"` | 没有单独核对 | 没核对 |
 
 没有对真实的 GitHub 发过任何请求（测试用假的 HTTP 层）；`deploy.yml` 六份模板（五种语言＋其它）没有在真实的 Actions 上跑过，只在开发机上检查过 YAML 能解析。SSH 那一路没有连过真实主机。
+
+## 消息里的 Markdown / HTML 渲染（2026-11-26）
+
+**`markdown` 包**（Dart 官方，pub.dev，BSD-3-Clause，纯 Dart）：版本 7.3.1。只用它的解析器（`Document.parse` / `parseInline` 拿语法树），不用它的 HTML 输出。
+下面几条是 2026-11-26 直接读包的源码（`~/.pub-cache` 里的 7.3.1）核对的：
+
+| 事实 | 来源 | 状态 | 我们怎么用 |
+|---|---|---|---|
+| `Document(withDefaultBlockSyntaxes: false, blockSyntaxes: […])` 可以只挑要的块语法；默认那一组里有“下一行 === 变标题”（`SetextHeaderSyntax`）、“缩进 4 格是代码”（`CodeBlockSyntax`）、原始 HTML 块（`HtmlBlockSyntax`） | 包源码 `lib/src/block_parser.dart`、`document.dart` | 已核对（读源码） | 这三样不要，其余照 GitHub 那一组（表格、任务列表、围栏） |
+| 自己加的行内语法排在内置的前面先试 | `lib/src/inline_parser.dart` 构造函数 | 已核对（读源码） | 整个 HTML 标签先被我们的规则吃掉，标签属性里的网址、星号不会被当成 Markdown |
+| 表格单元格的对齐写在 `th` / `td` 的 `align` 属性里；任务项是 `li` 里一个 `input`（`checked` 属性）；有序列表起始号在 `ol` 的 `start` | `block_syntaxes/table_syntax.dart`、`list_syntax.dart` | 已核对（读源码＋测试） | 转成我们自己的节点 |
+| 很长的一串不断开的字母数字（10 万字）会让行内解析慢到跑不完 | 自己测出来的（`test/md_parse_test.dart` 第一次跑卡死） | 实测 | 一块里有超过 2000 个连着的字母数字就不交给它，按纯文字显示；消息里的 `data:image/…;base64,…` 先换成短记号再解析 |
+
+**网页视图（HTML 预览）**：
+
+| 事实 | 来源 | 状态 | 我们怎么用 |
+|---|---|---|---|
+| `WebSettings.setAllowFileAccess`：开关 WebView 里读 `file://`；targetSdk ≥ 30 默认关、≤ 29 默认开，官方建议明确设成 false | developer.android.com 的 WebSettings 参考页 https://developer.android.com/reference/kotlin/android/webkit/WebSettings （2026-11-26 看的搜索摘录） | 摘录 | 预览视图里明确关掉 |
+| `WebSettings.setAllowContentAccess`：开关 WebView 里读 `content://`（内容提供者），**默认开** | 同上 | 摘录 | 预览视图里关掉 |
+| 这两个开关在 Flutter 这边只有安卓那一层有：`AndroidWebViewController.setAllowFileAccess` / `setAllowContentAccess`；另有 `setGeolocationEnabled`、`setMediaPlaybackRequiresUserGesture`、`setOnShowFileSelector`、`setOnPlatformPermissionRequest` | `webview_flutter_android` 4.14.1 源码 `lib/src/android_webview_controller.dart` | 已核对（读源码） | 所以 pubspec 里点名了 `webview_flutter_android`（原本就由 `webview_flutter` 带进来，版本没变） |
+| `WebViewController.loadHtmlString(html)` 在安卓上是 `loadDataWithBaseUrl(null, html, 'text/html', …)` | 同上源码 | 已核对（读源码） | 不传基准地址，页面不属于应用的任何地址 |
+| 不传基准地址时页面地址是 `about:blank`、没有自己的存储 | — | **未核对**（没翻到官方原文；真机也没验证） | 跳转拦截里只放行 `about:blank`。即使实际不是这个地址，也只是更严（都拦） |
+| `<meta http-equiv="Content-Security-Policy">` 可以给一份文档加内容安全策略；`default-src` 是其余取资源指令的后备；`'none'` 表示完全不许；多条策略只会越加越严，后加的放不宽先前的 | MDN https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Security-Policy （2026-11-26 看的搜索摘录） | 摘录 | 我们的那条放在文档最前面；页面自己再写也放不宽 |
+| meta 写法的策略从解析到这个标签起生效；`sandbox`、`frame-ancestors`、`report-uri` 在 meta 里无效 | 非官方文章摘录（jsonmind.com 的 CSP 指南），MDN 原文没逐字核对 | **未核对** | 所以放在最前面；不依赖 `sandbox` |
+| 系统 WebView 是否完整执行这条策略（拦外部图片 / 脚本 / fetch） | — | **没在真机验证** | 测试里只能证明“交给视图的文档开头带着这条策略” |
+
+自己定的数值见各文件开头：解析上限 20 万字、缓存 200 万字、代码块 30 行折叠、流式不上色 2 万字、单词串 2000、图片（网络 5MB / 15 秒 / 3 次跳转、本机 20MB、data: 2MB、内存缓存 24MB、最高 320）、表格一格最宽 240、预览高 120–360、同时 2 个预览、HTML 嵌套 12 层、解析嵌套 6 层。
