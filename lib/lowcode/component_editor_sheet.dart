@@ -137,15 +137,23 @@ class _ComponentEditorState extends State<_ComponentEditor> with LcMultiSelectHo
     unawaited(tellComponentProblem(context, error));
   }
 
-  void _restore(LcDocument? doc) {
+  /// 撤销 / 重做。写不回去（比如撤销会让一个已经有人填了内容的插槽消失）就退回这一步，两边保持一致，并说明原因。
+  void _restore({required bool undo}) {
+    final before = _temp.encode();
+    final doc = undo ? _history.undo() : _history.redo();
     if (doc == null) return;
+    lcLinkInstances(doc);
+    _temp = doc;
+    final error = _writeBack();
+    if (error != null) {
+      _temp = LcDocument.parse(before);
+      undo ? _history.redo() : _history.undo();
+      unawaited(tellComponentProblem(context, error));
+    }
     setState(() {
-      _temp = doc;
-      if (_selected != null && doc.find(_selected!) == null) _selected = null;
+      if (_selected != null && _temp.find(_selected!) == null) _selected = null;
       multiSync();
     });
-    final error = _writeBack();
-    if (error != null) unawaited(tellComponentProblem(context, error));
   }
 
   // 点画布空白处选中的是垫在下面的那张页面：它不是组件的一部分，当作“什么都没选”。
@@ -157,7 +165,7 @@ class _ComponentEditorState extends State<_ComponentEditor> with LcMultiSelectHo
     return node;
   }
 
-  static const _noDialog = '弹窗是整页的东西，不能放进组件里。请回到页面上加弹窗。';
+  static const _noDialog = kNoDialogInComponent;
 
   String? _addByTap(String type, [String? ref]) {
     final top = _top;
@@ -386,8 +394,8 @@ class _ComponentEditorState extends State<_ComponentEditor> with LcMultiSelectHo
           onResize: _resize,
           recents: widget.recents,
           onLayers: () => unawaited(_openLayers()),
-          onUndo: _history.canUndo ? () => _restore(_history.undo()) : null,
-          onRedo: _history.canRedo ? () => _restore(_history.redo()) : null,
+          onUndo: _history.canUndo ? () => _restore(undo: true) : null,
+          onRedo: _history.canRedo ? () => _restore(undo: false) : null,
           presetWidth: _presetWidth,
           showBoxModel: _showBoxModel,
           selectionBar: multiOn ? multiBar() : (node == null ? null : _selectionBar(context, node)),
@@ -408,8 +416,14 @@ class _ComponentEditorState extends State<_ComponentEditor> with LcMultiSelectHo
               if (parent != null && parent.id != kComponentEditRootId) _select(parent.id);
             },
       actions: [
-        EditorSelectionBar.primary('常用', () => _bench.currentState?.openInspector(InspectorPage.common)),
-        EditorSelectionBar.outlined('样式', () => _bench.currentState?.openInspector(InspectorPage.style)),
+        // 插槽没有样子可改：两个按钮换成它自己的两件事。
+        if (node.type == 'slot') ...[
+          EditorSelectionBar.primary('改名', () => _nodeAction('slotRename', node.id)),
+          EditorSelectionBar.outlined('取消插槽', () => _nodeAction('slotUnwrap', node.id)),
+        ] else ...[
+          EditorSelectionBar.primary('常用', () => _bench.currentState?.openInspector(InspectorPage.common)),
+          EditorSelectionBar.outlined('样式', () => _bench.currentState?.openInspector(InspectorPage.style)),
+        ],
         // 最外层不能移动、复制、删除（组件只能有一个最外层）：剪贴板里有东西时只有“粘贴到里面”。
         if (!isTop)
           LcNodeMoreButton(node: node, componentActions: false, slotActions: true, onAction: (v) => _nodeAction(v, node.id))

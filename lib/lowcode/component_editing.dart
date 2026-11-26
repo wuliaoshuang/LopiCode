@@ -50,11 +50,17 @@ LcDocument? componentEditingDocument(LcDocument doc, String componentId) {
 /// - 重名的占位节点（复制、粘贴出来的）先在 [editing] 里换成新名字；
 /// - 同一个占位节点的插槽名变了：已有实例里填的内容跟着改名；
 /// - 一个插槽没了、而有实例在里面填着东西：不让改，返回原因（“取消插槽”那条路会先把内容挪出来，不走到这儿）。
+const String kNoDialogInComponent = '弹窗是整页的东西，不能放进组件里。请回到页面上加弹窗。';
+
 LcOpResult applyComponentEditing(LcDocument doc, String componentId, LcDocument editing) {
   final def = doc.component(componentId);
   if (def == null) return const LcOpResult.fail('这个组件已经不存在了');
   if (editing.root.children.length != 1) return const LcOpResult.fail('组件最外层只能有一个控件');
   if (editing.root.children.single.type == 'slot') return const LcOpResult.fail('组件最外层不能是插槽。让最外层是一个容器，再把它的内容设成插槽。');
+  // 弹窗是整页的东西：不管从哪条路进来的（点、拖、粘贴），组件里都不能有。
+  var hasDialog = false;
+  _walk(editing.root, (n) => hasDialog = hasDialog || n.type == 'dialog');
+  if (hasDialog) return const LcOpResult.fail(kNoDialogInComponent);
   dedupeSlots(editing.root.children.single);
   final root = copyLcTree(editing.root.children.single);
   var cycle = false;

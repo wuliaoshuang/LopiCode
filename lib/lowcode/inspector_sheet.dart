@@ -392,6 +392,7 @@ class InspectorPanelState extends State<InspectorPanel> {
           },
           onPick: (s) => setState(() => _pickState(s)),
           onClear: () => _apply((n, _) => lcReplaceState(n, state!, const {})),
+          caveat: lcStateCaveat(preview.type, state),
         ),
       ),
       InspectorPage.events => InspectorEventsPage(

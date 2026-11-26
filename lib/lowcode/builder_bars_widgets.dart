@@ -55,19 +55,30 @@ List<PopupMenuEntry<String>> lcNodeMenuItems(
   bool slotActions = false,
 }) {
   final canPaste = lcClipboardHasContent && (componentActions || !lcClipboardHasInstances);
-  final slotItems = <PopupMenuEntry<String>>[
-    if (slotActions && node.type == 'slot') ...const [PopupMenuItem(value: 'slotRename', child: Text('改插槽名')), PopupMenuItem(value: 'slotUnwrap', child: Text('取消插槽')), PopupMenuDivider()],
-    if (slotActions && kSlotHostTypes.contains(node.type) && slotInside(node) == null) ...const [PopupMenuItem(value: 'slot', child: Text('把内容设成插槽')), PopupMenuDivider()],
-  ];
-  if (fixed) return [...slotItems, PopupMenuItem(value: 'pasteInto', enabled: canPaste, child: Text(node.type == 'page' ? '粘贴到页面里' : '粘贴到里面'))];
+  final canSlot = slotActions && kSlotHostTypes.contains(node.type) && slotInside(node) == null;
+  const makeSlot = PopupMenuItem(value: 'slot', child: Text('把内容设成插槽'));
+  if (fixed) return [if (canSlot) makeSlot, PopupMenuItem(value: 'pasteInto', enabled: canPaste, child: Text(node.type == 'page' ? '粘贴到页面里' : '粘贴到里面'))];
+  // 插槽占位：只有它自己的几件事（改名、取消、挪位置、删）。复制、包成容器对一个空位没有意义，菜单也短得一屏放得下。
+  if (slotActions && node.type == 'slot') {
+    return [
+      const PopupMenuItem(value: 'slotRename', child: Text('改插槽名')),
+      const PopupMenuItem(value: 'slotUnwrap', child: Text('取消插槽')),
+      if (withMove) ...const [PopupMenuDivider(), PopupMenuItem(value: 'up', child: Text('上移')), PopupMenuItem(value: 'down', child: Text('下移'))],
+      const PopupMenuDivider(),
+      PopupMenuItem(
+        value: 'delete',
+        child: Text('删除', style: TextStyle(color: context.colors.danger)),
+      ),
+    ];
+  }
   return [
-    ...slotItems,
     const PopupMenuItem(value: 'clip', child: Text('复制')),
     PopupMenuItem(value: 'paste', enabled: canPaste, child: const Text('粘贴到它后面')),
     const PopupMenuItem(value: 'dup', child: Text('重复一份')),
     if (multi) const PopupMenuItem(value: 'multi', child: Text('多选')),
     const PopupMenuDivider(),
     const PopupMenuItem(value: 'wrap', child: Text('包成容器')),
+    if (canSlot) makeSlot,
     if (componentActions && node.type == 'component') ...const [PopupMenuItem(value: 'edit', child: Text('编辑组件')), PopupMenuItem(value: 'detach', child: Text('拆开成普通控件'))] else if (componentActions)
       const PopupMenuItem(value: 'save', child: Text('存成组件')),
     if (withMove) ...const [PopupMenuDivider(), PopupMenuItem(value: 'up', child: Text('上移')), PopupMenuItem(value: 'down', child: Text('下移'))],

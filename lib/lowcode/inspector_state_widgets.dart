@@ -3,13 +3,17 @@
 // - 唯一主操作：没有。选中的药丸用浅强调底 + 强调色字；写过东西的状态药丸右上角一个小圆点（不选它也看得出“这个状态设过”）。
 // - 选了“平时”以外的：下面多一行小字说清楚“现在改的只记成这个状态下和平时不一样的地方”，右边“清掉”（这个状态写过东西才有）。
 //   这一行用强调色的浅底，时刻提醒她现在改的不是平时的样子。
+// - 选了“禁用”、可这种组件不能禁用（文本、容器…）：提示条下面再加一句灰字，说清楚设了不生效、哪些组件能禁用。
 // - 取用的 tokens：Space.x1/x2/x3、Radii.sm、accent、accentSoft、surfaceMuted、text、textMuted。
 import 'package:lopicode/lowcode/states.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:material_ui/material_ui.dart';
 
 class LcStateBar extends StatelessWidget {
-  const LcStateBar({super.key, required this.state, required this.filled, required this.onPick, required this.onClear});
+  const LcStateBar({super.key, required this.state, required this.filled, required this.onPick, required this.onClear, this.caveat});
+
+  /// 这个状态在这种组件上不生效时的一句说明（灰字，写在提示条下面）。
+  final String? caveat;
 
   /// 现在改的是哪个状态；null＝平时。
   final String? state;
@@ -94,6 +98,15 @@ class LcStateBar extends StatelessWidget {
             ),
           ),
         ],
+        if (caveat != null)
+          Padding(
+            padding: const EdgeInsets.only(top: Space.x2),
+            child: Text(
+              caveat!,
+              key: const Key('lc-state-caveat'),
+              style: t.bodySmall?.copyWith(color: c.textMuted),
+            ),
+          ),
         const SizedBox(height: Space.x3),
       ],
     );

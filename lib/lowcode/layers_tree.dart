@@ -2,6 +2,7 @@
 library;
 
 import 'package:lopicode/lowcode/model.dart';
+import 'package:lopicode/lowcode/slots.dart';
 
 /// 图层面板里的一行。
 class LayerRow {
@@ -38,6 +39,18 @@ String layerHint(LcNode n) {
   final text = n.strProp('text') ?? n.strProp('placeholder') ?? '';
   if (n.name.isEmpty) return text;
   return text.isEmpty ? n.spec.label : '${n.spec.label} · $text';
+}
+
+/// 这一行放在带插槽的组件里时，说它在哪个插槽：“在「底部按钮」里”。它上一层不带插槽就是空的。
+/// 自定义组件已经没有插槽了、它还留在里面：说“没地方放（这个组件没有插槽了）”——画布上看不到它，只有这里找得到。
+String layerSlotNote(LcDocument doc, LcNode n) {
+  final parent = doc.parentOf(n.id);
+  if (parent == null) return '';
+  final slots = lcSlotsOf(parent);
+  if (slots.isEmpty) return parent.type == 'component' ? '没地方放（这个组件没有插槽了）' : '';
+  final name = n.slot ?? lcFallbackSlot(parent);
+  final slot = slots.where((s) => s.name == name).firstOrNull;
+  return slot == null ? '没地方放（没有这个插槽了）' : '在「${slot.label}」里';
 }
 
 /// 搜索：名字、类型名、上面的字里有 [query]（不分大小写）的行，顺序不变。

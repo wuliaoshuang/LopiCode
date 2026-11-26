@@ -23,7 +23,6 @@ import 'package:lopicode/lowcode/editor_drag.dart';
 import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/lowcode/palette_widgets.dart';
 import 'package:lopicode/lowcode/slots.dart';
-import 'package:lopicode/lowcode/style_resolve.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/app_backdrop.dart';
 import 'package:material_ui/material_ui.dart';
@@ -294,17 +293,12 @@ class CanvasViewState extends State<CanvasView> with SingleTickerProviderStateMi
     final parent = doc.parentOf(node.id);
     final parentBox = parent == null ? null : _keys[parent.id]?.currentContext?.findRenderObject();
     final base = parentBox is RenderBox && parentBox.hasSize ? parentBox.size.width : _pageSize.width;
-    final style = resolvedStyle(node, parent);
-    final scale = CssScale(pageWidth: _pageSize.width, pageHeight: _pageSize.height);
-    final font = scale.withFont(cssSizePx(style['font-size'], scale) ?? 16);
-    _selection.value = CanvasSelection(
-      nodeId: node.id,
-      rect: rect,
-      margin: cssEdges(style, 'margin', font, percentOf: base),
-      border: cssBorderWidths(style, font),
-      padding: cssEdges(style, 'padding', font, percentOf: base),
-      isRoot: parent == null || node.locked,
-    );
+    // 旁边别的组件占的地方：尺寸标签放到框外面时避开它们
+    final avoid = [
+      for (final id in _keys.keys)
+        if (_rectOf(id, pageBox) case final box? when sizeLabelAvoids(doc, node.id, rect, id, box)) box,
+    ];
+    _selection.value = CanvasSelection.of(node, parent, rect, base: base, page: _pageSize, avoid: avoid);
   }
 
   /// 一个组件此刻在屏幕上占的那一块（屏幕坐标）；量不到是 null。

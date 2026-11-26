@@ -488,10 +488,18 @@ void main() {
     expect(node('k1'), findsOneWidget);
     expect(node('k2'), findsOneWidget);
 
-    // 最外层：不能删、不能移动（没有“更多操作”）。
+    // 最外层：不能删、不能移动。“更多操作”里只有一项“把内容设成插槽”（第 3 期第 3 段加的），没有删除、移动、复制。
     await select(tester, 'k1');
     expect(find.text('卡片（最外层）'), findsOneWidget);
-    expect(find.byTooltip('更多操作'), findsNothing);
+    await tester.tap(find.byTooltip('更多操作'));
+    await tester.pumpAndSettle();
+    expect(find.byType(PopupMenuItem<String>), findsNWidgets(2), reason: '设成插槽、粘贴到里面（灰的）');
+    expect(find.text('把内容设成插槽'), findsOneWidget);
+    for (final gone in ['删除', '上移', '下移', '复制', '重复一份']) {
+      expect(find.text(gone), findsNothing, reason: gone);
+    }
+    await tester.tapAt(const Offset(195, 60));
+    await tester.pumpAndSettle();
     // 选中最外层（容器）时点组件盒里的“文本”：加进它里面。
     await paletteAdd(tester, 'text');
     await settle(tester, rounds: 2);

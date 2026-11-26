@@ -418,6 +418,13 @@ class _InspectorCommonPageState extends State<InspectorCommonPage> {
     if (only != null) {
       return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [for (final f in only) ?_more(f)]);
     }
+    if (n.type == 'slot') {
+      return Text(
+        '插槽只是一个空位，自己没有样子可改。要改排法、间距，选它外面那个容器；要改名或取消，用选中条上的按钮。',
+        key: const Key('lc-slot-common-note'),
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(color: c.textMuted),
+      );
+    }
     final (rows, used) = _rows();
     final more = [
       for (final f in n.spec.fields)

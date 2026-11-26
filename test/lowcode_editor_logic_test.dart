@@ -412,6 +412,56 @@ void main() {
       expect(at.dy, greaterThanOrEqualTo(rect.bottom));
     });
 
+    // 第 3 期第 3 段：看图发现标签盖住了旁边的组件（网格里跨两列的格子下面那一格、小按钮上面那行字）。
+    Rect box(Offset at, String text) => at & Size(text.length * 7.0 + 12, 19);
+
+    test('上方有别的组件：换到下方；上下都有：换到左右；都不盖住旁边的', () {
+      const rect = Rect.fromLTWH(16, 116, 64, 48);
+      const t = '64 × 48';
+      const up = Rect.fromLTWH(16, 84, 20, 24), down = Rect.fromLTWH(16, 180, 64, 40);
+      expect(box(sizeLabelOrigin(rect, visible, 1, t, avoid: const [up]), t).overlaps(up), isFalse);
+      final both = box(sizeLabelOrigin(rect, visible, 1, t, avoid: const [up, down]), t);
+      expect(both.overlaps(up) || both.overlaps(down) || both.overlaps(rect), isFalse);
+      // 截图里那两种：网格里“第 1 格”跨两列，下面是“第 3 格”“第 4 格”，右边是“第 2 格”
+      const cell = Rect.fromLTWH(16, 80, 236, 24);
+      const others = [Rect.fromLTWH(260, 80, 114, 24), Rect.fromLTWH(16, 112, 114, 24), Rect.fromLTWH(138, 112, 114, 24)];
+      final at = box(sizeLabelOrigin(cell, visible, 1, '236 × 24', avoid: others), '236 × 24');
+      expect(others.any(at.overlaps) || at.overlaps(cell), isFalse, reason: '$at');
+      // 这一格贴着屏幕顶（上方露不出来）、下面右边都有格子：收进框里面的右头，不盖别的格子，也不盖左边的字
+      const top = Rect.fromLTWH(16, 4, 236, 24);
+      final crowded = [for (final r in others) r.shift(const Offset(0, -76))];
+      final inside = box(sizeLabelOrigin(top, visible, 1, '236 × 24', avoid: crowded), '236 × 24');
+      expect(crowded.any(inside.overlaps), isFalse, reason: '$inside');
+      expect(inside.left, greaterThan(top.center.dx));
+      expect(inside.right, lessThanOrEqualTo(top.right));
+      expect(at.top >= visible.top && at.bottom <= visible.bottom && at.left >= visible.left && at.right <= visible.right, isTrue);
+    });
+
+    test('四周挤满了：用盖得最少的那个位置，照样整个露在看得见的地方', () {
+      const rect = Rect.fromLTWH(160, 300, 64, 30);
+      final crowd = [
+        for (var x = 0.0; x < 390; x += 40)
+          for (var y = 200.0; y < 420; y += 22) Rect.fromLTWH(x, y, 38, 20),
+      ];
+      final at = box(sizeLabelOrigin(rect, visible, 1, '64 × 30', avoid: crowd), '64 × 30');
+      expect(at.overlaps(rect), isFalse);
+      expect(visible.contains(at.topLeft) && visible.contains(at.bottomRight), isTrue);
+    });
+
+    test('哪些要避：自己、包着自己的容器、里面有东西的容器不避；旁边的叶子组件避', () {
+      final doc = LcDocument.starter('x');
+      final col = doc.newNode('column'), a = doc.newNode('text'), b = doc.newNode('text');
+      doc.insert(doc.root.id, col);
+      doc.insert(col.id, a);
+      doc.insert(col.id, b);
+      const ra = Rect.fromLTWH(0, 0, 100, 20), rb = Rect.fromLTWH(0, 24, 100, 20), rc = Rect.fromLTWH(0, 0, 100, 44);
+      expect(sizeLabelAvoids(doc, a.id, ra, a.id, ra), isFalse);
+      expect(sizeLabelAvoids(doc, a.id, ra, col.id, rc), isFalse);
+      expect(sizeLabelAvoids(doc, a.id, ra, b.id, rb), isTrue);
+      expect(sizeLabelAvoids(doc, a.id, ra, 'inst__k5', rb), isTrue, reason: '自定义组件里面画出来的东西也算');
+      expect(sizeLabelAvoids(doc, a.id, ra, '${col.id}#left', rb), isFalse);
+    });
+
     test('贴着屏幕边：整个标签都在看得见的那一块里', () {
       for (final rect in const [Rect.fromLTWH(-200, 100, 230, 20), Rect.fromLTWH(380, 690, 300, 300), Rect.fromLTWH(0, 650, 30, 500)]) {
         for (final scale in [0.5, 1.0, 2.0]) {

@@ -264,7 +264,8 @@ class _LayerSheetState extends State<LayerSheet> {
     final active = multi == null ? node.id == _selected : multi.contains(node.id);
     final searching = _search.text.trim().isNotEmpty;
     final depth = searching ? 0 : r.depth;
-    final hint = layerHint(node);
+    final where = layerSlotNote(widget.doc(), node), what = layerHint(node);
+    final hint = where.isEmpty || what.isEmpty ? '$where$what' : '$where · $what';
     final canEdit = widget.onEdit != null && multi == null;
     final movable = widget.onMove != null && r.depth > 0 && !searching && multi == null && _renaming == null;
     final row = InkWell(

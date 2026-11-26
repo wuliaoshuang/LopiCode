@@ -4,19 +4,42 @@
 //   能按的范围往组件外侧偏 14px：伸进组件里面的只有 8px，尽量不盖住组件本身（还要能点它、长按拖它）。
 // - 组件太小时只留四个角的拖柄：边上的要这条边够长（屏幕上 ≥ 60px：两个角各伸进来 8，中间还放得下 44）才放。
 // - 尺寸标签（“160 × 48”）放在选中框里面的右下角，不挡框外面别的组件；框不够宽裕（不到两个标签宽、三个标签高）就放到框的上方（上方没地方放下方）。
-//   不管放哪都收在屏幕看得见的那一块里面，不会被屏幕边切掉。
+//   放到框外面时要避开旁边的组件：上方靠右 → 下方靠右 → 上方靠左 → 下方靠左 → 右边 → 左边，挨个试，第一个不盖住别的组件的就用；
+//   都会盖住（周围挤满了）：框够宽就收进框里面的右头（字一般靠左），不够宽用盖得最少的那个。不管放哪都收在屏幕看得见的那一块里面，不会被屏幕边切掉。
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:lopicode/lowcode/canvas_css.dart';
+import 'package:lopicode/lowcode/model.dart';
+import 'package:lopicode/lowcode/style_resolve.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// 选中的那个组件在页面里的位置和间距（都是页面坐标，没乘缩放）。
 @immutable
 class CanvasSelection {
-  const CanvasSelection({required this.nodeId, required this.rect, required this.margin, required this.border, required this.padding, required this.isRoot});
+  const CanvasSelection({required this.nodeId, required this.rect, required this.margin, required this.border, required this.padding, required this.isRoot, this.avoid = const []});
+
+  /// 量好位置以后算出选中层要的东西。[base]＝百分比间距按多宽算（父容器的宽），[page]＝页面多大。
+  factory CanvasSelection.of(LcNode node, LcNode? parent, Rect rect, {required double base, required Size page, List<Rect> avoid = const []}) {
+    final style = resolvedStyle(node, parent);
+    final scale = CssScale(pageWidth: page.width, pageHeight: page.height);
+    final font = scale.withFont(cssSizePx(style['font-size'], scale) ?? 16);
+    return CanvasSelection(
+      nodeId: node.id,
+      rect: rect,
+      margin: cssEdges(style, 'margin', font, percentOf: base),
+      border: cssBorderWidths(style, font),
+      padding: cssEdges(style, 'padding', font, percentOf: base),
+      isRoot: parent == null || node.locked,
+      avoid: avoid,
+    );
+  }
   final String nodeId;
+
+  /// 旁边别的组件占的地方（页面坐标）：尺寸标签放到框外面时避开它们。
+  final List<Rect> avoid;
 
   /// 边框盒。
   final Rect rect;
@@ -29,10 +52,17 @@ class CanvasSelection {
 
   @override
   bool operator ==(Object other) =>
-      other is CanvasSelection && other.nodeId == nodeId && other.rect == rect && other.margin == margin && other.border == border && other.padding == padding && other.isRoot == isRoot;
+      other is CanvasSelection &&
+      other.nodeId == nodeId &&
+      other.rect == rect &&
+      other.margin == margin &&
+      other.border == border &&
+      other.padding == padding &&
+      other.isRoot == isRoot &&
+      listEquals(other.avoid, avoid);
 
   @override
-  int get hashCode => Object.hash(nodeId, rect, margin, border, padding, isRoot);
+  int get hashCode => Object.hash(nodeId, rect, margin, border, padding, isRoot, Object.hashAll(avoid));
 }
 
 /// 八个拖柄：名字 → 在哪一侧（-1 左 / 上，0 中，1 右 / 下）。角上的排在后面，叠在边上的上面。
@@ -87,7 +117,7 @@ class CanvasSelectionOverlay extends StatelessWidget {
     final k = 1 / scale;
     final screenW = rect.width * scale, screenH = rect.height * scale;
     final text = '${rect.width.round()} × ${rect.height.round()}';
-    final at = sizeLabelOrigin(rect, visible, scale, text);
+    final at = sizeLabelOrigin(rect, visible, scale, text, avoid: selection.avoid);
     return Stack(
       clipBehavior: Clip.none,
       children: [
@@ -160,27 +190,52 @@ class CanvasSelectionOverlay extends StatelessWidget {
   }
 }
 
+/// 尺寸标签要不要避开 [id] 这个组件占的那一块（[box]，页面坐标）：选中的自己、包着选中框的（它的各层容器）、
+/// 里面还有东西的容器（让它里面的各自算）不用避；别的都避。
+bool sizeLabelAvoids(LcDocument doc, String selectedId, Rect selected, String id, Rect box) {
+  if (id == selectedId || id.contains('#')) return false;
+  if (doc.find(id)?.children.isNotEmpty ?? false) return false;
+  final both = box.expandToInclude(selected);
+  return both != box && both != selected; // 谁也不包着谁
+}
+
 /// 尺寸标签的左上角放哪（页面坐标）。[rect]＝选中框，[visible]＝屏幕上看得见的那一块，都是页面坐标。
-Offset sizeLabelOrigin(Rect rect, Rect visible, double scale, String text) {
+/// [avoid]＝旁边别的组件占的地方：标签放到框外面时尽量不盖住它们。
+Offset sizeLabelOrigin(Rect rect, Rect visible, double scale, String text, {List<Rect> avoid = const []}) {
   final k = 1 / scale;
   final w = _labelWidth(text) * k, h = _labelHeight * k, gap = 6 * k;
-  double left, top;
+  Offset clamp(double left, double top) => Offset(math.max(visible.left, math.min(left, visible.right - w)), math.max(visible.top, math.min(top, visible.bottom - h)));
   // “放得下”要宽裕：框至少有两个标签宽、三个标签高。刚好塞得进的小组件（一个按钮、一行标题）放进去会把它的字盖住
   // （第 2 期出截图时看到 88×48 的按钮上的字被标签挡了）。
-  if (rect.width >= w * 2 + gap * 2 && rect.height >= h * 3 + gap * 2) {
-    // 放得下：框里面的右下角
-    left = rect.right - gap - w;
-    top = rect.bottom - gap - h;
-  } else {
-    // 放不下：框的上方靠右；上方露不出来就放下方
-    left = rect.right - w;
-    top = rect.top - gap - h;
-    if (top < visible.top) top = rect.bottom + gap;
+  if (rect.width >= w * 2 + gap * 2 && rect.height >= h * 3 + gap * 2) return clamp(rect.right - gap - w, rect.bottom - gap - h); // 框里面的右下角
+  // 放不下：框外面。挨个试，第一个整个露得出来、又不盖住别的组件的就用。
+  final above = rect.top - gap - h, below = rect.bottom + gap, mid = rect.center.dy - h / 2;
+  final spots = [Offset(rect.right - w, above), Offset(rect.right - w, below), Offset(rect.left, above), Offset(rect.left, below), Offset(rect.right + gap, mid), Offset(rect.left - gap - w, mid)];
+  double covered(Offset at) {
+    final box = (at & Size(w, h)).deflate(0.5 * k);
+    var area = 0.0;
+    for (final r in [...avoid, rect]) {
+      final hit = box.intersect(r);
+      if (hit.width > 0 && hit.height > 0) area += hit.width * hit.height;
+    }
+    return area;
   }
-  // 收进看得见的那一块（那一块比标签还小就贴它的左上）
-  left = math.max(visible.left, math.min(left, visible.right - w));
-  top = math.max(visible.top, math.min(top, visible.bottom - h));
-  return Offset(left, top);
+
+  if (avoid.isNotEmpty) {
+    Offset? best;
+    var least = double.infinity;
+    for (final spot in spots) {
+      if (clamp(spot.dx, spot.dy) != spot) continue; // 露不全的不算
+      final c = covered(spot);
+      if (c == 0) return spot;
+      if (c < least) (best, least) = (spot, c);
+    }
+    // 四周都有东西：框够宽（放得下两个标签）就收进框里面的右头——字一般靠左，右头多半是空的；不够宽才用盖得最少的那个。
+    if (rect.width >= w * 2 + gap * 2) return clamp(rect.right - gap - w, rect.center.dy - h / 2);
+    if (best != null) return best;
+  }
+  // 旁边没东西要避（或者哪儿都露不全）：框的上方靠右；上方露不出来就放下方
+  return clamp(rect.right - w, above < visible.top ? below : above);
 }
 
 class _SelectionPainter extends CustomPainter {
