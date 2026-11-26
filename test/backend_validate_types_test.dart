@@ -5,7 +5,6 @@ import 'package:lopicode/backend/backend_model.dart';
 import 'package:lopicode/backend/backend_templates.dart';
 import 'package:lopicode/backend/backend_validate.dart';
 import 'package:lopicode/lang/rules.dart';
-import 'package:lopicode/lowcode/logic_validate.dart';
 
 import 'support/backend_conformance.dart';
 import 'support/backend_func_blocks.dart';
