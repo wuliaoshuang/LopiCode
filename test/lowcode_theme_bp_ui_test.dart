@@ -164,6 +164,36 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('“常用”页的预设档：展开后最下面一排变量牌，点了就用上；再点普通的一档就回到普通值', (tester) async {
+    final session = await lbOpen(tester, doc: themeBpSample(), selected: 'cardB');
+    await lbOpenCommon(tester);
+    await lbTapShown(tester, lbKey('lc-preset-radius-more'));
+    await lbShow(tester, lbKey('lc-var-radius-radius-md'));
+    expect(lbKey('lc-var-radius-color-primary'), findsNothing, reason: '圆角只列圆角变量');
+    await shot(tester, 'var-04-preset-open');
+    await lbTap(tester, lbKey('lc-var-radius-radius-md'));
+    await tester.pump(const Duration(milliseconds: 600));
+    await tester.pumpAndSettle();
+    var n = (await lbSaved(tester, session)).find('cardB')!;
+    expect(n.style['border-top-left-radius'], 'var(--radius-md)');
+    expect(n.style['border-bottom-right-radius'], 'var(--radius-md)');
+    // 展开着的时候行首只写现在是什么；收起来以后行首是变量牌。
+    expect(find.descendant(of: lbKey('lc-preset-radius-now'), matching: find.text('中圆角')), findsOneWidget);
+    await lbTapShown(tester, lbKey('lc-preset-radius-more'));
+    await lbShow(tester, lbKey('lc-preset-radius-var'));
+    expect(lbKey('lc-preset-radius-var'), findsOneWidget, reason: '行首是变量牌');
+    await shot(tester, 'var-05-preset-used');
+
+    await lbTapShown(tester, lbKey('lc-preset-radius-6'));
+    await tester.pump(const Duration(milliseconds: 600));
+    await tester.pumpAndSettle();
+    n = (await lbSaved(tester, session)).find('cardB')!;
+    expect(n.style.keys.where((k) => k.contains('radius')), isEmpty, reason: '变量那几条去掉了');
+    expect(n.props['radius'], 6, reason: '回到简写属性');
+    expect(lbKey('lc-preset-radius-var'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('主题变量页：改值所有用到的地方跟着变；改代码里的名字扫所有页面和组件；删除换成现在的值；都能撤销', (tester) async {
     final session = await lbOpen(tester, doc: themeBpSample());
     expect(lbCanvas(tester).env.vars['color-primary'], '#058654');
