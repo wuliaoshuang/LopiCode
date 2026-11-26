@@ -353,5 +353,6 @@ mixin LangFuncGen on LangCore {
     LNativeDecl() => '宿主函数的声明',
     LFuncDecl() => '函数',
     LVarDecl() => '变量',
+    LTypeDecl() => '类型的声明',
   };
 }

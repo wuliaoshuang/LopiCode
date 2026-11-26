@@ -169,6 +169,15 @@ class BlockOption {
   final String hint;
 }
 
+/// 一条问题上能直接点的修法（“一键修”）：按钮上的字，和点了以后做什么。
+class BlockIssueAction {
+  const BlockIssueAction(this.label, this.run);
+  final String label;
+
+  /// 去改（宿主自己记撤销）；改成了返回 true。
+  final bool Function() run;
+}
+
 /// 一条校验结果。
 class BlockIssue {
   const BlockIssue({
@@ -183,6 +192,8 @@ class BlockIssue {
     this.fix = '',
     this.group = '',
     this.spot = '',
+    this.isHint = false,
+    this.actions = const [],
   });
 
   /// 完整的一句话（在哪 + 什么问题）。
@@ -217,6 +228,12 @@ class BlockIssue {
 
   /// 组里的哪一处（“第 2 块（…）”）；帽子本身的问题为空。
   final String spot;
+
+  /// 只是提醒（不是错、也不算警告：比如“里面放什么还看不出来，先当成任意”）。是提醒时 [isError] 一定是 false。
+  final bool isHint;
+
+  /// 能直接点的修法；没有是空的。
+  final List<BlockIssueAction> actions;
 
   /// 给人看的原因：有 [problem] 用它，没有用整句。
   String get reason => problem.isEmpty ? message : problem;
@@ -453,6 +470,12 @@ abstract class BlockHost {
 
   /// 不再显示这个宿主了：有“停手后再查”的定时器就取消。默认什么都不做。可覆盖。
   void stopIssueTimer() {}
+
+  /// 选中这块积木（空路径＝帽子）时多显示的一行类型，比如 `总和：整数`；没有可说的返回 null。默认没有。可覆盖。
+  String? typeLineOf(String scriptId, LcBlockPath path) => null;
+
+  /// 这块积木上的类型能不能改（能就在那一行后面出“标类型”）。默认不能。可覆盖。
+  bool typeEditableAt(String scriptId, LcBlockPath path) => false;
 
   /// “看代码”面板里的字，和它是什么语言（标题用，例如 JavaScript / Python）。
   String get codeText;

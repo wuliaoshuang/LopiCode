@@ -29,6 +29,7 @@ import 'package:lopicode/blocks/block_palette_parts_view.dart';
 import 'package:lopicode/blocks/block_palette_view.dart';
 import 'package:lopicode/blocks/block_panels_sheet.dart';
 import 'package:lopicode/blocks/block_script_view.dart';
+import 'package:lopicode/blocks/block_type_line_view.dart';
 import 'package:lopicode/lowcode/logic_blocks.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/shell.dart';
@@ -55,6 +56,7 @@ class BlockEditorView extends StatefulWidget {
     this.extraActions = const [],
     this.focusScriptId,
     this.menuExtra,
+    this.onEditTypes,
     this.onHostChanged,
     this.paletteHeight = 248,
     this.dockMemoryKey,
@@ -73,6 +75,9 @@ class BlockEditorView extends StatefulWidget {
 
   /// 某种参数的下拉菜单要不要多一项；不要返回 null。
   final BlockMenuExtra? Function(LcArgSpec arg)? menuExtra;
+
+  /// 选中的积木上点了“标类型”（宿主说这块能标时才有这个按钮）。不给就没有按钮。
+  final void Function(BlockSelection selection)? onEditTypes;
 
   /// 宿主的内容变了（改动、撤销）以后顺带通知外壳一声（比如顶栏上的数量要跟着变）。
   final VoidCallback? onHostChanged;
@@ -379,59 +384,72 @@ class BlockEditorViewState extends State<BlockEditorView> with TickerProviderSta
   }
 
   Widget _selectionBar(BuildContext context) {
-    final c = context.colors;
     final sel = selection!;
     final mine = [
       for (final i in issues)
         if (i.scriptId == sel.scriptId && i.path.length == sel.path.length && [for (var k = 0; k < i.path.length; k++) i.path[k] == sel.path[k]].every((x) => x)) i,
     ];
     final issue = mine.isEmpty ? null : mine.firstWhere((i) => i.isError, orElse: () => mine.first);
-    return Align(
-      alignment: Alignment.topRight,
-      child: _pill(
-        context,
-        children: [
-          if (issue != null)
-            Flexible(
-              child: Padding(
-                padding: const EdgeInsets.only(left: 14, right: 4),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.error_rounded, size: 16, color: issue.isError ? c.danger : c.warning),
-                    const SizedBox(width: 6),
-                    Flexible(
-                      child: Text(
-                        issue.message,
-                        key: const ValueKey('bk-selection-issue'),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(color: c.text),
-                      ),
+    final typeLine = host.typeLineOf(sel.scriptId, sel.path);
+    final edit = widget.onEditTypes;
+    final bar = _actionsPill(context, sel, issue);
+    if (typeLine == null) return Align(alignment: Alignment.topRight, child: bar);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        bar,
+        const SizedBox(height: 6),
+        BkTypeLine(text: typeLine, onEdit: edit != null && host.typeEditableAt(sel.scriptId, sel.path) ? () => edit(sel) : null),
+      ],
+    );
+  }
+
+  Widget _actionsPill(BuildContext context, BlockSelection sel, BlockIssue? issue) {
+    final c = context.colors;
+    return _pill(
+      context,
+      children: [
+        if (issue != null)
+          Flexible(
+            child: Padding(
+              padding: const EdgeInsets.only(left: 14, right: 4),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(issue.isHint ? Icons.info_rounded : Icons.error_rounded, size: 16, color: issue.isError ? c.danger : (issue.isHint ? c.textMuted : c.warning)),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      issue.message,
+                      key: const ValueKey('bk-selection-issue'),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(color: c.text),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
-          if (sel.path.isNotEmpty)
-            IconButton(
-              key: const ValueKey('bk-action-duplicate'),
-              tooltip: '复制一块',
-              onPressed: duplicateSelection,
-              icon: const Icon(Icons.copy_rounded, size: 20),
-              color: c.text,
-              constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-            ),
+          ),
+        if (sel.path.isNotEmpty)
           IconButton(
-            key: const ValueKey('bk-action-delete'),
-            tooltip: sel.path.isEmpty ? '删掉这一串' : '删除',
-            onPressed: deleteSelection,
-            icon: const Icon(Icons.delete_outline_rounded, size: 20),
-            color: c.danger,
+            key: const ValueKey('bk-action-duplicate'),
+            tooltip: '复制一块',
+            onPressed: duplicateSelection,
+            icon: const Icon(Icons.copy_rounded, size: 20),
+            color: c.text,
             constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
           ),
-        ],
-      ),
+        IconButton(
+          key: const ValueKey('bk-action-delete'),
+          tooltip: sel.path.isEmpty ? '删掉这一串' : '删除',
+          onPressed: deleteSelection,
+          icon: const Icon(Icons.delete_outline_rounded, size: 20),
+          color: c.danger,
+          constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+        ),
+      ],
     );
   }
 }

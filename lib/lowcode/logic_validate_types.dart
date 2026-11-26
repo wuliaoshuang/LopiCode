@@ -9,8 +9,10 @@
 /// - 说不准类型的（没声明类型的值、请求里读来的东西）一律不报。
 library;
 
+import 'package:lopicode/lang/types.dart';
 import 'package:lopicode/lowcode/logic_blocks.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
+import 'package:lopicode/lowcode/logic_type_bridge.dart';
 
 /// 报一个问题。`arg`＝积木的哪个参数，`exprPath`＝参数里的哪个位置（和积木编辑器的槽位路径是同一种写法）。
 typedef LcValueReport = void Function(LcIssueLevel level, String code, String problem, {required String arg, required List<Object> exprPath, String? fix});
@@ -100,7 +102,8 @@ class LcValueChecker {
     }
     if (op == '==' || op == '!=') {
       final lt = typeOf(l), rt = typeOf(r);
-      if (lt != LcType.any && rt != LcType.any && lt != rt && (lt == LcType.boolean || rt == LcType.boolean)) {
+      final a = lcToLType(lt), b = lcToLType(rt);
+      if (a.clashesWith(b) && (a == LType.boolean || b == LType.boolean)) {
         report(LcIssueLevel.warning, 'badType', '比较的两边一个是${_typeName(lt)}、一个是${_typeName(rt)}，会先都变成文字再比，多半${op == '==' ? '永远不相等' : '永远不一样'}', arg: arg, exprPath: xp, fix: '把两边换成同一种类型的值再比。');
       }
     }
@@ -108,17 +111,19 @@ class LcValueChecker {
 
   void _fit(String want, Map<dynamic, dynamic> value, String kind, String arg, List<Object> xp) {
     final got = typeOf(value);
-    if (want == LcType.number) {
+    // 判断用语言核心的类型来做（和 T 开头的规则同一套）；G10 的三条判断、规则号、文案都不变。
+    final wantT = lcToLType(want), gotT = lcToLType(got);
+    if (wantT == LType.number) {
       if (kind == 'text') {
         final v = exprString(value, 'v') ?? '';
         final n = num.tryParse(v.trim());
         if (n == null || !n.isFinite) {
           report(LcIssueLevel.error, 'badType', '这里要数字，填的是文字“${_clip(v)}”，运行时会当成 0', arg: arg, exprPath: xp, fix: '长按这一格，换成“数字”再填。');
         }
-      } else if (got == LcType.boolean) {
+      } else if (gotT == LType.boolean) {
         report(LcIssueLevel.warning, 'badType', '这里要数字，放的是“是 / 否”，会被硬转成数字，多半不是你想要的', arg: arg, exprPath: xp, fix: '长按这个值，换成数字或数字类型的变量。');
       }
-    } else if (want == LcType.boolean && (got == LcType.number || got == LcType.text)) {
+    } else if (wantT == LType.boolean && gotT.clashesWith(wantT)) {
       final literal = kind == 'num' || kind == 'text';
       report(
         LcIssueLevel.warning,

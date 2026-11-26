@@ -311,13 +311,13 @@ BeProgram lowerBackend(BeDocument doc) {
 
 const Map<String, String> _binFns = {'+': 'add', '-': 'sub', '*': 'mul', '/': 'div', '%': 'mod', '==': 'eq', '!=': 'ne', '<': 'lt', '<=': 'le', '>': 'gt', '>=': 'ge', 'and': 'allOf', 'or': 'anyOf'};
 
-/// 一串积木走新路时用的翻译器（见 backend_lower_lang.dart）；没用到第 4 版积木的接口返回 null。[shadow]＝给校验用的影子模式；
-/// [inFunction]＝这一串是函数的定义（一定走新路，看不见文档里的变量）。
-BeLangLower? beLangLowerOf(BeDocument doc, BeRoute route, {bool shadow = false, bool inFunction = false}) => _Lowerer(doc, route, shadow: shadow, inFunction: inFunction)._lang;
+/// 一串积木走新路时用的翻译器（见 backend_lower_lang.dart）；没用到第 4 版积木的接口返回 null。[shadow]＝给校验用的影子模式；[inFunction]＝这一串是函数的定义（一定走新路，看不见文档里的变量）。[all]＝没用到第 4 版积木也走新路（只给规矩版本 2 的类型检查用，不用来生成）。
+BeLangLower? beLangLowerOf(BeDocument doc, BeRoute route, {bool shadow = false, bool inFunction = false, bool all = false}) =>
+    _Lowerer(doc, route, shadow: shadow, inFunction: inFunction, always: all)._lang;
 
 class _Lowerer implements BeLowerHost {
-  _Lowerer(this.doc, this.route, {bool shadow = false, this.inFunction = false}) : _params = bePathParams(route.path).toSet() {
-    if (inFunction || beBlocksUseLang(route.body)) _lang = BeLangLower(this, route, shadow: shadow);
+  _Lowerer(this.doc, this.route, {bool shadow = false, this.inFunction = false, bool always = false}) : _params = bePathParams(route.path).toSet() {
+    if (inFunction || always || beBlocksUseLang(route.body)) _lang = BeLangLower(this, route, shadow: shadow);
   }
 
   final bool inFunction;

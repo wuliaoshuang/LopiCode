@@ -33,6 +33,7 @@ import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/app_ref.dart';
 import 'package:lopicode/ui/backend_panels_sheet.dart';
 import 'package:lopicode/ui/backend_run_sheet.dart';
+import 'package:lopicode/ui/backend_types_sheet.dart';
 import 'package:lopicode/ui/file_icon.dart';
 import 'package:lopicode/ui/shell.dart';
 import 'package:lopicode/ui/top_bar.dart';
@@ -392,7 +393,16 @@ class BackendScreenState extends ConsumerState<BackendScreen> {
         unawaited(_openSettings());
       case 'regen':
         unawaited(_openRegen());
+      case 'strict':
+        unawaited(_upgradeStrict());
     }
+  }
+
+  /// “升级到严格规矩”：先给变化清单，确认了才升；升完有标红的就直接打开问题列表。
+  Future<void> _upgradeStrict() async {
+    final host = _host;
+    if (host == null || !await showBeUpgradeStrict(context, host) || !mounted) return;
+    if (host.errorCount > 0) unawaited(_editor.currentState?.openIssues());
   }
 
   /// 变量 / 集合的下拉菜单最后一项“新建…”：建出来并选中是同一次改动。
@@ -473,6 +483,7 @@ class BackendScreenState extends ConsumerState<BackendScreen> {
       dockMemoryKey: 'backend',
       stars: _stars,
       menuExtra: _menuExtra,
+      onEditTypes: (sel) => unawaited(showBeTypeEditor(context, host, sel)),
       onHostChanged: () => setState(() {}),
       extraActions: [
         IconButton(key: const ValueKey('be-run'), tooltip: '运行', onPressed: _openRun, icon: const Icon(Icons.play_arrow_rounded)),
@@ -495,6 +506,10 @@ class BackendScreenState extends ConsumerState<BackendScreen> {
             ),
             PopupMenuItem(key: const ValueKey('be-menu-data'), value: 'data', child: _menuRow(Icons.data_object_rounded, '变量与集合（${host.doc.variables.length} + ${host.doc.collections.length}）')),
             PopupMenuItem(key: const ValueKey('be-menu-settings'), value: 'settings', child: _menuRow(Icons.tune_rounded, '服务设置（端口 ${host.doc.port}）')),
+            // 规矩版本：老规矩的文档给“升级”的入口；已经是严格规矩的只说一声（不能点）。
+            host.strictRules
+                ? PopupMenuItem(key: const ValueKey('be-menu-strict-on'), enabled: false, child: _menuRow(Icons.verified_outlined, '严格规矩：已开启'))
+                : PopupMenuItem(key: const ValueKey('be-menu-strict'), value: 'strict', child: _menuRow(Icons.upgrade_rounded, '升级到严格规矩…')),
             PopupMenuItem(
               key: const ValueKey('be-menu-regen'),
               value: 'regen',

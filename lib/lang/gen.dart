@@ -278,6 +278,8 @@ abstract class LangCore {
         throw LangUnsupported('抛出错误', stage: 6, src: s.src);
       case LTry():
         throw LangUnsupported('试着做 / 出错了', stage: 6, src: s.src);
+      case LStmtV5():
+        throw LangUnsupported('“看是哪种情况”（要走严格规矩的生成路径，这条路还没有接上）', src: s.src);
     }
   }
 
@@ -359,6 +361,8 @@ abstract class LangCore {
         throw LangUnsupported('类和对象', stage: 5, src: e.src);
       case LAwait() || LSpawn():
         throw LangUnsupported('异步', stage: 6, src: e.src);
+      case LExprV5():
+        throw LangUnsupported('记录 / 枚举 / 变体 / 当成〈类型〉（要走严格规矩的生成路径，这条路还没有接上）', src: e.src);
     }
   }
 }
