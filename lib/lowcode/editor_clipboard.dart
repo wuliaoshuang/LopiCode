@@ -14,10 +14,10 @@ import 'package:lopicode/lowcode/component_ops.dart';
 import 'package:lopicode/lowcode/model.dart';
 
 class _Clip {
-  _Clip(this.node, this.defs);
+  _Clip(this.nodes, this.defs);
 
-  /// 子树的 JSON。
-  final String node;
+  /// 一棵或几棵子树的 JSON（多选复制时是几棵，按页面上的先后）。
+  final List<String> nodes;
 
   /// 用到的自定义组件定义的 JSON（被依赖的在前）。
   final List<String> defs;
@@ -42,9 +42,15 @@ void _walk(LcNode n, void Function(LcNode n) visit) {
 }
 
 /// 复制一个组件（连同里面的）。页面本身不能复制；找不到返回 false。
-bool lcClipboardCopy(LcDocument doc, String nodeId) {
-  final node = doc.find(nodeId);
-  if (node == null || node.type == 'page') return false;
+bool lcClipboardCopy(LcDocument doc, String nodeId) => lcClipboardCopyMany(doc, [nodeId]);
+
+/// 剪贴板里有几个组件（多选复制的是几个）。
+int get lcClipboardCount => _clip?.nodes.length ?? 0;
+
+/// 一次复制几个组件（多选）：粘贴时按 [nodeIds] 的顺序挨着贴。里面有页面本身或找不到的，整次不复制。
+bool lcClipboardCopyMany(LcDocument doc, List<String> nodeIds) {
+  final nodes = [for (final id in nodeIds) doc.find(id)];
+  if (nodes.isEmpty || nodes.any((n) => n == null || n.type == 'page')) return false;
   final defs = <String, LcComponentDef>{};
   void collect(LcNode root) => _walk(root, (n) {
     final ref = n.type == 'component' ? n.strProp('ref') : null;
@@ -57,22 +63,30 @@ bool lcClipboardCopy(LcDocument doc, String nodeId) {
       }
     }
   });
-  collect(node);
-  _clip = _Clip(jsonEncode(node.toJson()), [for (final d in defs.values) jsonEncode(d.toJson())]);
+  for (final n in nodes) {
+    collect(n!);
+  }
+  _clip = _Clip([for (final n in nodes) jsonEncode(n!.toJson())], [for (final d in defs.values) jsonEncode(d.toJson())]);
   return true;
 }
 
-/// 把剪贴板里的东西贴进 [doc]：[parentId] 的第 [index] 个位置（不给＝放最后）。返回新组件的编号；贴不了返回 null。
-String? lcClipboardPaste(LcDocument doc, String parentId, [int? index]) {
+/// 把剪贴板里的东西贴进 [doc]：[parentId] 的第 [index] 个位置（不给＝放最后）。返回新组件的编号
+/// （剪贴板里是几个时，返回第一个的）；贴不了返回 null。
+String? lcClipboardPaste(LcDocument doc, String parentId, [int? index]) => lcClipboardPasteAll(doc, parentId, index).firstOrNull;
+
+/// 同 [lcClipboardPaste]，返回贴进来的每一个的编号（按先后）；贴不了是空的。
+List<String> lcClipboardPasteAll(LcDocument doc, String parentId, [int? index]) {
   final clip = _clip;
-  if (clip == null) return null;
+  if (clip == null) return const [];
   final parent = doc.find(parentId);
-  if (parent == null || !parent.isContainer) return null;
-  final LcNode tree;
+  if (parent == null || !parent.isContainer) return const [];
+  final trees = <LcNode>[];
   try {
-    tree = LcNode.fromJson(jsonDecode(clip.node) as Map<String, dynamic>, 0);
+    for (final raw in clip.nodes) {
+      trees.add(LcNode.fromJson(jsonDecode(raw) as Map<String, dynamic>, 0, version: LcDocument.currentVersion));
+    }
   } on FormatException {
-    return null;
+    return const [];
   }
   // 带来的自定义组件：一样的直接用，没有的补上。
   final remap = <String, String>{};
@@ -103,10 +117,16 @@ String? lcClipboardPaste(LcDocument doc, String parentId, [int? index]) {
     doc.components.add(def);
     remap[oldId] = def.id;
   }
-  retarget(tree);
-  _walk(tree, (n) => n.id = ''); // 编号让文档重新发
-  if (!doc.insert(parentId, tree, index)) return null;
-  return tree.id;
+  var at = index ?? parent.children.length;
+  final ids = <String>[];
+  for (final tree in trees) {
+    retarget(tree);
+    _walk(tree, (n) => n.id = ''); // 编号让文档重新发
+    if (!doc.insert(parentId, tree, at)) continue;
+    ids.add(tree.id);
+    at++;
+  }
+  return ids;
 }
 
 /// 贴在某个组件的后面（和它同一层）。

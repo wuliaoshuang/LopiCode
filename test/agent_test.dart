@@ -259,6 +259,29 @@ void main() {
     expect(File(p.join(guard.root, 'style.css')).existsSync(), isTrue);
   });
 
+  test('低代码工具：原来的页面是新版做的——版本号不往回写、看不懂的最外层字段留着、回话里明说', () async {
+    final raw = LcDocument.starter('页面').toJson()
+      ..['version'] = 7
+      ..['futureThing'] = {'k': 1};
+    File(p.join(guard.root, kLowcodePageFile)).writeAsStringSync(jsonEncode(raw));
+    final next = LcDocument.starter('新标题').toJson()..remove('version');
+    final runner = await runnerFor([
+      ScriptedReply(
+        calls: [
+          ScriptedCall('lowcode_update_page', jsonEncode({'page': next})),
+        ],
+      ),
+      ScriptedReply(text: '好了'),
+    ]);
+    final done = finished(await runner.send('改标题').toList());
+    expect(done.single.outcome.ok, isTrue);
+    expect(done.single.outcome.text, contains('这个页面是新版做的'));
+    final out = jsonDecode(File(p.join(guard.root, kLowcodePageFile)).readAsStringSync()) as Map<String, dynamic>;
+    expect(out['version'], 7);
+    expect(out['title'], '新标题');
+    expect(out['futureThing'], {'k': 1});
+  });
+
   test('接口报错：给出人话，不泄露 Key，用户消息撤回', () async {
     final runner = await runnerFor([ScriptedReply(status: 401, errorBody: '{"error":{"message":"Incorrect API key provided"}}')]);
     final events = await runner.send('hi').toList();

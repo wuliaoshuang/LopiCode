@@ -1,7 +1,12 @@
-// 页面文件格式钉住（第 5 版第 1 期只改编辑器的布局和手势，page.lc.json 的读写规则一个字都不许变）。
+// 页面文件格式钉住。
+//
+// 2026-11-26 编辑器第 3 期把格式升到了第 3 版（霜霜同意的，只升这一次；说明见 docs/lowcode-page-format-v3.md）。
+// 升版时改了这里 5 处断言，逐条记在 docs/lowcode-page-format-v3.md 的“改了哪些老断言”一节。
 //
 // - test/fixtures/lowcode/page-v1.lc.json / page-v2.lc.json：两份“旧文件”。
-// - 同名的 .saved.lc.json：它们打开再存出来应该是什么样（由改造之前的读写代码生成，之后不许再重新生成）。
+// - 同名的 .saved.lc.json：格式还是第 2 版时它们打开再存出来的样子（由当时的读写代码生成，不许重新生成）。
+// - 同名的 .saved-v3.lc.json：现在打开再存出来的样子。和 .saved.lc.json 比只多两样：版本号是 3；
+//   老代码存盘时丢掉的那几个看不懂的属性，现在留在节点的 oldProps 里（不丢东西）。
 // - 界面这一层：打开不写；在新布局里点一下添加、长按拖动、拖柄改尺寸，存出来的内容和“直接对文档做同样的修改”一字不差；
 //   编辑器自己的东西（“常用”）不进页面文件。
 import 'dart:convert';
@@ -54,26 +59,44 @@ Finder node(String id) => find.byKey(ValueKey('lowcode-node-$id'));
 
 void main() {
   group('读写规则（不经过界面）', () {
-    test('版本号还是 2；最外层只有这几个字段，顺序不变', () {
-      expect(LcDocument.currentVersion, 2);
+    test('版本号是 3；最外层只有这几个字段，顺序不变', () {
+      expect(LcDocument.currentVersion, 3);
       final v2 = jsonDecode(LcDocument.parse(fixture('page-v2.lc.json')).encode()) as Map<String, dynamic>;
       expect(v2.keys.toList(), ['version', 'title', 'root', 'logic', 'components']);
       final v1 = jsonDecode(LcDocument.parse(fixture('page-v1.lc.json')).encode()) as Map<String, dynamic>;
       expect(v1.keys.toList(), ['version', 'title', 'root']);
-      expect(v1['version'], 2, reason: '旧文件存出来写当前版本号（原来就是这样）');
+      expect(v1['version'], 3, reason: '旧文件存出来写当前版本号（原来就是这样）');
     });
 
     for (final name in ['page-v1', 'page-v2']) {
-      test('$name：打开再存，和改造前存出来的一字不差；再来一遍不再变', () {
+      test('$name：打开再存，和钉住的第 3 版样子一字不差；再来一遍不再变', () {
         final saved = LcDocument.parse(fixture('$name.lc.json')).encode();
-        expect(saved, fixture('$name.saved.lc.json'));
+        expect(saved, fixture('$name.saved-v3.lc.json'));
         expect(LcDocument.parse(saved).encode(), saved);
+      });
+
+      test('$name：第 3 版存出来的，去掉版本号和 oldProps 以后，和第 2 版时存出来的一字不差', () {
+        final json = jsonDecode(fixture('$name.saved-v3.lc.json')) as Map<String, dynamic>;
+        var dropped = 0;
+        void strip(Object? n) {
+          if (n is Map) {
+            if (n.remove('oldProps') != null) dropped++;
+            n.values.toList().forEach(strip);
+          } else if (n is List) {
+            n.forEach(strip);
+          }
+        }
+
+        strip(json);
+        json['version'] = 2;
+        expect(const JsonEncoder.withIndent('  ').convert(json), fixture('$name.saved.lc.json'));
+        expect(dropped, greaterThan(0), reason: '两份样例里都有老代码会丢的属性，现在应该留在 oldProps 里');
       });
     }
 
-    test('节点的字段：只有 id / type / props / style / bind / children，空的不写', () {
+    test('旧文件存出来，节点的字段：只有 id / type / props / style / bind / oldProps / children，空的不写', () {
       void walk(Map<String, dynamic> n) {
-        expect(n.keys.toSet().difference({'id', 'type', 'props', 'style', 'bind', 'children'}), isEmpty, reason: '${n['id']}');
+        expect(n.keys.toSet().difference({'id', 'type', 'props', 'style', 'bind', 'oldProps', 'children'}), isEmpty, reason: '${n['id']}');
         for (final key in ['props', 'style', 'bind', 'children']) {
           if (n.containsKey(key)) expect(n[key], isNotEmpty, reason: '${n['id']}.$key');
         }
@@ -83,7 +106,7 @@ void main() {
       }
 
       for (final name in ['page-v1', 'page-v2']) {
-        walk((jsonDecode(fixture('$name.saved.lc.json')) as Map<String, dynamic>)['root'] as Map<String, dynamic>);
+        walk((jsonDecode(fixture('$name.saved-v3.lc.json')) as Map<String, dynamic>)['root'] as Map<String, dynamic>);
       }
     });
   });
@@ -181,7 +204,7 @@ void main() {
       final json = jsonDecode(text) as Map<String, dynamic>, old = jsonDecode(fixture('page-v2.saved.lc.json')) as Map<String, dynamic>;
       expect(json['logic'], old['logic']);
       expect(json['components'], old['components']);
-      expect(json['version'], 2);
+      expect(json['version'], 3);
       expect(tester.takeException(), isNull);
     });
   });

@@ -642,3 +642,11 @@ PHP 真跑撞到并修掉的 5 个问题，以及依据：
 | 系统 WebView 是否完整执行这条策略（拦外部图片 / 脚本 / fetch） | — | **没在真机验证** | 测试里只能证明“交给视图的文档开头带着这条策略” |
 
 自己定的数值见各文件开头：解析上限 20 万字、缓存 200 万字、代码块 30 行折叠、流式不上色 2 万字、单词串 2000、图片（网络 5MB / 15 秒 / 3 次跳转、本机 20MB、data: 2MB、内存缓存 24MB、最高 320）、表格一格最宽 240、预览高 120–360、同时 2 个预览、HTML 嵌套 12 层、解析嵌套 6 层。
+
+## 低代码内置图标（2026-11-26，编辑器第 3 期 B1）
+
+| 事实 | 来源 | 状态 | 我们怎么用 |
+|---|---|---|---|
+| `Icons.add` / `Icons.send` 等 25 个名字在 Flutter 的 `Icons` 里存在 | 本机 Flutter SDK：`lib/lowcode/icon_set_widgets.dart` 直接引用它们，编译通过 | 已核对（编译） | 画布画这些图标；Flutter 导出写同名 `Icons.xxx` |
+| 网页 / Vue / React 导出里每个图标的 SVG 路径（24×24）和 Material Icons 官方的形状一致 | 凭记忆照 Material Icons（Apache-2.0）写的 | **未核对**（没逐个和官方 SVG 文件比对，也没在真浏览器里看过） | 导出的按钮里内嵌 `<svg class="lc-icon">`；形状不对只影响导出网页里图标的样子 |
+| `<button disabled>`、`<input required disabled type="email|tel|number|password">`、`<label>` 包住 `<input>` 即关联 | HTML 标准的常识用法 | 未逐条翻官方原文 | 第 3 版新属性的网页导出 |

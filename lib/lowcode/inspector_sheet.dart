@@ -342,6 +342,11 @@ class InspectorPanelState extends State<InspectorPanel> {
         key: ValueKey('events-${node.id}'),
         doc: _doc,
         node: node,
+        onEdit: (change) {
+          flush();
+          widget.onEdit((d) => change(_doc = d));
+          if (mounted) setState(_reload);
+        },
         onOpen: () {
           flush();
           widget.onOpenLogic?.call(node.id);

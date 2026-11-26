@@ -7,6 +7,7 @@ library;
 
 import 'package:lopicode/format/format.dart';
 import 'package:lopicode/lowcode/component_model.dart';
+import 'package:lopicode/lowcode/export_v3_fields.dart';
 import 'package:lopicode/lowcode/logic_blocks.dart';
 import 'package:lopicode/lowcode/logic_js_core.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
@@ -74,6 +75,7 @@ const String kFrameworkBaseCss =
 ''';
 
 const String kNoteBody = '字体和文字颜色写在页面最外层的元素上，没有去动 body；想去掉浏览器默认的页边距，在你工程的全局样式里加一条 body { margin: 0 }。';
+const String kNoteUnknownNode = '页面里有新版应用加的组件，这一版不认识，没有导出。';
 const String kNoteNoBinding = '变量改了以后界面不会自己跟着变（页面里没有“把变量显示出来”的写法，和导出的网页一样）；要让界面变，用“改控件”积木。';
 
 // —— 起名 ——
@@ -159,14 +161,21 @@ String lcCollectCss(LcNode root, String prefix, List<String> notes) {
     } else if (body.isNotEmpty) {
       out.writeln('.n-$prefix${_safeId(n.id)} { $body }');
     }
+    final fieldRule = lcFieldRule(n, parent, '.n-$prefix${_safeId(n.id)}');
+    if (fieldRule.isNotEmpty) out.writeln(fieldRule);
     for (final c in n.children) {
       walk(c, n, depth + 1);
     }
   }
 
   walk(root, null, 0);
+  // 第 3 版加的属性要的公共样式：用到了才写。
+  out.write(lcV3ExtraCss(root));
   return out.toString();
 }
+
+/// 带标签的输入框外面那一层的 class（见 export_v3_fields.dart）。
+String lcFieldClassOf(LcNode n, String prefix) => lcFieldClass('n-$prefix${_safeId(n.id)}');
 
 // —— 被逻辑用到的控件属性 ——
 

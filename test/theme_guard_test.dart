@@ -46,6 +46,10 @@ const _exceptions = <String, Map<String, String>>{
     "_argb(s['background-color']) ?? Colors.white, border: _border(s, scale, Palette.neutral900, false)": '用户页面内容：页面默认白底、边框默认色',
     'const [BoxShadow(color: Color(0x33000000), blurRadius: 3, offset: Offset(0, 1))]': '用户页面内容：卡片组件的默认阴影（和导出代码一致）',
   },
+  'lib/lowcode/canvas_controls_widgets.dart': {
+    'const Color _labelColor = Color(0xFF5C6479);': '用户页面内容：输入框标签的默认色（和导出的网页 .lc-label 一致）',
+    'const Color _requiredColor = Color(0xFFC62828);': '用户页面内容：必填星号的颜色（和导出的网页 .lc-required 一致）',
+  },
   'lib/lowcode/canvas_parts_widgets.dart': {'color: background ?? Palette.neutral200,': '用户页面内容：图片占位的底色（和导出代码一致）', 'child: Icon(icon, color: Palette.neutral500),': '用户页面内容：图片占位的图标色'},
   'lib/lowcode/canvas_drag_widgets.dart': {'color: Colors.white,': '用户页面内容：拖动时拎起来的那份缩略图垫的底，和页面默认白底一致，不跟应用主题走'},
   'lib/lowcode/inline_text_widgets.dart': {'(fg.computeLuminance() > 0.6 ? const Color(0xFF222435) : Colors.white)': '用户页面内容：就地改字时垫在字后面的底，只为和用户自己定的字色拉开反差，不是编辑器界面色'},

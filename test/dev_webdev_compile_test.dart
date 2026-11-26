@@ -16,6 +16,7 @@ import 'lowcode_export_vue_test.dart' show nastyJson;
 import 'support/dev_tools.dart';
 import 'support/lowcode_samples.dart';
 import 'support/sample_doc.dart';
+import 'support/v3_sample.dart';
 
 Map<String, String> _files(LcFrameworkExport e) => {for (final f in e.files) f.path: f.content};
 
@@ -27,7 +28,13 @@ void main() {
     print('【跳过】Vue / React / TypeScript 真编译：$skipWithoutWebdev');
   }
 
-  final samples = <String, LcDocument Function()>{'带逻辑和自定义组件的样本': frameworkSample, '文字里全是刁钻字符的样本': () => docOf(nastyJson()), '各种组件都有的样本': sample, '新建页面的默认内容': () => LcDocument.starter('我的页面')};
+  final samples = <String, LcDocument Function()>{
+    '带逻辑和自定义组件的样本': frameworkSample,
+    '文字里全是刁钻字符的样本': () => docOf(nastyJson()),
+    '各种组件都有的样本': sample,
+    '第 3 版新属性都用上的样本': v3Sample,
+    '新建页面的默认内容': () => LcDocument.starter('我的页面'),
+  };
 
   for (final kind in ['vue', 'react']) {
     group(kind == 'vue' ? 'Vue 3 导出真编译' : 'React 导出真编译', () {

@@ -24,6 +24,7 @@ import 'package:lopicode/lowcode/inline_text_widgets.dart';
 import 'package:lopicode/lowcode/inspector_sheet.dart';
 import 'package:lopicode/lowcode/lift_gesture_widgets.dart';
 import 'package:lopicode/lowcode/model.dart';
+import 'package:lopicode/lowcode/multi_select_widgets.dart';
 import 'package:lopicode/lowcode/palette_catalog.dart';
 import 'package:lopicode/lowcode/palette_widgets.dart';
 import 'package:lopicode/theme/tokens.dart';
@@ -77,7 +78,11 @@ class EditorWorkbench extends StatefulWidget {
     this.onOpenLogic,
     this.onAddLogic,
     this.onNodeMenu,
+    this.marked = const {},
   });
+
+  /// 多选时选中的那几个（画布上各描一圈，见 multi_select_widgets.dart）；空的＝没在多选。
+  final Set<String> marked;
 
   /// 合一面板和就地改字靠它改文档；不给＝这两样都没有。
   final LcEdit? onEdit;
@@ -382,6 +387,10 @@ class EditorWorkbenchState extends State<EditorWorkbench> {
                                       : (_paletteOpen ? kPaletteHandleHeight : 0),
                                 ),
                               ),
+                              if (widget.marked.isNotEmpty && drag == null)
+                                Positioned.fill(
+                                  child: MultiMarksOverlay(canvas: () => canvas, ids: widget.marked),
+                                ),
                               if (_paletteOpen)
                                 Positioned(
                                   left: 0,

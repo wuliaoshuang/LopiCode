@@ -1,4 +1,5 @@
 import 'package:lopicode/lowcode/component_ops.dart';
+import 'package:lopicode/lowcode/icon_set.dart';
 import 'package:lopicode/lowcode/image_assets.dart';
 import 'package:lopicode/lowcode/model.dart';
 
@@ -84,28 +85,42 @@ String _node(LcNode n, LcNode? parent, int i) {
         if (n.numProp('radius') != null) 'shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(${_d(n.numProp('radius')!)}))',
         if (n.numProp('fontSize') != null) 'textStyle: const TextStyle(fontSize: ${_d(n.numProp('fontSize')!)})',
       ];
+      // 第 3 版加的：图标（FilledButton.icon）、禁用（onPressed: null）。没用到时和以前一个字都不差。
+      final icon = lcIconByName(n.strProp('icon'));
       final button =
-          'FilledButton(\n${_ind(i + 1)}onPressed: () {},\n'
+          '${icon == null ? 'FilledButton' : 'FilledButton.icon'}(\n${_ind(i + 1)}onPressed: ${n.props['disabled'] == true ? 'null' : '() {}'},\n'
           '${_ind(i + 1)}style: FilledButton.styleFrom(${styles.join(', ')}),\n'
-          '${_ind(i + 1)}child: Text(${_s(n.strProp('text') ?? '')}),\n${_ind(i)})';
+          '${icon == null ? '' : '${_ind(i + 1)}icon: const Icon(Icons.${icon.name}),\n'}'
+          '${_ind(i + 1)}${icon == null ? 'child' : 'label'}: Text(${_s(n.strProp('text') ?? '')}),\n${_ind(i)})';
       return wrapFill(_sized(n, i, button, inRow: inRow));
     case 'image':
       final radius = _d(n.numProp('radius') ?? 0);
       final h = n.numProp('height');
       final src = n.strProp('src');
+      final alt = n.strProp('alt');
       final size =
           '${h != null ? 'height: ${_d(h)}, ' : ''}'
           '${n.props['width'] is num ? 'width: ${_d(n.props['width'] as num)}, ' : (n.fillWidth && !inRow ? 'width: double.infinity, ' : '')}';
       final img = src == null
-          ? 'Container(${size}color: const Color(0xFFD3DEE4), alignment: Alignment.center, child: const Icon(Icons.image_outlined))'
+          ? 'Container(${size}color: const Color(0xFFD3DEE4), alignment: Alignment.center, child: const Icon(Icons.image_outlined${alt == null ? '' : ', semanticLabel: ${_s(alt)}'}))'
           // 图片加载失败（没网、地址错）时显示占位，而不是抛异常。
           // 项目里的图片（相对地址）用 Image.asset：要在工程的 pubspec.yaml 的 assets 里列上这个文件。
-          : '${lcIsRemoteSrc(src) ? 'Image.network' : 'Image.asset'}(${_s(src)}, ${size}fit: BoxFit.cover, errorBuilder: (context, error, stack) => const Icon(Icons.broken_image_outlined))';
+          : '${lcIsRemoteSrc(src) ? 'Image.network' : 'Image.asset'}(${_s(src)}, ${size}fit: BoxFit.cover, ${alt == null ? '' : 'semanticLabel: ${_s(alt)}, '}errorBuilder: (context, error, stack) => const Icon(Icons.broken_image_outlined))';
       final clipped = 'ClipRRect(\n${_ind(i + 1)}borderRadius: BorderRadius.circular($radius),\n${_ind(i + 1)}child: $img,\n${_ind(i)})';
       return wrapFill(_margin(n, i, clipped));
     case 'input':
+      // 第 3 版加的：类型、默认值、标签、必填、禁用。没用到时和以前一个字都不差。
+      final value = n.strProp('value');
+      final label = n.strProp('label');
+      final keyboard = const {'number': 'number', 'email': 'emailAddress', 'tel': 'phone'}[n.strProp('inputType')];
       final field =
-          'TextField(\n${_ind(i + 1)}decoration: InputDecoration(\n'
+          '${value == null ? 'TextField' : 'TextFormField'}(\n'
+          '${value == null ? '' : '${_ind(i + 1)}initialValue: ${_s(value)},\n'}'
+          '${n.props['disabled'] == true ? '${_ind(i + 1)}enabled: false,\n' : ''}'
+          '${n.strProp('inputType') == 'password' ? '${_ind(i + 1)}obscureText: true,\n' : ''}'
+          '${keyboard == null ? '' : '${_ind(i + 1)}keyboardType: TextInputType.$keyboard,\n'}'
+          '${_ind(i + 1)}decoration: InputDecoration(\n'
+          '${label == null ? '' : '${_ind(i + 2)}labelText: ${_s(n.props['required'] == true ? '$label *' : label)},\n'}'
           '${_ind(i + 2)}hintText: ${_s(n.strProp('placeholder') ?? '')},\n'
           '${_ind(i + 2)}border: OutlineInputBorder(borderRadius: BorderRadius.circular(${_d(n.numProp('radius') ?? 4)})),\n'
           '${_ind(i + 1)}),\n${_ind(i)})';

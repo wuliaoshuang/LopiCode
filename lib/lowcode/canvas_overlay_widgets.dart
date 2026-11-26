@@ -23,6 +23,8 @@ class CanvasSelection {
   final CssEdges margin;
   final CssEdges border;
   final CssEdges padding;
+
+  /// 不出拖柄、不画外边距那一圈：页面本身，和锁定了的组件。
   final bool isRoot;
 
   @override

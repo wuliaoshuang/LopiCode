@@ -57,12 +57,9 @@ Object? _cloneValue(Object? v) => switch (v) {
 Map<String, dynamic> _cloneProps(Map<String, dynamic> props) => {for (final e in props.entries) e.key: _cloneValue(e.value)};
 
 /// 深拷贝一棵子树（不走 JSON 解析：解析有嵌套层数上限，这里的树是合法的，没必要再查一遍）。
-LcNode copyLcTree(LcNode n, {bool keepBind = true}) => LcNode(
-  id: n.id,
-  type: n.type,
+LcNode copyLcTree(LcNode n, {bool keepBind = true}) => n.shell(
   props: _cloneProps(n.props),
-  style: Map.of(n.style),
-  bind: keepBind ? Map.of(n.bind) : null,
+  keepBind: keepBind,
   children: [for (final c in n.children) copyLcTree(c, keepBind: keepBind)],
 );
 
@@ -226,7 +223,7 @@ LcNode expandedTree(LcDocument doc) {
   LcNode walk(LcNode n) {
     if (n.type == 'component') return ex.expand(n) ?? n;
     if (n.children.isEmpty) return n;
-    return LcNode(id: n.id, type: n.type, props: n.props, style: n.style, bind: n.bind, children: [for (final c in n.children) walk(c)]);
+    return LcNode(id: n.id, type: n.type, props: n.props, style: n.style, bind: n.bind, children: [for (final c in n.children) walk(c)], raw: n.raw);
   }
 
   return walk(doc.root);

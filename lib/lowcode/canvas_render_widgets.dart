@@ -8,6 +8,7 @@
 import 'dart:math' as math;
 
 import 'package:lopicode/lowcode/canvas_component_widgets.dart';
+import 'package:lopicode/lowcode/canvas_controls_widgets.dart';
 import 'package:lopicode/lowcode/canvas_css.dart';
 import 'package:lopicode/lowcode/canvas_parts_widgets.dart';
 import 'package:lopicode/lowcode/component_ops.dart';
@@ -275,7 +276,8 @@ class CanvasPage extends StatelessWidget {
       return inert ? const SizedBox.shrink() : const CanvasEmptyHint();
     }
     // 子项之间的间距由容器自己留（拖动时也不往里插东西），这样“两端对齐”之类的分布才准。
-    final children = [for (final c in n.children) _node(context, c, inner)];
+    // “编辑器里隐藏”的（图层面板的眼睛）不画、不占位；导出不受影响。
+    final children = [for (final c in n.children.where((c) => !c.hidden)) _node(context, c, inner)];
     final spacing = mainGap;
     final textDirection = flow.row && flow.reverse ? TextDirection.rtl : null;
     final verticalDirection = !flow.row && flow.reverse ? VerticalDirection.up : VerticalDirection.down;
@@ -348,6 +350,7 @@ class CanvasPage extends StatelessWidget {
             type: shown.type,
             props: shown.props,
             children: shown.children,
+            raw: shown.raw,
             style: {...shown.style, if (p.width != null) 'width': '${p.width}px', if (p.height != null) 'height': '${p.height}px'},
           )
         : shown;
@@ -423,8 +426,9 @@ class CanvasPage extends StatelessWidget {
         paintBg = paintBorder = usePadding = false;
         final side = cssBorderSide(s, 'top', scale);
         final line = side == null ? BorderSide.none : BorderSide(width: side.width, color: side.argb == null ? textColor : Color(side.argb!));
-        content = FilledButton(
-          onPressed: () {},
+        content = canvasButton(
+          n,
+          textAlign: _textAlign(s),
           style: FilledButton.styleFrom(
             backgroundColor: bg,
             foregroundColor: _argb(s['color']),
@@ -433,7 +437,6 @@ class CanvasPage extends StatelessWidget {
             // 只改写了的那几项：整个替换 textStyle 会丢掉主题里的字体和字重
             textStyle: own == null ? null : (s.containsKey('font-size') ? ctx.buttonText : Theme.of(context).textTheme.labelLarge)?.merge(own),
           ),
-          child: Text(n.strProp('text') ?? '', textAlign: _textAlign(s)),
         );
       case 'image':
         paintBg = false;
@@ -442,6 +445,8 @@ class CanvasPage extends StatelessWidget {
           borderRadius: radius ?? BorderRadius.zero,
           child: CanvasImage(src: n.strProp('src'), width: w, height: size.height, style: s, background: bg),
         );
+      case LcNode.unknownType:
+        content = CanvasUnknownPlaceholder(typeName: n.fileType);
       case 'input':
         paintBg = paintBorder = usePadding = false;
         final side = cssBorderSide(s, 'top', scale);
@@ -449,8 +454,10 @@ class CanvasPage extends StatelessWidget {
           borderRadius: _hasRadius(s) ? radius ?? BorderRadius.zero : BorderRadius.circular(4),
           borderSide: side == null ? const BorderSide() : BorderSide(width: side.width, color: side.argb == null ? textColor : Color(side.argb!)),
         );
+        final value = canvasInputValue(n);
         final field = TextField(
           enabled: false,
+          controller: value == null ? null : TextEditingController(text: value),
           style: own,
           decoration: InputDecoration(
             hintText: n.strProp('placeholder') ?? '',
@@ -462,7 +469,8 @@ class CanvasPage extends StatelessWidget {
           ),
         );
         // 输入框自己没有“自然宽度”：行里、或者宽度没有上限的地方，给它一个固定的 160。
-        content = !tightW && (inRow || !boundedW) ? SizedBox(width: math.min(160, size.maxWidth ?? 160), child: field) : field;
+        final framed = canvasInputFrame(n, field);
+        content = !tightW && (inRow || !boundedW) ? SizedBox(width: math.min(160, size.maxWidth ?? 160), child: framed) : framed;
       case 'list':
         final style = _textStyle(s, scale, defaultHeight: 1.75);
         final items = n.props['items'];
@@ -527,31 +535,27 @@ class CanvasPage extends StatelessWidget {
     final badge = hidden ? '已隐藏' : (position == 'absolute' || position == 'fixed' ? '绝对定位' : (position == 'sticky' ? '粘性定位' : null));
     final opacity = cssOpacity(s['opacity']) * (hidden ? 0.35 : 1);
     if (opacity < 1) box = Opacity(opacity: opacity, child: box);
-    if (badge != null) {
-      box = Stack(
-        fit: StackFit.passthrough,
-        clipBehavior: Clip.none,
-        children: [
-          box,
-          // 往上探出去一点：贴着左上角放会盖住文字开头
-          Positioned(left: 0, top: -9, child: CanvasBadge(badge)),
-        ],
-      );
-    }
+    if (badge != null) box = canvasBadged(box, badge);
     if (!margin.isZero) box = Padding(padding: EdgeInsets.fromLTRB(margin.left, margin.top, margin.right, margin.bottom), child: box);
 
     // 选中框和拖柄由画布叠在上面画；这里只管点选和长按拖动。
     // 实例整块只当一个东西：里面的内容一律不接手势（点哪儿选中的都是实例）。
     final droppable = n.isContainer && !instance;
+    // 锁着的：点不中、拖不动（点它等于点它外面那一层）；它里面的东西照常能点。
     Widget wrapped = inert
         ? box
+        : node.locked
+        ? KeyedSubtree(
+            key: ValueKey('lowcode-node-${n.id}'),
+            child: droppable ? box : IgnorePointer(child: box),
+          )
         : GestureDetector(
             key: ValueKey('lowcode-node-${n.id}'),
             behavior: HitTestBehavior.opaque,
             onTap: () => onSelect(n.id),
             child: droppable ? box : IgnorePointer(child: box),
           );
-    if (!inert) {
+    if (!inert && !node.locked) {
       // 变淡包在“长按拿起”里面：拖动中这一层不能换位置，不然手势会被打断。
       wrapped = _liftable(node, node.id == movingId ? Opacity(opacity: 0.35, child: wrapped) : wrapped);
     }

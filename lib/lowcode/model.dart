@@ -2,6 +2,9 @@ import 'dart:convert';
 
 import 'package:lopicode/lowcode/component_model.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
+import 'package:lopicode/lowcode/model_props.dart';
+
+export 'package:lopicode/lowcode/model_history.dart';
 
 /// 低代码页面的数据模型：一棵组件树，整份存成项目里的 JSON 文件。
 ///
@@ -19,12 +22,54 @@ import 'package:lopicode/lowcode/logic_model.dart';
 /// 第 2 版加的（都可省略，旧文件没有也能打开；约定见 docs/lowcode-v2-design.md）：
 /// - [style]：这个组件自己的 CSS 声明（规范写法：小写连字符的属性名 → 值），盖在上面那些简写属性之上。
 /// - [bind]：只在自定义组件的定义里用，把属性接到组件的 prop 上（属性名 → prop 名）。
+///
+/// 第 3 版加的（都可省略；整份说明见 docs/lowcode-page-format-v3.md）：
+/// - [name]：用户起的名字（图层面板里显示）。[locked]：锁定。[hidden]：只在编辑器里不画，**不影响导出**。
+/// - [keptProps]：`props` 里这一版看不懂的，不解释、原样留着。
+/// - [more]：节点上别的字段（给后面几期留的 states / responsive / data / repeat / showIf / slot，
+///   老文件里挪出来的 oldProps，以及任何不认识的字段），不解释、原样留着。
+/// - [raw]：这一版不认识的组件类型（[type] 是 `unknown`）：整个节点原样留着，画布上画一个占位，导出时跳过。
 class LcNode {
-  LcNode({required this.id, required this.type, Map<String, dynamic>? props, List<LcNode>? children, Map<String, String>? style, Map<String, String>? bind})
-    : props = props ?? {},
-      children = children ?? [],
-      style = style ?? {},
-      bind = bind ?? {};
+  LcNode({
+    required this.id,
+    required this.type,
+    Map<String, dynamic>? props,
+    List<LcNode>? children,
+    Map<String, String>? style,
+    Map<String, String>? bind,
+    this.name = '',
+    this.locked = false,
+    this.hidden = false,
+    Map<String, dynamic>? keptProps,
+    Map<String, dynamic>? more,
+    this.raw,
+  }) : props = props ?? {},
+       children = children ?? [],
+       style = style ?? {},
+       bind = bind ?? {},
+       keptProps = keptProps ?? {},
+       more = more ?? {};
+
+  /// 不认识的组件类型在内存里的类型名（文件里写的还是它原来的名字，见 [raw]）。
+  static const String unknownType = 'unknown';
+
+  /// 节点上这一版会读的字段；别的都进 [more]。
+  static const Set<String> knownKeys = {'id', 'type', 'name', 'locked', 'hidden', 'props', 'style', 'bind', 'children'};
+
+  /// 名字最长多少个字。
+  static const int maxNameLength = 40;
+
+  String name;
+  bool locked;
+  bool hidden;
+  final Map<String, dynamic> keptProps;
+  final Map<String, dynamic> more;
+  final Map<String, dynamic>? raw;
+
+  bool get isUnknown => raw != null;
+
+  /// 文件里写的类型名（不认识的类型也给得出来）。
+  String get fileType => raw?['type'] is String ? raw!['type'] as String : type;
 
   String id;
   final String type;
@@ -33,7 +78,7 @@ class LcNode {
   final Map<String, String> style;
   final Map<String, String> bind;
 
-  LcSpec get spec => lcSpecs[type]!;
+  LcSpec get spec => lcSpecs[type] ?? lcUnknownSpec;
   bool get isContainer => spec.isContainer;
 
   num? numProp(String key) {
@@ -48,26 +93,62 @@ class LcNode {
 
   bool get fillWidth => props['width'] == 'fill';
 
-  Map<String, dynamic> toJson() => {
-    'id': id,
-    'type': type,
-    if (props.isNotEmpty) 'props': props,
-    if (style.isNotEmpty) 'style': style,
-    if (bind.isNotEmpty) 'bind': bind,
-    if (children.isNotEmpty) 'children': [for (final c in children) c.toJson()],
-  };
+  /// 字段顺序固定：id、type、name、locked、hidden、props、style、bind、（别的字段）、children；空的不写。
+  Map<String, dynamic> toJson() {
+    if (raw != null) return {...raw!, 'id': id};
+    final allProps = {
+      ...props,
+      for (final e in keptProps.entries)
+        if (!props.containsKey(e.key)) e.key: e.value,
+    };
+    return {
+      'id': id,
+      'type': type,
+      if (name.isNotEmpty) 'name': name,
+      if (locked) 'locked': true,
+      if (hidden) 'hidden': true,
+      if (allProps.isNotEmpty) 'props': allProps,
+      if (style.isNotEmpty) 'style': style,
+      if (bind.isNotEmpty) 'bind': bind,
+      ...more,
+      if (children.isNotEmpty) 'children': [for (final c in children) c.toJson()],
+    };
+  }
+
+  static Map<String, dynamic> _deep(Map<String, dynamic> m) => m.isEmpty ? {} : jsonDecode(jsonEncode(m)) as Map<String, dynamic>;
+
+  /// 拷一份自己，不带子组件（[children] 另给）：名字、锁定、隐藏和原样留着的东西都带上。
+  LcNode shell({required Map<String, dynamic> props, bool keepBind = true, List<LcNode>? children}) => LcNode(
+    id: id,
+    type: type,
+    props: props,
+    style: Map.of(style),
+    bind: keepBind ? Map.of(bind) : null,
+    children: children,
+    name: name,
+    locked: locked,
+    hidden: hidden,
+    keptProps: _deep(keptProps),
+    more: _deep(more),
+    raw: raw == null ? null : _deep(raw!),
+  );
 
   LcNode clone() => LcNode.fromJson(jsonDecode(jsonEncode(toJson())) as Map<String, dynamic>, 0);
 
   static const int maxDepth = 24;
 
-  factory LcNode.fromJson(Map<String, dynamic> json, int depth) {
+  /// [version]：这个节点来自第几版的文件（内存里复制、撤销重做用的都是当前版）。
+  factory LcNode.fromJson(Map<String, dynamic> json, int depth, {int version = LcDocument.currentVersion}) {
     if (depth > maxDepth) {
       throw const FormatException('组件嵌套太深（最多 $maxDepth 层）');
     }
     final type = json['type'];
-    if (type is! String || !lcSpecs.containsKey(type)) {
+    if (type is! String || type.isEmpty) {
       throw FormatException('未知的组件类型：$type');
+    }
+    if (!lcSpecs.containsKey(type)) {
+      // 这一版不认识的类型（多半是新版应用加的组件）：整个节点原样留着，不解释。
+      return LcNode(id: json['id'] is String ? json['id'] as String : '', type: unknownType, raw: Map.of(json));
     }
     final rawProps = json['props'];
     if (rawProps != null && rawProps is! Map) {
@@ -82,7 +163,7 @@ class LcNode {
       if (c is! Map<String, dynamic>) {
         throw FormatException('$type 的子组件必须是对象');
       }
-      children.add(LcNode.fromJson(c, depth + 1));
+      children.add(LcNode.fromJson(c, depth + 1, version: version));
     }
     if (children.isNotEmpty && !lcSpecs[type]!.isContainer) {
       throw FormatException('${lcSpecs[type]!.label}（$type）不能包含子组件');
@@ -90,14 +171,39 @@ class LcNode {
     if (children.any((c) => c.type == 'page')) {
       throw const FormatException('page 只能作为根组件');
     }
+    final (props, kept) = lcReadProps(type, rawProps is Map ? rawProps : const {}, version);
+    final more = <String, dynamic>{
+      for (final e in json.entries)
+        if (!knownKeys.contains(e.key) && e.value != null) e.key: e.value,
+    };
+    final keptProps = <String, dynamic>{};
+    if (version < 3 && kept.isNotEmpty) {
+      // 老文件里多出来的属性：那时候不算数，现在也不能突然算数——挪到 oldProps 里留着。
+      final old = more['oldProps'];
+      more['oldProps'] = {...kept, if (old is Map) ...old};
+    } else {
+      keptProps.addAll(kept);
+    }
+    final name = json['name'];
     return LcNode(
       id: json['id'] is String ? json['id'] as String : '',
       type: type,
-      props: _cleanProps(type, (rawProps as Map?)?.cast<String, dynamic>() ?? {}),
+      name: name is String ? cleanName(name) : '',
+      locked: json['locked'] == true,
+      hidden: json['hidden'] == true,
+      props: props,
+      keptProps: keptProps,
+      more: more,
       children: children,
       style: cleanStyle(json['style']),
       bind: cleanBind(json['bind']),
     );
+  }
+
+  /// 名字：去掉首尾空白和换行，太长截断。
+  static String cleanName(String raw) {
+    final s = raw.replaceAll(RegExp(r'[\r\n\t]+'), ' ').trim();
+    return s.length > maxNameLength ? s.substring(0, maxNameLength) : s;
   }
 
   static final RegExp _cssName = RegExp(r'^-{0,2}[a-z][a-z0-9-]{0,63}$');
@@ -127,45 +233,6 @@ class LcNode {
     });
     return out;
   }
-
-  static Map<String, dynamic> _cleanProps(String type, Map<String, dynamic> raw) {
-    final out = <String, dynamic>{};
-    raw.forEach((key, value) {
-      if (value == null) return;
-      switch (key) {
-        case 'width':
-          if (value == 'fill' || (value is num && value >= 0)) out[key] = value;
-        case 'height' || 'padding' || 'margin' || 'radius' || 'gap' || 'fontSize' || 'size':
-          if (value is num && value >= 0) out[key] = value;
-        case 'bg' || 'color':
-          if (value is String && RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(value)) {
-            out[key] = value.toUpperCase();
-          }
-        case 'align':
-          if (const ['start', 'center', 'end', 'stretch'].contains(value)) out[key] = value;
-        case 'justify':
-          if (const ['start', 'center', 'end', 'between'].contains(value)) out[key] = value;
-        case 'textAlign':
-          if (const ['left', 'center', 'right'].contains(value)) out[key] = value;
-        case 'text' || 'src' || 'placeholder':
-          if (value is String) out[key] = value;
-        case 'bold':
-          if (value is bool) out[key] = value;
-        case 'items':
-          if (value is List) out[key] = [for (final v in value) '$v'];
-        case 'ref':
-          if (type == 'component' && value is String && LcComponentDef.idPattern.hasMatch(value)) out[key] = value;
-        case 'values':
-          if (type == 'component' && value is Map) {
-            out[key] = <String, dynamic>{
-              for (final e in value.entries)
-                if (e.key is String && (e.value is String || e.value is num || e.value is bool)) e.key as String: e.value,
-            };
-          }
-      }
-    });
-    return out;
-  }
 }
 
 class LcSpec {
@@ -181,6 +248,9 @@ class LcSpec {
 
 const _boxFields = ['width', 'height', 'padding', 'margin', 'bg', 'radius'];
 const _layoutFields = ['gap', 'align', 'justify'];
+
+/// 这一版不认识的组件类型用的说明（不在 [lcSpecs] 里：组件盒、各处“每种组件”的清单都不该有它）。
+const LcSpec lcUnknownSpec = LcSpec('unknown', '新版组件', defaults: {}, fields: []);
 
 const Map<String, LcSpec> lcSpecs = {
   'page': LcSpec('page', '页面', isContainer: true, defaults: {'padding': 16, 'gap': 12, 'bg': '#F6FBFD'}, fields: ['padding', 'bg', ..._layoutFields]),
@@ -214,6 +284,7 @@ const Map<String, LcSpec> lcSpecs = {
   ),
   'divider': LcSpec('divider', '分割线', defaults: {}, fields: ['margin']),
   'spacer': LcSpec('spacer', '间隔', defaults: {'size': 16}, fields: ['size']),
+  // 这一版不认识的类型（LcNode.raw）：不能放子组件、不在组件盒里、没有可改的属性。
   // 自定义组件的实例：props.ref 指向 LcDocument.components 里的定义。不在组件栏的固定清单里。
   'component': LcSpec('component', '组件', defaults: {}, fields: ['width', 'margin']),
 };
@@ -222,13 +293,34 @@ const Map<String, LcSpec> lcSpecs = {
 const List<String> lcPaletteTypes = ['container', 'row', 'column', 'card', 'text', 'button', 'image', 'input', 'list', 'divider', 'spacer'];
 
 class LcDocument {
-  LcDocument({required this.title, required this.root, LcLogic? logic, List<LcComponentDef>? components}) : logic = logic ?? LcLogic(), components = components ?? [] {
+  LcDocument({required this.title, required this.root, LcLogic? logic, List<LcComponentDef>? components, this.fileVersion = currentVersion, Map<String, dynamic>? more, List<Object?>? keptComponents})
+    : logic = logic ?? LcLogic(),
+      components = components ?? [],
+      more = more ?? {},
+      keptComponents = keptComponents ?? [] {
     _normalizeIds();
     _normalizeComponents();
   }
 
   /// 1＝只有组件树；2＝加了 style / logic / components（都可省略，所以第 1 版的文件照样能读）。
-  static const int currentVersion = 2;
+  /// 3＝节点多了名字 / 锁定 / 编辑器内隐藏和一批新属性，并且给后面几期留好了字段；看不懂的东西一律原样留着。
+  /// 整份说明见 docs/lowcode-page-format-v3.md。
+  static const int currentVersion = 3;
+
+  /// 最外层这一版会读的字段；别的（给后面几期留的 pages / theme，以及任何不认识的）都进 [more]。
+  static const Set<String> knownKeys = {'version', 'title', 'root', 'logic', 'components'};
+
+  /// 打开的那个文件写的是第几版（没写＝1）。只用来判断“是不是比这一版新”，以及存盘时版本号不往回写。
+  final int fileVersion;
+
+  /// 这个页面是比这一版应用更新的版本做的：有些东西这里显示不了、改不了，但存盘时会原样留着。
+  bool get isFromNewer => fileVersion > currentVersion;
+
+  /// 最外层别的字段：不解释，原样留着。
+  final Map<String, dynamic> more;
+
+  /// 读不出来的组件定义：不解释，原样留着（排在读得出来的后面）。
+  final List<Object?> keptComponents;
 
   String title;
   LcNode root;
@@ -267,7 +359,9 @@ class LcDocument {
     if (rootJson is! Map<String, dynamic>) {
       throw const FormatException('缺少 root');
     }
-    final root = LcNode.fromJson(rootJson, 0);
+    final v = json['version'];
+    final version = v is int && v >= 1 ? v : 1;
+    final root = LcNode.fromJson(rootJson, 0, version: version);
     if (root.type != 'page') {
       throw const FormatException('根组件必须是 page');
     }
@@ -276,10 +370,20 @@ class LcDocument {
       title: json['title'] is String ? json['title'] as String : '未命名页面',
       root: root,
       logic: LcLogic.fromJson(json['logic']),
+      fileVersion: version,
       components: [
         if (rawComponents is List)
-          for (final c in rawComponents) ?LcComponentDef.tryParse(c),
+          for (final c in rawComponents) ?LcComponentDef.tryParse(c, version: version),
       ],
+      keptComponents: [
+        if (rawComponents is List)
+          for (final c in rawComponents)
+            if (LcComponentDef.tryParse(c, version: version) == null) c,
+      ],
+      more: {
+        for (final e in json.entries)
+          if (!knownKeys.contains(e.key) && e.value != null) e.key: e.value,
+      },
     );
   }
 
@@ -297,11 +401,12 @@ class LcDocument {
   }
 
   Map<String, dynamic> toJson() => {
-    'version': currentVersion,
+    'version': fileVersion > currentVersion ? fileVersion : currentVersion,
     'title': title,
     'root': root.toJson(),
     if (!logic.isEmpty) 'logic': logic.toJson(),
-    if (components.isNotEmpty) 'components': [for (final c in components) c.toJson()],
+    if (components.isNotEmpty || keptComponents.isNotEmpty) 'components': [for (final c in components) c.toJson(), ...keptComponents],
+    ...more,
   };
 
   LcComponentDef? component(String id) {
@@ -453,38 +558,5 @@ class LcDocument {
     parent.children.insert(parent.children.indexOf(node) + 1, copy);
     _normalizeIds();
     return copy.id;
-  }
-}
-
-/// 撤销 / 重做：存整份 JSON 快照，简单可靠。
-class LcHistory {
-  LcHistory(LcDocument initial) : _undo = [initial.encode()];
-  final List<String> _undo;
-  final List<String> _redo = [];
-  static const int limit = 100;
-
-  bool get canUndo => _undo.length > 1;
-  bool get canRedo => _redo.isNotEmpty;
-
-  /// 每次修改之后调用。
-  void record(LcDocument doc) {
-    final snap = doc.encode();
-    if (snap == _undo.last) return;
-    _undo.add(snap);
-    if (_undo.length > limit) _undo.removeAt(0);
-    _redo.clear();
-  }
-
-  LcDocument? undo() {
-    if (!canUndo) return null;
-    _redo.add(_undo.removeLast());
-    return LcDocument.parse(_undo.last);
-  }
-
-  LcDocument? redo() {
-    if (!canRedo) return null;
-    final snap = _redo.removeLast();
-    _undo.add(snap);
-    return LcDocument.parse(snap);
   }
 }

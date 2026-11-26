@@ -7,6 +7,7 @@
 // - 取用的 tokens：Space.x2/x3/x4、textMuted（名字）、textFaint（说明小字）。
 import 'package:lopicode/lowcode/component_values_widgets.dart';
 import 'package:lopicode/lowcode/inspector_presets_widgets.dart';
+import 'package:lopicode/lowcode/inspector_v3_rows_widgets.dart';
 import 'package:lopicode/lowcode/inspector_write.dart';
 import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/lowcode/style_controls_widgets.dart';
@@ -34,8 +35,11 @@ class InspectorEdit {
 const Map<int, String> _zeroNone = {0: '无'};
 
 class InspectorCommonPage extends StatefulWidget {
-  const InspectorCommonPage({super.key, required this.ed});
+  const InspectorCommonPage({super.key, required this.ed, this.only});
   final InspectorEdit ed;
+
+  /// 只放这几项简写属性（多选“一起改样式”用：只列几个组件都有的）；不给＝按组件类型放整页。
+  final List<String>? only;
 
   @override
   State<InspectorCommonPage> createState() => _InspectorCommonPageState();
@@ -296,13 +300,14 @@ class _InspectorCommonPageState extends State<InspectorCommonPage> {
             InspectorChoiceRow(id: 'size', label: '大小', options: const {'s': '小', 'm': '中', 'l': '大'}, selected: buttonSize(n, ed.parent), onChanged: (v) => ed.apply((n, _) => setButtonSize(n, v))),
             _width(),
             _color('accent', '颜色', buttonVariant(n, ed.parent) == 'solid' ? 'background-color' : 'color', onChanged: (v) => ed.apply((n, p) => setButtonAccent(n, p, (v ?? '#058654').toUpperCase()))),
+            ...lcButtonV3Rows(context, ed),
           ],
           {'text', 'width'},
         );
       case 'image':
-        return (_image(), {'src', 'radius'});
+        return ([..._image(), ...lcImageV3Rows(ed)], {'src', 'radius'});
       case 'input':
-        return ([_textRow('placeholder', '提示文字'), _width(), _radius()], {'placeholder', 'width', 'radius'});
+        return ([_textRow('placeholder', '提示文字'), ...lcInputV3Rows(ed), _width(), _radius()], {'placeholder', 'width', 'radius'});
       case 'page' || 'container' || 'row' || 'column':
         return (_layout(), {'gap', 'align', 'justify', 'padding', 'bg'});
       case 'card':
@@ -408,6 +413,10 @@ class _InspectorCommonPageState extends State<InspectorCommonPage> {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
+    final only = widget.only;
+    if (only != null) {
+      return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [for (final f in only) ?_more(f)]);
+    }
     final (rows, used) = _rows();
     final more = [
       for (final f in n.spec.fields)

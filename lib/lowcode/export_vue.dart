@@ -18,6 +18,7 @@ import 'dart:convert';
 
 import 'package:lopicode/lowcode/component_model.dart';
 import 'package:lopicode/lowcode/export_framework_common.dart';
+import 'package:lopicode/lowcode/export_v3_fields.dart';
 import 'package:lopicode/lowcode/logic_blocks.dart';
 import 'package:lopicode/lowcode/logic_js_core.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
@@ -137,6 +138,10 @@ class _Template {
     return name != null ? '{{ $name }}' : vueText(n.strProp('text') ?? '');
   }
 
+  String _alt(LcNode n) => n.strProp('alt') == null ? ' alt=""' : vueAttr('alt', n.strProp('alt')!);
+
+  String _ariaLabel(LcNode n) => vueAttr('aria-label', n.strProp('alt') ?? '图片占位');
+
   String _bindable(LcNode n, String prop) {
     final name = dyn(n, prop);
     return name != null ? ' :$prop="$name"' : vueAttr(prop, n.strProp(prop) ?? '');
@@ -154,20 +159,33 @@ class _Template {
       case 'text':
         out.writeln('$pad<p$a>${_content(n)}</p>');
       case 'button':
-        out.writeln('$pad<button type="button"$a>${_content(n)}</button>');
+        final icon = lcButtonIcon(n);
+        final solo = dyn(n, 'text') == null && (n.strProp('text') ?? '').isEmpty;
+        out.writeln('$pad<button type="button"$a${lcIsDisabled(n) ? ' disabled' : ''}>${icon == null ? '' : lcIconSvg(icon, solo: solo)}${_content(n)}</button>');
       case 'image':
         final name = dyn(n, 'src');
         if (name != null) {
           // 地址会变：有地址显示图片，空着显示占位块。
-          out.writeln('$pad<img v-if="$name"$a :src="$name" alt="">');
-          out.writeln('$pad<div v-else$a role="img" aria-label="图片占位"></div>');
+          out.writeln('$pad<img v-if="$name"$a :src="$name"${_alt(n)}>');
+          out.writeln('$pad<div v-else$a role="img"${_ariaLabel(n)}></div>');
         } else {
           final src = n.strProp('src');
-          out.writeln(src == null ? '$pad<div$a role="img" aria-label="图片占位"></div>' : '$pad<img$a${vueAttr('src', src)} alt="">');
+          out.writeln(src == null ? '$pad<div$a role="img"${_ariaLabel(n)}></div>' : '$pad<img$a${vueAttr('src', src)}${_alt(n)}>');
         }
       case 'input':
         final value = dyn(n, 'value');
-        out.writeln('$pad<input$a${_bindable(n, 'placeholder')}${value == null ? '' : ' :value="$value"'}>');
+        final type = lcInputType(n), fixed = n.strProp('value'), label = lcInputLabel(n);
+        final input =
+            '<input$a${type == null ? '' : ' type="$type"'}${_bindable(n, 'placeholder')}${value != null ? ' :value="$value"' : (fixed == null ? '' : vueAttr('value', fixed))}'
+            '${lcInputRequired(n) ? ' required' : ''}${lcIsDisabled(n) ? ' disabled' : ''}>';
+        if (label == null) {
+          out.writeln('$pad$input');
+        } else {
+          out.writeln('$pad<label class="${lcFieldClassOf(n, prefix)}">');
+          out.writeln('$pad  <span class="lc-label">${vueText(label)}${lcInputRequired(n) ? '<span class="lc-required" aria-hidden="true"> *</span>' : ''}</span>');
+          out.writeln('$pad  $input');
+          out.writeln('$pad</label>');
+        }
       case 'list':
         out.writeln('$pad<ul$a>');
         final items = n.props['items'];
@@ -179,6 +197,9 @@ class _Template {
         out.writeln('$pad<hr$a>');
       case 'spacer':
         out.writeln('$pad<div$a></div>');
+      case LcNode.unknownType:
+        out.writeln('$pad<!-- 这里有一个新版应用加的组件，这一版导不出来 -->');
+        notes.add(kNoteUnknownNode);
       case 'component':
         final plan = plans.planFor(n, ownerId: ownerId);
         if (plan == null) {

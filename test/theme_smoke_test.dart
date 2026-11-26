@@ -5,7 +5,7 @@
 //
 // 覆盖的页面：聊天页（确认卡、做完的步骤组展开、步骤详情里的命令与报错）、“＋”底部面板、侧边栏、
 // 项目列表、新建项目面板、文件页、代码编辑器（查找栏）、终端（16 色都打出来）、后端积木页、看代码面板、
-// 低代码编辑器（底部工具条、选中、合一面板、组件盒、图层、长按菜单；第 5 版第 1、2 期）、严格规矩文档的类型标红、设置首页、外观子页、主题列表页、对话框、提示条、
+// 低代码编辑器（底部工具条、选中、合一面板、组件盒、图层、长按菜单；第 5 版第 1、2 期；第 3 期第 1 段的图层搜索 / 改名 / 眼睛 / 锁、常用页新行、选图标、快捷动作、多选）、严格规矩文档的类型标红、设置首页、外观子页、主题列表页、对话框、提示条、
 // 主题管理页、主题编辑器、背景图片设置页（2026-11-26 合并后加）。
 // 打包页单独在 test/theme_pack_smoke_test.dart（本地打包合进来后状态多了，这个文件放不下）。
 import 'dart:convert';
@@ -479,6 +479,79 @@ void main() {
         expect(find.text('复制'), findsWidgets);
         await shot(tester, 'lowcode-node-menu');
         await back();
+      });
+
+      testWidgets('低代码编辑器 · 格式第 3 版的新界面：图层的搜索 / 改名 / 眼睛 / 锁、常用页新行、选图标、快捷动作、多选', (tester) async {
+        final (env, project, session) = await open(tester, ProjectTemplate.lowcode);
+        await show(tester, env, ProjectShell(project: project, session: session, initial: ShellDest.builder));
+        Finder key(String k) => find.byKey(ValueKey(k));
+        Future<void> tap(Finder f) async {
+          await tester.ensureVisible(f);
+          await tester.pump();
+          await tester.tap(f, warnIfMissed: false);
+          await tester.pumpAndSettle();
+        }
+
+        Future<void> back() async {
+          await tester.binding.handlePopRoute();
+          await tester.pumpAndSettle();
+          await settle(tester, rounds: 2);
+        }
+
+        // 图层：选中一行（眼睛、锁出来）、锁上、搜索、改名。
+        await tester.tap(find.byTooltip('图层').last);
+        await tester.pumpAndSettle();
+        await tap(key('lc-layer-n5'));
+        await tap(key('lc-layer-lock-n5'));
+        await tap(key('lc-layer-eye-n5'));
+        await shot(tester, 'lowcode-layers-flags');
+        await tap(key('lc-layer-eye-n5'));
+        await tap(key('lc-layer-lock-n5'));
+        await tap(key('lc-layer-name-n5'));
+        expect(key('lc-layer-rename'), findsOneWidget);
+        await shot(tester, 'lowcode-layers-rename');
+        await tester.testTextInput.receiveAction(TextInputAction.done);
+        await tester.pumpAndSettle();
+        await tester.enterText(key('lc-layer-search'), '按钮');
+        await tester.pumpAndSettle();
+        await shot(tester, 'lowcode-layers-search');
+        await back();
+
+        // 常用页的新行、选图标面板、事件页的快捷动作。
+        await tester.tap(key('lowcode-node-n5'), warnIfMissed: false);
+        await settle(tester, rounds: 2);
+        await tester.tap(find.text('常用').last);
+        await tester.pumpAndSettle();
+        await tap(key('lc-common-disabled'));
+        await tap(key('lc-common-icon'));
+        expect(key('lc-icon-pick-send'), findsOneWidget);
+        await shot(tester, 'lowcode-icon-picker');
+        await tap(key('lc-icon-pick-send'));
+        await shot(tester, 'lowcode-props-v3');
+        await tester.tap(key('lc-page-events'));
+        await tester.pumpAndSettle();
+        expect(key('lc-quick-navigate'), findsOneWidget);
+        await shot(tester, 'lowcode-quick-actions');
+        await back();
+
+        // 多选：长按菜单进入，再点一个；“样式”面板。
+        final g = await tester.startGesture(tester.getCenter(key('lowcode-node-n4')));
+        await tester.pump(const Duration(milliseconds: 340));
+        await tester.pump();
+        await g.up();
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('多选').last);
+        await tester.pumpAndSettle();
+        await tester.tap(key('lowcode-node-n5'), warnIfMissed: false);
+        await settle(tester, rounds: 2);
+        expect(key('lc-multi-mark-n4'), findsOneWidget);
+        expect(key('lc-multi-mark-n5'), findsOneWidget);
+        await shot(tester, 'lowcode-multi');
+        await tap(key('lc-multi-style'));
+        expect(key('lc-multi-style-rows'), findsOneWidget);
+        await shot(tester, 'lowcode-multi-style');
+        await back();
+        await tap(key('lc-multi-done'));
       });
 
       // 打包页（本地表单、进行中、成功、失败、不适用、钥匙页、两种远程方式）在 test/theme_pack_smoke_test.dart。

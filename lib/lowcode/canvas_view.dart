@@ -296,7 +296,7 @@ class CanvasViewState extends State<CanvasView> with SingleTickerProviderStateMi
       margin: cssEdges(style, 'margin', font, percentOf: base),
       border: cssBorderWidths(style, font),
       padding: cssEdges(style, 'padding', font, percentOf: base),
-      isRoot: parent == null,
+      isRoot: parent == null || node.locked,
     );
   }
 

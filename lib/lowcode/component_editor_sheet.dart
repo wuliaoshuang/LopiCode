@@ -22,6 +22,7 @@ import 'package:lopicode/lowcode/image_pick_sheet.dart';
 import 'package:lopicode/lowcode/inspector_sheet.dart';
 import 'package:lopicode/lowcode/layers_sheet.dart';
 import 'package:lopicode/lowcode/model.dart';
+import 'package:lopicode/lowcode/multi_select_widgets.dart';
 import 'package:lopicode/lowcode/node_actions.dart';
 import 'package:lopicode/lowcode/palette_catalog.dart';
 import 'package:lopicode/lowcode/palette_widgets.dart';
@@ -56,6 +57,8 @@ LcDocument? componentEditingDocument(LcDocument doc, String componentId) {
             id: c.id,
             name: c.name,
             props: [for (final p in c.props) LcComponentProp(name: p.name, type: p.type, defaultValue: p.defaultValue)],
+            keptProps: c.keptProps,
+            more: c.more,
             root: copyLcTree(c.root),
           ),
     ],
@@ -122,7 +125,17 @@ class _ComponentEditor extends StatefulWidget {
   State<_ComponentEditor> createState() => _ComponentEditorState();
 }
 
-class _ComponentEditorState extends State<_ComponentEditor> {
+class _ComponentEditorState extends State<_ComponentEditor> with LcMultiSelectHost<_ComponentEditor> {
+  @override
+  LcDocument get multiDoc => _temp;
+  @override
+  LcEdit get multiEdit => _apply;
+  @override
+  void multiSelectSingle(String? id) => _select(id);
+  // 垫在外面的那张页面、组件的最外层不能和别的一起选。
+  @override
+  bool multiCanPick(String id) => id != kComponentEditRootId && id != _top?.id && _temp.parentOf(id) != null;
+
   /// 搭建页手里的文档（每次写回时更新成它当时用的那个对象）。
   late LcDocument _real = widget.doc;
   late LcDocument _temp;
@@ -181,6 +194,7 @@ class _ComponentEditorState extends State<_ComponentEditor> {
     setState(() {
       _temp = doc;
       if (_selected != null && doc.find(_selected!) == null) _selected = null;
+      multiSync();
     });
     final error = _writeBack();
     if (error != null) unawaited(tellComponentProblem(context, error));
@@ -216,6 +230,7 @@ class _ComponentEditorState extends State<_ComponentEditor> {
   }
 
   void _drop(LcDrag drag, String parentId, int index) {
+    if (multiDrop(drag, parentId, index)) return;
     if (drag.type != null) {
       final node = _fresh(drag.type!, drag.ref);
       _apply((d) => d.insert(parentId, node, index));
@@ -229,6 +244,8 @@ class _ComponentEditorState extends State<_ComponentEditor> {
   bool _canDrop(LcDrag drag, String parentId) {
     // 垫在下面的页面里只能有组件最外层那一个控件。
     if (parentId == kComponentEditRootId) return false;
+    final many = multiCanDrop(drag, parentId);
+    if (many != null) return many;
     if (drag.nodeId == null) return true;
     final node = _temp.find(drag.nodeId!);
     if (node == null) return false;
@@ -248,6 +265,7 @@ class _ComponentEditorState extends State<_ComponentEditor> {
     if (!mounted) return;
     setState(() {
       if (_selected != null && _temp.find(_selected!) == null) _selected = null;
+      multiSync();
     });
   }
 
@@ -259,6 +277,8 @@ class _ComponentEditorState extends State<_ComponentEditor> {
       doc: () => _temp,
       root: () => _top ?? _temp.root,
       selected: _selected,
+      onEdit: _apply,
+      multi: LayerMulti(ids: () => multiOn ? multiIds : null, setOn: (on) => on ? multiEnter() : multiExit(), tap: multiTap),
       showLogic: false,
       onSelect: (id) {
         _select(id);
@@ -275,12 +295,17 @@ class _ComponentEditorState extends State<_ComponentEditor> {
   Future<void> _nodeMenu(String id, Offset at) async {
     final node = _temp.find(id);
     if (node == null || id == kComponentEditRootId) return;
+    if (multiOn) {
+      multiTap(id); // 多选时长按没挪＝加进来 / 移出去
+      return;
+    }
     _select(id);
-    final v = await showLcNodeMenu(context, at, node, componentActions: false, fixed: identical(node, _top));
+    final v = await showLcNodeMenu(context, at, node, componentActions: false, fixed: identical(node, _top), avoid: _bench.currentState?.canvas?.nodeScreenRect(id));
     if (v != null && mounted) _nodeAction(v, id);
   }
 
   void _nodeAction(String v, String id) {
+    if (v == 'multi') return multiEnter(id);
     final (done, select) = runLcNodeAction(v, _temp, id, _apply);
     if (done) {
       setState(() => _selected = select);
@@ -339,14 +364,16 @@ class _ComponentEditorState extends State<_ComponentEditor> {
           pickImage: widget.images == null ? null : (from) => widget.images!.pick(context, from),
           onNodeMenu: (id, at) => unawaited(_nodeMenu(id, at)),
           doc: _temp,
-          selected: _selected,
-          onSelect: _select,
+          selected: multiOn ? null : _selected,
+          marked: multiIds,
+          onSelect: (id) => multiOn ? multiTap(id) : _select(id),
           onAdd: _addByTap,
           onDrop: _drop,
           canDrop: _canDrop,
           // 最外层不能删（组件只能有一个最外层）。
           canDelete: (id) => id != _top?.id,
           onDelete: (id) {
+            if (multiDeleteDragged(id)) return;
             _apply((d) => d.remove(id));
             setState(() => _selected = null);
           },
@@ -357,7 +384,7 @@ class _ComponentEditorState extends State<_ComponentEditor> {
           onRedo: _history.canRedo ? () => _restore(_history.redo()) : null,
           presetWidth: _presetWidth,
           showBoxModel: _showBoxModel,
-          selectionBar: node == null ? null : _selectionBar(context, node),
+          selectionBar: multiOn ? multiBar() : (node == null ? null : _selectionBar(context, node)),
         ),
       ),
     );

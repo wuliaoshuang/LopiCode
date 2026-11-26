@@ -28,12 +28,26 @@ class LcComponentProp {
     final name = json['name'];
     if (name is! String || !namePattern.hasMatch(name)) return null;
     final type = json['type'];
-    return LcComponentProp(name: name, type: type is String && types.contains(type) ? type : 'text', defaultValue: json['default']);
+    // 类型是这一版不认识的（后面几期会加 选项 / 图片 / 列表 / 记录 / 任意）：不当成文字硬读，交给上面原样留着。
+    if (type is String && !types.contains(type)) return null;
+    return LcComponentProp(name: name, type: type is String ? type : 'text', defaultValue: json['default']);
   }
 }
 
 class LcComponentDef {
-  LcComponentDef({required this.id, required this.name, List<LcComponentProp>? props, required this.root}) : props = props ?? [];
+  LcComponentDef({required this.id, required this.name, List<LcComponentProp>? props, required this.root, List<Object?>? keptProps, Map<String, dynamic>? more})
+    : props = props ?? [],
+      keptProps = keptProps ?? [],
+      more = more ?? {};
+
+  /// 定义上这一版会读的字段；别的（给第 6 期留的 events / slots / variants / state / logic，以及任何不认识的）都进 [more]。
+  static const Set<String> knownKeys = {'id', 'name', 'props', 'root'};
+
+  /// 读不懂的属性（类型是这一版不认识的、名字不合规矩的、重名的）：不解释，原样留着。
+  final List<Object?> keptProps;
+
+  /// 定义上别的字段：不解释，原样留着。
+  final Map<String, dynamic> more;
 
   /// 组件 id：`c数字`，页面里的实例靠它引用。
   String id;
@@ -48,8 +62,9 @@ class LcComponentDef {
   Map<String, dynamic> toJson() => {
     'id': id,
     'name': name,
-    if (props.isNotEmpty) 'props': [for (final p in props) p.toJson()],
+    if (props.isNotEmpty || keptProps.isNotEmpty) 'props': [for (final p in props) p.toJson(), ...keptProps],
     'root': root.toJson(),
+    ...more,
   };
 
   LcComponentProp? prop(String name) {
@@ -60,29 +75,40 @@ class LcComponentDef {
   }
 
   /// 读不出来（缺 root、root 结构不合法、root 是 page）返回 null：坏的组件定义跳过，不让整页打不开。
-  static LcComponentDef? tryParse(Object? json) {
+  static LcComponentDef? tryParse(Object? json, {int version = LcDocument.currentVersion}) {
     if (json is! Map<String, dynamic>) return null;
     final rootJson = json['root'];
     if (rootJson is! Map<String, dynamic>) return null;
     final LcNode root;
     try {
-      root = LcNode.fromJson(rootJson, 1);
+      root = LcNode.fromJson(rootJson, 1, version: version);
     } on FormatException {
       return null;
     }
-    if (root.type == 'page') return null;
+    if (root.type == 'page' || root.isUnknown) return null;
     final id = json['id'];
     final name = json['name'];
     final rawProps = json['props'];
     final seen = <String>{};
+    final good = <LcComponentProp>[];
+    final kept = <Object?>[];
+    for (final p in rawProps is List ? rawProps : const <Object?>[]) {
+      final x = LcComponentProp.tryParse(p);
+      if (x != null && seen.add(x.name)) {
+        good.add(x);
+      } else {
+        kept.add(p);
+      }
+    }
     return LcComponentDef(
       id: id is String && idPattern.hasMatch(id) ? id : '',
       name: name is String && name.trim().isNotEmpty ? name.trim() : '未命名组件',
-      props: [
-        if (rawProps is List)
-          for (final p in rawProps)
-            if (LcComponentProp.tryParse(p) case final x? when seen.add(x.name)) x,
-      ],
+      props: good,
+      keptProps: kept,
+      more: {
+        for (final e in json.entries)
+          if (!knownKeys.contains(e.key) && e.value != null) e.key: e.value,
+      },
       root: root,
     );
   }

@@ -13,6 +13,7 @@ import 'package:lopicode/lowcode/export_html.dart';
 import 'package:lopicode/lowcode/export_tidy.dart';
 import 'package:lopicode/lowcode/logic_gate.dart';
 import 'package:lopicode/lowcode/model.dart';
+import 'package:lopicode/lowcode/newer_notice.dart';
 
 /// 需要用户点头的一次操作（显示成对话里的确认卡）。
 class ApprovalRequest {
@@ -258,7 +259,10 @@ class AgentToolbox {
       'lowcode_update_page',
       '用新的 JSON 整体替换低代码页面，并重新导出 index.html 和 style.css。',
       {
-        'page': {'type': 'object', 'description': '完整的页面对象：{title, root, logic?, components?}，root.type 必须是 page；节点可带 style（CSS 声明表）。logic（积木逻辑）/ components（自定义组件）不传就沿用现有的，要清空请传 {} / []'},
+        'page': {
+          'type': 'object',
+          'description': '完整的页面对象：{title, root, logic?, components?}，root.type 必须是 page；节点可带 style（CSS 声明表）、name（名字）；读到的不认识的字段原样带回、不要删。logic（积木逻辑）/ components（自定义组件）不传就沿用现有的，要清空请传 {} / []',
+        },
       },
       ['page'],
     ),
@@ -450,16 +454,20 @@ class AgentToolbox {
     // Agent 只想改版面时常常不带 logic / components：没带就沿用文件里现有的，免得把用户搭好的积木和组件冲掉。
     // 想清空要明确传空的（logic: {}，components: []）。
     var merged = value;
-    if (!merged.containsKey('logic') || !merged.containsKey('components')) {
+    int? oldVersion;
+    {
       final current = File(guard.resolve(kLowcodePageFile));
       if (await current.exists()) {
         try {
           final old = jsonDecode(await current.readAsString());
           if (old is Map<String, dynamic>) {
+            final v = old['version'];
+            if (v is int) oldVersion = v;
             merged = {
               ...merged,
-              for (final k in const ['logic', 'components'])
-                if (!merged.containsKey(k) && old[k] != null) k: old[k],
+              // 逻辑、组件，还有这一版不认识的最外层字段（新版应用写的）：没带就沿用。
+              for (final k in old.keys)
+                if (k != 'version' && k != 'title' && k != 'root' && !merged.containsKey(k) && old[k] != null) k: old[k],
             };
           }
         } on FormatException {
@@ -467,12 +475,17 @@ class AgentToolbox {
         }
       }
     }
+    // Agent 写的是新内容：没写版本号就按当前版读（老文件没写版本号才当第 1 版）。
+    if (merged['version'] is! int) merged = {...merged, 'version': LcDocument.currentVersion};
+    // 原来的文件是更新的版本做的：版本号不往回写（不然里面看不懂的东西就对不上号了）。
+    final given = merged['version'];
+    if (oldVersion != null && given is int && oldVersion > given) merged = {...merged, 'version': oldVersion};
     final doc = LcDocument.fromJson(merged); // 结构不合法会抛 FormatException，文件不会被改
     for (final f in [kLowcodePageFile, 'index.html', 'style.css', kLowcodeLogicFile]) {
       _checkScope(guard.resolve(f));
     }
     await saveLowcodePage(guard, doc);
-    return ToolOutcome('页面已更新，并重新导出了 index.html 和 style.css。${lcLogicToolReport(doc)}', changedFiles: true);
+    return ToolOutcome('页面已更新，并重新导出了 index.html 和 style.css。${lcLogicToolReport(doc)}${doc.isFromNewer ? '\n注意：${lcNewerNoticeText(doc)}' : ''}', changedFiles: true);
   }
 
   static String argString(Map<String, dynamic> args, String key, {bool allowEmpty = false}) {

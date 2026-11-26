@@ -30,6 +30,27 @@ List<LayerRow> layerRows(LcNode root, Set<String> collapsed) {
   return rows;
 }
 
+/// 图层面板里一行的名字：她起了名字就是名字，没起就是类型名。
+String layerTitle(LcNode n) => n.name.isNotEmpty ? n.name : n.spec.label;
+
+/// 名字后面那句灰字：上面的字 / 提示文字；起了名字的再带上类型名（不然看不出它是个什么）。
+String layerHint(LcNode n) {
+  final text = n.strProp('text') ?? n.strProp('placeholder') ?? '';
+  if (n.name.isEmpty) return text;
+  return text.isEmpty ? n.spec.label : '${n.spec.label} · $text';
+}
+
+/// 搜索：名字、类型名、上面的字里有 [query]（不分大小写）的行，顺序不变。
+List<LayerRow> layerSearch(List<LayerRow> all, String query) {
+  final q = query.trim().toLowerCase();
+  if (q.isEmpty) return all;
+  bool hit(LcNode n) => n.name.toLowerCase().contains(q) || n.spec.label.toLowerCase().contains(q) || (n.strProp('text') ?? n.strProp('placeholder') ?? '').toLowerCase().contains(q);
+  return [
+    for (final r in all)
+      if (hit(r.node)) LayerRow(r.node, r.depth, collapsed: false),
+  ];
+}
+
 /// 拖着的那一行会落在哪儿。
 class LayerDrop {
   const LayerDrop(this.parentId, this.index, {required this.line, required this.depth, required this.into});

@@ -163,3 +163,13 @@ class CanvasImage extends StatelessWidget {
     return sized(Image.file(File(path), height: h, width: width, fit: fit, errorBuilder: broken));
   }
 }
+
+/// 给组件左上角挂一个角标。往上探出去一点：贴着左上角放会盖住文字开头。
+Widget canvasBadged(Widget box, String badge) => Stack(
+  fit: StackFit.passthrough,
+  clipBehavior: Clip.none,
+  children: [
+    box,
+    Positioned(left: 0, top: -9, child: CanvasBadge(badge)),
+  ],
+);

@@ -1,6 +1,7 @@
 // 设计约束（低代码 · 画布上就地改文字 · 390×844）
 // - 对象：文字、按钮（改上面的字）、输入框（改提示文字）。点一下已经选中的它，原地变成输入框。
-// - 内容主次：只有这一个输入框——字号、对齐、内边距照组件原样，盖在组件原来的位置上；一圈强调色的边告诉她“正在改”。
+// - 内容主次：只有这一个输入框——字号、对齐、内边距照组件原样，盖在组件原来的位置上、和组件一样宽（字多了跟着变宽）；
+//   一圈强调色的边告诉她“正在改”。
 // - 键盘上方不加工具行。点别处、键盘上的“完成”、收键盘＝提交；整次只记一条撤销。没改就不记。
 // - 键盘弹出来把它挡住时，画布自己滚到露出来。
 // - 取用的 tokens：accent（那一圈边）、Radii.sm。
@@ -11,6 +12,9 @@ import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/lowcode/style_resolve.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:material_ui/material_ui.dart';
+
+/// 就地改字的框最窄多宽：够放一个光标和一两个字。
+const double kInlineEditMinWidth = 32;
 
 /// 这种组件点第二下改的是哪个属性；不能就地改返回 null。
 String? inlineTextProp(LcNode n) => switch (n.type) {
@@ -94,51 +98,59 @@ class _InlineTextEditorState extends State<InlineTextEditor> {
             final pad = n.type == 'input' ? 12.0 : (effectivePx(n, widget.parent, 'padding-left') ?? 0).toDouble();
             final padV = n.type == 'input' ? 12.0 : (effectivePx(n, widget.parent, 'padding-top') ?? 0).toDouble();
             final weight = r['font-weight'];
+            // 最窄不小于 [kInlineEditMinWidth]（空文字的组件量出来可能是 0 宽，得有地方放光标）。
+            final minWidth = rect.width.clamp(kInlineEditMinWidth, box.maxWidth).toDouble();
+            final left = rect.left.clamp(0.0, (box.maxWidth - minWidth).clamp(0.0, double.infinity)).toDouble();
             return Stack(
               children: [
                 Positioned(
-                  left: rect.left.clamp(0.0, (box.maxWidth - 120).clamp(0.0, double.infinity)).toDouble(),
+                  left: left,
                   top: rect.top,
-                  width: rect.width.clamp(120.0, box.maxWidth).toDouble(),
-                  child: Material(
-                    color: bg,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(Radii.sm),
-                      side: BorderSide(color: c.accent, width: 2),
-                    ),
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(minHeight: rect.height),
-                      child: Padding(
-                        padding: EdgeInsets.symmetric(horizontal: pad * scale, vertical: padV * scale),
-                        child: TextField(
-                          key: const Key('lc-inline-edit'),
-                          controller: _text,
-                          focusNode: _focus,
-                          autofocus: true,
-                          maxLines: multiline ? null : 1,
-                          textInputAction: multiline ? TextInputAction.newline : TextInputAction.done,
-                          textAlign: switch (n.type == 'button' ? 'center' : r['text-align']) {
-                            'center' => TextAlign.center,
-                            'right' => TextAlign.right,
-                            _ => TextAlign.left,
-                          },
-                          cursorColor: fg,
-                          style: TextStyle(
-                            fontSize: ((effectivePx(n, widget.parent, 'font-size') ?? 16) * scale).toDouble(),
-                            color: fg,
-                            fontWeight: weight == 'bold' || (int.tryParse(weight ?? '') ?? 400) >= 600 ? FontWeight.w600 : FontWeight.w400,
-                            height: n.type == 'text' ? 1.5 : null,
+                  // 和组件一样宽；字打多了跟着变宽，最宽到屏幕右边（以前最窄 120，小按钮上的框比按钮还宽）。
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(minWidth: minWidth, maxWidth: (box.maxWidth - left).clamp(minWidth, double.infinity).toDouble()),
+                    child: IntrinsicWidth(
+                      child: Material(
+                        color: bg,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(Radii.sm),
+                          side: BorderSide(color: c.accent, width: 2),
+                        ),
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(minHeight: rect.height),
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(horizontal: pad * scale, vertical: padV * scale),
+                            child: TextField(
+                              key: const Key('lc-inline-edit'),
+                              controller: _text,
+                              focusNode: _focus,
+                              autofocus: true,
+                              maxLines: multiline ? null : 1,
+                              textInputAction: multiline ? TextInputAction.newline : TextInputAction.done,
+                              textAlign: switch (n.type == 'button' ? 'center' : r['text-align']) {
+                                'center' => TextAlign.center,
+                                'right' => TextAlign.right,
+                                _ => TextAlign.left,
+                              },
+                              cursorColor: fg,
+                              style: TextStyle(
+                                fontSize: ((effectivePx(n, widget.parent, 'font-size') ?? 16) * scale).toDouble(),
+                                color: fg,
+                                fontWeight: weight == 'bold' || (int.tryParse(weight ?? '') ?? 400) >= 600 ? FontWeight.w600 : FontWeight.w400,
+                                height: n.type == 'text' ? 1.5 : null,
+                              ),
+                              // 各种状态的边框都明说关掉，不跟着主题里输入框的描边走（外面那圈蓝边是这个编辑框自己的）
+                              decoration: const InputDecoration(
+                                isCollapsed: true,
+                                filled: false,
+                                border: InputBorder.none,
+                                enabledBorder: InputBorder.none,
+                                focusedBorder: InputBorder.none,
+                                contentPadding: EdgeInsets.zero,
+                              ),
+                              onSubmitted: (_) => _finish(),
+                            ),
                           ),
-                          // 各种状态的边框都明说关掉，不跟着主题里输入框的描边走（外面那圈蓝边是这个编辑框自己的）
-                          decoration: const InputDecoration(
-                            isCollapsed: true,
-                            filled: false,
-                            border: InputBorder.none,
-                            enabledBorder: InputBorder.none,
-                            focusedBorder: InputBorder.none,
-                            contentPadding: EdgeInsets.zero,
-                          ),
-                          onSubmitted: (_) => _finish(),
                         ),
                       ),
                     ),

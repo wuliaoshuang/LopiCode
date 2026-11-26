@@ -21,6 +21,7 @@ library;
 
 import 'package:lopicode/lowcode/component_model.dart';
 import 'package:lopicode/lowcode/export_framework_common.dart';
+import 'package:lopicode/lowcode/export_v3_fields.dart';
 import 'package:lopicode/lowcode/logic_blocks.dart';
 import 'package:lopicode/lowcode/logic_js_core.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
@@ -197,19 +198,36 @@ class _View {
       case 'text':
         return _Jsx(['<p$a>${_content(n)}</p>']);
       case 'button':
-        return _Jsx(['<button type="button"$a>${_content(n)}</button>']);
+        final icon = lcButtonIcon(n);
+        final solo = dyn(n, 'text') == null && (n.strProp('text') ?? '').isEmpty;
+        return _Jsx(['<button type="button"$a${lcIsDisabled(n) ? ' disabled' : ''}>${icon == null ? '' : lcIconSvg(icon, classAttr: 'className', solo: solo, jsx: true)}${_content(n)}</button>']);
       case 'image':
-        const placeholder = ' role="img" aria-label="图片占位"';
+        final altText = n.strProp('alt');
+        final placeholder = altText == null ? ' role="img" aria-label="图片占位"' : ' role="img"${jsxAttr('aria-label', altText)}';
+        final alt = altText == null ? ' alt=""' : jsxAttr('alt', altText);
         final e = dyn(n, 'src');
         if (e != null) {
           // 地址会变：有地址显示图片，空着显示占位块。
-          return _Jsx(['$e ? (', '  <img$a src={$e} alt="" />', ') : (', '  <div$a$placeholder></div>', ')'], _Kind.expression);
+          return _Jsx(['$e ? (', '  <img$a src={$e}$alt />', ') : (', '  <div$a$placeholder></div>', ')'], _Kind.expression);
         }
         final src = n.strProp('src');
-        return _Jsx([src == null ? '<div$a$placeholder></div>' : '<img$a${jsxAttr('src', src)} alt="" />']);
+        return _Jsx([src == null ? '<div$a$placeholder></div>' : '<img$a${jsxAttr('src', src)}$alt />']);
       case 'input':
         final value = dyn(n, 'value');
-        return _Jsx(['<input$a${_bindable(n, 'placeholder')}${value == null ? '' : ' value={$value}'} />']);
+        final type = lcInputType(n), fixed = n.strProp('value'), label = lcInputLabel(n);
+        final input =
+            '<input$a${type == null ? '' : ' type="$type"'}${_bindable(n, 'placeholder')}${value != null ? ' value={$value}' : (fixed == null ? '' : jsxAttr('defaultValue', fixed))}'
+            '${lcInputRequired(n) ? ' required' : ''}${lcIsDisabled(n) ? ' disabled' : ''} />';
+        if (label == null) return _Jsx([input]);
+        return _Jsx([
+          '<label className="${lcFieldClassOf(n, prefix)}">',
+          '  <span className="lc-label">',
+          '    ${jsxText(label)}',
+          if (lcInputRequired(n)) '    <span className="lc-required" aria-hidden="true">{" *"}</span>',
+          '  </span>',
+          '  $input',
+          '</label>',
+        ]);
       case 'list':
         final items = n.props['items'];
         return _Jsx(['<ul$a>', for (final item in items is List ? items : const <Object?>[]) '  <li>${jsxText('$item')}</li>', '</ul>']);
@@ -217,6 +235,9 @@ class _View {
         return _Jsx(['<hr$a />']);
       case 'spacer':
         return _Jsx(['<div$a></div>']);
+      case LcNode.unknownType:
+        notes.add(kNoteUnknownNode);
+        return const _Jsx(['这里有一个新版应用加的组件，这一版导不出来'], _Kind.comment);
       case 'component':
         final plan = plans.planFor(n, ownerId: ownerId);
         if (plan == null) {
