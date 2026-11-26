@@ -1,29 +1,34 @@
 // 设计约束（低代码 · 编辑组件的内容 · 390×844）
 // - 整页：和搭建页同一套排法，只是画布上放的不是页面，而是“这个组件的内容”（外面垫一张空白页当背景）。
 //   顶栏（沉浸式，悬浮在画布上面，没有底色）：标题“编辑组件”+ 组件名；右边“⋮”（可配置的属性、屏宽与缩放）和主操作“完成”。
-//   顶栏以下是和搭建页共用的搭建台（editor_workbench_widgets.dart）：画布 → 选中条（名字在左；属性 / 样式 在右；
-//   上移、下移、复制、删除收进“更多操作”）→ 最底下的工具条（添加 / 图层 / 撤销 / 重做；这里没有预览）。
+//   顶栏以下是和搭建页共用的搭建台（editor_workbench_widgets.dart）：画布 → 选中条（“选上一层”和名字在左；常用 / 样式 在右，
+//   打开同一张合一面板的两页；其余收进“更多操作”，和长按菜单同一份）→ 最底下的工具条（添加 / 图层 / 撤销 / 重做；这里没有预览）。
 // - 这里没有积木逻辑的入口：组件里面的控件不支持逻辑。
 // - 组件最外层只能有一个控件：最外层不能删、不能移走，旁边也放不了别的控件（要放就放进它里面）。
 // - 每改一下立刻写回组件定义（搭建页那边记一条撤销），所以回到页面时所有实例已经是新样子；“完成”只是关掉这一页。
 import 'dart:async';
 
+import 'package:lopicode/lowcode/builder_bars_widgets.dart';
+import 'package:lopicode/lowcode/canvas_parts_widgets.dart';
 import 'package:lopicode/lowcode/canvas_view_sheet.dart';
 import 'package:lopicode/lowcode/component_model.dart';
 import 'package:lopicode/lowcode/component_ops.dart';
 import 'package:lopicode/lowcode/component_props_sheet.dart';
 import 'package:lopicode/lowcode/component_values_widgets.dart';
 import 'package:lopicode/lowcode/edit_types.dart';
+import 'package:lopicode/lowcode/editor_clipboard.dart';
 import 'package:lopicode/lowcode/editor_workbench_widgets.dart';
+import 'package:lopicode/lowcode/image_pick_sheet.dart';
+import 'package:lopicode/lowcode/inspector_sheet.dart';
 import 'package:lopicode/lowcode/layers_sheet.dart';
 import 'package:lopicode/lowcode/model.dart';
+import 'package:lopicode/lowcode/node_actions.dart';
 import 'package:lopicode/lowcode/palette_catalog.dart';
 import 'package:lopicode/lowcode/palette_widgets.dart';
-import 'package:lopicode/lowcode/props_sheet.dart';
-import 'package:lopicode/lowcode/style_editor_sheet.dart';
 import 'package:lopicode/lowcode/style_model.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/shell.dart';
+import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// “编辑组件”用的临时页面的根 id。带下划线：定义里的节点 id 只有字母数字，不会和它撞。
@@ -89,7 +94,7 @@ LcOpResult applyComponentEditing(LcDocument doc, String componentId, LcDocument 
 }
 
 /// 打开“编辑组件内容”页。关掉后组件定义已经是改好的（每一步都即时写回）。
-Future<void> showComponentEditor(BuildContext context, {required LcDocument doc, required LcEdit onEdit, required String componentId, PaletteRecents? recents}) async {
+Future<void> showComponentEditor(BuildContext context, {required LcDocument doc, required LcEdit onEdit, required String componentId, PaletteRecents? recents, LcImages? images}) async {
   if (doc.component(componentId) == null) {
     await tellComponentProblem(context, '这个组件的定义已经不存在了。');
     return;
@@ -97,13 +102,16 @@ Future<void> showComponentEditor(BuildContext context, {required LcDocument doc,
   await Navigator.push(
     context,
     MaterialPageRoute<void>(
-      builder: (_) => _ComponentEditor(doc: doc, onEdit: onEdit, componentId: componentId, recents: recents ?? PaletteRecents()),
+      builder: (_) => _ComponentEditor(doc: doc, onEdit: onEdit, componentId: componentId, recents: recents ?? PaletteRecents(), images: images),
     ),
   );
 }
 
 class _ComponentEditor extends StatefulWidget {
-  const _ComponentEditor({required this.doc, required this.onEdit, required this.componentId, required this.recents});
+  const _ComponentEditor({required this.doc, required this.onEdit, required this.componentId, required this.recents, this.images});
+
+  /// 项目的图片（画布认相对地址、面板里选图）；没给就只能填网址。
+  final LcImages? images;
 
   /// 组件盒的“常用”：和搭建页用同一份（没给就只在这一页里记）。
   final PaletteRecents recents;
@@ -244,45 +252,44 @@ class _ComponentEditorState extends State<_ComponentEditor> {
     });
   }
 
-  void _openProps(LcNode node) {
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      barrierColor: Colors.black26,
-      builder: (_) => PropertySheet(
-        node: node,
-        doc: _temp,
-        onChanged: (key, value) => _apply((d) {
-          final n = d.find(node.id);
-          if (n == null) return;
-          if (value == null) {
-            n.props.remove(key);
-          } else {
-            n.props[key] = value;
-          }
-        }),
-      ),
+  /// 图层面板从组件的最外层列起（外面垫的那张空白页不算）。
+  Future<void> _openLayers() async {
+    _bench.currentState?.closeInspector();
+    await showLayerSheet(
+      context,
+      doc: () => _temp,
+      root: () => _top ?? _temp.root,
+      selected: _selected,
+      showLogic: false,
+      onSelect: (id) {
+        _select(id);
+        WidgetsBinding.instance.addPostFrameCallback((_) => _bench.currentState?.canvas?.revealNode(id));
+      },
+      onMove: (id, parentId, index) {
+        _apply((d) => d.move(id, parentId, index));
+        _select(id);
+      },
     );
-  }
-
-  Future<void> _openStyle(String id) async {
-    await showStyleEditor(context, doc: _temp, nodeId: id, onEdit: _apply);
     _refresh();
   }
 
-  void _openLayers() {
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      builder: (sheetContext) => LayerSheet(
-        doc: _temp,
-        selected: _selected,
-        onSelect: (id) {
-          Navigator.pop(sheetContext);
-          _select(id);
-        },
-      ),
-    );
+  Future<void> _nodeMenu(String id, Offset at) async {
+    final node = _temp.find(id);
+    if (node == null || id == kComponentEditRootId) return;
+    _select(id);
+    final v = await showLcNodeMenu(context, at, node, componentActions: false, fixed: identical(node, _top));
+    if (v != null && mounted) _nodeAction(v, id);
+  }
+
+  void _nodeAction(String v, String id) {
+    final (done, select) = runLcNodeAction(v, _temp, id, _apply);
+    if (done) {
+      setState(() => _selected = select);
+      if (v == 'clip') showEditorHint(context, '已复制，长按别的组件可以“粘贴到它后面”');
+    } else if (v == 'delete') {
+      _apply((d) => d.remove(id));
+      setState(() => _selected = null);
+    }
   }
 
   Future<void> _openComponentProps() async {
@@ -325,8 +332,13 @@ class _ComponentEditorState extends State<_ComponentEditor> {
           TextButton(key: const ValueKey('comp-editor-done'), onPressed: () => Navigator.pop(context), child: const Text('完成')),
         ],
       ),
-      body: EditorWorkbench(
+      body: LcImageScope(
+        resolve: (src) => widget.images?.resolve(src),
+        child: EditorWorkbench(
         key: _bench,
+        onEdit: _apply,
+        pickImage: widget.images == null ? null : (from) => widget.images!.pick(context, from),
+        onNodeMenu: (id, at) => unawaited(_nodeMenu(id, at)),
         doc: _temp,
         selected: _selected,
         onSelect: _select,
@@ -341,12 +353,13 @@ class _ComponentEditorState extends State<_ComponentEditor> {
         },
         onResize: _resize,
         recents: widget.recents,
-        onLayers: _openLayers,
+        onLayers: () => unawaited(_openLayers()),
         onUndo: _history.canUndo ? () => _restore(_history.undo()) : null,
         onRedo: _history.canRedo ? () => _restore(_history.redo()) : null,
         presetWidth: _presetWidth,
         showBoxModel: _showBoxModel,
         selectionBar: node == null ? null : _selectionBar(context, node),
+      ),
       ),
     );
   }
@@ -356,38 +369,22 @@ class _ComponentEditorState extends State<_ComponentEditor> {
     return EditorSelectionBar(
       icon: lcIcon(node.type),
       label: '${node.type == 'component' ? componentLabel(_temp, node) : node.spec.label}${isTop ? '（最外层）' : ''}',
-      actions: [
-        EditorSelectionBar.primary('属性', () => _openProps(node)),
-        EditorSelectionBar.outlined('样式', () => _openStyle(node.id)),
-        // 最外层不能移动、复制、删除（组件只能有一个最外层）。
-        if (isTop)
-          const SizedBox(width: Space.x3)
-        else
-          PopupMenuButton<String>(
-            tooltip: '更多操作',
-            icon: const Icon(Icons.more_horiz, size: 20),
-            onSelected: (v) {
-              switch (v) {
-                case 'up':
-                  _apply((d) => d.shift(node.id, -1));
-                case 'down':
-                  _apply((d) => d.shift(node.id, 1));
-                case 'copy':
-                  String? copy;
-                  _apply((d) => copy = d.duplicate(node.id));
-                  if (copy != null) setState(() => _selected = copy);
-                case 'delete':
-                  _apply((d) => d.remove(node.id));
-                  setState(() => _selected = null);
-              }
+      onParent: isTop
+          ? null
+          : () {
+              final parent = _temp.parentOf(node.id);
+              if (parent != null && parent.id != kComponentEditRootId) _select(parent.id);
             },
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: 'up', child: Text('上移')),
-              PopupMenuItem(value: 'down', child: Text('下移')),
-              PopupMenuItem(value: 'copy', child: Text('复制')),
-              PopupMenuItem(value: 'delete', child: Text('删除')),
-            ],
-          ),
+      actions: [
+        EditorSelectionBar.primary('常用', () => _bench.currentState?.openInspector(InspectorPage.common)),
+        EditorSelectionBar.outlined('样式', () => _bench.currentState?.openInspector(InspectorPage.style)),
+        // 最外层不能移动、复制、删除（组件只能有一个最外层）：剪贴板里有东西时只有“粘贴到里面”。
+        if (!isTop)
+          LcNodeMoreButton(node: node, componentActions: false, onAction: (v) => _nodeAction(v, node.id))
+        else if (lcClipboardHasContent && node.isContainer)
+          LcNodeMoreButton(node: node, componentActions: false, fixed: true, onAction: (v) => _nodeAction(v, node.id))
+        else
+          const SizedBox(width: Space.x3),
       ],
     );
   }

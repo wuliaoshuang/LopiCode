@@ -438,7 +438,7 @@ void main() {
       expect(canvas(tester).scale, 1);
       // 没选中：没有拖柄、没有操作条
       expect(handle('se'), findsNothing);
-      expect(find.text('属性'), findsNothing);
+      expect(find.byKey(const ValueKey('lc-selection-bar')), findsNothing);
     });
 
     testWidgets('选中按钮：出现拖柄和尺寸；选中页面：没有拖柄', (tester) async {
@@ -583,7 +583,7 @@ void main() {
       await tester.tapAt(tester.getCenter(node('n5')));
       await settle(tester, rounds: 2);
       expect(find.text('按钮'), findsWidgets);
-      expect(find.widgetWithText(FilledButton, '属性'), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, '常用'), findsOneWidget);
       expect(tester.getRect(handle('se')).width, closeTo(44, 0.01));
       expect(find.text('64 × 48'), findsOneWidget, reason: '尺寸标签显示的是页面上的像素，不随缩放变');
       // 缩小后拖拖柄：手指移 40，页面上是 80（手指移得太少系统不当成拖动）
@@ -726,22 +726,22 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('“更多操作”里的上移 / 下移 / 复制 / 删除', (tester) async {
+    testWidgets('“更多操作”里的上移 / 下移 / 重复一份 / 删除', (tester) async {
       final session = await openBuilder(tester);
       await select(tester, 'n2');
       await moreAction(tester, '上移');
       expect([for (final c in (await savedDoc(tester, session)).root.children) c.id], ['n2', 'n1', 'n3']);
       await moreAction(tester, '下移');
       expect([for (final c in (await savedDoc(tester, session)).root.children) c.id], ['n1', 'n2', 'n3']);
-      await moreAction(tester, '复制');
+      await moreAction(tester, '重复一份');
       var doc = await savedDoc(tester, session);
       expect([for (final c in doc.root.children) c.type], ['text', 'text', 'text', 'card']);
       expect(doc.root.children[2].strProp('text'), doc.root.children[1].strProp('text'));
-      // 复制后选中的是新的那个；删掉它
+      // 重复一份后选中的是新的那个；删掉它
       await moreAction(tester, '删除');
       doc = await savedDoc(tester, session);
       expect([for (final c in doc.root.children) c.id], ['n1', 'n2', 'n3']);
-      expect(find.text('属性'), findsNothing, reason: '删除后取消选中');
+      expect(find.byKey(const ValueKey('lc-selection-bar')), findsNothing, reason: '删除后取消选中');
       expect(tester.takeException(), isNull);
     });
 
@@ -815,27 +815,39 @@ void main() {
     testWidgets('新入口：样式 / 逻辑 / 积木逻辑 / 自定义组件 / 导出 Vue / React 都能点开', (tester) async {
       await openBuilder(tester);
       await select(tester, 'n5');
-      // 原来的“属性”还在
-      await tester.tap(find.widgetWithText(FilledButton, '属性'));
+      // “属性”和“样式”合成了一张面板：“常用”打开它的第一页，不挡画布；返回键收起
+      final panel = find.byKey(const ValueKey('lc-inspector'));
+      await tester.tap(find.widgetWithText(FilledButton, '常用'));
       await tester.pumpAndSettle();
-      expect(find.text('按钮属性'), findsOneWidget);
+      expect(panel, findsOneWidget);
+      expect(tester.widget<Text>(find.byKey(const ValueKey('lc-inspector-title'))).data, '按钮');
+      expect(find.byKey(const ValueKey('lc-common-text')), findsOneWidget);
       await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
+      expect(panel, findsNothing);
 
       await tester.tap(find.widgetWithText(OutlinedButton, '样式'));
       await tester.pumpAndSettle();
-      expect(find.byType(BottomSheet), findsOneWidget);
+      expect(panel, findsOneWidget);
+      expect(find.byKey(const ValueKey('lc-tab-size')), findsOneWidget);
       await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
-      expect(find.byType(BottomSheet), findsNothing);
+      expect(panel, findsNothing);
 
+      // “逻辑”打开面板的“事件”页；点“加逻辑”进积木页，带着这个组件
       await tester.tap(find.widgetWithText(TextButton, '逻辑'));
+      await tester.pumpAndSettle();
+      expect(panel, findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('lc-event-add-click')));
       await tester.pumpAndSettle();
       expect(tester.widget<LogicScreen>(find.byType(LogicScreen)).initialNodeId, 'n5');
       await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
       expect(find.byType(LogicScreen), findsNothing);
-      expect(find.text('属性'), findsOneWidget, reason: '回来以后选中还在');
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(panel, findsNothing);
+      expect(find.byKey(const ValueKey('lc-selection-bar')), findsOneWidget, reason: '回来以后选中还在');
 
       await topMenu(tester, '积木逻辑');
       expect(tester.widget<LogicScreen>(find.byType(LogicScreen)).initialNodeId, isNull);
@@ -870,7 +882,7 @@ void main() {
       await tester.pump();
       await tester.tapAt(tester.getCenter(node('n3')));
       await settle(tester, rounds: 2);
-      expect(find.text('属性'), findsOneWidget);
+      expect(find.byKey(const ValueKey('lc-selection-bar')), findsOneWidget);
       // 间距示意的开关在“⋮ › 屏宽与缩放”里，默认开
       bool boxModelOn() => tester.widget<SwitchListTile>(find.byKey(const ValueKey('lc-box-model'))).value;
       await openViewSheet(tester);
@@ -885,7 +897,7 @@ void main() {
       final view = tester.getRect(find.byKey(const ValueKey('lowcode-canvas')));
       await tester.tapAt(view.centerLeft + const Offset(20, 0));
       await settle(tester, rounds: 2);
-      expect(find.text('属性'), findsNothing);
+      expect(find.byKey(const ValueKey('lc-selection-bar')), findsNothing);
       expect(tester.takeException(), isNull);
     });
   });

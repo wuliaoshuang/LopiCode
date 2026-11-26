@@ -110,7 +110,7 @@ class _CssSheetState extends ConsumerState<_CssSheet> {
                 const SizedBox(height: Space.x4),
                 Text('来自属性的样式（只读）', style: t.labelMedium),
                 const SizedBox(height: Space.x1),
-                Text(widget.legacy.isEmpty ? '这个组件的“属性”里没有设会变成样式的东西。' : '这些是从“属性”面板里设的值翻出来的，要改去“属性”里改。在上面写同名的，会盖掉它。', style: t.bodySmall?.copyWith(color: c.textFaint)),
+                Text(widget.legacy.isEmpty ? '这个组件的“常用”页里没有设会变成样式的东西。' : '这些是从“常用”页里设的值翻出来的，要改去“常用”页里改。在上面写同名的，会盖掉它。', style: t.bodySmall?.copyWith(color: c.textFaint)),
                 if (widget.legacy.isNotEmpty) ...[
                   const SizedBox(height: Space.x2),
                   Container(

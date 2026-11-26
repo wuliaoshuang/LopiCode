@@ -9,8 +9,19 @@
 //     经过一个新的可放位置轻震一下，放下轻震，丢进删除区重震。
 //   拖动时别的都不动：选中条不收（只是变淡、点不了）、画布不变高——页面一个像素都不跳。
 // - 第 2 期往这里加东西的口子：选中条的按钮是传进来的一串控件；工具条右边那排图标可以加 [toolbarExtra]。
+// - 第 2 期加的三样也归这里管（两个页面共用）：
+//     合一面板（inspector_sheet.dart）：贴在工具条上面、盖住选中条、**不挡画布**——上面露着的画布照样能点，
+//       点另一个组件面板跟着换；点“×”/ 往下拖到底 / 返回键＝收起。取消选中时它只是先让开，再选中一个组件它自己回来
+//       （所以“选中 → 点档”两步就能改一个值）；她亲手收起、或者去开组件盒以后，就不再自己出来。
+//       它开着时画布把选中的组件滚到面板上方。
+//     就地改字（inline_text_widgets.dart）：点一下已经选中的文字 / 按钮 / 输入框，原地变输入框。
+//     长按菜单：长按一个组件、没挪（不到 8 像素）就松手＝出菜单（由页面决定菜单里有什么）；挪了才是拖动。
 import 'package:lopicode/lowcode/canvas_drag_widgets.dart';
 import 'package:lopicode/lowcode/canvas_view.dart';
+import 'package:lopicode/lowcode/edit_types.dart';
+import 'package:lopicode/lowcode/editor_selection_bar_widgets.dart';
+import 'package:lopicode/lowcode/inline_text_widgets.dart';
+import 'package:lopicode/lowcode/inspector_sheet.dart';
 import 'package:lopicode/lowcode/lift_gesture_widgets.dart';
 import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/lowcode/palette_catalog.dart';
@@ -19,11 +30,26 @@ import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/top_bar.dart';
 import 'package:material_ui/material_ui.dart';
 
+// 选中条的外壳原来就定义在这个文件里，别处还从这里引用。
+export 'package:lopicode/lowcode/editor_selection_bar_widgets.dart' show EditorSelectionBar, kEditorSelectionBarHeight;
+
 /// 工具条多高。
 const double kEditorToolbarHeight = 56;
 
-/// 选中条多高。
-const double kEditorSelectionBarHeight = 48;
+/// 搭建台里的一句提示（“已复制…”）：浮在工具条和选中条**上面**。
+/// 用全应用那种贴底的提示会把撤销 / 重做盖住好几秒（测试里点撤销点到了提示上才发现）。
+void showEditorHint(BuildContext context, String text) {
+  ScaffoldMessenger.of(context)
+    ..hideCurrentSnackBar()
+    ..showSnackBar(
+      SnackBar(
+        content: Text(text),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 3),
+        margin: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, kEditorToolbarHeight + kEditorSelectionBarHeight + Space.x2),
+      ),
+    );
+}
 
 class EditorWorkbench extends StatefulWidget {
   const EditorWorkbench({
@@ -46,7 +72,25 @@ class EditorWorkbench extends StatefulWidget {
     this.toolbarExtra = const [],
     this.presetWidth = 0,
     this.showBoxModel = true,
+    this.onEdit,
+    this.pickImage,
+    this.onOpenLogic,
+    this.onAddLogic,
+    this.onNodeMenu,
   });
+
+  /// 合一面板和就地改字靠它改文档；不给＝这两样都没有。
+  final LcEdit? onEdit;
+
+  /// 合一面板里选图片（见 [InspectorPanel.pickImage]）。
+  final Future<String?> Function(String from)? pickImage;
+
+  /// 合一面板“事件”页用（见 [InspectorPanel]）；不给＝没有“事件”页。
+  final void Function(String nodeId)? onOpenLogic;
+  final void Function(String nodeId, String event)? onAddLogic;
+
+  /// 长按一个组件没挪就松手：页面在 [at]（屏幕坐标）弹菜单。不给＝长按只有拖动。
+  final void Function(String nodeId, Offset at)? onNodeMenu;
 
   final LcDocument doc;
   final String? selected;
@@ -95,7 +139,18 @@ class EditorWorkbenchState extends State<EditorWorkbench> {
   final GlobalKey<CanvasViewState> _canvasKey = GlobalKey();
   final GlobalKey<PalettePanelState> _paletteKey = GlobalKey();
   final GlobalKey _zoneKey = GlobalKey();
+  final GlobalKey<InspectorPanelState> _inspectorKey = GlobalKey();
   bool _paletteOpen = false;
+
+  /// 合一面板开在哪一页；null＝没开。
+  InspectorPage? _inspector;
+
+  /// 正在就地改字的组件。
+  String? _editing;
+
+  // 这次长按是从哪儿拿起来的、拿起来以后挪没挪过。
+  Offset _liftAt = Offset.zero;
+  bool _moved = false;
 
   // 正在拖的东西；手指位置和“在不在删除区上”单独通知，不让整块跟着重搭。
   LcDrag? _drag;
@@ -110,6 +165,73 @@ class EditorWorkbenchState extends State<EditorWorkbench> {
   PalettePanelState? get palette => _paletteKey.currentState;
 
   bool get paletteOpen => _paletteOpen;
+  bool get inspectorOpen => _inspector != null && widget.selected != null;
+
+  /// 合一面板（没开是 null）。
+  InspectorPanelState? get inspector => _inspectorKey.currentState;
+
+  /// 打开合一面板的某一页（已经开着就换页）。
+  void openInspector(InspectorPage page) {
+    if (widget.onEdit == null) return;
+    final open = inspector;
+    if (open != null) {
+      open.showPage(page);
+      return;
+    }
+    setState(() {
+      _inspector = page;
+      _paletteOpen = false;
+    });
+    _revealSelected();
+  }
+
+  /// 收起合一面板（没提交的改动先交出去）。
+  void closeInspector() {
+    if (_inspector == null) return;
+    inspector?.flush();
+    setState(() => _inspector = null);
+  }
+
+  void _revealSelected() => WidgetsBinding.instance.addPostFrameCallback((_) {
+    final id = widget.selected;
+    if (mounted && id != null && _inspector != null) canvas?.revealNode(id);
+  });
+
+  @override
+  void didUpdateWidget(EditorWorkbench oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.selected != oldWidget.selected) {
+      _editing = null;
+      if (_inspector != null) _revealSelected(); // 面板开着换了组件：滚到面板上方
+    }
+  }
+
+  /// 画布上点了一个组件（或空白）。点的是已经选中的文字 / 按钮 / 输入框＝就地改字。
+  void _tapNode(String? id) {
+    final node = id == null ? null : widget.doc.find(id);
+    if (_editing != null) {
+      // 正在就地改字时点了别处：先把字交出去（输入框失焦就会提交），这一下只算“改完了”。
+      FocusManager.instance.primaryFocus?.unfocus();
+      if (id != widget.selected) widget.onSelect(id);
+      return;
+    }
+    if (node != null && id == widget.selected && widget.onEdit != null && _drag == null && inlineTextProp(node) != null) {
+      setState(() => _editing = id);
+      return;
+    }
+    widget.onSelect(id);
+  }
+
+  void _inlineDone(String id, String? text) {
+    if (!mounted) return;
+    setState(() => _editing = null);
+    if (text == null) return;
+    widget.onEdit?.call((d) {
+      final n = d.find(id);
+      final prop = n == null ? null : inlineTextProp(n);
+      if (prop != null) n!.props[prop] = text;
+    });
+  }
   bool get dragging => _drag != null;
 
   void togglePalette() => setState(() {
@@ -118,6 +240,7 @@ class EditorWorkbenchState extends State<EditorWorkbench> {
       p.expand(); // 只剩手柄时再点“添加”＝拉回默认高度
     } else {
       _paletteOpen = !_paletteOpen;
+      if (_paletteOpen) _inspector = null; // 去加组件了：合一面板不再自己跟出来
     }
   });
 
@@ -147,12 +270,16 @@ class EditorWorkbenchState extends State<EditorWorkbench> {
     final cv = canvas;
     if (cv == null || _drag != null || !cv.beginDrag(drag)) return;
     LcHaptics.lift();
+    inspector?.flush(); // 面板里没提交的先交出去（拖动时面板先收着）
     palette?.collapse();
     final moving = drag.nodeId;
     final rect = moving == null ? null : cv.nodeScreenRect(moving);
     _overZone.value = false;
     _finger.value = global;
+    _liftAt = global;
+    _moved = false;
     setState(() {
+      _editing = null;
       _drag = drag;
       _ghost = buildDragGhost(widget.doc, drag, layoutWidth: rect == null ? cv.pageWidth : rect.width / cv.scale);
     });
@@ -167,6 +294,7 @@ class EditorWorkbenchState extends State<EditorWorkbench> {
   void _move(Offset global, {bool quiet = false}) {
     final cv = canvas;
     if (_drag == null || cv == null) return;
+    if ((global - _liftAt).distance > kLcLiftSlop) _moved = true;
     _finger.value = global;
     final before = cv.dropTarget;
     if (_inZone(global)) {
@@ -193,6 +321,11 @@ class EditorWorkbenchState extends State<EditorWorkbench> {
     });
     if (cancelled) return;
     final moving = drag.nodeId;
+    // 拿起来没挪就松手：不是拖动，是要菜单。
+    if (!_moved && moving != null && widget.onNodeMenu != null) {
+      widget.onNodeMenu!(moving, _liftAt);
+      return;
+    }
     if (over) {
       if (moving != null && (widget.canDelete?.call(moving) ?? true)) {
         LcHaptics.delete();
@@ -213,10 +346,16 @@ class EditorWorkbenchState extends State<EditorWorkbench> {
   Widget build(BuildContext context) {
     final topInset = PageBar.insetOf(context);
     final drag = _drag;
+    final selected = widget.selected, editing = _editing == null ? null : widget.doc.find(_editing!);
     return Stack(
       children: [
         Column(
           children: [
+            Expanded(
+              child: Stack(
+                children: [
+                  Column(
+                    children: [
             Expanded(
               child: LayoutBuilder(
                 builder: (context, box) => Stack(
@@ -226,7 +365,7 @@ class EditorWorkbenchState extends State<EditorWorkbench> {
                         key: _canvasKey,
                         doc: widget.doc,
                         selected: widget.selected,
-                        onSelect: widget.onSelect,
+                        onSelect: _tapNode,
                         canDrop: widget.canDrop,
                         onResize: widget.onResize,
                         onLift: _lift,
@@ -236,7 +375,10 @@ class EditorWorkbenchState extends State<EditorWorkbench> {
                         presetWidth: widget.presetWidth,
                         showBoxModel: widget.showBoxModel,
                         topInset: topInset,
-                        bottomInset: _paletteOpen ? kPaletteHandleHeight : 0,
+                        // 合一面板开着：它盖住的那一段不算画布的可见范围（选中的组件滚到它上方）。
+                        bottomInset: _inspector != null && selected != null
+                            ? ((box.maxHeight + kEditorSelectionBarHeight) * kInspectorInitialSize - kEditorSelectionBarHeight).clamp(0.0, box.maxHeight * 0.75).toDouble()
+                            : (_paletteOpen ? kPaletteHandleHeight : 0),
                       ),
                     ),
                     if (_paletteOpen)
@@ -267,9 +409,43 @@ class EditorWorkbenchState extends State<EditorWorkbench> {
                 ignoring: drag != null,
                 child: Opacity(key: const ValueKey('lc-selection-bar-wrap'), opacity: drag == null ? 1 : 0.4, child: widget.selectionBar),
               ),
+                    ],
+                  ),
+                  // 合一面板：盖住选中条和画布的下半截，最底下的工具条（撤销 / 重做 / 预览）一直露着。
+                  if (_inspector != null && selected != null && widget.onEdit != null && drag == null)
+          Positioned.fill(
+            child: InspectorPanel(
+              key: _inspectorKey,
+              doc: widget.doc,
+              nodeId: selected,
+              onEdit: widget.onEdit!,
+              initialPage: _inspector!,
+              onClose: closeInspector,
+              pickImage: widget.pickImage,
+              onOpenLogic: widget.onOpenLogic,
+              onAddLogic: widget.onAddLogic,
+            ),
+          ),
+                ],
+              ),
+            ),
             KeyedSubtree(key: _zoneKey, child: drag == null ? _toolbar(context) : _dropZone(context, drag)),
           ],
         ),
+        if (editing != null && canvas != null && inlineTextProp(editing) != null)
+          Positioned.fill(
+            child: InlineTextEditor(
+              key: ValueKey('inline-${editing.id}'),
+              canvas: canvas!,
+              node: editing,
+              parent: widget.doc.parentOf(editing.id),
+              origin: () {
+                final box = context.findRenderObject();
+                return box is RenderBox && box.hasSize ? box.localToGlobal(Offset.zero) : Offset.zero;
+              },
+              onDone: (text) => _inlineDone(editing.id, text),
+            ),
+          ),
         // 手指下面的缩略图：在手指的正上方一点，不被手指挡住
         if (_ghost != null)
           Positioned.fill(
@@ -375,78 +551,6 @@ class EditorWorkbenchState extends State<EditorWorkbench> {
           ),
         );
       },
-    );
-  }
-}
-
-/// 选中条：左边图标＋名字，右边是这个组件能做的事。
-///
-/// [actions] 从左到右排；按钮用下面三个造：[primary]（实心，最常点的那个）、[outlined]、[plain]（只有字，可带小圆点）。
-/// “⋯”之类的菜单直接放一个 PopupMenuButton 进来。
-class EditorSelectionBar extends StatelessWidget {
-  const EditorSelectionBar({super.key, required this.icon, required this.label, required this.actions});
-  final IconData icon;
-  final String label;
-  final List<Widget> actions;
-
-  static ButtonStyle _compact() => FilledButton.styleFrom(
-    minimumSize: const Size(0, 36),
-    padding: const EdgeInsets.symmetric(horizontal: Space.x3),
-  );
-
-  static Widget primary(String label, VoidCallback? onPressed) => FilledButton(onPressed: onPressed, style: _compact(), child: Text(label));
-
-  static Widget outlined(String label, VoidCallback? onPressed) => Padding(
-    padding: const EdgeInsets.only(left: Space.x2),
-    child: OutlinedButton(onPressed: onPressed, style: _compact(), child: Text(label)),
-  );
-
-  /// [dot]：右上角带一个小圆点（“这里已经有东西了”）。
-  static Widget plain(String label, VoidCallback? onPressed, {bool dot = false}) => Builder(
-    builder: (context) => TextButton(
-      onPressed: onPressed,
-      style: TextButton.styleFrom(
-        minimumSize: const Size(0, 36),
-        padding: const EdgeInsets.symmetric(horizontal: Space.x3),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(label),
-          if (dot)
-            Container(
-              key: const ValueKey('lc-action-dot'),
-              margin: const EdgeInsets.only(left: 4, bottom: 8),
-              width: 6,
-              height: 6,
-              decoration: BoxDecoration(color: context.colors.accent, shape: BoxShape.circle),
-            ),
-        ],
-      ),
-    ),
-  );
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.colors;
-    return Container(
-      key: const ValueKey('lc-selection-bar'),
-      decoration: BoxDecoration(
-        color: c.surface,
-        border: Border(top: BorderSide(color: c.border)),
-      ),
-      padding: const EdgeInsets.only(left: Space.x4, right: Space.x1),
-      height: kEditorSelectionBarHeight,
-      child: Row(
-        children: [
-          Icon(icon, size: 18, color: c.accent),
-          const SizedBox(width: Space.x2),
-          Expanded(
-            child: Text(label, style: Theme.of(context).textTheme.titleSmall, maxLines: 1, overflow: TextOverflow.ellipsis),
-          ),
-          ...actions,
-        ],
-      ),
     );
   }
 }

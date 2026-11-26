@@ -312,8 +312,8 @@ void main() {
 
     // 只改实例 a 传的值。
     await select(tester, 'a');
-    await tapText(tester, '属性');
-    expect(find.text('问候卡属性'), findsOneWidget);
+    await tapText(tester, '常用');
+    expect(tester.widget<Text>(key('lc-inspector-title')).data, '问候卡');
     expect(key('comp-reset-title'), findsNothing);
     await tester.enterText(find.descendant(of: key('comp-value-title'), matching: find.byType(TextField)), '只有我');
     await settle(tester, rounds: 2);
@@ -501,7 +501,7 @@ void main() {
 
     // 改按钮的文字。
     await select(tester, 'k3');
-    await tapText(tester, '属性');
+    await tapText(tester, '常用');
     await tester.enterText(find.widgetWithText(TextField, '去看看'), '马上去');
     await settle(tester, rounds: 2);
     await closeSheet(tester);
@@ -544,7 +544,7 @@ void main() {
     expect((await savedDoc(tester, session)).component('c1')!.root.children, isEmpty);
 
     await select(tester, 'k1');
-    await tapText(tester, '属性');
+    await tapText(tester, '常用');
     await tester.enterText(find.widgetWithText(TextField, '只有一行字'), '改过了');
     await settle(tester, rounds: 2);
     await closeSheet(tester);
@@ -583,7 +583,7 @@ void main() {
     await shot(tester, 'lc-comp-missing-light');
 
     await select(tester, 'gone');
-    await tapText(tester, '属性');
+    await tapText(tester, '常用');
     expect(find.textContaining('定义已经不存在了'), findsOneWidget);
     await closeSheet(tester);
 
@@ -619,7 +619,7 @@ void main() {
       await tapText(tester, '取消');
       await closeSheet(tester);
       await closeSheet(tester);
-      await tapText(tester, '属性');
+      await tapText(tester, '常用');
       await shot(tester, 'lc-comp-instance-props-$tag');
       await closeSheet(tester);
       await moreAction(tester, '编辑组件');

@@ -200,17 +200,17 @@ void main() {
     expect(host.style('b1'), {'max-width': '320px'});
   });
 
-  testWidgets('间距：联动改内边距写四条；关掉联动只动上边；显示的是最终值并提示“继承自属性”', (tester) async {
+  testWidgets('间距：联动改内边距写四条；关掉联动只动上边；显示的是最终值并提示“来自常用页”', (tester) async {
     final host = await openEditor(tester);
     await goTab(tester, StyleTab.spacing);
     // 按钮的 padding: 12 是简写属性里来的：示意图上显示 12，下面那一行提示来源。
     expect(find.descendant(of: k('lc-box-padding-top'), matching: find.text('12')), findsOneWidget);
-    expect(find.text('继承自属性'), findsOneWidget);
+    expect(find.text('来自常用页'), findsOneWidget);
     expect(find.text('内边距（四边）'), findsOneWidget);
 
     await typeNum(tester, 'box', '20');
     expect(host.style('b1'), {'padding-top': '20px', 'padding-right': '20px', 'padding-bottom': '20px', 'padding-left': '20px'});
-    expect(find.text('继承自属性'), findsNothing);
+    expect(find.text('来自常用页'), findsNothing);
     expect(host.edits, 1);
 
     await tapKey(tester, 'lc-box-link');
@@ -528,7 +528,7 @@ void main() {
     await typeNum(tester, 'width', '100');
     await tapKey(tester, 'lc-style-css');
     expect(tester.widget<TextField>(k('lc-css-input')).controller!.text, 'width: 100px;');
-    expect(find.textContaining('这些是从“属性”面板里设的值翻出来的'), findsOneWidget);
+    expect(find.textContaining('这些是从“常用”页里设的值翻出来的'), findsOneWidget);
     expect(tester.widget<Text>(k('lc-css-legacy')).data, contains('padding: 12px;'));
 
     await tester.enterText(k('lc-css-input'), 'margin: 8px 4px; border: 1px solid red; foo-bar: baz; color: red; } body{display:none');

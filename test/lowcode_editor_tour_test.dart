@@ -3,17 +3,20 @@
 // 带 LOPI_SHOTS=1 时把每个界面的截图写到 LOPI_SHOT_DIR（不给就是 docs/screenshots/editor-tour/）。
 // 给霜霜圈问题、前后对比用的那套图就是这里出的（改之前的在 da5ae2c 上出，改之后的按第 5 版第 1 期的新布局走）。
 import 'dart:io';
+import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lopicode/core/templates.dart';
 import 'package:lopicode/lowcode/builder_screen.dart';
+import 'package:lopicode/lowcode/canvas_view.dart';
 import 'package:lopicode/lowcode/component_model.dart';
 import 'package:lopicode/lowcode/logic_expr.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/project_session.dart';
+import 'package:lopicode/ui/chat_panels.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'support/harness.dart';
@@ -35,7 +38,7 @@ Future<void> shot(WidgetTester tester, String name) async {
   });
 }
 
-Future<void> openBuilder(WidgetTester tester, LcDocument doc, {ThemeMode mode = ThemeMode.light, String? selected}) async {
+Future<ProjectSession> openBuilder(WidgetTester tester, LcDocument doc, {ThemeMode mode = ThemeMode.light, String? selected}) async {
   usePhoneViewport(tester);
   late TestEnv env;
   late ProjectSession session;
@@ -58,6 +61,7 @@ Future<void> openBuilder(WidgetTester tester, LcDocument doc, {ThemeMode mode = 
     ),
   );
   await settle(tester, rounds: 6);
+  return session;
 }
 
 Finder node(String id) => find.byKey(ValueKey('lowcode-node-$id'));
@@ -76,6 +80,27 @@ Future<void> tapText(WidgetTester tester, String label) async {
 Future<void> tapTip(WidgetTester tester, String tip) async {
   await tester.tap(find.byTooltip(tip).last);
   await tester.pumpAndSettle();
+}
+
+/// 长按不挪就松手（出菜单）。
+Future<void> longPress(WidgetTester tester, String id) async {
+  final g = await tester.startGesture(tester.getCenter(node(id)));
+  await tester.pump(const Duration(milliseconds: 340));
+  await tester.pump();
+  await g.up();
+  await tester.pumpAndSettle();
+}
+
+/// 截图里当“相册照片”用的一张图：两种颜色的斜向渐变，320×200。
+Future<Uint8List> tourPhoto(Color a, Color b) async {
+  final recorder = ui.PictureRecorder();
+  final canvas = Canvas(recorder);
+  const size = Size(320, 200);
+  canvas.drawRect(Offset.zero & size, Paint()..shader = ui.Gradient.linear(Offset.zero, size.bottomRight(Offset.zero), [a, b]));
+  canvas.drawCircle(const Offset(240, 70), 36, Paint()..color = const Color(0x66FFFFFF));
+  final image = await recorder.endRecording().toImage(320, 200);
+  final data = await image.toByteData(format: ui.ImageByteFormat.png);
+  return data!.buffer.asUint8List();
 }
 
 Future<void> back(WidgetTester tester) async {
@@ -187,12 +212,35 @@ void main() {
     await back(tester);
   });
 
-  testWidgets('面板：属性、样式各组、取色、原始 CSS、图层', (tester) async {
+  testWidgets('面板：常用、样式各组、取色、原始 CSS、事件、图层', (tester) async {
     await openBuilder(tester, tourDoc(), selected: 'n5');
-    await tapText(tester, '属性');
+    await tapText(tester, '常用');
     await shot(tester, 'props-button-light');
-    await back(tester);
-    await tapText(tester, '样式');
+    // 预设档展开
+    await tester.tap(k('lc-common-variant-outline'));
+    await tester.pumpAndSettle();
+    await shot(tester, 'common-button-outline-light');
+    // 面板开着直接点画布上别的组件：面板跟着换
+    await select(tester, 'n3');
+    await tester.pumpAndSettle();
+    await shot(tester, 'common-card-light');
+    await tester.tap(k('lc-preset-padding-more'));
+    await tester.pumpAndSettle();
+    await shot(tester, 'common-card-preset-open-light');
+    await select(tester, 'n1');
+    await tester.pumpAndSettle();
+    await shot(tester, 'common-text-light');
+    await select(tester, 'n4');
+    await tester.pumpAndSettle();
+    await shot(tester, 'common-input-light');
+    tester.widget<CanvasView>(find.byType(CanvasView)).onSelect('root');
+    await settle(tester, rounds: 2);
+    await tester.pumpAndSettle();
+    await shot(tester, 'common-page-light');
+    await select(tester, 'n5');
+    await tester.pumpAndSettle();
+    await tester.tap(k('lc-page-style'));
+    await tester.pumpAndSettle();
     await shot(tester, 'style-size-light');
     for (final tab in ['spacing', 'text', 'layout']) {
       await tester.ensureVisible(k('lc-tab-$tab'));
@@ -213,15 +261,97 @@ void main() {
     await tester.pumpAndSettle();
     await shot(tester, 'style-css-light');
     await back(tester);
+    await tester.tap(k('lc-page-events'));
+    await tester.pumpAndSettle();
+    await shot(tester, 'events-light');
     await back(tester);
+    expect(k('lc-inspector'), findsNothing);
     await tapTip(tester, '图层');
     await shot(tester, 'layers-light');
+    await tester.tap(k('lc-layer-fold-n3'));
+    await tester.pumpAndSettle();
+    await shot(tester, 'layers-folded-light');
+    await tester.tap(k('lc-layer-fold-n3'));
+    await tester.pumpAndSettle();
+    final g = await tester.startGesture(tester.getCenter(k('lc-layer-n2')));
+    await tester.pump(const Duration(milliseconds: 340));
+    await g.moveTo(Offset(60, tester.getRect(k('lc-layer-n1')).top + 8));
+    await tester.pump();
+    await shot(tester, 'layers-dragging-light');
+    await g.moveTo(Offset(320, tester.getCenter(k('lc-layer-n3')).dy));
+    await tester.pump();
+    await shot(tester, 'layers-dragging-into-light');
+    await g.cancel();
+    await tester.pumpAndSettle();
+    await back(tester);
+  });
+
+  testWidgets('就地改字、长按菜单、选上一层', (tester) async {
+    await openBuilder(tester, tourDoc(), selected: 'n5');
+    await select(tester, 'n5');
+    await tester.pumpAndSettle();
+    await shot(tester, 'inline-edit-button-light');
+    await tester.enterText(k('lc-inline-edit'), '立即报名');
+    await tester.pump();
+    await shot(tester, 'inline-edit-button-typed-light');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await settle(tester, rounds: 2);
+    await select(tester, 'n1');
+    await select(tester, 'n1');
+    await tester.pumpAndSettle();
+    await shot(tester, 'inline-edit-text-light');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await settle(tester, rounds: 2);
+    await longPress(tester, 'n5');
+    await shot(tester, 'node-menu-light');
+    await tapText(tester, '复制');
+    await settle(tester, rounds: 2);
+    await shot(tester, 'node-menu-copied-light');
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+    await longPress(tester, 'n1');
+    await shot(tester, 'node-menu-paste-light');
+    await back(tester);
+    await select(tester, 'n5');
+    await tester.tap(k('lc-select-parent'));
+    await tester.pumpAndSettle();
+    await shot(tester, 'select-parent-light');
+  });
+
+  testWidgets('图片：从相册选、项目文件', (tester) async {
+    final doc = tourDoc();
+    doc.insert('root', LcNode(id: 'pic', type: 'image', props: Map.of(lcSpecs['image']!.defaults)..remove('src')), 0);
+    final session = await openBuilder(tester, doc, selected: 'pic');
+    late Uint8List photo, photo2;
+    await tester.runAsync(() async {
+      photo = await tourPhoto(const Color(0xFF2E7D6B), const Color(0xFFF2C14E));
+      photo2 = await tourPhoto(const Color(0xFF3B5BA9), const Color(0xFFE9967A));
+      for (final (name, bytes) in [('images/banner.png', photo2), ('images/logo.png', photo), ('pic/cover.png', photo2)]) {
+        File(session.guard.resolve(name))
+          ..parent.createSync(recursive: true)
+          ..writeAsBytesSync(bytes);
+      }
+    });
+    pickImagesOverride = ({required bool camera}) async => [PickedImage('IMG_20261126.png', photo)];
+    addTearDown(() => pickImagesOverride = null);
+    await tapText(tester, '常用');
+    await shot(tester, 'image-common-empty-light');
+    await tester.tap(k('lc-common-src-gallery'));
+    await settle(tester, rounds: 8);
+    await tester.pumpAndSettle();
+    await shot(tester, 'image-from-gallery-light');
+    await tester.tap(k('lc-common-src-project'));
+    await settle(tester, rounds: 8);
+    await tester.pumpAndSettle();
+    await shot(tester, 'image-project-sheet-light');
     await back(tester);
   });
 
   testWidgets('积木逻辑、看代码、导出', (tester) async {
     await openBuilder(tester, tourDoc(), selected: 'n5');
     await tapText(tester, '逻辑');
+    await tester.tap(find.byWidgetPredicate((w) => w.key is ValueKey<String> && (w.key! as ValueKey<String>).value.startsWith('lc-event-')).first);
+    await tester.pumpAndSettle();
     await settle(tester, rounds: 2);
     await shot(tester, 'logic-light');
     await tester.tap(k('bk-code'));
@@ -229,6 +359,7 @@ void main() {
     await shot(tester, 'logic-code-light');
     await back(tester);
     await back(tester);
+    await back(tester); // 收起合一面板
     await tapTip(tester, '更多');
     await tapText(tester, '导出 Vue / React');
     await settle(tester, rounds: 2);
@@ -249,7 +380,7 @@ void main() {
     await tapText(tester, '自定义组件');
     await shot(tester, 'component-sheet-light');
     await back(tester);
-    await tapText(tester, '属性');
+    await tapText(tester, '常用');
     await shot(tester, 'component-instance-props-light');
     await back(tester);
     await tapTip(tester, '更多操作');
@@ -265,8 +396,22 @@ void main() {
     await shot(tester, 'canvas-filled-dark');
     await select(tester, 'n5');
     await shot(tester, 'canvas-selected-button-dark');
-    await tapText(tester, '样式');
+    await tapText(tester, '常用');
+    await shot(tester, 'common-button-dark');
+    await tester.tap(k('lc-page-style'));
+    await tester.pumpAndSettle();
     await shot(tester, 'style-size-dark');
+    await back(tester);
+    await select(tester, 'n5');
+    await tester.pumpAndSettle();
+    await shot(tester, 'inline-edit-button-dark');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await settle(tester, rounds: 2);
+    await longPress(tester, 'n5');
+    await shot(tester, 'node-menu-dark');
+    await back(tester);
+    await tapTip(tester, '图层');
+    await shot(tester, 'layers-dark');
     await back(tester);
     await select(tester, 'n3');
     await shot(tester, 'canvas-selected-card-dark');

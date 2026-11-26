@@ -11,6 +11,7 @@ import 'package:lopicode/lowcode/component_ops.dart';
 import 'package:lopicode/lowcode/component_props_sheet.dart';
 import 'package:lopicode/lowcode/component_values_widgets.dart';
 import 'package:lopicode/lowcode/edit_types.dart';
+import 'package:lopicode/lowcode/image_pick_sheet.dart';
 import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/lowcode/palette_catalog.dart';
 import 'package:lopicode/theme/tokens.dart';
@@ -22,10 +23,10 @@ export 'package:lopicode/lowcode/component_ops.dart' show componentLabel;
 
 /// 自定义组件：列出已有组件（可插入、改名、改 props、删除），并可把 [selectedNodeId] 那棵子树存成新组件。
 /// 返回新插入 / 新变成实例的节点 id（没有就是 null），搭建页拿去选中。
-Future<String?> showComponentSheet(BuildContext context, {required LcDocument doc, required LcEdit onEdit, String? selectedNodeId, PaletteRecents? recents}) => showModalBottomSheet<String>(
+Future<String?> showComponentSheet(BuildContext context, {required LcDocument doc, required LcEdit onEdit, String? selectedNodeId, PaletteRecents? recents, LcImages? images}) => showModalBottomSheet<String>(
   context: context,
   isScrollControlled: true,
-  builder: (_) => _ComponentSheet(doc: doc, onEdit: onEdit, selectedNodeId: selectedNodeId, recents: recents),
+  builder: (_) => _ComponentSheet(doc: doc, onEdit: onEdit, selectedNodeId: selectedNodeId, recents: recents, images: images),
 );
 
 /// “存成组件”：问一个名字，把 [nodeId] 那棵子树存成新组件、原位置换成实例（一条撤销记录）。
@@ -66,7 +67,8 @@ Future<bool> detachInstanceFlow(BuildContext context, {required LcDocument doc, 
 }
 
 class _ComponentSheet extends StatefulWidget {
-  const _ComponentSheet({required this.doc, required this.onEdit, required this.selectedNodeId, this.recents});
+  const _ComponentSheet({required this.doc, required this.onEdit, required this.selectedNodeId, this.recents, this.images});
+  final LcImages? images;
 
   /// 组件盒的“常用”（传给“编辑组件”页，和搭建页用同一份）。
   final PaletteRecents? recents;
@@ -132,7 +134,7 @@ class _ComponentSheetState extends State<_ComponentSheet> {
   }
 
   Future<void> _editContent(LcComponentDef def) async {
-    await showComponentEditor(context, doc: _doc, onEdit: _edit, componentId: def.id, recents: widget.recents);
+    await showComponentEditor(context, doc: _doc, onEdit: _edit, componentId: def.id, recents: widget.recents, images: widget.images);
     if (mounted) setState(() {});
   }
 

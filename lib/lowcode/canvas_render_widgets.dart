@@ -410,7 +410,14 @@ class CanvasPage extends StatelessWidget {
         final align = _textAlign(s);
         if (own != null || align != null) content = DefaultTextStyle.merge(style: own, textAlign: align, child: content);
       case 'text':
-        content = Text(n.strProp('text') ?? '', textAlign: _textAlign(s), style: _textStyle(s, scale, defaultHeight: 1.5));
+        final lines = int.tryParse(s['-webkit-line-clamp'] ?? '');
+        content = Text(
+          n.strProp('text') ?? '',
+          textAlign: _textAlign(s),
+          style: _textStyle(s, scale, defaultHeight: 1.5),
+          maxLines: lines != null && lines > 0 ? lines : null,
+          overflow: lines != null && lines > 0 ? TextOverflow.ellipsis : null,
+        );
       case 'button':
         paintBg = paintBorder = usePadding = false;
         final side = cssBorderSide(s, 'top', scale);
@@ -430,19 +437,9 @@ class CanvasPage extends StatelessWidget {
       case 'image':
         paintBg = false;
         final w = size.width ?? (stretchW ? double.infinity : null);
-        final src = n.strProp('src');
-        Widget placeholder(IconData icon) => Container(
-          height: size.height,
-          width: w,
-          color: bg ?? Palette.neutral200,
-          alignment: Alignment.center,
-          child: Icon(icon, color: Palette.neutral500),
-        );
         content = ClipRRect(
           borderRadius: radius ?? BorderRadius.zero,
-          child: src == null
-              ? placeholder(Icons.image_outlined)
-              : Image.network(src, height: size.height, width: w, fit: BoxFit.cover, errorBuilder: (_, _, _) => placeholder(Icons.broken_image_outlined)),
+          child: CanvasImage(src: n.strProp('src'), width: w, height: size.height, style: s, background: bg),
         );
       case 'input':
         paintBg = paintBorder = usePadding = false;

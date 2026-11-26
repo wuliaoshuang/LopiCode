@@ -223,7 +223,7 @@ void main() {
       await shot(tester, 'lc-editor-layout-light');
     });
 
-    testWidgets('选中以后多出一条 48 高的选中条（在画布和工具条之间）：左名字，右 属性 / 样式 / 逻辑 / ⋯；取消选中就收走', (tester) async {
+    testWidgets('选中以后多出一条 48 高的选中条（在画布和工具条之间）：左名字，右 常用 / 样式 / 逻辑 / ⋯；取消选中就收走', (tester) async {
       await openBuilder(tester);
       final before = tester.getRect(find.byType(CanvasView));
       await select(tester, 'n5');
@@ -236,7 +236,7 @@ void main() {
       expect(inBar(find.text('按钮')), findsOneWidget);
       final xs = [
         tester.getCenter(inBar(find.text('按钮'))).dx,
-        tester.getCenter(inBar(find.widgetWithText(FilledButton, '属性'))).dx,
+        tester.getCenter(inBar(find.widgetWithText(FilledButton, '常用'))).dx,
         tester.getCenter(inBar(find.widgetWithText(OutlinedButton, '样式'))).dx,
         tester.getCenter(inBar(find.widgetWithText(TextButton, '逻辑'))).dx,
         tester.getCenter(inBar(find.byTooltip('更多操作'))).dx,
@@ -244,8 +244,8 @@ void main() {
       expect(xs, [...xs]..sort());
       expect(tester.getRect(inBar(find.byTooltip('更多操作'))).right, lessThanOrEqualTo(390));
       expect(k('lc-action-dot'), findsNothing, reason: '这个按钮没有逻辑');
-      // 上移、下移、复制、删除收在“⋯”里，不摊在条上
-      for (final label in ['上移', '下移', '复制', '删除']) {
+      // 上移、下移、复制、重复一份、删除收在“⋯”里，不摊在条上
+      for (final label in ['上移', '下移', '复制', '重复一份', '删除']) {
         expect(find.text(label), findsNothing);
       }
       await shot(tester, 'lc-editor-selected-light');
@@ -564,11 +564,11 @@ void main() {
       expect(tester.getRect(k('lc-selection-bar')), bar);
       expect(canvas(tester).pageRect, page);
       expect(opacity(), 0.4);
-      expect(find.text('属性').hitTestable(), findsNothing, reason: '拖动中选中条点不了');
+      expect(find.text('常用').hitTestable(), findsNothing, reason: '拖动中选中条点不了');
       await g.cancel();
       await settle(tester, rounds: 2);
       expect(opacity(), 1);
-      expect(find.text('属性').hitTestable(), findsOneWidget);
+      expect(find.text('常用').hitTestable(), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 

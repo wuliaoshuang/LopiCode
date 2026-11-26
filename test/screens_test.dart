@@ -440,20 +440,22 @@ void main() {
       expect(find.byTooltip('打开侧边栏'), findsOneWidget);
       await shot(tester, '12-builder-$suffix');
 
-      // 点画布上的按钮选中它 → 打开属性面板。文字在 IgnorePointer 里，要点它外层的选择手势。
+      // 点画布上的按钮选中它 → 打开合一面板的“常用”页。文字在 IgnorePointer 里，要点它外层的选择手势。
       final submit = find.text('提交').first;
       await tester.ensureVisible(submit);
       await tester.pump(const Duration(milliseconds: 300));
       await tester.tap(find.byKey(const ValueKey('lowcode-node-n5')));
       await settle(tester, rounds: 2);
-      expect(find.text('属性'), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, '常用'), findsOneWidget);
       await shot(tester, '13-builder-selected-$suffix');
-      await tester.tap(find.widgetWithText(FilledButton, '属性'));
+      await tester.tap(find.widgetWithText(FilledButton, '常用'));
       await settle(tester, rounds: 3);
-      expect(find.text('按钮属性'), findsOneWidget);
+      expect(tester.widget<Text>(find.byKey(const ValueKey('lc-inspector-title'))).data, '按钮');
+      expect(find.byKey(const ValueKey('lc-common-text')), findsOneWidget);
       await shot(tester, '14-builder-props-$suffix');
-      await tester.tapAt(const Offset(195, 60));
+      await tester.binding.handlePopRoute();
       await settle(tester, rounds: 2);
+      expect(find.byKey(const ValueKey('lc-inspector')), findsNothing);
       await tester.tap(find.byTooltip('图层'));
       await settle(tester, rounds: 3);
       await shot(tester, '15-builder-layers-$suffix');

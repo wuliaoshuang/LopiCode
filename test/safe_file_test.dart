@@ -707,6 +707,16 @@ void main() {
           ..writeAsStringSync(entry.value);
         expect(await loadPaletteRecent(PathGuard(tmp.path)), isEmpty);
       });
+
+      test('坏内容（${entry.key}）：图层折叠当没折过，之后存折叠状态照常能存能读', () async {
+        file()
+          ..createSync(recursive: true)
+          ..writeAsStringSync(entry.value);
+        final guard = PathGuard(tmp.path);
+        expect(await loadLayersCollapsed(guard), isEmpty);
+        await saveLayersCollapsed(guard, {'n2'});
+        expect(await loadLayersCollapsed(guard), {'n2'});
+      });
     }
 
     test('半截的文件：留一份 .bad 备份；之后照常能存能读', () async {
@@ -725,6 +735,16 @@ void main() {
         ..createSync(recursive: true)
         ..writeAsStringSync('{"recent": "text"}');
       expect(await loadPaletteRecent(PathGuard(tmp.path)), isEmpty);
+      expect(badBackups(file()), isEmpty);
+    });
+
+    test('形状对、layersCollapsed 不是列表 / 里面不是字符串：当没折过，不算坏文件', () async {
+      file()
+        ..createSync(recursive: true)
+        ..writeAsStringSync('{"layersCollapsed": {"n1": true}}');
+      expect(await loadLayersCollapsed(PathGuard(tmp.path)), isEmpty);
+      file().writeAsStringSync('{"layersCollapsed": [1, null, "n3", ""]}');
+      expect(await loadLayersCollapsed(PathGuard(tmp.path)), {'n3'});
       expect(badBackups(file()), isEmpty);
     });
   });

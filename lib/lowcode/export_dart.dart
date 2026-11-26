@@ -1,4 +1,5 @@
 import 'package:lopicode/lowcode/component_ops.dart';
+import 'package:lopicode/lowcode/image_assets.dart';
 import 'package:lopicode/lowcode/model.dart';
 
 /// 把页面导出成一个可直接放进 Flutter 项目的 Dart 文件（一个 StatelessWidget）。
@@ -98,7 +99,8 @@ String _node(LcNode n, LcNode? parent, int i) {
       final img = src == null
           ? 'Container(${size}color: const Color(0xFFD3DEE4), alignment: Alignment.center, child: const Icon(Icons.image_outlined))'
           // 图片加载失败（没网、地址错）时显示占位，而不是抛异常。
-          : 'Image.network(${_s(src)}, ${size}fit: BoxFit.cover, errorBuilder: (context, error, stack) => const Icon(Icons.broken_image_outlined))';
+          // 项目里的图片（相对地址）用 Image.asset：要在工程的 pubspec.yaml 的 assets 里列上这个文件。
+          : '${lcIsRemoteSrc(src) ? 'Image.network' : 'Image.asset'}(${_s(src)}, ${size}fit: BoxFit.cover, errorBuilder: (context, error, stack) => const Icon(Icons.broken_image_outlined))';
       final clipped = 'ClipRRect(\n${_ind(i + 1)}borderRadius: BorderRadius.circular($radius),\n${_ind(i + 1)}child: $img,\n${_ind(i)})';
       return wrapFill(_margin(n, i, clipped));
     case 'input':
