@@ -22,6 +22,7 @@ library;
 import 'package:lopicode/lowcode/component_model.dart';
 import 'package:lopicode/lowcode/export_framework_common.dart';
 import 'package:lopicode/lowcode/export_v3_fields.dart';
+import 'package:lopicode/lowcode/export_web_v3.dart';
 import 'package:lopicode/lowcode/logic_blocks.dart';
 import 'package:lopicode/lowcode/logic_js_core.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
@@ -152,6 +153,16 @@ class _View {
 
   final Set<LcComponentPlan> used = {};
 
+  /// 页面的根节点（组件定义里是 null）：判断“页面级的栏”用。
+  LcNode? pageRoot;
+  late final LcWebCtx web = LcWebCtx(
+    uniqueIds: prefix.isEmpty,
+    fieldClass: (n) => lcFieldClassOf(n, prefix),
+    // 弹窗的显示被逻辑管着（lcUi 里有它）：关闭时改 lcUi 再让 React 重画。
+    closeExpr: (n) => dyn(n, 'visible') == null ? null : '{ ${dyn(n, 'visible')} = false; lcRefresh(); }',
+    pageRoot: pageRoot,
+  );
+
   String _attrs(LcNode n) {
     final isRoot = identical(n, rootNode);
     final cls = lcNodeClass(n, prefix);
@@ -194,6 +205,14 @@ class _View {
       return const _Jsx(['嵌套太深，这里面的内容没有导出'], _Kind.comment);
     }
     final a = _attrs(n);
+    // 第 3 版的新组件：元素树三种导出共用（export_web_v3.dart）。
+    final el = lcWebElement(n, web);
+    if (el != null) {
+      return _Jsx([
+        for (final p in lcRenderEl(el, LcWebDialect.react, hostAttrs: a, text: jsxText, attr: jsxAttr))
+          if (p.child == null) '${'  ' * p.indent}${p.line}' else ...[for (final l in node(p.child!, depth + p.indent).asChild) '${'  ' * p.indent}$l'],
+      ]);
+    }
     switch (n.type) {
       case 'text':
         return _Jsx(['<p$a>${_content(n)}</p>']);
@@ -306,7 +325,8 @@ String _objectLiteral(Iterable<(String, String)> entries) =>
     return out;
   }
 
-  final view = _View(prefix: '', plans: plans, notes: notes, dyn: (n, prop) => states.of(n, prop) == null ? null : 'lcUi.${states.of(n, prop)!.name}', events: eventsOf, importDir: './components/');
+  final view = _View(prefix: '', plans: plans, notes: notes, dyn: (n, prop) => states.of(n, prop) == null ? null : 'lcUi.${states.of(n, prop)!.name}', events: eventsOf, importDir: './components/')
+    ..pageRoot = doc.root;
   final root = view.node(doc.root, 0);
 
   final hasLogic = !logic.isEmpty;

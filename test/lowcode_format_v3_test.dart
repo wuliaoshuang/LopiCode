@@ -213,7 +213,7 @@ void main() {
           },
           {
             'id': 'sw',
-            'type': 'switch',
+            'type': 'someFutureWidget',
             'props': {'checked': true},
             'whatever': 1,
             'children': [
@@ -246,7 +246,7 @@ void main() {
         {
           'id': 'c2',
           'name': '坏的',
-          'root': {'id': 'k1', 'type': 'tabs'},
+          'root': {'id': 'k1', 'type': 'someFutureWidget'},
         },
       ],
       'pages': [
@@ -269,14 +269,14 @@ void main() {
       final sw = doc.find('sw')!;
       expect(sw.isUnknown, isTrue);
       expect(sw.type, LcNode.unknownType);
-      expect(sw.fileType, 'switch');
+      expect(sw.fileType, 'someFutureWidget');
       expect(sw.isContainer, isFalse);
       expect(exportHtml(doc).html, contains('新版应用加的组件'));
       // 复制、移动以后还在。
       final copyId = doc.duplicate('sw')!;
       expect(nodeOf(json(doc.encode()), copyId)!['props'], {'checked': true});
       expect(doc.move('sw', 'root', 0), isTrue);
-      expect((json(doc.encode())['root'] as Map)['children'][0]['type'], 'switch');
+      expect((json(doc.encode())['root'] as Map)['children'][0]['type'], 'someFutureWidget');
     });
 
     test('改了别的东西以后，没碰的那些不认识的字段还在；撤销重做也不丢', () {

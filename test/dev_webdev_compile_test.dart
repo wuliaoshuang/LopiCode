@@ -16,6 +16,7 @@ import 'lowcode_export_vue_test.dart' show nastyJson;
 import 'support/dev_tools.dart';
 import 'support/lowcode_samples.dart';
 import 'support/sample_doc.dart';
+import 'support/v3_components_sample.dart';
 import 'support/v3_sample.dart';
 
 Map<String, String> _files(LcFrameworkExport e) => {for (final f in e.files) f.path: f.content};
@@ -34,6 +35,8 @@ void main() {
     '各种组件都有的样本': sample,
     '第 3 版新属性都用上的样本': v3Sample,
     '新建页面的默认内容': () => LcDocument.starter('我的页面'),
+    // 第 3 期第 2 段：11 个新组件的四个样例页
+    ...v3ComponentSamples(),
   };
 
   for (final kind in ['vue', 'react']) {

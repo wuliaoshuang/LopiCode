@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:lopicode/lowcode/component_model.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 import 'package:lopicode/lowcode/model_props.dart';
+import 'package:lopicode/lowcode/model_v3_components.dart';
 
 export 'package:lopicode/lowcode/model_history.dart';
 
@@ -92,6 +93,13 @@ class LcNode {
   }
 
   bool get fillWidth => props['width'] == 'fill';
+
+  /// 这个节点放在父节点的哪个插槽里（文件里的 `slot`）；没写是 null。
+  String? get slot => more['slot'] is String ? more['slot'] as String : null;
+  set slot(String? v) => v == null ? more.remove('slot') : more['slot'] = v;
+
+  /// 是不是带插槽的组件（列表行、顶部导航栏、标签页、弹窗）；插槽怎么读见 slots.dart。
+  bool get hasSlots => spec.slots != null;
 
   /// 字段顺序固定：id、type、name、locked、hidden、props、style、bind、（别的字段）、children；空的不写。
   Map<String, dynamic> toJson() {
@@ -236,11 +244,14 @@ class LcNode {
 }
 
 class LcSpec {
-  const LcSpec(this.type, this.label, {this.isContainer = false, this.defaults = const {}, this.fields = const []});
+  const LcSpec(this.type, this.label, {this.isContainer = false, this.defaults = const {}, this.fields = const [], this.slots});
   final String type;
   final String label;
   final bool isContainer;
   final Map<String, dynamic> defaults;
+
+  /// 带插槽的组件：固定的插槽名（标签页的插槽跟着页签走，这里是空表）。null＝没有插槽。读法见 slots.dart。
+  final List<String>? slots;
 
   /// 属性面板里显示哪些字段、按什么顺序。
   final List<String> fields;
@@ -287,10 +298,12 @@ const Map<String, LcSpec> lcSpecs = {
   // 这一版不认识的类型（LcNode.raw）：不能放子组件、不在组件盒里、没有可改的属性。
   // 自定义组件的实例：props.ref 指向 LcDocument.components 里的定义。不在组件栏的固定清单里。
   'component': LcSpec('component', '组件', defaults: {}, fields: ['width', 'margin']),
+  // 第 3 版的 11 个新组件（model_v3_components.dart）。
+  ...lcV3Specs,
 };
 
 /// 组件面板里可拖出来的类型（page 只能是根）。
-const List<String> lcPaletteTypes = ['container', 'row', 'column', 'card', 'text', 'button', 'image', 'input', 'list', 'divider', 'spacer'];
+const List<String> lcPaletteTypes = ['container', 'row', 'column', 'card', 'text', 'button', 'image', 'input', 'list', 'divider', 'spacer', ...lcV3PaletteTypes];
 
 class LcDocument {
   LcDocument({required this.title, required this.root, LcLogic? logic, List<LcComponentDef>? components, this.fileVersion = currentVersion, Map<String, dynamic>? more, List<Object?>? keptComponents})

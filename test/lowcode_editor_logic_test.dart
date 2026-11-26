@@ -48,10 +48,10 @@ void main() {
         grouped.addAll(inGroup);
       }
       expect(grouped, lcPaletteTypes.toSet());
-      expect(keysOf(paletteInGroup(all, PaletteGroup.layout, const [])), ['container', 'row', 'column', 'card', 'spacer']);
+      expect(keysOf(paletteInGroup(all, PaletteGroup.layout, const [])), ['container', 'row', 'column', 'card', 'spacer', 'dialog']);
       expect(keysOf(paletteInGroup(all, PaletteGroup.mine, const [])), ['component:c1', 'component:c2']);
-      expect([for (final g in paletteGroups(all)) g.label], ['常用', '布局', '基础', '表单', '展示', '我的']);
-      expect([for (final g in paletteGroups(paletteEntries(const []))) g.label], ['常用', '布局', '基础', '表单', '展示']);
+      expect([for (final g in paletteGroups(all)) g.label], ['常用', '布局', '基础', '表单', '展示', '导航', '我的']);
+      expect([for (final g in paletteGroups(paletteEntries(const []))) g.label], ['常用', '布局', '基础', '表单', '展示', '导航']);
     });
 
     test('常用：没用过是内置的 8 个起步组件；用过的排前面、不重复、最多 8 个；已经不存在的跳过', () {
@@ -96,7 +96,7 @@ void main() {
       expect(keysOf(paletteSearch(all, 'btn')), ['button']);
       expect(keysOf(paletteSearch(all, 'anniu')), ['button']);
       expect(keysOf(paletteSearch(all, '图')), contains('image'));
-      expect(keysOf(paletteSearch(all, '输入')), ['input']);
+      expect(keysOf(paletteSearch(all, '输入')), ['input', 'textarea']);
       expect(keysOf(paletteSearch(all, '问候')), ['component:c1']);
       expect(keysOf(paletteSearch(all, '价')), ['component:c2']);
       expect(paletteSearch(all, '根本没有这个'), isEmpty);

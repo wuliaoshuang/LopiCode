@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:lopicode/lowcode/component_ops.dart';
 import 'package:lopicode/lowcode/export_v3_fields.dart';
+import 'package:lopicode/lowcode/export_web_v3.dart';
+import 'package:lopicode/lowcode/export_web_v3_css.dart';
 import 'package:lopicode/lowcode/logic_js.dart';
 import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/lowcode/style_resolve.dart';
@@ -51,12 +53,24 @@ LcHtmlExport exportHtml(LcDocument doc) {
   final css = StringBuffer(_baseCss);
   final body = StringBuffer();
 
+  late final LcWebCtx web;
   void walk(LcNode n, LcNode? parent, int depth) {
     final pad = '  ' * (depth + 1);
-    final cls = 'lc-${n.type} n-${n.id}';
+    final cls = '${lcTypeClass(n.type)} n-${n.id}';
     // 每个节点一条规则，内容是它的最终样式（简写属性 + 自己的 style，见 style_resolve.dart）。
     final rule = nodeCssRule(n, parent);
     if (rule.isNotEmpty) css.writeln(rule);
+    lcStateRules(n, nodeCssSelector(n)).forEach(css.writeln);
+    // 第 3 版的新组件：元素树三种导出共用（export_web_v3.dart）。
+    final el = lcWebElement(n, web);
+    if (el != null) {
+      final fieldRule = lcFieldRule(n, parent, nodeCssSelector(n));
+      if (fieldRule.isNotEmpty) css.writeln(fieldRule);
+      for (final p in lcRenderEl(el, LcWebDialect.html, hostAttrs: ' class="$cls"', text: _esc.convert, attr: (k, v) => ' $k="${_escAttr.convert(v)}"')) {
+        p.child == null ? body.writeln('$pad${'  ' * p.indent}${p.line}') : walk(p.child!, n, depth + p.indent);
+      }
+      return;
+    }
     switch (n.type) {
       case 'text':
         body.writeln('$pad<p class="$cls">${_esc.convert(n.strProp('text') ?? '')}</p>');
@@ -118,6 +132,7 @@ LcHtmlExport exportHtml(LcDocument doc) {
 
   // 实例展开后最外层沿用实例的 id、里面是“实例id__内部id”，所以 class 和 CSS 规则全页不重复。
   final tree = expandedTree(doc);
+  web = LcWebCtx(uniqueIds: true, fieldClass: (n) => lcFieldClass('n-${n.id}'), closeExpr: (_) => null, pageRoot: tree, plainHtml: true);
   walk(tree, null, 0);
   // 第 3 版加的属性要的公共样式：用到了才写（没用到的页面一个字节都不多）。
   css.write(lcV3ExtraCss(tree));

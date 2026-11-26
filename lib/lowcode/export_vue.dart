@@ -19,6 +19,7 @@ import 'dart:convert';
 import 'package:lopicode/lowcode/component_model.dart';
 import 'package:lopicode/lowcode/export_framework_common.dart';
 import 'package:lopicode/lowcode/export_v3_fields.dart';
+import 'package:lopicode/lowcode/export_web_v3.dart';
 import 'package:lopicode/lowcode/logic_blocks.dart';
 import 'package:lopicode/lowcode/logic_js_core.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
@@ -117,6 +118,16 @@ class _Template {
 
   final StringBuffer out = StringBuffer();
 
+  /// 页面的根节点（组件定义里是 null）：判断“页面级的栏”用。
+  LcNode? pageRoot;
+  late final LcWebCtx web = LcWebCtx(
+    uniqueIds: prefix.isEmpty,
+    fieldClass: (n) => lcFieldClassOf(n, prefix),
+    // 弹窗的显示被逻辑管着（v-show 绑着一个 ref）：关闭时改那个 ref。
+    closeExpr: (n) => dyn(n, 'visible') == null ? null : '${dyn(n, 'visible')} = false',
+    pageRoot: pageRoot,
+  );
+
   /// 模板里用到的组件（要在脚本里 import）。
   final Set<LcComponentPlan> used = {};
 
@@ -155,6 +166,14 @@ class _Template {
       return;
     }
     final a = _attrs(n);
+    // 第 3 版的新组件：元素树三种导出共用（export_web_v3.dart）。
+    final el = lcWebElement(n, web);
+    if (el != null) {
+      for (final p in lcRenderEl(el, LcWebDialect.vue, hostAttrs: a, text: vueText, attr: vueAttr)) {
+        p.child == null ? out.writeln('$pad${'  ' * p.indent}${p.line}') : node(p.child!, depth + p.indent);
+      }
+      return;
+    }
     switch (n.type) {
       case 'text':
         out.writeln('$pad<p$a>${_content(n)}</p>');
@@ -294,7 +313,9 @@ String _page(LcDocument doc, LcComponentPlans plans, List<String> notes) {
     return out;
   }
 
-  final template = _Template(prefix: '', plans: plans, notes: notes, dyn: (n, prop) => states.of(n, prop)?.name, events: eventsOf, importDir: './components/')..node(doc.root, 1);
+  final template = _Template(prefix: '', plans: plans, notes: notes, dyn: (n, prop) => states.of(n, prop)?.name, events: eventsOf, importDir: './components/')
+    ..pageRoot = doc.root
+    ..node(doc.root, 1);
 
   final usesRef = logic.variables.isNotEmpty || !states.isEmpty;
   final vueImports = [if (handlers.load.isNotEmpty) 'onMounted', if (usesRef) 'ref'];

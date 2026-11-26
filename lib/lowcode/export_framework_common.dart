@@ -8,6 +8,8 @@ library;
 import 'package:lopicode/format/format.dart';
 import 'package:lopicode/lowcode/component_model.dart';
 import 'package:lopicode/lowcode/export_v3_fields.dart';
+import 'package:lopicode/lowcode/export_web_v3.dart';
+import 'package:lopicode/lowcode/export_web_v3_css.dart';
 import 'package:lopicode/lowcode/logic_blocks.dart';
 import 'package:lopicode/lowcode/logic_js_core.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
@@ -144,7 +146,7 @@ String lcValueLiteral(String type, Object? value) => switch (type) {
 String _safeId(String id) => isSafeNodeId(id) ? id : id.replaceAll(RegExp('[^A-Za-z0-9_]'), '_');
 
 /// 节点在模板里的 class。[prefix]：页面节点是空串；组件定义里的节点是 `<组件 id>-`，免得和页面节点撞名。
-String lcNodeClass(LcNode n, String prefix) => 'lc-${n.type} n-$prefix${_safeId(n.id)}';
+String lcNodeClass(LcNode n, String prefix) => '${lcTypeClass(n.type)} n-$prefix${_safeId(n.id)}';
 
 /// 组件定义里的节点用的前缀。
 String lcComponentPrefix(LcComponentDef def) => '${_safeId(def.id)}-';
@@ -161,6 +163,7 @@ String lcCollectCss(LcNode root, String prefix, List<String> notes) {
     } else if (body.isNotEmpty) {
       out.writeln('.n-$prefix${_safeId(n.id)} { $body }');
     }
+    lcStateRules(n, '.n-$prefix${_safeId(n.id)}').forEach(out.writeln);
     final fieldRule = lcFieldRule(n, parent, '.n-$prefix${_safeId(n.id)}');
     if (fieldRule.isNotEmpty) out.writeln(fieldRule);
     for (final c in n.children) {
@@ -209,7 +212,8 @@ class LcPropStates {
 
   static String _initial(LcNode n, String prop) => switch (prop) {
     'text' || 'src' || 'placeholder' => jsString(n.strProp(prop) ?? ''),
-    'visible' => 'true',
+    // 弹窗一开始显不显示看它的 `open`；别的组件一开始都是显示的。
+    'visible' => n.type == 'dialog' && n.props['open'] != true ? 'false' : 'true',
     _ => '""',
   };
 }

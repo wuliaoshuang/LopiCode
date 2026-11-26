@@ -39,6 +39,17 @@ IconData lcIcon(String type) => switch (type) {
   'list' => Icons.format_list_bulleted,
   'divider' => Icons.horizontal_rule,
   'spacer' => Icons.expand,
+  'icon' => Icons.star_outline,
+  'textarea' => Icons.notes,
+  'switch' => Icons.toggle_on_outlined,
+  'checkbox' => Icons.check_box_outlined,
+  'radio' => Icons.radio_button_checked,
+  'select' => Icons.arrow_drop_down_circle_outlined,
+  'listItem' => Icons.view_list_outlined,
+  'appBar' => Icons.web_asset,
+  'bottomNav' => Icons.video_label,
+  'tabs' => Icons.tab,
+  'dialog' => Icons.chat_bubble_outline,
   _ => Icons.widgets_outlined,
 };
 
@@ -233,7 +244,7 @@ class PalettePanelState extends State<PalettePanel> {
                               borderRadius: BorderRadius.circular(16),
                               onTap: () => setState(() => _group = g),
                               child: Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: Space.x3, vertical: 6),
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                 child: Text(
                                   g.label,
                                   style: t.labelLarge?.copyWith(color: on ? c.accent : c.textMuted, fontWeight: on ? FontWeight.w600 : FontWeight.w400),

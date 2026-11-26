@@ -1,4 +1,5 @@
 import 'package:lopicode/lowcode/component_model.dart';
+import 'package:lopicode/lowcode/model_v3_components.dart';
 
 /// 页面文件里节点 `props` 的读法（格式说明见 docs/lowcode-page-format-v3.md）。
 ///
@@ -18,6 +19,8 @@ final RegExp _iconName = RegExp(r'^[a-z][a-z0-9_]{0,39}$');
 
 /// 一个值合不合这个键的规矩；合就返回整理好的值，不合（或者键不认识）返回 null。
 Object? _clean(String type, String key, Object? value, int version) {
+  // 新组件带来的键（第 3 版才有；哪种组件能用哪个键、对象数组的规矩都在 model_v3_components.dart）。
+  if (lcIsV3ComponentKey(type, key)) return version < 3 ? null : lcCleanV3(type, key, value);
   if (version < 3 && lcV3PropKeys.contains(key)) return null;
   switch (key) {
     case 'width':

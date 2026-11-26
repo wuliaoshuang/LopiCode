@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:lopicode/lowcode/export_web_v3_css.dart';
 import 'package:lopicode/lowcode/icon_set.dart';
 import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/lowcode/style_resolve.dart';
@@ -17,9 +18,9 @@ LcIcon? lcButtonIcon(LcNode n) => n.type == 'button' ? lcIconByName(n.strProp('i
 bool lcIsDisabled(LcNode n) => (n.type == 'button' || n.type == 'input') && n.props['disabled'] == true;
 
 /// 输入框上面的标签文字；没有返回 null。
-String? lcInputLabel(LcNode n) => n.type == 'input' ? n.strProp('label') : null;
+String? lcInputLabel(LcNode n) => n.type == 'input' || n.type == 'textarea' ? n.strProp('label') : null;
 
-bool lcInputRequired(LcNode n) => n.type == 'input' && n.props['required'] == true;
+bool lcInputRequired(LcNode n) => (n.type == 'input' || n.type == 'textarea') && n.props['required'] == true;
 
 /// 输入框的类型；文字（默认）返回 null。
 String? lcInputType(LcNode n) {
@@ -77,5 +78,7 @@ String lcV3ExtraCss(LcNode root) {
       ..writeln('.lc-label { font-size: 14px; line-height: 1.4; color: #5c6479; }');
   }
   if (required) out.writeln('.lc-required { color: #c62828; }');
+  // 第 3 版的 11 个新组件：用到哪个写哪个（export_web_v3_css.dart）。
+  out.write(lcV3ComponentsCss(root));
   return out.toString();
 }
