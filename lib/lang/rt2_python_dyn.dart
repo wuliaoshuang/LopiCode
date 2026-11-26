@@ -246,9 +246,20 @@ def _bad_const(_):
     raise ValueError("不是 JSON")
 
 
+# 文字里写成 \\ud800 这种“半个表情符号”的（不成对的代理项）换成 U+FFFD：五种语言读出来一样。
+def _fix_half(v):
+    if isinstance(v, str):
+        return _re.sub("[\ud800-\udfff]", "\ufffd", v)
+    if isinstance(v, list):
+        return [_fix_half(x) for x in v]
+    if isinstance(v, dict):
+        return {_fix_half(k): _fix_half(x) for k, x in v.items()}
+    return v
+
+
 def fromJson(s):
     try:
-        return _json.loads(s, parse_int=float, parse_constant=_bad_const)
+        return _fix_half(_json.loads(s, parse_int=float, parse_constant=_bad_const))
     except (ValueError, RecursionError):
         fail("这段文字不是 JSON")
 

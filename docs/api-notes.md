@@ -662,3 +662,15 @@ PHP 真跑撞到并修掉的 5 个问题，以及依据：
 - Go `net/http`：`http.Server{Handler}`＋`net.Listen` 再 `Serve`；自己设了 Content-Length 就不分块。`runtime.Stack` 输出的第一行是 `goroutine 编号 [状态]:`（格子里拿来认“是不是同一条线”，Go 不保证这个格式长期不变）。未核对。
 - Java `com.sun.net.httpserver.HttpServer`（JDK 自带，模块 `jdk.httpserver`）：`sendResponseHeaders(状态码, 长度)` 里长度给 `-1`＝没有内容、给正数＝定长不分块、给 `0`＝分块（所以空内容要给 `-1`）。`Thread.ofVirtual()`、`Executors.newVirtualThreadPerTaskExecutor()` 要 JDK 21。未核对。
 - `gofmt -l`、`go vet ./...`：本机 Go 1.25.0 下小库干净、“小框架”整套 vet 不报。
+
+## 积木第 5 版·核心 2 第 5 段用到的各语言标准库（2026-11-26）
+
+状态：**实跑核对**（开发机 Node v24.22.1、Python 3.12.3、PHP 8.3.37、Go 1.25.0、Java Temurin 21.0.13.1；`test/lang_gen2_host_io_test.dart`、`test/lang_gen2_service_v1_test.dart` 五种语言输出一样），**没有逐条对官方文档**——下面每条都标“未核对”，只说明本机上实际这样。
+
+- Node 自带的 `fetch`：`redirect: "follow"` 跟跳转；`signal: AbortSignal.timeout(毫秒)` 到时间抛 `TimeoutError`；`crypto.randomBytes`。未核对。
+- Python `urllib.request.urlopen(请求, timeout=秒)`：4xx/5xx 抛 `HTTPError`，它本身能当回应读（`.code`、`.headers`、`.read()`）；超时是 `TimeoutError` 或包在 `URLError.reason` 里；`os.urandom`；`os.replace` 改名覆盖。未核对。
+- PHP http 流（`fopen`＋`stream_context_create`）：`ignore_errors` 让 4xx/5xx 也读内容；`follow_location`、`timeout`、`protocol_version`；回应头从流的元数据里读；`random_bytes`。本机 PHP 没有 curl、mbstring 扩展。未核对。
+- Go `http.Client{Timeout}`：超时的错误能用 `os.IsTimeout` 认；`crypto/rand.Read`；`json.Decoder.UseNumber`＋`strconv.ParseFloat`（超出范围时返回正负无穷和一个范围错误）。未核对。
+- Java `java.net.http.HttpClient`（21 起可以放进 try-with-resources）：`HttpTimeoutException`；`connectTimeout`；`followRedirects(NORMAL)`；`java.security.SecureRandom`；`Files.move(…, REPLACE_EXISTING, ATOMIC_MOVE)`。未核对。
+- Java `com.sun.net.httpserver.HttpServer`：请求路径以两个斜杠开头时它自己回 400 `Bad request URI`，不进处理函数（本机实测）。未核对。
+- 这台开发机的运行环境：Java 程序连本机回环地址要带 `-Djava.net.preferIPv4Stack=true`，不带的话连接被运行环境拦下（只是这台机器的事，不是 JDK 的规矩）。

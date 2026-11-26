@@ -12,6 +12,7 @@ package lc
 
 import (
 	"encoding/json"
+	"io"
 	"math"
 	"net/url"
 	"reflect"

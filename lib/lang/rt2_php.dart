@@ -380,6 +380,9 @@ final class Lc {
   }
   static function fromJson(string $s): mixed {
     try {
+      // 文字里写成 \ud800 这种“半个表情符号”的（不成对的代理项）先换成 \ufffd：PHP 自己会把整份判成不合法，别的语言是换掉。
+      $s = preg_replace_callback('/\\\\(u[dD][89abAB][0-9a-fA-F]{2}\\\\u[dD][c-fC-F][0-9a-fA-F]{2}|u[dD][89a-fA-F][0-9a-fA-F]{2}|.)/su',
+        fn($m) => strlen($m[1]) === 5 && $m[1][0] === 'u' && stripos('89abcdef', $m[1][2]) !== false && ($m[1][1] === 'd' || $m[1][1] === 'D') ? '\\ufffd' : $m[0], $s) ?? $s;
       return self::fromDecoded(json_decode($s, false, 512, JSON_THROW_ON_ERROR));
     } catch (JsonException $e) {
       self::fail("这段文字不是 JSON");

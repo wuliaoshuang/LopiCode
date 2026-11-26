@@ -359,12 +359,21 @@ func fromDecoded(v any) any {
 			out[k] = fromDecoded(it)
 		}
 		return out
+	case json.Number:
+		f, _ := strconv.ParseFloat(string(x), 64)
+		return f
 	}
 	return v
 }
 func FromJson(s string) any {
+	// 数字先按原文留着：写得超出范围的（1e400）读成无穷大，和别的语言一样；直接读成小数的话 Go 会把整份判成不合法。
+	dec := json.NewDecoder(strings.NewReader(s))
+	dec.UseNumber()
 	var v any
-	if err := json.Unmarshal([]byte(s), &v); err != nil {
+	if err := dec.Decode(&v); err != nil {
+		Fail("这段文字不是 JSON")
+	}
+	if _, err := dec.Token(); err != io.EOF {
 		Fail("这段文字不是 JSON")
 	}
 	return fromDecoded(v)
