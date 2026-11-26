@@ -244,7 +244,7 @@ abstract class Gen2Dyn extends Gen2 {
     _ => 'dynSize',
   }, [code]);
   @override
-  String orElseCode(String code, LType type, String def) => '($code ?? $def)';
+  String orElseCode(String code, LType type, String def, LType want) => '($code ?? $def)';
   @override
   String mustCode(String code, LType type) => call('must', [code]);
   @override

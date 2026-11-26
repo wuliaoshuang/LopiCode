@@ -67,7 +67,7 @@ class PythonGen2 extends Gen2Dyn {
   @override
   String ternary(String cond, String a, String b, LType type) => '($a if $cond else $b)';
   @override
-  String orElseCode(String code, LType type, String def) => 'lc.orElse($code, lambda: $def)';
+  String orElseCode(String code, LType type, String def, LType want) => 'lc.orElse($code, lambda: $def)';
   @override
   String selfCode() => 'self';
   @override

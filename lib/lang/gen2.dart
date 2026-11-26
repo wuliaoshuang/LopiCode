@@ -520,13 +520,16 @@ abstract class Gen2Base {
     try {
       final head = first?.call() ?? const <String>[];
       final lines = stmts(body);
-      final tail = f.isVoid || lAlwaysReturns(body) ? const <String>[] : (f.ret.nullable || f.ret.isAny ? [returnLine(nulOf(f.ret))] : unreachable());
+      final tail = f.isVoid ? const <String>[] : (lAlwaysReturns(body) ? alwaysTail(f) : (f.ret.nullable || f.ret.isAny ? [returnLine(nulOf(f.ret))] : unreachable()));
       return [...declareLocals(f), ...head, ...lines, ...tail];
     } finally {
       _fnOrNull = saved;
       if (saved != null) fn = saved;
     }
   }
+
+  /// 函数体每条路都已经返回了以后还要不要补一句（Go 的“试着做”是闭包，编译器看不出来已经返回）。
+  List<String> alwaysTail(V2Fn f) => const [];
 
   V2Fn? _fnOrNull;
 

@@ -66,7 +66,8 @@ mixin Gen2Expr on Gen2Base {
   String concat(List<String> parts);
   String logCode(String text);
   String sizeCode(String code, LType type);
-  String orElseCode(String code, LType type, String def);
+  /// [code] 是 [type]（可空）的值；空就用 [def]。结果是 [want]（[def] 自己也可空时，结果还是可空的）。
+  String orElseCode(String code, LType type, String def, LType want);
   String mustCode(String code, LType type);
   String pushCode(String list, String value, LType listType);
   String popCode(String list, LType listType);
@@ -363,7 +364,7 @@ mixin Gen2Expr on Gen2Base {
         final want = t(e);
         if (!at(0).nullable && !at(0).isAny) return x(a[0], want);
         if (at(0).isAny) return conv(dynRt('orElse', [x(a[0]), x(a[1], _any)]), _any, want);
-        return orElseCode(x(a[0], want.orNull), want.orNull, x(a[1], want));
+        return orElseCode(x(a[0], want.orNull), want.orNull, x(a[1], want), want);
       case 'must' when a.length == 1:
         if (!at(0).nullable && !at(0).isAny) return x(a[0]);
         return conv(mustCode(x(a[0]), at(0)), at(0).nonNull, t(e));
