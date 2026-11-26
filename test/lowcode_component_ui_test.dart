@@ -79,6 +79,19 @@ Future<void> select(WidgetTester tester, String id) async {
   await settle(tester, rounds: 2);
 }
 
+/// 选中一个“正中间被旁边选中框的拖柄盖住”的组件：拖柄能按的范围（44）比看到的大，紧挨着的小组件的正中间会落在它里面。
+/// 这时点一下走的是拖柄的“点穿”（CanvasSelectionOverlay.onTapThrough → 选中手指下面的组件），不是组件自己接的点击——
+/// 所以先确认点到的确实是拖柄，再点，再确认选中的确实换成了 [id]（以前直接 tap(node(id))，测试框架会警告“点击可能没点中”）。
+Future<void> selectUnderHandle(WidgetTester tester, String id) async {
+  final at = tester.getCenter(node(id));
+  final handles = find.byWidgetPredicate((w) => w.key is ValueKey<String> && (w.key! as ValueKey<String>).value.startsWith('lowcode-handle-'));
+  final hit = tester.hitTestOnBinding(at).path.map((e) => e.target).toSet();
+  expect(handles.evaluate().any((e) => hit.contains(e.renderObject)), isTrue, reason: '$id 的正中间应该落在旁边选中框拖柄能按的范围里');
+  await tester.tapAt(at);
+  await settle(tester, rounds: 2);
+  expect(tester.widget<CanvasView>(find.byType(CanvasView).last).selected, id, reason: '点在拖柄上没挪＝选中它下面的组件');
+}
+
 /// 在组件盒里点一个组件（[itemKey]：内置的是类型名，自定义组件是 `component:<id>`）。组件盒没开 / 收着就先点“添加”。
 Future<void> paletteAdd(WidgetTester tester, String itemKey) async {
   final panel = find.byType(PalettePanel);
@@ -507,14 +520,14 @@ void main() {
     expect(doc.component('c1')!.root.children.map((n) => n.type), ['text', 'button', 'text']);
     await shot(tester, 'lc-comp-editor-light');
 
-    // 改按钮的文字。
-    await select(tester, 'k3');
+    // 改按钮的文字（刚加的文本还选中着，它的拖柄盖着按钮的正中间）。
+    await selectUnderHandle(tester, 'k3');
     await tapText(tester, '常用');
     await tester.enterText(find.widgetWithText(TextField, '去看看'), '马上去');
     await settle(tester, rounds: 2);
     await closeSheet(tester);
-    // 里面的控件可以删。
-    await select(tester, 'k2');
+    // 里面的控件可以删（按钮还选中着，它的拖柄盖着上面那行文本的正中间）。
+    await selectUnderHandle(tester, 'k2');
     expect(find.byTooltip('更多操作'), findsOneWidget);
     // 最外层现在也有“更多操作”了（设成插槽的入口），所以点开看一眼：里面的控件的菜单里有“删除”。
     await tester.tap(find.byTooltip('更多操作'));
