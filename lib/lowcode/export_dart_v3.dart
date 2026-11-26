@@ -7,7 +7,7 @@
 /// - 弹窗不在页面的控件树里：每个弹窗导出成一个静态方法 `showDialog_<id>(context)`，要打开时调用它；
 ///   页面里“一开始就打开”（`open`）导不出来。
 /// - 页面级的栏（顶部导航栏是页面第一个、底部导航栏是最后一个）放进 Scaffold 的 `appBar` / `bottomNavigationBar`。
-/// - 底部导航栏每一项的 `page`（去哪一页）要等多页面，点了没反应。
+/// - 底部导航栏每一项的 `page`（去哪一页）：多页面的项目里点了会换到那一页（[dartPageJumps]）；只有一页的项目点了没反应。
 /// - 状态样式（按下 / 禁用 / 聚焦）、网格布局、`style` 里的 CSS 这一份都不读（它一直只读简写属性）。
 library;
 
@@ -25,6 +25,34 @@ String _ind(int n) => '  ' * n;
 String _call(String head, List<String> args, int i) => '$head(\n${[for (final a in args) '${_ind(i + 1)}$a,\n'].join()}${_ind(i)})';
 
 String _list(List<String> items, int i) => items.isEmpty ? '[]' : '[\n${[for (final x in items) '${_ind(i + 1)}$x,\n'].join()}${_ind(i)}]';
+
+/// 多页面导出时“页面之间怎么跳”（export_dart.dart 在导出每一页的前后设上 / 清掉；只有一页的项目一直是 null）。
+class DartPageJumps {
+  const DartPageJumps(this.classOf, this.clickPage);
+
+  /// 页面 id → 那一页的类名；页面不在了、或者就是当前这页，返回 null。
+  final String? Function(String pageId) classOf;
+
+  /// 这个组件“点击时去页面”（快捷操作存下来的那种：点击下面正好一块“去页面”）去的那一页的类名；没有返回 null。
+  final String? Function(LcNode n) clickPage;
+}
+
+DartPageJumps? dartPageJumps;
+
+/// 多页面导出的文件末尾带的两个小函数：叠一页上去（能返回）、换成另一页（底部导航用）。
+const String kDartPageHelpers = '''
+
+/// 去另一页（叠在当前页上面，系统的返回能回来）。
+void _lcGoTo(BuildContext context, Widget page) {
+  Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => page));
+}
+
+/// 换成另一页（底部导航用：不往上叠）。page 是 null＝这一项没设去哪页，什么都不做。
+void _lcSwitchTo(BuildContext context, Widget? page) {
+  if (page == null) return;
+  Navigator.of(context).pushReplacement(MaterialPageRoute<void>(builder: (_) => page));
+}
+''';
 
 /// 当“在一行里”的父节点用（插槽里的子组件横着排：撑满的用 Expanded，输入框给固定宽度）。
 final LcNode _rowParent = LcNode(id: '_slot', type: 'row');
@@ -172,9 +200,14 @@ String? dartV3Node(LcNode n, int i, DartChild child, {required bool inRow}) {
           'child: Center(child: ${items.isEmpty ? 'SizedBox.shrink()' : 'Column(mainAxisSize: MainAxisSize.min, children: [${icon(items.first)}, Text(${_s(lcItemLabel(items.first, ''))}, style: const TextStyle(fontSize: 12))])'})',
         ], i);
       }
+      // 每一项去哪页（多页面时才有）：没设 / 页面不在了 / 就是当前页的是 null。
+      final jumps = dartPageJumps;
+      final targets = [for (final m in items) m['page'] is String ? jumps?.classOf(m['page'] as String) : null];
       return _call('NavigationBar', [
         'selectedIndex: ${current.clamp(0, items.length - 1)}',
-        'onDestinationSelected: (index) {}',
+        targets.every((t) => t == null)
+            ? 'onDestinationSelected: (index) {}'
+            : 'onDestinationSelected: (index) => _lcSwitchTo(context, const <Widget?>[${[for (final t in targets) t == null ? 'null' : '$t()'].join(', ')}][index])',
         if (variant == 'iconOnly') 'labelBehavior: NavigationDestinationLabelBehavior.alwaysHide',
         if (bg != null) 'backgroundColor: ${_color(bg)}',
         if (color != null) 'indicatorColor: ${_color(color, '33')}',

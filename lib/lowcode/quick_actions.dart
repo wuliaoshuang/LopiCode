@@ -4,9 +4,9 @@
 /// - 它**不是另一套东西**：存下来的就是一串普通积木——“当 这个组件 被点击”下面挂一块 `navigate` / `alert`，
 ///   进积木编辑器能看到、能改。这里只认“帽子下面正好一块、参数是一段写死的文字”的那种；她在积木里改复杂了，
 ///   这里就不再把它当快捷动作（那一串还在，从上面“点击时 N 块积木”进去看）。
-/// - 现在有四样：打开网址、弹出提示、打开弹窗、关闭弹窗。
-///   后两样存的是“改控件 某个弹窗 的 显示 改成 是 / 否”（`setProp`），填的不是一段文字而是“选页面里的哪个弹窗”。
-/// - 设计里的“去页面”要等有了多页面（第 4 期），到时候往 [kLcQuickActions] 里加。
+/// - 现在有五样：去页面、打开网址、弹出提示、打开弹窗、关闭弹窗。
+///   “去页面”存的是一块 `goPage`，填的是页面 id（选项目里的哪一页）；
+///   弹窗那两样存的是“改控件 某个弹窗 的 显示 改成 是 / 否”（`setProp`），填的是“选页面里的哪个弹窗”。
 library;
 
 import 'package:lopicode/lowcode/logic_expr.dart';
@@ -14,7 +14,7 @@ import 'package:lopicode/lowcode/logic_model.dart';
 import 'package:lopicode/lowcode/model.dart';
 
 class LcQuickAction {
-  const LcQuickAction(this.op, this.arg, this.label, this.hint, {this.dialogShown});
+  const LcQuickAction(this.op, this.arg, this.label, this.hint, {this.dialogShown, this.picksPage = false});
 
   /// 用的是哪块积木、填的东西放在它的哪个参数上。
   final String op;
@@ -27,6 +27,12 @@ class LcQuickAction {
 
   bool get picksDialog => dialogShown != null;
 
+  /// 这是“去页面”：填的是页面 id，不是一段文字。
+  final bool picksPage;
+
+  /// 填的是“选一样东西”（弹窗 / 页面）的 id，不是让人打字。
+  bool get picksId => picksDialog || picksPage;
+
   /// 界面上认它用的名字（两样弹窗动作用的是同一块积木，光看 [op] 分不开）。
   String get id => switch (dialogShown) {
     null => op,
@@ -35,7 +41,11 @@ class LcQuickAction {
   };
 }
 
+/// “点击时去页面”。
+const LcQuickAction kLcGoPageQuick = LcQuickAction(kLcGoPageOp, 'page', '点击时去页面', '选一个页面', picksPage: true);
+
 const List<LcQuickAction> kLcQuickActions = [
+  kLcGoPageQuick,
   LcQuickAction('navigate', 'url', '点击时打开网址', 'https://…'),
   LcQuickAction('alert', 'message', '点击时弹出提示', '提示里写什么'),
   LcQuickAction('setProp', 'node', '点击时打开弹窗', '选一个弹窗', dialogShown: true),
@@ -65,6 +75,7 @@ String? _literal(Object? expr) => expr is Map && expr['e'] == 'text' && expr['v'
 /// 这块积木在这个快捷动作里填的是什么；它不是这个快捷动作的样子返回 null。
 String? _valueOf(LcBlock b, LcQuickAction a) {
   if (b.op != a.op || b.body.isNotEmpty || b.orElse.isNotEmpty) return null;
+  if (a.picksPage) return b.args[a.arg] is String && (b.args[a.arg] as String).isNotEmpty ? b.args[a.arg] as String : null;
   if (!a.picksDialog) return _literal(b.args[a.arg]);
   final id = b.args[a.arg], v = b.args['value'];
   return id is String && id.isNotEmpty && b.args['prop'] == 'visible' && v is Map && v['e'] == 'bool' && v['v'] == a.dialogShown ? id : null;
@@ -86,7 +97,7 @@ String? lcQuickValue(LcDocument doc, String nodeId, LcQuickAction a) {
 }
 
 /// 设 / 改 / 去掉一个快捷动作。[value] 是 null 或空＝去掉（只去掉这一串，别的逻辑不动）。返回改没改。
-/// 弹窗动作的 [value] 是弹窗的 id：页面里没有这个弹窗就不改。
+/// 弹窗动作的 [value] 是弹窗的 id：页面里没有这个弹窗就不改。“去页面”的 [value] 是页面 id：项目里没有这一页就不改。
 bool lcSetQuick(LcDocument doc, String nodeId, LcQuickAction a, String? value) {
   final node = doc.find(nodeId);
   if (node == null || !lcHasQuickActions(node)) return false;
@@ -94,13 +105,18 @@ bool lcSetQuick(LcDocument doc, String nodeId, LcQuickAction a, String? value) {
   final v = value?.trim() ?? '';
   if (v.isEmpty) return old != null && doc.logic.removeHandler(old.id);
   if (a.picksDialog && doc.find(v)?.type != 'dialog') return false;
+  if (a.picksPage && doc.pageById(v) == null) return false;
   if (old != null) {
     if (_valueOf(old.body.single, a) == v) return false;
-    old.body.single.args[a.arg] = a.picksDialog ? v : exText(v);
+    old.body.single.args[a.arg] = a.picksId ? v : exText(v);
     return true;
   }
   final h = doc.logic.addHandler('click', target: nodeId);
   if (h == null) return false;
-  h.body.add(a.picksDialog ? LcBlock(op: a.op, args: {a.arg: v, 'prop': 'visible', 'value': exBool(a.dialogShown!)}) : LcBlock(op: a.op, args: {a.arg: exText(v)}));
+  h.body.add(switch (a) {
+    _ when a.picksPage => LcBlock(op: a.op, args: {a.arg: v}),
+    _ when a.picksDialog => LcBlock(op: a.op, args: {a.arg: v, 'prop': 'visible', 'value': exBool(a.dialogShown!)}),
+    _ => LcBlock(op: a.op, args: {a.arg: exText(v)}),
+  });
   return true;
 }

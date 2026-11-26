@@ -18,6 +18,7 @@ import 'dart:convert';
 
 import 'package:lopicode/lowcode/component_model.dart';
 import 'package:lopicode/lowcode/export_framework_common.dart';
+import 'package:lopicode/lowcode/export_pages.dart';
 import 'package:lopicode/lowcode/export_v3_fields.dart';
 import 'package:lopicode/lowcode/export_web_v3.dart';
 import 'package:lopicode/lowcode/logic_blocks.dart';
@@ -87,10 +88,17 @@ class VueJsTarget extends JsTarget {
     }
     return ['${states.require(node, prop).name}.value = $valueJs;'];
   }
+
+  @override
+  List<String> goPage(LcDocument doc, LcPage page) => lcHashGoPage(page);
 }
 
 /// 把页面导出成 Vue 3 的文件。任何输入都不抛异常。
+///
+/// 多页面的项目：每页一个 `<页名>.vue`，外加一个外壳 `LcApp.vue`（看地址栏决定显示哪一页，见 export_pages.dart）；
+/// 自定义组件所有页面共用一份。只有一页时和以前逐字节一样。
 LcFrameworkExport exportVue(LcDocument doc) {
+  if (doc.isMultiPage) return _exportSite(doc);
   final notes = <String>[kNoteBody];
   final pageName = lcPageName(doc);
   final plans = LcComponentPlans.build(doc, pageName: pageName, notes: notes);
@@ -99,6 +107,22 @@ LcFrameworkExport exportVue(LcDocument doc) {
     files.add(lcFormatted('components/${plan.name}.vue', _component(plan, plans, notes), 'vue'));
   }
   return LcFrameworkExport(files: files, notes: {...notes}.toList());
+}
+
+LcFrameworkExport _exportSite(LcDocument doc) {
+  final notes = <String>[kNoteBody, kNotePages];
+  final site = LcSitePlan(doc);
+  final files = <LcExportFile>[lcFormatted('$kLcShellName.vue', lcVueShell(site), 'vue')];
+  final components = <LcExportFile>[];
+  final done = <String>{};
+  for (final p in site.pages) {
+    final plans = LcComponentPlans.build(p.view, pageName: p.name, notes: notes, fixedNames: site.componentNames);
+    files.add(lcFormatted('${p.name}.vue', _page(p.view, plans, notes), 'vue'));
+    for (final plan in plans.all) {
+      if (done.add(plan.def.id)) components.add(lcFormatted('components/${plan.name}.vue', _component(plan, plans, notes, doc: p.view), 'vue'));
+    }
+  }
+  return LcFrameworkExport(files: [...files, ...components], notes: {...notes}.toList());
 }
 
 /// 模板生成器：页面和组件定义共用，区别只在“某个属性绑到哪个名字上”和“事件挂什么”。
@@ -121,12 +145,16 @@ class _Template {
 
   /// 页面的根节点（组件定义里是 null）：判断“页面级的栏”用。
   LcNode? pageRoot;
+
+  /// 底部导航项怎么跳页（只有一页的项目是 null）。
+  String? Function(String pageId)? pageJump;
   late final LcWebCtx web = LcWebCtx(
     uniqueIds: prefix.isEmpty,
     fieldClass: (n) => lcFieldClassOf(n, prefix),
     // 弹窗的显示被逻辑管着（v-show 绑着一个 ref）：关闭时改那个 ref。
     closeExpr: (n) => dyn(n, 'visible') == null ? null : '${dyn(n, 'visible')} = false',
     pageRoot: pageRoot,
+    pageJump: pageJump,
   );
 
   /// 模板里用到的组件（要在脚本里 import）。
@@ -342,6 +370,7 @@ String _page(LcDocument doc, LcComponentPlans plans, List<String> notes) {
 
   final template = _Template(prefix: '', plans: plans, notes: notes, dyn: (n, prop) => states.of(n, prop)?.name, events: eventsOf, importDir: './components/')
     ..pageRoot = doc.root
+    ..pageJump = doc.isMultiPage ? lcPageJumper(doc, hash: true) : null
     ..node(doc.root, 1);
 
   final usesRef = logic.variables.isNotEmpty || !states.isEmpty;
@@ -378,10 +407,12 @@ String _propType(LcComponentProp p) => switch (p.type) {
   _ => 'String',
 };
 
-String _component(LcComponentPlan plan, LcComponentPlans plans, List<String> notes) {
+/// [doc]：多页面导出时给（组件里的底部导航项要知道项目里有哪些页；组件哪页都可能用，所以“去当前这页”也照写，反正不会动）。
+String _component(LcComponentPlan plan, LcComponentPlans plans, List<String> notes, {LcDocument? doc}) {
   final def = plan.def;
   final prefix = lcComponentPrefix(def);
   final template = _Template(prefix: prefix, plans: plans, notes: notes, dyn: (n, prop) => lcBoundAttr(plan, n, prop, notes), events: (_) => const {}, ownerId: def.id, importDir: './')
+    ..pageJump = doc == null ? null : lcPageJumper(doc, hash: true, allowSelf: true)
     ..node(def.root, 1);
   final script = <String>[
     '// 自定义组件：${jsComment(def.name, 60)}',

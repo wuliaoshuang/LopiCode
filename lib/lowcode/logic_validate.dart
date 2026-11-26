@@ -56,6 +56,9 @@ abstract final class LcIssueCode {
   /// 积木或表达式嵌套太深。
   static const String tooDeep = 'tooDeep';
 
+  /// “去页面”指的页面已经不在项目里了。
+  static const String pageNotFound = 'pageNotFound';
+
   /// 这种控件没有这个属性（警告：比如改容器的文字、读按钮的输入内容）。
   static const String propNotSupported = 'propNotSupported';
 
@@ -280,6 +283,7 @@ class _Validator {
     _xp = const [];
     _values.block(b, spec);
     if (b.op == 'navigate' || b.op == 'fetch') _url(b);
+    if (b.op == kLcGoPageOp) _page(b);
     if (!spec.hasBody && b.body.isNotEmpty) {
       _warn(LcIssueCode.strayBody, '“${spec.label}”里面不能放积木，里面的 ${b.body.length} 块导出时会被忽略');
     }
@@ -294,6 +298,17 @@ class _Validator {
       }
     }
     if (b.op == 'setProp') _propFit(b.args['node'], b.args['prop'], write: true);
+  }
+
+  /// “去页面”指的那一页：没选＝错误；已经删掉了＝错误（导出时这一块会跳过，点了没反应）。
+  void _page(LcBlock b) {
+    final id = b.args['page'];
+    if (id is! String) return; // 没填 / 不是文字：上面按参数已经报过了
+    if (id.isEmpty) {
+      _add(LcIssueLevel.error, LcIssueCode.missingArg, '还没选去哪个页面', arg: 'page', xp: const []);
+    } else if (doc.pageById(id) == null) {
+      _add(LcIssueLevel.error, LcIssueCode.pageNotFound, '它要去的页面已经删掉了，换一个页面或者删掉这块积木', arg: 'page', xp: const []);
+    }
   }
 
   /// 直接填的网址：跳转的空着 / 不像网址＝警告；请求的空着＝错误（一定请求不到），不像网址＝警告。
@@ -367,6 +382,9 @@ class _Validator {
       case LcArgKind.choice:
         if (missing) {
           _error(LcIssueCode.missingArg, '“${a.label}”还没选', arg: a.name);
+        } else if (a.choices.isEmpty) {
+          // 可选的东西跟着项目走的（“去页面”的页面）：这里只管是不是文字，在不在由 [_page] 查。
+          if (value is! String) _error(LcIssueCode.badArg, '“${a.label}”应该是一个 id', arg: a.name);
         } else if (value is! String || !a.choices.contains(value)) {
           _error(LcIssueCode.badArg, '“${a.label}”只能是 ${a.choices.join(' / ')}', arg: a.name);
         }

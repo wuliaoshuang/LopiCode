@@ -358,7 +358,8 @@ class LcComponentPlans {
   }
 
   /// 从页面出发把用到的组件都找出来。找不到定义的、循环引用的各记一条说明。
-  static LcComponentPlans build(LcDocument doc, {required String pageName, required List<String> notes}) {
+  /// [fixedNames]：多页面导出时每个组件叫什么已经全项目定好了（组件 id → 名字，见 export_pages.dart），各页照着用。
+  static LcComponentPlans build(LcDocument doc, {required String pageName, required List<String> notes, Map<String, String>? fixedNames}) {
     final all = <LcComponentPlan>[];
     final byId = <String, LcComponentPlan>{};
     final broken = <String>{};
@@ -377,9 +378,9 @@ class LcComponentPlans {
           if (ownerId != null) broken.add(_edge(ownerId, n));
           notes.add('组件「${jsComment(def.name, 30)}」里绕了一圈又用到了自己（循环引用），那个位置没有展开，只留了一行注释。');
         } else if (!byId.containsKey(def.id)) {
-          var name = lcPascalName(def.name, fallback: 'LcComponent');
+          var name = fixedNames?[def.id] ?? lcPascalName(def.name, fallback: 'LcComponent');
           final base = name;
-          for (var i = 2; !names.add(name); i++) {
+          for (var i = 2; fixedNames?[def.id] == null && !names.add(name); i++) {
             name = '$base$i';
           }
           final attrNames = LcNames(_reservedPropNames);

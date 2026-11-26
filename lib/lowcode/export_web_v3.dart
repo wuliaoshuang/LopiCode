@@ -9,7 +9,8 @@
 /// - 自带的小交互（页签切换、弹窗的按钮和点遮罩关闭、导航栏的返回）**直接改网页元素**，不经框架的状态：
 ///   写成一句不带双引号的 JS 表达式，事件对象在三种写法里分别叫 `event` / `$event` / `event`。
 ///   弹窗要是被“改控件”积木管着显示，关闭时改的是那份状态（[LcWebCtx.closeExpr]），不然积木再让它显示会不灵。
-/// - 底部导航栏每一项的 `page`（去哪一页）要等多页面（第 4 期），这里不导出，点了没反应。
+/// - 底部导航栏每一项的 `page`（去哪一页）：项目里有这一页、而且不是当前这页时，点了就跳过去（[LcWebCtx.pageJump]）；
+///   只有一页的项目没有可跳的地方，和以前一样不导出点击。
 /// - 单选组：页面上节点 id 不重复，用 `name` 分组；自定义组件的定义会被用多次，`name` 会撞，
 ///   这时不写 `name`，改成点一个就把同组别的取消（[LcWebCtx.uniqueIds]）。
 library;
@@ -44,7 +45,11 @@ class LcEl {
 const String kLcEv = '\u0001';
 
 class LcWebCtx {
-  const LcWebCtx({required this.uniqueIds, required this.fieldClass, required this.closeExpr, required this.pageRoot, this.plainHtml = false});
+  const LcWebCtx({required this.uniqueIds, required this.fieldClass, required this.closeExpr, required this.pageRoot, this.plainHtml = false, this.pageJump});
+
+  /// 底部导航项“去哪一页”：页面 id → 点击时的一句 JS（见 export_pages.dart 的 lcPageJumper）；
+  /// 没给、或者返回 null（页面不在了 / 就是当前这页）＝这一项点了没反应。
+  final String? Function(String pageId)? pageJump;
 
   /// 导出的是不带框架的网页：弹窗的显示靠元素自己的 `style.display`（页面逻辑的“改控件 显示”改的就是它）。
   final bool plainHtml;
@@ -234,6 +239,7 @@ LcEl? lcWebElement(LcNode n, LcWebCtx ctx) {
                 _svg(item['icon'] as String?),
                 if (variant != 'iconOnly') LcEl('span', text: lcItemLabel(item, '')),
               ],
+              on: {if (item['page'] is String) 'click': ?ctx.pageJump?.call(item['page'] as String)},
             ),
         ],
       );

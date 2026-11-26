@@ -21,6 +21,7 @@ library;
 
 import 'package:lopicode/lowcode/component_model.dart';
 import 'package:lopicode/lowcode/export_framework_common.dart';
+import 'package:lopicode/lowcode/export_pages.dart';
 import 'package:lopicode/lowcode/export_v3_fields.dart';
 import 'package:lopicode/lowcode/export_web_v3.dart';
 import 'package:lopicode/lowcode/logic_blocks.dart';
@@ -83,10 +84,17 @@ class ReactJsTarget extends JsTarget {
     }
     return ['lcUi.${states.require(node, prop).name} = $valueJs;', 'lcRefresh();'];
   }
+
+  @override
+  List<String> goPage(LcDocument doc, LcPage page) => lcHashGoPage(page);
 }
 
 /// 把页面导出成 React 的文件。任何输入都不抛异常。
+///
+/// 多页面的项目：每页一个 `<页名>.jsx` / `.css`，外加一个外壳 `LcApp.jsx`（看地址栏决定显示哪一页，见 export_pages.dart）；
+/// 自定义组件所有页面共用一份。只有一页时和以前逐字节一样。
 LcFrameworkExport exportReact(LcDocument doc) {
+  if (doc.isMultiPage) return _exportSite(doc);
   final notes = <String>[kNoteBody];
   final pageName = lcPageName(doc);
   final plans = LcComponentPlans.build(doc, pageName: pageName, notes: notes);
@@ -99,6 +107,30 @@ LcFrameworkExport exportReact(LcDocument doc) {
       ..add(lcFormatted('components/${plan.name}.css', cCss, 'css'));
   }
   return LcFrameworkExport(files: files, notes: {...notes}.toList());
+}
+
+LcFrameworkExport _exportSite(LcDocument doc) {
+  final notes = <String>[kNoteBody, kNotePages];
+  final site = LcSitePlan(doc);
+  final files = <LcExportFile>[lcFormatted('$kLcShellName.jsx', lcReactShell(site), 'jsx')];
+  final components = <LcExportFile>[];
+  final done = <String>{};
+  for (final p in site.pages) {
+    final plans = LcComponentPlans.build(p.view, pageName: p.name, notes: notes, fixedNames: site.componentNames);
+    final (jsx, css) = _page(p.view, p.name, plans, notes);
+    files
+      ..add(lcFormatted('${p.name}.jsx', jsx, 'jsx'))
+      ..add(lcFormatted('${p.name}.css', css, 'css'));
+    for (final plan in plans.all) {
+      if (!done.add(plan.def.id)) continue;
+      final (cJsx, cCss) = _component(plan, plans, notes, doc: p.view);
+      components
+        ..add(lcFormatted('components/${plan.name}.jsx', cJsx, 'jsx'))
+        ..add(lcFormatted('components/${plan.name}.css', cCss, 'css'));
+    }
+  }
+  files.add(lcFormatted(kReactBaseCss, '/* $kExportHeader */\n$kFrameworkBaseCss', 'css'));
+  return LcFrameworkExport(files: [...files, ...components], notes: {...notes}.toList());
 }
 
 enum _Kind {
@@ -157,12 +189,16 @@ class _View {
 
   /// 页面的根节点（组件定义里是 null）：判断“页面级的栏”用。
   LcNode? pageRoot;
+
+  /// 底部导航项怎么跳页（只有一页的项目是 null）。
+  String? Function(String pageId)? pageJump;
   late final LcWebCtx web = LcWebCtx(
     uniqueIds: prefix.isEmpty,
     fieldClass: (n) => lcFieldClassOf(n, prefix),
     // 弹窗的显示被逻辑管着（lcUi 里有它）：关闭时改 lcUi 再让 React 重画。
     closeExpr: (n) => dyn(n, 'visible') == null ? null : '{ ${dyn(n, 'visible')} = false; lcRefresh(); }',
     pageRoot: pageRoot,
+    pageJump: pageJump,
   );
 
   String _attrs(LcNode n) {
@@ -352,7 +388,8 @@ String _objectLiteral(Iterable<(String, String)> entries) =>
   }
 
   final view = _View(prefix: '', plans: plans, notes: notes, dyn: (n, prop) => states.of(n, prop) == null ? null : 'lcUi.${states.of(n, prop)!.name}', events: eventsOf, importDir: './components/')
-    ..pageRoot = doc.root;
+    ..pageRoot = doc.root
+    ..pageJump = doc.isMultiPage ? lcPageJumper(doc, hash: true) : null;
   final root = view.node(doc.root, 0);
 
   final hasLogic = !logic.isEmpty;
@@ -419,7 +456,8 @@ String _objectLiteral(Iterable<(String, String)> entries) =>
   return (out.toString(), '/* $kExportHeader */\n${lcCollectCss(doc.root, '', notes, plans: plans)}');
 }
 
-(String, String) _component(LcComponentPlan plan, LcComponentPlans plans, List<String> notes) {
+/// [doc]：多页面导出时给（组件里的底部导航项要知道项目里有哪些页）。
+(String, String) _component(LcComponentPlan plan, LcComponentPlans plans, List<String> notes, {LcDocument? doc}) {
   final def = plan.def;
   final prefix = lcComponentPrefix(def);
   final view = _View(
@@ -432,7 +470,7 @@ String _objectLiteral(Iterable<(String, String)> entries) =>
     importDir: './',
     rootNode: def.root,
     textNeedsString: (n) => !lcBoundIsText(plan, n, 'text'),
-  );
+  )..pageJump = doc == null ? null : lcPageJumper(doc, hash: true, allowSelf: true);
   final root = view.node(def.root, 0);
   final params = [for (final LcComponentProp p in def.props) '${plan.attrs[p.name]} = ${lcPropDefaultLiteral(p)}', ...plan.slotAttrs.values, 'className', 'style', '...lcRest'];
   final out = StringBuffer()

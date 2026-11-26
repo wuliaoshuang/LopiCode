@@ -91,6 +91,9 @@ abstract class JsTarget {
   /// 改控件属性（`prop` 一定在 [kWritableProps] 里）。
   List<String> writeProp(LcNode node, String prop, String valueJs);
 
+  /// “去页面”怎么写。普通网页：每页一个 .html，换地址就行；Vue / React 改地址栏里 # 后面那段，外壳跟着换页（各自覆盖）。
+  List<String> goPage(LcDocument doc, LcPage page) => ['location.href = ${jsString('${lcPageFileBase(doc, page.id)}.html')};'];
+
   /// input 事件里“输入的内容”。处理函数的参数名固定叫 `event`。
   String eventValue() => 'lcEventValue(event)';
 }
@@ -283,6 +286,11 @@ class JsLogicWriter {
         return ['alert(${toText(arg('message')).code});'];
       case 'navigate':
         return ['location.href = ${toText(arg('url')).code};'];
+      case kLcGoPageOp:
+        final id = b.args['page'];
+        final page = id is String ? doc.pageById(id) : null;
+        if (page == null) return _skip(b, '要去的页面已经不在了');
+        return target.goPage(doc, page);
       case 'log':
         return ['console.log(${arg('value').code});'];
       case 'fetch':

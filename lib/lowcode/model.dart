@@ -2,11 +2,14 @@ import 'dart:convert';
 
 import 'package:lopicode/lowcode/component_model.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
+import 'package:lopicode/lowcode/model_pages.dart';
 import 'package:lopicode/lowcode/model_props.dart';
-import 'package:lopicode/lowcode/model_v3_components.dart';
+import 'package:lopicode/lowcode/model_specs.dart';
 import 'package:lopicode/lowcode/slots.dart';
 
 export 'package:lopicode/lowcode/model_history.dart';
+export 'package:lopicode/lowcode/model_pages.dart';
+export 'package:lopicode/lowcode/model_specs.dart';
 
 /// 低代码页面的数据模型：一棵组件树，整份存成项目里的 JSON 文件。
 ///
@@ -248,76 +251,24 @@ class LcNode {
   }
 }
 
-class LcSpec {
-  const LcSpec(this.type, this.label, {this.isContainer = false, this.defaults = const {}, this.fields = const [], this.slots});
-  final String type;
-  final String label;
-  final bool isContainer;
-  final Map<String, dynamic> defaults;
-
-  /// 带插槽的组件：固定的插槽名（标签页的插槽跟着页签走，这里是空表）。null＝没有插槽。读法见 slots.dart。
-  final List<String>? slots;
-
-  /// 属性面板里显示哪些字段、按什么顺序。
-  final List<String> fields;
-}
-
-const _boxFields = ['width', 'height', 'padding', 'margin', 'bg', 'radius'];
-const _layoutFields = ['gap', 'align', 'justify'];
-
-/// 这一版不认识的组件类型用的说明（不在 [lcSpecs] 里：组件盒、各处“每种组件”的清单都不该有它）。
-const LcSpec lcUnknownSpec = LcSpec('unknown', '新版组件', defaults: {}, fields: []);
-
-const Map<String, LcSpec> lcSpecs = {
-  'page': LcSpec('page', '页面', isContainer: true, defaults: {'padding': 16, 'gap': 12, 'bg': '#F6FBFD'}, fields: ['padding', 'bg', ..._layoutFields]),
-  'container': LcSpec('container', '容器', isContainer: true, defaults: {'padding': 12, 'gap': 8, 'width': 'fill'}, fields: [..._boxFields, ..._layoutFields]),
-  'row': LcSpec('row', '行', isContainer: true, defaults: {'gap': 8, 'align': 'center', 'width': 'fill'}, fields: [..._boxFields, ..._layoutFields]),
-  'column': LcSpec('column', '列', isContainer: true, defaults: {'gap': 8}, fields: [..._boxFields, ..._layoutFields]),
-  'card': LcSpec('card', '卡片', isContainer: true, defaults: {'padding': 16, 'gap': 8, 'bg': '#FFFFFF', 'radius': 12, 'width': 'fill'}, fields: [..._boxFields, ..._layoutFields]),
-  'text': LcSpec(
-    'text',
-    '文本',
-    defaults: {'text': '一段文本', 'fontSize': 16, 'color': '#222435'},
-    fields: ['text', 'fontSize', 'bold', 'color', 'textAlign', 'width', 'padding', 'margin', 'bg', 'radius'],
-  ),
-  'button': LcSpec(
-    'button',
-    '按钮',
-    defaults: {'text': '按钮', 'bg': '#058654', 'color': '#FFFFFF', 'radius': 8, 'padding': 12, 'fontSize': 16},
-    fields: ['text', 'fontSize', 'bg', 'color', 'radius', 'padding', 'width', 'margin'],
-  ),
-  'image': LcSpec('image', '图片', defaults: {'src': '', 'height': 160, 'radius': 8, 'width': 'fill'}, fields: ['src', 'width', 'height', 'radius', 'margin']),
-  'input': LcSpec('input', '输入框', defaults: {'placeholder': '请输入', 'radius': 8, 'width': 'fill'}, fields: ['placeholder', 'width', 'radius', 'margin']),
-  'list': LcSpec(
-    'list',
-    '列表',
-    defaults: {
-      'items': ['第一项', '第二项', '第三项'],
-      'fontSize': 16,
-      'color': '#222435',
-    },
-    fields: ['items', 'fontSize', 'color', 'width', 'padding', 'margin', 'bg', 'radius'],
-  ),
-  'divider': LcSpec('divider', '分割线', defaults: {}, fields: ['margin']),
-  'spacer': LcSpec('spacer', '间隔', defaults: {'size': 16}, fields: ['size']),
-  // 这一版不认识的类型（LcNode.raw）：不能放子组件、不在组件盒里、没有可改的属性。
-  // 自定义组件的实例：props.ref 指向 LcDocument.components 里的定义。不在组件栏的固定清单里。
-  'component': LcSpec('component', '组件', defaults: {}, fields: ['width', 'margin']),
-  // 插槽占位：只在自定义组件的定义里用（props.name 是插槽名，子节点是没填时显示的默认内容）。不在组件盒里。
-  'slot': LcSpec('slot', '插槽', isContainer: true, defaults: {}, fields: []),
-  // 第 3 版的 11 个新组件（model_v3_components.dart）。
-  ...lcV3Specs,
-};
-
-/// 组件面板里可拖出来的类型（page 只能是根）。
-const List<String> lcPaletteTypes = ['container', 'row', 'column', 'card', 'text', 'button', 'image', 'input', 'list', 'divider', 'spacer', ...lcV3PaletteTypes];
-
 class LcDocument {
-  LcDocument({required this.title, required this.root, LcLogic? logic, List<LcComponentDef>? components, this.fileVersion = currentVersion, Map<String, dynamic>? more, List<Object?>? keptComponents})
-    : logic = logic ?? LcLogic(),
-      components = components ?? [],
-      more = more ?? {},
-      keptComponents = keptComponents ?? [] {
+  LcDocument({
+    required String title,
+    required LcNode root,
+    LcLogic? logic,
+    List<LcComponentDef>? components,
+    this.fileVersion = currentVersion,
+    Map<String, dynamic>? more,
+    List<Object?>? keptComponents,
+    String? pageId,
+    List<LcPage>? pages,
+    List<Object?>? keptPages,
+  }) : pages = [LcPage(id: pageId ?? kLcFirstPageId, title: title, root: root, logic: logic), ...?pages],
+       components = components ?? [],
+       more = more ?? {},
+       keptComponents = keptComponents ?? [],
+       keptPages = keptPages ?? [] {
+    lcNormalizePageIds(this.pages);
     _normalizeIds();
     _normalizeComponents();
     lcLinkInstances(this);
@@ -328,8 +279,8 @@ class LcDocument {
   /// 整份说明见 docs/lowcode-page-format-v3.md。
   static const int currentVersion = 3;
 
-  /// 最外层这一版会读的字段；别的（给后面几期留的 pages / theme，以及任何不认识的）都进 [more]。
-  static const Set<String> knownKeys = {'version', 'title', 'root', 'logic', 'components'};
+  /// 最外层这一版会读的字段；别的（给后面几期留的 theme，以及任何不认识的）都进 [more]。
+  static const Set<String> knownKeys = {'version', 'id', 'title', 'root', 'logic', 'components', 'pages'};
 
   /// 打开的那个文件写的是第几版（没写＝1）。只用来判断“是不是比这一版新”，以及存盘时版本号不往回写。
   final int fileVersion;
@@ -343,13 +294,34 @@ class LcDocument {
   /// 读不出来的组件定义：不解释，原样留着（排在读得出来的后面）。
   final List<Object?> keptComponents;
 
-  String title;
-  LcNode root;
+  /// 全部页面，第一个是首页（多页面见 model_pages.dart）。至少有一页。
+  final List<LcPage> pages;
 
-  /// 页面逻辑：变量和事件处理。
-  final LcLogic logic;
+  /// `pages` 里读不出来的项：不解释，原样留着（排在读得出来的后面）。
+  final List<Object?> keptPages;
+  int _at = 0;
 
-  /// 自定义组件的定义。
+  /// 当前在编辑的那一页。下面的 [title] / [root] / [logic] 和查找、插入、移动都是对它说的。
+  LcPage get page => pages[_at];
+  int get pageIndex => _at;
+
+  /// 换一页来编辑（不算一次修改，不写文件）。
+  void openPageAt(int index) => _at = index.clamp(0, pages.length - 1);
+  bool openPage(String id) {
+    final i = pages.indexWhere((p) => p.id == id);
+    if (i >= 0) _at = i;
+    return i >= 0;
+  }
+
+  String get title => page.title;
+  set title(String v) => page.title = v;
+  LcNode get root => page.root;
+  set root(LcNode v) => page.root = v;
+
+  /// 当前页的逻辑：变量和事件处理。
+  LcLogic get logic => page.logic;
+
+  /// 自定义组件的定义（项目级：所有页面共用）。
   final List<LcComponentDef> components;
   int _nextId = 1;
 
@@ -387,11 +359,20 @@ class LcDocument {
       throw const FormatException('根组件必须是 page');
     }
     final rawComponents = json['components'];
+    final rawPages = json['pages'];
+    final pages = <LcPage>[], keptPages = <Object?>[];
+    for (final p in rawPages is List ? rawPages : const <Object?>[]) {
+      final page = pages.length < kLcMaxPages - 1 ? LcPage.tryParse(p, version: version) : null;
+      page == null ? keptPages.add(p) : pages.add(page);
+    }
     return LcDocument(
       title: json['title'] is String ? json['title'] as String : '未命名页面',
       root: root,
       logic: LcLogic.fromJson(json['logic']),
       fileVersion: version,
+      pageId: json['id'] is String ? json['id'] as String : null,
+      pages: pages,
+      keptPages: keptPages,
       components: [
         if (rawComponents is List)
           for (final c in rawComponents) ?LcComponentDef.tryParse(c, version: version),
@@ -421,14 +402,21 @@ class LcDocument {
     return LcDocument.fromJson(decoded);
   }
 
-  Map<String, dynamic> toJson() => {
-    'version': fileVersion > currentVersion ? fileVersion : currentVersion,
-    'title': title,
-    'root': root.toJson(),
-    if (!logic.isEmpty) 'logic': logic.toJson(),
-    if (components.isNotEmpty || keptComponents.isNotEmpty) 'components': [for (final c in components) c.toJson(), ...keptComponents],
-    ...more,
-  };
+  /// 首页写在最外层，别的页写在 `pages` 里。只有一页、首页的 id 又是默认的那个时不写 `id` 和 `pages`——和以前逐字节一样。
+  Map<String, dynamic> toJson() {
+    final home = pages.first, rest = pages.skip(1);
+    return {
+      'version': fileVersion > currentVersion ? fileVersion : currentVersion,
+      if (rest.isNotEmpty || home.id != kLcFirstPageId) 'id': home.id,
+      'title': home.title,
+      'root': home.root.toJson(),
+      if (!home.logic.isEmpty) 'logic': home.logic.toJson(),
+      if (components.isNotEmpty || keptComponents.isNotEmpty) 'components': [for (final c in components) c.toJson(), ...keptComponents],
+      if (rest.isNotEmpty || keptPages.isNotEmpty) 'pages': [for (final p in rest) p.toJson(), ...keptPages],
+      ...home.more,
+      ...more,
+    };
+  }
 
   LcComponentDef? component(String id) {
     for (final c in components) {
@@ -468,9 +456,8 @@ class LcDocument {
 
   String encode() => const JsonEncoder.withIndent('  ').convert(toJson());
 
-  /// 保证每个节点都有唯一 id（外部 JSON、Agent 写入的可能缺或重复）。
+  /// 保证每个节点都有唯一 id（外部 JSON、Agent 写入的可能缺或重复）。每页各算各的；新 id 的数字全项目往上接。
   void _normalizeIds() {
-    final seen = <String>{};
     var maxN = 0;
     void scan(LcNode n) {
       final m = RegExp(r'^n(\d+)$').firstMatch(n.id);
@@ -478,17 +465,22 @@ class LcDocument {
       n.children.forEach(scan);
     }
 
-    scan(root);
-    _nextId = maxN + 1;
-    void fix(LcNode n) {
-      if (n.id.isEmpty || !RegExp(r'^[A-Za-z0-9_]+$').hasMatch(n.id) || !seen.add(n.id)) {
-        n.id = 'n${_nextId++}';
-        seen.add(n.id);
-      }
-      n.children.forEach(fix);
+    for (final p in pages) {
+      scan(p.root);
     }
+    _nextId = maxN + 1;
+    for (final p in pages) {
+      final seen = <String>{};
+      void fix(LcNode n) {
+        if (n.id.isEmpty || !RegExp(r'^[A-Za-z0-9_]+$').hasMatch(n.id) || !seen.add(n.id)) {
+          n.id = 'n${_nextId++}';
+          seen.add(n.id);
+        }
+        n.children.forEach(fix);
+      }
 
-    fix(root);
+      fix(p.root);
+    }
   }
 
   LcNode newNode(String type) => LcNode(id: 'n${_nextId++}', type: type, props: jsonDecode(jsonEncode(lcSpecs[type]!.defaults)) as Map<String, dynamic>);

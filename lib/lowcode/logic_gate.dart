@@ -16,10 +16,22 @@ String lcExportBlockedText(int errors) => '没有导出：积木逻辑里有 $er
 
 /// 给模型看的校验结果（接在页面工具的结果后面）。没有问题返回空字符串。
 /// 有错误时说清楚 logic.js 没有更新；每条带规则编号、在哪、什么问题、建议怎么改。
+///
+/// 多页面时每一页都查（逻辑是每页各一份）：每条前面带上是哪一页；“脚本没有更新”说的是出错的那几页各自的脚本。
 String lcLogicToolReport(LcDocument doc, {int limit = 20}) {
-  final issues = validateLogic(doc);
+  final issues = <LcLogicIssue>[];
+  final pageOf = <LcLogicIssue, String>{};
+  final keep = doc.pageIndex;
+  for (var i = 0; i < doc.pages.length; i++) {
+    doc.openPageAt(i);
+    for (final issue in validateLogic(doc)) {
+      issues.add(issue);
+      if (doc.isMultiPage) pageOf[issue] = '【${doc.page.title}】';
+    }
+  }
+  doc.openPageAt(keep);
   if (issues.isEmpty) return '';
-  String line(LcLogicIssue i) => '- [${i.rule}] ${i.where}——${i.problem}${i.advice.isEmpty ? '' : '（建议：${i.advice}）'}';
+  String line(LcLogicIssue i) => '- ${pageOf[i] ?? ''}[${i.rule}] ${i.where}——${i.problem}${i.advice.isEmpty ? '' : '（建议：${i.advice}）'}';
   final errors = [
     for (final i in issues)
       if (i.isError) i,

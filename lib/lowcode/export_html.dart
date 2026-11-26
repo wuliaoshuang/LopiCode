@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:lopicode/lowcode/component_ops.dart';
+import 'package:lopicode/lowcode/export_pages.dart';
 import 'package:lopicode/lowcode/export_v3_fields.dart';
 import 'package:lopicode/lowcode/export_web_v3.dart';
 import 'package:lopicode/lowcode/export_web_v3_css.dart';
@@ -22,6 +23,9 @@ class LcHtmlExport {
 
 const _esc = HtmlEscape(HtmlEscapeMode.element);
 const _escAttr = HtmlEscape(HtmlEscapeMode.attribute);
+
+/// 导出的样式文件开头的标记（认“这是不是我们生成的”用）。
+const String kLowcodeCssMarker = '/* 由 LopiCode 低代码搭建器生成';
 
 const String _baseCss = '''/* 由 LopiCode 低代码搭建器生成，重新导出会覆盖本文件 */
 * { box-sizing: border-box; }
@@ -49,7 +53,8 @@ const String kLowcodeLogicFile = 'logic.js';
 const String kLowcodeLogicMarker = '// 由 LopiCode 低代码搭建器生成';
 
 /// 把页面导出成 `index.html` + `style.css`（有逻辑时再加 `logic.js`）的内容。
-LcHtmlExport exportHtml(LcDocument doc) {
+/// [cssFile] / [jsFile]：这一页引用的样式和脚本文件名（多页面时除首页外每页各有一份，见 export_pages.dart）。
+LcHtmlExport exportHtml(LcDocument doc, {String cssFile = 'style.css', String jsFile = kLowcodeLogicFile}) {
   final css = StringBuffer(_baseCss);
   final body = StringBuffer();
 
@@ -132,13 +137,20 @@ LcHtmlExport exportHtml(LcDocument doc) {
 
   // 实例展开后最外层沿用实例的 id、里面是“实例id__内部id”，所以 class 和 CSS 规则全页不重复。
   final tree = expandedTree(doc);
-  web = LcWebCtx(uniqueIds: true, fieldClass: (n) => lcFieldClass('n-${n.id}'), closeExpr: (_) => null, pageRoot: tree, plainHtml: true);
+  web = LcWebCtx(
+    uniqueIds: true,
+    fieldClass: (n) => lcFieldClass('n-${n.id}'),
+    closeExpr: (_) => null,
+    pageRoot: tree,
+    plainHtml: true,
+    pageJump: doc.isMultiPage ? lcPageJumper(doc, hash: false) : null,
+  );
   walk(tree, null, 0);
   // 第 3 版加的属性要的公共样式：用到了才写（没用到的页面一个字节都不多）。
   css.write(lcV3ExtraCss(tree));
   final js = exportLogicJs(doc);
   // 没有逻辑的页面一个字节都不多（和第 1 版导出的一样）。
-  final script = js.isEmpty ? '' : '  <script src="$kLowcodeLogicFile" defer></script>\n';
+  final script = js.isEmpty ? '' : '  <script src="$jsFile" defer></script>\n';
 
   final html =
       '''<!DOCTYPE html>
@@ -147,7 +159,7 @@ LcHtmlExport exportHtml(LcDocument doc) {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>${_esc.convert(doc.title)}</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="$cssFile">
 $script</head>
 <body>
 $body</body>

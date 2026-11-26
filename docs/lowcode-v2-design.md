@@ -54,6 +54,7 @@
 | `repeat` | `times`(表达式) ＋ `body` | 重复 N 次（生成的代码里封顶 10000 次） |
 | `alert` | `message`(表达式) | 弹提示 |
 | `navigate` | `url`(表达式) | 跳转网址 |
+| `goPage` | `page`(页面 id) | 去页面：换到这个项目里的另一页（第 4 期·多页面加的；页面 id 见 docs/lowcode-page-format-v3.md） |
 | `fetch` | `url`(表达式), `method`(GET/POST), `into`(变量名，可空) ＋ `body`(成功后) ＋ `else`(失败后) | 请求网址，结果文本放进变量 |
 | `log` | `value`(表达式) | 写到控制台 |
 | `wait` | `ms`(表达式) ＋ `body` | 等一会儿再做 |

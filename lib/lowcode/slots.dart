@@ -37,7 +37,7 @@ String lcSlotNameOf(LcNode slotNode) => slotNode.strProp('name') ?? kLcDefaultSl
 
 String lcDefaultSlotLabel(String name) => name == kLcDefaultSlot ? '默认插槽' : name;
 
-/// 给页面里、各组件定义里的每个组件实例对上“它的定义现在有哪些插槽”（[LcNode.instSlots]）。
+/// 给所有页面里、各组件定义里的每个组件实例对上“它的定义现在有哪些插槽”（[LcNode.instSlots]）。
 /// 文档每次建好、插入 / 移动 / 复制之前、编辑器每次改完都调一遍；[extra] 是一棵还没放进文档的子树。
 void lcLinkInstances(LcDocument doc, {LcNode? extra}) {
   final cache = <String, List<LcSlot>>{};
@@ -49,7 +49,10 @@ void lcLinkInstances(LcDocument doc, {LcNode? extra}) {
     n.children.forEach(walk);
   }
 
-  walk(doc.root);
+  // 组件是项目级的：每一页里的实例都要对上。
+  for (final p in doc.pages) {
+    walk(p.root);
+  }
   for (final c in doc.components) {
     walk(c.root);
   }
