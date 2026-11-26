@@ -275,3 +275,52 @@ LTypeResult checkTypes({decls, main, scripts: [LTypeScript(name, body, vars: {�
 - 错误变量 `LVarKind.error` 的类型从“文字”改成错误类；读错误对象上没有的字段报 T08；把错误当文字用报 T01（要读“消息”）；抛“可能是空的错误”报 T02。
 - `LTypeResult.prelude`（内置错误类的声明）、`LTypeResult.usesErrors`（生成器据此决定带不带它们）。
 - 给第 3 段（积木、一键修）：新规则都还没有一键修；T01“把错误当文字用”最自然的修法是“读它的消息”，可以加一种 `LFixKind`。积木翻语法树时每一节“出错时”的错误变量可以同名（检查器按节收窄）。
+
+## 核心 2 第 2 段以后的说明（2026-11-26，分支 v5r2-core）：类与接口
+
+语法树：**没有加新节点，也没有加新字段。** 原来就有、这一段才真的用上的：
+
+| 节点 / 字段 | 现在的意思 |
+|---|---|
+| `LClassDecl(name, parent, interfaces, fields, ctor, methods, typeParams, isOpen, isPublic)` | 类。`isOpen`＝可以被继承 |
+| `LFieldDecl(name, init, type, isPrivate, isStatic)` | `isPrivate`＝内部（本类和子类里面能用）；`isStatic`＝属于类本身 |
+| `LMethodDecl(fn, isStatic, isAbstract)` | `isStatic`＝类本身的方法（里面没有“我自己”）；`isAbstract` 还没用 |
+| `LInterfaceDecl(name, methods: [LSignature(name, params, returns)])` | 接口；`LSignature.params` 里的默认值有意义（调用处补） |
+| `LParam(name, type, defaultValue: LLit?)` | 默认值只能是直接写的值 |
+| `LNew`、`LSend`、`LSuperSend`（`.ctor`）、`LThis`、`LIsA`、`LField`、`LTField`、`LCast` | 新建、让对象做、调父类的、我自己、是不是、读字段、改字段、转成 |
+| `LSend(LName(类名), …)`、`LField(LName(类名), …)`、`LTField(LName(类名), …)` | 类本身的方法 / 字段（名字没被变量、函数挡住时） |
+| `LNativeDecl(name, params, type)`、`LNative(name, args)` | 宿主接口的声明、调用 |
+
+`ast_util.dart` 加了：`LClassParts.ownFields / ownMethods`（不算类本身的）、`lStaticName(类, 成员)`、`lStaticDecls(类)`（类本身的成员变成 `LVarDecl` / `LFuncDecl`）。
+
+检查（`kTypeRules` 加了 T22–T28；T11、T18 加严，T08 多了几种说法）：
+
+| 号 | 报什么 |
+|---|---|
+| T22 | 在类的外面读 / 改内部的字段（连类本身的内部字段） |
+| T23 | 新建接口；拿接口当父类；拿类写在“实现了”里 |
+| T24 | 继承绕圈（提示语把圈画出来） |
+| T25 | 在对象上调类本身的方法；在类名上调对象的方法、读对象的字段；在类本身的方法里、类的外面用“我自己” |
+| T26 | 有默认值的参数后面跟着没默认值的；默认值放不进参数的类型 |
+| T27 | “调父类的创建时”不在子类“创建时”的第一句、调了两次、写在方法里；父类的“创建时”要参数而子类没调 |
+| T28 | 类里字段、方法、类本身的成员重名；子类的字段和父类的字段重名 |
+| T11（加严） | 实现接口的方法：参数的类型、返回的类型、默认值都要和接口说的一模一样 |
+| T18（加严） | 重写的方法：同上，和父类的一模一样 |
+| T08（多的说法） | “没有叫「x」的类或接口”（是不是）；“「类」这个类本身没有「x」这个方法 / 这一项”；“没有叫「x」的接口” |
+
+- 类本身的方法在结果里是一条普通的函数签名，名字“类名.方法名”；类本身的字段是一个全局变量，名字“类名.字段名”（`LTypeResult.vars` 里作用域是“主”）。
+- 节点上的记号：`opOf(节点) == 'static:类名.成员名'`＝这一句用的是类本身的成员（生成器、以后的积木层都看这个）。
+- 宿主接口：有声明就按声明查参数；声明本身和 `kHostV2` 对不对得上是生成器查的（检查器不知道目标有哪些宿主接口——以后前端、后端的清单不一样）。
+
+原型里的名字 → 现在的名字（A4 搬“小框架”时用）：
+
+| 原型（02-web-framework） | 现在 |
+|---|---|
+| `native log.error (值)` | `sys.print(文字, "err")`（值先用“连”变成文字） |
+| `native time.ms ()` | `time.now()` |
+| `native store.get (名字)` | `store.read(名字)` |
+| `native store.update (名字 函数)` | `store.update(名字, 函数)`（函数要标成 (任意) → 任意） |
+| `native url.decode (文字)` | 小库 `urlDecode` |
+| `native http.serve`、`native time.sleep`、`spawn`、等 | 还没有（核心 3） |
+| `static-method`、`(send 类名 方法 …)` | `LMethodDecl(isStatic: true)`、`LSend(LName(类名), …)` |
+| `private-field` | `LFieldDecl(isPrivate: true)` |

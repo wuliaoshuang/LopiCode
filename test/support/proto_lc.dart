@@ -305,6 +305,7 @@ class _Reader {
     '解析整数': 'parseInt',
     '码点们': 'codePoints',
     '是数字': 'isNumeric',
+    '转JSON': 'toJson',
     '网址解码': 'urlDecode',
   };
 

@@ -175,6 +175,13 @@ abstract class GoGen2Types extends Gen2 {
   String convert(String code, LType from, LType to) {
     if (to.isAny) return toAny(code, from);
     if (from.isAny) return fromAny(code, to);
+    if (_fnMismatch(from, to)) {
+      // 函数当另一种样子的函数用（比如返回“列表”的当返回“任意”的）：Go 里函数类型要一模一样，包一层。
+      final f = tmpName('F'), qs = [for (final _ in to.params) tmpName('Q')];
+      final call = '$f(${[for (var i = 0; i < qs.length; i++) conv(qs[i], to.params[i], from.params[i])].join(', ')})';
+      final body = to.returns.isNul ? call : 'return ${conv(call, from.returns, to.returns)}';
+      return 'func($f ${gt(from)}) ${gt(to)} { return func(${[for (var i = 0; i < qs.length; i++) '${qs[i]} ${gt(to.params[i])}'].join(', ')})${to.returns.isNul ? '' : ' ${gt(to.returns)}'} { $body } }($code)';
+    }
     final fb = from.nonNull, tb = to.nonNull;
     if (from.isNul) return nulOf(to);
     if (!from.nullable) {
@@ -187,6 +194,9 @@ abstract class GoGen2Types extends Gen2 {
     if (fb.isNamed && tb.isNamed && gt(from) != gt(to)) return 'lc.Up[${gt(to)}]($code)';
     return code;
   }
+
+  bool _fnMismatch(LType from, LType to) =>
+      !from.nullable && !to.nullable && from.kind == LKind.fn && to.kind == LKind.fn && from.hasShape && to.hasShape && from.params.length == to.params.length && gt(from) != gt(to);
 
   // —— 运算 ——
 

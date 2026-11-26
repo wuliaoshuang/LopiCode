@@ -1,0 +1,19 @@
+#1 GET / → 200
+200 text/plain 首页
+#2 GET /没有 → 404
+404 text/plain 没有这一页
+#3 GET /我的/名字 → 401
+401 application/json {"种类":"没登录","详情":null,"错":"请先登录"}
+#4 GET /我的/名字 → 200
+200 application/json {"名":"霜霜"}
+#5 POST /回声 → 500
+500 application/json {"种类":"HTTP错误","详情":null,"错":"内容只能读一次"}
+#6 GET /除 → 500
+500 text/plain 服务器出错：除以 0
+#7 GET /你 好 → 204
+204 - 
+#8 GET /要数字 → 400
+400 application/json {"种类":"HTTP错误","详情":"body","错":"要一个数字"}
+#9 GET /要数字 → 200
+200 application/json {"好":true}
+404 text/plain 没有这一页

@@ -1488,3 +1488,5 @@ B01–B09（第 2 阶段的 9 条“我的积木”规则）继续管外观本�
 | https://www.scribd.com/document/699288194/6-MIT-APP-Inventor-Extension 和社区帖 | **非官方**；App Inventor 扩展的说法只能算“未核对” |
 
 读过的本工程文件（只读）：`docs/blocks-v5-parts/BRIEF.md`、`AGENTS.md`、`docs/blocks-v4-language-design.md` 第 5–8 节和阶段 2 实施记录、`lib/lang/custom_block.dart`、`custom_block_edit.dart`、`ast.dart`、`lib/backend/` 的 `backend_blocks*.dart`、`runtime_*.dart`、`backend_validate*.dart`、`backend_project.dart`、`lib/lowcode/logic_blocks.dart`、`logic_js*.dart`、`logic_rules.dart`、`component_model.dart`、`pubspec.yaml`。
+
+> **2026-11-26 说明（核心 2 第 2 段）**：9.1 里不用等的四个（`sys.print`、`time.now`、`store.read`、`store.update`）已经在规矩版本 2 的五种语言小库里落地（清单 `lib/lang/host_v2.dart`）。和这里写的有三处出入，都记在 B-gen-notes 11.3：`sys.print` 的 `out` 通道现在和“打印”一起攒到程序结束才写；PHP 的格子现在是进程里的表、不是带锁的文件；Go / Java 的格子在“同时有两件事改同一个名字”时会报错而不是排队。三处都要等核心 3 有了 `http.serve` 一起改。

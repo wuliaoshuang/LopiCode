@@ -642,3 +642,11 @@ PHP 真跑撞到并修掉的 5 个问题，以及依据：
 | 系统 WebView 是否完整执行这条策略（拦外部图片 / 脚本 / fetch） | — | **没在真机验证** | 测试里只能证明“交给视图的文档开头带着这条策略” |
 
 自己定的数值见各文件开头：解析上限 20 万字、缓存 200 万字、代码块 30 行折叠、流式不上色 2 万字、单词串 2000、图片（网络 5MB / 15 秒 / 3 次跳转、本机 20MB、data: 2MB、内存缓存 24MB、最高 320）、表格一格最宽 240、预览高 120–360、同时 2 个预览、HTML 嵌套 12 层、解析嵌套 6 层。
+
+## 积木第 5 版·核心 2 第 2 段用到的各语言行为（2026-11-26）
+
+状态：**实跑核对**（开发机 Node v24.22.1、Python 3.12.3、PHP 8.3.37、Go 1.25.0、本机 JDK；`test/lang_gen2_classes_test.dart` 的 c11 样例五种语言输出一样），**没有逐条对官方文档**。
+
+- 网址解码：Node `decodeURIComponent`（写坏的 `%`、不是 UTF-8 会抛错）；Python `urllib.parse.unquote(s, errors="strict")`（写坏的 `%` 它原样留着，所以先用正则查）；PHP `rawurldecode`（不查，所以先查 `%`、再用 `preg_match('//u')` 查 UTF-8）；Go `url.PathUnescape`＋`utf8.ValidString`；Java 自己一个字节一个字节解＋`CharsetDecoder`（`URLDecoder` 会把“+”变空格，不能用）。
+- “是不是数字”里文字变数：Node `Number`、Python `float`、PHP `(float)`、Go `strconv.ParseFloat`、Java `Double.parseDouble`——都先用同一条正则把关，只靠它们判断“是不是无穷大”。
+- Go 的接口可以嵌方法重复的接口（要求签名一样）：靠它让“能被继承的类”的接口嵌它实现的接口。未对官方文档核对版本下限（开发机 1.25 通过）。

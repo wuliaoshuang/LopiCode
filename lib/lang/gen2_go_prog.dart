@@ -314,6 +314,9 @@ class GoGen2 extends GoGen2Types {
         'type ${typeName(c.name)}$tp interface {',
         ...indent([
           if (parent != null) typeName(parent.name),
+          // 实现了的接口也嵌进来：拿着“可以被继承的类”这个类型的值，才能直接当那个接口用。
+          for (final i in d.interfaces)
+            if (w.interfaces.containsKey(i)) typeName(i),
           for (final m in d.ownMethods) '${member(m.fn.name)}(${sigs[m.fn.name]!.params.map(gt).join(', ')})${_retOf(sigs[m.fn.name]!.returns)}',
           'lcAs_$id() *$s',
           'LcName() string',

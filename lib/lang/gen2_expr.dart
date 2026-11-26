@@ -255,7 +255,8 @@ mixin Gen2Expr on Gen2Base {
       case LNative(:final name, :final args):
         final sig = kHostV2[name] ?? unsupported('宿主接口「$name」这里还没有（现在有：${kHostV2.keys.join('、')}）', e);
         final d = module.decls.whereType<LNativeDecl>().where((d) => d.name == name).firstOrNull ?? unsupported('宿主接口「$name」用之前要先声明', e);
-        final same = d.params.length == sig.params.length && w.resolve(d.type) == sig.ret && [for (var i = 0; i < sig.params.length; i++) w.resolve(d.params[i].type) == sig.params[i]].every((ok) => ok);
+        final same =
+            d.params.length == sig.params.length && w.resolve(d.type) == sig.ret && [for (var i = 0; i < sig.params.length; i++) w.resolve(d.params[i].type) == sig.params[i]].every((ok) => ok);
         if (!same || args.length != sig.params.length) unsupported('宿主接口「$name」的声明和宿主给的对不上：应该是 (${sig.params.map((p) => p.show()).join(', ')}) → ${sig.ret.show()}', e);
         return conv(hostCall(kHostV2Code[name]!, argCodes(args, sig.params, null)), sig.ret, t(e));
       case LAwait() || LSpawn():

@@ -709,3 +709,5 @@ class UserApi { @GetMapping("/users/{id}") User get(@PathVariable int id) {…} 
 | 二手来源，只作参考、不算核对：https://babeljs.io/docs/plugins-list 、https://github.com/jxck/tc39-llm-wiki/blob/HEAD/wiki/proposals/explicit-resource-management.md 、https://dev.to/iamprincejkc/stop-nesting-tryfinally-for-cleanup-javascript-has-using-4o68 | E21（JS 的 using 已到最后阶段）、X01（JS 装饰器阶段，说法不一） |
 | 本机跑的程序：/tmp/v5-A2/exp1/main.go、/tmp/v5-A2/exp2/main.go（go 1.25.0，临时目录，要点已抄进 10.a、10.e） | 10.a、10.e 的两个结论 |
 | 读的代码与设计稿：`lib/lang/ast.dart`、`gen_support.dart`、`gen_func.dart`、`analyze.dart`、`analyze_module.dart`、`types.dart`、`rt.dart`、`docs/blocks-v4-language-design.md` 3.7–3.10、4.3、5.5、11、12.2 | 所有“现在积木核心”一格 |
+
+> **2026-11-26 更正（核心 2 第 2 段做完以后）**：C09（类本身的成员）实际做成五种语言都降成模块级的变量 / 函数，不只是 Go；C12（内部的字段）实际只在检查阶段拦、生成的名字不变；C13（内部的方法）还没做；C17（调父类的创建时）照这里写的做了（规则 T27）。接口不能当“出错时”要接的种类。细节和理由见 B-gen-notes 第 11 节。

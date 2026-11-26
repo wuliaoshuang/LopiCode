@@ -212,6 +212,13 @@ abstract class JavaGen2Types extends Gen2 {
     if (to.isAny) return toAny(code, from);
     if (from.isAny) return fromAny(code, to);
     if (from.isNul) return nulOf(to);
+    if (!from.nullable && !to.nullable && from.kind == LKind.fn && to.kind == LKind.fn && from.hasShape && to.hasShape && from.params.length == to.params.length && jt(from) != jt(to)) {
+      // 函数当另一种样子的函数用（比如返回“列表”的当返回“任意”的）：Java 的泛型不会自己转，包一层。
+      final f = tmpName('F'), qs = [for (final _ in to.params) tmpName('Q')];
+      final call = '$f.call(${[for (var i = 0; i < qs.length; i++) conv(qs[i], to.params[i], from.params[i])].join(', ')})';
+      final body = to.returns.isNul ? '{ $call; }' : conv(call, from.returns, to.returns);
+      return '((Lc.Fn1<${jt(from)}, ${jt(to)}>) ($f) -> (${jt(to)}) (${qs.join(', ')}) -> $body).call($code)';
+    }
     if (from.nonNull.kind == LKind.integer && to.nonNull.kind == LKind.number) return from.nullable ? 'Lc.widenOpt($code)' : 'Lc.i2f($code)';
     // 其余的（装箱、拆箱、子类当父类用）Java 自己会做。
     return code;

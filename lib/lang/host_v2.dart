@@ -14,7 +14,10 @@ const Map<String, LRtSig> kHostV2 = {
   // 读格子：没有就是空。读出来的是复制的一份。
   'store.read': LRtSig('读格子', [LType.text], LType.any),
   // 改格子：把旧值（复制的一份）交给函数，把函数返回的新值存回去（存的也是复制的一份），返回新值。
-  'store.update': LRtSig('改格子', [LType.text, LType.func([LType.any, LType.any])], LType.any),
+  'store.update': LRtSig('改格子', [
+    LType.text,
+    LType.func([LType.any, LType.any]),
+  ], LType.any),
 };
 
 /// 宿主接口在小库里叫什么（Go 里首字母大写）。
