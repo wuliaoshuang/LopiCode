@@ -148,7 +148,25 @@ const String _want =
 void main() {
   test('任务点名的 17 个旧函数在版本 2 的表里都有签名（或者是检查器单独处理的那几个）', () {
     const special = {'toText', 'dictRemove'}; // 检查器、生成器里单独处理，不走表
-    const names = ['abs', 'max', 'min', 'random', 'copy', 'template', 'toNumber', 'toText', 'toBool', 'isType', 'listInsert', 'listRemove', 'listSort', 'listEach', 'dictMerge', 'dictPairs', 'dictRemove'];
+    const names = [
+      'abs',
+      'max',
+      'min',
+      'random',
+      'copy',
+      'template',
+      'toNumber',
+      'toText',
+      'toBool',
+      'isType',
+      'listInsert',
+      'listRemove',
+      'listSort',
+      'listEach',
+      'dictMerge',
+      'dictPairs',
+      'dictRemove',
+    ];
     expect(names, hasLength(17));
     for (final n in names) {
       expect((kLangCoreFns.containsKey(n) || kLangRtFns.containsKey(n)), isTrue, reason: '$n 是版本 1 小库里的名字');

@@ -325,6 +325,89 @@ function storeUpdate(name, f) {
 }
 const hostEnv = (name) => { const v = process.env[name]; return v === undefined ? null : v; };
 
+// —— 随机字节、文件、请求别的网址（细则见 docs/blocks-v5-parts/B-gen-notes.md 第 14 节）——
+function hostRandomBytes(n) {
+  if (n < 1 || n > 1024) fail("随机字节的个数要在 1 到 1024 之间");
+  return Array.from(require("node:crypto").randomBytes(n));
+}
+const fs = require("node:fs"), nodePath = require("node:path");
+function filePath(p) {
+  if (p === "" || /^[\/\\]/.test(p) || /^[A-Za-z]:/.test(p) || p.split(/[\/\\]/).includes("..")) fail("路径不对：只能用工程文件夹里面的相对路径");
+  return nodePath.join(process.cwd(), p);
+}
+function fileRead(p) {
+  const full = filePath(p);
+  let bytes;
+  try { bytes = fs.readFileSync(full); } catch (e) { return fail(e.code === "ENOENT" ? "读不了文件：没有「" + p + "」" : "读不了文件：「" + p + "」"); }
+  try { return new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes); } catch (e) { return fail("读不了文件：「" + p + "」不是 UTF-8 文字"); }
+}
+function fileWrite(p, text) {
+  const full = filePath(p), tmp = full + ".lctmp" + process.pid;
+  try {
+    fs.mkdirSync(nodePath.dirname(full), { recursive: true });
+    fs.writeFileSync(tmp, text, "utf8");
+    fs.renameSync(tmp, full);
+  } catch (e) {
+    try { fs.unlinkSync(tmp); } catch (e2) { /* 临时文件本来就没写出来 */ }
+    fail("写不了文件：「" + p + "」");
+  }
+}
+const fileExists = (p) => fs.existsSync(filePath(p));
+function fileList(p) {
+  const full = filePath(p);
+  try { return fs.readdirSync(full).sort(cmpText); } catch (e) { return fail("列不了文件夹：「" + p + "」"); }
+}
+function fileRemove(p) {
+  const full = filePath(p);
+  let ok = false;
+  try { ok = fs.statSync(full).isFile(); if (ok) fs.unlinkSync(full); } catch (e) { ok = false; }
+  if (!ok) fail("删不了文件：「" + p + "」");
+}
+// 网址里的空格、中文、写法不对的百分号先按 UTF-8 做百分号转义（各语言自己的处理不一样，这里统一）；# 后面的不发。
+function encodeUrl(s) {
+  const hash = s.indexOf("#");
+  const bytes = Buffer.from(hash < 0 ? s : s.slice(0, hash), "utf8");
+  let out = "";
+  for (let i = 0; i < bytes.length; i++) {
+    const ch = String.fromCharCode(bytes[i]);
+    const escaped = ch === "%" && i + 2 < bytes.length && /^[0-9A-Fa-f]{2}$/.test(String.fromCharCode(bytes[i + 1], bytes[i + 2]));
+    out += escaped || /^[A-Za-z0-9\-._~:\/?\[\]@!$&'()*+,;=]$/.test(ch) ? ch : "%" + bytes[i].toString(16).toUpperCase().padStart(2, "0");
+  }
+  return out;
+}
+const FETCH_METHODS = ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"];
+const FETCH_SKIP = ["host", "content-length", "connection", "expect", "upgrade"];
+async function hostFetch(method, url, headers, body, timeoutMs) {
+  if (!/^https?:\/\//i.test(url)) fail("请求不了：网址要以 http:// 或 https:// 开头");
+  if (!FETCH_METHODS.includes(method)) fail("请求不了：不认识的方式「" + method + "」");
+  if (timeoutMs <= 0) fail("请求不了：超时毫秒要大于 0");
+  const hs = [];
+  let hasType = false, hasAgent = false;
+  for (const k of keys(headers)) {
+    const low = k.toLowerCase();
+    if (FETCH_SKIP.includes(low)) continue;
+    hasType = hasType || low === "content-type";
+    hasAgent = hasAgent || low === "user-agent";
+    hs.push([k, headers.get(k)]);
+  }
+  const init = { method, headers: hs, redirect: "follow", signal: AbortSignal.timeout(timeoutMs) };
+  if (!hasAgent) hs.push(["User-Agent", "LopiCode"]);
+  if (body !== null && method !== "GET" && method !== "HEAD") {
+    init.body = Buffer.from(body, "utf8");
+    if (!hasType) hs.push(["Content-Type", "text/plain; charset=utf-8"]);
+  }
+  let res, bytes;
+  try {
+    res = await fetch(encodeUrl(url), init);
+    bytes = await res.arrayBuffer();
+  } catch (e) {
+    return fail(e && (e.name === "TimeoutError" || e.name === "AbortError") ? "请求超时了" : "请求不了：连不上");
+  }
+  const back = new Map();
+  res.headers.forEach((v, k) => back.set(k.toLowerCase(), v));
+  return new Map([["status", res.status], ["headers", back], ["body", new TextDecoder("utf-8", { ignoreBOM: true }).decode(bytes)]]);
+}
+
 // —— 要等的事 ——
 const hostSleep = (ms) => new Promise((done) => setTimeout(() => done(null), Math.max(0, ms)));
 // 开始做一件事：马上开始，拿到“稍后的结果”；出了错先记着，等它的时候再抛。
@@ -426,5 +509,6 @@ module.exports = {
   dadd, dsub, dmul, ddiv, dpow, didiv, dmod, dynGet, dynSet, dynPush, dynPop, dynRemove, dynOrElse, dynSize,
   toJson, fromJson, dtext, log, run, isNumeric, isType, dictMerge, toNumber, urlDecode,
   hostPrint, hostNow, hostEnv, hostSleep, hostServe, spawn, storeRead, storeUpdate,
+  hostRandomBytes, hostFetch, fileRead, fileWrite, fileExists, fileList, fileRemove,
 };
 ''';

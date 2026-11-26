@@ -200,5 +200,131 @@ final class LcHost {
       Thread.currentThread().interrupt();
     }
   }
+  // —— 随机字节、文件、请求别的网址（细则见 docs/blocks-v5-parts/B-gen-notes.md 第 14 节）——
+  static java.util.ArrayList<Long> hostRandomBytes(long n) {
+    if (n < 1 || n > 1024) Lc.fail("随机字节的个数要在 1 到 1024 之间");
+    byte[] raw = new byte[(int) n];
+    new java.security.SecureRandom().nextBytes(raw);
+    java.util.ArrayList<Long> out = new java.util.ArrayList<>();
+    for (byte b : raw) out.add((long) (b & 0xFF));
+    return out;
+  }
+  private static java.nio.file.Path filePath(String p) {
+    boolean bad = p.isEmpty() || p.charAt(0) == '/' || p.charAt(0) == '\\' || p.matches("^[A-Za-z]:.*");
+    for (String seg : p.split("[/\\\\]")) bad = bad || seg.equals("..");
+    if (bad) Lc.fail("路径不对：只能用工程文件夹里面的相对路径");
+    try {
+      return java.nio.file.Paths.get(System.getProperty("user.dir")).resolve(p);
+    } catch (java.nio.file.InvalidPathException e) {
+      return Lc.fail("路径不对：只能用工程文件夹里面的相对路径");
+    }
+  }
+  static String fileRead(String p) {
+    java.nio.file.Path full = filePath(p);
+    if (!java.nio.file.Files.exists(full)) Lc.fail("读不了文件：没有「" + p + "」");
+    byte[] raw;
+    try {
+      raw = java.nio.file.Files.readAllBytes(full);
+    } catch (IOException e) {
+      return Lc.fail("读不了文件：「" + p + "」");
+    }
+    try {
+      return StandardCharsets.UTF_8.newDecoder().decode(ByteBuffer.wrap(raw)).toString();
+    } catch (CharacterCodingException e) {
+      return Lc.fail("读不了文件：「" + p + "」不是 UTF-8 文字");
+    }
+  }
+  static void fileWrite(String p, String text) {
+    java.nio.file.Path full = filePath(p);
+    java.nio.file.Path tmp = full.resolveSibling(full.getFileName() + ".lctmp" + ProcessHandle.current().pid());
+    try {
+      if (full.getParent() != null) java.nio.file.Files.createDirectories(full.getParent());
+      java.nio.file.Files.write(tmp, text.getBytes(StandardCharsets.UTF_8));
+      java.nio.file.Files.move(tmp, full, java.nio.file.StandardCopyOption.REPLACE_EXISTING, java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+    } catch (IOException | RuntimeException e) {
+      try {
+        java.nio.file.Files.deleteIfExists(tmp);
+      } catch (IOException e2) {
+        Lc.errLine("临时文件没删掉：" + tmp);
+      }
+      Lc.fail("写不了文件：「" + p + "」");
+    }
+  }
+  static boolean fileExists(String p) { return java.nio.file.Files.exists(filePath(p)); }
+  static java.util.ArrayList<String> fileList(String p) {
+    java.util.ArrayList<String> out = new java.util.ArrayList<>();
+    try (java.util.stream.Stream<java.nio.file.Path> s = java.nio.file.Files.list(filePath(p))) {
+      s.forEach(x -> out.add(x.getFileName().toString()));
+    } catch (IOException | RuntimeException e) {
+      if (e instanceof Lc.LcError le) throw le;
+      Lc.fail("列不了文件夹：「" + p + "」");
+    }
+    out.sort(Lc::cmpText);
+    return out;
+  }
+  static void fileRemove(String p) {
+    java.nio.file.Path full = filePath(p);
+    boolean ok = java.nio.file.Files.isRegularFile(full);
+    try {
+      if (ok) java.nio.file.Files.delete(full);
+    } catch (IOException e) {
+      ok = false;
+    }
+    if (!ok) Lc.fail("删不了文件：「" + p + "」");
+  }
+  // 网址里的空格、中文、写法不对的百分号先按 UTF-8 做百分号转义（各语言自己的处理不一样，这里统一）；# 后面的不发。
+  private static String encodeUrl(String s) {
+    int hash = s.indexOf('#');
+    byte[] raw = (hash < 0 ? s : s.substring(0, hash)).getBytes(StandardCharsets.UTF_8);
+    StringBuilder out = new StringBuilder();
+    for (int i = 0; i < raw.length; i++) {
+      int c = raw[i] & 0xFF;
+      boolean escaped = c == '%' && i + 2 < raw.length && Character.digit(raw[i + 1], 16) >= 0 && Character.digit(raw[i + 2], 16) >= 0;
+      boolean keep = (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || "-._~:/?[]@!$&'()*+,;=".indexOf(c) >= 0;
+      if (escaped || keep) out.append((char) c);
+      else out.append('%').append("0123456789ABCDEF".charAt(c >> 4)).append("0123456789ABCDEF".charAt(c & 15));
+    }
+    return out.toString();
+  }
+  private static final List<String> FETCH_METHODS = List.of("GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS");
+  private static final List<String> FETCH_SKIP = List.of("host", "content-length", "connection", "expect", "upgrade");
+  static TreeMap<String, Object> hostFetch(String method, String url, TreeMap<String, String> headers, String body, long timeoutMs) {
+    String lower = url.toLowerCase(java.util.Locale.ROOT);
+    if (!lower.startsWith("http://") && !lower.startsWith("https://")) Lc.fail("请求不了：网址要以 http:// 或 https:// 开头");
+    if (!FETCH_METHODS.contains(method)) Lc.fail("请求不了：不认识的方式「" + method + "」");
+    if (timeoutMs <= 0) Lc.fail("请求不了：超时毫秒要大于 0");
+    java.time.Duration limit = java.time.Duration.ofMillis(timeoutMs);
+    try (java.net.http.HttpClient client = java.net.http.HttpClient.newBuilder().version(java.net.http.HttpClient.Version.HTTP_1_1)
+        .followRedirects(java.net.http.HttpClient.Redirect.NORMAL).connectTimeout(limit).build()) {
+      boolean hasBody = body != null && !method.equals("GET") && !method.equals("HEAD");
+      java.net.http.HttpRequest.Builder req = java.net.http.HttpRequest.newBuilder(java.net.URI.create(encodeUrl(url))).timeout(limit)
+          .method(method, hasBody ? java.net.http.HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8) : java.net.http.HttpRequest.BodyPublishers.noBody());
+      boolean hasType = false, hasAgent = false;
+      for (Map.Entry<String, String> h : headers.entrySet()) {
+        String low = h.getKey().toLowerCase(java.util.Locale.ROOT);
+        if (FETCH_SKIP.contains(low)) continue;
+        hasType = hasType || low.equals("content-type");
+        hasAgent = hasAgent || low.equals("user-agent");
+        req.setHeader(h.getKey(), h.getValue());
+      }
+      if (!hasAgent) req.setHeader("User-Agent", "LopiCode");
+      if (hasBody && !hasType) req.setHeader("Content-Type", "text/plain; charset=utf-8");
+      java.net.http.HttpResponse<byte[]> res = client.send(req.build(), java.net.http.HttpResponse.BodyHandlers.ofByteArray());
+      TreeMap<String, Object> back = Lc.dict();
+      for (Map.Entry<String, List<String>> h : res.headers().map().entrySet()) back.put(h.getKey().toLowerCase(java.util.Locale.ROOT), String.join(", ", h.getValue()));
+      TreeMap<String, Object> out = Lc.dict();
+      out.put("status", (double) res.statusCode());
+      out.put("headers", back);
+      out.put("body", new String(res.body(), StandardCharsets.UTF_8));
+      return out;
+    } catch (java.net.http.HttpTimeoutException e) {
+      return Lc.fail("请求超时了");
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      return Lc.fail("请求不了：连不上");
+    } catch (IOException | IllegalArgumentException e) {
+      return Lc.fail("请求不了：连不上");
+    }
+  }
 }
 ''';

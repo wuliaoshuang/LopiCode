@@ -228,9 +228,9 @@ void main() {
       expect(_said('(主 (试 (做 (抛出 (新 找不到 "丢了"))) (出错时 找不到 e (打印 (. e 消息)))))'), isEmpty);
     });
 
-    test('宿主接口的清单：五个不用等的、两个要等的；每个都有小库里的名字', () {
-      expect(kHostV2.keys.toList(), ['sys.print', 'sys.env', 'time.now', 'time.sleep', 'store.read', 'store.update', 'http.serve']);
-      expect(kHostV2Waits, {'time.sleep', 'http.serve'});
+    test('宿主接口的清单：开头七个是这一段定的；后面七个（随机字节、请求网址、文件五个）在 lang_gen2_host_io_test.dart 里查；每个都有小库里的名字', () {
+      expect(kHostV2.keys.take(7).toList(), ['sys.print', 'sys.env', 'time.now', 'time.sleep', 'store.read', 'store.update', 'http.serve']);
+      expect(kHostV2Waits.containsAll({'time.sleep', 'http.serve'}), isTrue);
       expect(kHostV2Code.keys.toSet(), kHostV2.keys.toSet());
     });
 
@@ -247,7 +247,7 @@ void main() {
       expect(why('(宿主 time.now () -> 整数) (主 (打印 (宿 time.now)))'), '');
       expect(why('(宿主 time.now () -> 小数) (主 (打印 (宿 time.now)))'), contains('宿主接口「time.now」的声明和宿主给的对不上：应该是 () → 整数'));
       expect(why('(宿主 time.sleep ((毫秒 整数)) -> 空) (主 (做 (宿 time.sleep 1)))'), '');
-      expect(why('(宿主 file.read ((名 文字)) -> 文字) (主 (打印 (宿 file.read "a")))'), contains('宿主接口「file.read」这里还没有'));
+      expect(why('(宿主 dom.query ((名 文字)) -> 文字) (主 (打印 (宿 dom.query "a")))'), contains('宿主接口「dom.query」这里还没有'));
       expect(why('(主 (打印 (文 (宿 time.now))))'), contains('宿主接口「time.now」用之前要先声明'));
       // 参数不对，检查阶段就拦（按声明查）。
       expect(_said('(宿主 sys.print ((话 文字) (通道 文字)) -> 空) (主 (做 (宿 sys.print 1 "out")))').single, startsWith('T01 '));

@@ -2,9 +2,10 @@
 library;
 
 import 'package:lopicode/lang/rt2_python.dart';
+import 'package:lopicode/lang/rt2_python_more.dart';
 
 /// 整份小库。
-const String kRt2PythonSource = kRt2PythonHead + _tail;
+const String kRt2PythonSource = kRt2PythonHead + _tail + kRt2PythonMore;
 
 const String _tail = r'''
 # —— 列表、字典 ——
