@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 应用内安装 APK 时，允许交给系统安装器的目录（ApkFileProvider 用）。只登记必要的三处，不整盘暴露：
+     1. 本地打包 / 远程打包放安装包的外部目录：Android/data/<包名>/files/apk/
+     2. 应用目录里的工作区：应用文档目录（app_flutter）下的 projects/。
+        FileProvider 没有直接指“应用文档目录”的写法，这里从 files/ 往上退一层再进 app_flutter；
+        FileProvider 登记目录时会把路径规范化，所以可行（对着 androidx.core 1.18.0 的实现确认过）。
+        万一哪台设备上不认，原生那头会自动改走第 3 处。
+     3. 上面两处都不包含的文件（比如 Ubuntu 环境里的工作区）：先抄一份到缓存目录的 apk_install/ 再交出去。 -->
+<paths>
+    <external-files-path name="apk_out" path="apk/" />
+    <files-path name="projects" path="../app_flutter/projects/" />
+    <cache-path name="staged" path="apk_install/" />
+</paths>

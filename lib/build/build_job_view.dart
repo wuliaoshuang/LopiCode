@@ -1,9 +1,10 @@
 // 设计约束（远程打包的进度 / 结果卡 · GitHub 和 SSH 共用 · 390×844）
-// 层级：① 一句结论（正在做什么 / 打包完成 / 没成功）最显眼；② 成了以后是“APK 在哪”，没成是最后那句原因；
+// 层级：① 一句结论（正在做什么 / 打包完成 / 没成功）最显眼；② 成了以后是主按钮“安装”和“APK 在哪”，没成是最后那句原因；
 //       ③ 一步一句的过程是弱色小字——想看才看；构建命令的原始输出在最下面的等宽框里。
 // 排版：卡内 16；块与块之间 12；过程每行之间 4。一行只放一样东西：路径、网址各占一行，复制按钮在行尾。
 // 颜色：结论的图标和字用状态色（完成＝强调色、没成＝危险色、停了＝警告色），其余全是正文色 / 弱色。
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lopicode/build/apk_install_view.dart';
 import 'package:lopicode/build/build_controller.dart';
 import 'package:lopicode/build/build_widgets.dart';
 import 'package:lopicode/state/code_font.dart';
@@ -46,7 +47,13 @@ class BuildJobCard extends ConsumerWidget {
             child: Text(reason, style: t.bodyMedium?.copyWith(color: c.danger)),
           ),
         ],
-        if (job.apkPath != null) ...[const SizedBox(height: Space.x3), CopyLine(label: 'APK 保存在', value: job.apkPath!, note: '用手机自带的文件管理器找到它，点开就能安装。')],
+        // 下载回来的安装包在外部目录里（“文件”页看不到那里），所以在这张卡上直接给“安装”，和本地打包的结果卡一样。
+        if (job.apkPath != null) ...[
+          const SizedBox(height: Space.x3),
+          ApkInstallButton(path: job.apkPath!),
+          const SizedBox(height: Space.x3),
+          CopyLine(label: 'APK 保存在', value: job.apkPath!, note: '点“安装”不行的话，用手机自带的文件管理器找到它，点开也能装。'),
+        ],
         if (job.runUrl != null) ...[const SizedBox(height: Space.x3), CopyLine(label: '运行页面（完整日志）', value: job.runUrl!)],
         if (steps.isNotEmpty) ...[
           const SizedBox(height: Space.x3),

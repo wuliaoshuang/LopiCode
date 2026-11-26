@@ -1,6 +1,7 @@
 // 设计约束（文件 · 390×844）
 // - 手机上文件树和编辑器不并排：先看文件列表，点文件进编辑器，编辑器顶上是已打开文件的标签条。
 // - 文件列表一行一个文件：图标 + 名字（目录按层级缩进）；改名 / 删除收进长按菜单。
+// - 编辑器打不开的文件（安装包、二进制、超过 1MB）点了出信息面板（file_info_sheet.dart），安装包在面板里能直接装。
 // - 编辑器顶栏一行只做“切文件”，保存按钮固定在行尾；未保存用标签上的小圆点表示。
 // - 编辑器顶栏行尾：保存 + ⋮（查找、替换、格式化、自动换行、撤销、重做）。编辑区见 code_editor.dart，格式化见 editor_format.dart。
 import 'dart:io';
@@ -16,6 +17,7 @@ import 'package:lopicode/ui/backend_screen.dart';
 import 'package:lopicode/ui/code_editor.dart';
 import 'package:lopicode/ui/editor_format.dart';
 import 'package:lopicode/ui/file_icon.dart';
+import 'package:lopicode/ui/file_info_sheet.dart';
 import 'package:lopicode/ui/keyboard_tap_dismiss.dart';
 import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
@@ -120,10 +122,20 @@ class _FilesTabState extends ConsumerState<FilesTab> {
       return;
     }
     try {
-      final file = File(_guard.resolve(path));
-      final bytes = await file.readAsBytes();
-      if (bytes.length > 1024 * 1024 || bytes.take(8000).contains(0)) {
-        if (mounted) showSnack(context, '这个文件是二进制或太大（超过 1MB），不能在编辑器里打开');
+      final full = _guard.resolve(path);
+      final file = File(full);
+      // 先看大小再决定读不读：安装包、大文件不整个读进内存（原来是先全读进来再判断）。
+      final size = await file.length();
+      final block = isApkPath(path)
+          ? FileBlock.apk
+          : size > kEditorMaxBytes
+          ? FileBlock.tooLarge
+          : (await file.readAsBytes()).take(8000).contains(0)
+          ? FileBlock.binary
+          : null;
+      if (block != null) {
+        // 编辑器打不开的：给一张信息面板（安装包能直接装），不再只弹一句话。
+        if (mounted) await showFileInfoSheet(context, path: path, fullPath: full, block: block, sizeBytes: size, onRename: () => _rename(path), onDelete: () => _delete(path));
         return;
       }
       final opened = _OpenFile(path, await file.readAsString());
