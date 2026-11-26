@@ -126,11 +126,13 @@ void main() {
         expect(icon('copy', id), findsOneWidget);
         expect(icon('more', id), findsOneWidget);
       }
-      // 常驻的：Agent 回复是复制、重试、更多；我的消息是复制、编辑、更多。分支在“更多”里
-      expect(find.descendant(of: bar(last), matching: find.byType(InkResponse)), findsNWidgets(3));
-      expect(find.descendant(of: bar(mine), matching: find.byType(InkResponse)), findsNWidgets(3));
-      expect(icon('retry', last), findsOneWidget);
-      expect(icon('edit', mine), findsOneWidget);
+      // 常驻四个：Agent 回复是复制、编辑、重试、更多；我的消息是复制、编辑、重新发送、更多。分支在“更多”里
+      expect(find.descendant(of: bar(last), matching: find.byType(InkResponse)), findsNWidgets(4));
+      expect(find.descendant(of: bar(mine), matching: find.byType(InkResponse)), findsNWidgets(4));
+      for (final id in [mine, last, thanks, bye]) {
+        expect(icon('retry', id), findsOneWidget);
+        expect(icon('edit', id), findsOneWidget);
+      }
       // 一共 4 条看得见的消息 → 4 排；步骤组下面没有
       expect(find.byType(MessageActionBar), findsNWidgets(4));
       expect(tester.getSize(icon('copy', last)), const Size(44, 44));
@@ -317,7 +319,7 @@ void main() {
       expect(tester.widget<ListTile>(find.byKey(const ValueKey('more-delete'))).enabled, isTrue);
     });
 
-    testWidgets('行级：还在往外冒的回复没有操作栏；没有 id 的没有；整轮级别的动作只在这一轮最后一段回复下面；没有聊天页环境（子代理对话页）不显示 ($suffix)', (tester) async {
+    testWidgets('行级：还在往外冒的回复没有操作栏；没有 id 的没有；编辑和重试每条消息下面都有；没有聊天页环境（子代理对话页）不显示 ($suffix)', (tester) async {
       await boot(tester);
       Future<void> noop(BuildContext context, MessageTarget t) async {}
       // 重试、编辑、分支现在是正式登记的动作；这里另外登记一个示例动作，守着“登记一条就多一个”的约定
@@ -357,18 +359,20 @@ void main() {
       expect(find.byType(MessageActionBar), findsNWidgets(3), reason: 'u1、a2、u2 各一排；往外冒的、没 id 的、步骤组都没有');
       expect(bar('a1'), findsNothing);
       expect(bar('a3'), findsNothing);
-      // 登记了以后：重试只在这一轮最后一段回复下面；编辑只在我的消息下面
-      expect(icon('retry', 'a2'), findsOneWidget);
-      expect(icon('retry', 'u1'), findsNothing);
-      expect(icon('edit', 'u1'), findsOneWidget);
-      expect(icon('edit', 'u2'), findsOneWidget);
-      expect(icon('edit', 'a2'), findsNothing);
-      // 从左到右按登记的位置排：复制、重试、更多
-      final xs = [
-        for (final k in ['copy', 'retry', 'more']) tester.getTopLeft(icon(k, 'a2')).dx,
-      ];
-      expect(xs, orderedEquals([...xs]..sort()));
+      // 编辑、重试（我的消息上叫“重新发送”）每条消息下面都有
+      for (final id in ['u1', 'a2', 'u2']) {
+        expect(icon('retry', id), findsOneWidget);
+        expect(icon('edit', id), findsOneWidget);
+        // 从左到右按登记的位置排：复制、编辑、重试、更多
+        final xs = [
+          for (final k in ['copy', 'edit', 'retry', 'more']) tester.getTopLeft(icon(k, id)).dx,
+        ];
+        expect(xs, orderedEquals([...xs]..sort()), reason: id);
+      }
+      // 收藏着的记号排在四个按钮的外侧（我的消息在左边），四个按钮的位置不跟着变
       expect(icon('favorite', 'u1'), findsOneWidget);
+      expect(tester.getTopLeft(icon('favorite', 'u1')).dx, lessThan(tester.getTopLeft(icon('copy', 'u1')).dx));
+      expect(tester.getTopLeft(icon('copy', 'u1')).dx, tester.getTopLeft(icon('copy', 'u2')).dx);
       await shot(tester, 'ops-07-registered-actions-$suffix');
       await tester.tap(icon('more', 'a2'));
       await tester.pumpAndSettle();

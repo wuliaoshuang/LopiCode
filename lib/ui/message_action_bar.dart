@@ -1,11 +1,15 @@
 // 设计约束（聊天消息下面的操作栏 · 390×844）
 // 层级：正文最重；操作栏是次要内容——图标 16、最淡的灰（textFaint），不带底色、不带文字，紧贴在气泡下面、和气泡同侧对齐。
-// - 一条消息下面只有一排：常驻的一两个图标 + 最右的“更多”（⋯）。其余动作收进“更多”面板，一行一个。
-//   我的消息：复制、（编辑）、更多；Agent 的回复：复制、（重试）、更多。括号里的两个由登记的动作决定，没登记就不占位。
-//   收藏过的消息多一个实心书签（点它＝取消收藏），让“已收藏”看得见。
+// - 一条消息下面只有一排，常驻四个按钮，位置固定（2026-11-26 真机反馈第五轮，霜霜：“消息气泡底下有四个按钮”）：
+//   我的消息：复制、编辑、重新发送、更多；Agent 的回复：复制、编辑、重试、更多。其余动作（分支、收藏、分享、删除）收进“更多”面板，一行一个。
+//   Agent 的一轮只在最后一段正文下面出现一次（2026-11-26 11:52 协调者补充：之后 Agent 一整轮会画成一条连续的内容流，操作栏在末尾只有一排）。
+//   所以这一排管的是“这一轮的正文”（[MessageTarget.parts]）：复制＝各段连起来；编辑＝只有一段直接改，有几段先选改哪一段；
+//   重试＝重试这一轮；“更多”里的分支、收藏、分享、删除照旧针对最后一段。
+// - 四个按钮之外只放“状态记号”，不放别的动作：收藏着是实心书签（点它＝取消收藏）、分出过对话是强调色分叉（点开列表）、
+//   改过的回复是一个很淡的“已编辑”。记号排在四个按钮的外侧（Agent 的回复在右边，我的消息在左边），所以四个按钮的位置不跟着变。
+//   最挤的时候是 4 个按钮 + 2 个记号 + “已编辑”，约 310 宽，390 的屏放得下。
 // - 每个图标的可点区域 44×44。
 // - 只挂在“我的消息”和“Agent 的正式回复”下面；步骤组、思考、脚注、提示下面没有。还在往外冒的回复没有操作栏。
-// - 整轮级别的动作（重试……）只出现在这一轮最后一段回复下面。
 //
 // 怎么加一个新动作：在本文件末尾的 [kMessageActions] 里登记一条 [MessageAction]（见那里的说明），别的地方都不用动。
 import 'package:flutter/foundation.dart';
@@ -13,17 +17,22 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/session/message_actions.dart';
+import 'package:lopicode/session/reply_edit.dart';
 import 'package:lopicode/state/workspace_chat.dart';
 import 'package:lopicode/state/workspace_conversations.dart';
 import 'package:lopicode/state/workspace_favorites.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/message_branch_actions.dart';
+import 'package:lopicode/ui/message_reply_editor.dart';
 import 'package:lopicode/ui/message_sheets.dart';
 import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// 动作在“更多”面板里的先后（也是常驻图标从左到右的先后）。
-enum MessageActionSlot { copy, retry, edit, branch, branches, favorite, share, delete }
+enum MessageActionSlot { copy, edit, retry, branch, branches, favorite, share, delete }
+
+/// 常驻的四个按钮里除“更多”以外的三个位置。别的动作就算常驻，也只算状态记号，排在外侧。
+const Set<MessageActionSlot> kCoreSlots = {MessageActionSlot.copy, MessageActionSlot.edit, MessageActionSlot.retry};
 
 /// 操作栏点的是哪条消息。
 class MessageTarget {
@@ -37,6 +46,8 @@ class MessageTarget {
     required this.turnLast,
     required this.favorited,
     this.branches = const [],
+    this.edited = false,
+    this.parts = const [],
   });
 
   final ProjectSession session;
@@ -62,6 +73,16 @@ class MessageTarget {
 
   /// 从这条消息分出去的对话（分支和旧版本）。
   final List<Conversation> branches;
+
+  /// 这一轮的正文里有用户改过的段。
+  final bool edited;
+
+  /// Agent 的回复：这一轮的正式回复段，按先后排，最后一段就是 [id]。我的消息是空的。
+  /// 复制、编辑针对的是这个列表——以后改成“针对整轮”只要换这里装的东西。
+  final List<ReplyPart> parts;
+
+  /// 复制用的文字：Agent 的回复是这一轮各段正文连起来。
+  String get copyText => parts.length > 1 ? joinReplyParts(parts) : text;
 }
 
 /// 一个消息动作。全部字段都是“给一条消息、答一个值”，所以同一个动作可以按消息变样子（收藏 / 取消收藏）。
@@ -95,7 +116,7 @@ class MessageAction {
   /// 现在不能用的原因（能用返回 null）。不能用时“更多”里那一行变灰并写出原因；常驻图标变灰，点了提示原因。
   final String? Function(MessageTarget t)? disabledReason;
 
-  /// 整轮级别的动作：只在这一轮最后一段回复下面出现。
+  /// 整轮级别的动作：只在这一轮最后一段回复下面出现。（Agent 的操作栏本来就只挂在那里，现在登记的动作都不用它。）
   final bool turnLevel;
 
   /// 危险动作（删除）：“更多”里用红色。
@@ -116,6 +137,7 @@ class MessageOpsScope extends InheritedWidget {
     required this.busy,
     required this.lastReplyIds,
     required this.favoriteIds,
+    this.turnReplies = const {},
     this.branches = const {},
     this.flash,
     this.actions = kMessageActions,
@@ -124,6 +146,13 @@ class MessageOpsScope extends InheritedWidget {
   final ProjectSession session;
   final bool busy;
   final Set<String> lastReplyIds;
+
+  /// 每一轮的正式回复段（键＝这一轮最后一段的 id）。没给＝每一轮只当它有最后那一段。
+  final Map<String, List<ReplyPart>> turnReplies;
+
+  String get _replySig => [
+    for (final e in turnReplies.entries) '${e.key}:${[for (final p in e.value) '${p.id}/${p.edited}/${p.text.hashCode}'].join(',')}',
+  ].join(';');
 
   /// 当前对话里收藏着的消息 id。
   final Set<String> favoriteIds;
@@ -148,6 +177,7 @@ class MessageOpsScope extends InheritedWidget {
       old.flash != flash ||
       old.actions != actions ||
       old._branchSig != _branchSig ||
+      old._replySig != _replySig ||
       !setEquals(old.lastReplyIds, lastReplyIds) ||
       !setEquals(old.favoriteIds, favoriteIds);
 }
@@ -185,6 +215,7 @@ class _MessageOpsHostState extends ConsumerState<MessageOpsHost> {
       session: s,
       busy: chat.busy,
       lastReplyIds: s.messageOps.lastReplyIds,
+      turnReplies: s.messageOps.turnReplies,
       favoriteIds: {
         for (final f in favorites.items)
           if (f.convId == conv) f.messageId,
@@ -212,25 +243,38 @@ class MessageFrame extends StatelessWidget {
       _ => (null, false, '', false),
     };
     if (scope == null || id == null || streaming) return child;
-    final target = MessageTarget(
-      session: scope.session,
-      item: item,
-      id: id,
-      mine: mine,
-      text: text,
-      busy: scope.busy,
-      turnLast: scope.lastReplyIds.contains(id),
-      favorited: scope.favoriteIds.contains(id),
-      branches: scope.branches[id] ?? const [],
-    );
-    final block = Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        child,
-        MessageActionBar(target: target, actions: scope.actions),
-      ],
-    );
+    final turnLast = scope.lastReplyIds.contains(id);
+    final parts = mine ? const <ReplyPart>[] : (scope.turnReplies[id] ?? const <ReplyPart>[]);
+    final ownEdited = switch (item) {
+      AssistantItem(:final edited) => edited,
+      _ => false,
+    };
+    // Agent 的一轮只在最后一段正文下面有操作栏；中间的段没有（从收藏页跳回来的高亮照常有）
+    final target = !mine && !turnLast
+        ? null
+        : MessageTarget(
+            session: scope.session,
+            item: item,
+            id: id,
+            mine: mine,
+            text: text,
+            busy: scope.busy,
+            turnLast: turnLast,
+            favorited: scope.favoriteIds.contains(id),
+            branches: scope.branches[id] ?? const [],
+            edited: ownEdited || parts.any((p) => p.edited),
+            parts: parts,
+          );
+    final block = target == null
+        ? child
+        : Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              child,
+              MessageActionBar(target: target, actions: scope.actions),
+            ],
+          );
     final flash = scope.flash;
     if (flash == null) return block;
     final c = context.colors;
@@ -264,24 +308,41 @@ class MessageActionBar extends StatelessWidget {
     final pinned = [...all.where((a) => a.pinned?.call(t) ?? false)];
     final rest = [...all.where((a) => !pinned.contains(a))];
     if (all.isEmpty) return const SizedBox.shrink();
+    Widget button(MessageAction a) => _BarIcon(
+      key: ValueKey('message-${a.slot.name}-${t.id}'),
+      icon: a.icon(t),
+      label: a.label(t),
+      active: (a.slot == MessageActionSlot.favorite && t.favorited) || a.slot == MessageActionSlot.branches,
+      disabled: a.disabledReason?.call(t) != null,
+      onTap: () => runMessageAction(context, a, t),
+    );
+    // 四个按钮：位置固定
+    final core = [
+      for (final a in pinned)
+        if (kCoreSlots.contains(a.slot)) button(a),
+      if (rest.isNotEmpty) _BarIcon(key: ValueKey('message-more-${t.id}'), icon: Icons.more_horiz, label: '更多操作', onTap: () => _openMore(context, rest)),
+    ];
+    // 状态记号：排在四个按钮的外侧
+    final marks = [
+      for (final a in pinned)
+        if (!kCoreSlots.contains(a.slot)) button(a),
+      if (t.edited)
+        Flexible(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: Space.x1),
+            child: Text(
+              '已编辑',
+              key: ValueKey('message-edited-${t.id}'),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(color: context.colors.textFaint),
+            ),
+          ),
+        ),
+    ];
     return Align(
       alignment: t.mine ? Alignment.centerRight : Alignment.centerLeft,
-      child: Row(
-        key: ValueKey('message-actions-${t.id}'),
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          for (final a in pinned)
-            _BarIcon(
-              key: ValueKey('message-${a.slot.name}-${t.id}'),
-              icon: a.icon(t),
-              label: a.label(t),
-              active: (a.slot == MessageActionSlot.favorite && t.favorited) || a.slot == MessageActionSlot.branches,
-              disabled: a.disabledReason?.call(t) != null,
-              onTap: () => runMessageAction(context, a, t),
-            ),
-          if (rest.isNotEmpty) _BarIcon(key: ValueKey('message-more-${t.id}'), icon: Icons.more_horiz, label: '更多操作', onTap: () => _openMore(context, rest)),
-        ],
-      ),
+      child: Row(key: ValueKey('message-actions-${t.id}'), mainAxisSize: MainAxisSize.min, children: t.mine ? [...marks.reversed, ...core] : [...core, ...marks]),
     );
   }
 
@@ -331,11 +392,11 @@ class _BarIcon extends StatelessWidget {
 // ── 登记在册的动作 ─────────────────────────────────────
 //
 // 加一个动作＝在 [kMessageActions] 里加一条（字段说明见 [MessageAction]）。
-// 重试、编辑、分支已经登记：它们的文案和动作在 message_branch_actions.dart。
+// 重试、编辑、分支已经登记：它们的文案和动作在 message_branch_actions.dart；改 Agent 的回复在 message_reply_editor.dart。
 // 没登记的位置不显示任何东西（不放点了没反应的按钮）。
 
 Future<void> _copy(BuildContext context, MessageTarget t) async {
-  await Clipboard.setData(ClipboardData(text: t.text));
+  await Clipboard.setData(ClipboardData(text: t.copyText));
   if (context.mounted) showSnack(context, '已复制');
 }
 
@@ -371,10 +432,11 @@ Future<void> _delete(BuildContext context, MessageTarget t) async {
 /// 全部消息动作。顺序无所谓（按 [MessageActionSlot] 排）。
 const List<MessageAction> kMessageActions = [
   MessageAction(slot: MessageActionSlot.copy, label: _copyLabel, icon: _copyIcon, pinned: _always, run: _copy),
-  // 重试 / 编辑 / 分支（动作在 message_branch_actions.dart）
-  MessageAction(slot: MessageActionSlot.retry, label: retryLabel, icon: retryIcon, hint: retryHint, appliesTo: onReply, pinned: _always, turnLevel: true, disabledReason: rewindBlocked, run: runRetry),
-  MessageAction(slot: MessageActionSlot.retry, label: retryLabel, icon: retryIcon, hint: retryHint, appliesTo: onMine, disabledReason: rewindBlocked, run: runRetry),
+  // 编辑：我的消息＝放回输入框改了再发（message_branch_actions.dart）；Agent 的回复＝直接改这段文字（message_reply_editor.dart）
   MessageAction(slot: MessageActionSlot.edit, label: editLabel, icon: editIcon, hint: editHint, appliesTo: onMine, pinned: _always, disabledReason: rewindBlocked, run: runEdit),
+  MessageAction(slot: MessageActionSlot.edit, label: editLabel, icon: editIcon, hint: editReplyHint, appliesTo: onReply, pinned: _always, disabledReason: editReplyBlocked, run: runEditReply),
+  // 重试 / 重新发送：我的每条消息、Agent 每一轮的末尾都有
+  MessageAction(slot: MessageActionSlot.retry, label: retryLabel, icon: retryIcon, hint: retryHint, pinned: _always, disabledReason: rewindBlocked, run: runRetry),
   MessageAction(slot: MessageActionSlot.branch, label: branchLabel, icon: branchIcon, hint: branchHint, disabledReason: branchBlocked, run: runBranch),
   MessageAction(slot: MessageActionSlot.branches, label: branchesLabel, icon: branchesIcon, appliesTo: hasBranches, pinned: branchesPinned, run: runShowBranches),
   MessageAction(slot: MessageActionSlot.favorite, label: _favoriteLabel, icon: _favoriteIcon, hint: _favoriteHint, pinned: _whenFavorited, run: _favorite),

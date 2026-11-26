@@ -1,18 +1,39 @@
 // 对当前对话里的一条消息动手：删一条 / 删一轮、导出成 Markdown、收藏。
 // 算法（删完长什么样、合不合法）在 message_ops.dart；这里负责换进状态、存盘、通知收藏。
 // 界面通过 ProjectSession.messageOps 用它。重试 / 编辑 / 分支以后也加在这里（它们要用的 [deleteTurn] 这类底层方法已经在了）。
+import 'dart:io';
+
 import 'package:lopicode/agent/message_ids.dart';
+import 'package:lopicode/core/safe_file.dart';
 import 'package:lopicode/session/chat_export.dart';
 import 'package:lopicode/session/chat_models.dart';
 import 'package:lopicode/session/favorites.dart';
 import 'package:lopicode/session/message_ops.dart';
 import 'package:lopicode/session/message_ops.dart' as ops show previewDelete;
+import 'package:lopicode/session/reply_edit.dart';
 import 'package:lopicode/session/session_core.dart';
 import 'package:lopicode/state/workspace_chat.dart';
 import 'package:lopicode/state/workspace_favorites.dart';
 
 /// Agent 正在回复时不能删：说明原因的那句话。
 const String kDeleteWhileBusy = 'Agent 正在回复，等它停下再删。';
+
+/// Agent 正在回复时不能改它的回复：说明原因的那句话。
+const String kEditReplyWhileBusy = 'Agent 正在回复，等它停下再编辑。';
+
+/// 改一段回复的结果。
+class ReplyEditOutcome {
+  const ReplyEditOutcome({this.error, this.changed = false, this.edited = false});
+
+  /// 没改成的原因（给用户看）；改成了（或者本来就没变）是 null。
+  final String? error;
+
+  /// 文字真的变了并且已经存盘。
+  final bool changed;
+
+  /// 改完以后这条带不带“已编辑”（改回原话就不带了）。
+  final bool edited;
+}
 
 class MessageOps {
   MessageOps(this.core, {required this.dropConversations});
@@ -34,6 +55,9 @@ class MessageOps {
 
   /// 当前对话里每一轮最后一段回复的 id（整轮级别的操作挂在它下面）。
   Set<String> get lastReplyIds => lastReplyIdsOf(_run.messages);
+
+  /// 每一轮的正式回复段（键＝这一轮最后一段的 id）。
+  Map<String, List<ReplyPart>> get turnReplies => turnRepliesOf(_run.messages);
 
   // ── 删除 ─────────────────────────────────────────────
   /// 删之前先算：两种删法各自行不行、会带走什么。这条不在记录里返回 null。
@@ -73,6 +97,55 @@ class MessageOps {
     await core.saveRun(run);
     await _favorites?.markGone(run.convId, result.goneIds);
     return null;
+  }
+
+  // ── 编辑 Agent 的回复 ────────────────────────────────
+  /// 打开编辑页要用的：现在的文字、模型的原话（没改过是 null）、是不是已经被压缩归档。不是能改的回复返回 null。
+  ReplyEditInfo? replyEditInfo(String id) => infoOfReply(_run.messages, id);
+
+  /// 把 [id] 这段回复的文字直接换成 [text]（规矩见 reply_edit.dart）。不重新生成，别的消息都不动。
+  ///
+  /// - Agent 正在回复时不改（它手里正拿着这份记录在跑）。
+  /// - **先存盘，存成了才换进状态**：盘写不了就什么都不改，并说明原因。
+  /// - 这条要是收藏着，收藏里留的文字跟着换。对话累计用量、这一轮的用量脚注不变；上下文占用改回估算。
+  Future<ReplyEditOutcome> editReply(String id, String text) async {
+    final run = _run;
+    if (run.busy) return const ReplyEditOutcome(error: kEditReplyWhileBusy);
+    final plan = planReplyEdit(run.messages, id, text);
+    if (plan == null) return const ReplyEditOutcome(error: '这段回复已经不在记录里了。');
+    if (plan.error != null) return ReplyEditOutcome(error: plan.error);
+    if (!plan.changed) return ReplyEditOutcome(edited: plan.edited);
+    final convId = run.convId;
+    final before = run.messages;
+    final count = before.length;
+    final target = messageById(id);
+    try {
+      await writeJsonAtomic(core.chatFileOf(convId), plan.messages);
+    } on FileSystemException {
+      return const ReplyEditOutcome(error: '没存进去（存储写不了），这段回复没有改。');
+    }
+    // 存盘的工夫里它开始跑了 / 记录被换过（删除、重试）：盘上那份已经是旧的，按现在的记录重写一遍，不把改动硬塞进去
+    if (run.busy || !identical(run.messages, before) || before.length != count || !identical(messageById(id), target)) {
+      await core.saveRun(run);
+      return const ReplyEditOutcome(error: '保存的时候这段对话变了，这次没有改。请再试一次。');
+    }
+    run.messages = plan.messages;
+    final old = run.items.whereType<AssistantItem>().where((i) => i.id == id).firstOrNull;
+    if (old != null) {
+      run.replace(old, old.copyWith(text: plan.text, edited: plan.edited));
+    } else {
+      // 界面条目里找不到它（不该出现）：从记录重建，和重开对话看到的一样
+      final interrupted = [...run.items.whereType<InterruptedItem>()];
+      core.rebuildItems(run);
+      for (final card in interrupted) {
+        run.add(card);
+      }
+    }
+    // 上次请求的 token 数对不上现在的记录了：上下文占用改回估算
+    core.convs?.update(convId, (c) => c.copyWith(clearLastInput: true));
+    await core.saveIndex();
+    await _favorites?.retext(convId, id, plan.text);
+    return ReplyEditOutcome(changed: true, edited: plan.edited);
   }
 
   // ── 分享 ─────────────────────────────────────────────
