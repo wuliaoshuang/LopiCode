@@ -3,6 +3,8 @@
 library;
 
 const String kRt2GoIo = r'''
+// LopiCode 积木的小库（Go，严格规矩）·第四份。由 LopiCode 生成，别手改。
+
 package lc
 
 import (

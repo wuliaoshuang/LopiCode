@@ -153,45 +153,67 @@ Future<Gen2Server> gen2Serve(String language, Map<String, String> files, {int se
       default:
         throw StateError('不认识的语言 $language');
     }
-    final proc = await Process.start(cmd.first, cmd.sublist(1), workingDirectory: dir.path, environment: env, includeParentEnvironment: false);
-    final out = <int>[], err = <int>[];
-    final started = Completer<String?>();
-    final pipes = [
-      proc.stdout.forEach((chunk) {
-        out.addAll(chunk);
-        if (!started.isCompleted) {
-          final nl = out.indexOf(10);
-          if (nl >= 0) started.complete(utf8.decode(out.sublist(0, nl), allowMalformed: true));
-        }
-      }),
-      proc.stderr.forEach(err.addAll),
-    ];
-    String? startLine;
-    try {
-      if (language == 'php') {
-        // php -S 不经过程序，没有“后端已启动”那一行：等端口连得上。
-        final deadline = DateTime.now().add(Duration(seconds: seconds));
-        while (true) {
-          try {
-            (await Socket.connect(InternetAddress.loopbackIPv4, port, timeout: const Duration(seconds: 2))).destroy();
-            break;
-          } on SocketException {
-            if (DateTime.now().isAfter(deadline)) throw StateError('等了 $seconds 秒，服务还连不上');
-            await Future<void>.delayed(const Duration(milliseconds: 50));
-          }
-        }
-      } else {
-        final exited = proc.exitCode.then<String?>((code) => throw StateError('服务没起来就退出了（退出码 $code）'));
-        startLine = await Future.any([started.future, exited]).timeout(Duration(seconds: seconds), onTimeout: () => throw StateError('等了 $seconds 秒，服务没说“后端已启动”'));
-        if (startLine != '后端已启动：http://127.0.0.1:$port') throw StateError('第一行应该是“后端已启动：http://127.0.0.1:$port”，实际是：$startLine');
-      }
-    } on StateError catch (e) {
-      proc.kill(ProcessSignal.sigkill);
-      throw StateError('${e.message}\n标准输出：${utf8.decode(out, allowMalformed: true)}\n标准错误：${utf8.decode(err, allowMalformed: true)}');
-    }
-    return Gen2Server._(proc, port, dir, startLine, out, err, pipes);
+    return await _launch(cmd, dir, port, env, php: language == 'php', seconds: seconds);
   } on Object {
     if (dir.existsSync()) dir.deleteSync(recursive: true);
     rethrow;
   }
+}
+
+Future<Gen2Server> _launch(List<String> cmd, Directory dir, int port, Map<String, String> env, {required bool php, required int seconds, bool firstLine = true}) async {
+  final proc = await Process.start(cmd.first, cmd.sublist(1), workingDirectory: dir.path, environment: env, includeParentEnvironment: false);
+  final out = <int>[], err = <int>[];
+  final started = Completer<String?>();
+  final pipes = [
+    proc.stdout.forEach((chunk) {
+      out.addAll(chunk);
+      if (!started.isCompleted) {
+        // firstLine：第一行就得是“后端已启动”；不然等到出现这一行为止（文档有“程序开始时”的话它先写自己的）。
+        final lines = utf8.decode(out, allowMalformed: true).split('\n')..removeLast();
+        final hit = firstLine ? lines.firstOrNull : lines.where((l) => l.startsWith('后端已启动：')).firstOrNull;
+        if (hit != null) started.complete(hit);
+      }
+    }),
+    proc.stderr.forEach(err.addAll),
+  ];
+  String? startLine;
+  try {
+    if (php) {
+      // php -S 不经过程序，没有“后端已启动”那一行：等端口连得上。
+      final deadline = DateTime.now().add(Duration(seconds: seconds));
+      while (true) {
+        try {
+          (await Socket.connect(InternetAddress.loopbackIPv4, port, timeout: const Duration(seconds: 2))).destroy();
+          break;
+        } on SocketException {
+          if (DateTime.now().isAfter(deadline)) throw StateError('等了 $seconds 秒，服务还连不上');
+          await Future<void>.delayed(const Duration(milliseconds: 50));
+        }
+      }
+    } else {
+      final exited = proc.exitCode.then<String?>((code) => throw StateError('服务没起来就退出了（退出码 $code）'));
+      startLine = await Future.any([started.future, exited]).timeout(Duration(seconds: seconds), onTimeout: () => throw StateError('等了 $seconds 秒，服务没说“后端已启动”'));
+      if (startLine != '后端已启动：http://127.0.0.1:$port') throw StateError('第一行应该是“后端已启动：http://127.0.0.1:$port”，实际是：$startLine');
+    }
+  } on StateError catch (e) {
+    proc.kill(ProcessSignal.sigkill);
+    throw StateError('${e.message}\n标准输出：${utf8.decode(out, allowMalformed: true)}\n标准错误：${utf8.decode(err, allowMalformed: true)}');
+  }
+  return Gen2Server._(proc, port, dir, startLine, out, err, pipes);
+}
+
+/// 一个本机现在空着的端口（文档里写端口的测试用）。
+Future<int> gen2FreePort() => _freePort();
+
+/// 照产品给的命令起服务（[dir] 里已经写好了工程）：[build] 每条用 `bash -c` 跑完，再 `bash -c "exec [start]"`。
+/// 不设 PORT（端口用文档里写的 [port]），HOST 设成 127.0.0.1；node、python3、php、go、javac、java 所在目录放进 PATH。
+Future<Gen2Server> gen2ServeShell(Directory dir, {required List<String> build, required String start, required int port, required bool php, int seconds = 60}) async {
+  final env = _env(port)..remove('PORT');
+  final bins = {for (final t in gen2Tools.values) ?(t == null ? null : File(t).parent.path)};
+  env['PATH'] = [...bins, env['PATH'] ?? '/usr/bin:/bin'].join(':');
+  for (final b in build) {
+    final r = await Process.run('bash', ['-c', b], workingDirectory: dir.path, environment: env, includeParentEnvironment: false).timeout(const Duration(seconds: 600));
+    if (r.exitCode != 0) throw StateError('“$b”没过：${r.stderr}');
+  }
+  return _launch(['bash', '-c', 'exec $start'], dir, port, env, php: php, seconds: seconds, firstLine: false);
 }

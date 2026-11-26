@@ -16,6 +16,7 @@ import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:lopicode/backend/backend_model.dart';
 import 'package:lopicode/backend/backend_readme.dart';
+import 'package:lopicode/backend/backend_strict_target.dart';
 import 'package:lopicode/backend/backend_targets.dart';
 import 'package:lopicode/backend/backend_validate.dart';
 import 'package:lopicode/core/path_guard.dart';
@@ -29,7 +30,7 @@ const List<String> kBackendDirs = ['', 'server', 'backend', 'api'];
 const String kBackendManifestFile = 'backend-gen.json';
 
 /// 生成的文件开头会有的标记（任一条）。各语言的生成器请保留其中一条在文件的头几行里。
-const List<String> kBackendGeneratedMarkers = ['由 LopiCode 后端积木生成', 'LopiCode 后端运行时小库'];
+const List<String> kBackendGeneratedMarkers = ['由 LopiCode 后端积木生成', 'LopiCode 后端运行时小库', '由 LopiCode 积木生成', 'LopiCode 积木的小库'];
 
 /// `backend.lc.json` 最大读多少（防止误把大文件读进内存）。
 const int kBackendMaxFileBytes = 2 * 1024 * 1024;
@@ -166,7 +167,7 @@ Future<List<BackendProjectInfo>> findBackendProjects(String workspaceDir) async 
         name: doc.name,
         language: doc.language,
         port: doc.port,
-        target: backendTargetFor(doc.language),
+        target: backendTargetOf(doc),
         routeCount: doc.routes.length,
         errorCount: backendErrors(doc).length,
       ),
@@ -348,9 +349,15 @@ Future<BackendRegenResult> _regenerate(PathGuard guard, {String? file, BeDocumen
     return BackendRegenResult(error: '积木里有 $errors 个错误，代码没有更新（上一次生成的文件原样留着）。把错误修好以后会自动重新生成', blocked: true, errorCount: errors, file: rel, dir: dir, language: document.language, note: note);
   }
 
-  // 3b. 严格规矩的文档：后端的严格生成还没接上，老的生成器会写出和严格规矩不符的代码（见 rules.dart 的 kLangStrictBackendGen）——不生成，明说。
+  // 3b. 严格规矩的文档：严格生成关着时（rules.dart 的 kLangStrictBackendGen）老的生成器会写出和严格规矩不符的代码——不生成，明说。
   if (beStrictGenPending(document)) {
     return BackendRegenResult(error: kBeStrictGenPending, strictPending: true, file: rel, dir: dir, language: document.language, note: note);
+  }
+  // 3c. 严格规矩的文档走“接口服务”库那条路；翻不出来（库那边报的问题）就不动文件、说原因。
+  final strict = backendTargetOf(document);
+  if (strict is StrictBackendTarget) {
+    final why = strict.problem(document);
+    if (why != null) return BackendRegenResult(error: '代码现在出不来：$why。代码没有更新（上一次生成的文件原样留着）', blocked: true, file: rel, dir: dir, language: document.language, note: note);
   }
 
   // 4. 生成
@@ -415,8 +422,11 @@ Future<BackendRegenResult> _regenerate(PathGuard guard, {String? file, BeDocumen
 
   // 6. 上一种语言留下的：登记过的 + 别的生成器会生成的，这次不再生成的那些
   final stale = <String>{...recorded.keys};
+  // 别的语言留下的；同一种语言换了规矩（宽松 ↔ 严格）留下的也算。
+  final strictNow = gen.target is StrictBackendTarget;
   for (final t in backendTargets) {
-    if (t.id != gen.target.id) stale.addAll(t.generate(document).keys);
+    if (strictNow || t.id != gen.target.id) stale.addAll(t.generate(document).keys);
+    if (!strictNow || t.id != gen.target.id) stale.addAll(kBeStrictFiles[t.id] ?? const []);
   }
   stale.removeWhere((k) => gen.files.containsKey(k) || !_safeRelative(k) || k == kBackendFileName);
   final toRemove = <String, String>{};

@@ -28,7 +28,7 @@ String? backendLaunchCommand(BeDocument doc, {String dir = ''}) {
     name: doc.name,
     language: doc.language,
     port: doc.port,
-    target: backendTargetFor(doc.language),
+    target: backendTargetOf(doc),
   );
   final line = info.terminalCommand;
   if (line == null) return null;

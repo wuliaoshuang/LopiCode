@@ -93,7 +93,7 @@ void _describeBlocks(StringBuffer out, List<LcBlock> list, String indent, int de
 /// 整份文档的中文读法（每个接口一行标题，下面是一块块积木）。
 String describeBackendDocument(BeDocument doc) {
   final out = StringBuffer();
-  out.writeln('服务“${doc.name}”，语言 ${backendTargetFor(doc.language)?.label ?? doc.language}，端口 ${doc.port}。');
+  out.writeln('服务“${doc.name}”，语言 ${backendTargetOf(doc)?.label ?? doc.language}，端口 ${doc.port}。');
   if (doc.variables.isNotEmpty) out.writeln('变量：${doc.variables.map((v) => v.name).join('、')}');
   if (doc.collections.isNotEmpty) out.writeln('数据集合：${doc.collections.map((c) => c.name).join('、')}');
   if (doc.routes.isEmpty) out.writeln('（还没有接口）');

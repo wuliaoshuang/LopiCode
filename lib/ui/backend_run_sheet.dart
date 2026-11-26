@@ -94,7 +94,7 @@ class BeRunSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
-    final target = backendTargetFor(doc.language);
+    final target = backendTargetOf(doc);
     final command = backendLaunchCommand(doc, dir: dir);
     final url = 'http://localhost:${doc.port}';
     final tools = beToolchainNote(doc.language);
