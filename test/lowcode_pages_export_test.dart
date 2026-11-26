@@ -13,6 +13,7 @@ import 'package:lopicode/lowcode/export_html.dart';
 import 'package:lopicode/lowcode/export_pages.dart';
 import 'package:lopicode/lowcode/export_react.dart';
 import 'package:lopicode/lowcode/export_vue.dart';
+import 'package:lopicode/lowcode/logic_gate.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 import 'package:lopicode/lowcode/model.dart';
 import 'package:path/path.dart' as p;
@@ -123,6 +124,17 @@ void main() {
       }
       expect(vue, contains('<component :is="lcPages[lcCurrent]" :key="lcCurrent" />'));
       expect(react, contains('export default function LcApp()'));
+    });
+
+    test('导出面板拦不拦看所有页：别的页有错误也拦，并说是哪一页', () {
+      final doc = pagesSample();
+      expect(lcLogicErrorsByPage(doc), isEmpty);
+      doc.pageById('p2')!.logic.handlers.single.body.single.args['page'] = '';
+      expect(lcLogicErrorCount(doc), 0, reason: '当前在首页，首页没有错误');
+      expect(lcLogicErrorsByPage(doc), {'商品列表': 1});
+      expect(doc.page.id, 'p1');
+      expect(lcExportBlockedText(1, lcLogicErrorsByPage(doc)), allOf(contains('（「商品列表」1 个）'), contains('换到那一页')));
+      expect(lcExportBlockedText(2), isNot(contains('换到那一页')));
     });
 
     test('跳页：积木和底部导航都改 location.hash；当前这页的导航项没有点击', () {

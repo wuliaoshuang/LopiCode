@@ -712,3 +712,14 @@ Vue 那边（`<slot name>` 里写默认内容、用的地方 `<template #名字>
 - Java `java.net.http.HttpClient`（21 起可以放进 try-with-resources）：`HttpTimeoutException`；`connectTimeout`；`followRedirects(NORMAL)`；`java.security.SecureRandom`；`Files.move(…, REPLACE_EXISTING, ATOMIC_MOVE)`。未核对。
 - Java `com.sun.net.httpserver.HttpServer`：请求路径以两个斜杠开头时它自己回 400 `Bad request URI`，不进处理函数（本机实测）。未核对。
 - 这台开发机的运行环境：Java 程序连本机回环地址要带 `-Djava.net.preferIPv4Stack=true`，不带的话连接被运行环境拦下（只是这台机器的事，不是 JDK 的规矩）。
+
+## 低代码多页面导出用到的浏览器 / 框架接口（2026-11-27，编辑器第 4 期 B1）
+
+状态：**实跑核对了一部分**——Vue 3 / React 的外壳和三页样例用开发机验证环境里的官方编译器真编译（0 错 0 警告）并在 Node 里服务端渲染出首页（`test/dev_webdev_compile_test.dart`）；
+Flutter 导出在测试里真的跳了页（`test/lowcode_pages_export_test.dart`）。**没有逐条对官方文档，没在真浏览器里点过**——下面每条标“未核对”的是指文档。
+
+- 浏览器：改 `location.hash` 会触发 `window` 的 `hashchange` 事件，并且进浏览器历史（后退能回上一页）；`location.href = "别的.html"` 是整页跳转。未核对；**真浏览器里没点过**（服务端渲染只出第一屏）。
+- Vue 3：`<component :is="组件对象" :key="…">` 按变量换组件；`shallowRef`、`onMounted`、`onBeforeUnmount` 从 `vue` 引入；`<script setup>` 里引入的组件能直接放进普通对象里当值用。未核对（真编译通过）。
+- React：`useState(函数)` 把函数当“第一次取初值”用；`useEffect(…, [])` 里加监听、返回的函数里取消；组件变量名要大写开头才能当标签用（`<LcCurrentPage />`）。未核对（真编译通过）。
+- 服务端渲染时没有 `location` / `window`：外壳里取当前页的函数先判 `typeof location === "undefined"`；监听都放在只在浏览器里跑的钩子里（`onMounted` / `useEffect`）。实跑如此。
+- Flutter：`Navigator.of(context).push(MaterialPageRoute(...))` 叠一页、`pushReplacement` 换掉当前页；`NavigationBar.onDestinationSelected` 给的是点中项的下标。未核对（测试里真跑过）。
