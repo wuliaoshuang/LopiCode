@@ -514,7 +514,7 @@ class BkWorkspacePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final palette = kit.palette;
-    canvas.drawRect(Offset.zero & size, Paint()..color = palette.canvas);
+    // 画布的底色不在这里铺：由外面那一层（block_editor_view 的 bk-canvas-layer）铺，有背景图片且“透出 › 积木画布”开着时它是半透明的。
     _dots(canvas, size, palette);
     canvas.save();
     canvas.clipRect(Offset.zero & size);

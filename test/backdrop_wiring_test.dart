@@ -10,7 +10,6 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lopicode/appearance/theme_builtin.dart';
 import 'package:lopicode/backdrop/backdrop_model.dart';
-import 'package:lopicode/blocks/block_canvas_view.dart';
 import 'package:lopicode/build/build_screen.dart';
 import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/core/templates.dart';
@@ -211,7 +210,7 @@ void main() {
       await show(tester, env, const ThemesScreen(), rounds: 4);
       await flip(tester, env, what: '主题管理页');
       await shot(tester, 'themes-light');
-      await show(tester, env, const ThemeEditorScreen(theme: kDefaultLightTheme), rounds: 4);
+      await show(tester, env, ThemeEditorScreen(theme: kDefaultLightTheme), rounds: 4);
       await flip(tester, env, what: '主题编辑器');
       await shot(tester, 'theme-editor-light');
       await show(tester, env, const ThemeImportScreen(), rounds: 4);
@@ -221,16 +220,16 @@ void main() {
     testWidgets('工作区里的页面：文件、终端、打包、运行环境、收藏', (tester) async {
       final (env, project, session) = await open(tester, ProjectTemplate.web);
       await seed(tester, env);
-      await show(tester, env, ProjectShell(project: project, session: session, initial: ShellDest.files), rounds: 20);
+      await show(tester, env, ProjectShell(key: UniqueKey(), project: project, session: session, initial: ShellDest.files), rounds: 20);
       await flip(tester, env, what: '文件页');
       await shot(tester, 'files-light');
-      await show(tester, env, ProjectShell(project: project, session: session, initial: ShellDest.terminal));
+      await show(tester, env, ProjectShell(key: UniqueKey(), project: project, session: session, initial: ShellDest.terminal));
       await flip(tester, env, what: '终端页');
-      await show(tester, env, ProjectShell(project: project, session: session, initial: ShellDest.apk));
+      await show(tester, env, ProjectShell(key: UniqueKey(), project: project, session: session, initial: ShellDest.apk));
       expect(find.byType(BuildScreen), findsOneWidget);
       await flip(tester, env, what: '打包页');
       await shot(tester, 'apk-light');
-      await show(tester, env, ProjectShell(project: project, session: session, initial: ShellDest.runtime));
+      await show(tester, env, ProjectShell(key: UniqueKey(), project: project, session: session, initial: ShellDest.runtime));
       expect(find.byType(RuntimeScreen), findsOneWidget);
       await flip(tester, env, what: '运行环境页');
       await shot(tester, 'runtime-light');
@@ -241,7 +240,7 @@ void main() {
     testWidgets('搭建页：低代码、后端积木（画布默认还是实底，只是页面后面有背景）', (tester) async {
       final (env, project, session) = await open(tester, ProjectTemplate.lowcode);
       await seed(tester, env);
-      await show(tester, env, ProjectShell(project: project, session: session, initial: ShellDest.builder));
+      await show(tester, env, ProjectShell(key: UniqueKey(), project: project, session: session, initial: ShellDest.builder));
       expect(find.byType(BuilderScreen), findsOneWidget);
       await flip(tester, env, what: '低代码搭建页');
       final canvas = tester.widget<ColoredBox>(find.ancestor(of: find.byKey(const ValueKey('lowcode-canvas')), matching: find.byType(ColoredBox)).first);
@@ -253,7 +252,7 @@ void main() {
     testWidgets('终端：关＝实底；开＝底色按表面不透明度变透，xterm 自己不再铺底', (tester) async {
       final (env, project, session) = await open(tester, ProjectTemplate.web);
       await seed(tester, env);
-      await show(tester, env, ProjectShell(project: project, session: session, initial: ShellDest.terminal));
+      await show(tester, env, ProjectShell(key: UniqueKey(), project: project, session: session, initial: ShellDest.terminal));
       await tester.runAsync(() async {
         session.terminals[session.activeTerminal].run('ls');
         await Future<void>.delayed(const Duration(milliseconds: 600));
@@ -282,7 +281,7 @@ void main() {
       await show(
         tester,
         env,
-        ProjectShell(project: project, session: session, initial: ShellDest.terminal),
+        ProjectShell(key: UniqueKey(), project: project, session: session, initial: ShellDest.terminal),
         mode: ThemeMode.dark,
       );
       session.terminals[session.activeTerminal].terminal.write('\x1b[33m黄色 warn\x1b[0m\r\n');
@@ -296,7 +295,7 @@ void main() {
     testWidgets('代码区：编辑器底色', (tester) async {
       final (env, project, session) = await open(tester, ProjectTemplate.web, before: (project) => File(p.join(project.dir, 'todo.js')).writeAsStringSync(_js));
       await seed(tester, env);
-      await show(tester, env, ProjectShell(project: project, session: session, initial: ShellDest.files), rounds: 20);
+      await show(tester, env, ProjectShell(key: UniqueKey(), project: project, session: session, initial: ShellDest.files), rounds: 20);
       await tester.tap(find.text('todo.js').first);
       await settle(tester, rounds: 20, ms: 5);
       Color bg() => tester.widget<CodeEditor>(find.byType(CodeEditor)).style!.backgroundColor!;
@@ -313,7 +312,7 @@ void main() {
       await show(
         tester,
         env,
-        ProjectShell(project: project, session: session, initial: ShellDest.files),
+        ProjectShell(key: UniqueKey(), project: project, session: session, initial: ShellDest.files),
         mode: ThemeMode.dark,
         rounds: 20,
       );
@@ -325,10 +324,10 @@ void main() {
     testWidgets('积木画布', (tester) async {
       final (env, project, session) = await open(tester, ProjectTemplate.backendBlocks, language: 'node', fakePty: true);
       await seed(tester, env);
-      await show(tester, env, ProjectShell(project: project, session: session, initial: ShellDest.builder));
+      await show(tester, env, ProjectShell(key: UniqueKey(), project: project, session: session, initial: ShellDest.builder));
       expect(find.byType(BackendScreen), findsOneWidget);
       expect(find.byKey(paintKey), findsWidgets, reason: '后端积木页后面有背景');
-      ColoredBox box() => tester.widget<ColoredBox>(find.descendant(of: find.byType(BlockCanvasView), matching: find.byType(ColoredBox)).first);
+      ColoredBox box() => tester.widget<ColoredBox>(find.descendant(of: find.byKey(const ValueKey('bk-canvas-layer')), matching: find.byType(ColoredBox)).first);
       expect(box().color.a, 1, reason: '默认不透出');
       final solid = box().color;
       backdropOf(env).update((s) => s.withArea(BackdropArea.blocks, true), persist: false);
@@ -336,13 +335,13 @@ void main() {
       expect(box().color.a, closeTo(0.88, 0.01));
       expect(box().color.withValues(alpha: 1), solid);
       // 整页的底让开了：不然两层叠起来比设定的更不透
-      final scaffold = tester.widget<Scaffold>(find.ancestor(of: find.byType(BlockCanvasView), matching: find.byType(Scaffold)).first);
+      final scaffold = tester.widget<Scaffold>(find.ancestor(of: find.byKey(const ValueKey('bk-canvas-layer')), matching: find.byType(Scaffold)).first);
       expect(scaffold.backgroundColor!.a, 0);
       await shot(tester, 'blocks-on-light');
       await show(
         tester,
         env,
-        ProjectShell(project: project, session: session, initial: ShellDest.builder),
+        ProjectShell(key: UniqueKey(), project: project, session: session, initial: ShellDest.builder),
         mode: ThemeMode.dark,
       );
       await shot(tester, 'blocks-on-dark');
@@ -354,7 +353,7 @@ void main() {
     testWidgets('低代码画布：四周变透，页面本身不变', (tester) async {
       final (env, project, session) = await open(tester, ProjectTemplate.lowcode);
       await seed(tester, env);
-      await show(tester, env, ProjectShell(project: project, session: session, initial: ShellDest.builder));
+      await show(tester, env, ProjectShell(key: UniqueKey(), project: project, session: session, initial: ShellDest.builder));
       ColoredBox box() => tester.widget<ColoredBox>(find.ancestor(of: find.byKey(const ValueKey('lowcode-canvas')), matching: find.byType(ColoredBox)).first);
       final solid = box().color;
       expect(solid.a, 1);
@@ -365,7 +364,7 @@ void main() {
       await show(
         tester,
         env,
-        ProjectShell(project: project, session: session, initial: ShellDest.builder),
+        ProjectShell(key: UniqueKey(), project: project, session: session, initial: ShellDest.builder),
         mode: ThemeMode.dark,
       );
       await shot(tester, 'lowcode-on-dark');

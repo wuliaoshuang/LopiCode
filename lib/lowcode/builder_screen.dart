@@ -11,6 +11,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:lopicode/agent/agent_tools.dart';
+import 'package:lopicode/backdrop/backdrop_model.dart';
 import 'package:lopicode/core/templates.dart';
 import 'package:lopicode/lowcode/canvas_view.dart';
 import 'package:lopicode/lowcode/code_sheet.dart';
@@ -281,7 +282,11 @@ class _BuilderScreenState extends State<BuilderScreen> {
     await Navigator.push(
       context,
       MaterialPageRoute<void>(
-        builder: (_) => LogicScreen(doc: _doc!, onEdit: _apply, initialNodeId: nodeId, history: _history, onRestore: _restore),
+        // 逻辑页是另开的一页：也接上背景（跟“其它页面”开关走），不然“透出背景 › 积木画布”在这页不起作用
+        builder: (_) => AppBackdrop(
+          area: BackdropArea.pages,
+          builder: (_, _) => LogicScreen(doc: _doc!, onEdit: _apply, initialNodeId: nodeId, history: _history, onRestore: _restore),
+        ),
       ),
     );
     _refresh();

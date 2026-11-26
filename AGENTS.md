@@ -74,8 +74,11 @@ tool/check.sh --fix    # 先自动排版
   - `ui_prefs.dart`：`themeModeProvider`（外观）、`chatPrefsProvider`（开场建议、显示用量）。
   - `themes_state.dart`：`themesProvider`——主题库（内置 + 用户的）和“浅色时用哪套、深色时用哪套”（完整版：不可变快照 + `ThemesNotifier`）；
     `lightThemeProvider` / `darkThemeProvider`（应用外壳订阅这两个）、`activeThemeProvider(系统是不是深色)`。`ThemeSpec` 不可变，改就 `withColors` / `copyWith` 造一份新的交给 `save`。
-  - `theme_hooks.dart`：`themeBackgroundBridgeProvider`——主题导出 / 导入和“背景图”那部分的对接口（现在返回 null＝没接上；接的时候只改那一行）；
+  - `theme_hooks.dart`：`themeBackgroundBridgeProvider`——主题导出 / 导入和“背景图”那部分的对接口（已接到 `backdropProvider` 的 `exportForTheme` / `applyThemeBackground`）；
     `recentColorsProvider`——取色面板“最近用过”的颜色（存在设置键 `ui.themeRecentColors`，最多 12 个）。
+  - `backdrop_state.dart`：`backdropProvider`——背景图片设置（独立于主题的全局外观设置；`BackdropNotifier`）。**新页面要接背景**：
+    `AppBackdrop(area: BackdropArea.pages, builder: (context, on) => Scaffold(backgroundColor: on ? Colors.transparent : 原来的, …))`，
+    页面里的卡片 / 整块底色写 `BackdropScope.surface(context, 颜色)`（没背景时原样返回）；接了要在 `test/backdrop_wiring_test.dart` 加“开 → 有、关 → 没有”。详见 `docs/backdrop-integration.md`。
   - `quota_state.dart`：`quotaProvider`——额度上限和余额。这是**标准样板**：状态是不可变对象，只有 `QuotaNotifier` 能改。
   - `presets_state.dart`：`presetsProvider`——Agent 预设与个人偏好（完整版：不可变快照 + `PresetsNotifier`）。
   - `skills_state.dart`：`skillsProvider(工作区目录)`——技能清单（完整版；异步扫描带代次，没人看就释放）。

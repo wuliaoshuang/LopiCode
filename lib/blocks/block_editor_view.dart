@@ -346,7 +346,13 @@ class BlockEditorViewState extends State<BlockEditorView> with TickerProviderSta
           fit: StackFit.expand,
           clipBehavior: Clip.hardEdge,
           children: [
-            Positioned.fill(key: const ValueKey('bk-canvas-layer'), child: buildCanvas(context)),
+            Positioned.fill(
+              key: const ValueKey('bk-canvas-layer'),
+              child: ColoredBox(
+                color: BackdropScope.surface(context, kit.palette.canvas, seeThrough: BackdropArea.blocks),
+                child: buildCanvas(context),
+              ),
+            ),
             if (all.scripts.isEmpty && !dragging && box.maxHeight - coveredTop - dock >= BkEditorDock.guideRoom)
               Positioned(
                 key: const ValueKey('bk-empty-layer'),

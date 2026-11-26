@@ -1,5 +1,18 @@
 # 背景图片：怎么接（给合并的人）
 
+> **2026-11-26 已合并进主题分支，下面的接入点全部接上了。** 这份文档留作“以后新加页面怎么接背景”的参考；合并时定下来的事：
+>
+> - 外观页入口：`lib/ui/appearance_background_entry.dart`（设置 › 界面 › 外观 › 背景图片）。
+> - 表面不透明度：滑杆说了算；背景设置里这一项可空（`surfaceOverride`），空＝没动过，用当前主题的 `metrics.surfaceOpacity`（第 2 节的建议）。
+> - 遮罩“跟随主题”：用主题的 `ui.backdropScrim`（只取色相）。
+> - 主题导出 / 导入带图：`lib/state/theme_hooks.dart` 的 `themeBackgroundBridgeProvider`；主题格式加了 `fit`、`tile`、`maskColor`、`brightness` 四个可选字段。
+>   文件里 `maskColor` 写 `"#RRGGBB"` 或 `"theme"`（跟随主题），没有 `turns`（旋转在导出时已画进图里）。
+> - 第 4 节的页面和四个“透出”都接了，每个接入点在 `test/backdrop_wiring_test.dart` 里有“开 → 有背景层、关 → 没有”的用例。
+>   另外接了：主题管理页、主题编辑器、导入主题页、背景图片设置页自己（都跟“其它页面”开关）、低代码搭建页和后端积木页（整页）。
+> - 弹出来的面板（底部面板、对话框、低代码“看代码”面板）不在背景范围里，保持实底。
+> - 新页面的接法：`AppBackdrop(area: BackdropArea.pages, builder: (context, on) => Scaffold(backgroundColor: on ? Colors.transparent : 原来的, …))`；
+>   页面里的卡片 / 整块底色写 `BackdropScope.surface(context, 原来的颜色)`；属于四个“透出”区域的底色加 `seeThrough: BackdropArea.xxx`。
+
 2026-11-26。背景图片是独立的全局外观设置（不属于某套主题），代码在 `lib/backdrop/`、`lib/state/backdrop_state.dart`、
 `lib/ui/app_backdrop.dart` 和 `lib/ui/backdrop_*.dart`。聊天页已经接好；下面是其余要接的地方。
 
@@ -102,7 +115,7 @@ BackdropScope.surface(context, c.codeBg, seeThrough: BackdropArea.terminal)
 | 遮罩 | 0–100%，一步 5，默认 60%；颜色默认跟随主题，另有 8 个固定色可选 | `backdrop_model.dart` |
 | 模糊 | 0–30，一步 2，默认 0 | 同上 |
 | 亮度 | −100…+100，一步 5，默认 0 | 同上 |
-| 表面不透明度 | 40–100%，一步 5，默认 90% | 同上 |
+| 表面不透明度 | 40–100%，一步 5；没动过滑杆时跟随当前主题（默认两套主题是 88%，滑杆显示 90%） | 同上 |
 | 平铺一格 | 屏幕宽的 10–100%，一步 5，默认 50% | 同上 |
 | 裁剪最大放大 | 8 倍，滑杆一档 0.25 倍 | `crop_math.dart` |
 | 解码缓存 | 最多 3 张原图、6 张模糊小图；解码时长边不超过屏幕物理像素的长边（不低于 1280） | `backdrop_images.dart` |

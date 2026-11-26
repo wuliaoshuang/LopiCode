@@ -5,7 +5,8 @@
 //
 // 覆盖的页面：聊天页（确认卡、做完的步骤组展开、步骤详情里的命令与报错）、“＋”底部面板、侧边栏、
 // 项目列表、新建项目面板、文件页、代码编辑器（查找栏）、终端（16 色都打出来）、后端积木页、看代码面板、
-// 低代码编辑器（选中、属性面板）、打包页、设置首页、外观子页、主题列表页、对话框、提示条。
+// 低代码编辑器（选中、属性面板）、打包页、设置首页、外观子页、主题列表页、对话框、提示条、
+// 主题管理页、主题编辑器、背景图片设置页（2026-11-26 合并后加）。
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -18,6 +19,7 @@ import 'package:lopicode/project_session.dart';
 import 'package:lopicode/state/themes_state.dart';
 import 'package:lopicode/templates/project_templates.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/backdrop_settings_screen.dart';
 import 'package:lopicode/ui/backend_screen.dart';
 import 'package:lopicode/ui/project_list_screen.dart';
 import 'package:lopicode/ui/project_shell.dart';
@@ -25,6 +27,8 @@ import 'package:lopicode/ui/settings_pages.dart';
 import 'package:lopicode/ui/settings_screen.dart';
 import 'package:lopicode/ui/settings_theme.dart';
 import 'package:lopicode/ui/shell.dart';
+import 'package:lopicode/ui/theme_editor_screen.dart';
+import 'package:lopicode/ui/themes_screen.dart';
 import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:path/path.dart' as p;
@@ -374,6 +378,34 @@ void main() {
           expect(find.byKey(Key('theme-pick-${t.id}')), findsOneWidget, reason: '${t.name} 在列表里');
         }
         await shot(tester, 'theme-pick');
+      });
+
+      testWidgets('主题管理页、主题编辑器（各预览块、一项颜色的取色面板）、背景图片设置页', (tester) async {
+        final env = await makeEnv(tester);
+        addTearDown(() => tester.runAsync(env.dispose));
+        await show(tester, env, const ThemesScreen(), rounds: 4);
+        await tester.scrollUntilVisible(
+          find.byKey(Key('themes-card-${theme.id}')),
+          200,
+          scrollable: find.descendant(of: find.byKey(const Key('themes-list')), matching: find.byType(Scrollable)).first,
+        );
+        expect(find.byKey(Key('themes-inuse-${theme.id}')), findsOneWidget, reason: '${theme.name} 在管理页里，标着“正在使用”');
+        await shot(tester, 'themes');
+
+        // 编辑器：内置主题进来是只读，照样把预览和字段列表都渲染出来
+        await show(tester, env, ThemeEditorScreen(theme: theme), rounds: 4);
+        expect(find.byKey(const Key('theme-editor-list')), findsOneWidget);
+        await shot(tester, 'editor');
+        for (final (label, kind) in [('代码', 'code'), ('积木', 'blocks'), ('搭建', 'lowcode'), ('终端', 'terminal')]) {
+          await tester.tap(find.descendant(of: find.byKey(const Key('theme-preview-kind')), matching: find.text(label)));
+          await tester.pumpAndSettle();
+          expect(find.byKey(Key('theme-preview-$kind')), findsOneWidget);
+          await shot(tester, 'editor-$kind');
+        }
+
+        await show(tester, env, const BackdropSettingsScreen(), rounds: 6);
+        expect(find.byKey(const Key('bg-settings-list')), findsOneWidget);
+        await shot(tester, 'backdrop-settings');
       });
     });
   }
