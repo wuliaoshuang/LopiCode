@@ -96,7 +96,8 @@ void main() {
     ShellDest.terminal: find.byTooltip('新建会话'),
     ShellDest.preview: find.text('手机'),
     ShellDest.builder: find.byTooltip('图层'),
-    ShellDest.apk: find.textContaining('手机上跑不了 Android SDK 和 Gradle'),
+    // 没选过打包方式时默认是“本地打包”（2026-11-26 起），所以认这一页用本地打包的说明
+    ShellDest.apk: find.textContaining('就在这台手机上打包'),
     ShellDest.runtime: find.byKey(const Key('runtime-status')),
   };
 
