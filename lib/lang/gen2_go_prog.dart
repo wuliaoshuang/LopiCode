@@ -6,6 +6,7 @@ import 'package:lopicode/lang/ast_util.dart';
 import 'package:lopicode/lang/gen2.dart';
 import 'package:lopicode/lang/gen2_err.dart';
 import 'package:lopicode/lang/gen2_go.dart';
+import 'package:lopicode/lang/gen2_split.dart';
 import 'package:lopicode/lang/rt2_go_dyn.dart';
 import 'package:lopicode/lang/rt2_go_host.dart';
 import 'package:lopicode/lang/rt2_go_io.dart';
@@ -414,49 +415,85 @@ class GoGen2 extends GoGen2Types {
 
   // —— 整个程序 ——
 
-  @override
-  String program() {
-    final top = <String>[];
-    void add(List<String> lines) {
-      if (lines.isEmpty) return;
-      top
-        ..add('')
-        ..addAll(lines);
+  /// 顶层代码按“归哪一份”攒好（不分文件时只有一份），外加主程序的代码。
+  (Gen2Parts, List<String>) _collect() {
+    final parts = Gen2Parts();
+    String part(String name) => split?.of(name) ?? Gen2Split.kinds;
+    void add(String p, List<String> lines) => parts.add(p, lines.isEmpty ? lines : ['', ...lines]);
+    final vars = <String, List<String>>{};
+    for (final g in globals) {
+      (vars[part(g.name)] ??= []).add('var ${varCode(V2Var(g, 0, global: true))} ${gt(g.type)}');
     }
-
-    add([for (final g in globals) 'var ${varCode(V2Var(g, 0, global: true))} ${gt(g.type)}']);
-    if (r.usesErrors) add(errSupport());
+    vars.forEach(add);
+    if (r.usesErrors) add(Gen2Split.kinds, errSupport());
     for (final d in decls) {
+      final p = part(d.name);
       switch (d) {
         case LRecordDecl():
-          add(_record(d));
+          add(p, _record(d));
         case LEnumDecl():
-          add(_enum(d));
+          add(p, _enum(d));
         case LVariantDecl():
-          add(_variant(d));
+          add(p, _variant(d));
         case LInterfaceDecl():
-          add(_interface(d));
+          add(p, _interface(d));
         case LClassDecl():
-          add(_class(w.classes[d.name]!));
+          add(p, _class(w.classes[d.name]!));
         case LFuncDecl():
-          add(_function(d));
+          add(p, _function(d));
         case LAliasDecl() || LVarDecl() || LNativeDecl():
           break;
       }
     }
     final main = V2Fn(Gen2Base.mainScope, LType.nul, isMain: true, waits: true);
-    final body = funcBody(main, startup);
-    return [
-      '// 由 LopiCode 积木生成（Go，严格规矩、带原生类型）。',
-      'package main',
-      '',
-      'import "lcprog/lc"',
-      ...top,
-      '',
-      'func main() {',
-      ...indent(['lc.Run(func() {', ...indent(body), '})']),
-      '}',
-      '',
-    ].join('\n');
+    return (parts, funcBody(main, startup));
+  }
+
+  String _mainText(List<String> top, List<String> body) => [
+    '// 由 LopiCode 积木生成（Go，严格规矩、带原生类型）。',
+    'package main',
+    '',
+    'import "lcprog/lc"',
+    ...top,
+    '',
+    'func main() {',
+    ...indent(['lc.Run(func() {', ...indent(body), '})']),
+    '}',
+    '',
+  ].join('\n');
+
+  @override
+  String program() {
+    final (parts, body) = _collect();
+    return _mainText(parts.of(Gen2Split.kinds), body);
+  }
+
+  static final RegExp _goText = RegExp(r'"(?:[^"\\]|\\.)*"|`[^`]*`');
+
+  /// 一个模块一个文件，都在 main 这个包里（同一个包的文件互相看得见，名字不用改）：主文件（入口模块＋main）、
+  /// 内置错误种类一份、别的模块各一份。文件名最后带 `_lc`：Go 把 `_test.go`、`_linux.go` 这类结尾当成特殊文件，模块名正好这样结尾就会被跳过。
+  @override
+  Map<String, String> programFiles() {
+    final s = split;
+    if (s == null) return super.programFiles();
+    final (parts, body) = _collect();
+    String file(String what, List<String> top) {
+      // 没用到小库的文件不能写 import（Go 不许引了不用）；看的时候把文字去掉，免得文字里正好有“lc.”。
+      final uses = top.any((l) => l.replaceAll(_goText, '""').contains('lc.'));
+      return [
+        '// 由 LopiCode 积木生成（Go，严格规矩、带原生类型）：$what。',
+        'package main',
+        if (uses) ...['', 'import "lcprog/lc"'],
+        ...top,
+        '',
+      ].join('\n');
+    }
+
+    const kinds = Gen2Split.kinds;
+    return {
+      mainFile: _mainText(parts.of(s.entry), body),
+      if (parts.of(kinds).isNotEmpty) 'lc_kinds.go': file('内置的错误种类', parts.of(kinds)),
+      for (final m in s.order) 'm_${s.ident[m]}_lc.go': file('模块「${m.replaceAll(RegExp(r'[\x00-\x1f\x7f\u0085\u2028\u2029]'), ' ')}」', parts.of(m)),
+    };
   }
 }

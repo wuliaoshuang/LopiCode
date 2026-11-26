@@ -187,6 +187,6 @@ String beStrictReadme(BeDocument doc, BackendTarget target) {
   out.writeln('- 没有对上的地址回 404，地址对了但方式不对回 405；接口里没有碰到“返回”积木时回 204（空响应）。');
   out.writeln('- 返回的 JSON 里，对象的字段按名字排序；整数不带小数点。');
   out.writeln('- 所有响应都带 `Access-Control-Allow-Origin: *`，网页可以直接跨域调用。');
-  out.writeln('- `${target.entryFile}` 是你的积木翻出来的代码（前半截是“接口服务”库，后半截是你的接口），其余代码文件是每份工程都一样的小工具，不用改。');
+  out.writeln('- `${target.entryFile}` 是你的积木翻出来的代码；一个模块一个文件：“接口服务”库和你分出去的模块各有一个名字带模块名的文件，内置的错误种类也单独一个。其余代码文件是每份工程都一样的小工具，不用改。');
   return out.toString();
 }

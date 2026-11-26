@@ -103,17 +103,20 @@ BeDocument strictConformanceDocument() {
 
   // 照版本 1 的宽松比法要明着写：两边先“变成文字”。
   _J text(_J v) => {'e': 'convert', 'x': v, 'fn': 'toText'};
-  doc.addRoute('GET', '/equal-text')!.body.add(
-    _json(
-      200,
-      beObj({
-        'numText': exBin('==', text(exNum(5)), exText('5')),
-        'nullEmpty': exBin('==', text(_nul), exText('')),
-        'boolText': exBin('==', text(exBool(true)), exText('true')),
-        'objText': exBin('==', text(beObj({'a': exNum(1)})), exText('{"a":1}')),
-      }),
-    ),
-  );
+  doc
+      .addRoute('GET', '/equal-text')!
+      .body
+      .add(
+        _json(
+          200,
+          beObj({
+            'numText': exBin('==', text(exNum(5)), exText('5')),
+            'nullEmpty': exBin('==', text(_nul), exText('')),
+            'boolText': exBin('==', text(exBool(true)), exText('true')),
+            'objText': exBin('==', text(beObj({'a': exNum(1)})), exText('{"a":1}')),
+          }),
+        ),
+      );
 
   // /truthy：“不是（不是 x）”在严格规矩里只收“是 / 否”。换成明着的“算不算是”。
   final truthy = doc.routes.firstWhere((r) => r.path == '/truthy');
@@ -149,7 +152,10 @@ BeDocument strictConformanceDocument() {
   // /bump：“加上”用在放着文字的变量上，严格规矩下是出错（不再先当 0）：那一块拿掉，另开 /bump-text 单考。
   final bump = doc.routes.firstWhere((r) => r.path == '/bump');
   final onText = bump.body.removeAt(1);
-  doc.addRoute('GET', '/bump-text')!.body.addAll([onText, _json(200, beObj({'s': exVar('s')}))]);
+  doc.addRoute('GET', '/bump-text')!.body.addAll([
+    onText,
+    _json(200, beObj({'s': exVar('s')})),
+  ]);
 
   // /holes：“空 + 空”（左右都没填的运算）严格规矩下查不过：那一格拿掉。别的没填好的地方照旧当成空。
   final holes = doc.routes.firstWhere((r) => r.path == '/holes');
@@ -172,18 +178,46 @@ const String kStrictFailed = '{"error":"服务器内部出错"}';
 /// 第几条（从 1 数，对着 conformanceCases）的期望和版本 1 不一样。
 const Map<int, StrictDiff> strictDiffs = {
   33: StrictDiff(200, r'{"list":3,"obj":2,"text":3}', '“有几个”给数字、给空在严格规矩下是出错：这两格拿掉了（出错另由 /len-null 考）'),
-  40: StrictDiff(200, r'{"and":true,"diff":4.5,"eq":false,"ge":true,"gt":true,"le":false,"lt":false,"ne":true,"notA":false,"or":true,"prod":17.5,"quot":2.8,"rem":1,"sum":9.5}', '“余”只算整数：7 余 2.5 先各自向下取整成 7 余 2，得 1；版本 1 按小数算得 2'),
+  40: StrictDiff(
+    200,
+    r'{"and":true,"diff":4.5,"eq":false,"ge":true,"gt":true,"le":false,"lt":false,"ne":true,"notA":false,"or":true,"prod":17.5,"quot":2.8,"rem":1,"sum":9.5}',
+    '“余”只算整数：7 余 2.5 先各自向下取整成 7 余 2，得 1；版本 1 按小数算得 2',
+  ),
   41: StrictDiff(500, kStrictFailed, '“abc”不是数字，“变成数字”出错（回 500）；版本 1 悄悄当 0'),
-  42: StrictDiff(200, r'{"and":false,"diff":5,"eq":false,"ge":true,"gt":true,"le":false,"lt":false,"ne":true,"notA":false,"or":true,"prod":0,"quot":null,"rem":null,"sum":5}', 'b 没给，当 0；除数是 0 时样本明着先判断、给空；版本 1 悄悄得 0'),
-  43: StrictDiff(200, r'{"and":false,"diff":0,"eq":true,"ge":true,"gt":false,"le":true,"lt":false,"ne":false,"notA":true,"or":false,"prod":0,"quot":null,"rem":null,"sum":0}', 'a、b 都没给，当 0；除数是 0 时给空；版本 1 悄悄得 0'),
-  44: StrictDiff(200, r'{"and":true,"diff":999.5,"eq":false,"ge":true,"gt":true,"le":false,"lt":false,"ne":true,"notA":false,"or":true,"prod":500,"quot":2000,"rem":null,"sum":1000.5}', '“余”先向下取整，0.5 取整是 0，除数是 0 给空；版本 1 按小数算得 0'),
+  42: StrictDiff(
+    200,
+    r'{"and":false,"diff":5,"eq":false,"ge":true,"gt":true,"le":false,"lt":false,"ne":true,"notA":false,"or":true,"prod":0,"quot":null,"rem":null,"sum":5}',
+    'b 没给，当 0；除数是 0 时样本明着先判断、给空；版本 1 悄悄得 0',
+  ),
+  43: StrictDiff(
+    200,
+    r'{"and":false,"diff":0,"eq":true,"ge":true,"gt":false,"le":true,"lt":false,"ne":false,"notA":true,"or":false,"prod":0,"quot":null,"rem":null,"sum":0}',
+    'a、b 都没给，当 0；除数是 0 时给空；版本 1 悄悄得 0',
+  ),
+  44: StrictDiff(
+    200,
+    r'{"and":true,"diff":999.5,"eq":false,"ge":true,"gt":true,"le":false,"lt":false,"ne":true,"notA":false,"or":true,"prod":500,"quot":2000,"rem":null,"sum":1000.5}',
+    '“余”先向下取整，0.5 取整是 0，除数是 0 给空；版本 1 按小数算得 0',
+  ),
   45: StrictDiff(500, kStrictFailed, '“0x10”、全角的“５”不是数字，“变成数字”出错；版本 1 悄悄当 0'),
   46: StrictDiff(500, kStrictFailed, '“Infinity”“1_000”不是数字，“变成数字”出错；版本 1 悄悄当 0'),
   47: StrictDiff(500, kStrictFailed, '“1e999”超出小数范围，“变成数字”出错；版本 1 悄悄当 0'),
-  49: StrictDiff(200, r'{"and":true,"diff":0,"eq":true,"ge":true,"gt":false,"le":true,"lt":false,"ne":false,"notA":false,"or":true,"prod":25,"quot":1,"rem":0,"sum":10}', '“5”和“5.0”先变成数字再比，相等；版本 1 两边都是文字、按文字比，不相等'),
+  49: StrictDiff(
+    200,
+    r'{"and":true,"diff":0,"eq":true,"ge":true,"gt":false,"le":true,"lt":false,"ne":false,"notA":false,"or":true,"prod":25,"quot":1,"rem":0,"sum":10}',
+    '“5”和“5.0”先变成数字再比，相等；版本 1 两边都是文字、按文字比，不相等',
+  ),
   50: StrictDiff(500, kStrictFailed, 'b 给了但是空文字，“变成数字”出错；版本 1 悄悄当 0'),
-  51: StrictDiff(200, r'{"big":1e21,"bigInt":1.23456789012e17,"e15":1000000000000000,"frac":123456.789,"fracRem":1,"half":0.5,"justUnder":999999999999999,"long":1234567890.12,"neg":-42,"negFrac":-0.5,"negRem":-1,"negTie":-12345678901.3,"negZero":0,"nines":1e15,"pointThree":0.3,"small":2.5e-10,"third":0.333333333333,"tie":12345678901.3,"tinier":1.2e-8,"tiny":0.00000012,"whole":3}', '除以 0、对 0 取余、算出界三格拿掉了（另由 /div-zero、/rem-zero、/overflow 考）；5.5 余 2 先取整得 1；1e15 是整数，按整数写全（版本 1 不分整数小数，写成 1e15）'),
-  52: StrictDiff(200, r'{"boolText":false,"floatSum":false,"listSame":true,"neText":true,"nullEmpty":false,"nullNull":true,"nullZero":false,"numText":false,"numTextDot":false,"objDiff":false,"objOrder":true,"objText":false,"oneTrue":false,"zeroEmpty":false}', '不同类型比“相等”一律不相等、不做宽松换算：数字和文字、空和空文字、是否和文字、字典和文字这四格从 true 变 false（照版本 1 的比法另由 /equal-text 考）'),
+  51: StrictDiff(
+    200,
+    r'{"big":1e21,"bigInt":1.23456789012e17,"e15":1000000000000000,"frac":123456.789,"fracRem":1,"half":0.5,"justUnder":999999999999999,"long":1234567890.12,"neg":-42,"negFrac":-0.5,"negRem":-1,"negTie":-12345678901.3,"negZero":0,"nines":1e15,"pointThree":0.3,"small":2.5e-10,"third":0.333333333333,"tie":12345678901.3,"tinier":1.2e-8,"tiny":0.00000012,"whole":3}',
+    '除以 0、对 0 取余、算出界三格拿掉了（另由 /div-zero、/rem-zero、/overflow 考）；5.5 余 2 先取整得 1；1e15 是整数，按整数写全（版本 1 不分整数小数，写成 1e15）',
+  ),
+  52: StrictDiff(
+    200,
+    r'{"boolText":false,"floatSum":false,"listSame":true,"neText":true,"nullEmpty":false,"nullNull":true,"nullZero":false,"numText":false,"numTextDot":false,"objDiff":false,"objOrder":true,"objText":false,"oneTrue":false,"zeroEmpty":false}',
+    '不同类型比“相等”一律不相等、不做宽松换算：数字和文字、空和空文字、是否和文字、字典和文字这四格从 true 变 false（照版本 1 的比法另由 /equal-text 考）',
+  ),
   62: StrictDiff(200, r'{"n":10}', '“变成整数”不收“2.9”（给空，再“是空就用 0”）所以重复 0 次；版本 1 向下取整成 2 次'),
   76: StrictDiff(200, r'{"class":6,"n":8,"s":"初始\"值\\"}', '往放着文字的变量“加上”在严格规矩下是出错：那一块拿掉了，s 保持原样（出错另由 /bump-text 考）'),
   77: StrictDiff(200, r'{"class":6,"n":8,"s":"初始\"值\\"}', '同第 76 条'),

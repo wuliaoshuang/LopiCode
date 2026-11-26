@@ -4,6 +4,7 @@ library;
 import 'package:lopicode/lang/ast.dart';
 import 'package:lopicode/lang/gen2.dart';
 import 'package:lopicode/lang/gen2_dyn.dart';
+import 'package:lopicode/lang/gen2_split.dart';
 import 'package:lopicode/lang/gen_support.dart';
 import 'package:lopicode/lang/rt2_python_dyn.dart';
 import 'package:lopicode/lang/typecheck.dart';
@@ -125,7 +126,11 @@ class PythonGen2 extends Gen2Dyn {
 
   /// 这个函数里要声明成“外面的”名字：全局的（global）、外层函数的（nonlocal）。
   List<String> _outer(V2Fn f) {
-    final g = [for (final v in globals) varCode(V2Var(v, 0, global: true))];
+    // 分了文件的时候只声明这个文件自己的模块级变量（别的模块的写成 `lcM_模块.g_变量`，不用声明）。
+    final g = [
+      for (final v in globals)
+        if (split == null || split!.of(v.name) == curModule) varCode(V2Var(v, 0, global: true)),
+    ];
     final out = <String>[if (g.isNotEmpty) 'global ${g.join(', ')}'];
     final lam = f.lambda;
     if (lam != null) {
@@ -234,11 +239,12 @@ class PythonGen2 extends Gen2Dyn {
   String funcValue(LTypedSig f) => funcName(f.info.name);
 
   @override
-  String programText(List<String> top, List<String> mainBody) {
+  String programText(List<String> top, List<String> mainBody, {List<String> head = const []}) {
     final out = StringBuffer()
       ..writeln('# 由 LopiCode 积木生成（Python，严格规矩）。')
-      ..writeln('import lc2 as lc')
-      ..writeln();
+      ..writeln('import lc2 as lc');
+    head.forEach(out.writeln);
+    out.writeln();
     top.forEach(out.writeln);
     out
       ..writeln()
@@ -250,4 +256,21 @@ class PythonGen2 extends Gen2Dyn {
       ..writeln('lc.run(lc_main)');
     return out.toString();
   }
+
+  // —— 分文件：每个模块是一个 .py 文件。类型、函数用 from … import 引进来；别的模块的变量写成 `lcM_模块.g_变量`
+  // （模块上的属性，读到、改到的就是那个模块里的变量；from … import 拿到的只是当时的值，不能用）。
+
+  @override
+  String get ext => 'py';
+  @override
+  String globalFrom(String part, String base) => '${modVar(part)}.$base';
+
+  @override
+  List<String> importLines(String part, List<String> names, {required bool vars, required bool inMain}) => [
+    if (part != Gen2Split.kinds) 'import ${partBase(part)} as ${modVar(part)}',
+    if (names.isNotEmpty) 'from ${partBase(part)} import ${names.join(', ')}',
+  ];
+
+  @override
+  String moduleText(String what, List<String> head, List<String> top, List<String> tail) => ['# 由 LopiCode 积木生成（Python，严格规矩）：$what。', 'import lc2 as lc', ...head, '', ...top, ''].join('\n');
 }

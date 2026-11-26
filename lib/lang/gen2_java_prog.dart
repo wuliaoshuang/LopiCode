@@ -6,6 +6,7 @@ import 'package:lopicode/lang/ast_util.dart';
 import 'package:lopicode/lang/gen2.dart';
 import 'package:lopicode/lang/gen2_err.dart';
 import 'package:lopicode/lang/gen2_java.dart';
+import 'package:lopicode/lang/gen2_split.dart';
 import 'package:lopicode/lang/rt2_java_dyn.dart';
 import 'package:lopicode/lang/rt2_java_host.dart';
 import 'package:lopicode/lang/type_world.dart';
@@ -320,55 +321,95 @@ class JavaGen2 extends JavaGen2Types {
 
   // —— 整个程序 ——
 
-  @override
-  String program() {
-    final top = <String>[];
-    void add(List<String> lines) {
-      if (lines.isEmpty) return;
-      top
-        ..addAll(lines)
-        ..add('');
+  /// 顶层代码按“归哪一份”攒好（不分文件时只有一份），外加主程序的代码。
+  (Gen2Parts, List<String>) _collect() {
+    final parts = Gen2Parts();
+    String part(String name) => split?.of(name) ?? Gen2Split.kinds;
+    void add(String p, List<String> lines) => parts.add(p, lines.isEmpty ? lines : [...lines, '']);
+    final vars = <String, List<String>>{};
+    for (final g in globals) {
+      (vars[part(g.name)] ??= []).add('static ${jt(g.type)} ${varBase(V2Var(g, 0, global: true))} = ${zero(g.type)};');
     }
-
-    add([for (final g in globals) 'static ${jt(g.type)} ${varBase(V2Var(g, 0, global: true))} = ${zero(g.type)};']);
-    if (r.usesErrors) add(errSupport());
+    vars.forEach(add);
+    if (r.usesErrors) add(Gen2Split.kinds, errSupport());
     for (final d in decls) {
+      final p = part(d.name);
       switch (d) {
         case LRecordDecl():
-          add(_recordDecl(d));
+          add(p, _recordDecl(d));
         case LEnumDecl():
-          add(_enum(d));
+          add(p, _enum(d));
         case LVariantDecl():
-          add(_variant(d));
+          add(p, _variant(d));
         case LInterfaceDecl():
-          add(_interface(d));
+          add(p, _interface(d));
         case LClassDecl():
-          add(_class(w.classes[d.name]!));
+          add(p, _class(w.classes[d.name]!));
         case LFuncDecl():
-          add(_function(d));
+          add(p, _function(d));
         case LAliasDecl() || LVarDecl() || LNativeDecl():
           break;
       }
     }
     final main = V2Fn(Gen2Base.mainScope, LType.nul, isMain: true, waits: true);
-    final body = funcBody(main, startup);
-    return [
-      '// 由 LopiCode 积木生成（Java，严格规矩、带原生类型）。',
-      'import java.util.ArrayList;',
-      'import java.util.TreeMap;',
+    return (parts, funcBody(main, startup));
+  }
+
+  String _mainText(List<String> top, List<String> body, {String parent = ''}) => [
+    '// 由 LopiCode 积木生成（Java，严格规矩、带原生类型）。',
+    'import java.util.ArrayList;',
+    'import java.util.TreeMap;',
+    '',
+    '@SuppressWarnings({"unchecked", "rawtypes", "cast"})',
+    'public final class Main$parent {',
+    ...indent([
+      'private Main() {}',
       '',
-      '@SuppressWarnings({"unchecked", "rawtypes", "cast"})',
-      'public final class Main {',
-      ...indent([
-        'private Main() {}',
-        '',
-        ...top,
-        'public static void main(String[] args) {',
-        ...indent(['Lc.run(() -> {', ...indent(body), '});']),
-        '}',
-      ]),
+      ...top,
+      'public static void main(String[] args) {',
+      ...indent(['Lc.run(() -> {', ...indent(body), '});']),
       '}',
-      '',
-    ].join('\n');
+    ]),
+    '}',
+    '',
+  ].join('\n');
+
+  @override
+  String program() {
+    final (parts, body) = _collect();
+    return _mainText(parts.of(Gen2Split.kinds), body);
+  }
+
+  /// 一个模块一个类文件，里面的东西都是 static 的：内置错误种类 `LcKinds`、别的模块 `M_模块名`、入口在 `Main`。
+  /// 这些类按启动顺序一个接一个“继承”下来（`M_乙 extends M_甲`…`Main extends 最后一个`）：Java 里子类直接看得见父类的
+  /// static 成员和里面的类，所以别的模块的函数、变量、类型在代码里照旧只写名字，不用带类名。（没有包名的类不能 import static，只能这样。）
+  @override
+  Map<String, String> programFiles() {
+    final s = split;
+    if (s == null) return super.programFiles();
+    final (parts, body) = _collect();
+    const kinds = Gen2Split.kinds;
+    final out = <String, String>{};
+    var parent = '';
+    void file(String cls, String what, List<String> top) {
+      out['$cls.java'] = [
+        '// 由 LopiCode 积木生成（Java，严格规矩、带原生类型）：$what。',
+        'import java.util.ArrayList;',
+        'import java.util.TreeMap;',
+        '',
+        '@SuppressWarnings({"unchecked", "rawtypes", "cast"})',
+        'class $cls$parent {',
+        ...indent(['$cls() {}', '', ...top]),
+        '}',
+        '',
+      ].join('\n');
+      parent = ' extends $cls';
+    }
+
+    if (parts.of(kinds).isNotEmpty) file('LcKinds', '内置的错误种类', parts.of(kinds));
+    for (final m in s.order) {
+      file('M_${ascii(s.ident[m]!)}', '模块「${m.replaceAll(RegExp(r'[\x00-\x1f\x7f\u0085\u2028\u2029]'), ' ')}」', parts.of(m));
+    }
+    return {mainFile: _mainText(parts.of(s.entry), body, parent: parent), ...out};
   }
 }

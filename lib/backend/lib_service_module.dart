@@ -1,6 +1,6 @@
 /// 内置库“接口服务”的模块文件（`modules/service.lc` 的内容；语法树的文字写法）。
-/// 从上一轮的测试样例 test/fixtures/framework/service_v1.lc 搬进来的：函数体一个字没改，只是给积木要用的勾了“公开”、
-/// 末尾加了“新路由表”“开服务”两个函数和两个类型别名。清单和积木表在 lib_service.dart。
+/// 这是唯一的一份：老测试 test/lang_gen2_service_v1_test.dart 也读这里（test/fixtures/framework/service_v1.lc 里只剩它的样本模块）。
+/// 生成出来它自己是一个文件（m_接口服务.*）。清单和积木表在 lib_service.dart。
 library;
 
 const String kBeServiceModuleLc = r'''

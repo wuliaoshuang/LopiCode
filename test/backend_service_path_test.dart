@@ -45,7 +45,25 @@ void main() {
     expect([for (final t in lib.types) t.name], ['请求', '回应类型', '一条记录']);
     expect([for (final s in lib.settings) '${s.id}=${s.legacyKey}'], ['port=port', 'collections=collections']);
     // 旧小库的名字各对着一块积木。
-    for (final fn in ['sendJson', 'sendText', 'pathParam', 'query', 'bodyField', 'body', 'header', 'dbAll', 'dbGet', 'dbFind', 'dbCount', 'dbInsert', 'dbUpdate', 'dbDelete', 'field', 'now', 'fetch']) {
+    for (final fn in [
+      'sendJson',
+      'sendText',
+      'pathParam',
+      'query',
+      'bodyField',
+      'body',
+      'header',
+      'dbAll',
+      'dbGet',
+      'dbFind',
+      'dbCount',
+      'dbInsert',
+      'dbUpdate',
+      'dbDelete',
+      'field',
+      'now',
+      'fetch',
+    ]) {
       expect(lib.legacy(fn), isNotNull, reason: fn);
     }
     // 宿主接口只碰这七个。

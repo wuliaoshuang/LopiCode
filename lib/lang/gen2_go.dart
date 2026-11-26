@@ -217,7 +217,12 @@ abstract class GoGen2Types extends Gen2 {
   @override
   String arith(String op, String a, String b) => switch (op) {
     // 两边都是写死的小数：Go 会在编译时算，算出界（1e308 * 10.5）直接编译不过。交给小库在运行时算（得到无穷大，和别的语言一样）。
-    'fadd' || 'fsub' || 'fmul' when _constFloat.hasMatch(a) && _constFloat.hasMatch(b) => 'lc.F${op == 'fadd' ? 'Add' : op == 'fsub' ? 'Sub' : 'Mul'}($a, $b)',
+    'fadd' || 'fsub' || 'fmul' when _constFloat.hasMatch(a) && _constFloat.hasMatch(b) =>
+      'lc.F${op == 'fadd'
+          ? 'Add'
+          : op == 'fsub'
+          ? 'Sub'
+          : 'Mul'}($a, $b)',
     'fadd' => '($a + $b)',
     'fsub' => '($a - $b)',
     'fmul' => '($a * $b)',

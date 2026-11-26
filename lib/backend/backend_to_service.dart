@@ -37,7 +37,18 @@ typedef BeServiceProgram = ({LProgram? program, List<String> problems, List<Stri
 /// 翻译的全部结果：除了程序，还有类型检查要用的东西——文档自己的声明和入口的语句（节点就是翻译器翻出来的那些对象，
 /// 没有经过合并改名，所以“哪个式子是哪一格翻来的”还对得上）、每一串积木用的翻译器、每个接口的处理函数是哪个匿名函数。
 class BeServiceBuilt {
-  const BeServiceBuilt({this.program, this.problems = const [], this.skipped = const [], this.decls = const [], this.body = const [], this.trees = const {}, this.lowers = const {}, this.names = const {}, this.lambdas = const {}, this.split = false});
+  const BeServiceBuilt({
+    this.program,
+    this.problems = const [],
+    this.skipped = const [],
+    this.decls = const [],
+    this.body = const [],
+    this.trees = const {},
+    this.lowers = const {},
+    this.names = const {},
+    this.lambdas = const {},
+    this.split = false,
+  });
   final LProgram? program;
   final List<String> problems;
   final List<String> skipped;

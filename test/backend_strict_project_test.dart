@@ -136,7 +136,10 @@ void main() {
       final doc = _doc(language, 8131);
       final t = backendTargetOf(doc)!;
       final files = t.generate(doc);
-      expect(files.keys.toSet(), {...kBeStrictFiles[language]!, 'README.md'}, reason: language);
+      // 固定的那几个之外，只多出分出去的模块文件：内置错误种类一份、“接口服务”库一份、“工具”模块一份。
+      final extra = files.keys.toSet().difference({...kBeStrictFiles[language]!, 'README.md'});
+      expect(extra, hasLength(3), reason: '$language：$extra');
+      expect(extra.every(RegExp(r'^(lc_kinds\.|LcKinds\.|m_|M_)').hasMatch), isTrue, reason: '$language：$extra');
       expect(files.keys.first, t.entryFile);
       for (final e in files.entries) {
         if (e.key == 'go.mod') continue;
@@ -155,18 +158,25 @@ void main() {
     final r = await regenerateBackend(ws);
     expect(r.error, isNull);
     expect(r.strictPending, isFalse);
-    expect(r.written.toSet(), {'main.js', 'lc2.js', 'README.md'});
+    expect(r.written.toSet(), {'main.js', 'lc_kinds.js', 'm_接口服务.js', 'm_工具.js', 'lc2.js', 'README.md'});
     expect(f('README.md').readAsStringSync(), contains('## 在 LopiCode 里启动'));
     expect(f('README.md').readAsStringSync(), contains('启动：`node main.js`'));
     final again = await regenerateBackend(ws);
     expect(again.written, isEmpty);
-    expect(again.unchanged.toSet(), {'main.js', 'lc2.js', 'README.md'});
+    expect(again.unchanged.toSet(), {'main.js', 'lc_kinds.js', 'm_接口服务.js', 'm_工具.js', 'lc2.js', 'README.md'});
     final host = BeBlockHost(doc: doc);
     expect(host.codeText, f('main.js').readAsStringSync());
     expect(host.codeFileName, 'main.js');
     host.stopIssueTimer();
     final info = (await findBackendProjects(ws)).single;
     expect(info.terminalCommand, 'node main.js');
+    // 模块改了名字：老名字的那个文件跟着删掉（它登记过），不留在工程里。
+    f(kBackendFileName).writeAsStringSync('${doc.encode().replaceAll('工具', '帮手')}\n');
+    final third = await regenerateBackend(ws);
+    expect(third.error, isNull);
+    expect(third.written, contains('m_帮手.js'));
+    expect(f('m_工具.js').existsSync(), isFalse);
+    expect(f('m_帮手.js').readAsStringSync(), contains('模块「帮手」'));
   });
 
   test('同一种语言换规矩：宽松 → 严格清掉 server.js 和老小库；严格 → 宽松清掉 main.js、lc2.js', () async {

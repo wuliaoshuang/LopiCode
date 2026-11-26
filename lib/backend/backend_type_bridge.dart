@@ -255,9 +255,7 @@ BeTypeCheck? beTypeCheckShared(BeDocument doc) {
 /// 检查结果里的问题 → 对回到积木上。[links]＝模块之间的问题（不在哪块积木上，记在整份文档名下）。
 List<BeTypeFinding> _findings(BeDocument doc, LTypeResult result, List<LTypeIssue> links, Map<String, LcBlockTree> trees, Map<String, BeLangLower> lowers, Map<String, String> scopes) {
   final core = doc.core;
-  final findings = <BeTypeFinding>[
-    for (final i in links) BeTypeFinding(i, const BeSlotRef('', [], null, []), const [], extra: beCoreExtraFixes(doc, i, treeId: '')),
-  ];
+  final findings = <BeTypeFinding>[for (final i in links) BeTypeFinding(i, const BeSlotRef('', [], null, []), const [], extra: beCoreExtraFixes(doc, i, treeId: ''))];
   for (final i in result.issues) {
     // 变量、函数的名字找不到：老规则（G03 / L01）已经报了，说法也更贴着积木，不重复。字段、方法、情况找不到的照报。
     final node = i.node;
@@ -328,5 +326,11 @@ BeTypeCheck? _viaLibrary(BeDocument doc) {
     for (final i in linkProgram(program).issues)
       if (built.split || i.code == 'M08') i,
   ];
-  return BeTypeCheck(result, _findings(doc, result, links, built.trees, built.lowers, scopes), scopes, module: LModule(decls: own, body: built.body), program: program);
+  return BeTypeCheck(
+    result,
+    _findings(doc, result, links, built.trees, built.lowers, scopes),
+    scopes,
+    module: LModule(decls: own, body: built.body),
+    program: program,
+  );
 }

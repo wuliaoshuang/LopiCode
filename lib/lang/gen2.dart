@@ -11,6 +11,7 @@ library;
 
 import 'package:lopicode/lang/ast.dart';
 import 'package:lopicode/lang/ast_util.dart';
+import 'package:lopicode/lang/gen2_split.dart';
 import 'package:lopicode/lang/gen_support.dart';
 import 'package:lopicode/lang/type_world.dart';
 import 'package:lopicode/lang/typecheck.dart';
@@ -590,4 +591,8 @@ abstract class Gen2Base {
 
   /// **入口**：整个模块 → 一份能直接运行的程序（文件名 → 内容；小库的文件另外由 [runtimeFiles] 给）。
   String program();
+
+  /// 分文件的安排（gen2_split.dart）；null＝一个文件。[curModule]＝正在写的顶层声明归哪一份。
+  Gen2Split? split;
+  String curModule = Gen2Split.kinds;
 }

@@ -476,4 +476,7 @@ abstract class Gen2 extends Gen2Base with Gen2Expr, Gen2Err {
 
   /// 主文件叫什么。
   String get mainFile;
+
+  /// 整个程序的文件（不含小库），主文件排第一个。不分文件时只有主文件。
+  Map<String, String> programFiles() => {mainFile: program()};
 }

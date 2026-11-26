@@ -188,13 +188,14 @@ class PhpGen2 extends Gen2Dyn {
   }
 
   @override
-  String programText(List<String> top, List<String> mainBody) {
+  String programText(List<String> top, List<String> mainBody, {List<String> head = const []}) {
     final out = StringBuffer()
       ..writeln('<?php')
       ..writeln('// 由 LopiCode 积木生成（PHP，严格规矩）。')
       ..writeln('declare(strict_types=1);')
-      ..writeln("require __DIR__ . '/lc2.php';")
-      ..writeln();
+      ..writeln("require __DIR__ . '/lc2.php';");
+    head.forEach(out.writeln);
+    out.writeln();
     top.forEach(out.writeln);
     out
       ..writeln()
@@ -203,4 +204,17 @@ class PhpGen2 extends Gen2Dyn {
     out.writeln('});');
     return out.toString();
   }
+
+  // —— 分文件：每个模块是一个 .php 文件，主文件按启动顺序一个个 require_once 进来。
+  // PHP 的函数、类、最外层的变量哪个文件都看得见，所以模块文件自己不用再引别的文件，名字也不用改。
+
+  @override
+  String get ext => 'php';
+
+  @override
+  List<String> importLines(String part, List<String> names, {required bool vars, required bool inMain}) => [if (inMain) "require_once __DIR__ . '/${partBase(part)}.php';"];
+
+  @override
+  String moduleText(String what, List<String> head, List<String> top, List<String> tail) =>
+      ['<?php', '// 由 LopiCode 积木生成（PHP，严格规矩）：$what。由主文件引进来，不单独运行。', 'declare(strict_types=1);', '', ...top, ''].join('\n');
 }
