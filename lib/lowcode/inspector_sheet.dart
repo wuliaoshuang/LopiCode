@@ -16,10 +16,13 @@ import 'dart:convert';
 import 'package:lopicode/lowcode/component_ops.dart';
 import 'package:lopicode/lowcode/css_codec.dart';
 import 'package:lopicode/lowcode/edit_types.dart';
+import 'package:lopicode/lowcode/grid_css.dart';
 import 'package:lopicode/lowcode/inspector_common_widgets.dart';
 import 'package:lopicode/lowcode/inspector_events_widgets.dart';
+import 'package:lopicode/lowcode/inspector_state_widgets.dart';
 import 'package:lopicode/lowcode/inspector_style_widgets.dart';
 import 'package:lopicode/lowcode/model.dart';
+import 'package:lopicode/lowcode/states.dart';
 import 'package:lopicode/lowcode/style_controls_widgets.dart';
 import 'package:lopicode/lowcode/style_css_sheet.dart';
 import 'package:lopicode/lowcode/style_groups_widgets.dart';
@@ -58,6 +61,7 @@ class InspectorPanel extends StatefulWidget {
     this.pickImage,
     this.onOpenLogic,
     this.onAddLogic,
+    this.onState,
   });
   final LcDocument doc;
   final String nodeId;
@@ -77,6 +81,9 @@ class InspectorPanel extends StatefulWidget {
   /// 给这个组件的某个事件加逻辑（建好帽子再跳过去）。
   final void Function(String nodeId, String event)? onAddLogic;
 
+  /// “样式”页顶上选了哪个状态（null＝平时）：搭建台拿它让画布照这个状态画选中的组件。
+  final ValueChanged<String?>? onState;
+
   @override
   State<InspectorPanel> createState() => InspectorPanelState();
 }
@@ -89,6 +96,12 @@ class InspectorPanelState extends State<InspectorPanel> {
   /// 面板显示用的：组件自己的属性和 style，加上还没提交的改动。
   Map<String, dynamic> _props = {};
   Map<String, String> _style = {};
+
+  /// 节点上别的字段（状态样式在这里面）的显示用副本。
+  Map<String, dynamic> _more = {};
+
+  /// “样式”页现在改的是哪个状态的样子；null＝平时。
+  String? _state;
 
   /// 还没提交的改动。提交时在搭建页给的节点上按顺序重放一遍，而不是拿显示用的那份整个盖过去——
   /// 这样即使节点在别处变过，也只动用户碰过的那几项。
@@ -139,6 +152,7 @@ class InspectorPanelState extends State<InspectorPanel> {
         WidgetsBinding.instance.addPostFrameCallback((_) => _commit(id, ops));
       }
       _dropped = const [];
+      _pickState(null, later: true);
     }
     _doc = widget.doc;
     if (_pending.isEmpty) _reload();
@@ -180,9 +194,30 @@ class InspectorPanelState extends State<InspectorPanel> {
     final n = _node;
     _props = n == null ? {} : (jsonDecode(jsonEncode(n.props)) as Map).cast<String, dynamic>();
     _style = n == null ? {} : Map.of(n.style);
+    _more = n == null ? {} : (jsonDecode(jsonEncode(n.more)) as Map).cast<String, dynamic>();
   }
 
-  LcNode _preview(LcNode node) => LcNode(id: node.id, type: node.type, props: _props, style: _style);
+  LcNode _preview(LcNode node) => LcNode(id: node.id, type: node.type, props: _props, style: _style, more: _more);
+
+  /// 换一个状态来改（null＝平时）。[later]＝现在正在搭界面，等这一帧画完再告诉搭建台。
+  void _pickState(String? state, {bool later = false}) {
+    if (_state == state) return;
+    _state = state;
+    final tell = widget.onState;
+    if (tell == null) return;
+    if (later) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => tell(state));
+    } else {
+      tell(state);
+    }
+  }
+
+  /// 改某个状态下的样式：改完的那份整个写回 `states[状态]`（只有和平时不一样的那几条）。
+  void _applyState(String state, void Function(LcStyle s) change, {bool merge = false}) => _apply((n, _) {
+    final decl = Map<String, String>.of(lcStateStyle(n, state));
+    change(LcStyle(decl));
+    lcReplaceState(n, state, decl);
+  }, merge: merge);
 
   void _apply(void Function(LcNode n, LcNode? parent) change, {bool merge = false}) {
     final node = _node;
@@ -326,6 +361,10 @@ class InspectorPanelState extends State<InspectorPanel> {
     final preview = _preview(node);
     final parent = _doc.parentOf(node.id);
     _scroll = scroll;
+    final state = _state;
+    final parentStyle = parent == null ? null : resolvedStyle(parent, _doc.parentOf(parent.id));
+    final parentColumns = parentStyle != null && lcIsGrid(parentStyle) ? lcGridColumns(parentStyle) : null;
+    final stateOwn = state == null ? const <String, String>{} : lcStateStyle(preview, state);
     final Widget content = switch (_page) {
       InspectorPage.common => InspectorCommonPage(
         key: ValueKey('common-${node.id}'),
@@ -333,15 +372,38 @@ class InspectorPanelState extends State<InspectorPanel> {
       ),
       InspectorPage.style => InspectorStylePage(
         key: ValueKey('style-${node.id}'),
-        ed: StyleEdit(node: node, own: _style, resolved: resolvedStyle(preview, parent), apply: _applyStyle),
+        ed: state == null
+            ? StyleEdit(node: node, own: _style, resolved: resolvedStyle(preview, parent), apply: _applyStyle, parentColumns: parentColumns)
+            : StyleEdit(
+                node: node,
+                own: stateOwn,
+                resolved: {...resolvedStyle(preview, parent), ...stateOwn},
+                apply: (change, {merge = false}) => _applyState(state, change, merge: merge),
+                parentColumns: parentColumns,
+              ),
         tab: _tab,
         dropped: _dropped,
         onDismissDropped: () => setState(() => _dropped = const []),
+        top: LcStateBar(
+          state: state,
+          filled: {
+            for (final s in kLcStateNames)
+              if (lcStateStyle(preview, s).isNotEmpty) s,
+          },
+          onPick: (s) => setState(() => _pickState(s)),
+          onClear: () => _apply((n, _) => lcReplaceState(n, state!, const {})),
+          caveat: lcStateCaveat(preview.type, state),
+        ),
       ),
       InspectorPage.events => InspectorEventsPage(
         key: ValueKey('events-${node.id}'),
         doc: _doc,
         node: node,
+        onEdit: (change) {
+          flush();
+          widget.onEdit((d) => change(_doc = d));
+          if (mounted) setState(_reload);
+        },
         onOpen: () {
           flush();
           widget.onOpenLogic?.call(node.id);

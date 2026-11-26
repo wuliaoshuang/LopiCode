@@ -1,7 +1,7 @@
 /// 组件盒里“有哪些组件、怎么分类、怎么搜、哪些算常用”的纯逻辑（不带界面）。
 ///
 /// - 一个条目＝一个内置组件类型，或者一个自定义组件。条目的 key：内置的就是类型名（`text`），自定义的是 `component:<id>`。
-/// - 分类是固定的几组；没有条目的分类不显示。“常用”排第一，“我的”（自定义组件）排最后。
+/// - 分类是固定的几组（第 3 期有了导航、弹层类组件以后多了“导航”“反馈”两组）；没有条目的分类不显示。“常用”排第一，“我的”（自定义组件）排最后。
 /// - 搜索按名字和别名（中文别名、英文、拼音），不分大小写，包含就算。
 /// - “常用”＝最近用过的 [kPaletteRecentMax] 个（最新的在前）；不够就用内置的起步组件补齐。
 library;
@@ -22,6 +22,7 @@ enum PaletteGroup {
   basic('基础'),
   form('表单'),
   show('展示'),
+  nav('导航'),
   mine('我的');
 
   const PaletteGroup(this.label);
@@ -40,6 +41,18 @@ const Map<String, PaletteGroup> _groupOf = {
   'input': PaletteGroup.form,
   'list': PaletteGroup.show,
   'divider': PaletteGroup.show,
+  'icon': PaletteGroup.basic,
+  'textarea': PaletteGroup.form,
+  'switch': PaletteGroup.form,
+  'checkbox': PaletteGroup.form,
+  'radio': PaletteGroup.form,
+  'select': PaletteGroup.form,
+  'listItem': PaletteGroup.show,
+  'appBar': PaletteGroup.nav,
+  'bottomNav': PaletteGroup.nav,
+  'tabs': PaletteGroup.nav,
+  // 弹窗只有一个，不单开一类（分类条在 390 宽上最多放得下 7 个，再多“我的”就被挤出屏幕了）；它是装东西的一层，归布局。
+  'dialog': PaletteGroup.layout,
 };
 
 /// 搜索用的别名（名字本身不用写）。
@@ -55,6 +68,17 @@ const Map<String, List<String>> _aliases = {
   'input': ['文本框', '输入', '表单', 'input', 'textfield', 'shurukuang'],
   'list': ['清单', '条目', 'list', 'liebiao'],
   'divider': ['分隔线', '横线', '线', 'divider', 'line', 'hr', 'fengexian'],
+  'icon': ['图标', '小图', '符号', 'icon', 'tubiao'],
+  'textarea': ['多行', '文本域', '留言', '备注', 'textarea', 'duohang'],
+  'switch': ['开关', '切换', 'switch', 'toggle', 'kaiguan'],
+  'checkbox': ['勾选', '复选', '多选', '打勾', 'checkbox', 'gouxuan'],
+  'radio': ['单选', '选项', 'radio', 'danxuan'],
+  'select': ['下拉', '选择', '菜单', 'select', 'dropdown', 'xiala'],
+  'listItem': ['列表行', '一行', '单元格', '设置项', 'cell', 'listitem', 'liebiaohang'],
+  'appBar': ['导航栏', '标题栏', '顶栏', '顶部', 'appbar', 'navbar', 'daohanglan'],
+  'bottomNav': ['底栏', '底部导航', '标签栏', 'tabbar', 'bottomnav', 'dibu'],
+  'tabs': ['标签页', '页签', '选项卡', 'tabs', 'tab', 'biaoqianye'],
+  'dialog': ['弹窗', '对话框', '提示框', '弹层', 'dialog', 'modal', 'tanchuang'],
 };
 
 /// 组件盒里的一个条目。

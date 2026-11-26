@@ -5,7 +5,7 @@
 //
 // 覆盖的页面：聊天页（确认卡、做完的步骤组展开、步骤详情里的命令与报错）、“＋”底部面板、侧边栏、
 // 项目列表、新建项目面板、文件页、代码编辑器（查找栏）、终端（16 色都打出来）、后端积木页、看代码面板、
-// 低代码编辑器（底部工具条、选中、合一面板、组件盒、图层、长按菜单；第 5 版第 1、2 期）、严格规矩文档的类型标红、设置首页、外观子页、主题列表页、对话框、提示条、
+// 低代码编辑器（底部工具条、选中、合一面板、组件盒、图层、长按菜单；第 5 版第 1、2 期；第 3 期第 1 段的图层搜索 / 改名 / 眼睛 / 锁、常用页新行、选图标、快捷动作、多选）、严格规矩文档的类型标红、设置首页、外观子页、主题列表页、对话框、提示条、
 // 主题管理页、主题编辑器、背景图片设置页（2026-11-26 合并后加）。
 // 打包页单独在 test/theme_pack_smoke_test.dart（本地打包合进来后状态多了，这个文件放不下）。
 import 'dart:convert';
@@ -47,6 +47,8 @@ import 'support/backend_func_blocks.dart' as fb;
 import 'support/backend_lang_blocks.dart' as bk;
 import 'support/harness.dart';
 import 'support/runtime_fakes.dart';
+import 'support/slot_sample.dart';
+import 'support/v3_components_sample.dart';
 
 final bool writeShots = Platform.environment['LOPI_SHOTS'] == '1';
 final String shotDir = Platform.environment['LOPI_SHOT_DIR'] ?? '.tmp/theme-shots';
@@ -479,6 +481,202 @@ void main() {
         expect(find.text('复制'), findsWidgets);
         await shot(tester, 'lowcode-node-menu');
         await back();
+      });
+
+      testWidgets('低代码编辑器 · 格式第 3 版的新界面：图层的搜索 / 改名 / 眼睛 / 锁、常用页新行、选图标、快捷动作、多选', (tester) async {
+        final (env, project, session) = await open(tester, ProjectTemplate.lowcode);
+        await show(tester, env, ProjectShell(project: project, session: session, initial: ShellDest.builder));
+        Finder key(String k) => find.byKey(ValueKey(k));
+        Future<void> tap(Finder f) async {
+          await tester.ensureVisible(f);
+          await tester.pump();
+          await tester.tap(f, warnIfMissed: false);
+          await tester.pumpAndSettle();
+        }
+
+        Future<void> back() async {
+          await tester.binding.handlePopRoute();
+          await tester.pumpAndSettle();
+          await settle(tester, rounds: 2);
+        }
+
+        // 图层：选中一行（眼睛、锁出来）、锁上、搜索、改名。
+        await tester.tap(find.byTooltip('图层').last);
+        await tester.pumpAndSettle();
+        await tap(key('lc-layer-n5'));
+        await tap(key('lc-layer-lock-n5'));
+        await tap(key('lc-layer-eye-n5'));
+        await shot(tester, 'lowcode-layers-flags');
+        await tap(key('lc-layer-eye-n5'));
+        await tap(key('lc-layer-lock-n5'));
+        await tap(key('lc-layer-name-n5'));
+        expect(key('lc-layer-rename'), findsOneWidget);
+        await shot(tester, 'lowcode-layers-rename');
+        await tester.testTextInput.receiveAction(TextInputAction.done);
+        await tester.pumpAndSettle();
+        await tester.enterText(key('lc-layer-search'), '按钮');
+        await tester.pumpAndSettle();
+        await shot(tester, 'lowcode-layers-search');
+        await back();
+
+        // 常用页的新行、选图标面板、事件页的快捷动作。
+        await tester.tap(key('lowcode-node-n5'), warnIfMissed: false);
+        await settle(tester, rounds: 2);
+        await tester.tap(find.text('常用').last);
+        await tester.pumpAndSettle();
+        await tap(key('lc-common-disabled'));
+        await tap(key('lc-common-icon'));
+        expect(key('lc-icon-pick-send'), findsOneWidget);
+        await shot(tester, 'lowcode-icon-picker');
+        await tap(key('lc-icon-pick-send'));
+        await shot(tester, 'lowcode-props-v3');
+        await tester.tap(key('lc-page-events'));
+        await tester.pumpAndSettle();
+        expect(key('lc-quick-navigate'), findsOneWidget);
+        await shot(tester, 'lowcode-quick-actions');
+        await back();
+
+        // 多选：长按菜单进入，再点一个；“样式”面板。
+        final g = await tester.startGesture(tester.getCenter(key('lowcode-node-n4')));
+        await tester.pump(const Duration(milliseconds: 340));
+        await tester.pump();
+        await g.up();
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('多选').last);
+        await tester.pumpAndSettle();
+        await tester.tap(key('lowcode-node-n5'), warnIfMissed: false);
+        await settle(tester, rounds: 2);
+        expect(key('lc-multi-mark-n4'), findsOneWidget);
+        expect(key('lc-multi-mark-n5'), findsOneWidget);
+        await shot(tester, 'lowcode-multi');
+        await tap(key('lc-multi-style'));
+        expect(key('lc-multi-style-rows'), findsOneWidget);
+        await shot(tester, 'lowcode-multi-style');
+        await back();
+        await tap(key('lc-multi-done'));
+      });
+
+      testWidgets('低代码编辑器 · 11 个新组件的新界面：全组件页、选项编辑块、状态行、网格设置、弹窗动作、只看这个弹层', (tester) async {
+        final (env, project, session) = await open(
+          tester,
+          ProjectTemplate.lowcode,
+          before: (project) => File(p.join(project.dir, kLowcodePageFile)).writeAsStringSync(const JsonEncoder.withIndent('  ').convert(v3AllPage().toJson())),
+        );
+        await show(tester, env, ProjectShell(project: project, session: session, initial: ShellDest.builder));
+        Finder key(String k) => find.byKey(ValueKey(k));
+        Future<void> tap(Finder f) async {
+          await tester.ensureVisible(f);
+          await tester.pump();
+          await tester.tap(f, warnIfMissed: false);
+          await tester.pumpAndSettle();
+        }
+
+        Future<void> pick(String id) async {
+          await tester.tap(key('lowcode-node-$id'), warnIfMissed: false);
+          await settle(tester, rounds: 2);
+        }
+
+        await shot(tester, 'lowcode-v3-components');
+        // 选项编辑块（单选组）。
+        await pick('rd');
+        await tester.tap(find.text('常用').last);
+        await tester.pumpAndSettle();
+        expect(key('lc-items-options'), findsOneWidget);
+        await shot(tester, 'lowcode-v3-options');
+        // 状态行、网格设置（样式页 › 布局）。
+        await tester.tap(find.text('样式').last);
+        await tester.pumpAndSettle();
+        await tap(key('lc-state-pressed'));
+        expect(key('lc-state-note'), findsOneWidget);
+        await shot(tester, 'lowcode-v3-state');
+        await tap(key('lc-state-normal'));
+        // 事件页：打开 / 关闭弹窗。
+        await pick('open');
+        await tester.tap(find.text('事件').last);
+        await tester.pumpAndSettle();
+        await tap(key('lc-quick-closeDialog'));
+        expect(key('lc-quick-dialog-0'), findsOneWidget);
+        await shot(tester, 'lowcode-v3-quick-dialog');
+        await tester.binding.handlePopRoute();
+        await tester.pumpAndSettle();
+        // 只看这个弹层。
+        await tester.binding.handlePopRoute();
+        await tester.pumpAndSettle();
+        await settle(tester, rounds: 2);
+        // 弹窗的小标签在长页面最下面，从图层里点它。
+        await tester.tap(find.byTooltip('图层'));
+        await tester.pumpAndSettle();
+        await tap(key('lc-layer-dlg'));
+        await tester.tapAt(const Offset(195, 60));
+        await settle(tester, rounds: 3);
+        expect(key('lc-overlay-bar'), findsOneWidget);
+        await shot(tester, 'lowcode-v3-overlay');
+        await tap(key('lc-overlay-exit'));
+        expect(key('lc-overlay-bar'), findsNothing);
+      });
+
+      testWidgets('低代码编辑器 · 自定义组件的插槽：页面上填了的 / 默认内容 / 空位 / 误放的占位、图层、组件编辑页的插槽框、起名对话框、取消确认、禁用说明', (tester) async {
+        // 样例页再加两样：一个“底部按钮”没有默认内容的空位看不出来，所以把默认内容去掉；页面最后误放一个占位。
+        final json = slotCardJson();
+        final defRoot = ((json['components']! as List).single as Map)['root'] as Map;
+        ((defRoot['children'] as List)[2]['children'] as List)[0].remove('children');
+        ((json['root']! as Map)['children'] as List).add({
+          'id': 'stray',
+          'type': 'slot',
+          'children': [
+            {
+              'id': 'in',
+              'type': 'text',
+              'props': {'text': '占位里的字'},
+            },
+          ],
+        });
+        final (env, project, session) = await open(tester, ProjectTemplate.lowcode, before: (project) => File(p.join(project.dir, kLowcodePageFile)).writeAsStringSync(jsonEncode(json)));
+        await show(tester, env, ProjectShell(project: project, session: session, initial: ShellDest.builder));
+        Finder key(String k) => find.byKey(ValueKey(k));
+        Future<void> tap(Finder f) async {
+          await tester.tap(f.first, warnIfMissed: false);
+          await tester.pumpAndSettle();
+          await settle(tester, rounds: 2);
+        }
+
+        expect(key('lc-slot-hint-b-footer'), findsOneWidget);
+        expect(find.text('插槽（只在组件里有用）'), findsOneWidget);
+        await shot(tester, 'lowcode-slots-page');
+        // 图层：写着在哪个插槽里。
+        await tap(find.byTooltip('图层'));
+        expect(find.textContaining('在「底部按钮」里'), findsWidgets);
+        await shot(tester, 'lowcode-slots-layers');
+        await tester.tapAt(const Offset(195, 60));
+        await settle(tester, rounds: 3);
+        // “禁用”设在文本上：一句灰字。
+        await tap(key('lowcode-node-head'));
+        await tap(find.text('样式'));
+        await tap(key('lc-state-disabled'));
+        expect(key('lc-state-caveat'), findsOneWidget);
+        await shot(tester, 'lowcode-state-caveat');
+        await tester.binding.handlePopRoute();
+        await tester.pumpAndSettle();
+        await settle(tester, rounds: 2);
+        // 组件编辑页：插槽框、选中插槽、起名对话框、取消确认。
+        await tap(key('lowcode-node-b'));
+        await tap(find.byTooltip('更多操作'));
+        await tap(find.text('编辑组件'));
+        expect(find.text('插槽 · 内容'), findsOneWidget);
+        await shot(tester, 'lowcode-slots-editor');
+        await tap(key('lowcode-node-k5'));
+        await tap(find.byTooltip('选上一层'));
+        await shot(tester, 'lowcode-slots-selected');
+        await tap(find.widgetWithText(FilledButton, '改名'));
+        expect(key('slot-name-field'), findsOneWidget);
+        await tester.enterText(key('slot-name-field'), '');
+        await tap(key('slot-name-ok'));
+        await shot(tester, 'lowcode-slots-name-dialog');
+        await tap(find.text('取消'));
+        await tap(find.widgetWithText(OutlinedButton, '取消插槽'));
+        expect(find.textContaining('不会删掉'), findsOneWidget);
+        await shot(tester, 'lowcode-slots-unwrap-confirm');
+        await tap(find.text('取消'));
       });
 
       // 打包页（本地表单、进行中、成功、失败、不适用、钥匙页、两种远程方式）在 test/theme_pack_smoke_test.dart。

@@ -1,0 +1,32 @@
+/* 由 LopiCode 低代码搭建器生成，重新导出会覆盖本文件 */
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "PingFang SC", "Noto Sans SC", sans-serif;
+  color: #222435;
+}
+.lc-page, .lc-container, .lc-column, .lc-card { display: flex; flex-direction: column; }
+.lc-row { display: flex; flex-direction: row; }
+.lc-page { min-height: 100vh; }
+.lc-card { box-shadow: 0 1px 3px rgba(0, 0, 0, .2); }
+.lc-text { margin: 0; line-height: 1.5; }
+.lc-button { border: 0; cursor: pointer; font: inherit; }
+.lc-input { border: 1px solid #b1c0c8; font: inherit; padding: 10px 12px; min-width: 0; }
+.lc-image { display: block; max-width: 100%; object-fit: cover; background: #d3dee4; }
+.lc-list { margin: 0; padding-left: 20px; line-height: 1.75; }
+.lc-divider { border: 0; border-top: 1px solid #d3dee4; margin: 0; align-self: stretch; }
+.n-root { padding: 16px; background: #f6fbfd; gap: 12px; }
+.n-t1 { align-self: stretch; font-size: 24px; font-weight: 600; text-align: center; }
+.n-card { align-self: stretch; padding: 16px; background: #ffffff; border-radius: 12px; gap: 8px; }
+.n-in { align-self: stretch; }
+.n-row { align-self: stretch; gap: 8px; justify-content: space-between; }
+.n-b1 { flex: 1; min-width: 0; background: #058654; color: #ffffff; }
+.n-b2 { width: 96px; }
+.n-sp { flex: 0 0 8px; width: 8px; }
+.n-img { align-self: stretch; height: 120px; border-radius: 8px; }
+.n-img2 { width: 80px; height: 80px; }
+.n-ls { padding: 8px; background: #ffffff; }
+.n-col { gap: 4px; align-items: stretch; }
+.n-c1 { height: 40px; margin: 4px; background: #d3dee4; }
+.n-dv2 { margin: 8px; }
+.n-sp2 { flex: 0 0 24px; height: 24px; }

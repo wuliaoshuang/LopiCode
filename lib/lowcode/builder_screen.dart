@@ -22,6 +22,7 @@ import 'package:lopicode/lowcode/canvas_view.dart';
 import 'package:lopicode/lowcode/canvas_view_sheet.dart';
 import 'package:lopicode/lowcode/code_sheet.dart';
 import 'package:lopicode/lowcode/component_sheet.dart';
+import 'package:lopicode/lowcode/edit_types.dart';
 import 'package:lopicode/lowcode/editor_recents.dart';
 import 'package:lopicode/lowcode/editor_workbench_widgets.dart';
 import 'package:lopicode/lowcode/export_dart.dart';
@@ -32,10 +33,12 @@ import 'package:lopicode/lowcode/layers_sheet.dart';
 import 'package:lopicode/lowcode/logic_edit.dart';
 import 'package:lopicode/lowcode/logic_screen.dart';
 import 'package:lopicode/lowcode/model.dart';
+import 'package:lopicode/lowcode/multi_select_widgets.dart';
 import 'package:lopicode/lowcode/node_actions.dart';
 import 'package:lopicode/lowcode/palette_catalog.dart';
 import 'package:lopicode/lowcode/palette_widgets.dart';
 import 'package:lopicode/lowcode/save_queue.dart';
+import 'package:lopicode/lowcode/slots.dart';
 import 'package:lopicode/lowcode/style_model.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/theme/tokens.dart';
@@ -60,7 +63,14 @@ class BuilderScreen extends StatefulWidget {
   State<BuilderScreen> createState() => _BuilderScreenState();
 }
 
-class _BuilderScreenState extends State<BuilderScreen> with WidgetsBindingObserver {
+class _BuilderScreenState extends State<BuilderScreen> with WidgetsBindingObserver, LcMultiSelectHost<BuilderScreen> {
+  @override
+  LcDocument get multiDoc => _doc!;
+  @override
+  LcEdit get multiEdit => _apply;
+  @override
+  void multiSelectSingle(String? id) => setState(() => _selected = id);
+
   LcDocument? _doc;
   LcHistory? _history;
   String? _loadError;
@@ -162,7 +172,10 @@ class _BuilderScreenState extends State<BuilderScreen> with WidgetsBindingObserv
   /// 所有修改都走这里：改模型 → 记历史 → 存盘并重新导出网页。
   void _apply(void Function(LcDocument doc) change) {
     final doc = _doc!;
-    setState(() => change(doc));
+    setState(() {
+      change(doc);
+      lcLinkInstances(doc); // 实例的插槽跟着定义走：定义可能刚被改过
+    });
     _history!.record(doc);
     _save();
   }
@@ -175,6 +188,7 @@ class _BuilderScreenState extends State<BuilderScreen> with WidgetsBindingObserv
     setState(() {
       _doc = doc;
       if (_selected != null && doc.find(_selected!) == null) _selected = null;
+      multiSync();
     });
     _save();
   }
@@ -186,9 +200,10 @@ class _BuilderScreenState extends State<BuilderScreen> with WidgetsBindingObserv
     final node = doc.newNode(type);
     if (ref != null) node.props['ref'] = ref; // 自定义组件的实例
     _apply((d) {
-      if (sel != null && sel.isContainer) {
+      if (sel != null && sel.isContainer && type != 'dialog') {
         d.insert(sel.id, node);
-      } else if (sel != null) {
+      } else if (sel != null && sel.id != d.root.id && type != 'dialog') {
+        // 弹窗是整页的东西：永远加在页面最后
         final parent = d.parentOf(sel.id)!;
         d.insert(parent.id, node, parent.children.indexOf(sel) + 1);
       } else {
@@ -200,23 +215,26 @@ class _BuilderScreenState extends State<BuilderScreen> with WidgetsBindingObserv
   }
 
   void _drop(LcDrag drag, String parentId, int index) {
+    if (multiDrop(drag, parentId, index)) return;
     if (drag.type != null) {
       final node = _doc!.newNode(drag.type!);
       if (drag.ref != null) node.props['ref'] = drag.ref;
-      _apply((d) => d.insert(parentId, node, index));
+      _apply((d) => lcInsertAt(d, parentId, node, index));
       setState(() => _selected = node.id);
     } else {
-      _apply((d) => d.move(drag.nodeId!, parentId, index));
+      _apply((d) => lcMoveTo(d, drag.nodeId!, parentId, index));
       setState(() => _selected = drag.nodeId);
     }
   }
 
   bool _canDrop(LcDrag drag, String parentId) {
+    final many = multiCanDrop(drag, parentId);
+    if (many != null) return many;
     if (drag.nodeId == null) return true;
     final node = _doc!.find(drag.nodeId!);
     if (node == null) return false;
     // 不能拖进自己或自己的后代里
-    bool contains(LcNode n) => n.id == parentId || n.children.any(contains);
+    bool contains(LcNode n) => n.id == lcSplitSlotId(parentId).$1 || n.children.any(contains);
     return !contains(node);
   }
 
@@ -230,6 +248,8 @@ class _BuilderScreenState extends State<BuilderScreen> with WidgetsBindingObserv
       context,
       doc: () => _doc!,
       selected: _selected,
+      onEdit: _apply,
+      multi: LayerMulti(ids: () => multiOn ? multiIds : null, setOn: (on) => on ? multiEnter() : multiExit(), tap: multiTap),
       collapsed: _layersCollapsed,
       onCollapsed: (ids) {
         _layersCollapsed = ids;
@@ -313,6 +333,7 @@ class _BuilderScreenState extends State<BuilderScreen> with WidgetsBindingObserv
     if (!mounted) return;
     setState(() {
       if (_selected != null && _doc?.find(_selected!) == null) _selected = null;
+      if (_doc != null) multiSync();
     });
   }
 
@@ -328,14 +349,19 @@ class _BuilderScreenState extends State<BuilderScreen> with WidgetsBindingObserv
   Future<void> _nodeMenu(String id, Offset at) async {
     final node = _doc?.find(id);
     if (node == null) return;
+    if (multiOn) {
+      multiTap(id); // 多选时长按没挪＝加进来 / 移出去
+      return;
+    }
     setState(() => _selected = id);
-    final v = await showLcNodeMenu(context, at, node, fixed: node.type == 'page');
+    final v = await showLcNodeMenu(context, at, node, fixed: node.type == 'page', avoid: _bench.currentState?.canvas?.nodeScreenRect(id));
     if (v != null && mounted) _nodeAction(v, id);
   }
 
   void _nodeAction(String v, String id) {
     final doc = _doc!, node = doc.find(id);
     if (node == null) return;
+    if (v == 'multi') return multiEnter(id);
     final (done, select) = runLcNodeAction(v, doc, id, _apply);
     if (done) {
       setState(() => _selected = select);
@@ -482,14 +508,15 @@ class _BuilderScreenState extends State<BuilderScreen> with WidgetsBindingObserv
                 onAddLogic: _addLogic,
                 onNodeMenu: (id, at) => unawaited(_nodeMenu(id, at)),
                 doc: doc,
-                selected: _selected,
-                onSelect: (id) => setState(() => _selected = id),
+                selected: multiOn ? null : _selected,
+                marked: multiIds,
+                onSelect: (id) => multiOn ? multiTap(id) : setState(() => _selected = id),
                 onAdd: _addByTap,
                 onDrop: _drop,
                 canDrop: _canDrop,
                 onDelete: (id) {
                   final n = doc.find(id);
-                  if (n != null) unawaited(_delete(n));
+                  if (n != null && !multiDeleteDragged(id)) unawaited(_delete(n));
                 },
                 onResize: _resize,
                 recents: _recents,
@@ -499,7 +526,7 @@ class _BuilderScreenState extends State<BuilderScreen> with WidgetsBindingObserv
                 onPreview: () => unawaited(_preview()),
                 presetWidth: _presetWidth,
                 showBoxModel: _showBoxModel,
-                selectionBar: node == null ? null : _selectionBar(node),
+                selectionBar: multiOn ? multiBar() : (node == null ? null : _selectionBar(node)),
               ),
             ),
     );

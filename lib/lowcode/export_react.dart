@@ -21,11 +21,14 @@ library;
 
 import 'package:lopicode/lowcode/component_model.dart';
 import 'package:lopicode/lowcode/export_framework_common.dart';
+import 'package:lopicode/lowcode/export_v3_fields.dart';
+import 'package:lopicode/lowcode/export_web_v3.dart';
 import 'package:lopicode/lowcode/logic_blocks.dart';
 import 'package:lopicode/lowcode/logic_js_core.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 import 'package:lopicode/lowcode/logic_text.dart';
 import 'package:lopicode/lowcode/model.dart';
+import 'package:lopicode/lowcode/slots.dart';
 
 export 'package:lopicode/lowcode/export_framework_common.dart' show LcExportFile, LcFrameworkExport;
 
@@ -150,6 +153,17 @@ class _View {
   final bool Function(LcNode n)? textNeedsString;
 
   final Set<LcComponentPlan> used = {};
+  final Set<String> _slotsSeen = {};
+
+  /// 页面的根节点（组件定义里是 null）：判断“页面级的栏”用。
+  LcNode? pageRoot;
+  late final LcWebCtx web = LcWebCtx(
+    uniqueIds: prefix.isEmpty,
+    fieldClass: (n) => lcFieldClassOf(n, prefix),
+    // 弹窗的显示被逻辑管着（lcUi 里有它）：关闭时改 lcUi 再让 React 重画。
+    closeExpr: (n) => dyn(n, 'visible') == null ? null : '{ ${dyn(n, 'visible')} = false; lcRefresh(); }',
+    pageRoot: pageRoot,
+  );
 
   String _attrs(LcNode n) {
     final isRoot = identical(n, rootNode);
@@ -193,23 +207,48 @@ class _View {
       return const _Jsx(['嵌套太深，这里面的内容没有导出'], _Kind.comment);
     }
     final a = _attrs(n);
+    // 第 3 版的新组件：元素树三种导出共用（export_web_v3.dart）。
+    final el = lcWebElement(n, web);
+    if (el != null) {
+      return _Jsx([
+        for (final p in lcRenderEl(el, LcWebDialect.react, hostAttrs: a, text: jsxText, attr: jsxAttr))
+          if (p.child == null) '${'  ' * p.indent}${p.line}' else ...[for (final l in node(p.child!, depth + p.indent).asChild) '${'  ' * p.indent}$l'],
+      ]);
+    }
     switch (n.type) {
       case 'text':
         return _Jsx(['<p$a>${_content(n)}</p>']);
       case 'button':
-        return _Jsx(['<button type="button"$a>${_content(n)}</button>']);
+        final icon = lcButtonIcon(n);
+        final solo = dyn(n, 'text') == null && (n.strProp('text') ?? '').isEmpty;
+        return _Jsx(['<button type="button"$a${lcIsDisabled(n) ? ' disabled' : ''}>${icon == null ? '' : lcIconSvg(icon, classAttr: 'className', solo: solo, jsx: true)}${_content(n)}</button>']);
       case 'image':
-        const placeholder = ' role="img" aria-label="图片占位"';
+        final altText = n.strProp('alt');
+        final placeholder = altText == null ? ' role="img" aria-label="图片占位"' : ' role="img"${jsxAttr('aria-label', altText)}';
+        final alt = altText == null ? ' alt=""' : jsxAttr('alt', altText);
         final e = dyn(n, 'src');
         if (e != null) {
           // 地址会变：有地址显示图片，空着显示占位块。
-          return _Jsx(['$e ? (', '  <img$a src={$e} alt="" />', ') : (', '  <div$a$placeholder></div>', ')'], _Kind.expression);
+          return _Jsx(['$e ? (', '  <img$a src={$e}$alt />', ') : (', '  <div$a$placeholder></div>', ')'], _Kind.expression);
         }
         final src = n.strProp('src');
-        return _Jsx([src == null ? '<div$a$placeholder></div>' : '<img$a${jsxAttr('src', src)} alt="" />']);
+        return _Jsx([src == null ? '<div$a$placeholder></div>' : '<img$a${jsxAttr('src', src)}$alt />']);
       case 'input':
         final value = dyn(n, 'value');
-        return _Jsx(['<input$a${_bindable(n, 'placeholder')}${value == null ? '' : ' value={$value}'} />']);
+        final type = lcInputType(n), fixed = n.strProp('value'), label = lcInputLabel(n);
+        final input =
+            '<input$a${type == null ? '' : ' type="$type"'}${_bindable(n, 'placeholder')}${value != null ? ' value={$value}' : (fixed == null ? '' : jsxAttr('defaultValue', fixed))}'
+            '${lcInputRequired(n) ? ' required' : ''}${lcIsDisabled(n) ? ' disabled' : ''} />';
+        if (label == null) return _Jsx([input]);
+        return _Jsx([
+          '<label className="${lcFieldClassOf(n, prefix)}">',
+          '  <span className="lc-label">',
+          '    ${jsxText(label)}',
+          if (lcInputRequired(n)) '    <span className="lc-required" aria-hidden="true">{" *"}</span>',
+          '  </span>',
+          '  $input',
+          '</label>',
+        ]);
       case 'list':
         final items = n.props['items'];
         return _Jsx(['<ul$a>', for (final item in items is List ? items : const <Object?>[]) '  <li>${jsxText('$item')}</li>', '</ul>']);
@@ -217,6 +256,9 @@ class _View {
         return _Jsx(['<hr$a />']);
       case 'spacer':
         return _Jsx(['<div$a></div>']);
+      case LcNode.unknownType:
+        notes.add(kNoteUnknownNode);
+        return const _Jsx(['这里有一个新版应用加的组件，这一版导不出来'], _Kind.comment);
       case 'component':
         final plan = plans.planFor(n, ownerId: ownerId);
         if (plan == null) {
@@ -227,7 +269,31 @@ class _View {
         for (final (attr, p, v) in lcInstanceValues(plan, n)) {
           values.write(v is String ? jsxAttr(attr, v) : ' $attr={${lcValueLiteral(p.type, v)}}');
         }
-        return _Jsx(['<${plan.name}$a$values />']);
+        final filled = plan.filled(n);
+        if (n.children.isNotEmpty && plan.def.slots.isEmpty) notes.add(kNoteHomeless);
+        if (filled.isEmpty) return _Jsx(['<${plan.name}$a$values />']);
+        // 填进插槽的内容：默认插槽写成子节点（组件那边是 children），具名插槽当属性传一段 JSX。
+        List<String> kidsOf(String slot) => [for (final c in filled[slot]!) ...node(c, depth + 1).asChild];
+        final named = [
+          for (final slot in filled.keys)
+            if (slot != kLcDefaultSlot) ...['  ${plan.slotAttrs[slot]}={', '    <>', ..._indent(_indent(_indent(kidsOf(slot)))), '    </>', '  }'],
+        ];
+        final inner = filled.containsKey(kLcDefaultSlot) ? kidsOf(kLcDefaultSlot) : null;
+        if (named.isEmpty) return _Jsx(['<${plan.name}$a$values>', ..._indent(inner!), '</${plan.name}>']);
+        return _Jsx([
+          '<${plan.name}$a$values',
+          ...named,
+          if (inner == null) '/>' else ...['>', ..._indent(inner), '</${plan.name}>'],
+        ]);
+      case 'slot':
+        // 组件定义里：外面传了就用外面的，没传用默认内容。同名的第二个、页面里误放的：只留里面的内容。
+        final name = lcSlotNameOf(n);
+        final attr = ownerId == null ? null : plans.planOf(ownerId!)?.slotAttrs[name];
+        if (ownerId == null) notes.add(kNoteStraySlot);
+        final kids = [for (final c in n.children) ...node(c, depth + 1).asChild];
+        if (attr == null || !_slotsSeen.add(name)) return _Jsx(['<>', ..._indent(kids), '</>']);
+        if (kids.isEmpty) return _Jsx([attr], _Kind.expression);
+        return _Jsx(['$attr ?? (', '  <>', ..._indent(_indent(kids)), '  </>', ')'], _Kind.expression);
       default:
         final tag = n.type == 'page' ? 'main' : 'div';
         return _Jsx(['<$tag$a>', for (final c in n.children) ..._indent(node(c, depth + 1).asChild), '</$tag>']);
@@ -285,7 +351,8 @@ String _objectLiteral(Iterable<(String, String)> entries) =>
     return out;
   }
 
-  final view = _View(prefix: '', plans: plans, notes: notes, dyn: (n, prop) => states.of(n, prop) == null ? null : 'lcUi.${states.of(n, prop)!.name}', events: eventsOf, importDir: './components/');
+  final view = _View(prefix: '', plans: plans, notes: notes, dyn: (n, prop) => states.of(n, prop) == null ? null : 'lcUi.${states.of(n, prop)!.name}', events: eventsOf, importDir: './components/')
+    ..pageRoot = doc.root;
   final root = view.node(doc.root, 0);
 
   final hasLogic = !logic.isEmpty;
@@ -349,7 +416,7 @@ String _objectLiteral(Iterable<(String, String)> entries) =>
   out
     ..writeln('  );')
     ..writeln('}');
-  return (out.toString(), '/* $kExportHeader */\n${lcCollectCss(doc.root, '', notes)}');
+  return (out.toString(), '/* $kExportHeader */\n${lcCollectCss(doc.root, '', notes, plans: plans)}');
 }
 
 (String, String) _component(LcComponentPlan plan, LcComponentPlans plans, List<String> notes) {
@@ -367,7 +434,7 @@ String _objectLiteral(Iterable<(String, String)> entries) =>
     textNeedsString: (n) => !lcBoundIsText(plan, n, 'text'),
   );
   final root = view.node(def.root, 0);
-  final params = [for (final LcComponentProp p in def.props) '${plan.attrs[p.name]} = ${lcPropDefaultLiteral(p)}', 'className', 'style', '...lcRest'];
+  final params = [for (final LcComponentProp p in def.props) '${plan.attrs[p.name]} = ${lcPropDefaultLiteral(p)}', ...plan.slotAttrs.values, 'className', 'style', '...lcRest'];
   final out = StringBuffer()
     ..writeln('// $kExportHeader')
     ..writeln('// 自定义组件：${jsComment(def.name, 60)}')
@@ -384,5 +451,5 @@ String _objectLiteral(Iterable<(String, String)> entries) =>
   out
     ..writeln('  );')
     ..writeln('}');
-  return (out.toString(), '/* $kExportHeader */\n${lcCollectCss(def.root, prefix, notes)}');
+  return (out.toString(), '/* $kExportHeader */\n${lcCollectCss(def.root, prefix, notes, plans: plans)}');
 }

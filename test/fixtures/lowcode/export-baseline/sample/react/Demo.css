@@ -1,0 +1,83 @@
+/* 由 LopiCode 低代码搭建器生成，重新导出会覆盖本文件。 */
+.n-root {
+  padding: 16px;
+  background: #f6fbfd;
+  gap: 12px;
+}
+
+.n-t1 {
+  align-self: stretch;
+  font-size: 24px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.n-card {
+  align-self: stretch;
+  padding: 16px;
+  background: #ffffff;
+  border-radius: 12px;
+  gap: 8px;
+}
+
+.n-in {
+  align-self: stretch;
+}
+
+.n-row {
+  align-self: stretch;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.n-b1 {
+  flex: 1;
+  min-width: 0;
+  background: #058654;
+  color: #ffffff;
+}
+
+.n-b2 {
+  width: 96px;
+}
+
+.n-sp {
+  flex: 0 0 8px;
+  width: 8px;
+}
+
+.n-img {
+  align-self: stretch;
+  height: 120px;
+  border-radius: 8px;
+}
+
+.n-img2 {
+  width: 80px;
+  height: 80px;
+}
+
+.n-ls {
+  padding: 8px;
+  background: #ffffff;
+}
+
+.n-col {
+  gap: 4px;
+  align-items: stretch;
+}
+
+.n-c1 {
+  height: 40px;
+  margin: 4px;
+  background: #d3dee4;
+}
+
+.n-dv2 {
+  margin: 8px;
+}
+
+.n-sp2 {
+  flex: 0 0 24px;
+  height: 24px;
+}

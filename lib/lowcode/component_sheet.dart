@@ -9,6 +9,7 @@ import 'package:lopicode/lowcode/component_editor_sheet.dart';
 import 'package:lopicode/lowcode/component_model.dart';
 import 'package:lopicode/lowcode/component_ops.dart';
 import 'package:lopicode/lowcode/component_props_sheet.dart';
+import 'package:lopicode/lowcode/component_slots.dart';
 import 'package:lopicode/lowcode/component_values_widgets.dart';
 import 'package:lopicode/lowcode/edit_types.dart';
 import 'package:lopicode/lowcode/image_pick_sheet.dart';
@@ -149,11 +150,12 @@ class _ComponentSheetState extends State<_ComponentSheet> {
       return;
     }
     final c = context.colors;
+    final fill = componentFillCount(_doc, id);
     final mode = await showDialog<LcDeleteInstances>(
       context: context,
       builder: (context) => AlertDialog(
         title: Text('删除组件「${def.name}」'),
-        content: Text('还有 $uses 处在用它。用到的地方怎么办？'),
+        content: Text('还有 $uses 处在用它${fill.nodes == 0 ? '' : '，其中 ${fill.instances} 处往它的插槽里填了东西'}。用到的地方怎么办？${fill.nodes == 0 ? '' : '\n\n拆成普通控件：填的内容留在原来的位置。一起删：填的内容也一起删。'}'),
         actionsOverflowDirection: VerticalDirection.down,
         actions: [
           TextButton(key: const ValueKey('comp-delete-detach'), onPressed: () => Navigator.pop(context, LcDeleteInstances.detach), child: const Text('拆成普通控件留着')),

@@ -1,0 +1,76 @@
+// 由 LopiCode 低代码搭建器生成，重新导出会覆盖本文件。
+import 'package:flutter/material.dart';
+
+class OldPage extends StatelessWidget {
+  const OldPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+        body: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: SizedBox(
+              width: double.infinity,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                spacing: 12,
+                children: [
+                  Text(
+                    '标题',
+                    style: const TextStyle(height: 1.5),
+                  ),
+                  Container(
+                    width: double.infinity,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.max,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      spacing: 8,
+                      children: [
+                        FilledButton(
+                          onPressed: () {},
+                          style: FilledButton.styleFrom(),
+                          child: Text('加一'),
+                        ),
+                        Flexible(
+                          child: Text(
+                            '0',
+                            style: const TextStyle(height: 1.5),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 3, offset: Offset(0, 1))]),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      spacing: 8,
+                      children: [
+                        Text(
+                          '标题',
+                          style: const TextStyle(height: 1.5),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    width: double.infinity,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+  }
+}

@@ -268,10 +268,18 @@ class _PresetRowState extends State<PresetRow> {
             ),
       child: Row(
         children: [
-          for (final q in widget.quick) InspectorChip(key: Key('lc-preset-${widget.id}-$q'), label: _name(q), selected: v == q, onTap: () => widget.onChanged(q)),
+          // 展开以后整条刻度就在下面：这一行不再重复摆那几档（不然像同一行出现了两遍），只说现在是多少。
+          if (_open)
+            Padding(
+              key: Key('lc-preset-${widget.id}-now'),
+              padding: const EdgeInsets.only(right: Space.x2),
+              child: Text(v == null ? '默认' : (widget.names[v] ?? '${_fmt(v)}${widget.unit.isEmpty ? '' : ' ${widget.unit}'}'), style: t.bodyMedium?.copyWith(color: c.textMuted)),
+            )
+          else
+            for (final q in widget.quick) InspectorChip(key: Key('lc-preset-${widget.id}-$q'), label: _name(q), selected: v == q, onTap: () => widget.onChanged(q)),
           InspectorChip(
             key: Key('lc-preset-${widget.id}-more'),
-            label: offScale ? '${widget.names[v] ?? _fmt(v)} …' : '…',
+            label: _open ? '收起' : (offScale ? '${widget.names[v] ?? _fmt(v)} …' : '…'),
             selected: offScale || _open,
             tooltip: '更多档位和自定义',
             onTap: () => setState(() => _open = !_open),

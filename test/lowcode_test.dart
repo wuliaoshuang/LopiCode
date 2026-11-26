@@ -41,12 +41,27 @@ void main() {
         'title': 'x',
         'root': {'type': 'text'},
       }); // 根必须是 page
+      // 格式第 3 版起：不认识的组件类型不再让整页打不开，原样留着（见 docs/lowcode-page-format-v3.md）。
+      final kept = LcDocument.parse(
+        jsonEncode({
+          'title': 'x',
+          'root': {
+            'type': 'page',
+            'children': [
+              {'type': 'nope'},
+            ],
+          },
+        }),
+      );
+      expect(kept.root.children.single.isUnknown, isTrue);
+      expect(kept.root.children.single.fileType, 'nope');
+      // 连类型都没写的还是拒绝。
       bad({
         'title': 'x',
         'root': {
           'type': 'page',
           'children': [
-            {'type': 'nope'},
+            {'id': 'a'},
           ],
         },
       });

@@ -13,7 +13,7 @@ void main() {
     expect(doc.components, isEmpty);
     expect(doc.find('n1')!.style, isEmpty);
     final out = doc.toJson();
-    expect(out['version'], 2);
+    expect(out['version'], 3);
     expect(out.containsKey('logic'), isFalse);
     expect(out.containsKey('components'), isFalse);
     expect((out['root'] as Map)['children'], [

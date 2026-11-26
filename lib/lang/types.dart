@@ -166,7 +166,9 @@ class LType {
       LKind.bool => '是否',
       LKind.nul => '空',
       LKind.never => '永不',
-      LKind.hole => '待定',
+      // 给人看的字里不出现“待定”：没定下来的最后都按“任意”算（见 LWorld.close），提示里也这么说，
+      // 不然会冒出“列表〈待定〉”这种看不懂的词（2026-11-26 第一轮截图里见过）。
+      LKind.hole => '任意',
       LKind.list => '列表〈${(of ?? any).show()}〉',
       LKind.dict => '字典〈${(of ?? any).show()}〉',
       LKind.future => '稍后的结果〈${(of ?? any).show()}〉',

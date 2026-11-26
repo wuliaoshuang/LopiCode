@@ -8,75 +8,25 @@
 import 'dart:math' as math;
 
 import 'package:lopicode/lowcode/canvas_component_widgets.dart';
+import 'package:lopicode/lowcode/canvas_controls_widgets.dart';
 import 'package:lopicode/lowcode/canvas_css.dart';
+import 'package:lopicode/lowcode/canvas_dialog_widgets.dart';
+import 'package:lopicode/lowcode/canvas_grid_widgets.dart';
 import 'package:lopicode/lowcode/canvas_parts_widgets.dart';
+import 'package:lopicode/lowcode/canvas_style_widgets.dart';
+import 'package:lopicode/lowcode/canvas_v3_widgets.dart';
+import 'package:lopicode/lowcode/component_editing.dart';
 import 'package:lopicode/lowcode/component_ops.dart';
-import 'package:lopicode/lowcode/css_color.dart';
 import 'package:lopicode/lowcode/lift_gesture_widgets.dart';
 import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/lowcode/palette_widgets.dart';
+import 'package:lopicode/lowcode/slots.dart';
+import 'package:lopicode/lowcode/states.dart';
 import 'package:lopicode/lowcode/style_resolve.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:material_ui/material_ui.dart';
 
-/// 拖柄拖动中的临时尺寸：只影响画布怎么画，不动页面数据（松手才真的写进去）。
-class CanvasResizePreview {
-  const CanvasResizePreview(this.nodeId, this.width, this.height);
-  final String nodeId;
-  final int? width;
-  final int? height;
-}
-
-/// 画一个子组件时，从父容器那里知道的事。
-class _Ctx {
-  const _Ctx({
-    required this.parent,
-    required this.flow,
-    required this.boundedW,
-    required this.boundedH,
-    required this.availW,
-    required this.availH,
-    required this.scale,
-    required this.growCount,
-    required this.textColor,
-    required this.buttonText,
-    required this.styles,
-  });
-  final LcNode parent;
-  final CssFlow flow;
-
-  /// 父容器给的宽 / 高是不是有上限。没有上限时不能“撑满”，不然排版会报错。
-  final bool boundedW;
-  final bool boundedH;
-
-  /// 父容器内容区的宽高（估的），百分比尺寸参照它；高度不知道是 null。
-  final double availW;
-  final double? availH;
-  final CssScale scale;
-
-  /// 父容器里有几个子项要“放大占满”，用来估每个能分到多宽。
-  final int growCount;
-
-  /// 继承下来的文字颜色（边框、阴影没写颜色时用它，CSS 的 currentcolor）。
-  final Color textColor;
-
-  /// 设了字号的按钮，文字的基础样式沿用应用主题里的（第 1 版就是这样，换掉的话旧页面的按钮会变样）。
-  final TextStyle? buttonText;
-
-  /// 这一次重搭里已经算过的最终样式（按组件对象记）：同一个组件不算第二遍。
-  final Map<LcNode, Map<String, String>> styles;
-
-  Map<String, String> styleOf(LcNode n, LcNode? parent) => styles[n] ??= resolvedStyle(n, parent);
-}
-
-Color? _argb(String? css) {
-  final v = cssColorToArgb(css);
-  return v == null ? null : Color(v);
-}
-
-bool _has(Map<String, String> s, String prefix) => s.keys.any((k) => k.startsWith(prefix));
-
-bool _hasRadius(Map<String, String> s) => s.keys.any((k) => k.startsWith('border-') && k.endsWith('-radius'));
+part 'canvas_render_slots.dart';
 
 /// 画布里的那块“页面”。
 class CanvasPage extends StatelessWidget {
@@ -95,6 +45,9 @@ class CanvasPage extends StatelessWidget {
     this.onLiftCancel,
     this.preview,
     this.inert = false,
+    this.overlayId,
+    this.statePreview,
+    this.live,
   });
 
   /// 只画样子的页面（拖动时手指下面的缩略图、测试）：不能点、不能拖。
@@ -108,6 +61,9 @@ class CanvasPage extends StatelessWidget {
       onLiftCancel = null,
       boxKey = _stillKeys,
       preview = null,
+      overlayId = null,
+      statePreview = null,
+      live = null,
       inert = true;
 
   static void _ignoreSelect(String _) {}
@@ -143,7 +99,16 @@ class CanvasPage extends StatelessWidget {
   /// true＝只画样子：不能点、不能拖、没有插入位。自定义组件实例里面的内容用它画（整块只能当一个东西选中）。
   final bool inert;
 
-  CanvasPage _inertCopy() => CanvasPage(doc: doc, pageWidth: pageWidth, minHeight: minHeight, selected: null, onSelect: (_) {}, boxKey: boxKey, inert: true);
+  /// “只看这个弹层”：正在编辑的那个弹窗（页面里别的不画）。
+  final String? overlayId;
+
+  /// 正在预览哪个组件的哪种状态样式（按下 / 禁用 / 聚焦）。
+  final ({String nodeId, String state})? statePreview;
+
+  /// 只画样子的这一份是替哪张活页面画的（实例里填进插槽的内容交回给它画，见 canvas_render_slots.dart）。
+  final CanvasPage? live;
+
+  CanvasPage _inertCopy() => CanvasPage(doc: doc, pageWidth: pageWidth, minHeight: minHeight, selected: null, onSelect: (_) {}, boxKey: boxKey, inert: true, live: inert ? live : this);
 
   @override
   Widget build(BuildContext context) {
@@ -164,26 +129,40 @@ class CanvasPage extends StatelessWidget {
       availH: null,
       scale: scale,
       growCount: 0,
-      textColor: _argb(s['color']) ?? Palette.neutral900,
+      textColor: canvasArgb(s['color']) ?? Palette.neutral900,
       buttonText: Theme.of(context).textTheme.labelLarge,
       styles: Map.identity(),
     );
-    final page = Container(
-      key: boxKey(root.id),
-      width: pageWidth,
-      constraints: BoxConstraints(minHeight: minHeight),
-      decoration: BoxDecoration(color: _argb(s['background-color']) ?? Colors.white, border: _border(s, scale, Palette.neutral900, false)),
-      foregroundDecoration: selected == root.id ? BoxDecoration(border: Border.all(color: context.themeSpec.lowcodeColor(LowcodeKey.selection), width: 2)) : null,
-      padding: EdgeInsets.fromLTRB(padding.left, padding.top, padding.right, padding.bottom),
-      child: _flex(context, root, s, ctx, tightW: true, tightH: false),
-    );
+    final dialog = overlayId == null ? null : doc.find(overlayId!);
+    final page = dialog != null && dialog.type == 'dialog'
+        ? canvasDialogStage(
+            context,
+            node: dialog,
+            pageWidth: pageWidth,
+            minHeight: minHeight,
+            pageColor: canvasArgb(s['background-color']) ?? Colors.white,
+            pageKey: boxKey(root.id),
+            panelKey: boxKey(dialog.id),
+            inert: inert,
+            onSelect: () => onSelect(dialog.id),
+            slot: (name, {required row, required availW, end = false}) => _slot(context, dialog, ctx, name, row: row, availW: availW, end: end),
+          )
+        : Container(
+            key: boxKey(root.id),
+            width: pageWidth,
+            constraints: BoxConstraints(minHeight: minHeight),
+            decoration: BoxDecoration(color: canvasArgb(s['background-color']) ?? Colors.white, border: canvasBorder(s, scale, Palette.neutral900, false)),
+            foregroundDecoration: selected == root.id ? BoxDecoration(border: Border.all(color: context.themeSpec.lowcodeColor(LowcodeKey.selection), width: 2)) : null,
+            padding: EdgeInsets.fromLTRB(padding.left, padding.top, padding.right, padding.bottom),
+            child: _flex(context, root, s, ctx, tightW: true, tightH: false),
+          );
     return Theme(
       // 页面内容用自己的一套 Material 外观（不跟应用主题走）；只把应用主题的颜色表带进去，给选中框、插入位这些编辑器界面色用。
       data: ThemeData(useMaterial3: true, colorSchemeSeed: Palette.primary700, fontFamily: font, extensions: [AppColors.resolve(context)]),
       child: Builder(
         builder: (context) => DefaultTextStyle(
-          style: TextStyle(fontSize: 16, color: Palette.neutral900, height: 1.5, fontFamily: font).merge(_textStyle(s, scale)),
-          textAlign: _textAlign(s),
+          style: TextStyle(fontSize: 16, color: Palette.neutral900, height: 1.5, fontFamily: font).merge(canvasTextStyle(s, scale)),
+          textAlign: canvasTextAlign(s),
           // 单独一层：平移 / 缩放只挪这一层，不把几百个组件重画一遍。
           child: RepaintBoundary(
             child: inert ? page : GestureDetector(key: const ValueKey('lowcode-page'), onTap: () => onSelect(root.id), child: page),
@@ -193,89 +172,44 @@ class CanvasPage extends StatelessWidget {
     );
   }
 
-  // ───────────── 文字样式 ─────────────
-
-  static TextStyle? _textStyle(Map<String, String> s, CssScale scale, {double? defaultHeight}) {
-    final weight = cssFontWeight(s['font-weight']);
-    final italic = s['font-style']?.trim().toLowerCase();
-    final lines = cssDecorationLines(s);
-    final none = (s['text-decoration-line'] ?? s['text-decoration'] ?? '').trim().toLowerCase() == 'none';
-    final style = TextStyle(
-      color: _argb(s['color']),
-      // 字号在外面已经换算好放进 scale 了（em 是相对父级的，这里不能再算一遍）
-      fontSize: s.containsKey('font-size') ? scale.fontSize : null,
-      fontWeight: weight == null ? null : FontWeight.values[(weight ~/ 100) - 1],
-      fontStyle: italic == 'italic' || italic == 'oblique' ? FontStyle.italic : (italic == 'normal' ? FontStyle.normal : null),
-      height: cssLineHeight(s['line-height'], scale) ?? defaultHeight,
-      letterSpacing: cssPx(s['letter-spacing'], scale),
-      decoration: lines.isNotEmpty
-          ? TextDecoration.combine([
-              if (lines.contains('underline')) TextDecoration.underline,
-              if (lines.contains('line-through')) TextDecoration.lineThrough,
-              if (lines.contains('overline')) TextDecoration.overline,
-            ])
-          : (none ? TextDecoration.none : null),
-    );
-    return style == const TextStyle() ? null : style;
-  }
-
-  static TextAlign? _textAlign(Map<String, String> s) => switch (s['text-align']?.trim().toLowerCase()) {
-    'center' => TextAlign.center,
-    'right' || 'end' => TextAlign.right,
-    'left' || 'start' => TextAlign.left,
-    'justify' => TextAlign.justify,
-    _ => null,
-  };
-
-  // ───────────── 盒子：边框、圆角、阴影 ─────────────
-
-  static BorderRadius? _radius(Map<String, String> s, CssScale scale) {
-    final r = cssRadii(s, scale);
-    if (r.every((v) => v == 0)) return null;
-    return BorderRadius.only(topLeft: Radius.circular(r[0]), topRight: Radius.circular(r[1]), bottomRight: Radius.circular(r[2]), bottomLeft: Radius.circular(r[3]));
-  }
-
-  /// [rounded]：盒子有圆角。有圆角时四边必须同色（界面库的限制），这时统一用第一条边的颜色。
-  static Border? _border(Map<String, String> s, CssScale scale, Color textColor, bool rounded) {
-    final sides = [
-      for (final side in const ['top', 'right', 'bottom', 'left']) cssBorderSide(s, side, scale),
-    ];
-    if (sides.every((b) => b == null)) return null;
-    final first = sides.firstWhere((b) => b != null)!;
-    BorderSide of(CssBorderSide? b) {
-      if (b == null) return BorderSide.none;
-      final argb = rounded ? first.argb : b.argb;
-      return BorderSide(width: b.width, color: argb == null ? textColor : Color(argb));
-    }
-
-    return Border(top: of(sides[0]), right: of(sides[1]), bottom: of(sides[2]), left: of(sides[3]));
-  }
-
-  static List<BoxShadow>? _shadow(LcNode n, Map<String, String> s, CssScale scale, Color textColor) {
-    if (!s.containsKey('box-shadow')) {
-      // 卡片自带一层浅阴影（和导出的网页一样）。
-      return n.type == 'card' ? const [BoxShadow(color: Color(0x33000000), blurRadius: 3, offset: Offset(0, 1))] : null;
-    }
-    final sh = cssShadow(s, scale);
-    if (sh == null) return null;
-    return [BoxShadow(color: sh.argb == null ? textColor : Color(sh.argb!), offset: Offset(sh.x, sh.y), blurRadius: sh.blur, spreadRadius: sh.spread)];
-  }
-
   // ───────────── 容器里的子项 ─────────────
 
   /// 把容器的子项排出来。[tightW] / [tightH]：容器自己的宽 / 高是不是定死的（决定“拉伸”要不要先量内容）。
-  Widget _flex(BuildContext context, LcNode n, Map<String, String> s, _Ctx inner, {required bool tightW, required bool tightH}) {
+  Widget _flex(BuildContext context, LcNode n, Map<String, String> s, _Ctx inner, {required bool tightW, required bool tightH, List<LcNode>? only}) {
     final flow = inner.flow;
     final scale = inner.scale;
     final mainGap = cssSizePx(s[flow.row ? 'column-gap' : 'row-gap'], scale, percentOf: inner.availW) ?? 0;
     final crossGap = cssSizePx(s[flow.row ? 'row-gap' : 'column-gap'], scale, percentOf: inner.availW) ?? 0;
     final align = cssAlign(s['align-items']) ?? (n.type == 'row' ? CssAlign.center : CssAlign.start);
     final justify = cssJustify(s['justify-content']) ?? CssJustify.start;
-    if (n.children.isEmpty) {
+    final kids = [
+      for (final c in only ?? n.children)
+        if (!c.hidden) c,
+    ];
+    if ((only ?? n.children).isEmpty) {
       return inert ? const SizedBox.shrink() : const CanvasEmptyHint();
     }
+    // 网格：等宽的几列，一行行排下去（canvas_grid_widgets.dart）。格子里的组件按“竖排容器里的子项”画，宽度就是一格。
+    final grid = only == null ? canvasGridOf(s, scale, inner.availW) : null;
+    if (grid != null) {
+      final cell = _Ctx(
+        parent: n,
+        flow: const CssFlow(row: false, reverse: false, wrap: false),
+        boundedW: true,
+        boundedH: false,
+        availW: grid.columnWidth,
+        availH: null,
+        scale: scale,
+        growCount: 0,
+        textColor: inner.textColor,
+        buttonText: inner.buttonText,
+        styles: inner.styles,
+      );
+      return canvasGrid(grid, [for (final c in kids) (span: canvasGridSpan(inner.styleOf(c, n)), child: _item(context, n, s, cell, c))]);
+    }
     // 子项之间的间距由容器自己留（拖动时也不往里插东西），这样“两端对齐”之类的分布才准。
-    final children = [for (final c in n.children) _node(context, c, inner)];
+    // “编辑器里隐藏”的（图层面板的眼睛）不画、不占位；导出不受影响。
+    final children = [for (final c in kids) _item(context, n, s, inner, c)];
     final spacing = mainGap;
     final textDirection = flow.row && flow.reverse ? TextDirection.rtl : null;
     final verticalDirection = !flow.row && flow.reverse ? VerticalDirection.up : VerticalDirection.down;
@@ -341,20 +275,16 @@ class CanvasPage extends StatelessWidget {
     // 自定义组件的实例：按展开后的内容画（最外层沿用实例的 id，所以选中框、拖柄照常认得它）。
     // 展开不了、或者已经在别的实例里面了（inert）就不展开，下面画占位。
     final instance = node.type == 'component' && !inert;
-    final shown = instance ? expandInstance(doc, node) ?? node : node;
-    final n = p != null && p.nodeId == node.id
-        ? LcNode(
-            id: shown.id,
-            type: shown.type,
-            props: shown.props,
-            children: shown.children,
-            style: {...shown.style, if (p.width != null) 'width': '${p.width}px', if (p.height != null) 'height': '${p.height}px'},
-          )
-        : shown;
+    final shown = instance ? expandInstance(doc, node, markers: true) ?? node : node;
+    final n = canvasPreviewNode(
+      shown,
+      resize: p != null && p.nodeId == node.id ? (p.width, p.height) : null,
+      state: statePreview?.nodeId == node.id ? lcStateStyle(node, statePreview!.state) : const {},
+    );
     // 没被改过的组件用这一轮记着的那份（父容器数“要放大的子项”时已经算过了）；展开的实例、拖柄预览是临时造的，现算。
     final s = identical(n, node) ? ctx.styleOf(n, parent) : resolvedStyle(n, parent);
     final scale = ctx.scale.withFont(cssSizePx(s['font-size'], ctx.scale) ?? ctx.scale.fontSize);
-    final textColor = _argb(s['color']) ?? ctx.textColor;
+    final textColor = canvasArgb(s['color']) ?? ctx.textColor;
     final inRow = ctx.flow.row;
     final wrap = ctx.flow.wrap;
     final size = cssBoxSize(s, scale, availWidth: ctx.availW, availHeight: ctx.availH);
@@ -381,9 +311,9 @@ class CanvasPage extends StatelessWidget {
     final contentW = math.max(0.0, outerW - border.horizontal - padding.horizontal);
     final contentH = size.height == null ? null : math.max(0.0, size.height! - border.vertical - padding.vertical);
 
-    final radius = _radius(s, scale);
-    final bg = _argb(s['background-color']);
-    final own = _textStyle(s, scale);
+    final radius = canvasRadius(s, scale);
+    final bg = canvasArgb(s['background-color']);
+    final own = canvasTextStyle(s, scale);
     // 哪些样式由里面的控件自己画（按钮的底色、输入框的边框…），外面的盒子就不重复画。
     var paintBg = true, paintBorder = true, usePadding = true;
     Widget content;
@@ -408,14 +338,14 @@ class CanvasPage extends StatelessWidget {
           styles: ctx.styles,
         );
         content = (instance ? _inertCopy() : this)._flex(context, n, s, inner, tightW: tightW, tightH: tightH);
-        final align = _textAlign(s);
+        final align = canvasTextAlign(s);
         if (own != null || align != null) content = DefaultTextStyle.merge(style: own, textAlign: align, child: content);
       case 'text':
         final lines = int.tryParse(s['-webkit-line-clamp'] ?? '');
         content = Text(
           n.strProp('text') ?? '',
-          textAlign: _textAlign(s),
-          style: _textStyle(s, scale, defaultHeight: 1.5),
+          textAlign: canvasTextAlign(s),
+          style: canvasTextStyle(s, scale, defaultHeight: 1.5),
           maxLines: lines != null && lines > 0 ? lines : null,
           overflow: lines != null && lines > 0 ? TextOverflow.ellipsis : null,
         );
@@ -423,17 +353,17 @@ class CanvasPage extends StatelessWidget {
         paintBg = paintBorder = usePadding = false;
         final side = cssBorderSide(s, 'top', scale);
         final line = side == null ? BorderSide.none : BorderSide(width: side.width, color: side.argb == null ? textColor : Color(side.argb!));
-        content = FilledButton(
-          onPressed: () {},
+        content = canvasButton(
+          n,
+          textAlign: canvasTextAlign(s),
           style: FilledButton.styleFrom(
             backgroundColor: bg,
-            foregroundColor: _argb(s['color']),
+            foregroundColor: canvasArgb(s['color']),
             padding: _has(s, 'padding-') ? EdgeInsets.fromLTRB(padding.left, padding.top, padding.right, padding.bottom) : null,
             shape: _hasRadius(s) ? RoundedRectangleBorder(borderRadius: radius ?? BorderRadius.zero, side: line) : (side == null ? null : StadiumBorder(side: line)),
             // 只改写了的那几项：整个替换 textStyle 会丢掉主题里的字体和字重
             textStyle: own == null ? null : (s.containsKey('font-size') ? ctx.buttonText : Theme.of(context).textTheme.labelLarge)?.merge(own),
           ),
-          child: Text(n.strProp('text') ?? '', textAlign: _textAlign(s)),
         );
       case 'image':
         paintBg = false;
@@ -442,6 +372,8 @@ class CanvasPage extends StatelessWidget {
           borderRadius: radius ?? BorderRadius.zero,
           child: CanvasImage(src: n.strProp('src'), width: w, height: size.height, style: s, background: bg),
         );
+      case LcNode.unknownType:
+        content = CanvasUnknownPlaceholder(typeName: n.fileType);
       case 'input':
         paintBg = paintBorder = usePadding = false;
         final side = cssBorderSide(s, 'top', scale);
@@ -449,8 +381,10 @@ class CanvasPage extends StatelessWidget {
           borderRadius: _hasRadius(s) ? radius ?? BorderRadius.zero : BorderRadius.circular(4),
           borderSide: side == null ? const BorderSide() : BorderSide(width: side.width, color: side.argb == null ? textColor : Color(side.argb!)),
         );
+        final value = canvasInputValue(n);
         final field = TextField(
           enabled: false,
+          controller: value == null ? null : TextEditingController(text: value),
           style: own,
           decoration: InputDecoration(
             hintText: n.strProp('placeholder') ?? '',
@@ -462,19 +396,10 @@ class CanvasPage extends StatelessWidget {
           ),
         );
         // 输入框自己没有“自然宽度”：行里、或者宽度没有上限的地方，给它一个固定的 160。
-        content = !tightW && (inRow || !boundedW) ? SizedBox(width: math.min(160, size.maxWidth ?? 160), child: field) : field;
+        final framed = canvasInputFrame(n, field);
+        content = !tightW && (inRow || !boundedW) ? SizedBox(width: math.min(160, size.maxWidth ?? 160), child: framed) : framed;
       case 'list':
-        final style = _textStyle(s, scale, defaultHeight: 1.75);
-        final items = n.props['items'];
-        content = QuietFlex(
-          direction: Axis.vertical,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (items is List)
-              for (final item in items) Text('• $item', style: style, textAlign: _textAlign(s)),
-          ],
-        );
+        content = canvasBullets(n, s, scale);
       case 'divider':
         paintBorder = false;
         final line = cssBorderSide(s, 'top', scale);
@@ -491,7 +416,29 @@ class CanvasPage extends StatelessWidget {
         final ref = n.strProp('ref');
         content = CanvasComponentPlaceholder(name: ref == null ? null : doc.component(ref)?.name);
       default:
-        content = const SizedBox.shrink();
+        final side = cssBorderSide(s, 'top', scale);
+        final v3 = canvasV3Content(
+          context,
+          CanvasV3(
+            node: n,
+            textColor: textColor,
+            own: own,
+            radius: radius,
+            bg: bg,
+            side: side == null ? null : BorderSide(width: side.width, color: side.argb == null ? textColor : Color(side.argb!)),
+            padded: _has(s, 'padding-'),
+            tightW: tightW,
+            boundedW: boundedW && !inRow,
+            contentW: contentW,
+            inert: inert || instance,
+            selected: selected,
+            onSelect: onSelect,
+            slot: (name, {required row, required availW, end = false}) =>
+                (instance ? _inertCopy() : this)._slot(context, n, ctx, name, row: row, availW: availW, end: end, scale: scale, textColor: textColor),
+          ),
+        );
+        if (kCanvasV3SelfBoxed.contains(n.type)) paintBg = paintBorder = usePadding = false;
+        content = v3 ?? const SizedBox.shrink();
     }
 
     // 边框盒：尺寸 → 底色 / 边框 / 圆角 / 阴影 → 裁剪 → 内边距 → 内容。哪一层没有就不套。
@@ -499,8 +446,8 @@ class CanvasPage extends StatelessWidget {
     Widget box = content;
     if (!inset.isZero) box = Padding(padding: EdgeInsets.fromLTRB(inset.left, inset.top, inset.right, inset.bottom), child: box);
     if (cssClips(s)) box = ClipRRect(borderRadius: radius ?? BorderRadius.zero, child: box);
-    final shadow = _shadow(n, s, scale, textColor);
-    final edge = paintBorder ? _border(s, scale, textColor, radius != null) : null;
+    final shadow = canvasShadow(n, s, scale, textColor);
+    final edge = paintBorder ? canvasBorder(s, scale, textColor, radius != null) : null;
     if ((paintBg && bg != null) || edge != null || shadow != null || (paintBg && radius != null)) {
       box = DecoratedBox(
         decoration: BoxDecoration(color: paintBg ? bg : null, border: edge, borderRadius: radius, boxShadow: shadow),
@@ -527,31 +474,27 @@ class CanvasPage extends StatelessWidget {
     final badge = hidden ? '已隐藏' : (position == 'absolute' || position == 'fixed' ? '绝对定位' : (position == 'sticky' ? '粘性定位' : null));
     final opacity = cssOpacity(s['opacity']) * (hidden ? 0.35 : 1);
     if (opacity < 1) box = Opacity(opacity: opacity, child: box);
-    if (badge != null) {
-      box = Stack(
-        fit: StackFit.passthrough,
-        clipBehavior: Clip.none,
-        children: [
-          box,
-          // 往上探出去一点：贴着左上角放会盖住文字开头
-          Positioned(left: 0, top: -9, child: CanvasBadge(badge)),
-        ],
-      );
-    }
+    if (badge != null) box = canvasBadged(box, badge);
     if (!margin.isZero) box = Padding(padding: EdgeInsets.fromLTRB(margin.left, margin.top, margin.right, margin.bottom), child: box);
 
     // 选中框和拖柄由画布叠在上面画；这里只管点选和长按拖动。
-    // 实例整块只当一个东西：里面的内容一律不接手势（点哪儿选中的都是实例）。
-    final droppable = n.isContainer && !instance;
+    // 实例整块只当一个东西：里面的内容不接手势（点哪儿选中的都是实例）；只有填进它插槽里的东西是活的。
+    final droppable = n.isContainer && (!instance || node.hasSlots) && n.type != 'dialog';
+    // 锁着的：点不中、拖不动（点它等于点它外面那一层）；它里面的东西照常能点。
     Widget wrapped = inert
         ? box
+        : node.locked
+        ? KeyedSubtree(
+            key: ValueKey('lowcode-node-${n.id}'),
+            child: droppable ? box : IgnorePointer(child: box),
+          )
         : GestureDetector(
             key: ValueKey('lowcode-node-${n.id}'),
             behavior: HitTestBehavior.opaque,
             onTap: () => onSelect(n.id),
             child: droppable ? box : IgnorePointer(child: box),
           );
-    if (!inert) {
+    if (!inert && !node.locked) {
       // 变淡包在“长按拿起”里面：拖动中这一层不能换位置，不然手势会被打断。
       wrapped = _liftable(node, node.id == movingId ? Opacity(opacity: 0.35, child: wrapped) : wrapped);
     }
@@ -575,6 +518,30 @@ class CanvasPage extends StatelessWidget {
     if (expanded) return Expanded(key: key, flex: grow.round().clamp(1, 1000), child: wrapped);
     if (flexible) return Flexible(key: key, child: wrapped);
     return KeyedSubtree(key: key, child: wrapped);
+  }
+
+  /// 画一个插槽（列表行左右、导航栏左右、标签页的一页、弹窗的内容和底部）。它的落点 id 是“宿主 id#插槽名”。
+  Widget _slot(BuildContext context, LcNode host, _Ctx base, String name, {required bool row, required double availW, bool end = false, CssScale? scale, Color? textColor}) {
+    final kids = lcSlotChildren(host, name);
+    final inner = _Ctx(
+      parent: host,
+      flow: CssFlow(row: row, reverse: false, wrap: false),
+      boundedW: !row,
+      boundedH: false,
+      availW: availW,
+      availH: null,
+      scale: scale ?? base.scale,
+      growCount: 0,
+      textColor: textColor ?? base.textColor,
+      buttonText: base.buttonText,
+      styles: base.styles,
+    );
+    final style = row ? {'align-items': 'center', 'column-gap': '8px', if (end) 'justify-content': 'flex-end'} : const {'row-gap': '8px', 'align-items': 'stretch'};
+    final label = lcSlotsOf(host).where((s) => s.name == name).firstOrNull?.label ?? name;
+    final Widget body = kids.isEmpty
+        ? (inert ? const SizedBox.shrink() : CanvasSlotHint(key: ValueKey('lc-slot-hint-${host.id}-$name'), label: label, row: row, quiet: row && selected != host.id))
+        : _flex(context, host, style, inner, tightW: !row, tightH: false, only: kids);
+    return inert ? body : KeyedSubtree(key: boxKey(lcSlotBoxId(host.id, name)), child: body);
   }
 
   Widget _liftable(LcNode n, Widget child) {

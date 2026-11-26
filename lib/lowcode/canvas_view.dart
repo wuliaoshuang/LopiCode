@@ -15,14 +15,14 @@ import 'package:flutter/scheduler.dart';
 import 'package:lopicode/backdrop/backdrop_model.dart';
 import 'package:lopicode/lowcode/canvas_css.dart';
 import 'package:lopicode/lowcode/canvas_drag_widgets.dart';
+import 'package:lopicode/lowcode/canvas_dropbox.dart';
 import 'package:lopicode/lowcode/canvas_overlay_widgets.dart';
 import 'package:lopicode/lowcode/canvas_render_widgets.dart';
 import 'package:lopicode/lowcode/canvas_viewport.dart';
-import 'package:lopicode/lowcode/component_ops.dart';
 import 'package:lopicode/lowcode/editor_drag.dart';
 import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/lowcode/palette_widgets.dart';
-import 'package:lopicode/lowcode/style_resolve.dart';
+import 'package:lopicode/lowcode/slots.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/app_backdrop.dart';
 import 'package:material_ui/material_ui.dart';
@@ -45,6 +45,8 @@ class CanvasView extends StatefulWidget {
     this.showBoxModel = true,
     this.topInset = 0,
     this.bottomInset = 0,
+    this.overlayId,
+    this.statePreview,
   });
 
   final LcDocument doc;
@@ -75,6 +77,10 @@ class CanvasView extends StatefulWidget {
 
   /// 画布最下面被别的东西（收起来的组件盒手柄）盖住多高：页面滚到底时底边停在它上面。
   final double bottomInset;
+
+  /// “只看这个弹层”的那个弹窗；正在预览的状态样式（见 CanvasPage 同名的两项）。
+  final String? overlayId;
+  final ({String nodeId, String state})? statePreview;
 
   @override
   State<CanvasView> createState() => CanvasViewState();
@@ -287,17 +293,12 @@ class CanvasViewState extends State<CanvasView> with SingleTickerProviderStateMi
     final parent = doc.parentOf(node.id);
     final parentBox = parent == null ? null : _keys[parent.id]?.currentContext?.findRenderObject();
     final base = parentBox is RenderBox && parentBox.hasSize ? parentBox.size.width : _pageSize.width;
-    final style = resolvedStyle(node, parent);
-    final scale = CssScale(pageWidth: _pageSize.width, pageHeight: _pageSize.height);
-    final font = scale.withFont(cssSizePx(style['font-size'], scale) ?? 16);
-    _selection.value = CanvasSelection(
-      nodeId: node.id,
-      rect: rect,
-      margin: cssEdges(style, 'margin', font, percentOf: base),
-      border: cssBorderWidths(style, font),
-      padding: cssEdges(style, 'padding', font, percentOf: base),
-      isRoot: parent == null,
-    );
+    // 旁边别的组件占的地方：尺寸标签放到框外面时避开它们
+    final avoid = [
+      for (final id in _keys.keys)
+        if (_rectOf(id, pageBox) case final box? when sizeLabelAvoids(doc, node.id, rect, id, box)) box,
+    ];
+    _selection.value = CanvasSelection.of(node, parent, rect, base: base, page: _pageSize, avoid: avoid);
   }
 
   /// 一个组件此刻在屏幕上占的那一块（屏幕坐标）；量不到是 null。
@@ -368,30 +369,15 @@ class CanvasViewState extends State<CanvasView> with SingleTickerProviderStateMi
 
   // ───────────── 拖组件：算落点、边缘自动滚 ─────────────
 
-  DropBox? _boxOf(LcNode node, LcNode? parent, RenderBox pageBox) {
-    final rect = _rectOf(node.id, pageBox);
-    if (rect == null) return null;
-    final instance = node.type == 'component';
-    final container = node.isContainer && !instance;
-    final flow = container ? cssFlow(resolvedStyle(node, parent), rowByDefault: node.type == 'row') : null;
-    return DropBox(
-      id: node.id,
-      label: instance ? componentLabel(widget.doc, node) : node.spec.label,
-      rect: rect,
-      container: container,
-      row: flow?.row ?? false,
-      reverse: flow?.reverse ?? false,
-      children: container ? [for (final c in node.children) ?_boxOf(c, node, pageBox)] : const [],
-    );
-  }
+  DropBox? _boxes(RenderBox pageBox) => lcDropBoxTree(widget.doc, (id) => _rectOf(id, pageBox), overlayId: widget.overlayId);
 
   /// 在拖柄上点了一下（没拖）：当成点在它下面的组件上——拖柄能按的范围比看到的大，不能把旁边的小组件挡得点不着。
   void _tapThrough(Offset global) {
     final self = context.findRenderObject(), pageBox = _pageBox;
-    final root = pageBox == null ? null : _boxOf(widget.doc.root, null, pageBox);
+    final root = pageBox == null ? null : _boxes(pageBox);
     if (root == null || self is! RenderBox) return;
     final point = (self.globalToLocal(global) - _offset) / _scale;
-    widget.onSelect(root.rect.contains(point) ? dropChain(root, point).last.id : null);
+    widget.onSelect(root.rect.contains(point) ? lcSplitSlotId(dropChain(root, point).last.id).$1 : null);
   }
 
   /// 开始拖：把所有组件的位置量下来（拖动中排版不变，量一次就够）。量不到（页面还没排出来）返回 false。
@@ -399,7 +385,7 @@ class CanvasViewState extends State<CanvasView> with SingleTickerProviderStateMi
     _stopDrag();
     _ticker.stop();
     final pageBox = _pageBox;
-    final root = pageBox == null ? null : _boxOf(widget.doc.root, null, pageBox);
+    final root = pageBox == null ? null : _boxes(pageBox);
     if (root == null) return false;
     setState(() => _drag = (drag: drag, root: root));
     _autoScroll = Timer.periodic(const Duration(milliseconds: 16), (_) => _autoScrollTick());
@@ -502,7 +488,7 @@ class CanvasViewState extends State<CanvasView> with SingleTickerProviderStateMi
       }
 
       walk(widget.doc.root);
-      _keys.removeWhere((id, _) => !alive.contains(id));
+      _keys.removeWhere((id, _) => !alive.contains(lcSplitSlotId(id).$1));
     }
     SchedulerBinding.instance.addPostFrameCallback((_) => _measure());
     return LayoutBuilder(
@@ -531,6 +517,8 @@ class CanvasViewState extends State<CanvasView> with SingleTickerProviderStateMi
               onLiftCancel: widget.onLiftCancel,
               boxKey: _keyFor,
               preview: _preview,
+              overlayId: widget.overlayId,
+              statePreview: widget.statePreview,
             ),
             Positioned.fill(
               child: ListenableBuilder(

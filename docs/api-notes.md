@@ -642,3 +642,41 @@ PHP 真跑撞到并修掉的 5 个问题，以及依据：
 | 系统 WebView 是否完整执行这条策略（拦外部图片 / 脚本 / fetch） | — | **没在真机验证** | 测试里只能证明“交给视图的文档开头带着这条策略” |
 
 自己定的数值见各文件开头：解析上限 20 万字、缓存 200 万字、代码块 30 行折叠、流式不上色 2 万字、单词串 2000、图片（网络 5MB / 15 秒 / 3 次跳转、本机 20MB、data: 2MB、内存缓存 24MB、最高 320）、表格一格最宽 240、预览高 120–360、同时 2 个预览、HTML 嵌套 12 层、解析嵌套 6 层。
+
+## 低代码内置图标（2026-11-26，编辑器第 3 期 B1）
+
+| 事实 | 来源 | 状态 | 我们怎么用 |
+|---|---|---|---|
+| `Icons.add` / `Icons.send` 等 25 个名字在 Flutter 的 `Icons` 里存在 | 本机 Flutter SDK：`lib/lowcode/icon_set_widgets.dart` 直接引用它们，编译通过 | 已核对（编译） | 画布画这些图标；Flutter 导出写同名 `Icons.xxx` |
+| 网页 / Vue / React 导出里每个图标的 SVG 路径（24×24）和 Material Icons 官方的形状一致 | 凭记忆照 Material Icons（Apache-2.0）写的 | **未核对**（没逐个和官方 SVG 文件比对，也没在真浏览器里看过） | 导出的按钮里内嵌 `<svg class="lc-icon">`；形状不对只影响导出网页里图标的样子 |
+| `<button disabled>`、`<input required disabled type="email|tel|number|password">`、`<label>` 包住 `<input>` 即关联 | HTML 标准的常识用法 | 未逐条翻官方原文 | 第 3 版新属性的网页导出 |
+
+## 2026-11-26 低代码第 3 期 B2：网格、状态样式和新组件导出用到的 CSS（`lib/lowcode/grid_css.dart`、`states.dart`、`export_web_v3_css.dart`）
+
+| 写法 | 用在哪 | 核对情况 |
+|---|---|---|
+| `display: grid` + `grid-template-columns: repeat(N, 1fr)`；`repeat()` 第一个参数是重复次数、第二个是轨道写法；`fr` 是“剩余空间的一份” | 网格容器（等宽 N 列） | **核对过**：MDN《Basic concepts of grid layout》 https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Grid_layout/Basic_concepts ，例子里就有 `grid-template-columns: repeat(3, 1fr)` |
+| `grid-column: span N`（让自动摆放照常选起点，只定跨几列；N 是正整数，0 和负数无效）；它是 `grid-column-start` / `grid-column-end` 的简写 | 网格里的子组件“跨几列” | **核对过**：MDN `grid-column` https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/grid-column |
+| `:active`（正在被按下 / 激活）、`:disabled`（处于禁用状态的界面元素）、`:focus`（有焦点） | 状态样式“按下 / 禁用 / 聚焦” | **核对过**：MDN《Pseudo-classes》 https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Selectors/Pseudo-classes |
+| `column-gap` / `row-gap` 用在网格上 | 网格的列间距、行间距 | **未核对**（MDN 的网格教程里用的是简写 `gap`；这两个单项没单独打开页面看） |
+| `:where(...)`（不增加选择器权重） | 新组件的默认样式，让页面自己的样式总能盖过去 | **未核对** |
+| `:has(...)` | 勾选框 / 单选项“禁用时变淡”、按钮式单选“选中的那一项” | **未核对**（包括各浏览器从哪个版本起支持） |
+| `field-sizing: content` | 多行输入“自动长高” | **未核对**；不认识它的浏览器会忽略这一条，输入框就是固定行数、不自动长高 |
+| `accent-color`、`appearance: none`、`inset: 0`、`[hidden]` 属性选择器 | 表单控件的颜色、去掉原生外观、弹窗遮罩铺满、页签面板 / 弹窗的隐藏 | **未核对** |
+
+真编译只说明“Vue 3 / React 能把导出的代码编过、能服务端渲染出 HTML”；上面这些 CSS **没在真浏览器里看过效果**。
+
+## 2026-11-26 低代码第 3 期 B3：自定义组件的插槽在 React 里怎么写（`lib/lowcode/export_react.dart`）
+
+导出的写法：默认插槽走 `children`，具名插槽当一个同名属性传一段 JSX；组件里“外面没传就用默认内容”写成 `{children ?? (<>默认内容</>)}`。
+
+| 说法 | 核对结果 | 来源 |
+|---|---|---|
+| 属性可以传任何 JavaScript 值，包括一段 JSX | **核对过**：原文 “you can pass any JavaScript value through them, including objects, arrays, functions, and even JSX!”，示例 `function Card({ children }) { return <div className="card">{children}</div>; }` | https://react.dev/learn/describing-the-ui （“Passing props to a component”一节） |
+| 把 JSX 嵌在组件标签里，组件从 `children` 属性拿到 | **核对过**：同上那段示例；另一页写明用小写的 `children` 属性是 “good and encouraged”，并有把 JSX 放进属性值里传的示例（`content: <p>…</p>`） | https://react.dev/reference/react/Children |
+| “Passing Props to a Component”整页（含 “How to pass some JSX to a component”一节） | **只看了同一份文档源码的预览站和仓库里的原文**，react.dev 上这一页本身没直接打开 | https://react-pm2dhqs66-react-foundation.vercel.app/learn/passing-props-to-a-component |
+| `??`（外面没传时用默认内容） | 这是 JavaScript 自己的写法，不是 React 的；**没对 MDN 核对**。真编译（esbuild）＋服务端渲染跑过：没传时渲染默认内容，传了渲染传的 | `test/dev_webdev_compile_test.dart`「带插槽的商品卡片」 |
+
+一处要知道的：React 里“传了一个空的东西”（比如 `footer={null}`）也算没传，会显示默认内容；导出器不会生成这种写法（没填就干脆不写这个属性）。
+
+Vue 那边（`<slot name>` 里写默认内容、用的地方 `<template #名字>`）第 2 期设计时已对官方文档核对过，这次只是真编译＋服务端渲染再验了一遍。

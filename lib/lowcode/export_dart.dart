@@ -1,4 +1,6 @@
 import 'package:lopicode/lowcode/component_ops.dart';
+import 'package:lopicode/lowcode/export_dart_v3.dart';
+import 'package:lopicode/lowcode/icon_set.dart';
 import 'package:lopicode/lowcode/image_assets.dart';
 import 'package:lopicode/lowcode/model.dart';
 
@@ -6,7 +8,10 @@ import 'package:lopicode/lowcode/model.dart';
 String exportDart(LcDocument doc, {String? className}) {
   final name = className ?? dartClassName(doc.title);
   // 自定义组件的实例先展开成普通控件再生成；展开不了的那个位置是一个空的 SizedBox。
-  final body = _node(expandedTree(doc), null, 3);
+  final tree = expandedTree(doc);
+  final body = _node(tree, null, 3);
+  // 弹窗不在控件树里：每个弹窗一个静态方法（没有弹窗的页面一个字都不多）。
+  final dialogs = [for (final d in dartDialogsOf(tree)) '\n${dartDialogMethodCode(d, _node)}'].join();
   return '''// 由 LopiCode 低代码搭建器生成，重新导出会覆盖本文件。
 import 'package:flutter/material.dart';
 
@@ -17,7 +22,7 @@ class $name extends StatelessWidget {
   Widget build(BuildContext context) {
     return $body;
   }
-}
+$dialogs}
 ''';
 }
 
@@ -47,12 +52,22 @@ String _node(LcNode n, LcNode? parent, int i) {
   switch (n.type) {
     case 'page':
       final bg = n.strProp('bg');
+      // 页面级的栏（顶部导航栏排第一个、底部导航栏排最后一个）放进 Scaffold 自己的位置。
+      final flow = [
+        for (final c in n.children)
+          if (c.type != 'dialog') c,
+      ];
+      final top = flow.isNotEmpty && flow.first.type == 'appBar' ? flow.first : null;
+      final bottom = flow.isNotEmpty && flow.last.type == 'bottomNav' ? flow.last : null;
+      String bar(LcNode b) => dartV3Node(b, i + 1, _node, inRow: false)!;
       return 'Scaffold(\n'
           '${bg != null ? '${_ind(i + 1)}backgroundColor: ${_color(bg)},\n' : ''}'
+          '${top == null ? '' : '${_ind(i + 1)}appBar: ${bar(top).replaceFirst('primary: false', 'primary: true')},\n'}'
+          '${bottom == null ? '' : '${_ind(i + 1)}bottomNavigationBar: ${bar(bottom)},\n'}'
           '${_ind(i + 1)}body: SafeArea(\n'
           '${_ind(i + 2)}child: SingleChildScrollView(\n'
           '${_ind(i + 3)}padding: const EdgeInsets.all(${_d(n.numProp('padding') ?? 0)}),\n'
-          '${_ind(i + 3)}child: ${_flex(n, i + 3, column: true, forceStretchWidth: true)},\n'
+          '${_ind(i + 3)}child: ${_flex(n, i + 3, column: true, forceStretchWidth: true, skip: [?top, ?bottom])},\n'
           '${_ind(i + 2)}),\n'
           '${_ind(i + 1)}),\n'
           '${_ind(i)})';
@@ -84,28 +99,42 @@ String _node(LcNode n, LcNode? parent, int i) {
         if (n.numProp('radius') != null) 'shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(${_d(n.numProp('radius')!)}))',
         if (n.numProp('fontSize') != null) 'textStyle: const TextStyle(fontSize: ${_d(n.numProp('fontSize')!)})',
       ];
+      // 第 3 版加的：图标（FilledButton.icon）、禁用（onPressed: null）。没用到时和以前一个字都不差。
+      final icon = lcIconByName(n.strProp('icon'));
       final button =
-          'FilledButton(\n${_ind(i + 1)}onPressed: () {},\n'
+          '${icon == null ? 'FilledButton' : 'FilledButton.icon'}(\n${_ind(i + 1)}onPressed: ${n.props['disabled'] == true ? 'null' : '() {}'},\n'
           '${_ind(i + 1)}style: FilledButton.styleFrom(${styles.join(', ')}),\n'
-          '${_ind(i + 1)}child: Text(${_s(n.strProp('text') ?? '')}),\n${_ind(i)})';
+          '${icon == null ? '' : '${_ind(i + 1)}icon: const Icon(Icons.${icon.name}),\n'}'
+          '${_ind(i + 1)}${icon == null ? 'child' : 'label'}: Text(${_s(n.strProp('text') ?? '')}),\n${_ind(i)})';
       return wrapFill(_sized(n, i, button, inRow: inRow));
     case 'image':
       final radius = _d(n.numProp('radius') ?? 0);
       final h = n.numProp('height');
       final src = n.strProp('src');
+      final alt = n.strProp('alt');
       final size =
           '${h != null ? 'height: ${_d(h)}, ' : ''}'
           '${n.props['width'] is num ? 'width: ${_d(n.props['width'] as num)}, ' : (n.fillWidth && !inRow ? 'width: double.infinity, ' : '')}';
       final img = src == null
-          ? 'Container(${size}color: const Color(0xFFD3DEE4), alignment: Alignment.center, child: const Icon(Icons.image_outlined))'
+          ? 'Container(${size}color: const Color(0xFFD3DEE4), alignment: Alignment.center, child: const Icon(Icons.image_outlined${alt == null ? '' : ', semanticLabel: ${_s(alt)}'}))'
           // 图片加载失败（没网、地址错）时显示占位，而不是抛异常。
           // 项目里的图片（相对地址）用 Image.asset：要在工程的 pubspec.yaml 的 assets 里列上这个文件。
-          : '${lcIsRemoteSrc(src) ? 'Image.network' : 'Image.asset'}(${_s(src)}, ${size}fit: BoxFit.cover, errorBuilder: (context, error, stack) => const Icon(Icons.broken_image_outlined))';
+          : '${lcIsRemoteSrc(src) ? 'Image.network' : 'Image.asset'}(${_s(src)}, ${size}fit: BoxFit.cover, ${alt == null ? '' : 'semanticLabel: ${_s(alt)}, '}errorBuilder: (context, error, stack) => const Icon(Icons.broken_image_outlined))';
       final clipped = 'ClipRRect(\n${_ind(i + 1)}borderRadius: BorderRadius.circular($radius),\n${_ind(i + 1)}child: $img,\n${_ind(i)})';
       return wrapFill(_margin(n, i, clipped));
     case 'input':
+      // 第 3 版加的：类型、默认值、标签、必填、禁用。没用到时和以前一个字都不差。
+      final value = n.strProp('value');
+      final label = n.strProp('label');
+      final keyboard = const {'number': 'number', 'email': 'emailAddress', 'tel': 'phone'}[n.strProp('inputType')];
       final field =
-          'TextField(\n${_ind(i + 1)}decoration: InputDecoration(\n'
+          '${value == null ? 'TextField' : 'TextFormField'}(\n'
+          '${value == null ? '' : '${_ind(i + 1)}initialValue: ${_s(value)},\n'}'
+          '${n.props['disabled'] == true ? '${_ind(i + 1)}enabled: false,\n' : ''}'
+          '${n.strProp('inputType') == 'password' ? '${_ind(i + 1)}obscureText: true,\n' : ''}'
+          '${keyboard == null ? '' : '${_ind(i + 1)}keyboardType: TextInputType.$keyboard,\n'}'
+          '${_ind(i + 1)}decoration: InputDecoration(\n'
+          '${label == null ? '' : '${_ind(i + 2)}labelText: ${_s(n.props['required'] == true ? '$label *' : label)},\n'}'
           '${_ind(i + 2)}hintText: ${_s(n.strProp('placeholder') ?? '')},\n'
           '${_ind(i + 2)}border: OutlineInputBorder(borderRadius: BorderRadius.circular(${_d(n.numProp('radius') ?? 4)})),\n'
           '${_ind(i + 1)}),\n${_ind(i)})';
@@ -128,6 +157,20 @@ String _node(LcNode n, LcNode? parent, int i) {
       final size = _d(n.numProp('size') ?? 16);
       return inRow ? 'const SizedBox(width: $size)' : 'const SizedBox(height: $size)';
   }
+  // 第 3 版的新组件（export_dart_v3.dart）。弹窗不在控件树里，这里不会走到（_flex 已经把它挑出去了）。
+  final v3 = n.type == 'dialog' ? null : dartV3Node(n, i, _node, inRow: inRow);
+  if (v3 != null) {
+    return switch (n.type) {
+      // 顶部导航栏不在页面最上面时：当一个 56 高的条放在内容里。
+      'appBar' => 'SizedBox(\n${_ind(i + 1)}height: 56,\n${_ind(i + 1)}child: ${_reindent(v3, 1)},\n${_ind(i)})',
+      // 一行里的勾选框、单选组可以被压窄（字会折行），不然一行放不下就溢出了。
+      'checkbox' || 'radio' when inRow => 'Flexible(\n${_ind(i + 1)}child: ${_reindent(_margin(n, i, v3), 1)},\n${_ind(i)})',
+      'icon' || 'switch' || 'checkbox' || 'radio' || 'bottomNav' => _margin(n, i, v3),
+      'select' => _margin(n, i, v3),
+      'textarea' when inRow && n.props['width'] == null => _margin(n, i, 'SizedBox(\n${_ind(i + 1)}width: 160,\n${_ind(i + 1)}child: ${_reindent(v3, 1)},\n${_ind(i)})'),
+      _ => wrapFill(_sized(n, i, v3, inRow: inRow)),
+    };
+  }
   return 'const SizedBox.shrink()';
 }
 
@@ -135,12 +178,15 @@ bool _needsBox(LcNode n) => n.props['width'] != null || n.numProp('padding') != 
 
 String _reindent(String code, int by) => code.replaceAll('\n', '\n${_ind(by)}');
 
-String _flex(LcNode n, int i, {required bool column, bool forceStretchWidth = false}) {
+String _flex(LcNode n, int i, {required bool column, bool forceStretchWidth = false, List<LcNode> skip = const []}) {
   const cross = {'start': 'start', 'center': 'center', 'end': 'end', 'stretch': 'stretch'};
   const main = {'start': 'start', 'center': 'center', 'end': 'end', 'between': 'spaceBetween'};
   final a = n.strProp('align') ?? (column ? 'start' : 'center');
   final j = n.strProp('justify');
-  final children = [for (final c in n.children) '${_ind(i + 2)}${_node(c, n, i + 2)},\n'].join();
+  final children = [
+    for (final c in n.children)
+      if (c.type != 'dialog' && !skip.contains(c)) '${_ind(i + 2)}${_node(c, n, i + 2)},\n',
+  ].join();
   final flex =
       '${column ? 'Column' : 'Row'}(\n'
       '${_ind(i + 1)}mainAxisSize: ${column ? 'MainAxisSize.min' : 'MainAxisSize.max'},\n'
