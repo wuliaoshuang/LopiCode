@@ -11,6 +11,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lopicode/appearance/theme_builtin.dart';
 import 'package:lopicode/backdrop/backdrop_model.dart';
 import 'package:lopicode/build/build_screen.dart';
+import 'package:lopicode/build/deploy_panel_view.dart';
 import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/core/templates.dart';
 import 'package:lopicode/lowcode/builder_screen.dart';
@@ -241,6 +242,15 @@ void main() {
       await shot(tester, 'runtime-light');
       await show(tester, env, FavoritesScreen(session: session), rounds: 6);
       await flip(tester, env, what: '收藏页');
+    });
+
+    testWidgets('后端项目的打包页（构建与部署）', (tester) async {
+      final (env, project, session) = await open(tester, ProjectTemplate.backendBlocks, language: 'node', fakePty: true);
+      await seed(tester, env);
+      await show(tester, env, ProjectShell(key: UniqueKey(), project: project, session: session, initial: ShellDest.apk), rounds: 12);
+      expect(find.byType(BuildScreen), findsOneWidget);
+      expect(find.byType(DeployPanel), findsOneWidget, reason: '后端项目：打包页换成“构建与部署”');
+      await flip(tester, env, what: '构建与部署页');
     });
 
     testWidgets('搭建页：低代码、后端积木（画布默认还是实底，只是页面后面有背景）', (tester) async {

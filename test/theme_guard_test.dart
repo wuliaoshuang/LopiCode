@@ -54,6 +54,11 @@ const _exceptions = <String, Map<String, String>>{
     'color: const Color(0xFFD3DEE4), alignment: Alignment.center': '生成的 Flutter 代码文本',
     "'boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 3, offset: Offset(0, 1))]'": '生成的 Flutter 代码文本',
   },
+  'lib/ui/html_preview.dart': {'color: Colors.white,': '网页内容：聊天里 HTML 预览框的底。网页默认就是白底黑字，换什么主题、深色模式都给它白底，不是界面色'},
+  'lib/ui/html_preview_web_view.dart': {
+    'await _web.setBackgroundColor(Colors.white);': '网页内容：预览用的网页视图的默认白底（同上）',
+    'style: const TextStyle(color: Colors.black87, fontSize: 13)': '写在预览框白底上的那句“预览打不开”：底是固定的白，字就得是固定的深色',
+  },
   'lib/lowcode/style_color_sheet.dart': {
     "slider('l', '明度'": '取色器的明度条：从黑到白是这根条本身的含义',
     'const CheckerPainter(Color(0xFFFFFFFF), Color(0xFFCFD2D6), 4)': '取色器的透明棋盘格：约定俗成的灰白格，表示“透明”',
