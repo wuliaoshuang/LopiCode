@@ -82,7 +82,7 @@ class InspectorChip extends StatelessWidget {
             height: 36,
             constraints: const BoxConstraints(minWidth: 40),
             padding: const EdgeInsets.symmetric(horizontal: Space.x3),
-            // 不用 alignment：放进会换行的一排里时它会把自己撑满整行（出截图时发现整条刻度一行只有一档）
+            // 用 Center(widthFactor: 1) 而不是 alignment：宽度跟着字走，放进会换行的一排里也不会把自己撑满整行
             child: Center(
               widthFactor: 1,
               child: icon != null
