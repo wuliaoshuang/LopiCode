@@ -326,6 +326,23 @@ void main() {
       await shot(tester, 'page-设置页-dark');
     });
 
+    testWidgets('深色：全组件页、弹层编辑状态、网格、选项编辑块都画得出来', (tester) async {
+      await lbOpen(tester, doc: v3AllPage(), mode: ThemeMode.dark);
+      await shot(tester, 'dark-all-page');
+      await lbOpen(tester, doc: smallDoc(), mode: ThemeMode.dark);
+      await lbTap(tester, lbNode('dlg'));
+      expect(lbKey('lc-overlay-bar'), findsOneWidget);
+      await shot(tester, 'dark-dialog-editing');
+      final grid = gridDoc();
+      grid.find('g')!.style.addAll({'display': 'grid', 'grid-template-columns': 'repeat(3, 1fr)', 'column-gap': '8px', 'row-gap': '8px'});
+      await lbOpen(tester, doc: grid, mode: ThemeMode.dark, selected: 'g');
+      await shot(tester, 'dark-grid');
+      await lbOpen(tester, doc: v3AllPage(), mode: ThemeMode.dark, selected: 'rd');
+      await lbOpenCommon(tester);
+      expect(lbKey('lc-items-options'), findsOneWidget);
+      await shot(tester, 'dark-inspector-radio');
+    });
+
     testWidgets('往插槽里拖：组件盒的图标拖进列表行左边；画布上的字拖进右边；存下来带着插槽名', (tester) async {
       final session = await lbOpen(tester, doc: smallDoc());
       expect(lbKey('lc-slot-hint-li-left'), findsOneWidget);

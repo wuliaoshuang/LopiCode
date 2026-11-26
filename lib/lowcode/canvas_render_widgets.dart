@@ -585,7 +585,7 @@ class CanvasPage extends StatelessWidget {
     final style = row ? {'align-items': 'center', 'column-gap': '8px', if (end) 'justify-content': 'flex-end'} : const {'row-gap': '8px', 'align-items': 'stretch'};
     final label = lcSlotsOf(host).where((s) => s.name == name).firstOrNull?.label ?? name;
     final Widget body = kids.isEmpty
-        ? (inert ? const SizedBox.shrink() : CanvasSlotHint(key: ValueKey('lc-slot-hint-${host.id}-$name'), label: label, row: row))
+        ? (inert ? const SizedBox.shrink() : CanvasSlotHint(key: ValueKey('lc-slot-hint-${host.id}-$name'), label: label, row: row, quiet: row && selected != host.id))
         : _flex(context, host, style, inner, tightW: !row, tightH: false, only: kids);
     return inert ? body : KeyedSubtree(key: boxKey(lcSlotBoxId(host.id, name)), child: body);
   }

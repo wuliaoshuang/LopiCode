@@ -502,9 +502,12 @@ class _DialogChip extends StatelessWidget {
 
 /// 空插槽的落点。横排的插槽里是 28 见方的小框，竖排的是一条写着字的。
 class CanvasSlotHint extends StatelessWidget {
-  const CanvasSlotHint({super.key, required this.label, required this.row});
+  const CanvasSlotHint({super.key, required this.label, required this.row, this.quiet = false});
   final String label;
   final bool row;
+
+  /// 宿主没被选中时画淡一点：一页里十来个小“＋”框太抢眼，选中那一行时才画实。
+  final bool quiet;
 
   @override
   Widget build(BuildContext context) {
@@ -516,11 +519,14 @@ class CanvasSlotHint extends StatelessWidget {
     );
     final color = ui.lowcodeColor(LowcodeKey.dropText);
     if (row) {
-      return Container(
-        width: 28,
-        height: 28,
-        decoration: box,
-        child: Icon(Icons.add, size: 14, color: color),
+      return Opacity(
+        opacity: quiet ? 0.4 : 1,
+        child: Container(
+          width: 28,
+          height: 28,
+          decoration: box,
+          child: Icon(Icons.add, size: 14, color: color),
+        ),
       );
     }
     return Container(

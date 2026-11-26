@@ -118,7 +118,7 @@ class _LcItemsEditorState extends State<LcItemsEditor> {
             ],
           ),
           for (var i = 0; i < all.length; i++) ...[
-            if (i > 0) const SizedBox(height: Space.x1),
+            if (i > 0) const SizedBox(height: Space.x2),
             Row(
               children: [
                 SizedBox(
