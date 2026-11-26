@@ -112,10 +112,7 @@ class PhpGen2 extends Gen2Dyn {
   @override
   List<String> recordDecl(String name, String label, List<String> fields, {String? base}) => [
     'class $name extends ${base == null ? 'LcRec' : (base.isEmpty ? 'LcVariant' : base)} {',
-    ...indent([
-      'const lcName = ${textLit(label)};',
-      if (base == null || base.isNotEmpty) 'function __construct(${fields.map((f) => 'public \$$f').join(', ')}) {}',
-    ]),
+    ...indent(['const lcName = ${textLit(label)};', if (base == null || base.isNotEmpty) 'function __construct(${fields.map((f) => 'public \$$f').join(', ')}) {}']),
     '}',
   ];
 
@@ -139,9 +136,17 @@ class PhpGen2 extends Gen2Dyn {
         '}',
       ];
     } else if (c.parent != null) {
-      ctor = [r'function __construct(...$lcArgs) {', ...indent([r'parent::__construct(...$lcArgs);', own]), '}'];
+      ctor = [
+        r'function __construct(...$lcArgs) {',
+        ...indent([r'parent::__construct(...$lcArgs);', own]),
+        '}',
+      ];
     } else {
-      ctor = ['function __construct() {', ...indent([own]), '}'];
+      ctor = [
+        'function __construct() {',
+        ...indent([own]),
+        '}',
+      ];
     }
     return [
       'class ${c.name} extends ${c.parent ?? 'LcObj'} {',

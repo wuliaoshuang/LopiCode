@@ -5,7 +5,7 @@ import 'package:lopicode/lang/ast.dart';
 import 'package:lopicode/lang/gen2.dart';
 import 'package:lopicode/lang/gen2_dyn.dart';
 import 'package:lopicode/lang/gen_support.dart';
-import 'package:lopicode/lang/rt2_python.dart';
+import 'package:lopicode/lang/rt2_python_dyn.dart';
 import 'package:lopicode/lang/typecheck.dart';
 import 'package:lopicode/lang/types.dart';
 
@@ -146,7 +146,11 @@ class PythonGen2 extends Gen2Dyn {
     'class $name(${base == null ? 'lc.Rec' : (base.isEmpty ? 'lc.Variant' : base)}):',
     ...indent([
       'lcName = ${textLit(label)}',
-      if (base == null || base.isNotEmpty) ...['', 'def __init__(${['self', ...fields].join(', ')}):', ...suite([for (final f in fields) 'self.$f = $f'])],
+      if (base == null || base.isNotEmpty) ...[
+        '',
+        'def __init__(${['self', ...fields].join(', ')}):',
+        ...suite([for (final f in fields) 'self.$f = $f']),
+      ],
     ]),
     '',
   ];
@@ -172,9 +176,15 @@ class PythonGen2 extends Gen2Dyn {
         ...suite([if (!explicit && c.parent != null) 'super().__init__()', if (!explicit) own, ...c.ctorBody]),
       ];
     } else if (c.parent != null) {
-      ctor = ['def __init__(self, *lcArgs):', ...suite(['super().__init__(*lcArgs)', own])];
+      ctor = [
+        'def __init__(self, *lcArgs):',
+        ...suite(['super().__init__(*lcArgs)', own]),
+      ];
     } else {
-      ctor = ['def __init__(self):', ...suite([own])];
+      ctor = [
+        'def __init__(self):',
+        ...suite([own]),
+      ];
     }
     return [
       'class ${c.name}(${c.parent ?? 'lc.Obj'}):',
@@ -186,7 +196,11 @@ class PythonGen2 extends Gen2Dyn {
         ...suite([for (final f in c.fields) 'self.${f.$1} = ${f.$2}']),
         '',
         ...ctor,
-        for (final m in c.methods) ...['', 'def ${m.$1}(${['self', ...m.$2].join(', ')}):', ...suite(m.$3)],
+        for (final m in c.methods) ...[
+          '',
+          'def ${m.$1}(${['self', ...m.$2].join(', ')}):',
+          ...suite(m.$3),
+        ],
       ]),
       '',
     ];

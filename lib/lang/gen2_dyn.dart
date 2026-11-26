@@ -69,6 +69,7 @@ abstract class Gen2Dyn extends Gen2 {
   // —— 名字 ——
 
   String typeName(String name) => 'T_${v2Ident(name)}';
+
   /// 类型当值传给小库（PHP 要写 `T::class`）。
   String typeRef(String name) => typeName(name);
   String caseType(String variant, String c) => 'T_${v2Ident(variant)}_${v2Ident(c)}';
@@ -238,11 +239,14 @@ abstract class Gen2Dyn extends Gen2 {
   @override
   String logCode(String text) => call('log', [text]);
   @override
-  String sizeCode(String code, LType type) => call(switch (type.kind) {
-    LKind.text => 'textLen',
-    LKind.list || LKind.dict => 'len',
-    _ => 'dynSize',
-  }, [code]);
+  String sizeCode(String code, LType type) => call(
+    switch (type.kind) {
+      LKind.text => 'textLen',
+      LKind.list || LKind.dict => 'len',
+      _ => 'dynSize',
+    },
+    [code],
+  );
   @override
   String orElseCode(String code, LType type, String def, LType want) => '($code ?? $def)';
   @override
@@ -259,7 +263,10 @@ abstract class Gen2Dyn extends Gen2 {
   @override
   String recordNew(LRecordDecl d, LType type, List<String> values) => newOf(typeName(d.name), values);
   @override
-  String recordCopy(LRecordDecl d, LType type, String of, Map<String, String> changes) => call('recCopy', [of, this.changes({for (final e in changes.entries) member(e.key): e.value})]);
+  String recordCopy(LRecordDecl d, LType type, String of, Map<String, String> changes) => call('recCopy', [
+    of,
+    this.changes({for (final e in changes.entries) member(e.key): e.value}),
+  ]);
   @override
   String fieldGet(String of, LType ofType, String name, LField e) => '$of$dot${member(name)}';
   @override
@@ -285,7 +292,9 @@ abstract class Gen2Dyn extends Gen2 {
   // —— 语句 ——
 
   @override
-  List<String> unreachable() => ['${call('fail', [textLit('到不了这里')])}$end'];
+  List<String> unreachable() => [
+    '${call('fail', [textLit('到不了这里')])}$end',
+  ];
   @override
   String snapshot(String list, LType elem) => call('items', [list]);
   @override
@@ -309,13 +318,16 @@ abstract class Gen2Dyn extends Gen2 {
   DynClass _class(LClassInfo c) {
     final d = c.decl;
     final init = V2Fn('${c.name}.字段', LType.nul, cls: c);
-    final fields = inFn(init, () => [
-      for (final f in d.fields)
-        () {
-          final ft = w.resolve(f.type, c.typeVars);
-          return (member(f.name), f.init == null ? nullLit() : x(f.init!, ft));
-        }(),
-    ]);
+    final fields = inFn(
+      init,
+      () => [
+        for (final f in d.fields)
+          () {
+            final ft = w.resolve(f.type, c.typeVars);
+            return (member(f.name), f.init == null ? nullLit() : x(f.init!, ft));
+          }(),
+      ],
+    );
     List<String>? ctorParams;
     var ctorBody = const <String>[];
     final ctor = d.ctor;

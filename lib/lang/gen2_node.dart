@@ -104,7 +104,11 @@ class NodeGen2 extends Gen2Dyn {
       'class ${c.name}${c.parent == null ? ' extends lc.Obj' : ' extends ${c.parent}'} {',
       ...indent([
         for (final f in c.fields) '${f.$1} = ${f.$2};',
-        if (c.ctorParams != null) ...['constructor(${c.ctorParams!.join(', ')}) {', ...indent([if (needSuper || c.parent == null) 'super();', ...c.ctorBody]), '}'],
+        if (c.ctorParams != null) ...[
+          'constructor(${c.ctorParams!.join(', ')}) {',
+          ...indent([if (needSuper || c.parent == null) 'super();', ...c.ctorBody]),
+          '}',
+        ],
         for (final m in c.methods) ...['${m.$1}(${m.$2.join(', ')}) {', ...indent(m.$3), '}'],
       ]),
       '}',

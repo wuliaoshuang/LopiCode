@@ -5,7 +5,7 @@ import 'package:lopicode/lang/ast.dart';
 import 'package:lopicode/lang/ast_util.dart';
 import 'package:lopicode/lang/gen2.dart';
 import 'package:lopicode/lang/gen2_go.dart';
-import 'package:lopicode/lang/rt2_go.dart';
+import 'package:lopicode/lang/rt2_go_dyn.dart';
 import 'package:lopicode/lang/type_world.dart';
 import 'package:lopicode/lang/types.dart';
 
@@ -92,7 +92,18 @@ class GoGen2 extends GoGen2Types {
       'if lcDone {',
       ...indent([inside || fn.isVoid ? 'return' : 'return lcRet']),
       '}',
-      if (inLoop) ...['if lcBrk == 1 {', ...indent(['lcBrk = 0', 'break']), '}', 'if lcBrk == 2 {', ...indent(['lcBrk = 0', 'continue']), '}'] else if (inside) ...['if lcBrk != 0 {', ...indent(['return']), '}'],
+      if (inLoop) ...[
+        'if lcBrk == 1 {',
+        ...indent(['lcBrk = 0', 'break']),
+        '}',
+        'if lcBrk == 2 {',
+        ...indent(['lcBrk = 0', 'continue']),
+        '}',
+      ] else if (inside) ...[
+        'if lcBrk != 0 {',
+        ...indent(['return']),
+        '}',
+      ],
     ];
   }
 
@@ -300,10 +311,13 @@ class GoGen2 extends GoGen2Types {
     out.addAll([
       'func $recv lcF_$id() {',
       ...indent(
-        inFn(init, () => [
-          for (final f in d.fields)
-            if (f.init != null) 'o.${member(f.name)} = ${x(f.init!, w.resolve(f.type, c.typeVars))}',
-        ]),
+        inFn(
+          init,
+          () => [
+            for (final f in d.fields)
+              if (f.init != null) 'o.${member(f.name)} = ${x(f.init!, w.resolve(f.type, c.typeVars))}',
+          ],
+        ),
       ),
       '}',
     ]);
@@ -322,7 +336,11 @@ class GoGen2 extends GoGen2Types {
         }
       });
       final head = [if (!explicit && parent != null) 'o.${bodyName(parent.name)}.lcInit()', if (!explicit) 'o.lcF_$id()'];
-      out.addAll(['func $recv lcInit($ps) {', ...indent(funcBody(f, ctor.body, first: () => [...head, ...first])), '}']);
+      out.addAll([
+        'func $recv lcInit($ps) {',
+        ...indent(funcBody(f, ctor.body, first: () => [...head, ...first])),
+        '}',
+      ]);
       params = [for (var i = 0; i < sig.params.length; i++) 'a$i ${gt(sig.params[i])}'].join(', ');
       args = [for (var i = 0; i < sig.params.length; i++) 'a$i'];
     } else {
@@ -330,7 +348,11 @@ class GoGen2 extends GoGen2Types {
       final types = inherited?.params ?? const <LType>[];
       params = [for (var i = 0; i < types.length; i++) 'a$i ${gt(types[i])}'].join(', ');
       args = [for (var i = 0; i < types.length; i++) 'a$i'];
-      out.addAll(['func $recv lcInit($params) {', ...indent([if (parent != null) 'o.${bodyName(parent.name)}.lcInit(${args.join(', ')})', 'o.lcF_$id()']), '}']);
+      out.addAll([
+        'func $recv lcInit($params) {',
+        ...indent([if (parent != null) 'o.${bodyName(parent.name)}.lcInit(${args.join(', ')})', 'o.lcF_$id()']),
+        '}',
+      ]);
     }
     out.addAll([
       'func New_$id$tp($params) *$s {',

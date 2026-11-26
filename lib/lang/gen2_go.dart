@@ -331,8 +331,7 @@ abstract class GoGen2Types extends Gen2 {
   // —— 记录、枚举、变体、类 ——
 
   @override
-  String recordNew(LRecordDecl d, LType type, List<String> values) =>
-      '${gt(type)}{${[for (var i = 0; i < d.fields.length; i++) '${member(d.fields[i].name)}: ${values[i]}'].join(', ')}}';
+  String recordNew(LRecordDecl d, LType type, List<String> values) => '${gt(type)}{${[for (var i = 0; i < d.fields.length; i++) '${member(d.fields[i].name)}: ${values[i]}'].join(', ')}}';
 
   @override
   String recordCopy(LRecordDecl d, LType type, String of, Map<String, String> changes) {
@@ -351,8 +350,7 @@ abstract class GoGen2Types extends Gen2 {
   @override
   String fieldGet(String of, LType ofType, String name, LField e) => _fieldOf(of, ofType, name, e.of is LThis);
   @override
-  String setFieldLine(String obj, LType objType, String name, String value, LTField target) =>
-      assignLine(_fieldOf(obj, objType, name, target.of is LThis), value);
+  String setFieldLine(String obj, LType objType, String name, String value, LTField target) => assignLine(_fieldOf(obj, objType, name, target.of is LThis), value);
   @override
   String enumCode(LEnumDecl d, String caseName) => '${typeName(d.name)}_c_${v2Ident(caseName)}';
   @override

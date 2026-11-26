@@ -108,7 +108,13 @@ abstract class Gen2Base {
   /// 当前所在的类的类型。
   LType get selfType {
     final c = _fnOrNull?.owner;
-    return c == null ? LType.any : LType(LKind.object, name: c.name, args: [for (final v in c.typeVars) LType(LKind.typeVar, name: v)]);
+    return c == null
+        ? LType.any
+        : LType(
+            LKind.object,
+            name: c.name,
+            args: [for (final v in c.typeVars) LType(LKind.typeVar, name: v)],
+          );
   }
 
   Never unsupported(String what, [LNode? node]) => throw LangUnsupported(what, src: node?.src);
@@ -358,7 +364,7 @@ abstract class Gen2Base {
         out
           ..addAll(fn.pre)
           ..addAll(lines);
-        if (lExits(s)) break;
+        if (stmtExits(s)) break;
       }
     } finally {
       fn.pre = outer;
@@ -467,10 +473,7 @@ abstract class Gen2Base {
   }
 
   /// “返回”。不返回东西的函数里“返回 (式子)”：式子照算（[value]），再返回。
-  List<String> returnLines(String? code, {LExpr? value}) => [
-    if (code == null && value != null && fn.isVoid && value is! LLit) ...exprStmt(x(value), isVoid: t(value).isNul),
-    returnLine(code),
-  ];
+  List<String> returnLines(String? code, {LExpr? value}) => [if (code == null && value != null && fn.isVoid && value is! LLit) ...exprStmt(x(value), isVoid: t(value).isNul), returnLine(code)];
 
   String nulOf(LType type);
 
@@ -520,13 +523,17 @@ abstract class Gen2Base {
     try {
       final head = first?.call() ?? const <String>[];
       final lines = stmts(body);
-      final tail = f.isVoid ? const <String>[] : (lAlwaysReturns(body) ? alwaysTail(f) : (f.ret.nullable || f.ret.isAny ? [returnLine(nulOf(f.ret))] : unreachable()));
+      final tail = f.isVoid ? const <String>[] : (!fallsOff(body) ? alwaysTail(f) : (f.ret.nullable || f.ret.isAny ? [returnLine(nulOf(f.ret))] : unreachable()));
       return [...declareLocals(f), ...head, ...lines, ...tail];
     } finally {
       _fnOrNull = saved;
       if (saved != null) fn = saved;
     }
   }
+
+  /// 这一句后面的代码还到不到得了、函数体会不会“走到头”（Java 对“到不了的代码”有自己的一套算法，不照它的来不让编）。
+  bool stmtExits(LStmt s) => lExits(s);
+  bool fallsOff(List<LStmt> body) => !lAlwaysReturns(body);
 
   /// 函数体每条路都已经返回了以后还要不要补一句（Go 的“试着做”是闭包，编译器看不出来已经返回）。
   List<String> alwaysTail(V2Fn f) => const [];

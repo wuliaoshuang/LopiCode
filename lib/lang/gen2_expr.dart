@@ -49,6 +49,7 @@ mixin Gen2Expr on Gen2Base {
   String listAt(String list, String index, LType elem);
   String dictGet(String dict, String key, LType value);
   String dynGet(String of, String key);
+
   /// 改一项 / 存一项（写成一个式子，不带句尾）。
   String listSetCode(String list, String index, String value, LType elem);
   String dictSetCode(String dict, String key, String value, LType valueType);
@@ -66,6 +67,7 @@ mixin Gen2Expr on Gen2Base {
   String concat(List<String> parts);
   String logCode(String text);
   String sizeCode(String code, LType type);
+
   /// [code] 是 [type]（可空）的值；空就用 [def]。结果是 [want]（[def] 自己也可空时，结果还是可空的）。
   String orElseCode(String code, LType type, String def, LType want);
   String mustCode(String code, LType type);
