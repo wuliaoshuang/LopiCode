@@ -143,7 +143,7 @@ BeTypeCheck? beTypeCheck(BeDocument doc) {
     // 文档里声明的变量、“这次请求”：里面放什么说不准，一律当“任意”。
     final outer = <String, LType>{for (final v in doc.variables) v.name: LType.any, kBeRequestName: LType.any};
     for (final r in doc.routes) {
-      final lower = beLangLowerOf(doc, r, shadow: true, always: true);
+      final lower = beLangLowerOf(doc, r, shadow: true, all: true);
       if (lower == null) continue;
       lower.typed = true;
       trees[r.id] = r;
