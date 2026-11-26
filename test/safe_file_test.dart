@@ -1,6 +1,7 @@
 // 存盘健壮性：原子写、坏文件备份后回退默认、各个存盘文件读到损坏 / 旧版本内容不崩。
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lopicode/agent/automation.dart';
@@ -10,9 +11,11 @@ import 'package:lopicode/agent/mcp/mcp_models.dart';
 import 'package:lopicode/agent/memory_store.dart';
 import 'package:lopicode/agent/model_config.dart';
 import 'package:lopicode/agent/team.dart';
+import 'package:lopicode/apkpack/apk_pack_contract.dart';
 import 'package:lopicode/backend/backend_model.dart';
 import 'package:lopicode/backend/backend_project.dart';
 import 'package:lopicode/backend/backend_validate.dart';
+import 'package:lopicode/build/local_pack_form.dart';
 import 'package:lopicode/core/crash_log.dart';
 import 'package:lopicode/core/path_guard.dart';
 import 'package:lopicode/core/project_store.dart';
@@ -693,6 +696,63 @@ void main() {
     test('items 不是列表、版本号是以后的：不崩', () async {
       file().writeAsStringSync(jsonEncode({'version': 99, 'items': 'x'}));
       expect(await readFavorites(file()), isEmpty);
+    });
+  });
+  group('本地打包表单 .lopicode/local-pack.json', () {
+    const fallback = LocalPackForm(appName: '默认名', packageName: 'com.lopicode.app.demo', versionName: '1.0.0', versionCode: '1', permissions: {'android.permission.INTERNET'});
+    const options = [ApkPermissionOption(id: 'android.permission.INTERNET', label: '联网', hint: '', defaultOn: true), ApkPermissionOption(id: 'android.permission.CAMERA', label: '相机', hint: '')];
+    LocalPackFormStore store() => LocalPackFormStore(PathGuard(tmp.path));
+
+    test('没有文件：用默认值，不建文件', () async {
+      final form = await store().read(fallback: fallback, options: options);
+      expect(form.appName, '默认名');
+      expect(store().file.existsSync(), isFalse);
+    });
+
+    test('存了再读：原样回来', () async {
+      const form = LocalPackForm(appName: '小店', packageName: 'com.example.shop', versionName: '2.1', versionCode: '7', permissions: {'android.permission.CAMERA'}, customIcon: true);
+      await store().write(form);
+      final back = await store().read(fallback: fallback, options: options);
+      expect((back.appName, back.packageName, back.versionName, back.versionCode, back.customIcon), ('小店', 'com.example.shop', '2.1', '7', true));
+      expect(back.permissions, {'android.permission.CAMERA'});
+      expect(store().file.parent.listSync().where((e) => e.path.endsWith('.tmp')), isEmpty, reason: '原子写不留临时文件');
+    });
+
+    for (final entry in corruptSamples.entries) {
+      test('坏文件（${entry.key}）：回到默认值，不崩', () async {
+        store().file.parent.createSync(recursive: true);
+        store().file.writeAsStringSync(entry.value);
+        final form = await store().read(fallback: fallback, options: options);
+        expect(form.packageName, 'com.lopicode.app.demo');
+        expect(form.permissions, {'android.permission.INTERNET'});
+      });
+    }
+
+    test('半截的文件：留一份 .bad 备份', () async {
+      store().file.parent.createSync(recursive: true);
+      store().file.writeAsStringSync(corruptSamples['半截']!);
+      await store().read(fallback: fallback, options: options);
+      expect(badBackups(store().file), hasLength(1));
+    });
+
+    test('字段类型全错：每一项各自回到默认值；版本号存成数字的也认', () async {
+      store().file.parent.createSync(recursive: true);
+      store().file.writeAsStringSync(jsonEncode({'appName': 5, 'packageName': null, 'versionName': <String>[], 'versionCode': 9, 'permissions': 'x', 'customIcon': 'yes'}));
+      final form = await store().read(fallback: fallback, options: options);
+      expect((form.appName, form.packageName, form.versionName, form.versionCode, form.customIcon), ('默认名', 'com.lopicode.app.demo', '1.0.0', '9', false));
+      expect(form.permissions, {'android.permission.INTERNET'});
+      expect(badBackups(store().file), isEmpty);
+    });
+
+    test('自己选的图标缺了一张：当没有，用默认图标', () async {
+      await store().writeIcons({
+        for (final size in kApkIconSizes) size: Uint8List.fromList([1, 2, 3]),
+      });
+      expect((await store().readIcons()).length, 5);
+      File(p.join(store().iconDir.path, '96.png')).deleteSync();
+      expect(await store().readIcons(), isEmpty);
+      await store().clearIcons();
+      expect(store().iconDir.existsSync(), isFalse);
     });
   });
 }
