@@ -58,17 +58,9 @@ void main() {
       }
       final server = await gen2Serve(language, gen2ProgramFiles(language, lcProgram(src)));
       final wrong = <String>[];
-      final skippedOnJava = <String>[];
       try {
         for (var i = 0; i < cases.length; i++) {
           final c = cases[i];
-          // Java 的“开服务”用的是 JDK 自带的 HTTP 服务，路径以两个斜杠开头的请求它自己就回 400，到不了我们的代码
-          // （现有后端小库为这个专门自己读请求，见 lib/backend/runtime_java_server.dart 开头）。这一条在 Java 上先不比，
-          // 记在 docs/blocks-v5-parts/B-gen-notes.md 第 15 节“还差的”里：接通前要把 Java 的开服务换成自己读请求。
-          if (language == 'java' && c.target.startsWith('//')) {
-            skippedOnJava.add(c.target);
-            continue;
-          }
           final body = c.bodyBytes ?? (c.body == null ? null : utf8.encode(c.body!));
           final reply = await server.send(c.method, c.target.isEmpty ? '/' : c.target, headers: c.headers, body: body);
           final text = utf8.decode(reply.body, allowMalformed: true);
@@ -84,7 +76,6 @@ void main() {
         await server.stop();
       }
       expect(wrong, isEmpty, reason: '$language 的标准错误：\n${server.stderrText}');
-      expect(skippedOnJava, language == 'java' ? ['//a/1//b/2/'] : isEmpty);
     });
   }
 }

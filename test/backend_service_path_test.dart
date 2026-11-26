@@ -100,17 +100,10 @@ void main() {
       expect(gen.problem, isNull);
       final server = await gen2Serve(language, gen.files!);
       final wrong = <String>[];
-      final skippedOnJava = <String>[];
       var passed = 0;
       try {
         for (var i = 0; i < cases.length; i++) {
           final c = cases[i];
-          // Java 的“开服务”用的是 JDK 自带的 HTTP 服务，路径以两个斜杠开头的请求它自己就回 400，到不了我们的代码。
-          // 库 1 下半（A2）把 Java 的开服务换成自己读请求以后把这一条放回来。
-          if (language == 'java' && c.target.startsWith('//')) {
-            skippedOnJava.add(c.target);
-            continue;
-          }
           final body = c.bodyBytes ?? (c.body == null ? null : utf8.encode(c.body!));
           final reply = await server.send(c.method, c.target.isEmpty ? '/' : c.target, headers: c.headers, body: body);
           final text = utf8.decode(reply.body, allowMalformed: true);
@@ -130,9 +123,9 @@ void main() {
         await server.stop();
       }
       // ignore: avoid_print — 逐语言的通过数要让跑测试的人看见
-      print('$language：${cases.length} 条里通过 $passed 条${skippedOnJava.isEmpty ? '' : '，没比 ${skippedOnJava.length} 条（$skippedOnJava）'}');
+      print('$language：${cases.length} 条里通过 $passed 条');
       expect(wrong, isEmpty, reason: '$language 的标准错误：\n${server.stderrText}');
-      expect(skippedOnJava, language == 'java' ? ['//a/1//b/2/'] : isEmpty);
+      expect(passed, cases.length);
     });
   }
 }

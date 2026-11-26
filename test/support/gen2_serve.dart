@@ -146,7 +146,8 @@ Future<Gen2Server> gen2Serve(String language, Map<String, String> files, {int se
             if (f.endsWith('.java')) f,
         ];
         await build(gen2Tools['javac']!, ['-J-Xmx256m', '-J-XX:+UseSerialGC', '-encoding', 'UTF-8', '-Xlint:all', '-Werror', '-d', 'out', ...sources], 'javac');
-        cmd = [gen2Tools['java']!, '-Xmx256m', '-XX:+UseSerialGC', '-cp', 'out', 'Main'];
+        // 这台开发机的运行环境要这一项，Java 服务请求本机（127.0.0.1）才连得上。
+        cmd = [gen2Tools['java']!, '-Xmx256m', '-XX:+UseSerialGC', '-Djava.net.preferIPv4Stack=true', '-cp', 'out', 'Main'];
       default:
         throw StateError('不认识的语言 $language');
     }
