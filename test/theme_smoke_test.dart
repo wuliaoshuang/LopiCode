@@ -98,14 +98,31 @@ void main() {
     Future<void> shot(WidgetTester tester, String page) async {
       expect(tester.takeException(), isNull, reason: '${theme.name} · $page 渲染时出了异常（溢出也算）');
       if (!writeShots || !fontsLoaded) return;
-      final boundary = tester.renderObject<RenderRepaintBoundary>(find.byKey(shotKey));
-      await tester.runAsync(() async {
-        final image = await boundary.toImage(pixelRatio: 2);
-        final data = await image.toByteData(format: ui.ImageByteFormat.png);
-        File('$shotDir/theme-${theme.id}-$page.png')
-          ..parent.createSync(recursive: true)
-          ..writeAsBytesSync(data!.buffer.asUint8List());
-      });
+      // 测试环境默认把投影画成一圈实心黑边（debugDisableShadows）；出截图这一下按真机的画法（柔和的投影）重画，截完改回去。
+      Future<void> repaint({required bool realShadows}) async {
+        debugDisableShadows = !realShadows;
+        void mark(RenderObject o) {
+          o.markNeedsPaint();
+          o.visitChildren(mark);
+        }
+
+        tester.binding.renderViews.forEach(mark);
+        await tester.pump();
+      }
+
+      await repaint(realShadows: true);
+      try {
+        final boundary = tester.renderObject<RenderRepaintBoundary>(find.byKey(shotKey));
+        await tester.runAsync(() async {
+          final image = await boundary.toImage(pixelRatio: 2);
+          final data = await image.toByteData(format: ui.ImageByteFormat.png);
+          File('$shotDir/theme-${theme.id}-$page.png')
+            ..parent.createSync(recursive: true)
+            ..writeAsBytesSync(data!.buffer.asUint8List());
+        });
+      } finally {
+        await repaint(realShadows: false);
+      }
     }
 
     /// 建环境并选用这套主题。
