@@ -143,10 +143,14 @@ class _MdCodeBlockState extends State<MdCodeBlock> {
             child: Row(
               children: [
                 Expanded(
-                  child: Text(label, style: small?.copyWith(color: c.textFaint), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  child: Text(
+                    label,
+                    style: small?.copyWith(color: c.textFaint),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-                if (canPreview)
-                  action(_preview ? '看代码' : '预览', _preview ? Icons.code_rounded : Icons.visibility_outlined, () => setState(() => _preview = !_preview), const Key('md-code-preview')),
+                if (canPreview) action(_preview ? '看代码' : '预览', _preview ? Icons.code_rounded : Icons.visibility_outlined, () => setState(() => _preview = !_preview), const Key('md-code-preview')),
                 action('复制', Icons.copy_rounded, () => _copy(context), const Key('md-code-copy')),
               ],
             ),
@@ -190,7 +194,14 @@ class _MdCodeBlockState extends State<MdCodeBlock> {
       final shown = code.replaceAll('\t', '    ');
       final base = TextStyle(color: s.text);
       final span = plain ? TextSpan(text: shown, style: base) : highlightCode(shown, lang, dark: s.dark, base: base);
-      _span = widget.cursor ? TextSpan(children: [span, const TextSpan(text: '▍')]) : span;
+      _span = widget.cursor
+          ? TextSpan(
+              children: [
+                span,
+                const TextSpan(text: '▍'),
+              ],
+            )
+          : span;
       _spanFor = key;
     }
     return _span!;

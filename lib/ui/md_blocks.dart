@@ -57,7 +57,11 @@ class MdBlockView extends StatelessWidget {
       case MdHeading(:final level, :final inlines):
         return Padding(
           padding: EdgeInsets.only(top: level <= 2 && s.tone != MdTone.muted ? Space.x1 : 0),
-          child: MdRichText(inlines, style: s.heading(level).copyWith(color: style?.color), cursor: cursor),
+          child: MdRichText(
+            inlines,
+            style: s.heading(level).copyWith(color: style?.color),
+            cursor: cursor,
+          ),
         );
       case final MdCode code:
         return MdCodeBlock(code, cursor: cursor);
@@ -69,10 +73,14 @@ class MdBlockView extends StatelessWidget {
           decoration: BoxDecoration(
             border: Border(left: BorderSide(color: c.border, width: 3)),
           ),
-          child: MdBlocks(children, cursor: cursor, style: (style ?? s.base).copyWith(color: s.subtle)),
+          child: MdBlocks(
+            children,
+            cursor: cursor,
+            style: (style ?? s.base).copyWith(color: s.subtle),
+          ),
         );
       case final MdList list:
-        return _withCursor(_MdListView(list, style: style), s, inside: true);
+        return _withCursor(_MdListView(list, style: style), s);
       case final MdTable table:
         return _withCursor(_MdTableView(table), s);
       case final MdDetails details:
@@ -81,7 +89,7 @@ class MdBlockView extends StatelessWidget {
   }
 
   /// 最后一块不是文字时，光标块单独占一小行。
-  Widget _withCursor(Widget child, MdStyles s, {bool inside = false}) {
+  Widget _withCursor(Widget child, MdStyles s) {
     if (!cursor) return child;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -126,12 +134,7 @@ class _MdListView extends StatelessWidget {
                       padding: EdgeInsets.only(top: ((base.fontSize ?? 16) * (base.height ?? 1.5) - 16) / 2),
                       child: Align(
                         alignment: Alignment.centerLeft,
-                        child: Icon(
-                          on ? Icons.check_box_rounded : Icons.check_box_outline_blank_rounded,
-                          size: 16,
-                          color: on ? c.accent : c.textFaint,
-                          semanticLabel: on ? '已完成' : '未完成',
-                        ),
+                        child: Icon(on ? Icons.check_box_rounded : Icons.check_box_outline_blank_rounded, size: 16, color: on ? c.accent : c.textFaint, semanticLabel: on ? '已完成' : '未完成'),
                       ),
                     ),
                   },
@@ -165,7 +168,11 @@ class _MdTableView extends StatelessWidget {
       constraints: const BoxConstraints(maxWidth: kMdTableCellMaxWidth),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: Space.x3, vertical: Space.x2),
-        child: MdRichText(inlines ?? const [], style: head ? small.copyWith(fontWeight: FontWeight.w600) : small, textAlign: alignOf(i)),
+        child: MdRichText(
+          inlines ?? const [],
+          style: head ? small.copyWith(fontWeight: FontWeight.w600) : small,
+          textAlign: alignOf(i),
+        ),
       ),
     );
     TableRow row(List<List<MdInline>> cells, {bool head = false}) => TableRow(
@@ -232,7 +239,9 @@ class _MdDetailsViewState extends State<_MdDetailsView> {
                 children: [
                   Icon(_open ? Icons.expand_more : Icons.chevron_right, size: 20, color: c.textMuted),
                   const SizedBox(width: Space.x1),
-                  Expanded(child: MdRichText(widget.details.summary, style: s.base.copyWith(fontWeight: FontWeight.w600))),
+                  Expanded(
+                    child: MdRichText(widget.details.summary, style: s.base.copyWith(fontWeight: FontWeight.w600)),
+                  ),
                 ],
               ),
             ),

@@ -16,6 +16,7 @@ import 'package:lopicode/state/workspace_favorites.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/chat_row_view.dart';
 import 'package:lopicode/ui/message_action_bar.dart';
+import 'package:lopicode/ui/message_text.dart';
 import 'package:lopicode/ui/project_shell.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -105,7 +106,7 @@ void main() {
     }
 
     /// 聊天里的一个气泡（对话名、侧边栏里也可能有同样的字，所以只认气泡）。
-    Finder bubble(String text) => find.byWidgetPredicate((w) => w is SelectableText && w.data == text);
+    Finder bubble(String text) => find.byWidgetPredicate((w) => w is MessageText && w.text == text);
     Finder bar(String id) => find.byKey(ValueKey('message-actions-$id'));
     Finder icon(String kind, String id) => find.byKey(ValueKey('message-$kind-$id'));
 
@@ -157,7 +158,7 @@ void main() {
       await tester.pump();
       expect(clipboard.last, '看看首页');
       // 长按选字的老行为还在：正文仍然是可选择的文字
-      expect(find.widgetWithText(SelectableText, '首页看完了，结构没问题。'), findsOneWidget);
+      expect(find.widgetWithText(SelectionArea, '首页看完了，结构没问题。'), findsOneWidget);
     });
 
     testWidgets('“更多”面板：一行一个——收藏、分享、删除；收藏后图标变实心并常驻，再点取消 ($suffix)', (tester) async {

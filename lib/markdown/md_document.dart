@@ -42,14 +42,23 @@ class MdDocument {
 /// 解析一条消息。[previous] 是这条消息上一次的结果（流式时传进来，没变的块沿用）。
 MdDocument mdParseDocument(String text, {bool streaming = false, MdDocument? previous}) {
   if (text.length > kMdMaxChars) {
-    return MdDocument([MdPiece(text, [MdParagraph([MdText(text)])])], plain: true);
+    return MdDocument([
+      MdPiece(text, [
+        MdParagraph([MdText(text)]),
+      ]),
+    ], plain: true);
   }
   // 整条就是一份网页：当成一个 html 代码块（可以点“预览”）
   if (looksLikeHtmlDocument(text)) {
     final old = previous?.pieces.firstOrNull;
     if (old != null && old.source == text && old.closed == !streaming) return previous!;
     return MdDocument([
-      MdPiece(text, [MdCode(text.trim(), lang: 'html', closed: !streaming)], kind: MdChunkKind.fence, closed: !streaming),
+      MdPiece(
+        text,
+        [MdCode(text.trim(), lang: 'html', closed: !streaming)],
+        kind: MdChunkKind.fence,
+        closed: !streaming,
+      ),
     ]);
   }
   final shown = streaming ? mdTrimStreamingTail(text) : text;
@@ -65,7 +74,15 @@ MdDocument mdParseDocument(String text, {bool streaming = false, MdDocument? pre
       pieces.add(before); // 原文没变：沿用同一个对象
       continue;
     }
-    pieces.add(MdPiece(c.source, mdParseChunk(c, refs: refs, streamingTail: tail), kind: c.kind, closed: c.closed, tail: tail));
+    pieces.add(
+      MdPiece(
+        c.source,
+        mdParseChunk(c, refs: refs, streamingTail: tail),
+        kind: c.kind,
+        closed: c.closed,
+        tail: tail,
+      ),
+    );
   }
   return MdDocument(pieces, refs: refs);
 }

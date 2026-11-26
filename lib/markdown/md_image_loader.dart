@@ -49,10 +49,7 @@ class MdImageLoader {
   Future<Uint8List> _fetch(Uri first) async {
     final client = _clientFactory();
     try {
-      return await _run(client, first).timeout(
-        timeout,
-        onTimeout: () => throw MdImageException('等了 ${timeout.inSeconds} 秒还没下完（${first.host}）'),
-      );
+      return await _run(client, first).timeout(timeout, onTimeout: () => throw MdImageException('等了 ${timeout.inSeconds} 秒还没下完（${first.host}）'));
     } on MdImageException {
       rethrow;
     } on Exception catch (e) {

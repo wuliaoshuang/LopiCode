@@ -97,7 +97,10 @@ void main() {
 
   group('HTML 安全清单', () {
     test('行内排版标签', () {
-      expect(dump(parse('<b>粗</b><i>斜</i><u>线</u><s>删</s><kbd>Ctrl</kbd> H<sub>2</sub>O x<sup>2</sup> <mark>亮</mark><br>下一行')), 'p(bold<粗>italic<斜>underline<线>strike<删>kbd<Ctrl> Hsub<2>O xsup<2> mark<亮>br下一行)');
+      expect(
+        dump(parse('<b>粗</b><i>斜</i><u>线</u><s>删</s><kbd>Ctrl</kbd> H<sub>2</sub>O x<sup>2</sup> <mark>亮</mark><br>下一行')),
+        'p(bold<粗>italic<斜>underline<线>strike<删>kbd<Ctrl> Hsub<2>O xsup<2> mark<亮>br下一行)',
+      );
     });
     test('标签里可以套 Markdown，Markdown 里可以套标签', () {
       expect(dump(parse('<b>a *b*</b> **<u>c</u>**')), 'p(bold<a italic<b>> bold<underline<c>>)');
@@ -136,7 +139,22 @@ void main() {
       expect(dump(parse('<p align="center">居中的 <b>字</b></p>')), 'p(居中的 bold<字>)');
     });
     test('畸形 / 嵌套很深的 HTML 不崩', () {
-      for (final s in ['<', '<b', '<b <i>', '</', '<<<>>>', '<a href="x', '<table><tr><td>', '<details><details><details>', '${'<div>' * 200}x', '<p><p><p></table></b>', '<img src=>', '<a href=>x</a>', '&#99999999;', '<!-- 没收尾']) {
+      for (final s in [
+        '<',
+        '<b',
+        '<b <i>',
+        '</',
+        '<<<>>>',
+        '<a href="x',
+        '<table><tr><td>',
+        '<details><details><details>',
+        '${'<div>' * 200}x',
+        '<p><p><p></table></b>',
+        '<img src=>',
+        '<a href=>x</a>',
+        '&#99999999;',
+        '<!-- 没收尾',
+      ]) {
         expect(() => parse(s), returnsNormally, reason: s);
         expect(() => parse(s, streaming: true), returnsNormally, reason: s);
       }

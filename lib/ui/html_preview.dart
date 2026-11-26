@@ -46,10 +46,8 @@ abstract final class HtmlPreview {
 
   static Widget view(HtmlPreviewRequest request) => (debugViewBuilder ?? _real)(request);
 
-  static Widget _real(HtmlPreviewRequest request) => HtmlPreviewWebView(
-    request: request,
-    gestureRecognizers: request.scrollable ? {Factory<OneSequenceGestureRecognizer>(EagerGestureRecognizer.new)} : const {},
-  );
+  static Widget _real(HtmlPreviewRequest request) =>
+      HtmlPreviewWebView(request: request, gestureRecognizers: request.scrollable ? const {Factory<OneSequenceGestureRecognizer>(EagerGestureRecognizer.new)} : const {});
 }
 
 /// 现在开着的预览（从旧到新）。

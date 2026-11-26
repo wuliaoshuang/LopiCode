@@ -15,8 +15,7 @@ const double kHtmlPreviewBlockedSignal = -1;
 
 const String kHtmlPreviewCspOffline =
     "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src data: blob:; font-src data:; form-action 'none'; base-uri 'none'";
-const String kHtmlPreviewCspOnline =
-    "default-src https: data: blob: 'unsafe-inline' 'unsafe-eval'; form-action 'none'; base-uri 'none'";
+const String kHtmlPreviewCspOnline = "default-src https: data: blob: 'unsafe-inline' 'unsafe-eval'; form-action 'none'; base-uri 'none'";
 
 /// 能点“预览”的代码块语言。
 bool htmlPreviewable(String lang) => const {'html', 'htm', 'xhtml', 'svg'}.contains(lang.toLowerCase());

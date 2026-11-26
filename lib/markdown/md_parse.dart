@@ -87,7 +87,11 @@ List<MdBlock> mdParseChunk(MdChunk chunk, {String refs = '', bool streamingTail 
 /// 解析一段文字（先切块再逐块解析）。给 HTML 块里面的内容用。
 List<MdBlock> mdParseText(String text, {String refs = '', int depth = 0}) {
   if (text.trim().isEmpty) return const [];
-  if (depth > kMdMaxNesting) return [MdParagraph([MdText(text.trim())])];
+  if (depth > kMdMaxNesting) {
+    return [
+      MdParagraph([MdText(text.trim())]),
+    ];
+  }
   return [for (final c in mdSplitChunks(_dedent(text))) ...mdParseChunk(c, refs: refs, depth: depth)];
 }
 
@@ -124,7 +128,11 @@ List<MdBlock> _parseMarkdown(String source, String refs, {bool streamingTail = f
           return '$_dataMark${uris.length - 1}';
         })
       : source;
-  if (_longRun.hasMatch(text)) return [MdParagraph([MdText(source)])];
+  if (_longRun.hasMatch(text)) {
+    return [
+      MdParagraph([MdText(source)]),
+    ];
+  }
   final List<md.Node> nodes;
   final saved = _dataUris;
   _dataUris = uris;
@@ -132,7 +140,9 @@ List<MdBlock> _parseMarkdown(String source, String refs, {bool streamingTail = f
     nodes = _newDocument().parse(refs.isEmpty ? text : '$text\n\n$refs');
     return _finish(_blocks(nodes), source, streamingTail);
   } on Object {
-    return [MdParagraph([MdText(source)])]; // 解析器自己出错：退回纯文字，不让一条消息把页面弄崩
+    return [
+      MdParagraph([MdText(source)]),
+    ]; // 解析器自己出错：退回纯文字，不让一条消息把页面弄崩
   } finally {
     _dataUris = saved;
   }

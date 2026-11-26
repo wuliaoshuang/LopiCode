@@ -55,7 +55,10 @@ class ChatPrefsNotifier extends Notifier<ChatPrefs> {
       ..watch(settingRevProvider(SettingKeys.chatThinking))
       ..watch(settingRevProvider(SettingKeys.chatAutoImages));
     final s = ref.watch(settingsStoreProvider);
-    return ChatPrefs(suggestions: s.getBool(SettingKeys.chatSuggestions, true), usage: s.getBool(SettingKeys.chatUsage, true), thinking: s.getBool(SettingKeys.chatThinking, true),
+    return ChatPrefs(
+      suggestions: s.getBool(SettingKeys.chatSuggestions, true),
+      usage: s.getBool(SettingKeys.chatUsage, true),
+      thinking: s.getBool(SettingKeys.chatThinking, true),
       autoImages: s.getBool(SettingKeys.chatAutoImages, false),
     );
   }

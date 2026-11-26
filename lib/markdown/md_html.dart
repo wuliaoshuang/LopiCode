@@ -17,8 +17,58 @@ class HtmlTag {
   final String raw;
 }
 
-const Set<String> kMdInlineTags = {'b', 'strong', 'i', 'em', 'u', 'ins', 's', 'del', 'strike', 'code', 'kbd', 'sub', 'sup', 'mark', 'span', 'font', 'small', 'big', 'abbr', 'cite', 'q', 'a', 'img', 'br'};
-const Set<String> kMdBlockTags = {'p', 'div', 'center', 'details', 'summary', 'table', 'thead', 'tbody', 'tfoot', 'tr', 'th', 'td', 'ul', 'ol', 'li', 'blockquote', 'pre', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hr'};
+const Set<String> kMdInlineTags = {
+  'b',
+  'strong',
+  'i',
+  'em',
+  'u',
+  'ins',
+  's',
+  'del',
+  'strike',
+  'code',
+  'kbd',
+  'sub',
+  'sup',
+  'mark',
+  'span',
+  'font',
+  'small',
+  'big',
+  'abbr',
+  'cite',
+  'q',
+  'a',
+  'img',
+  'br',
+};
+const Set<String> kMdBlockTags = {
+  'p',
+  'div',
+  'center',
+  'details',
+  'summary',
+  'table',
+  'thead',
+  'tbody',
+  'tfoot',
+  'tr',
+  'th',
+  'td',
+  'ul',
+  'ol',
+  'li',
+  'blockquote',
+  'pre',
+  'h1',
+  'h2',
+  'h3',
+  'h4',
+  'h5',
+  'h6',
+  'hr',
+};
 const Set<String> kMdVoidTags = {'br', 'img', 'hr'};
 
 /// 每种标签允许留下的属性。

@@ -46,12 +46,15 @@ class _MdRichTextState extends State<MdRichText> {
     final s = scope.styles;
     _clear();
     final base = widget.style ?? s.base;
-    final spans = _spans(context, scope, widget.inlines, base);
+    final spans = _spans(context, scope, widget.inlines);
     if (widget.cursor) spans.add(const TextSpan(text: '▍'));
-    return Text.rich(TextSpan(style: base, children: spans), textAlign: widget.textAlign);
+    return Text.rich(
+      TextSpan(style: base, children: spans),
+      textAlign: widget.textAlign,
+    );
   }
 
-  List<InlineSpan> _spans(BuildContext context, MdScope scope, List<MdInline> list, TextStyle style) {
+  List<InlineSpan> _spans(BuildContext context, MdScope scope, List<MdInline> list) {
     final s = scope.styles;
     final c = s.colors;
     final out = <InlineSpan>[];
@@ -80,7 +83,7 @@ class _MdRichTextState extends State<MdRichText> {
             MdStyle.sub || MdStyle.sup => TextStyle(fontSize: size),
             MdStyle.kbd => TextStyle(fontFamily: kMonoFont, fontFamilyFallback: kMonoFallback, fontSize: s.codeSize, backgroundColor: s.blockBg, fontWeight: FontWeight.w600),
           };
-          out.add(TextSpan(style: ts, children: _spans(context, scope, children, style)));
+          out.add(TextSpan(style: ts, children: _spans(context, scope, children)));
         case MdLink(:final href, :final children):
           final tap = TapGestureRecognizer()..onTap = () => scope.onLink(context, href);
           _taps.add(tap);
@@ -90,7 +93,6 @@ class _MdRichTextState extends State<MdRichText> {
               recognizer: tap,
               // 链接里的字都挂上同一个点按（链接里套了粗体也能点）
               children: _linkKids(context, scope, children, tap),
-              semanticsLabel: null,
             ),
           );
         case MdImage(:final src, :final alt):
@@ -106,8 +108,7 @@ class _MdRichTextState extends State<MdRichText> {
   }
 
   List<InlineSpan> _linkKids(BuildContext context, MdScope scope, List<MdInline> kids, TapGestureRecognizer tap) {
-    InlineSpan hook(InlineSpan sp) =>
-        sp is TextSpan ? TextSpan(text: sp.text, style: sp.style, recognizer: tap, children: sp.children?.map(hook).toList()) : sp;
-    return _spans(context, scope, kids, scope.styles.base).map(hook).toList();
+    InlineSpan hook(InlineSpan sp) => sp is TextSpan ? TextSpan(text: sp.text, style: sp.style, recognizer: tap, children: sp.children?.map(hook).toList()) : sp;
+    return _spans(context, scope, kids).map(hook).toList();
   }
 }

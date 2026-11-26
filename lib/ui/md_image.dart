@@ -154,7 +154,11 @@ class _MdImageViewState extends State<MdImageView> {
     final cacheWidth = (mq.size.width * mq.devicePixelRatio).round().clamp(64, 2048);
     final child = image(cacheWidth);
     return GestureDetector(
-      onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => _ImageScreen(image: image(cacheWidth), title: widget.alt.trim()))),
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => _ImageScreen(image: image(cacheWidth), title: widget.alt.trim()),
+        ),
+      ),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxHeight: kMdImageMaxHeight),
         child: ClipRRect(borderRadius: BorderRadius.circular(Radii.sm), child: child),
@@ -188,7 +192,12 @@ class _Chip extends StatelessWidget {
           Icon(icon, size: 18, color: onTap == null ? c.textFaint : c.accent),
           const SizedBox(width: Space.x2),
           Flexible(
-            child: Text(text, style: t.bodySmall?.copyWith(color: c.textMuted, height: 1.4), maxLines: 3, overflow: TextOverflow.ellipsis),
+            child: Text(
+              text,
+              style: t.bodySmall?.copyWith(color: c.textMuted, height: 1.4),
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
         ],
       ),
