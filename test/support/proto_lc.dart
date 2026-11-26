@@ -182,7 +182,8 @@ class _Reader {
       case '每对':
         return LForPairs(expr(a[2]), a[0] as String, a[1] as String, stmts(a.skip(3)));
       case '数':
-        return LForCount(a[0] as String, expr(a[1]), expr(a[2]), const LLit(1), stmts(a.skip(3)));
+        // 原型里“数 i a b”不含 b；语法树的“从…数到…”含两头，所以数到 b - 1。
+        return LForCount(a[0] as String, expr(a[1]), LBinary('-', expr(a[2]), const LLit(1)), const LLit(1), stmts(a.skip(3)));
       case '返回':
         return LReturn(a.isEmpty ? null : expr(a[0]));
       case '抛出':
