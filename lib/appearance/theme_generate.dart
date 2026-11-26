@@ -109,8 +109,9 @@ ThemeSpec generateTheme({required bool dark, required int tint, required int acc
   return repairContrast(reaccentTheme(out, accent));
 }
 
-/// 这几对里要调的是“底”而不是“字”：积木上的字是所有分类共用的，动它不如动那一类的主色。
-bool _adjustsBg(String checkId) => checkId.startsWith('blocks._text/');
+/// 这几对里要调的是“底”而不是“字”：积木上的字是所有分类共用的，动它不如动那一类的主色；
+/// 终端查找“当前命中”的底和“别的命中”的底往往一深一浅，共用的那个字没法两头都够，所以动“当前命中”的底。
+bool _adjustsBg(String checkId) => checkId.startsWith('blocks._text/') || checkId == 'terminal.searchHitFg/terminal.searchHitBgCurrent';
 
 /// 把对比度不够的项调到达标：只动亮度，色相不变；一项要同时放在几种底上的，调到每一种都够。
 /// [only] 给了就只管这些检查项。调不动的（半透明的颜色、底色自己是中灰）留着不动。
@@ -142,7 +143,7 @@ ThemeSpec repairContrast(ThemeSpec t, {Set<String>? only}) {
         // 这一项当“字”出现的每一对都要过，免得修好这一对、弄坏那一对。
         final mine = [
           for (final c in kContrastChecks)
-            if (c.id.startsWith('$targetId/')) c,
+            if (c.id.startsWith('$targetId/') && !_adjustsBg(c.id)) c,
         ];
         final min = mine.map((c) => c.min).reduce((a, b) => a > b ? a : b);
         next = ensureContrast(now, [for (final c in mine) c.bg(out)], min);
