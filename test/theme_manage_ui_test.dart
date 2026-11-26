@@ -129,6 +129,9 @@ void main() {
       expect(find.byType(ThemeEditorScreen), findsNothing, reason: '“复制一份”只复制，不进编辑器');
 
       // 删除：先取消，再确认；正在用的删了退回默认
+      // （内置主题从 2 套变成 10 套以后，这张卡片排到了屏幕底部、被“已复制”的提示条盖住，先滚到看得见的地方再点）
+      await tester.ensureVisible(k('themes-card-${a.id}'));
+      await tester.pumpAndSettle();
       await tester.tap(k('themes-card-${a.id}'));
       await io(tester);
       expect(env.services.settings.getString(SettingKeys.themeLight), a.id);

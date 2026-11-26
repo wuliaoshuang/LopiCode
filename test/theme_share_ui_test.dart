@@ -318,7 +318,14 @@ void main() {
       });
       final decoded = decodeThemeText(text);
       expect(decoded.background, isNotNull, reason: decoded.error ?? decoded.notes.join());
-      final env = await boot(tester, (_) => ThemeImportPreviewScreen(text: text, result: decoded));
+      // 背景图片合并进来以后对接口默认是接上的；这条用例测的是“没接上”那条分支（代码里还留着），所以这里明确把它换成 null。
+      final env = await boot(
+        tester,
+        (_) => ProviderScope(
+          overrides: [themeBackgroundBridgeProvider.overrideWithValue(null)],
+          child: ThemeImportPreviewScreen(text: text, result: decoded),
+        ),
+      );
       await tester.scrollUntilVisible(
         k('theme-import-image'),
         200,
