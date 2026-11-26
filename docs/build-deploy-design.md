@@ -133,7 +133,7 @@ SSH（在远程目录里执行）：
 | PHP，没有 | `php -l 入口文件` |
 | 其它语言 | （空） |
 
-固定的三步：`mkdir -p 远程目录`、上传 `lopicode-upload.tar.gz`、`cd 远程目录 && tar -xzf lopicode-upload.tar.gz --strip-components=1`。
+固定的三步：`mkdir -p 远程目录`、上传（先 `cd 远程目录 && pwd` 查出完整路径，再用 SFTP 传 `lopicode-upload.tar.gz`）、`cd 远程目录 && tar -xzf lopicode-upload.tar.gz --strip-components=1`。
 
 GitHub 工作流模板按语言生成（`lib/build/deploy_workflows.dart`），构建步骤和上表 SSH 的命令是同一套思路；全文在应用里“查看 / 修改工作流”能看到。
 

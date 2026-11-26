@@ -503,3 +503,19 @@ PHP 估计 7.4+（PHP 那份代码从没运行过）。下面选的版本都够�
    先抄一份到缓存目录的 `apk_install/` 再交出去。每次安装前清空这个目录，只留当次的一份；缓存目录系统空间紧张时会自己清。
 
 自己定的数值：问系统一句话的超时 10 秒；交给安装器的超时 2 分钟（可能要先抄一份大文件）。
+
+## 2026-11-26 后端项目“构建与部署”（`lib/build/deploy_*.dart`、`lib/state/deploy_*.dart`）
+
+用的还是 `lib/build/github_client.dart` 现成的那几个接口（推送＝Git Data API 的 blob → tree → commit → 更新分支；触发＝workflow_dispatch；查运行），这次没有改客户端。核对日期 2026-11-26。
+
+| 事实 | 来源 | 状态 |
+| --- | --- | --- |
+| 触发工作流：`POST /repos/{owner}/{repo}/actions/workflows/{workflow_id}/dispatches`，body 里 `ref` 必填、`inputs` 可选（最多 25 项）；现在成功返回 200，带 `workflow_run_id`、`run_url`、`html_url`；经典令牌要 `repo` | https://docs.github.com/en/rest/actions/workflows （抓的是 docs.github.com/api/article/body?pathname=/en/rest/actions/workflows） | 直接核对 |
+| 同一页的示例请求头是 `X-GitHub-Api-Version: 2026-03-10`；我们的客户端发的是 `2022-11-28`，并且对“返回 204 / 不认识 `return_run_details`”有退路。这次没动它 | 同上 | 直接核对（只记一笔，没改代码） |
+| 更新分支：`PATCH /repos/{owner}/{repo}/git/refs/{ref}`，body `sha`、`force`（默认 false，我们不传＝不强推）；状态码 200 / 409 / 422 | https://docs.github.com/en/rest/git/refs （抓的是 docs.github.com/api/article?pathname=/en/rest/git/refs） | 直接核对 |
+| 推送里有 `.github/workflows/` 下的文件时：细粒度令牌除了 Contents 读写还要 **Workflows 读写**；经典令牌要勾 **workflow** | 官方的权限总表（docs.github.com 的 permissions-required-for-fine-grained-personal-access-tokens，3.10 企业版那页）抓到的正文丢了小标题，只看得出同一批接口列了两遍；“Workflows 权限 / workflow scope”这句话本身来自第三方对官方文档的转述（lesstep.com、ghtier.com、dev.to） | 间接 |
+| 细粒度令牌权限不够时，私有仓库可能回 404 而不是 403 | 第三方转述 | 间接。代码里 403 和（推送带工作流文件时的）404 都会带上“去哪开权限”的说明，404 另加一句“也请核对仓库名和分支名” |
+| 工作流模板里用的 Action 版本：`actions/checkout@v4`、`actions/setup-java@v4`、`actions/upload-artifact@v4`（和现有打 APK 的模板一样）；`actions/setup-go@v5`、`actions/setup-node@v4`、`actions/setup-python@v5` | 前三个沿用现有模板；后三个没有逐个核对官方仓库 | 没核对（后三个） |
+| `workflow_dispatch` 的 `inputs` 可以是 `type: boolean`；接口里传字符串 `"true"` / `"false"` | 没有单独核对 | 没核对 |
+
+没有对真实的 GitHub 发过任何请求（测试用假的 HTTP 层）；`deploy.yml` 六份模板（五种语言＋其它）没有在真实的 Actions 上跑过，只在开发机上检查过 YAML 能解析。SSH 那一路没有连过真实主机。
