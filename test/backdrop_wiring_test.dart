@@ -185,7 +185,13 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(BackdropSettingsScreen), findsOneWidget, reason: '点“背景图片”进它的设置页');
       await pumpUntil(tester, find.byKey(const Key('bg-enabled')));
-      await flip(tester, env, what: '背景图片设置页');
+      // 这一页自己还有一块预览（它也画背景），所以数个数：开＝预览 + 整页两处；关＝只剩预览
+      expect(find.byKey(paintKey), findsNWidgets(2), reason: '背景图片设置页：“其它页面”开着，整页后面也画着背景');
+      backdropOf(env).update((s) => s.copyWith(onPages: false), persist: false);
+      await settle(tester, rounds: 2);
+      expect(find.byKey(paintKey), findsOneWidget, reason: '背景图片设置页：“其它页面”关了，只剩预览那一块');
+      backdropOf(env).update((s) => s.copyWith(onPages: true), persist: false);
+      await settle(tester, rounds: 2);
       await shot(tester, 'backdrop-settings-light');
     });
 
@@ -263,12 +269,15 @@ void main() {
       final solid = tester.element(find.byType(TerminalView)).themeSpec.terminalColor('bg');
       expect(box().color, solid);
       expect(tester.widget<TerminalView>(find.byType(TerminalView)).theme.background, solid);
+      expect(tester.widget<TerminalView>(find.byType(TerminalView)).backgroundOpacity, 1);
       await shot(tester, 'terminal-off-light');
 
       backdropOf(env).update((s) => s.withArea(BackdropArea.terminal, true), persist: false);
       await settle(tester, rounds: 2);
       expect(box().color.a, closeTo(solid.a * 0.88, 0.01));
-      expect(tester.widget<TerminalView>(find.byType(TerminalView)).theme.background.a, 0, reason: '只铺一层半透明的底，不叠两层');
+      // xterm 自己那层底关掉（只铺外面那一层半透明的，不叠两层）；它主题里的底色保持原值（xterm 内部还拿它算别的）。
+      expect(tester.widget<TerminalView>(find.byType(TerminalView)).backgroundOpacity, 0);
+      expect(tester.widget<TerminalView>(find.byType(TerminalView)).theme.background, solid);
       await shot(tester, 'terminal-on-light');
 
       // “其它页面”关了：这一页没背景，透出开关开着也还是实底

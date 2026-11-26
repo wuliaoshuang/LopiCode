@@ -146,11 +146,11 @@ class _TerminalTabState extends ConsumerState<TerminalTab> {
   }
 
   /// 终端的配色：全部从当前主题的“终端”一节来（前景、背景、光标、选区、查找命中 + 16 色）。
-  TerminalTheme _theme(ThemeSpec t, Color background) => TerminalTheme(
+  TerminalTheme _theme(ThemeSpec t) => TerminalTheme(
     cursor: t.terminalColor('cursor'),
     selection: t.terminalColor('selection'),
     foreground: t.terminalColor('fg'),
-    background: background,
+    background: t.terminalColor('bg'),
     black: t.terminalColor('black'),
     red: t.terminalColor('red'),
     green: t.terminalColor('green'),
@@ -261,7 +261,7 @@ class _TerminalTabState extends ConsumerState<TerminalTab> {
         else ...[
           Expanded(
             child: ColoredBox(
-              // “透出背景 › 终端”开着、这一页又画着背景时：底色按“表面不透明度”变透（整块只铺这一层，xterm 自己不再铺底）
+              // “透出背景 › 终端”开着、这一页又画着背景时：底色按“表面不透明度”变透（整块只铺这一层；xterm 自己那层底用它的 backgroundOpacity 关掉，主题里的底色保持原值）
               color: termBg,
               // 终端的字号不吃主题的“界面字号”倍率（和代码区域一样）。
               child: SystemTextScale(
@@ -269,7 +269,8 @@ class _TerminalTabState extends ConsumerState<TerminalTab> {
                   key: ObjectKey(term),
                   session: term,
                   focusNode: _focus,
-                  theme: _theme(context.themeSpec, termBg == solidTermBg ? solidTermBg : Colors.transparent),
+                  theme: _theme(context.themeSpec),
+                  backgroundOpacity: termBg == solidTermBg ? 1 : 0,
                   textStyle: const TerminalStyle(fontSize: 13, height: 1.3, fontFamily: kMonoFont, fontFamilyFallback: kMonoFallback),
                   padding: const EdgeInsets.symmetric(horizontal: Space.x2, vertical: Space.x1),
                   mode: chinese ? TerminalImeMode.chinese : TerminalImeMode.direct,
