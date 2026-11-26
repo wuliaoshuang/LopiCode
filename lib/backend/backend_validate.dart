@@ -11,6 +11,7 @@ import 'package:lopicode/backend/backend_core.dart';
 import 'package:lopicode/backend/backend_func_table.dart';
 import 'package:lopicode/backend/backend_function.dart';
 import 'package:lopicode/backend/backend_ir.dart' show kBeRepeatLimit;
+import 'package:lopicode/backend/backend_issue_codes.dart';
 import 'package:lopicode/backend/backend_model.dart';
 import 'package:lopicode/backend/backend_text.dart';
 import 'package:lopicode/backend/backend_validate_func.dart';
@@ -22,51 +23,10 @@ import 'package:lopicode/lowcode/logic_rules.dart';
 import 'package:lopicode/lowcode/logic_validate.dart';
 import 'package:lopicode/lowcode/logic_validate_types.dart';
 
+export 'package:lopicode/backend/backend_issue_codes.dart';
 export 'package:lopicode/backend/backend_validate_func.dart' show BeFuncIssueCode;
 export 'package:lopicode/backend/backend_validate_lang.dart' show BeLangIssueCode;
 export 'package:lopicode/lowcode/logic_validate.dart' show LcIssueCode, LcIssueLevel, LcLogicIssue;
-
-/// 后端特有的问题种类（通用的——缺参数、没声明的变量、不认识的积木等——用 [LcIssueCode] 里现成的）。
-abstract final class BeIssueCode {
-  /// 集合本身有问题（名字不合规矩、重名）。
-  static const String badCollection = 'badCollection';
-
-  /// 用了没声明的集合。
-  static const String unknownCollection = 'unknownCollection';
-
-  /// 请求方式不认识。
-  static const String badMethod = 'badMethod';
-
-  /// 路径格式不对（含参数名重复）。
-  static const String badPath = 'badPath';
-
-  /// 有两个接口的“方式 + 路径”一样。
-  static const String duplicateRoute = 'duplicateRoute';
-
-  /// 这个接口被排在前面的接口挡住了（警告）：前面那个的路径参数能匹配到它的固定文字。
-  static const String shadowedRoute = 'shadowedRoute';
-
-  /// “路径参数”的名字在这个接口的路径里没有。
-  static const String unknownPathParam = 'unknownPathParam';
-
-  /// “返回”之后还有积木（提示：它们不会执行）。
-  static const String unreachable = 'unreachable';
-
-  /// 这个接口有的走法没有“返回”（提示：会回 204 空响应）。
-  static const String noRespond = 'noRespond';
-
-  /// “对象”的字段里放了不是“一个字段”的东西，或“一个字段”放在了对象外面，或字段名重复 / 没填。
-  static const String badPair = 'badPair';
-
-  /// 状态码直接填的数不在 200–599 里（警告：运行时会当成 200）。
-  static const String badStatus = 'badStatus';
-
-  /// 选的语言还没有生成器（警告）。
-  static const String noGenerator = 'noGenerator';
-
-  /// 端口不在 1–65535 里。
-  static const String badPort = 'badPort';
-}
 
 /// 检查整份后端文档，返回所有问题（按 服务设置、变量、集合、接口、积木 的顺序）。没有问题返回空表。
 /// `languages`＝现在有生成器的语言 id；给了就检查文档选的语言在不在里面。`table`＝调用方手上已经有的“我的积木”一览（省得再算一遍）。
