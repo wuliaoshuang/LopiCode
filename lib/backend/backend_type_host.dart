@@ -4,7 +4,7 @@
 /// - 改标注：参数、函数交回什么、“新建变量 / 常量”；
 /// - “升级到严格规矩”。
 ///
-/// 做成 mixin 混进 `BeBlockHost`。类型检查本身和“问题对回哪一格”在 backend_type_bridge.dart（临时的，见那个文件开头）。
+/// 做成 mixin 混进 `BeBlockHost`。类型检查本身和“问题对回哪一格”在 backend_type_bridge.dart；`validateBackend` 用的也是那一份。
 library;
 
 import 'package:lopicode/backend/backend_function.dart';
@@ -13,6 +13,7 @@ import 'package:lopicode/backend/backend_model.dart';
 import 'package:lopicode/backend/backend_text.dart';
 import 'package:lopicode/backend/backend_type_bridge.dart';
 import 'package:lopicode/backend/backend_type_fix.dart';
+import 'package:lopicode/backend/backend_validate_types.dart';
 import 'package:lopicode/blocks/block_host.dart';
 import 'package:lopicode/lang/lang.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
@@ -54,7 +55,7 @@ mixin BeTypeHost on BlockHost {
   BeTypeCheck? get typeCheck {
     if (!langRulesStrict(doc.rules)) return null;
     if (_checkRev != revision) {
-      _check = beTypeCheck(doc);
+      _check = beTypeCheckShared(doc);
       _checkRev = revision;
     }
     return _check;
@@ -82,9 +83,10 @@ mixin BeTypeHost on BlockHost {
     }
 
     final out = <BlockIssue>[
-      // 同一格上类型检查已经说了“要什么、放进来的是什么”，老的那条“类型对不上”（G10）就不重复了。
       for (final i in base)
-        if (!(i.rule == 'G10' && check.findings.any((f) => sameSlot(i, f.at)))) i,
+        // 校验（validateBackend）已经带出来的类型问题不要：下面换成同一批、但带着“式子里的位置”和一键修的那一份，免得同一个问题出现两次。
+        // 同一格上类型检查已经说了“要什么、放进来的是什么”，老的那条“类型对不上”（G10）也不重复。
+        if (!beIsTypeRule(i.rule) && !(i.rule == 'G10' && check.findings.any((f) => sameSlot(i, f.at)))) i,
     ];
     for (final f in check.findings) {
       final tree = _tree(f.at.treeId);
@@ -95,7 +97,7 @@ mixin BeTypeHost on BlockHost {
       final issue = f.issue;
       out.add(
         BlockIssue(
-          message: '$scope$spot：${issue.message}',
+          message: '$scope$spot：${f.problem}',
           isError: issue.level == LTypeLevel.error,
           isHint: issue.level == LTypeLevel.hint,
           scriptId: tree.id,
@@ -103,7 +105,7 @@ mixin BeTypeHost on BlockHost {
           arg: f.at.arg,
           exprPath: f.at.arg == null ? null : f.at.exprPath,
           rule: issue.code,
-          problem: issue.message,
+          problem: f.problem,
           fix: issue.rule.advice,
           group: scope,
           spot: spot,

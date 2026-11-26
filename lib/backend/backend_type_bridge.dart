@@ -1,7 +1,9 @@
 /// 规矩版本 2 的文档：跑一遍类型检查（lib/lang/typecheck.dart），把问题和一键修对回到积木、对回到具体哪一格上。
 ///
-/// 这是“积木上的标红和一键修（界面）”那一段为了不等并行那一段自己先写的最小版本；并行那一段把类型检查正式接进
-/// `validateBackend` 以后，用正式的替换这个文件（界面只认 [BeTypeCheck] / [BeTypeFinding] 这两个样子）。
+/// 全工程只有这一处跑后端文档的类型检查。两个地方用它的结果：
+/// - 校验（backend_validate_types.dart → `validateBackend`）：把“错 / 警告”转成校验问题，拦住生成、运行、导出；
+/// - 积木编辑器（backend_type_host.dart）：标红到式子里的位置、一键修、类型一行字。
+/// 两边拿的是同一份结果（[beTypeCheckShared]），所以同一个问题不会有两种说法。
 ///
 /// 做法照 backend_validate_lang.dart：接口、函数都按“影子模式”翻成语法树（没用到第 4 版积木的接口也翻，`always`），
 /// 交给 `checkTypes`；问题的节点靠翻译时记的 `origins`（式子 → 积木文档里的那个值）找回是哪一格，找不到的退回来源表（哪一块、哪个参数）。
@@ -36,6 +38,9 @@ class BeTypeFinding {
 
   /// 能在积木上做的一键修：修法＋它要包 / 要换的那一格。（要靠记录、“看是哪种情况”这些还没有积木的东西才能表达的不在里面。）
   final List<({LFix fix, BeSlotRef slot})> fixes;
+
+  /// 给人看的那句话：检查器里“这次请求”叫 req，这里换回积木上的叫法。
+  String get problem => issue.message.replaceAll('“req”', '“这次请求”').replaceAll('「req」', '“这次请求”');
 }
 
 class BeTypeCheck {
@@ -178,4 +183,20 @@ BeTypeCheck? beTypeCheck(BeDocument doc) {
   } on Object {
     return null;
   }
+}
+
+BeDocument? _sharedDoc;
+String? _sharedKey;
+BeTypeCheck? _shared;
+
+/// 和 [beTypeCheck] 一样，但文档内容没变就给上一次的结果（只记最近一份）。
+/// 校验一份文档时每个接口、每块“我的积木”都要问一遍，编辑器紧接着还要再问一遍——都落在同一次检查上。
+BeTypeCheck? beTypeCheckShared(BeDocument doc) {
+  if (!langRulesStrict(doc.rules)) return null;
+  final key = doc.encode();
+  if (identical(_sharedDoc, doc) && _sharedKey == key) return _shared;
+  final check = beTypeCheck(doc);
+  _sharedDoc = doc;
+  _sharedKey = key;
+  return _shared = check;
 }

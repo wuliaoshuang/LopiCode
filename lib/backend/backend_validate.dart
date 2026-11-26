@@ -105,6 +105,14 @@ bool _samePath(LcBlockPath a, LcBlockPath b) {
   return true;
 }
 
+bool _sameXp(List<Object>? a, List<Object> b) {
+  if (a == null || a.length != b.length) return false;
+  for (var i = 0; i < a.length; i++) {
+    if (a[i] != b[i]) return false;
+  }
+  return true;
+}
+
 bool _hasRespond(BeRoute r) {
   var found = false;
   r.visitBlocks((b, _) => found = found || _respondOps.contains(b.op));
@@ -303,12 +311,15 @@ class _Validator {
   void _lang(LcBlockTree r, List<BeLangFinding> findings) {
     for (final f in findings) {
       final rule = lcRuleId(f.code);
-      if (issues.any((i) => i.handlerId == r.id && i.rule == rule && _samePath(i.path, f.path) && (f.arg == null || i.arg == f.arg))) continue;
+      final xp = f.exprPath;
+      // 带着“参数里的哪个位置”的（类型检查的问题）：位置也一样才算同一条。
+      bool sameSpot(LcLogicIssue i) => xp == null || _sameXp(i.exprPath, xp);
+      if (issues.any((i) => i.handlerId == r.id && i.rule == rule && _samePath(i.path, f.path) && (f.arg == null || i.arg == f.arg) && sameSpot(i))) continue;
       // 同一格上类型检查已经说了“要什么、放进来的是什么”，老的那条“类型对不上”（G10）就不重复了。
-      if (f.code.startsWith('T')) issues.removeWhere((i) => i.handlerId == r.id && i.rule == 'G10' && _samePath(i.path, f.path) && i.arg == f.arg);
+      if (f.code.startsWith('T')) issues.removeWhere((i) => i.handlerId == r.id && i.rule == 'G10' && _samePath(i.path, f.path) && i.arg == f.arg && sameSpot(i));
       _path = f.path;
       _block = r.blockAt(f.path);
-      _add(f.isError ? LcIssueLevel.error : LcIssueLevel.warning, f.code, f.problem, arg: f.arg, xp: const [], fix: f.fix);
+      _add(f.isError ? LcIssueLevel.error : LcIssueLevel.warning, f.code, f.problem, arg: f.arg, xp: xp ?? const [], fix: f.fix);
     }
     _path = const [];
     _block = null;

@@ -73,7 +73,7 @@ bool beAlwaysResponds(List<LcBlock> list, [int depth = 0]) {
 
 /// 检查器报的一条，已经对回到积木上。
 class BeLangFinding {
-  const BeLangFinding(this.code, this.isError, this.problem, this.path, this.arg, this.fix);
+  const BeLangFinding(this.code, this.isError, this.problem, this.path, this.arg, this.fix, {this.exprPath});
 
   /// [LcIssueCode] / [BeLangIssueCode] / `unreachable` 里的一种。
   final String code;
@@ -83,6 +83,9 @@ class BeLangFinding {
 
   /// 积木的哪个参数（段参数是 `@<第几段>:<名字>`）；null＝整块。
   final String? arg;
+
+  /// 在那个参数里的哪个位置（和积木编辑器的槽位路径同一种写法）；null＝不知道，按整个参数算。只有类型检查的问题带。
+  final List<Object>? exprPath;
 
   /// 比规则表里默认的更贴切的建议；null＝用默认的。
   final String? fix;
