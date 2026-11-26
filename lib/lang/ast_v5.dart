@@ -21,6 +21,9 @@ const String kBoundComparable = 'comparable';
 /// “能当字典的键”（第一版只有文字）。
 const String kBoundKey = 'key';
 
+/// “是数字”（整数或小数）。只有小库函数的签名用（绝对值、较大、较小）：整数进整数出、小数进小数出；“任意”放进来到运行时再查。
+const String kBoundNumeric = 'numeric';
+
 /// 一个带类型的字段（记录的字段、变体某种情况带的东西）。
 class LTypedField {
   const LTypedField(this.name, this.type);

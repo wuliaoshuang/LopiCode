@@ -2,6 +2,7 @@
 library;
 
 import 'package:lopicode/backend/backend_blocks.dart';
+import 'package:lopicode/backend/backend_blocks_core.dart';
 import 'package:lopicode/backend/backend_blocks_strict.dart';
 import 'package:lopicode/backend/backend_model.dart';
 import 'package:lopicode/backend/backend_text_func.dart';
@@ -100,7 +101,7 @@ String _expr(Object? expr, int depth, bool nested, [String? Function(String id)?
     case 'field':
       return '${sub('of')} 的 ${_name(exprString(expr, 'key'), '没填字段')}';
     default:
-      return describeBeLangExpr(expr, sub) ?? describeBeFuncExpr(expr, sub, fnName) ?? describeBeStrictExpr(expr, sub) ?? '不认识的值（${_clip(kind)}）';
+      return describeBeLangExpr(expr, sub) ?? describeBeFuncExpr(expr, sub, fnName) ?? describeBeStrictExpr(expr, sub) ?? describeBeCoreExpr(expr, sub) ?? '不认识的值（${_clip(kind)}）';
   }
 }
 
@@ -143,7 +144,7 @@ String describeBeBlock(LcBlock b, [String? Function(String id)? fnName]) {
       final data = method == 'POST' && isExpr(b.args['data']) ? '，提交 ${arg('data')}' : '';
       return '用 $method 请求 ${arg('url')}$data${into('，结果放进')}';
     default:
-      return describeBeLangBlock(b, arg, (key) => _name(b.args[key], '没填')) ?? describeBeFuncBlock(b, arg, fnName) ?? '不认识的积木（${_clip(b.op)}）';
+      return describeBeLangBlock(b, arg, (key) => _name(b.args[key], '没填')) ?? describeBeFuncBlock(b, arg, fnName) ?? describeBeCoreBlock(b, arg) ?? '不认识的积木（${_clip(b.op)}）';
   }
 }
 
@@ -167,7 +168,7 @@ String describeBeBlockPath(LcBlockTree tree, LcBlockPath path) {
   LcBlock? parent;
   for (var i = 0; i < path.length; i++) {
     if (parent != null) {
-      final spec = beBlockSpecs[parent.op];
+      final spec = beBlockSpecs[parent.op] ?? beCoreBlockSpecs[parent.op];
       final arm = path[i].arm;
       if (arm <= -2) {
         // 这块积木上“带口的值”（匿名函数）的口：第几个按积木本身现数（见 lcExprMouthArm）。

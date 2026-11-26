@@ -32,7 +32,8 @@ mixin _Stmts on _Core {
     bool ends(List<LStmt> b) => _exits(b, jumps: false) || _allReturn(b);
     return switch (_last(body)) {
       LMatch(:final arms, :final orElse) => arms.every((a) => ends(a.body)) && (orElse == null || ends(orElse)),
-      LTry(:final body, :final onError, :final errorName) => ends(body) && (errorName == null && onError.isEmpty || ends(onError)),
+      LTry(:final body, :final handlers, :final onError, :final errorName) =>
+        ends(body) && (handlers == null ? errorName == null && onError.isEmpty || ends(onError) : handlers.every((c) => ends(c.body))),
       LIf(:final arms, :final orElse) => orElse.isNotEmpty && ends(orElse) && arms.every((a) => ends(a.body)),
       _ => false,
     };
@@ -96,7 +97,16 @@ mixin _Stmts on _Core {
           case LTIndex(:final of, :final key):
             store(sc, of, key, value, s);
           case LTField(:final of, :final name):
+            if (classRef(sc, of) != null) {
+              arg(sc, value, field(sc, of, name, target), '「$name」');
+              return;
+            }
             final t = w.res(ex(sc, of));
+            if (name == kErrKindField && isErr(t)) {
+              ex(sc, value);
+              err('T19', sc, '错误的“种类”只能读，不能改', node: s);
+              return;
+            }
             if (w.isRecord(t)) {
               ex(sc, value);
               err(
@@ -169,15 +179,10 @@ mixin _Stmts on _Core {
         }
         sc.rets.add(t);
         if (finalPass && value != null && wt == null && f != null) _returned.add((value, f));
-      case LThrow(:final message):
-        arg(sc, message, _txt, '抛出的错误信息');
-      case LTry(:final body, :final errorName, :final onError, :final finallyBody):
-        final keep = {...sc.nn};
-        block(sc, body);
-        sc.nn = keep.intersection(sc.nn);
-        if (errorName != null) declare(sc, errorName, _txt, kind: LVarKind.error); // 错误对象在核心 2；这一段先按“错误信息（文字）”。
-        block(sc, onError);
-        block(sc, finallyBody);
+      case LThrow():
+        throwStmt(sc, s);
+      case LTry():
+        tryStmt(sc, s);
       case LMatch():
         _match(sc, s);
     }
@@ -192,6 +197,10 @@ mixin _Stmts on _Core {
     }
     final v = vt[k]!;
     final t = ex(sc, value, v.fixed ? v.t : null);
+    for (_Scope? x = sc; x != null; x = x.parent) {
+      x.narrow.remove(name); // 重新放了东西：不再按“出错时”那一节的种类看
+      if (x.names.contains(name)) break;
+    }
     if (finalPass) _assigned.add((value, k));
     _assignType(sc, name, t, value);
   }

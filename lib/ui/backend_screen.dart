@@ -33,6 +33,8 @@ import 'package:lopicode/state/workspace_files.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/app_backdrop.dart';
 import 'package:lopicode/ui/app_ref.dart';
+import 'package:lopicode/ui/backend_core_sheet.dart';
+import 'package:lopicode/ui/backend_modules_sheet.dart';
 import 'package:lopicode/ui/backend_panels_sheet.dart';
 import 'package:lopicode/ui/backend_run_sheet.dart';
 import 'package:lopicode/ui/backend_types_sheet.dart';
@@ -411,6 +413,10 @@ class BackendScreenState extends ConsumerState<BackendScreen> {
         unawaited(_openRegen());
       case 'strict':
         unawaited(_upgradeStrict());
+      case 'types':
+        unawaited(showBeCoreTypes(context, _host!));
+      case 'modules':
+        unawaited(showBeModules(context, _host!));
     }
   }
 
@@ -453,6 +459,7 @@ class BackendScreenState extends ConsumerState<BackendScreen> {
     final errors = host.errorCount;
     final regen = _regen;
     if (errors > 0) return blockErrorsBrief(errors);
+    if (host.canvasType case final inside?) return '在类「${inside.name}」里面';
     if (regen != null && !regen.ok) return '代码没有重新生成';
     if (regen != null && regen.conflicts.isNotEmpty) return '${regen.conflicts.length} 个文件没覆盖';
     final target = host.target;
@@ -503,6 +510,8 @@ class BackendScreenState extends ConsumerState<BackendScreen> {
       onEditTypes: (sel) => unawaited(showBeTypeEditor(context, host, sel)),
       onHostChanged: () => setState(() {}),
       extraActions: [
+        // 在某个类的画布里：多一颗“回主画布”。
+        if (host.canvasType != null) IconButton(key: const ValueKey('be-canvas-back'), tooltip: '回主画布', onPressed: () => host.openCanvas(null), icon: const Icon(Icons.keyboard_return_rounded)),
         IconButton(key: const ValueKey('be-run'), tooltip: '运行', onPressed: _openRun, icon: const Icon(Icons.play_arrow_rounded)),
         PopupMenuButton<String>(
           key: const ValueKey('be-more'),
@@ -524,6 +533,9 @@ class BackendScreenState extends ConsumerState<BackendScreen> {
             PopupMenuItem(key: const ValueKey('be-menu-data'), value: 'data', child: _menuRow(Icons.data_object_rounded, '变量与集合（${host.doc.variables.length} + ${host.doc.collections.length}）')),
             PopupMenuItem(key: const ValueKey('be-menu-settings'), value: 'settings', child: _menuRow(Icons.tune_rounded, '服务设置（端口 ${host.doc.port}）')),
             // 规矩版本：已经是严格规矩的只说一声（不能点）；老规矩的文档给“升级”的入口——入口现在默认不出现（beStrictUpgradeEntry）。
+            // 类型与类、模块：只有严格规矩的文档才有（老规矩的文档这个菜单一项不多）。
+            if (host.strictRules) PopupMenuItem(key: const ValueKey('be-menu-types'), value: 'types', child: _menuRow(Icons.category_outlined, '类型与类（${host.core.types.length}）…')),
+            if (host.strictRules) PopupMenuItem(key: const ValueKey('be-menu-modules'), value: 'modules', child: _menuRow(Icons.view_module_outlined, '模块（${host.core.modules.length}）…')),
             if (host.strictRules)
               PopupMenuItem(key: const ValueKey('be-menu-strict-on'), enabled: false, child: _menuRow(Icons.verified_outlined, '严格规矩：已开启'))
             else if (beStrictUpgradeEntry)

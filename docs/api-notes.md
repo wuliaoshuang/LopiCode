@@ -680,3 +680,35 @@ PHP 真跑撞到并修掉的 5 个问题，以及依据：
 一处要知道的：React 里“传了一个空的东西”（比如 `footer={null}`）也算没传，会显示默认内容；导出器不会生成这种写法（没填就干脆不写这个属性）。
 
 Vue 那边（`<slot name>` 里写默认内容、用的地方 `<template #名字>`）第 2 期设计时已对官方文档核对过，这次只是真编译＋服务端渲染再验了一遍。
+
+## 积木第 5 版·核心 2 第 2 段用到的各语言行为（2026-11-26）
+
+状态：**实跑核对**（开发机 Node v24.22.1、Python 3.12.3、PHP 8.3.37、Go 1.25.0、本机 JDK；`test/lang_gen2_classes_test.dart` 的 c11 样例五种语言输出一样），**没有逐条对官方文档**。
+
+- 网址解码：Node `decodeURIComponent`（写坏的 `%`、不是 UTF-8 会抛错）；Python `urllib.parse.unquote(s, errors="strict")`（写坏的 `%` 它原样留着，所以先用正则查）；PHP `rawurldecode`（不查，所以先查 `%`、再用 `preg_match('//u')` 查 UTF-8）；Go `url.PathUnescape`＋`utf8.ValidString`；Java 自己一个字节一个字节解＋`CharsetDecoder`（`URLDecoder` 会把“+”变空格，不能用）。
+- “是不是数字”里文字变数：Node `Number`、Python `float`、PHP `(float)`、Go `strconv.ParseFloat`、Java `Double.parseDouble`——都先用同一条正则把关，只靠它们判断“是不是无穷大”。
+- Go 的接口可以嵌方法重复的接口（要求签名一样）：靠它让“能被继承的类”的接口嵌它实现的接口。未对官方文档核对版本下限（开发机 1.25 通过）。
+
+## 积木第 5 版·核心 2 第 4 段用到的各语言标准库（2026-11-26）
+
+状态：**实跑核对**（开发机 Node v24.22.1、Python 3.12.3、PHP 8.3.37、Go 1.25.0、Java Temurin 21.0.13.1；`test/lang_gen2_framework_test.dart` 五种语言各 39 条请求逐字节一样），**没有逐条对官方文档**——下面每条都标“未核对”，只说明本机上实测是这样。
+
+- Node `node:http`：`createServer`、`server.listen(端口, 主机)`；`res.writeHead(状态码, 头)`＋`res.end(内容)`，自己给了 Content-Length 就不分块。未核对。
+- Python `http.server.ThreadingHTTPServer`＋`BaseHTTPRequestHandler`：一个请求一条线程（`daemon_threads = True`）；没改 `protocol_version`（默认 HTTP/1.0，一个请求一条连接），Content-Length 自己给。未核对。
+- PHP 自带的服务 `php -S 主机:端口 脚本`：单进程、一次一个请求、脚本每个请求从头跑；往 `php://stdout` 写的东西到服务进程的标准输出，PHP 自己的启动行、访问记录写标准错误；`PHP_SAPI` 是 `cli-server`；`header_remove('X-Powered-By')` 有效；204 不带 Content-Length、HEAD 自动不写内容；`$_SERVER['REQUEST_URI']` 是原样没解码、带查询的。本机 PHP 没有 pcntl / posix / sockets 扩展（所以 PHP 上没法真的同时做几件事）。PHP 手册说这个自带服务只给开发用——这一句也未核对原文。重名的请求头到了 PHP 是什么样子没验证。
+- PHP `flock(LOCK_EX)`＋`serialize / unserialize`：格子的带锁文件。未核对。
+- Go `net/http`：`http.Server{Handler}`＋`net.Listen` 再 `Serve`；自己设了 Content-Length 就不分块。`runtime.Stack` 输出的第一行是 `goroutine 编号 [状态]:`（格子里拿来认“是不是同一条线”，Go 不保证这个格式长期不变）。未核对。
+- Java `com.sun.net.httpserver.HttpServer`（JDK 自带，模块 `jdk.httpserver`）：`sendResponseHeaders(状态码, 长度)` 里长度给 `-1`＝没有内容、给正数＝定长不分块、给 `0`＝分块（所以空内容要给 `-1`）。`Thread.ofVirtual()`、`Executors.newVirtualThreadPerTaskExecutor()` 要 JDK 21。未核对。
+- `gofmt -l`、`go vet ./...`：本机 Go 1.25.0 下小库干净、“小框架”整套 vet 不报。
+
+## 积木第 5 版·核心 2 第 5 段用到的各语言标准库（2026-11-26）
+
+状态：**实跑核对**（开发机 Node v24.22.1、Python 3.12.3、PHP 8.3.37、Go 1.25.0、Java Temurin 21.0.13.1；`test/lang_gen2_host_io_test.dart`、`test/lang_gen2_service_v1_test.dart` 五种语言输出一样），**没有逐条对官方文档**——下面每条都标“未核对”，只说明本机上实际这样。
+
+- Node 自带的 `fetch`：`redirect: "follow"` 跟跳转；`signal: AbortSignal.timeout(毫秒)` 到时间抛 `TimeoutError`；`crypto.randomBytes`。未核对。
+- Python `urllib.request.urlopen(请求, timeout=秒)`：4xx/5xx 抛 `HTTPError`，它本身能当回应读（`.code`、`.headers`、`.read()`）；超时是 `TimeoutError` 或包在 `URLError.reason` 里；`os.urandom`；`os.replace` 改名覆盖。未核对。
+- PHP http 流（`fopen`＋`stream_context_create`）：`ignore_errors` 让 4xx/5xx 也读内容；`follow_location`、`timeout`、`protocol_version`；回应头从流的元数据里读；`random_bytes`。本机 PHP 没有 curl、mbstring 扩展。未核对。
+- Go `http.Client{Timeout}`：超时的错误能用 `os.IsTimeout` 认；`crypto/rand.Read`；`json.Decoder.UseNumber`＋`strconv.ParseFloat`（超出范围时返回正负无穷和一个范围错误）。未核对。
+- Java `java.net.http.HttpClient`（21 起可以放进 try-with-resources）：`HttpTimeoutException`；`connectTimeout`；`followRedirects(NORMAL)`；`java.security.SecureRandom`；`Files.move(…, REPLACE_EXISTING, ATOMIC_MOVE)`。未核对。
+- Java `com.sun.net.httpserver.HttpServer`：请求路径以两个斜杠开头时它自己回 400 `Bad request URI`，不进处理函数（本机实测）。未核对。
+- 这台开发机的运行环境：Java 程序连本机回环地址要带 `-Djava.net.preferIPv4Stack=true`，不带的话连接被运行环境拦下（只是这台机器的事，不是 JDK 的规矩）。

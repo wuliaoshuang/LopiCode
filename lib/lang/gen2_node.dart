@@ -46,13 +46,36 @@ class NodeGen2 extends Gen2Dyn {
   List<String> throwLines(String message) => ['throw new lc.LcError($message);'];
 
   @override
-  List<String> tryLines(LTry s, List<String> Function(List<LStmt>) gen, String? errTarget) {
+  List<String> throwObjLines(String obj, String message) => ['throw new lc.LcError($message, $obj);'];
+  @override
+  String errObjCode(String e) => 'lc.errObj($e)';
+  @override
+  List<String> rethrowLines(String e) => ['throw $e;'];
+  @override
+  String errKindCode(String obj, LType type) => 'lc.kindOf($obj)';
+  @override
+  String errNarrow(String code, LType from, LType to) => code;
+  @override
+  List<String> errSupport() => [
+    'lc.errSetup((lcK, lcM) => {',
+    ...indent([
+      'switch (lcK) {',
+      ...indent([for (final (k, make) in errMakers('lcM').skip(1)) 'case ${textLit(k)}: return $make;', 'default: return ${errMakers('lcM').first.$2};']),
+      '}',
+    ]),
+    '});',
+  ];
+
+  @override
+  List<String> tryFrame(LTry s, List<String> Function(List<LStmt>) gen, List<String> Function(String e)? handler) {
     final e = tmpName('E');
     return [
       'try {',
       ...indent(gen(s.body)),
-      '} catch ($e) {',
-      ...indent(['if (!($e instanceof lc.LcError)) throw $e;', if (errTarget != null) '$errTarget = $e.message;', ...gen(s.onError)]),
+      if (handler != null) ...[
+        '} catch ($e) {',
+        ...indent(['if (!($e instanceof lc.LcError)) throw $e;', ...handler(e)]),
+      ],
       if (s.finallyBody.isNotEmpty) ...['} finally {', ...indent(gen(s.finallyBody))],
       '}',
     ];
@@ -67,12 +90,19 @@ class NodeGen2 extends Gen2Dyn {
   @override
   String lambdaCode(LLambda e, LType ft, V2Fn inner) {
     final params = paramCodes(inner, e.params).join(', ');
-    if (e.expr != null && !inner.isVoid && localsOf(inner.scope).isEmpty) return '(($params) => ${inFn(inner, () => x(e.expr!, inner.ret))})';
-    return '(($params) => {\n${indent(funcBody(inner, e.stmts)).join('\n')}\n})';
+    final head = e.waits ? 'async ' : '';
+    if (e.expr != null && !inner.isVoid && localsOf(inner.scope).isEmpty) return '($head($params) => ${inFn(inner, () => x(e.expr!, inner.ret))})';
+    return '($head($params) => {\n${indent(funcBody(inner, e.stmts)).join('\n')}\n})';
   }
 
   @override
-  List<String> funcDecl(String name, List<String> params, List<String> body) => ['function $name(${params.join(', ')}) {', ...indent(body), '}'];
+  List<String> funcDecl(String name, List<String> params, List<String> body) => ['${waitDecls.contains(name) ? 'async ' : ''}function $name(${params.join(', ')}) {', ...indent(body), '}'];
+
+  // “等”：Node 里一件要等的事交回来的是 Promise，前面写 await；“稍后的结果”本身就是 Promise。
+  @override
+  String awaited(String code) => '(await $code)';
+  @override
+  String waitCode(String task, LType of) => task;
 
   @override
   List<String> globalDecls(List<String> names) => names.isEmpty ? const [] : ['let ${names.map((n) => '$n = null').join(', ')};'];
@@ -109,7 +139,7 @@ class NodeGen2 extends Gen2Dyn {
           ...indent([if (needSuper || c.parent == null) 'super();', ...c.ctorBody]),
           '}',
         ],
-        for (final m in c.methods) ...['${m.$1}(${m.$2.join(', ')}) {', ...indent(m.$3), '}'],
+        for (final m in c.methods) ...['${waitDecls.contains('${c.name}.${m.$1}') ? 'async ' : ''}${m.$1}(${m.$2.join(', ')}) {', ...indent(m.$3), '}'],
       ]),
       '}',
       '${c.name}.lcName = ${textLit(c.info.name)};',
@@ -127,7 +157,7 @@ class NodeGen2 extends Gen2Dyn {
     top.forEach(out.writeln);
     out
       ..writeln()
-      ..writeln('lc.run(() => {');
+      ..writeln('lc.run(${mainWaits ? 'async ' : ''}() => {');
     for (final l in indent(mainBody)) {
       out.writeln(l);
     }

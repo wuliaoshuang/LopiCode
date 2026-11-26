@@ -2,9 +2,10 @@
 library;
 
 import 'package:lopicode/lang/rt2_python.dart';
+import 'package:lopicode/lang/rt2_python_more.dart';
 
 /// 整份小库。
-const String kRt2PythonSource = kRt2PythonHead + _tail;
+const String kRt2PythonSource = kRt2PythonHead + _tail + kRt2PythonMore;
 
 const String _tail = r'''
 # —— 列表、字典 ——
@@ -134,8 +135,8 @@ def listContains(xs, v):
     return listIndexOf(xs, v) >= 0
 
 
-def range(a, b):
-    return list(_b.range(a, b + 1))
+def range(a, b, s):
+    return [a + k * s for k in _b.range(_b.min(steps(a, b, s), 10000))]
 
 
 def recCopy(r, changes):
@@ -245,9 +246,20 @@ def _bad_const(_):
     raise ValueError("不是 JSON")
 
 
+# 文字里写成 \\ud800 这种“半个表情符号”的（不成对的代理项）换成 U+FFFD：五种语言读出来一样。
+def _fix_half(v):
+    if isinstance(v, str):
+        return _re.sub("[\ud800-\udfff]", "\ufffd", v)
+    if isinstance(v, list):
+        return [_fix_half(x) for x in v]
+    if isinstance(v, dict):
+        return {_fix_half(k): _fix_half(x) for k, x in v.items()}
+    return v
+
+
 def fromJson(s):
     try:
-        return _json.loads(s, parse_int=float, parse_constant=_bad_const)
+        return _fix_half(_json.loads(s, parse_int=float, parse_constant=_bad_const))
     except (ValueError, RecursionError):
         fail("这段文字不是 JSON")
 
@@ -274,18 +286,257 @@ def orElse(x, f):
     return f() if x is None else x
 
 
-# —— 输出：攒起来，最后一次写出 ——
-_out = []
+# —— 输出：写一行就马上写出去（服务被关掉的时候不会丢）；几条线同时写，一行也不会被拆开 ——
+_out_lock = _threading.Lock()
+_wrote = False
 
 
 def log(s):
-    _out.append(s)
+    global _wrote
+    with _out_lock:
+        _wrote = True
+        sys.stdout.buffer.write((s + "\n").encode("utf-8"))
+        sys.stdout.buffer.flush()
+
+
+# —— 是不是数字、网址解码 ——
+_NUM = _re.compile(r"[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)([eE][+-]?[0-9]+)?")
+_BAD_PCT = _re.compile(r"%(?![0-9A-Fa-f]{2})")
+
+
+def isNumeric(x):
+    if isinstance(x, bool):
+        return False
+    if isinstance(x, (int, float)):
+        return True
+    if not isinstance(x, str):
+        return False
+    s = x.strip(" \t\n\r")
+    return _NUM.fullmatch(s) is not None and math.isfinite(float(s))
+
+
+def toNumber(s):
+    if not isNumeric(s):
+        fail("「" + s + "」变不成数字")
+    return float(s.strip(" \t\n\r"))
+
+
+# 这个值是不是某一类：null bool number text list dict function object。
+def isType(x, name):
+    if name == "null":
+        return x is None
+    if name == "bool":
+        return isinstance(x, bool)
+    if name == "number":
+        return isinstance(x, (int, float)) and not isinstance(x, bool)
+    if name == "text":
+        return isinstance(x, str)
+    if name == "list":
+        return isinstance(x, list)
+    if name == "dict":
+        return isinstance(x, dict)
+    if name == "function":
+        return callable(x) and not isinstance(x, type)
+    if name == "object":
+        return isinstance(x, (Obj, Rec, Enum))
+    fail("没有「" + name + "」这一类值")
+
+
+# 两个字典合成一个新的：后面的盖住前面的。
+def dictMerge(a, b):
+    out = dict(a)
+    out.update(b)
+    return out
+
+
+def urlDecode(s):
+    if _BAD_PCT.search(s):
+        fail("这段网址编码解不开")
+    try:
+        return _urlparse.unquote(s, encoding="utf-8", errors="strict")
+    except UnicodeDecodeError:
+        fail("这段网址编码解不开")
+
+
+# —— 宿主（清单见 host_v2.dart）——
+def hostPrint(s, ch):
+    if ch == "out":
+        log(s)
+    elif ch == "err":
+        sys.stderr.buffer.write((s + "\n").encode("utf-8"))
+        sys.stderr.buffer.flush()
+    else:
+        fail("通道只能是 out 或 err")
+
+
+def hostNow():
+    return int(_time.time() * 1000)
+
+
+def _copy_val(v):
+    if isinstance(v, list):
+        return [_copy_val(x) for x in v]
+    if isinstance(v, dict):
+        return {k: _copy_val(x) for k, x in v.items()}
+    return v
+
+
+# 格子：每个名字一把锁。别的线同时改同一个名字＝排队；改它的函数里再改它＝报错（不然会自己等自己）。
+_store = {}
+_store_lock = _threading.Lock()
+_store_locks = {}
+
+
+def storeRead(name):
+    with _store_lock:
+        return _copy_val(_store.get(name))
+
+
+def storeUpdate(name, f):
+    with _store_lock:
+        lk = _store_locks.setdefault(name, [_threading.Lock(), None])
+    me = _threading.get_ident()
+    if lk[1] == me:
+        fail("「" + name + "」这个格子正在改，不能在改它的函数里再改它")
+    with lk[0]:
+        lk[1] = me
+        try:
+            v = _copy_val(f(storeRead(name)))
+            with _store_lock:
+                _store[name] = v
+            return _copy_val(v)
+        finally:
+            lk[1] = None
+
+
+def hostEnv(name):
+    return _os.environ.get(name)
+
+
+# —— 要等的事：一件事一条线 ——
+def hostSleep(ms):
+    _time.sleep(max(0, ms) / 1000.0)
+
+
+class Task:
+    def __init__(self, f):
+        self._done = _threading.Event()
+        self._val = None
+        self._err = None
+        _threading.Thread(target=self._run, args=(f,), daemon=True).start()
+
+    def _run(self, f):
+        try:
+            self._val = f()
+        except BaseException as e:  # 出了错先记着，等它的时候再抛
+            self._err = e
+        finally:
+            self._done.set()
+
+
+def spawn(f):
+    return Task(f)
+
+
+def wait(t):
+    t._done.wait()
+    if t._err is not None:
+        raise t._err
+    return t._val
+
+
+# —— 开服务（细则见 docs/blocks-v5-parts/C-library-system.md 9.1 和 B-gen-notes.md 第 12 节）——
+_BODY_LIMIT = 1048576
+
+
+def _err_text(e):
+    return "出错：" + str(e) if isinstance(e, LcError) else "".join(_traceback.format_exception(e)).rstrip("\n")
+
+
+def hostServe(port, host, handler):
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, format, *args):  # 不打印每次访问的日志
+            pass
+
+        def _write(self, status, headers, text):
+            payload = text.encode("utf-8", "replace")
+            no_body = status in (204, 304) or status < 200
+            self.send_response(status)
+            for k in sorted(k for k in headers if k.lower() != "content-length"):
+                self.send_header(k, dtext(headers[k]))
+            if not no_body:
+                self.send_header("Content-Length", str(_b.len(payload)))
+            self.end_headers()
+            if not no_body and self.command != "HEAD":
+                self.wfile.write(payload)
+
+        def _host_error(self, status, message):
+            self._write(status, {"Content-Type": "application/json; charset=utf-8"}, toJson({"error": message}))
+
+        def _handle(self):
+            length_text = self.headers.get("Content-Length") or "0"
+            length = int(length_text) if _re.fullmatch("[0-9]{1,12}", length_text) else 0
+            if length > _BODY_LIMIT:
+                self.close_connection = True
+                return self._host_error(413, "请求内容太大")
+            raw = self.rfile.read(length) if length > 0 else b""
+            try:
+                body = raw.decode("utf-8")
+            except UnicodeDecodeError:
+                body = None
+            headers = {}
+            for name, value in self.headers.items():
+                name = name.lower()
+                value = value.strip(" \t")
+                headers[name] = headers[name] + ", " + value if name in headers else value
+            path, _, query = self.path.partition("?")
+            request = {"method": self.command, "path": path, "query": query, "headers": headers, "body": body}
+            try:
+                out = handler(request)
+            except Exception as e:  # 处理函数自己没接住的错：记到错误输出，回 500
+                sys.stderr.write(_err_text(e) + "\n")
+                sys.stderr.flush()
+                return self._host_error(500, "服务器内部出错")
+            status = out.get("status") if isinstance(out, dict) else None
+            if isinstance(status, float) and status.is_integer():
+                status = int(status)
+            if not isinstance(status, int) or isinstance(status, bool) or not 100 <= status <= 599:
+                sys.stderr.write("处理函数返回的响应不对（要一个字典，status 是 100 到 599 的整数）\n")
+                sys.stderr.flush()
+                return self._host_error(500, "服务器内部出错")
+            hs = out.get("headers")
+            self._write(status, hs if isinstance(hs, dict) else {}, dtext(out.get("body")))
+
+        do_GET = do_POST = do_PUT = do_PATCH = do_DELETE = do_OPTIONS = do_HEAD = _handle
+
+    if port < 0 or port > 65535:
+        fail("开不了服务：端口要在 0 到 65535 之间")
+    ThreadingHTTPServer.daemon_threads = True
+    try:
+        server = ThreadingHTTPServer((host, port), Handler)
+    except OSError:
+        fail("开不了服务：" + host + ":" + str(port) + " 用不了")
+    log("后端已启动：http://" + host + ":" + str(server.server_address[1]))
+    try:
+        server.serve_forever()
+    finally:
+        server.server_close()
 
 
 def run(main):
+    failed = False
     try:
         main()
     except LcError as e:
-        _out.append("出错：" + str(e))
-    sys.stdout.buffer.write(("\n".join(_out) + "\n").encode("utf-8"))
+        log("出错：" + str(e))
+        failed = True
+    except KeyboardInterrupt:  # 被 Ctrl+C 停掉：安静地收场
+        pass
+    if not _wrote:  # 什么都没写过的，补一个空行（和原来“攒到最后一次写”的样子一样）
+        sys.stdout.buffer.write(b"\n")
+    sys.stdout.buffer.flush()
+    if failed:
+        sys.exit(1)
 ''';

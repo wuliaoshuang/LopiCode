@@ -8,8 +8,10 @@ library;
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:lopicode/backend/backend_blocks_core.dart';
 import 'package:lopicode/backend/backend_blocks_func.dart';
 import 'package:lopicode/backend/backend_blocks_lang.dart';
+import 'package:lopicode/backend/backend_core.dart';
 import 'package:lopicode/backend/backend_function.dart';
 import 'package:lopicode/core/safe_file.dart';
 import 'package:lopicode/lang/rules.dart';
@@ -145,6 +147,7 @@ class BeDocument {
     List<BeCollection>? collections,
     List<BeRoute>? routes,
     List<BeFunction>? functions,
+    BeCore? core,
     int rules = kLangRulesLoose,
   }) : port = _validPort(port) ? port : kBeDefaultPort,
        rules = rules < kLangRulesLoose ? kLangRulesLoose : rules,
@@ -152,7 +155,8 @@ class BeDocument {
        variables = variables ?? [],
        collections = collections ?? [],
        routes = routes ?? [],
-       functions = functions ?? [] {
+       functions = functions ?? [],
+       core = core ?? BeCore() {
     _normalize();
   }
 
@@ -170,6 +174,12 @@ class BeDocument {
   /// 函数 / “我的积木”（积木第 4 版·第 2 阶段，见 backend_function.dart）。每个接口、每个函数里都能调。
   final List<BeFunction> functions;
 
+  /// 核心 2 的东西：自己定义的类型、模块顶上的变量、模块、“程序开始时”（见 backend_core.dart）。一样都没有时存盘不写。
+  final BeCore core;
+
+  /// 有没有用到核心 2 才有的东西（类型、模块、“程序开始时”，或者哪一串里用了核心 2 的积木）。用到了版本号写 4。
+  bool get usesCore => !core.isEmpty || routes.any((r) => beBlocksUseCore(r.body)) || functions.any((f) => beBlocksUseCore(f.body));
+
   /// 规矩版本（见 lang/rules.dart）：1＝老规矩（旧文档，行为不变）；2＝严格规矩。是 1 时存盘不写这个字段。
   int rules;
 
@@ -183,7 +193,7 @@ class BeDocument {
   bool get usesFunctions => functions.isNotEmpty || routes.any((r) => beBlocksUseFunc(r.body));
 
   Map<String, dynamic> toJson() => {
-    'version': usesFunctions ? 3 : (usesLang ? 2 : 1),
+    'version': usesCore ? 4 : (usesFunctions ? 3 : (usesLang ? 2 : 1)),
     'kind': 'backend',
     if (rules != kLangRulesLoose) kLangRulesField: rules,
     'name': name,
@@ -193,6 +203,7 @@ class BeDocument {
     'collections': [for (final c in collections) c.toJson()],
     'routes': [for (final r in routes) r.toJson()],
     if (functions.isNotEmpty) 'functions': [for (final f in functions) f.toJson()],
+    if (!core.isEmpty) 'core': core.toJson(),
   };
 
   /// 存盘用的文字（带缩进，方便人看和版本对比）。
@@ -206,6 +217,7 @@ class BeDocument {
     collections: [for (final c in collections) BeCollection(name: c.name)],
     routes: [for (final r in routes) r.clone()],
     functions: [for (final f in functions) f.clone()],
+    core: core.clone(),
     rules: rules,
   );
 
@@ -247,6 +259,7 @@ class BeDocument {
       collections: list(json['collections'], BeCollection.tryParse),
       routes: list(json['routes'], BeRoute.tryParse),
       functions: list(json['functions'], BeFunction.tryParse),
+      core: BeCore.fromJson(json['core'], beNamePattern),
       rules: langRulesFromJson(json[kLangRulesField]),
     );
     return (doc: doc, note: skipped == 0 ? null : '后端文件里有 $skipped 条读不懂的内容，已跳过');
@@ -279,6 +292,7 @@ class BeDocument {
         ids.add(r.id);
       }
     }
+    core.normalize(ids);
   }
 
   static String _freeRouteId(Set<String> used) {

@@ -39,9 +39,12 @@ String? gen2SkipReason(String language) {
 
 /// 一次真跑的结果：[stdout] 是原始字节；[problem] 不是 null 说明没跑成（编译没过、超时…），里面是原因。
 class Gen2Run {
-  const Gen2Run(this.stdout, this.problem);
+  const Gen2Run(this.stdout, this.problem, {this.exitCode});
   final List<int> stdout;
   final String? problem;
+
+  /// 程序的退出码（没跑成＝null）。约定：正常结束是 0；有没接住的错，打印“出错：…”以后是 1。
+  final int? exitCode;
 }
 
 // JAVA_TOOL_OPTIONS 会让 java 往标准错误多写一行；编译和运行都不要它。输出一律按 UTF-8。
@@ -58,13 +61,19 @@ Future<ProcessResult> _run(String exe, List<String> args, String dir, {int secon
     Process.run(exe, args, workingDirectory: dir, environment: _env(dir), includeParentEnvironment: false, stdoutEncoding: null).timeout(Duration(seconds: seconds));
 
 /// 把 [files]（相对路径 → 内容）写进临时目录，按 [language] 编译并运行。用完目录就删。
-Future<Gen2Run> gen2RunFiles(String language, Map<String, String> files) async {
+/// [extra]：另外要放进目录的文件（相对路径 → 原始字节），给“读文件”的测试准备不是文字的文件用。
+Future<Gen2Run> gen2RunFiles(String language, Map<String, String> files, {Map<String, List<int>> extra = const {}}) async {
   final dir = Directory.systemTemp.createTempSync('lopi_gen2_');
   try {
     for (final f in files.entries) {
       File('${dir.path}/${f.key}')
         ..createSync(recursive: true)
         ..writeAsStringSync(f.value);
+    }
+    for (final f in extra.entries) {
+      File('${dir.path}/${f.key}')
+        ..createSync(recursive: true)
+        ..writeAsBytesSync(f.value);
     }
     final ProcessResult r;
     switch (language) {
@@ -86,12 +95,14 @@ Future<Gen2Run> gen2RunFiles(String language, Map<String, String> files) async {
         // -Xlint:all -Werror：生成的代码连一条警告都不许有。
         final b = await _run(gen2Tools['javac']!, ['-J-Xmx256m', '-J-XX:+UseSerialGC', '-encoding', 'UTF-8', '-Xlint:all', '-Werror', '-d', 'out', ...sources], dir.path, seconds: 600);
         if (b.exitCode != 0) return Gen2Run(const [], 'javac 没过：${b.stderr}');
-        r = await _run(gen2Tools['java']!, ['-cp', 'out', 'Main'], dir.path);
+        // 这台开发机上 Java 要走纯 IPv4 的套接字才连得上本机回环地址（工作区 env.sh 的 JAVA_TOOL_OPTIONS 里本来就带这一项；
+        // 上面把整个 JAVA_TOOL_OPTIONS 去掉了，这一项单独补回来）。只影响“请求别的网址”的测试。
+        r = await _run(gen2Tools['java']!, ['-Djava.net.preferIPv4Stack=true', '-cp', 'out', 'Main'], dir.path);
       default:
         return Gen2Run(const [], '不认识的语言 $language');
     }
-    // 退出码不看：程序里没接住的错按约定打印“出错：…”，那也是要逐字节比的输出的一部分。
-    return Gen2Run(r.stdout as List<int>, null);
+    // 退出码不在这里判：程序里没接住的错按约定打印“出错：…”（也是要逐字节比的输出的一部分），然后退出码是 1；要查的测试自己看 exitCode。
+    return Gen2Run(r.stdout as List<int>, null, exitCode: r.exitCode);
   } on Exception catch (e) {
     return Gen2Run(const [], '没跑成：$e');
   } finally {

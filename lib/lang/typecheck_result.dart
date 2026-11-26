@@ -43,12 +43,28 @@ class LTypedSig {
   final List<LType> params;
   final LType returns;
 
-  LType get type => LType(LKind.fn, args: [...params, returns]);
+  LType get type => LType(LKind.fn, args: [...params, returns], waits: info.decl?.waits == true ? true : null);
 }
 
 /// 检查的结果。所有类型都是收尾以后的：不含“待定”“永不”（没定下来的按“任意”）。
 class LTypeResult {
-  LTypeResult._(this.world, this.issues, this._types, this._wants, this._ops, this._typeArgs, this.checks, this.funcs, this.vars, this._lambdaKeys, this._lines, this.passes, this.shared);
+  LTypeResult._(
+    this.world,
+    this.issues,
+    this._types,
+    this._wants,
+    this._ops,
+    this._typeArgs,
+    this.checks,
+    this.funcs,
+    this.vars,
+    this._lambdaKeys,
+    this._lines,
+    this.passes,
+    this.shared,
+    this.prelude,
+    this.usesErrors,
+  );
 
   /// 声明表（记录、枚举、变体、接口、类、函数、别名），生成器要查字段顺序、情况列表时用。
   final LTypeWorld world;
@@ -77,6 +93,12 @@ class LTypeResult {
   /// 在树里出现了不止一次的同一个节点对象（多半是 `const` 写的）。结果是按节点对象记的，这样的节点 [typeOf]、[coercionOf]、[opOf]
   /// 只能记住一处——生成器用结果之前要保证它是空的（不会出错的那几种不算：空、是 / 否、文字的字面量）。
   final List<LNode> shared;
+
+  /// 内置的错误类（errors.dart 的那段语法树；声明表 [world] 里已经有它们）。
+  final List<LClassDecl> prelude;
+
+  /// 程序里用没用到错误（有“抛出 / 试着做”，或者提到了错误类）：用到了，生成器才把内置错误类生成出来。
+  final bool usesErrors;
 
   bool get hasErrors => issues.any((i) => i.isError);
   List<LTypeIssue> get errors => [
@@ -156,6 +178,7 @@ extension _Finish on _Checker {
   static String _bound(String b) => switch (b) {
     kBoundComparable => '能比较',
     kBoundKey => '能当键',
+    kBoundNumeric => '是数字',
     _ => b,
   };
 
@@ -168,7 +191,8 @@ extension _Finish on _Checker {
     }
     for (final key in sigOrder) {
       final dot = key.indexOf('.');
-      final f = dot < 0 ? w.funcs[key]! : w.classes[key.substring(0, dot)]!.methods[key.substring(dot + 1)]!;
+      // 类本身的方法也叫“类名.方法名”，但它记在函数表里。
+      final f = w.funcs[key] ?? w.classes[key.substring(0, dot)]!.methods[key.substring(dot + 1)]!;
       final ps = [for (var i = 0; i < f.params.length; i++) w.close(ptype(f, i))];
       final r = w.close(rtype(f));
       sigs[key] = LTypedSig(key, f, ps, r);
@@ -211,6 +235,11 @@ extension _Finish on _Checker {
       if (c.kind == LCoercionKind.checkEach) checks.add(LRuntimeCheck(LCheckKind.anyToContainer, e, type: to));
     }
     final outChecks = [for (final c in checks) LRuntimeCheck(c.kind, c.node, type: c.type == null ? null : w.close(c.type!), where: c.where)];
-    return LTypeResult._(w, issues, closedTypes, closedWants, ops, closedArgs, outChecks, sigs, vars, lambdaKeys, lines, passes, _sharedNodes());
+    final usesErrors =
+        sawErrors ||
+        w.classes.values.any((c) => !prelude.contains(c.decl) && w.supers(c.name).contains(kErrBase)) ||
+        closedTypes.values.any((t) => t.anyPart((x) => x.kind == LKind.object && langIsBuiltinError(x.name))) ||
+        vars.any((v) => v.type.anyPart((x) => x.kind == LKind.object && langIsBuiltinError(x.name)));
+    return LTypeResult._(w, issues, closedTypes, closedWants, ops, closedArgs, outChecks, sigs, vars, lambdaKeys, lines, passes, _sharedNodes(), prelude, usesErrors);
   }
 }

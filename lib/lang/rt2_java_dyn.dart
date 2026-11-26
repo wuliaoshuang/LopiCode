@@ -328,18 +328,106 @@ const String _tail = r'''
     return v;
   }
 
-  // —— 出错、输出 ——
-  private static final ArrayList<String> out = new ArrayList<>();
-  static void log(String s) { out.add(s); }
+  // —— 输出：写一行就马上写出去（服务被关掉的时候不会丢）；几条线同时写，一行也不会被拆开 ——
+  private static final Object outLock = new Object();
+  private static boolean wrote = false;
+  static void log(String s) {
+    byte[] bytes = (s + "\n").getBytes(StandardCharsets.UTF_8);
+    synchronized (outLock) {
+      wrote = true;
+      System.out.write(bytes, 0, bytes.length);
+      System.out.flush();
+    }
+  }
+  static void errLine(String s) {
+    byte[] bytes = (s + "\n").getBytes(StandardCharsets.UTF_8);
+    synchronized (outLock) {
+      System.err.write(bytes, 0, bytes.length);
+      System.err.flush();
+    }
+  }
+
+  // —— 是不是数字、网址解码 ——
+  private static final java.util.regex.Pattern NUM = java.util.regex.Pattern.compile("[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)([eE][+-]?[0-9]+)?");
+  static boolean isNumeric(Object x) {
+    if (x instanceof Double || x instanceof Long) return true;
+    if (!(x instanceof String s)) return false;
+    int a = 0, b = s.length();
+    while (a < b && " \t\n\r".indexOf(s.charAt(a)) >= 0) a++;
+    while (b > a && " \t\n\r".indexOf(s.charAt(b - 1)) >= 0) b--;
+    String t = s.substring(a, b);
+    return NUM.matcher(t).matches() && !Double.isInfinite(Double.parseDouble(t));
+  }
+  static double toNumber(String s) {
+    if (!isNumeric(s)) return fail("「" + s + "」变不成数字");
+    return Double.parseDouble(s.strip());
+  }
+  /** 这个值是不是某一类：null bool number text list dict function object。 */
+  static boolean isType(Object x, String name) {
+    switch (name) {
+      case "null": return x == null;
+      case "bool": return x instanceof Boolean;
+      case "number": return x instanceof Double || x instanceof Long;
+      case "text": return x instanceof String;
+      case "list": return x instanceof ArrayList;
+      case "dict": return x instanceof TreeMap;
+      case "function": return x instanceof DynFn || x instanceof Fn;
+      case "object": return x instanceof Named;
+      default: return fail("没有「" + name + "」这一类值");
+    }
+  }
+  /** 两个字典合成一个新的：后面的盖住前面的。 */
+  static <V> TreeMap<String, V> dictMerge(TreeMap<String, V> a, TreeMap<String, V> b) {
+    TreeMap<String, V> d = dict();
+    d.putAll(a);
+    d.putAll(b);
+    return d;
+  }
+  static String urlDecode(String s) {
+    byte[] in = s.getBytes(StandardCharsets.UTF_8);
+    java.io.ByteArrayOutputStream o = new java.io.ByteArrayOutputStream();
+    for (int i = 0; i < in.length; i++) {
+      if (in[i] != '%') { o.write(in[i]); continue; }
+      int hi = i + 2 < in.length ? Character.digit((int) in[i + 1], 16) : -1;
+      int lo = hi >= 0 ? Character.digit((int) in[i + 2], 16) : -1;
+      if (hi < 0 || lo < 0) return fail("这段网址编码解不开");
+      o.write(hi * 16 + lo);
+      i += 2;
+    }
+    try {
+      return StandardCharsets.UTF_8.newDecoder().decode(java.nio.ByteBuffer.wrap(o.toByteArray())).toString();
+    } catch (java.nio.charset.CharacterCodingException e) {
+      return fail("这段网址编码解不开");
+    }
+  }
+
+  static Object copyVal(Object v) {
+    if (v instanceof ArrayList<?> l) {
+      ArrayList<Object> c = new ArrayList<>();
+      for (Object x : l) c.add(copyVal(x));
+      return c;
+    }
+    if (v instanceof TreeMap<?, ?> m) {
+      TreeMap<String, Object> c = dict();
+      for (Map.Entry<?, ?> e : m.entrySet()) c.put((String) e.getKey(), copyVal(e.getValue()));
+      return c;
+    }
+    return v;
+  }
+
   static void run(Act0 main) {
+    boolean failed = false;
     try {
       main.call();
     } catch (LcError e) {
-      out.add("出错：" + e.getMessage());
+      log("出错：" + e.getMessage());
+      failed = true;
     }
-    byte[] bytes = (String.join("\n", out) + "\n").getBytes(StandardCharsets.UTF_8);
-    System.out.write(bytes, 0, bytes.length);
-    System.out.flush();
+    synchronized (outLock) {
+      if (!wrote) System.out.write('\n'); // 什么都没写过的，补一个空行（和原来“攒到最后一次写”的样子一样）
+      System.out.flush();
+    }
+    if (failed) System.exit(1);
   }
 }
 ''';

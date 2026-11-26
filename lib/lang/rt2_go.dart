@@ -12,8 +12,9 @@ package lc
 
 import (
 	"encoding/json"
+	"io"
 	"math"
-	"os"
+	"net/url"
 	"reflect"
 	"sort"
 	"strconv"
@@ -25,11 +26,27 @@ import (
 
 const Max = 9007199254740991
 
-type Error struct{ Msg string }
+// Error：抛出去的错。Msg 是那句话；Obj 是错误对象（小库自己报的错没有，接住的时候才按种类造）。
+type Error struct {
+	Msg string
+	Obj any
+}
 
-func Fail(m string) { panic(Error{m}) }
+func Fail(m string) { panic(Error{Msg: m}) }
 func FailV[T any](m string) T {
-	panic(Error{m})
+	panic(Error{Msg: m})
+}
+
+var errKinds = [][2]string{{"除以 0", "数值不对"}, {"整数超出范围", "数值不对"}, {"变不成整数", "数值不对"}, {"超出了", "找不到"}, {"拿到的是", "类型不对"}, {"值是空", "类型不对"}}
+
+// ErrKind：小库自己报的错归到哪一种。
+func ErrKind(m string) string {
+	for _, p := range errKinds {
+		if strings.Contains(m, p[0]) {
+			return p[1]
+		}
+	}
+	return "错误"
 }
 
 type Ordered interface {
@@ -158,7 +175,7 @@ func Round(x float64) int64 {
 	return ToInt(t)
 }
 func Sqrt(x float64) float64 { return math.Sqrt(x) }
-func Now() float64          { return float64(time.Now().UnixMilli()) }
+func Now() float64           { return float64(time.Now().UnixMilli()) }
 func Steps(a, b, s int64) int64 {
 	if s == 0 || (b > a && s < 0) || (b < a && s > 0) {
 		return 0
@@ -181,7 +198,7 @@ func FSteps(a, b, s float64) int64 {
 }
 
 // —— 文字（按码点） ——
-func TextLen(s string) int64 { return int64(utf8.RuneCountInString(s)) }
+func TextLen(s string) int64    { return int64(utf8.RuneCountInString(s)) }
 func CmpText(a, b string) int64 { return int64(strings.Compare(a, b)) }
 func Cmp[T Ordered](a, b T) int64 {
 	if a < b {
@@ -223,10 +240,10 @@ func CodePoints(s string) *List[int64] {
 	}
 	return out
 }
-func Split(s, sep string) *List[string]  { return &List[string]{Items: strings.Split(s, sep)} }
-func StartsWith(s, p string) bool        { return strings.HasPrefix(s, p) }
-func EndsWith(s, p string) bool          { return strings.HasSuffix(s, p) }
-func Contains(s, p string) bool          { return strings.Contains(s, p) }
+func Split(s, sep string) *List[string] { return &List[string]{Items: strings.Split(s, sep)} }
+func StartsWith(s, p string) bool       { return strings.HasPrefix(s, p) }
+func EndsWith(s, p string) bool         { return strings.HasSuffix(s, p) }
+func Contains(s, p string) bool         { return strings.Contains(s, p) }
 func IndexOf(s, p string) int64 {
 	at := strings.Index(s, p)
 	if at < 0 {
@@ -349,10 +366,10 @@ func Get[V any](d Dict[V], k string) *V {
 	}
 	return nil
 }
-func GetNil[V any](d Dict[V], k string) V       { return d[k] }
-func DictLen[V any](d Dict[V]) int64            { return int64(len(d)) }
-func DictHas[V any](d Dict[V], k string) bool   { _, ok := d[k]; return ok }
-func DictKeys[V any](d Dict[V]) *List[string]   { return &List[string]{Items: Keys(d)} }
+func GetNil[V any](d Dict[V], k string) V     { return d[k] }
+func DictLen[V any](d Dict[V]) int64          { return int64(len(d)) }
+func DictHas[V any](d Dict[V], k string) bool { _, ok := d[k]; return ok }
+func DictKeys[V any](d Dict[V]) *List[string] { return &List[string]{Items: Keys(d)} }
 func DictValues[V any](d Dict[V]) *List[V] {
 	out := &List[V]{}
 	for _, k := range Keys(d) {
@@ -447,13 +464,6 @@ func ListIndexOf[T any](xs *List[T], v T) int64 {
 	return -1
 }
 func ListContains[T any](xs *List[T], v T) bool { return ListIndexOf(xs, v) >= 0 }
-func Range(a, b int64) *List[int64] {
-	out := &List[int64]{Items: []int64{}}
-	for i := a; i <= b; i++ {
-		out.Items = append(out.Items, i)
-	}
-	return out
-}
 
 // —— 可空 ——
 func Box[T any](v T) *T { return &v }

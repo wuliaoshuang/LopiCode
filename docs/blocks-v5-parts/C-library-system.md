@@ -955,6 +955,8 @@ module.exports = { n_newId };
 
 ### 9.1 后端宿主：第一批 8 个（做“接口服务”库必须有）
 
+> **落地情况（2026-11-26，核心 2 第 5 段）**：9.1 的 8 个和 9.2 的 5 个五种语言都做了、真跑过（另多一个 `time.sleep`，共 14 个）。实际的签名、和下表不一样的地方、自己定的细则，以 `B-gen-notes.md` 第 12.3 节（http.serve）和第 14 节（random.bytes、net.fetch、文件五个）为准。
+
 | # | 接口 | 参数 → 返回 | 语义细则 | 为什么没法用积木搭 |
 | --- | --- | --- | --- | --- |
 | 1 | `sys.print(文字, 通道)` | 文字；通道是 `out` 或 `err` → 空 | 写一行，自动加换行；UTF-8；写完立刻刷出去（否则“运行”页的日志会迟到）。只收文字——别的值怎么变成文字是标准库的事 | 输出是进程和外面之间的口子，语言核心里没有 |
@@ -1488,3 +1490,7 @@ B01–B09（第 2 阶段的 9 条“我的积木”规则）继续管外观本�
 | https://www.scribd.com/document/699288194/6-MIT-APP-Inventor-Extension 和社区帖 | **非官方**；App Inventor 扩展的说法只能算“未核对” |
 
 读过的本工程文件（只读）：`docs/blocks-v5-parts/BRIEF.md`、`AGENTS.md`、`docs/blocks-v4-language-design.md` 第 5–8 节和阶段 2 实施记录、`lib/lang/custom_block.dart`、`custom_block_edit.dart`、`ast.dart`、`lib/backend/` 的 `backend_blocks*.dart`、`runtime_*.dart`、`backend_validate*.dart`、`backend_project.dart`、`lib/lowcode/logic_blocks.dart`、`logic_js*.dart`、`logic_rules.dart`、`component_model.dart`、`pubspec.yaml`。
+
+> **2026-11-26 说明（核心 2 第 2 段）**：9.1 里不用等的四个（`sys.print`、`time.now`、`store.read`、`store.update`）已经在规矩版本 2 的五种语言小库里落地（清单 `lib/lang/host_v2.dart`）。和这里写的有三处出入，都记在 B-gen-notes 11.3：`sys.print` 的 `out` 通道现在和“打印”一起攒到程序结束才写；PHP 的格子现在是进程里的表、不是带锁的文件；Go / Java 的格子在“同时有两件事改同一个名字”时会报错而不是排队。三处都要等核心 3 有了 `http.serve` 一起改。
+>
+> **2026-11-26 说明（核心 2 第 4 段）**：上面三处出入都改掉了；9.1 里又落地了三个：`sys.env`、`time.sleep`、`http.serve`（明着标“要等”的最小版）。现在版本 2 有的是 1、2、3、4、7、8 六项（`store` 算一项两个接口），`random.bytes`、`net.fetch` 还没有。五种语言各自怎么做、PHP 用 `php -S` 带来的几处不一样（没有启动提示行、一次一个请求）、这一段自己定的几条，见 B-gen-notes 第 12 节。

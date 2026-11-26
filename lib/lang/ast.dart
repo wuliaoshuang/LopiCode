@@ -55,12 +55,20 @@ class LModule extends LNode {
   const LModule({this.name = '', this.uses = const [], this.decls = const [], this.body = const [], super.src});
   final String name;
 
-  /// 用上的模块（第 7 阶段）。
+  /// 用上的模块（核心 2）：这里列了名字，才看得见那个模块里勾了“公开”的东西。
   final List<String> uses;
   final List<LDecl> decls;
 
-  /// “启动时”的语句。
+  /// “启动时”的语句。一个程序里只有入口模块可以有。
   final List<LStmt> body;
+}
+
+/// 一个程序＝几个模块（核心 2）。[entry] 是入口模块的名字：只有它有“程序开始时”。
+/// 检查和合并在 link.dart（`linkProgram`）：谁用了谁、公开不公开、绕圈、启动顺序。
+class LProgram extends LNode {
+  const LProgram(this.modules, {required this.entry, super.src});
+  final List<LModule> modules;
+  final String entry;
 }
 
 sealed class LDecl extends LNode {
@@ -93,7 +101,7 @@ class LParam {
 
 /// 函数（第 2 阶段）。[type] 是返回类型标注。
 class LFuncDecl extends LDecl {
-  const LFuncDecl(this.name, this.params, this.body, {this.isPublic = false, this.typeParams = const [], this.codeName, super.src, super.type});
+  const LFuncDecl(this.name, this.params, this.body, {this.isPublic = false, this.typeParams = const [], this.codeName, this.waits = false, super.src, super.type});
   @override
   final String name;
   final List<LParam> params;
@@ -105,6 +113,9 @@ class LFuncDecl extends LDecl {
 
   /// 代码名（拉丁字母开头，只含字母数字）：导出给别的包 / 文件用时在 Go、Java 里叫什么（第 5 版，GAP-B-1）。
   final String? codeName;
+
+  /// 这个函数“要等”（里面有要等的事）。现在由写的人明着标；自动推是核心 3 的事。
+  final bool waits;
 }
 
 class LFieldDecl {
@@ -160,10 +171,13 @@ class LClassDecl extends LDecl {
 }
 
 class LSignature {
-  const LSignature(this.name, this.params, {this.returns});
+  const LSignature(this.name, this.params, {this.returns, this.waits = false});
   final String name;
   final List<LParam> params;
   final LType? returns;
+
+  /// 这个方法“要等”。
+  final bool waits;
 }
 
 /// 接口（第 5 阶段）。
@@ -315,20 +329,44 @@ class LReturn extends LStmt {
   final LExpr? value;
 }
 
-/// 抛出错误（第 6 阶段）。
+/// 抛出错误（第 6 阶段）。规矩版本 1：[message] 是一句话。规矩版本 2（核心 2）：[message] 可以是一句话（自动包成内置的“错误”），
+/// 也可以是一个错误对象（内置“错误”类或它的子类的对象）——接住以后再抛、抛自己定义的错误都是它。
 class LThrow extends LStmt {
   const LThrow(this.message, {super.src});
   final LExpr message;
+
+  /// 抛出去的东西（就是 [message]；版本 2 里它不一定是文字，用这个名字读起来不别扭）。
+  LExpr get value => message;
+}
+
+/// “出错时”的一节（核心 2）：[kind]＝只接哪一种错误（内置“错误”类或它的子类的名字；null＝什么错都接）；
+/// [name]＝接到的错误对象放进哪个变量（null＝不要）。
+class LCatch {
+  const LCatch(this.body, {this.kind, this.name});
+  final String? kind;
+  final String? name;
+  final List<LStmt> body;
 }
 
 /// 试着做 / 出错了 / 最后总要（第 6 阶段）。
+///
+/// 两种写法：
+/// - 老写法（[handlers] 是 null）：只有一节“出错了”——[errorName]、[errorClass]、[onError]；什么都没写也算“接住了、什么都不做”。
+/// - 核心 2 的写法（[handlers] 不是 null）：“出错了”可以有好几节，从上往下第一节对得上的接；都对不上就原样往外抛；
+///   一节都没有（空列表）＝只有“最后总要”，错误照样往外走。
+///
+/// 两种写法统一从 [catches] 读。接到的东西在规矩版本 2 里是**错误对象**（不是一句话；要那句话读它的“消息”字段）。
 class LTry extends LStmt {
-  const LTry(this.body, {this.errorName, this.errorClass, this.onError = const [], this.finallyBody = const [], super.src});
+  const LTry(this.body, {this.errorName, this.errorClass, this.onError = const [], this.handlers, this.finallyBody = const [], super.src});
   final List<LStmt> body;
   final String? errorName;
   final String? errorClass;
   final List<LStmt> onError;
+  final List<LCatch>? handlers;
   final List<LStmt> finallyBody;
+
+  /// “出错了”的各节（两种写法统一成一个列表）。
+  List<LCatch> get catches => handlers ?? [LCatch(onError, kind: errorClass, name: errorName)];
 }
 
 /// 宿主自己的语句：语言核心不懂它，生成时原样交给宿主去写（`LangHost.stmt`），检查时跳过。
@@ -473,15 +511,18 @@ class LIsA extends LExpr {
 
 /// 匿名函数（第 2 阶段）。两种写法：带函数体的（[body]）；只有一个式子的短写法（[expr] 不是 null，这时 [body] 不用）。
 class LLambda extends LExpr {
-  const LLambda(this.params, this.body, {this.expr, super.src});
+  const LLambda(this.params, this.body, {this.expr, this.waits = false, super.src});
 
   /// 短写法：`(x) → 式子`。
-  const LLambda.short(this.params, LExpr this.expr, {super.src}) : body = const [];
+  const LLambda.short(this.params, LExpr this.expr, {this.waits = false, super.src}) : body = const [];
   final List<LParam> params;
   final List<LStmt> body;
 
   /// 短写法的那个式子；带函数体的是 null。
   final LExpr? expr;
+
+  /// 这个匿名函数“要等”。
+  final bool waits;
 
   /// 统一成函数体来看：短写法就是“返回 (式子)”。
   List<LStmt> get stmts => expr == null ? body : [LReturn(expr, src: src)];
@@ -497,7 +538,8 @@ class LAwait extends LExpr {
   final LExpr x;
 }
 
-/// 开始做（第 6 阶段）。
+/// 开始做（第 6 阶段）。严格规矩下现在只认一种样子：里面就一句“返回 f()”，f 是不带参数的函数——
+/// 马上开始做 f，结果是“稍后的结果〈f 返回的类型〉”。
 class LSpawn extends LExpr {
   const LSpawn(this.body, {super.src});
   final List<LStmt> body;

@@ -25,7 +25,17 @@ final class Lc {
 
   static final class LcError extends RuntimeException {
     private static final long serialVersionUID = 1L;
+    /** 错误对象（小库自己报的错没有，接住的时候才按种类造）。 */
+    transient Object obj;
     LcError(String m) { super(m); }
+    LcError(String m, Object obj) { super(m); this.obj = obj; }
+  }
+
+  private static final String[][] ERR_KINDS = {{"除以 0", "数值不对"}, {"整数超出范围", "数值不对"}, {"变不成整数", "数值不对"}, {"超出了", "找不到"}, {"拿到的是", "类型不对"}, {"值是空", "类型不对"}};
+  /** 小库自己报的错归到哪一种。 */
+  static String errKind(String m) {
+    for (String[] p : ERR_KINDS) if (m.contains(p[0])) return p[1];
+    return "错误";
   }
 
   static <T> T fail(String m) { throw new LcError(m); }
@@ -272,9 +282,86 @@ final class Lc {
     return -1;
   }
   static <T> boolean listContains(ArrayList<T> xs, T v) { return listIndexOf(xs, v) >= 0; }
-  static ArrayList<Long> range(long a, long b) {
+  static ArrayList<Long> range(long a, long b, long s) {
     ArrayList<Long> out = new ArrayList<>();
-    for (long i = a; i <= b; i++) out.add(i);
+    for (long k = 0, n = Math.min(steps(a, b, s), 10000); k < n; k++) out.add(a + k * s);
+    return out;
+  }
+  // —— 后端积木里早就有的那几个（严格规矩下的说法见 rt_v2.dart）。“任意”里的数字是 Double。 ——
+  private static double numArg(String name, Object x) { return x instanceof Double v ? v : Lc.<Double>fail("「" + name + "」要数字，拿到的是" + kind(x)); }
+  static long abs(long x) { return Math.abs(x); }
+  static double abs(double x) { return Math.abs(x); }
+  static Object abs(Object x) { return Math.abs(numArg("绝对值", x)); }
+  static long max(long a, long b) { return a >= b ? a : b; }
+  static double max(double a, double b) { return a >= b ? a : b; }
+  static Object max(Object a, Object b) { return numArg("较大的", a) >= numArg("较大的", b) ? a : b; }
+  static long min(long a, long b) { return a <= b ? a : b; }
+  static double min(double a, double b) { return a <= b ? a : b; }
+  static Object min(Object a, Object b) { return numArg("较小的", a) <= numArg("较小的", b) ? a : b; }
+  static long random(long a, long b) {
+    long lo = Math.min(a, b), hi = Math.max(a, b);
+    return lo + (long) Math.floor(Math.random() * (hi - lo + 1));
+  }
+  static <T> T copy(T x) {
+    if (x instanceof ArrayList<?> xs) {
+      ArrayList<Object> out = new ArrayList<>();
+      for (Object v : xs) out.add(copy(v));
+      return (T) out;
+    }
+    if (x instanceof TreeMap<?, ?> d) {
+      TreeMap<String, Object> out = dict();
+      for (Map.Entry<?, ?> e : d.entrySet()) out.put((String) e.getKey(), copy(e.getValue()));
+      return (T) out;
+    }
+    return x;
+  }
+  static <V> String template(String s, TreeMap<String, V> d) {
+    StringBuilder out = new StringBuilder();
+    int i = 0;
+    while (i < s.length()) {
+      int open = s.indexOf('{', i);
+      if (open < 0) break;
+      int close = open + 1;
+      while (close < s.length() && s.charAt(close) != '}' && s.charAt(close) != '{') close++;
+      if (close >= s.length() || s.charAt(close) == '{') {
+        out.append(s, i, close);
+        i = close;
+        continue;
+      }
+      String key = s.substring(open + 1, close);
+      out.append(s, i, open).append(d.containsKey(key) ? dtext(d.get(key)) : s.substring(open, close + 1));
+      i = close + 1;
+    }
+    return out.append(s.substring(i)).toString();
+  }
+  static boolean toBool(Object x) {
+    return !(x == null || Boolean.FALSE.equals(x) || "".equals(x) || (x instanceof Number n && n.doubleValue() == 0));
+  }
+  static <T> void listInsert(ArrayList<T> xs, long i, T v) {
+    if (i < 0 || i > xs.size()) fail(rangeMsg(i, xs.size()));
+    xs.add((int) i, v);
+  }
+  static <T> T listRemove(ArrayList<T> xs, long i) { return i >= 0 && i < xs.size() ? xs.remove((int) i) : fail(rangeMsg(i, xs.size())); }
+  static <T> ArrayList<T> listSort(ArrayList<T> xs) {
+    boolean nums = true, texts = true;
+    for (T v : xs) {
+      nums = nums && v instanceof Number;
+      texts = texts && v instanceof String;
+    }
+    if (!nums && !texts) fail("排序要全是数字或者全是文字的列表，拿到的是混着的");
+    ArrayList<T> out = new ArrayList<>(xs);
+    if (nums) out.sort((a, b) -> Double.compare(((Number) a).doubleValue(), ((Number) b).doubleValue()));
+    else out.sort((a, b) -> cmpText((String) a, (String) b));
+    return out;
+  }
+  static <V> ArrayList<ArrayList<Object>> dictPairs(TreeMap<String, V> d) {
+    ArrayList<ArrayList<Object>> out = new ArrayList<>();
+    for (Map.Entry<String, V> e : d.entrySet()) {
+      ArrayList<Object> pair = new ArrayList<>();
+      pair.add(e.getKey());
+      pair.add(toDyn(e.getValue()));
+      out.add(pair);
+    }
     return out;
   }
 ''';

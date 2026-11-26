@@ -15,6 +15,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lopicode/appearance/theme_builtin.dart';
+import 'package:lopicode/backend/backend_core.dart';
 import 'package:lopicode/backend/backend_model.dart';
 import 'package:lopicode/blocks/block_editor_view.dart';
 import 'package:lopicode/blocks/block_issue_view.dart';
@@ -43,6 +44,7 @@ import 'package:path/path.dart' as p;
 import 'package:re_editor/re_editor.dart';
 import 'package:xterm/xterm.dart';
 
+import 'support/backend_core_samples.dart' as cs;
 import 'support/backend_func_blocks.dart' as fb;
 import 'support/backend_lang_blocks.dart' as bk;
 import 'support/harness.dart';
@@ -426,6 +428,109 @@ void main() {
         await tester.tap(find.byKey(const ValueKey('bk-issues')));
         await tester.pumpAndSettle();
         await shot(tester, 'blocks-type-list');
+      });
+
+      testWidgets('后端积木页 · 核心 2：新积木在画布上、积木盒的“错误”“类型”页、类型与类 / 一个类型 / 方法 / 模块 / 一个模块的面板、类的画布', (tester) async {
+        final (env, project, session) = await open(
+          tester,
+          ProjectTemplate.backendBlocks,
+          language: 'node',
+          fakePty: true,
+          before: (project) {
+            // 样例 8（模块、错误种类、记录、模块顶上的变量）：端口和名字留用模板的。
+            final file = File(p.join(project.dir, kBackendFileName));
+            final was = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
+            file.writeAsStringSync(jsonEncode({...cs.coreSamples.last.doc, 'name': was['name'], 'port': was['port']}));
+          },
+        );
+        await show(tester, env, ProjectShell(project: project, session: session, initial: ShellDest.builder));
+        final editor = tester.state<BlockEditorViewState>(find.byType(BlockEditorView));
+        final host = tester.state<BackendScreenState>(find.byType(BackendScreen)).host!;
+        Future<void> tapKey(String key) async {
+          final f = find.byKey(ValueKey(key));
+          await tester.ensureVisible(f);
+          await tester.pumpAndSettle();
+          await tester.tap(f);
+          await tester.pumpAndSettle();
+        }
+
+        Future<void> close() async {
+          await tester.tap(find.byKey(const ValueKey('be-sheet-done')).last);
+          await tester.pumpAndSettle();
+        }
+
+        final tabs = find.byKey(const ValueKey('bk-palette-tabs'));
+        if (tabs.hitTestable().evaluate().isEmpty) {
+          // 积木盒收着（上一套主题那一轮收起来的，高度是记住的）：先拉开。
+          await tester.drag(find.byKey(const ValueKey('bk-palette-grip')), const Offset(0, -300), warnIfMissed: false);
+          await tester.pumpAndSettle();
+        }
+        for (final page in ['错误', '类型']) {
+          final tab = find.byKey(ValueKey('bk-palette-tab-$page'));
+          for (var i = 0; i < 12 && tab.hitTestable().evaluate().isEmpty; i++) {
+            await tester.drag(tabs, const Offset(-120, 0));
+            await tester.pumpAndSettle();
+          }
+          await tester.tap(tab);
+          await tester.pumpAndSettle();
+          await shot(tester, 'core2-palette-$page');
+        }
+        await tester.drag(find.byKey(const ValueKey('bk-palette-grip')), const Offset(0, 300), warnIfMissed: false);
+        await tester.pumpAndSettle();
+        editor.jumpTo(kBeMainId, const []);
+        await tester.pumpAndSettle();
+        editor.select(null);
+        await tester.pumpAndSettle();
+        await shot(tester, 'core2-canvas');
+
+        // 类型与类 → 新建哪一种 → 一个类的面板 → 方法的面板。
+        await tapKey('be-more');
+        await tapKey('be-menu-types');
+        await shot(tester, 'core2-types');
+        await tapKey('be-core-add');
+        await shot(tester, 'core2-kinds');
+        await tapKey('be-core-add-class');
+        await tapKey('be-core-add-field');
+        await tapKey('be-core-add-ctor');
+        await tapKey('be-core-add-method');
+        await tapKey('be-core-name');
+        await tester.enterText(find.byType(TextField).last, '没货'); // 重名：面板顶上出一行说明
+        await tester.tap(find.text('确定'));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const ValueKey('be-sheet-problem')), findsOneWidget);
+        await shot(tester, 'core2-class-sheet');
+        final klass = host.core.types.last;
+        await tapKey('be-core-method-${klass.methods.single.name}');
+        await tapKey('be-core-add-param');
+        await shot(tester, 'core2-method-sheet');
+        await close();
+        await tapKey('be-core-open-canvas');
+        expect(host.canvasType?.id, klass.id);
+        await shot(tester, 'core2-class-canvas');
+        await tapKey('be-canvas-back');
+
+        // 记录的面板、变体的面板（情况带东西）。
+        await tapKey('be-more');
+        await tapKey('be-menu-types');
+        await tapKey('be-core-type-出库单');
+        await shot(tester, 'core2-record-sheet');
+        await close();
+        await tapKey('be-core-add');
+        await tapKey('be-core-add-variant');
+        await tapKey('be-core-add-case');
+        await tapKey('be-core-add-field-${host.core.types.last.cases.first.name}');
+        await shot(tester, 'core2-variant-sheet');
+        await close();
+        await close();
+
+        // 模块、一个模块。
+        await tapKey('be-more');
+        await tapKey('be-menu-modules');
+        await shot(tester, 'core2-modules');
+        await tapKey('be-module-仓库');
+        await shot(tester, 'core2-module-sheet');
+        await close();
+        await close();
       });
 
       testWidgets('低代码编辑器：画布与底部工具条、选中、合一面板、组件盒、图层、长按菜单', (tester) async {

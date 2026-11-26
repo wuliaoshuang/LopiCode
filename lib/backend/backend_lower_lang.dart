@@ -12,9 +12,11 @@ library;
 
 import 'package:lopicode/backend/backend_blocks.dart';
 import 'package:lopicode/backend/backend_blocks_strict.dart';
+import 'package:lopicode/backend/backend_core.dart';
 import 'package:lopicode/backend/backend_function.dart';
 import 'package:lopicode/backend/backend_ir.dart';
 import 'package:lopicode/backend/backend_lang.dart';
+import 'package:lopicode/backend/backend_lower_core.dart';
 import 'package:lopicode/backend/backend_model.dart';
 import 'package:lopicode/backend/backend_text.dart';
 import 'package:lopicode/lang/ast.dart';
@@ -122,6 +124,14 @@ class BeLangLower {
   final List<BeLangSpot> spots = [];
 
   int _switches = 0;
+
+  /// 文档里定义的类型（核心 2 的积木要查；没给也能翻）。
+  BeCore? core;
+
+  /// 单独的一个值（字段、模块顶上变量的初始值）→ 语法树。
+  LExpr value(Object? v) => _lx(v);
+
+  BeCoreCx _coreCx(LExpr Function(Object? value, Object? holder, Object? key, {String? arg}) lx) => BeCoreCx(lx: lx, src: _src, note: host.addNote, core: core, temp: () => ++_switches, pure: pure);
   LcBlockPath _path = const [];
   String? _arg;
 
@@ -139,7 +149,10 @@ class BeLangLower {
     return LSrc(script: route.id, block: '${spots.length - 1}');
   }
 
-  static LExpr _toLang(BeX x) => beToLangExpr(x, request: kBeRequestName);
+  /// 只出语言核心的东西（“看代码”走版本 2 的生成器时用）：小库调用写成 `LRt`，“写到日志”“加上”也翻成核心的节点。
+  bool pure = false;
+
+  LExpr _toLang(BeX x) => bePureExpr(beToLangExpr(x, request: kBeRequestName), pure: pure);
 
   /// 语法树里的式子 → 它是积木文档里的哪个值翻来的（文档里那个对象本身）。规矩版本 2 的类型检查靠它把问题、
   /// 一键修对回到具体哪一格上（backend_type_bridge.dart）；别处不用。
@@ -228,6 +241,8 @@ class BeLangLower {
       case 'not' when typed:
         return lang(LUnary('not', sub('x')));
     }
+    final c2 = beCoreExpr(kind, e, _coreCx((v, holder, key, {arg}) => _lx(v, depth + 1, holder, key)));
+    if (c2 != null) return lang(c2);
     final strict = kBeStrictRtArgs[kind];
     if (strict != null) return lang(LRt(kind, [for (final a in strict) sub(a)], src: _src()));
     final func = _funcExpr(kind, e!, depth, sub);
@@ -376,7 +391,7 @@ class BeLangLower {
       _owner = b;
       _depth = depth;
       final translated = _block(b, path, depth);
-      if (b.op != 'note') out.add(LNote(describeBeBlock(b)));
+      if (b.op != 'note' && b.op != 'superInit') out.add(LNote(describeBeBlock(b)));
       for (final n in host.swapNotes(saved)) {
         out.add(LNote('（$n）'));
       }
@@ -419,6 +434,19 @@ class BeLangLower {
 
     List<LStmt> inner(List<LcBlock> list, {bool inElse = false, int arm = -1}) => stmts(list, path, depth + 1, inElse: inElse, arm: arm);
 
+    LExpr coreLx(Object? v, Object? holder, Object? key, {String? arg}) {
+      _path = path;
+      _owner = b;
+      _depth = depth;
+      _arg = arg;
+      final x = _lx(v, 0, holder, key);
+      _arg = null;
+      return x;
+    }
+
+    final c2 = beCoreBlock(b, BeCoreCx(lx: coreLx, src: src, note: host.addNote, core: core, temp: () => ++_switches, pure: pure), inner, beNamePattern);
+    if (c2 != null) return c2;
+
     switch (b.op) {
       case 'let' || 'const':
         final name = _newName(b, 'name');
@@ -433,7 +461,11 @@ class BeLangLower {
         if (!knows(name)) return _skip('变量没有声明');
         final by = arg('by');
         return [
-          LAssign(LTName(name as String), LNative('add', [LName(name, src: src('name')), by]), src: src('name')),
+          LAssign(
+            LTName(name as String),
+            pure ? LBinary('+', LName(name, src: src('name')), by) : LNative('add', [LName(name, src: src('name')), by]),
+            src: src('name'),
+          ),
         ];
       case 'setItem':
         return [LAssign(LTIndex(arg('of'), arg('key')), arg('value'), src: src())];

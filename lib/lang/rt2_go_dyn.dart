@@ -7,6 +7,7 @@ import 'package:lopicode/lang/rt2_go.dart';
 const String kRt2GoSource = kRt2GoHead + _tail;
 
 const String _tail = r'''
+
 // —— 任意 ——
 func ToDyn(x any) any {
 	switch v := x.(type) {
@@ -62,7 +63,9 @@ func Kind(x any) string {
 	}
 	return "「对象」"
 }
-func want[T any](name string, x any) T { return FailV[T]("这里要" + name + "，拿到的是" + Kind(x)) }
+func want[T any](name string, x any) T {
+	return FailV[T]("这里要" + name + "，拿到的是" + Kind(x))
+}
 func AsNum(x any) float64 {
 	if v, ok := x.(float64); ok {
 		return v
@@ -185,11 +188,11 @@ func dnum(op string, x any) float64 {
 	}
 	return FailV[float64](op + "的两边要数字，拿到的是" + Kind(x))
 }
-func DAdd(a, b any) any { return dnum("加法", a) + dnum("加法", b) }
-func DSub(a, b any) any { return dnum("减法", a) - dnum("减法", b) }
-func DMul(a, b any) any { return dnum("乘法", a) * dnum("乘法", b) }
-func DDiv(a, b any) any { return FDiv(dnum("除法", a), dnum("除法", b)) }
-func DPow(a, b any) any { return FPow(dnum("乘方", a), dnum("乘方", b)) }
+func DAdd(a, b any) any  { return dnum("加法", a) + dnum("加法", b) }
+func DSub(a, b any) any  { return dnum("减法", a) - dnum("减法", b) }
+func DMul(a, b any) any  { return dnum("乘法", a) * dnum("乘法", b) }
+func DDiv(a, b any) any  { return FDiv(dnum("除法", a), dnum("除法", b)) }
+func DPow(a, b any) any  { return FPow(dnum("乘方", a), dnum("乘方", b)) }
 func DIDiv(a, b any) any { return float64(IDiv(AsInt(a), AsInt(b))) }
 func DMod(a, b any) any  { return float64(IMod(AsInt(a), AsInt(b))) }
 func DCmp(a, b any) int64 {
@@ -224,9 +227,9 @@ func DynSet(x, k, val any) {
 		Fail("这里要列表或字典，拿到的是" + Kind(x))
 	}
 }
-func DynPush(x, v any)       { AsList(x).Push(v) }
-func DynPop(x any) any       { return PopNil(AsList(x)) }
-func DynRemove(x, k any)     { delete(AsDict(x), AsText(k)) }
+func DynPush(x, v any)   { AsList(x).Push(v) }
+func DynPop(x any) any   { return PopNil(AsList(x)) }
+func DynRemove(x, k any) { delete(AsDict(x), AsText(k)) }
 func DynOrElse(x, d any) any {
 	if x == nil {
 		return d
@@ -356,12 +359,21 @@ func fromDecoded(v any) any {
 			out[k] = fromDecoded(it)
 		}
 		return out
+	case json.Number:
+		f, _ := strconv.ParseFloat(string(x), 64)
+		return f
 	}
 	return v
 }
 func FromJson(s string) any {
+	// 数字先按原文留着：写得超出范围的（1e400）读成无穷大，和别的语言一样；直接读成小数的话 Go 会把整份判成不合法。
+	dec := json.NewDecoder(strings.NewReader(s))
+	dec.UseNumber()
 	var v any
-	if err := json.Unmarshal([]byte(s), &v); err != nil {
+	if err := dec.Decode(&v); err != nil {
+		Fail("这段文字不是 JSON")
+	}
+	if _, err := dec.Token(); err != io.EOF {
 		Fail("这段文字不是 JSON")
 	}
 	return fromDecoded(v)
@@ -390,11 +402,7 @@ func DText(x any) string {
 	return "[对象]"
 }
 
-// —— 出错、输出 ——
-var out []string
-
-func Log(s string) { out = append(out, s) }
-
+// —— 出错 ——
 // Try：跑 f；f 里抛了错就把错误文字交回来（ok 是 false）。
 func Try(f func()) (msg string, ok bool) {
 	defer func() {
@@ -409,10 +417,127 @@ func Try(f func()) (msg string, ok bool) {
 	f()
 	return "", true
 }
-func Run(main func()) {
-	if msg, ok := Try(main); !ok {
-		out = append(out, "出错："+msg)
+
+// TryE：和 Try 一样，交回来的是整个错（带着错误对象）。
+func TryE(f func()) (e Error, ok bool) {
+	defer func() {
+		if r := recover(); r != nil {
+			got, is := r.(Error)
+			if !is {
+				panic(r)
+			}
+			e, ok = got, false
+		}
+	}()
+	f()
+	return Error{}, true
+}
+
+// —— 是不是数字、网址解码 ——
+func numShape(s string) bool {
+	i, n := 0, len(s)
+	digits := func() int {
+		k := 0
+		for i < n && s[i] >= '0' && s[i] <= '9' {
+			i++
+			k++
+		}
+		return k
 	}
-	os.Stdout.WriteString(strings.Join(out, "\n") + "\n")
+	if i < n && (s[i] == '+' || s[i] == '-') {
+		i++
+	}
+	whole, frac := digits(), 0
+	if i < n && s[i] == '.' {
+		i++
+		frac = digits()
+	}
+	if whole+frac == 0 {
+		return false
+	}
+	if i < n && (s[i] == 'e' || s[i] == 'E') {
+		i++
+		if i < n && (s[i] == '+' || s[i] == '-') {
+			i++
+		}
+		if digits() == 0 {
+			return false
+		}
+	}
+	return i == n
+}
+
+func IsNumeric(x any) bool {
+	switch v := x.(type) {
+	case float64, int64:
+		return true
+	case string:
+		s := strings.Trim(v, " \t\n\r")
+		if !numShape(s) {
+			return false
+		}
+		f, err := strconv.ParseFloat(s, 64)
+		return err == nil && !math.IsInf(f, 0)
+	}
+	return false
+}
+
+func ToNumber(s string) float64 {
+	if !IsNumeric(s) {
+		Fail("「" + s + "」变不成数字")
+	}
+	f, _ := strconv.ParseFloat(strings.Trim(s, " \t\n\r"), 64)
+	return f
+}
+
+// IsType：这个值是不是某一类：null bool number text list dict function object。
+func IsType(x any, name string) bool {
+	x = ToDyn(x)
+	switch name {
+	case "null":
+		return x == nil
+	case "bool":
+		_, ok := x.(bool)
+		return ok
+	case "number":
+		_, ok := x.(float64)
+		return ok
+	case "text":
+		_, ok := x.(string)
+		return ok
+	case "list":
+		_, ok := x.(*List[any])
+		return ok
+	case "dict":
+		_, ok := x.(Dict[any])
+		return ok
+	case "function":
+		return x != nil && reflect.ValueOf(x).Kind() == reflect.Func
+	case "object":
+		_, ok := x.(named)
+		return ok
+	}
+	Fail("没有「" + name + "」这一类值")
+	return false
+}
+
+// DictMerge：两个字典合成一个新的，后面的盖住前面的。
+func DictMerge[V any](a Dict[V], b Dict[V]) Dict[V] {
+	out := make(Dict[V], len(a)+len(b))
+	for k, v := range a {
+		out[k] = v
+	}
+	for k, v := range b {
+		out[k] = v
+	}
+	return out
+}
+
+func UrlDecode(s string) string {
+	r, err := url.PathUnescape(s)
+	if err != nil || !utf8.ValidString(r) {
+		Fail("这段网址编码解不开")
+	}
+	return r
 }
 ''';

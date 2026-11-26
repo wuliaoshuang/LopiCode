@@ -6,11 +6,17 @@
 /// 只用 PHP 自带的 pcre、json，不要 mbstring。
 library;
 
-const String kRt2PhpSource = r'''<?php
+import 'package:lopicode/lang/rt2_php_host.dart';
+
+/// 整份小库：这一份＋宿主那一半（rt2_php_host.dart）。
+const String kRt2PhpSource = _core + kRt2PhpHost;
+
+const String _core = r'''<?php
 // LopiCode 积木的小库（PHP，严格规矩）。由 LopiCode 生成，别手改。
 declare(strict_types=1);
 
-class LcError extends Exception {}
+// 抛出去的错：外面这层带着那句话；obj 是错误对象（小库自己报的错没有，接住的时候才按种类造）。
+class LcError extends Exception { public ?object $obj = null; }
 class LcRec {}
 class LcVariant extends LcRec {}
 class LcEnum { public function __construct(public string $name, public int $index) {} }
@@ -20,7 +26,9 @@ final class LcDict { public function __construct(public array $a = []) {} }
 
 final class Lc {
   const MAX = 9007199254740991;
-  private static array $out = [];
+  private static bool $wrote = false;
+  private static $stdout = null;
+  private static $stderr = null;
 
   static function fail(string $m): never { throw new LcError($m); }
   static function list(array $a): LcList { return new LcList($a); }
@@ -269,7 +277,43 @@ final class Lc {
     return -1;
   }
   static function listContains(LcList $xs, mixed $v): bool { return self::listIndexOf($xs, $v) >= 0; }
-  static function range(int $a, int $b): LcList { return new LcList($a <= $b ? range($a, $b) : []); }
+  static function range(int $a, int $b, int $s): LcList {
+    $out = [];
+    for ($k = 0, $n = min(self::steps($a, $b, $s), 10000); $k < $n; $k++) $out[] = $a + $k * $s;
+    return new LcList($out);
+  }
+  // —— 后端积木里早就有的那几个（严格规矩下的说法见 rt_v2.dart） ——
+  private static function numArg(string $name, mixed $x): int|float { return self::isNum($x) ? $x : self::fail("「" . $name . "」要数字，拿到的是" . self::kind($x)); }
+  static function abs(mixed $x): int|float { return abs(self::numArg("绝对值", $x)); }
+  static function max(mixed $a, mixed $b): int|float { return self::numArg("较大的", $a) >= self::numArg("较大的", $b) ? $a : $b; }
+  static function min(mixed $a, mixed $b): int|float { return self::numArg("较小的", $a) <= self::numArg("较小的", $b) ? $a : $b; }
+  static function random(int $a, int $b): int { return random_int(min($a, $b), max($a, $b)); }
+  static function copy(mixed $x): mixed {
+    if ($x instanceof LcList) return new LcList(array_map(fn($v) => self::copy($v), $x->a));
+    if ($x instanceof LcDict) return new LcDict(array_map(fn($v) => self::copy($v), $x->a));
+    return $x;
+  }
+  static function template(string $s, LcDict $d): string {
+    return preg_replace_callback('/\{([^{}]*)\}/', fn($m) => array_key_exists($m[1], $d->a) ? self::dtext($d->a[$m[1]]) : $m[0], $s);
+  }
+  static function toBool(mixed $x): bool { return !($x === null || $x === false || $x === 0 || $x === 0.0 || $x === ""); }
+  static function listInsert(LcList $xs, int $i, mixed $v): void {
+    if ($i < 0 || $i > count($xs->a)) self::outOf($i, count($xs->a));
+    array_splice($xs->a, $i, 0, [$v]);
+  }
+  static function listRemove(LcList $xs, int $i): mixed {
+    if ($i < 0 || $i >= count($xs->a)) self::outOf($i, count($xs->a));
+    return array_splice($xs->a, $i, 1)[0];
+  }
+  static function listSort(LcList $xs): LcList {
+    $nums = true; $texts = true;
+    foreach ($xs->a as $v) { $nums = $nums && self::isNum($v); $texts = $texts && is_string($v); }
+    if (!$nums && !$texts) self::fail("排序要全是数字或者全是文字的列表，拿到的是混着的");
+    $out = $xs->a;
+    usort($out, fn($a, $b) => self::cmp($a, $b));
+    return new LcList($out);
+  }
+  static function dictPairs(LcDict $d): LcList { return new LcList(array_map(fn($k) => new LcList([$k, self::toDyn($d->a[$k])]), self::keys($d))); }
   static function recCopy(object $r, array $changes): object {
     $o = clone $r;
     foreach ($changes as $k => $v) $o->$k = $v;
@@ -336,6 +380,9 @@ final class Lc {
   }
   static function fromJson(string $s): mixed {
     try {
+      // 文字里写成 \ud800 这种“半个表情符号”的（不成对的代理项）先换成 \ufffd：PHP 自己会把整份判成不合法，别的语言是换掉。
+      $s = preg_replace_callback('/\\\\(u[dD][89abAB][0-9a-fA-F]{2}\\\\u[dD][c-fC-F][0-9a-fA-F]{2}|u[dD][89a-fA-F][0-9a-fA-F]{2}|.)/su',
+        fn($m) => strlen($m[1]) === 5 && $m[1][0] === 'u' && stripos('89abcdef', $m[1][2]) !== false && ($m[1][1] === 'd' || $m[1][1] === 'D') ? '\\ufffd' : $m[0], $s) ?? $s;
       return self::fromDecoded(json_decode($s, false, 512, JSON_THROW_ON_ERROR));
     } catch (JsonException $e) {
       self::fail("这段文字不是 JSON");
@@ -352,11 +399,98 @@ final class Lc {
     return "[" . self::nameOf($x) . "]";
   }
 
-  // —— 输出：攒起来，最后一次写出 ——
-  static function log(string $s): void { self::$out[] = $s; }
+  // —— 输出：写一行就马上写出去（服务被关掉的时候不会丢）。用 php -S 开服务的时候没有 STDOUT 这个常量，自己开。——
+  static function log(string $s): void {
+    self::$stdout ??= defined('STDOUT') ? STDOUT : fopen('php://stdout', 'w');
+    self::$wrote = true;
+    fwrite(self::$stdout, $s . "\n");
+    fflush(self::$stdout);
+  }
+  static function errLine(string $s): void {
+    self::$stderr ??= defined('STDERR') ? STDERR : fopen('php://stderr', 'w');
+    fwrite(self::$stderr, $s . "\n");
+  }
   static function run(Closure $main): void {
-    try { $main(); } catch (LcError $e) { self::$out[] = "出错：" . $e->getMessage(); }
-    fwrite(STDOUT, implode("\n", self::$out) . "\n");
+    $failed = false;
+    try { $main(); } catch (LcError $e) { self::log("出错：" . $e->getMessage()); $failed = true; }
+    if (PHP_SAPI === 'cli-server') {
+      // 一个请求把程序从头跑一遍：跑到这里还没有回应（没有调“开服务”，或者半路出错了）＝回 500。
+      if (!headers_sent()) LcHost::hostError(500, "服务器内部出错");
+      return;
+    }
+    if (!self::$wrote) fwrite(STDOUT, "\n"); // 什么都没写过的，补一个空行（和原来“攒到最后一次写”的样子一样）
+    if ($failed) exit(1);
+  }
+
+  // —— 是不是数字、网址解码 ——
+  static function isNumeric(mixed $x): bool {
+    if (self::isNum($x)) return true;
+    if (!is_string($x)) return false;
+    $s = trim($x, " \t\n\r");
+    return preg_match('/^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)([eE][+-]?[0-9]+)?$/D', $s) === 1 && is_finite((float) $s);
+  }
+  static function toNumber(string $s): float {
+    if (!self::isNumeric($s)) self::fail("「" . $s . "」变不成数字");
+    return (float) trim($s, " \t\n\r");
+  }
+  // 这个值是不是某一类：null bool number text list dict function object。
+  static function isType(mixed $x, string $name): bool {
+    switch ($name) {
+      case "null": return $x === null;
+      case "bool": return is_bool($x);
+      case "number": return self::isNum($x);
+      case "text": return is_string($x);
+      case "list": return $x instanceof LcList;
+      case "dict": return $x instanceof LcDict;
+      case "function": return $x instanceof Closure;
+      case "object": return $x instanceof LcObj || $x instanceof LcRec || $x instanceof LcEnum;
+    }
+    self::fail("没有「" . $name . "」这一类值");
+  }
+  // 两个字典合成一个新的：后面的盖住前面的。
+  static function dictMerge(LcDict $a, LcDict $b): LcDict {
+    $d = new LcDict($a->a);
+    foreach ($b->a as $k => $v) $d->a[$k] = $v;
+    return $d;
+  }
+  static function urlDecode(string $s): string {
+    if (preg_match('/%(?![0-9A-Fa-f]{2})/', $s) === 1) self::fail("这段网址编码解不开");
+    $r = rawurldecode($s);
+    if (preg_match('//u', $r) !== 1) self::fail("这段网址编码解不开");
+    return $r;
+  }
+
+  // —— 宿主（清单见 host_v2.dart；格子、要等的事、开服务在下面的 LcHost 里）——
+  static function hostPrint(string $s, string $ch): void {
+    if ($ch === "out") self::log($s);
+    elseif ($ch === "err") self::errLine($s);
+    else self::fail("通道只能是 out 或 err");
+  }
+  static function hostNow(): int { return (int) floor(microtime(true) * 1000); }
+  static function copyVal(mixed $v): mixed {
+    if ($v instanceof LcList) return new LcList(array_map(fn($x) => self::copyVal($x), $v->a));
+    if ($v instanceof LcDict) {
+      $d = new LcDict();
+      foreach ($v->a as $k => $x) $d->a[$k] = self::copyVal($x);
+      return $d;
+    }
+    return $v;
+  }
+
+  // —— 错误对象 ——
+  private const ERR_KINDS = [["除以 0", "数值不对"], ["整数超出范围", "数值不对"], ["变不成整数", "数值不对"], ["超出了", "找不到"], ["拿到的是", "类型不对"], ["值是空", "类型不对"]];
+  private static ?Closure $errMake = null;
+  static function errKind(string $m): string {
+    foreach (self::ERR_KINDS as [$part, $k]) { if (str_contains($m, $part)) return $k; }
+    return "错误";
+  }
+  static function errSetup(Closure $f): void { self::$errMake = $f; }
+  static function errOf(string $m, object $obj): LcError { $e = new LcError($m); $e->obj = $obj; return $e; }
+  static function errObj(LcError $e): object {
+    if ($e->obj === null) $e->obj = (self::$errMake)(self::errKind($e->getMessage()), $e->getMessage());
+    return $e->obj;
+  }
+  static function kindOf(object $x): string { return $x::lcName;
   }
 }
 ''';

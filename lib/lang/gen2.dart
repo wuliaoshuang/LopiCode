@@ -42,7 +42,7 @@ class V2Var {
 
 /// 正在生成的那个函数（有名字的函数、方法、“创建时”、匿名函数、主程序）。
 class V2Fn {
-  V2Fn(this.scope, this.ret, {this.parent, this.lambda, this.cls, this.isCtor = false, this.isMain = false});
+  V2Fn(this.scope, this.ret, {this.parent, this.lambda, this.cls, this.isCtor = false, this.isMain = false, this.waits = false});
   final String scope;
 
   /// 返回类型；空＝不返回东西。
@@ -52,6 +52,12 @@ class V2Fn {
   final LClassInfo? cls;
   final bool isCtor;
   final bool isMain;
+
+  /// 这个函数标了“要等”（主程序总是可以等）。
+  final bool waits;
+
+  /// 里面真的出现了要等的事。
+  bool usedWait = false;
 
   int get depth => parent == null ? 0 : parent!.depth + 1;
   V2Fn get root => parent?.root ?? this;
@@ -157,12 +163,12 @@ abstract class Gen2Base {
   // —— 先扫一遍：哪些变量被里层的匿名函数用到 ——
 
   void _scanAll() {
-    for (final d in module.decls) {
+    for (final d in decls) {
       if (d is LFuncDecl) _scan(d.body, [d.name], const []);
       if (d is LClassDecl) {
         final c = d.ctor;
         if (c != null) _scan(c.body, ['${d.name}.创建'], const []);
-        for (final m in d.methods) {
+        for (final m in d.ownMethods) {
           _scan(m.fn.body, ['${d.name}.${m.fn.name}'], const []);
         }
       }
@@ -226,8 +232,10 @@ abstract class Gen2Base {
         case LForPairs(:final key, :final value):
           w(key);
           w(value);
-        case LTry(:final errorName):
-          w(errorName);
+        case LTry(:final catches):
+          for (final c in catches) {
+            w(c.name);
+          }
         case LMatch(:final arms):
           for (final a in arms) {
             a.binds.forEach(w);
@@ -299,8 +307,23 @@ abstract class Gen2Base {
   /// 走不到的地方（“看是哪种情况”每种都写了以后的那个“否则”）。
   List<String> unreachable();
 
-  /// 试着做 / 出错了 / 最后。[errTarget]＝接错误文字的变量（没起名字是 null）。
-  List<String> tryLines(LTry s, List<String> Function(List<LStmt>) gen, String? errTarget);
+  /// 抛出；试着做 / 出错时 / 最后（gen2_err.dart）。
+  List<String> throwStmt(LThrow s);
+  List<String> tryStmt(LTry s, List<String> Function(List<LStmt>) gen);
+
+  /// 要生成的声明：用到错误的程序，前面带上内置的错误类；类本身的成员降成模块级的变量、函数，跟在它的类后面（[lStaticDecls]）。
+  late final List<LDecl> decls = [
+    for (final d in [if (r.usesErrors) ...r.prelude, ...module.decls]) ...[d, if (d is LClassDecl) ...lStaticDecls(d)],
+  ];
+
+  /// 程序开始时要做的：模块级变量（连类本身的字段）按声明的顺序放初值，然后是“启动时”的语句。
+  List<LStmt> get startup => [for (final d in decls.whereType<LVarDecl>()) LAssign(LTName(d.name), d.init), ...module.body];
+
+  /// 检查器认出来的“类本身的成员”（记号是“类名.成员名”）；不是＝null。
+  String? staticKey(LNode node) {
+    final op = r.opOf(node);
+    return op != null && op.startsWith('static:') ? op.substring(7) : null;
+  }
 
   /// 列表拍一份这种语言自己的数组（遍历时用）；它有几项、第 k 项。
   String snapshot(String list, LType elem);
@@ -396,6 +419,11 @@ abstract class Gen2Base {
           case LTIndex():
             return storeIndex(s, target);
           case LTField(:final of, :final name):
+            final sk = staticKey(target);
+            if (sk != null) {
+              final v = mustVar(sk, s);
+              return [assignLine(varCode(v), x(value, v.type))];
+            }
             final ot = t(of).nonNull;
             return [setFieldLine(x(of, ot), ot, name, x(value, fieldType(ot, name, s)), target)];
         }
@@ -460,11 +488,11 @@ abstract class Gen2Base {
         return continueLines();
       case LReturn(:final value):
         return returnLines(value == null ? (fn.isVoid ? null : nulOf(fn.ret)) : (fn.isVoid ? null : x(value, fn.ret)), value: value);
-      case LThrow(:final message):
-        return throwLines(x(message, LType.text));
-      case LTry(:final errorName):
+      case LThrow():
+        return throwStmt(s);
+      case LTry():
         fn.hasTry = true;
-        return tryLines(s, stmts, errorName == null ? null : varCode(mustVar(errorName, s)));
+        return tryStmt(s, stmts);
       case LMatch():
         return _match(s);
       case LHost():
@@ -523,7 +551,11 @@ abstract class Gen2Base {
     try {
       final head = first?.call() ?? const <String>[];
       final lines = stmts(body);
-      final tail = f.isVoid ? const <String>[] : (!fallsOff(body) ? alwaysTail(f) : (f.ret.nullable || f.ret.isAny ? [returnLine(nulOf(f.ret))] : unreachable()));
+      final tail = f.isVoid
+          ? const <String>[]
+          : (!fallsOff(body)
+                ? (body.isNotEmpty && (body.last is LReturn || body.last is LThrow) ? const <String>[] : alwaysTail(f))
+                : (f.ret.nullable || f.ret.isAny ? [returnLine(nulOf(f.ret))] : unreachable()));
       return [...declareLocals(f), ...head, ...lines, ...tail];
     } finally {
       _fnOrNull = saved;

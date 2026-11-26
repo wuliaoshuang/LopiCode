@@ -221,6 +221,16 @@ abstract class Gen2Dyn extends Gen2 {
   String dynCall(String f, List<String> args) => '${call('asFn', [f])}(${args.join(', ')})';
   @override
   String rtCall(String fn, List<String> args, List<LType> types, LType ret, LRt e) => call(fn, args);
+  @override
+  String hostCall(String fn, List<String> args) => call(fn, args);
+  @override
+  String spawnCode(String f, LType ft) => hostCall('spawn', [f]);
+  @override
+  String waitCode(String task, LType of) => hostCall('wait', [task]);
+
+  /// 标了“要等”的函数 / 方法在代码里的名字（方法是“类名.方法名”）；主程序里有没有要等的事。只有 Node 用得着。
+  final Set<String> waitDecls = {};
+  bool mainWaits = false;
 
   @override
   String text(String code, LType type) {
@@ -311,7 +321,8 @@ abstract class Gen2Dyn extends Gen2 {
 
   List<String> _function(LFuncDecl d) {
     final sig = r.funcs[d.name]!;
-    final f = V2Fn(d.name, sig.returns);
+    final f = V2Fn(d.name, sig.returns, waits: d.waits);
+    if (d.waits) waitDecls.add(funcName(d.name));
     return funcDecl(funcName(d.name), paramCodes(f, d.params), funcBody(f, d.body));
   }
 
@@ -321,7 +332,7 @@ abstract class Gen2Dyn extends Gen2 {
     final fields = inFn(
       init,
       () => [
-        for (final f in d.fields)
+        for (final f in d.ownFields)
           () {
             final ft = w.resolve(f.type, c.typeVars);
             return (member(f.name), f.init == null ? nullLit() : x(f.init!, ft));
@@ -337,9 +348,10 @@ abstract class Gen2Dyn extends Gen2 {
       ctorBody = funcBody(f, ctor.body);
     }
     final methods = <(String, List<String>, List<String>)>[];
-    for (final m in d.methods) {
+    for (final m in d.ownMethods) {
       final sig = r.funcs['${c.name}.${m.fn.name}']!;
-      final f = V2Fn(sig.key, sig.returns, cls: c);
+      final f = V2Fn(sig.key, sig.returns, cls: c, waits: m.fn.waits);
+      if (m.fn.waits) waitDecls.add('${typeName(c.name)}.${member(m.fn.name)}');
       methods.add((member(m.fn.name), paramCodes(f, m.fn.params), funcBody(f, m.fn.body)));
     }
     return DynClass(c, typeName(c.name), d.parent == null ? null : typeName(d.parent!), w.supers(c.name), fields, ctorParams, ctorBody, methods);
@@ -364,7 +376,7 @@ abstract class Gen2Dyn extends Gen2 {
     }
 
     add(globalDecls([for (final g in globals) varCode(V2Var(g, 0, global: true))]));
-    for (final d in module.decls) {
+    for (final d in decls) {
       switch (d) {
         case LRecordDecl():
           add(recordDecl(typeName(d.name), d.name, [for (final f in d.fields) member(f.name)]));
@@ -379,15 +391,15 @@ abstract class Gen2Dyn extends Gen2 {
           add(classDecl(_class(w.classes[d.name]!)));
         case LFuncDecl():
           add(_function(d));
-        case LAliasDecl() || LInterfaceDecl() || LVarDecl():
+        case LAliasDecl() || LInterfaceDecl() || LVarDecl() || LNativeDecl():
           break;
-        case LNativeDecl():
-          unsupported('宿主函数的声明', d);
       }
     }
-    final main = V2Fn(Gen2Base.mainScope, LType.nul, isMain: true);
-    final inits = <LStmt>[for (final d in module.decls.whereType<LVarDecl>()) LAssign(LTName(d.name), d.init), ...module.body];
-    return programText(top, funcBody(main, inits));
+    final main = V2Fn(Gen2Base.mainScope, LType.nul, isMain: true, waits: true);
+    if (r.usesErrors) add(errSupport());
+    final body = funcBody(main, startup);
+    mainWaits = main.usedWait;
+    return programText(top, body);
   }
 }
 

@@ -4,8 +4,12 @@ library;
 import 'package:lopicode/lang/ast.dart';
 import 'package:lopicode/lang/ast_util.dart';
 import 'package:lopicode/lang/gen2.dart';
+import 'package:lopicode/lang/gen2_err.dart';
 import 'package:lopicode/lang/gen2_go.dart';
 import 'package:lopicode/lang/rt2_go_dyn.dart';
+import 'package:lopicode/lang/rt2_go_host.dart';
+import 'package:lopicode/lang/rt2_go_io.dart';
+import 'package:lopicode/lang/rt2_go_more.dart';
 import 'package:lopicode/lang/type_world.dart';
 import 'package:lopicode/lang/types.dart';
 
@@ -21,7 +25,7 @@ class GoGen2 extends GoGen2Types {
   @override
   String get mainFile => 'main.go';
   @override
-  Map<String, String> get runtimeFiles => const {'go.mod': 'module lcprog\n\ngo 1.18\n', 'lc/lc.go': kRt2GoSource};
+  Map<String, String> get runtimeFiles => const {'go.mod': 'module lcprog\n\ngo 1.18\n', 'lc/lc.go': kRt2GoSource, 'lc/host.go': kRt2GoHost, 'lc/more.go': kRt2GoMore, 'lc/io.go': kRt2GoIo};
 
   final Map<V2Fn, _TryState> _states = Map.identity();
   _TryState get _st => _states[fn] ??= _TryState();
@@ -40,6 +44,9 @@ class GoGen2 extends GoGen2Types {
   List<String> exprStmt(String code, {required bool isVoid}) => code == 'nil' ? const [] : [isVoid ? code : '_ = $code'];
   @override
   List<String> throwLines(String message) => ['panic(lc.Error{Msg: $message})'];
+  // gofmt 的缩进是制表符。
+  @override
+  String get indentUnit => '\t';
   @override
   List<String> unreachable() => ['panic(lc.Error{Msg: "到不了这里"})'];
   @override
@@ -108,16 +115,50 @@ class GoGen2 extends GoGen2Types {
   }
 
   @override
-  List<String> tryLines(LTry s, List<String> Function(List<LStmt>) gen, String? errTarget) {
+  List<String> throwObjLines(String obj, String message) => ['panic(lc.Error{Msg: $message, Obj: $obj})'];
+  @override
+  String errObjCode(String e) => 'lcErrObj(&$e)';
+  @override
+  List<String> rethrowLines(String e) => ['panic($e)'];
+  @override
+  String errKindCode(String obj, LType type) => '$obj.LcName()';
+  @override
+  List<String> errSupport() {
+    final et = gt(Gen2Err.errType);
+    return [
+      'func lcErrObj(lcE *lc.Error) $et {',
+      ...indent([
+        'if lcE.Obj == nil {',
+        ...indent([
+          'lcM := lcE.Msg',
+          'switch lc.ErrKind(lcM) {',
+          for (final (k, make) in errMakers('lcM').skip(1)) ...[
+            'case ${textLit(k)}:',
+            ...indent(['lcE.Obj = $make']),
+          ],
+          'default:',
+          ...indent(['lcE.Obj = ${errMakers('lcM').first.$2}']),
+          '}',
+        ]),
+        '}',
+        'return lcE.Obj.($et)',
+      ]),
+      '}',
+    ];
+  }
+
+  @override
+  List<String> tryFrame(LTry s, List<String> Function(List<LStmt>) gen, List<String> Function(String e)? handler) {
     List<String> core() {
+      if (handler == null) return gen(s.body);
       final m = tmpName('E'), ok = tmpName('O');
       final body = _closure(() => gen(s.body));
       return [
-        '$m, $ok := lc.Try(func() {',
+        '$m, $ok := lc.TryE(func() {',
         ...indent(body),
         '})',
         'if !$ok {',
-        ...indent([errTarget != null ? '$errTarget = $m' : '_ = $m', ...gen(s.onError)]),
+        ...indent(['_ = &$m', ...handler(m)]),
         '}',
         ..._after(),
       ];
@@ -185,7 +226,7 @@ class GoGen2 extends GoGen2Types {
 
   List<String> _function(LFuncDecl d) {
     final sig = r.funcs[d.name]!;
-    final f = V2Fn(d.name, sig.returns);
+    final f = V2Fn(d.name, sig.returns, waits: d.waits);
     final (params, first) = _params(f, d.params, sig.params);
     return ['func ${funcName(d.name)}${_typeParams(sig.info.own, sig.info.bounds)}($params)${_retOf(sig.returns)} {', ...indent(funcBody(f, d.body, first: () => first)), '}'];
   }
@@ -270,8 +311,8 @@ class GoGen2 extends GoGen2Types {
     final tp = _typeParams(c.typeVars, const {}), ta = _typeArgs(c.typeVars);
     final s = '${open ? bodyName(c.name) : typeName(c.name)}$ta', recv = '(o *$s)';
     final out = <String>[];
-    final sigs = {for (final m in d.methods) m.fn.name: r.funcs['${c.name}.${m.fn.name}']!};
-    for (final m in d.methods) {
+    final sigs = {for (final m in d.ownMethods) m.fn.name: r.funcs['${c.name}.${m.fn.name}']!};
+    for (final m in d.ownMethods) {
       if (sigs[m.fn.name]!.info.own.isNotEmpty) unsupported('方法「${m.fn.name}」自己带类型变量（Go 的方法不能带）', d);
     }
     if (open) {
@@ -279,7 +320,10 @@ class GoGen2 extends GoGen2Types {
         'type ${typeName(c.name)}$tp interface {',
         ...indent([
           if (parent != null) typeName(parent.name),
-          for (final m in d.methods) '${member(m.fn.name)}(${sigs[m.fn.name]!.params.map(gt).join(', ')})${_retOf(sigs[m.fn.name]!.returns)}',
+          // 实现了的接口也嵌进来：拿着“可以被继承的类”这个类型的值，才能直接当那个接口用。
+          for (final i in d.interfaces)
+            if (w.interfaces.containsKey(i)) typeName(i),
+          for (final m in d.ownMethods) '${member(m.fn.name)}(${sigs[m.fn.name]!.params.map(gt).join(', ')})${_retOf(sigs[m.fn.name]!.returns)}',
           'lcAs_$id() *$s',
           'LcName() string',
           'LcObj()',
@@ -298,7 +342,7 @@ class GoGen2 extends GoGen2Types {
       ...indent([
         if (parent != null) bodyName(parent.name),
         if (parent == null && open) 'self ${typeName(c.name)}$ta',
-        for (final f in d.fields) '${member(f.name)} ${gt(w.resolve(f.type, c.typeVars))}',
+        for (final f in d.ownFields) '${member(f.name)} ${gt(w.resolve(f.type, c.typeVars))}',
       ]),
       '}',
       'func $recv LcName() string { return ${textLit(c.name)} }',
@@ -314,7 +358,7 @@ class GoGen2 extends GoGen2Types {
         inFn(
           init,
           () => [
-            for (final f in d.fields)
+            for (final f in d.ownFields)
               if (f.init != null) 'o.${member(f.name)} = ${x(f.init!, w.resolve(f.type, c.typeVars))}',
           ],
         ),
@@ -359,9 +403,9 @@ class GoGen2 extends GoGen2Types {
       ...indent(['o := &$s{}', if (hasSelf) 'o.self = o', 'o.lcInit(${args.join(', ')})', 'return o']),
       '}',
     ]);
-    for (final m in d.methods) {
+    for (final m in d.ownMethods) {
       final sig = sigs[m.fn.name]!;
-      final f = V2Fn(sig.key, sig.returns, cls: c);
+      final f = V2Fn(sig.key, sig.returns, cls: c, waits: m.fn.waits);
       final (ps, first) = _params(f, m.fn.params, sig.params);
       out.addAll(['func $recv ${member(m.fn.name)}($ps)${_retOf(sig.returns)} {', ...indent(funcBody(f, m.fn.body, first: () => first)), '}']);
     }
@@ -381,7 +425,8 @@ class GoGen2 extends GoGen2Types {
     }
 
     add([for (final g in globals) 'var ${varCode(V2Var(g, 0, global: true))} ${gt(g.type)}']);
-    for (final d in module.decls) {
+    if (r.usesErrors) add(errSupport());
+    for (final d in decls) {
       switch (d) {
         case LRecordDecl():
           add(_record(d));
@@ -395,15 +440,12 @@ class GoGen2 extends GoGen2Types {
           add(_class(w.classes[d.name]!));
         case LFuncDecl():
           add(_function(d));
-        case LAliasDecl() || LVarDecl():
+        case LAliasDecl() || LVarDecl() || LNativeDecl():
           break;
-        case LNativeDecl():
-          unsupported('宿主函数的声明', d);
       }
     }
-    final main = V2Fn(Gen2Base.mainScope, LType.nul, isMain: true);
-    final inits = <LStmt>[for (final d in module.decls.whereType<LVarDecl>()) LAssign(LTName(d.name), d.init), ...module.body];
-    final body = funcBody(main, inits);
+    final main = V2Fn(Gen2Base.mainScope, LType.nul, isMain: true, waits: true);
+    final body = funcBody(main, startup);
     return [
       '// 由 LopiCode 积木生成（Go，严格规矩、带原生类型）。',
       'package main',

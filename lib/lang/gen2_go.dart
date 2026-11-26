@@ -59,6 +59,8 @@ abstract class GoGen2Types extends Gen2 {
         return '*lc.List[${gt(t.of ?? LType.any)}]';
       case LKind.dict:
         return 'lc.Dict[${gt(t.of ?? LType.any)}]';
+      case LKind.future:
+        return '*lc.Task[${_taskOf(t.of)}]';
       case LKind.fn:
         if (!t.hasShape) return 'any';
         return 'func(${t.params.map(gt).join(', ')})${t.returns.isNul ? '' : ' ${gt(t.returns)}'}';
@@ -175,6 +177,18 @@ abstract class GoGen2Types extends Gen2 {
   String convert(String code, LType from, LType to) {
     if (to.isAny) return toAny(code, from);
     if (from.isAny) return fromAny(code, to);
+    if (_fnMismatch(from, to)) {
+      // 函数当另一种样子的函数用（比如返回“列表”的当返回“任意”的）：Go 里函数类型要一模一样，包一层。
+      final f = tmpName('F'), qs = [for (final _ in to.params) tmpName('Q')];
+      final call = '$f(${[for (var i = 0; i < qs.length; i++) conv(qs[i], to.params[i], from.params[i])].join(', ')})';
+      // 不返回东西的当“返回任意”的用：做完交回空。
+      final body = to.returns.isNul
+          ? call
+          : from.returns.isNul
+          ? '$call; return nil'
+          : 'return ${conv(call, from.returns, to.returns)}';
+      return 'func($f ${gt(from)}) ${gt(to)} { return func(${[for (var i = 0; i < qs.length; i++) '${qs[i]} ${gt(to.params[i])}'].join(', ')})${to.returns.isNul ? '' : ' ${gt(to.returns)}'} { $body } }($code)';
+    }
     final fb = from.nonNull, tb = to.nonNull;
     if (from.isNul) return nulOf(to);
     if (!from.nullable) {
@@ -187,6 +201,9 @@ abstract class GoGen2Types extends Gen2 {
     if (fb.isNamed && tb.isNamed && gt(from) != gt(to)) return 'lc.Up[${gt(to)}]($code)';
     return code;
   }
+
+  bool _fnMismatch(LType from, LType to) =>
+      !from.nullable && !to.nullable && from.kind == LKind.fn && to.kind == LKind.fn && from.hasShape && to.hasShape && from.params.length == to.params.length && gt(from) != gt(to);
 
   // —— 运算 ——
 
@@ -277,11 +294,28 @@ abstract class GoGen2Types extends Gen2 {
     'indexOf': 'IndexOf', 'replace': 'Replace', 'trim': 'Trim', 'upper': 'Upper', 'lower': 'Lower', 'repeatText': 'RepeatText',
     'charAt': 'CharAt', 'codePoints': 'CodePoints', 'listReverse': 'Reverse', 'listConcat': 'Concat', 'listSlice': 'Slice',
     'listContains': 'ListContains', 'listIndexOf': 'ListIndexOf', 'range': 'Range', 'dictKeys': 'DictKeys', 'dictValues': 'DictValues',
-    'dictHas': 'DictHas', 'toJson': 'ToJson', 'fromJson': 'FromJson', 'now': 'Now',
+    'dictHas': 'DictHas', 'toJson': 'ToJson', 'fromJson': 'FromJson', 'now': 'Now', 'isNumeric': 'IsNumeric', 'urlDecode': 'UrlDecode',
+    'isType': 'IsType', 'toNumber': 'ToNumber', 'dictMerge': 'DictMerge', 'abs': 'Abs', 'max': 'MaxOf', 'min': 'MinOf', 'random': 'Random',
+    'copy': 'Copy', 'template': 'Template', 'toBool': 'ToBool', 'listInsert': 'Insert', 'listRemove': 'RemoveAt', 'listSort': 'Sort',
+    'dictPairs': 'DictPairs',
   };
 
   @override
+  String hostCall(String fn, List<String> args) => 'lc.${fn[0].toUpperCase()}${fn.substring(1)}(${args.join(', ')})';
+
+  // “稍后的结果”里放什么：不返回东西的函数放 any（里面是 nil）。
+  String _taskOf(LType? of) => of == null || of.isNul ? 'any' : gt(of);
+  @override
+  String spawnCode(String f, LType ft) => ft.returns.isNul ? 'lc.Spawn(func() any { $f(); return nil })' : 'lc.Spawn($f)';
+  @override
+  String waitCode(String task, LType of) => 'lc.Wait($task)';
+
+  @override
   String rtCall(String fn, List<String> args, List<LType> types, LType ret, LRt e) {
+    // “任意”进来的：数字那三个、排序没法按类型挑实现，换成运行时再查的那一份。
+    if (const {'abs', 'max', 'min'}.contains(fn) && ret.isAny) return 'lc.Dyn${_rt[fn]!.replaceAll('Of', '')}(${args.join(', ')})';
+    if (fn == 'listSort' && (ret.of?.isAny ?? true)) return 'lc.DynSort(${args.join(', ')})';
+    if (fn == 'copy') return 'lc.Copy[${gt(types[0])}](${args.join(', ')})'; // 放进来的是“空”的时候 Go 自己推不出类型
     if (fn == 'listFind') return 'lc.${_boxResult(ret.nonNull) ? 'Find' : 'FindNil'}(${args.join(', ')})';
     final name = _rt[fn] ?? unsupported('小库函数「$fn」在 Go 的带类型生成路径里还没有', e);
     return 'lc.$name(${args.join(', ')})';

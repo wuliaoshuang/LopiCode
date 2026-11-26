@@ -7,7 +7,16 @@ library;
 const String kRt2NodeSource = r'''
 // LopiCode 积木的小库（Node.js，严格规矩）。由 LopiCode 生成，别手改。
 "use strict";
-class LcError extends Error {}
+// 抛出去的错：外面这层带着那句话；obj 是错误对象（小库自己报的错没有，接住的时候才按种类造）。
+class LcError extends Error {
+  constructor(m, obj) { super(m); this.obj = obj === undefined ? null : obj; }
+}
+const ERR_KINDS = [["除以 0", "数值不对"], ["整数超出范围", "数值不对"], ["变不成整数", "数值不对"], ["超出了", "找不到"], ["拿到的是", "类型不对"], ["值是空", "类型不对"]];
+const errKind = (m) => { for (const [part, k] of ERR_KINDS) if (m.includes(part)) return k; return "错误"; };
+let errMake = null;
+const errSetup = (f) => { errMake = f; };
+const errObj = (e) => { if (e.obj === null) e.obj = errMake(errKind(e.message), e.message); return e.obj; };
+const kindOf = (x) => x.constructor.lcName;
 class Rec {}
 class Variant extends Rec {}
 class Enum { constructor(name, index) { this.name = name; this.index = index; Object.freeze(this); } }
@@ -183,7 +192,28 @@ function listSlice(xs, from, to) {
 }
 const listIndexOf = (xs, v) => xs.findIndex((x) => eq(x, v));
 const listContains = (xs, v) => listIndexOf(xs, v) >= 0;
-function range(a, b) { const out = []; for (let i = a; i <= b; i++) out.push(i); return out; }
+function range(a, b, s) { const n = Math.min(steps(a, b, s), 10000), out = []; for (let k = 0; k < n; k++) out.push(a + k * s); return out; }
+// —— 后端积木里早就有的那几个（严格规矩下的说法见 rt_v2.dart） ——
+const numArg = (name, x) => (typeof x === "number" ? x : fail("「" + name + "」要数字，拿到的是" + kind(x)));
+const abs = (x) => Math.abs(numArg("绝对值", x)) + 0;
+const max = (a, b) => (numArg("较大的", a) >= numArg("较大的", b) ? a : b);
+const min = (a, b) => (numArg("较小的", a) <= numArg("较小的", b) ? a : b);
+function random(a, b) { const lo = Math.min(a, b), hi = Math.max(a, b); return lo + Math.floor(Math.random() * (hi - lo + 1)); }
+function copy(x) {
+  if (Array.isArray(x)) return x.map(copy);
+  if (x instanceof Map) return new Map(Array.from(x, ([k, v]) => [k, copy(v)]));
+  return x;
+}
+const template = (s, d) => s.replace(/\{([^{}]*)\}/g, (whole, key) => (d.has(key) ? dtext(d.get(key)) : whole));
+const toBool = (x) => !(x === null || x === undefined || x === false || x === 0 || x === "");
+function listInsert(xs, i, v) { if (i >= 0 && i <= xs.length) xs.splice(i, 0, v); else outOf(i, xs.length); }
+const listRemove = (xs, i) => (i >= 0 && i < xs.length ? xs.splice(i, 1)[0] : outOf(i, xs.length));
+function listSort(xs) {
+  const nums = xs.every((v) => typeof v === "number"), texts = xs.every((v) => typeof v === "string");
+  if (!nums && !texts) fail("排序要全是数字或者全是文字的列表，拿到的是混着的");
+  return xs.slice().sort(cmp);
+}
+const dictPairs = (d) => keys(d).map((k) => [k, toDyn(d.get(k))]);
 function recCopy(r, changes) {
   const o = Object.create(Object.getPrototypeOf(r));
   return Object.freeze(Object.assign(o, r, changes));
@@ -243,16 +273,231 @@ function dtext(x) {
   return "[" + (x.constructor.lcName || "对象") + "]";
 }
 
-// —— 输出：攒起来，最后一次写出 ——
-const out = [];
-const log = (s) => { out.push(s); };
+// —— 输出：写一行就马上写出去（服务被关掉的时候不会丢）——
+let wrote = false;
+const log = (s) => { wrote = true; process.stdout.write(s + "\n"); };
+
+// —— 是不是数字、网址解码 ——
+const NUM = /^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)([eE][+-]?[0-9]+)?$/;
+const numTrim = (s) => s.replace(/^[ \t\n\r]+|[ \t\n\r]+$/g, "");
+// 这个值是不是某一类：null bool number text list dict function object。
+function isType(x, name) {
+  switch (name) {
+    case "null": return x === null || x === undefined;
+    case "bool": return typeof x === "boolean";
+    case "number": return typeof x === "number";
+    case "text": return typeof x === "string";
+    case "list": return Array.isArray(x);
+    case "dict": return x instanceof Map;
+    case "function": return typeof x === "function";
+    case "object": return x instanceof Obj || x instanceof Rec || x instanceof Enum;
+  }
+  return fail("没有「" + name + "」这一类值");
+}
+// 两个字典合成一个新的：后面的盖住前面的。
+const dictMerge = (a, b) => new Map([...a, ...b]);
+const isNumeric = (x) => typeof x === "number" || (typeof x === "string" && NUM.test(numTrim(x)) && Number.isFinite(Number(numTrim(x))));
+const toNumber = (s) => (isNumeric(s) ? Number(numTrim(s)) : fail("「" + s + "」变不成数字"));
+function urlDecode(s) {
+  try { return decodeURIComponent(s); } catch (e) { return fail("这段网址编码解不开"); }
+}
+
+// —— 宿主（清单见 host_v2.dart）——
+function hostPrint(s, ch) {
+  if (ch === "out") log(s);
+  else if (ch === "err") process.stderr.write(s + "\n");
+  else fail("通道只能是 out 或 err");
+}
+const hostNow = () => Date.now();
+const copyVal = (v) => (Array.isArray(v) ? v.map(copyVal) : v instanceof Map ? new Map([...v].map(([k, x]) => [k, copyVal(x)])) : v);
+const store = new Map();
+const storeBusy = new Set();
+const storeRead = (name) => (store.has(name) ? copyVal(store.get(name)) : null);
+// Node 只有一条线，改格子的函数又不许“等”，所以别人插不进来；函数里再改同一个格子＝报错。
+function storeUpdate(name, f) {
+  if (storeBusy.has(name)) fail("「" + name + "」这个格子正在改，不能在改它的函数里再改它");
+  storeBusy.add(name);
+  try {
+    const v = copyVal(f(storeRead(name)));
+    store.set(name, v);
+    return copyVal(v);
+  } finally { storeBusy.delete(name); }
+}
+const hostEnv = (name) => { const v = process.env[name]; return v === undefined ? null : v; };
+
+// —— 随机字节、文件、请求别的网址（细则见 docs/blocks-v5-parts/B-gen-notes.md 第 14 节）——
+function hostRandomBytes(n) {
+  if (n < 1 || n > 1024) fail("随机字节的个数要在 1 到 1024 之间");
+  return Array.from(require("node:crypto").randomBytes(n));
+}
+const fs = require("node:fs"), nodePath = require("node:path");
+function filePath(p) {
+  if (p === "" || /^[\/\\]/.test(p) || /^[A-Za-z]:/.test(p) || p.split(/[\/\\]/).includes("..")) fail("路径不对：只能用工程文件夹里面的相对路径");
+  return nodePath.join(process.cwd(), p);
+}
+function fileRead(p) {
+  const full = filePath(p);
+  let bytes;
+  try { bytes = fs.readFileSync(full); } catch (e) { return fail(e.code === "ENOENT" ? "读不了文件：没有「" + p + "」" : "读不了文件：「" + p + "」"); }
+  try { return new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes); } catch (e) { return fail("读不了文件：「" + p + "」不是 UTF-8 文字"); }
+}
+function fileWrite(p, text) {
+  const full = filePath(p), tmp = full + ".lctmp" + process.pid;
+  try {
+    fs.mkdirSync(nodePath.dirname(full), { recursive: true });
+    fs.writeFileSync(tmp, text, "utf8");
+    fs.renameSync(tmp, full);
+  } catch (e) {
+    try { fs.unlinkSync(tmp); } catch (e2) { /* 临时文件本来就没写出来 */ }
+    fail("写不了文件：「" + p + "」");
+  }
+}
+const fileExists = (p) => fs.existsSync(filePath(p));
+function fileList(p) {
+  const full = filePath(p);
+  try { return fs.readdirSync(full).sort(cmpText); } catch (e) { return fail("列不了文件夹：「" + p + "」"); }
+}
+function fileRemove(p) {
+  const full = filePath(p);
+  let ok = false;
+  try { ok = fs.statSync(full).isFile(); if (ok) fs.unlinkSync(full); } catch (e) { ok = false; }
+  if (!ok) fail("删不了文件：「" + p + "」");
+}
+// 网址里的空格、中文、写法不对的百分号先按 UTF-8 做百分号转义（各语言自己的处理不一样，这里统一）；# 后面的不发。
+function encodeUrl(s) {
+  const hash = s.indexOf("#");
+  const bytes = Buffer.from(hash < 0 ? s : s.slice(0, hash), "utf8");
+  let out = "";
+  for (let i = 0; i < bytes.length; i++) {
+    const ch = String.fromCharCode(bytes[i]);
+    const escaped = ch === "%" && i + 2 < bytes.length && /^[0-9A-Fa-f]{2}$/.test(String.fromCharCode(bytes[i + 1], bytes[i + 2]));
+    out += escaped || /^[A-Za-z0-9\-._~:\/?\[\]@!$&'()*+,;=]$/.test(ch) ? ch : "%" + bytes[i].toString(16).toUpperCase().padStart(2, "0");
+  }
+  return out;
+}
+const FETCH_METHODS = ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"];
+const FETCH_SKIP = ["host", "content-length", "connection", "expect", "upgrade"];
+async function hostFetch(method, url, headers, body, timeoutMs) {
+  if (!/^https?:\/\//i.test(url)) fail("请求不了：网址要以 http:// 或 https:// 开头");
+  if (!FETCH_METHODS.includes(method)) fail("请求不了：不认识的方式「" + method + "」");
+  if (timeoutMs <= 0) fail("请求不了：超时毫秒要大于 0");
+  const hs = [];
+  let hasType = false, hasAgent = false;
+  for (const k of keys(headers)) {
+    const low = k.toLowerCase();
+    if (FETCH_SKIP.includes(low)) continue;
+    hasType = hasType || low === "content-type";
+    hasAgent = hasAgent || low === "user-agent";
+    hs.push([k, headers.get(k)]);
+  }
+  const init = { method, headers: hs, redirect: "follow", signal: AbortSignal.timeout(timeoutMs) };
+  if (!hasAgent) hs.push(["User-Agent", "LopiCode"]);
+  if (body !== null && method !== "GET" && method !== "HEAD") {
+    init.body = Buffer.from(body, "utf8");
+    if (!hasType) hs.push(["Content-Type", "text/plain; charset=utf-8"]);
+  }
+  let res, bytes;
+  try {
+    res = await fetch(encodeUrl(url), init);
+    bytes = await res.arrayBuffer();
+  } catch (e) {
+    return fail(e && (e.name === "TimeoutError" || e.name === "AbortError") ? "请求超时了" : "请求不了：连不上");
+  }
+  const back = new Map();
+  res.headers.forEach((v, k) => back.set(k.toLowerCase(), v));
+  return new Map([["status", res.status], ["headers", back], ["body", new TextDecoder("utf-8", { ignoreBOM: true }).decode(bytes)]]);
+}
+
+// —— 要等的事 ——
+const hostSleep = (ms) => new Promise((done) => setTimeout(() => done(null), Math.max(0, ms)));
+// 开始做一件事：马上开始，拿到“稍后的结果”；出了错先记着，等它的时候再抛。
+function spawn(f) {
+  const p = f();
+  p.catch(() => {});
+  return p;
+}
+
+// —— 开服务（细则见 docs/blocks-v5-parts/C-library-system.md 9.1 和 B-gen-notes.md 第 12 节）——
+const BODY_LIMIT = 1048576;
+const errText = (e) => (e instanceof LcError ? "出错：" + e.message : String((e && e.stack) || e));
+function writeRaw(req, res, status, headers, text) {
+  const bytes = Buffer.from(text, "utf8");
+  const noBody = status === 204 || status === 304 || status < 200;
+  const list = [];
+  for (const k of keys(headers)) if (k.toLowerCase() !== "content-length") list.push([k, dtext(headers.get(k))]);
+  if (!noBody) list.push(["Content-Length", String(bytes.length)]);
+  res.writeHead(status, list);
+  res.end(noBody || req.method === "HEAD" ? undefined : bytes);
+}
+const hostError = (req, res, status, message) =>
+  writeRaw(req, res, status, new Map([["Content-Type", "application/json; charset=utf-8"]]), toJson(new Map([["error", message]])));
+async function serveOne(req, res, handler) {
+  const chunks = [];
+  let total = 0;
+  for await (const chunk of req) {
+    total += chunk.length;
+    if (total <= BODY_LIMIT) chunks.push(chunk);
+  }
+  if (total > BODY_LIMIT) return hostError(req, res, 413, "请求内容太大");
+  let body;
+  try { body = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(Buffer.concat(chunks)); } catch (e) { body = null; }
+  const headers = new Map();
+  for (let i = 0; i + 1 < req.rawHeaders.length; i += 2) {
+    const name = req.rawHeaders[i].toLowerCase();
+    const value = req.rawHeaders[i + 1].replace(/^[ \t]+|[ \t]+$/g, "");
+    headers.set(name, headers.has(name) ? headers.get(name) + ", " + value : value);
+  }
+  const url = req.url || "/";
+  const q = url.indexOf("?");
+  const request = new Map([["method", req.method], ["path", q < 0 ? url : url.slice(0, q)], ["query", q < 0 ? "" : url.slice(q + 1)], ["headers", headers], ["body", body]]);
+  let out;
+  try { out = await handler(request); } catch (e) {
+    process.stderr.write(errText(e) + "\n");
+    return hostError(req, res, 500, "服务器内部出错");
+  }
+  const status = out instanceof Map ? out.get("status") : null;
+  if (!Number.isInteger(status) || status < 100 || status > 599) {
+    process.stderr.write("处理函数返回的响应不对（要一个字典，status 是 100 到 599 的整数）\n");
+    return hostError(req, res, 500, "服务器内部出错");
+  }
+  const hs = out.get("headers");
+  return writeRaw(req, res, status, hs instanceof Map ? hs : new Map(), dtext(out.get("body")));
+}
+// 一直服务，不返回；端口用不了＝出错。
+function hostServe(port, host, handler) {
+  return new Promise((done, bad) => {
+    if (port < 0 || port > 65535) return bad(new LcError("开不了服务：端口要在 0 到 65535 之间"));
+    const server = require("node:http").createServer((req, res) => {
+      serveOne(req, res, handler).catch((e) => {
+        process.stderr.write(errText(e) + "\n");
+        if (!res.headersSent) hostError(req, res, 500, "服务器内部出错");
+        else res.destroy();
+      });
+    });
+    server.on("error", () => bad(new LcError("开不了服务：" + host + ":" + port + " 用不了")));
+    server.listen(port, host, () => log("后端已启动：http://" + host + ":" + server.address().port));
+  });
+}
+
+function fatal(e) {
+  if (!(e instanceof LcError)) throw e;
+  log("出错：" + e.message);
+  process.exitCode = 1;
+}
+// 跑主程序。什么都没写过的，最后补一个空行（和原来“攒到最后一次写”的样子一样）。
+const finish = () => { if (!wrote) process.stdout.write("\n"); };
 function run(main) {
-  try { main(); } catch (e) { if (e instanceof LcError) out.push("出错：" + e.message); else throw e; }
-  process.stdout.write(out.join("\n") + "\n");
+  let r;
+  try { r = main(); } catch (e) {
+    try { fatal(e); } finally { finish(); }
+    return;
+  }
+  if (r instanceof Promise) r.then(finish, (e) => { try { fatal(e); } finally { finish(); } });
+  else finish();
 }
 
 module.exports = {
-  LcError, Rec, Variant, Enum, Obj, MAX, fail, fmtNum, itext, boolText,
+  LcError, errKind, errSetup, errObj, kindOf, Rec, Variant, Enum, Obj, MAX, fail, fmtNum, itext, boolText,
   iadd, isub, imul, imod, idiv, fdiv, fpow, toInt, floor, ceil, round, sqrt, now, steps, fsteps,
   textLen, cmpText, substring, charAt, codePoints, split, startsWith, endsWith, contains, indexOf, replace, trim, upper, lower,
   repeatText, parseInt: parseInt_,
@@ -260,7 +505,10 @@ module.exports = {
   eq, cmp, dcmp, at, setAt, push, pop, len, items, keys, get, dictSet, dictRemove, dictKeys, dictValues, dictHas, must,
   listMap, listFilter, listReduce, listFind, listEvery, listSome, listEach, listJoin, listReverse, listConcat, listSlice,
   listIndexOf, listContains, range, recCopy,
+  abs, max, min, random, copy, template, toBool, listInsert, listRemove, listSort, dictPairs,
   dadd, dsub, dmul, ddiv, dpow, didiv, dmod, dynGet, dynSet, dynPush, dynPop, dynRemove, dynOrElse, dynSize,
-  toJson, fromJson, dtext, log, run,
+  toJson, fromJson, dtext, log, run, isNumeric, isType, dictMerge, toNumber, urlDecode,
+  hostPrint, hostNow, hostEnv, hostSleep, hostServe, spawn, storeRead, storeUpdate,
+  hostRandomBytes, hostFetch, fileRead, fileWrite, fileExists, fileList, fileRemove,
 };
 ''';

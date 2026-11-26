@@ -6,6 +6,7 @@
 /// 这张表和 backend_blocks.dart 的旧表合在一起才是全部（`beBlockSpecs` / `beExprSpecs`）。
 library;
 
+import 'package:lopicode/backend/backend_blocks_core.dart';
 import 'package:lopicode/backend/backend_blocks_func.dart';
 import 'package:lopicode/backend/backend_blocks_strict.dart';
 import 'package:lopicode/backend/backend_function.dart';
@@ -304,7 +305,7 @@ bool _exprUsesLang(Object? value, int depth) {
   if (value is List) return value.any((v) => _exprUsesLang(v, depth + 1));
   if (value is! Map) return false;
   final kind = value['e'];
-  if (kind is String && (beLangExprSpecs.containsKey(kind) || beFuncExprSpecs.containsKey(kind) || beStrictExprSpecs.containsKey(kind) || beCallId(kind) != null)) return true;
+  if (kind is String && (beLangExprSpecs.containsKey(kind) || beFuncExprSpecs.containsKey(kind) || beStrictExprSpecs.containsKey(kind) || beIsCoreExpr(kind) || beCallId(kind) != null)) return true;
   return value.values.any((v) => _exprUsesLang(v, depth + 1));
 }
 
@@ -314,7 +315,7 @@ bool beBlocksUseLang(List<LcBlock> list, [int depth = 0]) {
   if (depth > LcBlock.maxDepth + 1) return false;
   for (final b in list) {
     if (beLangBlockSpecs.containsKey(b.op) || b.arms.isNotEmpty || b.noElse) return true;
-    if (beFuncBlockSpecs.containsKey(b.op) || beCallId(b.op) != null) return true;
+    if (beFuncBlockSpecs.containsKey(b.op) || beIsCoreOp(b.op) || beCallId(b.op) != null) return true;
     final index = b.args['index'];
     if (b.op == 'forEach' && index is String && index.isNotEmpty) return true;
     if (b.args.values.any((v) => _exprUsesLang(v, 0))) return true;
@@ -349,6 +350,9 @@ Map<String, bool> beLocalNames(List<LcBlock> list, RegExp pattern) {
       }
       walk(b.body, depth + 1);
       for (final a in b.arms) {
+        // 核心 2：“出错时”接到的错误、“看是哪种情况”带出来的东西。
+        if (b.op == 'try') add(a.args['name'], true);
+        if (b.op == 'match') beBindNames(a.args['binds']).forEach((n) => add(n, true));
         walk(a.body, depth + 1);
       }
       walk(b.orElse, depth + 1);

@@ -314,7 +314,7 @@ class LTypeWorld {
     var guard = 0;
     while (c != null && guard++ < 64) {
       for (final f in c.decl.fields) {
-        if (f.name == name) return (resolve(f.type, c.typeVars), c);
+        if (f.name == name && !f.isStatic) return (resolve(f.type, c.typeVars), c);
       }
       c = classes[c.decl.parent];
     }
