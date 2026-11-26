@@ -642,7 +642,7 @@ void main() {
       expect(items.whereType<ThinkingItem>(), isEmpty);
     });
 
-    test('排行：思考并进步骤组；设置里关了就完全不出现，只有一步的也不套组', () {
+    test('排行：一轮开头和回答前的思考各占一行；设置里关了就完全不出现，只有一步的也不套组', () {
       const items = <ChatItem>[
         UserItem('看看'),
         ThinkingItem('先看文件', ms: 3000),
@@ -651,9 +651,10 @@ void main() {
         AssistantItem('是 hello'),
       ];
       final on = deriveChatRows(items, busy: false);
-      expect(on.length, 4, reason: '我的话、步骤组、回答前的思考（一行）、回答');
-      expect((on[1] as StepGroupRow).steps.map((s) => s.runtimeType).toList(), [ThinkingItem, ToolItem]);
-      expect((on[2] as ItemRow).item, isA<ThinkingItem>());
+      expect(on.length, 5, reason: '我的话、开头的思考（一行）、一步、回答前的思考（一行）、回答');
+      expect((on[1] as ItemRow).item, isA<ThinkingItem>());
+      expect((on[2] as StepGroupRow).steps.map((s) => s.runtimeType).toList(), [ToolItem]);
+      expect((on[3] as ItemRow).item, isA<ThinkingItem>());
       final off = deriveChatRows(items, busy: false, showThinking: false);
       expect(off.length, 3);
       expect((off[1] as StepGroupRow).steps.length, 1);

@@ -121,21 +121,25 @@ ReplyEditPlan? planReplyEdit(List<Map<String, dynamic>> messages, String id, Str
   return ReplyEditPlan(messages: [...messages]..[index] = next, changed: true, edited: edited, text: text);
 }
 
-/// 一轮里的一段正式回复（有文字、后面没跟工具调用）。
+/// 一轮里 Agent 说的一段话。
 class ReplyPart {
-  const ReplyPart({required this.id, required this.text, this.edited = false});
+  const ReplyPart({required this.id, required this.text, this.edited = false, this.note = false});
   final String id;
   final String text;
   final bool edited;
+
+  /// true＝工具调用之间说的话（那条消息后面跟着工具调用）；false＝正式回复。
+  final bool note;
 }
 
-/// 每一轮的正式回复段，按先后排；键是这一轮最后一段的 id（操作栏只挂在它下面，动作针对这一整轮的正文）。
-/// “正式回复”的算法和 [lastReplyIdsOf] 一致。
+/// 每一轮里 Agent 说的话，按先后排（正式回复和工具调用之间的说明都算——界面上它们是同一条内容流里的正文）；
+/// 键是操作栏挂着的那一段的 id，和 [lastReplyIdsOf] 一致（动作针对这一整轮的正文）。
 Map<String, List<ReplyPart>> turnRepliesOf(List<Map<String, dynamic>> messages) {
   final out = <String, List<ReplyPart>>{};
   var parts = <ReplyPart>[];
   void close() {
-    if (parts.isNotEmpty) out[parts.last.id] = parts;
+    final at = parts.where((p) => !p.note).lastOrNull ?? parts.lastOrNull;
+    if (at != null) out[at.id] = parts;
     parts = <ReplyPart>[];
   }
 
@@ -146,8 +150,8 @@ Map<String, List<ReplyPart>> turnRepliesOf(List<Map<String, dynamic>> messages) 
     }
     final calls = m['tool_calls'];
     final id = messageIdOf(m);
-    if (id == null || !_editable(m) || (calls is List && calls.isNotEmpty)) continue;
-    parts.add(ReplyPart(id: id, text: m['content'] as String, edited: isEditedMessage(m)));
+    if (id == null || !_editable(m)) continue;
+    parts.add(ReplyPart(id: id, text: m['content'] as String, edited: isEditedMessage(m), note: calls is List && calls.isNotEmpty));
   }
   close();
   return out;

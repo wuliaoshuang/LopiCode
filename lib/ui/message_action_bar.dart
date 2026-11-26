@@ -3,13 +3,15 @@
 // - 一条消息下面只有一排，常驻四个按钮，位置固定（2026-11-26 真机反馈第五轮，霜霜：“消息气泡底下有四个按钮”）：
 //   我的消息：复制、编辑、重新发送、更多；Agent 的回复：复制、编辑、重试、更多。其余动作（分支、收藏、分享、删除）收进“更多”面板，一行一个。
 //   Agent 的一轮只在最后一段正文下面出现一次（2026-11-26 11:52 协调者补充：之后 Agent 一整轮会画成一条连续的内容流，操作栏在末尾只有一排）。
-//   所以这一排管的是“这一轮的正文”（[MessageTarget.parts]）：复制＝各段连起来；编辑＝只有一段直接改，有几段先选改哪一段；
-//   重试＝重试这一轮；“更多”里的分支、收藏、分享、删除照旧针对最后一段。
+//   所以这一排管的是“这一轮 Agent 说的话”（[MessageTarget.parts]，工具调用之间的说明也算）：复制＝各段连起来；重试＝重试这一轮；
+//   编辑、分支、收藏、分享、删除是“针对某一段”的动作（[MessageAction.partPrompt]）：只有一段直接做，有几段先在底部面板选哪一段。
+//   收藏 / 分叉记号：这一轮任何一段收藏着 / 分出过对话，末尾这一排就亮；点它同样先选段（只有一段符合就直接进）。
 // - 四个按钮之外只放“状态记号”，不放别的动作：收藏着是实心书签（点它＝取消收藏）、分出过对话是强调色分叉（点开列表）、
 //   改过的回复是一个很淡的“已编辑”。记号排在四个按钮的外侧（Agent 的回复在右边，我的消息在左边），所以四个按钮的位置不跟着变。
 //   最挤的时候是 4 个按钮 + 2 个记号 + “已编辑”，约 310 宽，390 的屏放得下。
 // - 每个图标的可点区域 44×44。
-// - 只挂在“我的消息”和“Agent 的正式回复”下面；步骤组、思考、脚注、提示下面没有。还在往外冒的回复没有操作栏。
+// - 只挂在“我的消息”和“Agent 每一轮最后一段话”下面；步骤组、思考、脚注、提示下面没有。还在往外冒的回复没有操作栏。
+//   一轮没有正式回复（被停下，只留下工具调用之间的说明）时挂在最后一段说明下面；Agent 正在跑的时候这种先不显示，免得挂在半路上。
 //
 // 怎么加一个新动作：在本文件末尾的 [kMessageActions] 里登记一条 [MessageAction]（见那里的说明），别的地方都不用动。
 import 'package:flutter/foundation.dart';
@@ -48,6 +50,8 @@ class MessageTarget {
     this.branches = const [],
     this.edited = false,
     this.parts = const [],
+    this.partFavorites = const {},
+    this.partBranches = const {},
   });
 
   final ProjectSession session;
@@ -81,8 +85,26 @@ class MessageTarget {
   /// 复制、编辑针对的是这个列表——以后改成“针对整轮”只要换这里装的东西。
   final List<ReplyPart> parts;
 
+  /// [parts] 里收藏着的那几段的 id、各段分出去的对话（“先选哪一段”时用）。
+  final Set<String> partFavorites;
+  final Map<String, List<Conversation>> partBranches;
+
   /// 复制用的文字：Agent 的回复是这一轮各段正文连起来。
   String get copyText => parts.length > 1 ? joinReplyParts(parts) : text;
+
+  /// 只针对这一轮里 [p] 这一段的目标（收藏、分支、分享、删除、编辑用）。
+  MessageTarget forPart(ReplyPart p) => MessageTarget(
+    session: session,
+    item: AssistantItem(p.text, id: p.id, edited: p.edited),
+    id: p.id,
+    mine: false,
+    text: p.text,
+    busy: busy,
+    turnLast: p.id == id,
+    favorited: partFavorites.contains(p.id),
+    branches: partBranches[p.id] ?? const [],
+    edited: p.edited,
+  );
 }
 
 /// 一个消息动作。全部字段都是“给一条消息、答一个值”，所以同一个动作可以按消息变样子（收藏 / 取消收藏）。
@@ -98,7 +120,11 @@ class MessageAction {
     this.disabledReason,
     this.turnLevel = false,
     this.danger = false,
+    this.partPrompt,
   });
+
+  /// 这个动作针对的是“某一段话”：这一轮有几段时先问哪一段，这是那个面板的标题（“收藏哪一段？”）。不给＝针对整轮。
+  final String? partPrompt;
 
   final MessageActionSlot slot;
   final String Function(MessageTarget t) label;
@@ -249,8 +275,11 @@ class MessageFrame extends StatelessWidget {
       AssistantItem(:final edited) => edited,
       _ => false,
     };
-    // Agent 的一轮只在最后一段正文下面有操作栏；中间的段没有（从收藏页跳回来的高亮照常有）
-    final target = !mine && !turnLast
+    // Agent 的一轮只在最后一段话下面有操作栏；中间的段没有（从收藏页跳回来的高亮照常有）。
+    // 挂在“说明”下面的（这一轮没有正式回复）：Agent 正在跑的时候先不显示。
+    final ownNote = parts.where((p) => p.id == id).firstOrNull?.note ?? false;
+    final partIds = {for (final p in parts) p.id, id};
+    final target = !mine && (!turnLast || (ownNote && scope.busy))
         ? null
         : MessageTarget(
             session: scope.session,
@@ -260,10 +289,15 @@ class MessageFrame extends StatelessWidget {
             text: text,
             busy: scope.busy,
             turnLast: turnLast,
-            favorited: scope.favoriteIds.contains(id),
-            branches: scope.branches[id] ?? const [],
+            favorited: partIds.any(scope.favoriteIds.contains),
+            branches: [for (final p in partIds) ...?scope.branches[p]],
             edited: ownEdited || parts.any((p) => p.edited),
             parts: parts,
+            partFavorites: scope.favoriteIds.intersection(partIds),
+            partBranches: {
+              for (final p in partIds)
+                if (scope.branches[p] != null) p: scope.branches[p]!,
+            },
           );
     final block = target == null
         ? child
@@ -356,11 +390,31 @@ class MessageActionBar extends StatelessWidget {
   }
 }
 
-/// 执行一个动作；现在不能用就说明原因。
+/// 执行一个动作；现在不能用就说明原因。针对“某一段话”的动作，这一轮有几段时先选哪一段。
 Future<void> runMessageAction(BuildContext context, MessageAction action, MessageTarget target) async {
-  final why = action.disabledReason?.call(target);
+  var t = target;
+  final prompt = action.partPrompt;
+  if (prompt != null && !t.mine && t.parts.length > 1) {
+    final busy = action.disabledReason?.call(t);
+    if (busy != null) return showSnack(context, busy);
+    // 只有这个动作用得上的段才列出来（比如“分出去的对话”只列分出过对话的段）
+    final fit = [
+      for (final p in t.parts)
+        if (action.appliesTo?.call(t.forPart(p)) ?? true) p,
+    ];
+    if (fit.isEmpty) return;
+    var picked = fit.length == 1 ? fit.single.id : null;
+    picked ??= await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => ReplyPartSheet(parts: fit, title: prompt, all: t.parts, favorites: t.partFavorites, branched: t.partBranches.keys.toSet()),
+    );
+    if (picked == null || !context.mounted) return;
+    t = t.forPart(t.parts.firstWhere((p) => p.id == picked));
+  }
+  final why = action.disabledReason?.call(t);
   if (why != null) return showSnack(context, why);
-  await action.run(context, target);
+  await action.run(context, t);
 }
 
 class _BarIcon extends StatelessWidget {
@@ -434,21 +488,31 @@ const List<MessageAction> kMessageActions = [
   MessageAction(slot: MessageActionSlot.copy, label: _copyLabel, icon: _copyIcon, pinned: _always, run: _copy),
   // 编辑：我的消息＝放回输入框改了再发（message_branch_actions.dart）；Agent 的回复＝直接改这段文字（message_reply_editor.dart）
   MessageAction(slot: MessageActionSlot.edit, label: editLabel, icon: editIcon, hint: editHint, appliesTo: onMine, pinned: _always, disabledReason: rewindBlocked, run: runEdit),
-  MessageAction(slot: MessageActionSlot.edit, label: editLabel, icon: editIcon, hint: editReplyHint, appliesTo: onReply, pinned: _always, disabledReason: editReplyBlocked, run: runEditReply),
+  MessageAction(
+    slot: MessageActionSlot.edit,
+    label: editLabel,
+    icon: editIcon,
+    hint: editReplyHint,
+    appliesTo: onReply,
+    pinned: _always,
+    disabledReason: editReplyBlocked,
+    partPrompt: '改哪一段？',
+    run: runEditReply,
+  ),
   // 重试 / 重新发送：我的每条消息、Agent 每一轮的末尾都有
   MessageAction(slot: MessageActionSlot.retry, label: retryLabel, icon: retryIcon, hint: retryHint, pinned: _always, disabledReason: rewindBlocked, run: runRetry),
-  MessageAction(slot: MessageActionSlot.branch, label: branchLabel, icon: branchIcon, hint: branchHint, disabledReason: branchBlocked, run: runBranch),
-  MessageAction(slot: MessageActionSlot.branches, label: branchesLabel, icon: branchesIcon, appliesTo: hasBranches, pinned: branchesPinned, run: runShowBranches),
-  MessageAction(slot: MessageActionSlot.favorite, label: _favoriteLabel, icon: _favoriteIcon, hint: _favoriteHint, pinned: _whenFavorited, run: _favorite),
-  MessageAction(slot: MessageActionSlot.share, label: _shareLabel, icon: _shareIcon, hint: _shareHint, run: _share),
-  MessageAction(slot: MessageActionSlot.delete, label: _deleteLabel, icon: _deleteIcon, hint: _deleteHint, disabledReason: _deleteBlocked, danger: true, run: _delete),
+  MessageAction(slot: MessageActionSlot.branch, label: branchLabel, icon: branchIcon, hint: branchHint, disabledReason: branchBlocked, partPrompt: '从哪一段分支？', run: runBranch),
+  MessageAction(slot: MessageActionSlot.branches, label: branchesLabel, icon: branchesIcon, appliesTo: hasBranches, pinned: branchesPinned, partPrompt: '看哪一段分出去的对话？', run: runShowBranches),
+  MessageAction(slot: MessageActionSlot.favorite, label: _favoriteLabel, icon: _favoriteIcon, hint: _favoriteHint, pinned: _whenFavorited, partPrompt: '收藏 / 取消收藏哪一段？', run: _favorite),
+  MessageAction(slot: MessageActionSlot.share, label: _shareLabel, icon: _shareIcon, hint: _shareHint, partPrompt: '分享哪一段？', run: _share),
+  MessageAction(slot: MessageActionSlot.delete, label: _deleteLabel, icon: _deleteIcon, hint: _deleteHint, disabledReason: _deleteBlocked, danger: true, partPrompt: '删哪一段？', run: _delete),
 ];
 
 bool _always(MessageTarget t) => true;
 bool _whenFavorited(MessageTarget t) => t.favorited;
 String _copyLabel(MessageTarget t) => '复制';
 IconData _copyIcon(MessageTarget t) => Icons.content_copy_outlined;
-String _favoriteLabel(MessageTarget t) => t.favorited ? '取消收藏' : '收藏';
+String _favoriteLabel(MessageTarget t) => t.parts.length > 1 ? (t.favorited ? '收藏 / 取消收藏' : '收藏') : (t.favorited ? '取消收藏' : '收藏');
 IconData _favoriteIcon(MessageTarget t) => t.favorited ? Icons.bookmark : Icons.bookmark_border;
 String? _favoriteHint(MessageTarget t) => t.favorited ? null : '以后在侧边栏的“收藏的消息”里找';
 String _shareLabel(MessageTarget t) => '分享';

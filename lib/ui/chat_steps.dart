@@ -7,8 +7,10 @@
 //   · 折叠时失败 / 被拒绝的那几步单独露在摘要下面（看得见停在哪），其余收起；
 //   · 点摘要展开清单：一条时间线（左边细竖线 + 每步一个状态圆点，见 step_timeline.dart），每步下面带一小段结果摘要；
 //     再点某一步看详情（按工具分别排，见 step_detail.dart）。一步那一行在 step_row.dart。
-//   · 某一步之前模型的思考也是清单里的一行（“思考了 N 秒”，见 chat_extras.dart），折叠时不露出来。
-// - 只有一步、中间也没说话的，不套组，直接是一行。
+//   · 两步之间模型的思考也是清单里的一行（“思考了 N 秒”，见 chat_extras.dart）；折叠时摘要里写“思考 N 段”，
+//     正在想的时候那一行直接写“正在思考… N 秒”。
+//   · 模型说的话不在组里（2026-11-26 起）：它是正文，排在组的前后，见 chat_rows.dart。
+// - 只有一步的，不套组，直接是一行。
 // - 颜色只出现在状态上：失败红、被拒绝橙、子代理的“查看”用强调色；其余全是中性灰。
 // - 主操作没有：这里全是“想看再点”的次要内容。
 import 'package:lopicode/session/chat_models.dart';
@@ -53,7 +55,7 @@ class _StepGroupViewState extends State<StepGroupView> with AutomaticKeepAliveCl
     super.build(context);
     final row = widget.row;
     final tools = row.tools;
-    // 只有一步、中间也没说话（也没有要显示的思考）：不套组。
+    // 只有一步（也没有夹着思考）：不套组。
     if (row.steps.length == 1) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: Space.x1),
@@ -83,8 +85,6 @@ class _StepGroupViewState extends State<StepGroupView> with AutomaticKeepAliveCl
                             onOpenChild: widget.onOpenChild,
                             rail: RailSpot(first: i == 0, last: i == row.steps.length - 1),
                           )
-                        else if (step is AssistantItem)
-                          _Between(child: _Note(step.text))
                         else if (step is ThinkingItem)
                           _Between(child: ThinkingRow(item: step)),
                     ],
@@ -117,9 +117,15 @@ class _GroupHeader extends StatelessWidget {
     final tools = row.tools;
     final sum = summarizeSteps(tools);
     final running = tools.where((x) => x.running).toList();
+    final thoughts = row.steps.whereType<ThinkingItem>().length;
+    final extras = [...sum.parts, if (thoughts > 0) '思考 $thoughts 段'];
+    final last = row.steps.last;
+    final thinking = row.live && running.isEmpty && last is ThinkingItem && last.streaming ? last : null;
     final String label;
     if (!row.live) {
       label = sum.line;
+    } else if (thinking != null) {
+      label = thinkingLineOf(thinking);
     } else if (running.isEmpty) {
       label = '正在想下一步…';
     } else if (running.length == 1) {
@@ -146,24 +152,34 @@ class _GroupHeader extends StatelessWidget {
               ),
               const SizedBox(width: Space.x2),
               Expanded(
-                child: Text.rich(
-                  // 做完的摘要：“执行了 N 步”是主体，后面的分项小一号、淡一点。
-                  row.live || sum.parts.isEmpty
-                      ? TextSpan(text: label)
-                      : TextSpan(
-                          text: '执行了 ${sum.total} 步',
-                          children: [
-                            TextSpan(
-                              text: ' · ${sum.parts.join(' · ')}',
-                              style: TextStyle(fontSize: FontSize.xs, color: c.textFaint),
-                            ),
-                          ],
+                child: thinking != null
+                    ? SecondTick(
+                        builder: (_) => Text(
+                          thinkingLineOf(thinking),
+                          key: const ValueKey('step-group-thinking'),
+                          style: t.bodyMedium?.copyWith(color: c.textMuted),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                  style: t.bodyMedium?.copyWith(color: c.textMuted),
-                  // 进行中只占一行；做完的摘要放不下时折到第二行，不用省略号吃掉数字。
-                  maxLines: row.live ? 1 : 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
+                      )
+                    : Text.rich(
+                        // 做完的摘要：“执行了 N 步”是主体，后面的分项小一号、淡一点。
+                        row.live || extras.isEmpty
+                            ? TextSpan(text: label)
+                            : TextSpan(
+                                text: '执行了 ${sum.total} 步',
+                                children: [
+                                  TextSpan(
+                                    text: ' · ${extras.join(' · ')}',
+                                    style: TextStyle(fontSize: FontSize.xs, color: c.textFaint),
+                                  ),
+                                ],
+                              ),
+                        style: t.bodyMedium?.copyWith(color: c.textMuted),
+                        // 进行中只占一行；做完的摘要放不下时折到第二行，不用省略号吃掉数字。
+                        maxLines: row.live ? 1 : 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
               ),
               if (row.live) ...[const SizedBox(width: Space.x2), Text('第 ${tools.length} 步', style: t.bodySmall?.copyWith(color: c.textFaint))],
               if (sum.failed > 0) ...[const SizedBox(width: Space.x2), _Flag(Icons.close, sum.failed, '步失败', c.danger)],
@@ -206,7 +222,7 @@ class _Flag extends StatelessWidget {
   );
 }
 
-/// 时间线上两步之间的东西（模型说的话、思考）：竖线从它左边穿过去不断开，内容缩进到和步骤的文字对齐。
+/// 时间线上两步之间的思考：竖线从它左边穿过去不断开，内容缩进到和步骤的文字对齐。
 class _Between extends StatelessWidget {
   const _Between({required this.child});
   final Widget child;
@@ -219,17 +235,5 @@ class _Between extends StatelessWidget {
       padding: const EdgeInsets.only(left: kRailWidth + Space.x2),
       child: child,
     ),
-  );
-}
-
-/// 模型在两步之间说的话：不套气泡，淡一点，放在它发生的位置。
-class _Note extends StatelessWidget {
-  const _Note(this.text);
-  final String text;
-
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: Space.x2),
-    child: Text(text.trim(), style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: context.colors.textMuted)),
   );
 }

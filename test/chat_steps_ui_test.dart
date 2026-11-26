@@ -82,19 +82,26 @@ void main() {
       await bootEnv(tester);
       await showRows(tester, kDoneTurn);
       // 一行摘要：文件按路径去重（读了 3 个），失败的命令照样算一条命令
-      expect(find.text('执行了 6 步 · 读 3 个文件 · 改 1 个文件 · 1 条命令'), findsOneWidget);
+      // 模型中间说了一句话，所以是前后两组
+      expect(find.text('执行了 3 步 · 读 2 个文件'), findsOneWidget);
+      expect(find.text('执行了 3 步 · 读 1 个文件 · 改 1 个文件 · 1 条命令'), findsOneWidget);
       expect(find.descendant(of: find.byKey(const ValueKey('flag-步失败')), matching: find.text('1')), findsOneWidget);
-      // 折叠着：成功的步骤和中间的话都不显示，失败的那一步露在外面
+      // 折叠着：成功的步骤不显示，失败的那一步露在外面；模型说的话是正文，一直看得见
       expect(find.text('读取 index.html'), findsNothing);
-      expect(find.text('需要加一份深色样式，再在页面里放一个按钮。'), findsNothing);
+      expect(find.text('我先看看项目里有什么。'), findsOneWidget);
+      expect(find.text('需要加一份深色样式，再在页面里放一个按钮。'), findsOneWidget);
       expect(find.text('执行 npx prettier --check .'), findsOneWidget);
       expect(find.text('失败'), findsOneWidget);
       // 正式回复在组外面
       expect(find.textContaining('已经加好 dark.css'), findsOneWidget);
       await shot(tester, '70-steps-collapsed-$suffix');
 
-      // 点摘要展开清单
+      // 点摘要展开清单（两组都展开）
       await tester.tap(find.byKey(const ValueKey('step-group-c1')));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const ValueKey('step-group-c4')));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('step-group-c4')));
       await tester.pumpAndSettle();
       for (final line in ['查看文件列表', '读取 index.html', '读取 style.css', '写入 dark.css', '执行 npx prettier --check .', '读取 app.js']) {
         expect(find.text(line), findsOneWidget, reason: line);

@@ -468,18 +468,21 @@ void main() {
         UserItem('加个深色模式'),
         ThinkingItem(thought, ms: 5300),
         ToolItem('c1', 'read_file', '{"path":"style.css"}', result: 'body { color: #222; }'),
+        ThinkingItem('文件不长，直接整份重写。', ms: 2100),
         ToolItem('c2', 'write_file', '{"path":"style.css","content":":root{}"}', result: '已写入 style.css'),
         ThinkingItem('改好了，告诉用户怎么切换。', ms: 900),
         AssistantItem('已经加好深色模式，右上角有切换按钮。'),
       ]);
-      // 折叠：步骤组一行 + 回答前的思考一行 + 回答；组里的思考不露出来
-      expect(find.text('执行了 2 步 · 读 1 个文件 · 改 1 个文件'), findsOneWidget);
-      expect(find.text('思考了 5 秒'), findsNothing);
+      // 折叠：开头的思考一行 + 步骤组一行（写着里面有 1 段思考）+ 回答前的思考一行 + 回答
+      expect(find.text('执行了 2 步 · 读 1 个文件 · 改 1 个文件 · 思考 1 段'), findsOneWidget);
+      expect(find.text('思考了 5 秒'), findsOneWidget, reason: '一轮开头的思考不再藏进折叠的步骤组');
+      expect(find.text('思考了 2 秒'), findsNothing, reason: '两步之间的思考在组里，展开才看到');
       expect(find.text('思考了不到 1 秒'), findsOneWidget);
       await shot(tester, '91-thinking-folded-$suffix');
-      // 展开步骤组：思考是清单里的一行，点开看全文
+      // 展开步骤组：两步之间的思考是清单里的一行
       await tester.tap(find.byKey(const ValueKey('step-group-c1')));
       await tester.pumpAndSettle();
+      expect(find.text('思考了 2 秒'), findsOneWidget);
       expect(find.text('思考了 5 秒'), findsOneWidget);
       await tester.tap(find.text('思考了 5 秒'));
       await tester.pumpAndSettle();
@@ -731,9 +734,10 @@ void main() {
       await waitReal(tester, () => !session.agentBusy, what: '这一轮结束');
       expect(find.text('全部检查完了。'), findsOneWidget);
       expect(find.textContaining('执行了 12 步'), findsOneWidget);
-      // 回答前的那段思考：一行
-      expect(find.byType(ThinkingRow), findsOneWidget);
-      expect(find.textContaining('思考了'), findsOneWidget);
+      // 开头的思考、回答前的思考各一行；步骤之间的 11 段在组里（摘要里写着）
+      expect(find.byType(ThinkingRow), findsNWidgets(2));
+      expect(find.textContaining('思考了'), findsNWidgets(2));
+      expect(find.textContaining('思考 11 段'), findsOneWidget);
       await shot(tester, '101-chat-thinking-done-$suffix');
 
       // 重新打开：思考从存盘的记录里重建
@@ -751,9 +755,9 @@ void main() {
         ),
       );
       await settle(tester);
-      expect(find.byType(ThinkingRow), findsOneWidget);
+      expect(find.byType(ThinkingRow), findsNWidgets(2));
       expect(find.byKey(const ValueKey('interrupted-card')), findsNothing, reason: '正常结束的不提示');
-      await tester.tap(find.byType(ThinkingRow));
+      await tester.tap(find.byType(ThinkingRow).last);
       await tester.pumpAndSettle();
       expect(find.text('可以收尾了'), findsOneWidget);
 

@@ -3,6 +3,7 @@ import 'package:lopicode/agent/agent_runner.dart' show kAppNoticeMark;
 import 'package:lopicode/agent/auto_compact.dart';
 import 'package:lopicode/agent/line_diff.dart';
 import 'package:lopicode/agent/message_ids.dart';
+import 'package:lopicode/agent/think_tags.dart';
 import 'package:lopicode/agent/usage.dart';
 import 'package:lopicode/session/chat_models.dart';
 import 'package:lopicode/session/reply_edit.dart';
@@ -48,11 +49,15 @@ List<ChatItem> chatItemsFromMessages(
         break; // 摘要后面那句承接的话：不显示
       case 'assistant':
         // 存着思考内容的（旧对话没有就不显示）：排在这一步的回复 / 工具调用前面。
-        final thought = m['_reasoning'];
+        final raw = m['content'];
+        // 旧存档里连 `<think>` 标签一起存进正文的回复：显示时剥出来（存档不动）。
+        final split = raw is String ? splitThinkTags(raw) : (text: '', thinking: '');
+        final saved = m['_reasoning'];
+        final thought = saved is String && saved.trim().isNotEmpty ? saved : split.thinking;
         final thoughtMs = m['_reasoningMs'];
-        if (thought is String && thought.trim().isNotEmpty) items.add(ThinkingItem(thought, ms: thoughtMs is int ? thoughtMs : null));
-        final text = m['content'];
-        if (text is String && text.isNotEmpty) items.add(AssistantItem(text, id: messageIdOf(m), edited: isEditedMessage(m)));
+        if (thought.trim().isNotEmpty) items.add(ThinkingItem(thought, ms: thoughtMs is int ? thoughtMs : null));
+        final text = split.text;
+        if (text.isNotEmpty) items.add(AssistantItem(text, id: messageIdOf(m), edited: isEditedMessage(m)));
         final calls = m['tool_calls'];
         final links = m[kChildLinksKey];
         for (final c in calls is List ? calls : const []) {

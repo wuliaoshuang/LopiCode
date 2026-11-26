@@ -39,6 +39,46 @@ String formatThinkingSpan(int ms) {
   return s < 60 ? '$s 秒' : '${s ~/ 60} 分 ${s % 60} 秒';
 }
 
+/// 思考那一行写什么：还在想＝“正在思考… N 秒”，想完＝“思考了 N 秒”（旧记录没存用时就只写“思考过程”）。
+String thinkingLineOf(ThinkingItem item) {
+  if (item.streaming) {
+    final from = item.startedAt;
+    final secs = from == null ? 0 : DateTime.now().difference(from).inSeconds;
+    return secs < 1 ? '正在思考…' : '正在思考… $secs 秒';
+  }
+  return item.ms == null ? '思考过程' : (item.ms! < 1000 ? '思考了不到 1 秒' : '思考了 ${formatThinkingSpan(item.ms!)}');
+}
+
+/// 每秒重画一次里面的东西（给“已经想了几秒”这种自己会变的字用）。
+class SecondTick extends StatefulWidget {
+  const SecondTick({super.key, required this.builder});
+  final WidgetBuilder builder;
+
+  @override
+  State<SecondTick> createState() => _SecondTickState();
+}
+
+class _SecondTickState extends State<SecondTick> {
+  late final Timer _tick;
+
+  @override
+  void initState() {
+    super.initState();
+    _tick = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _tick.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.builder(context);
+}
+
 /// 一段思考：一行，点开看全文。
 class ThinkingRow extends StatefulWidget {
   const ThinkingRow({super.key, required this.item});
@@ -87,14 +127,7 @@ class _ThinkingRowState extends State<ThinkingRow> {
     final c = context.colors;
     final t = Theme.of(context).textTheme;
     final item = widget.item;
-    final String label;
-    if (item.streaming) {
-      final from = item.startedAt;
-      final secs = from == null ? 0 : DateTime.now().difference(from).inSeconds;
-      label = secs < 1 ? '正在思考…' : '正在思考… $secs 秒';
-    } else {
-      label = item.ms == null ? '思考过程' : (item.ms! < 1000 ? '思考了不到 1 秒' : '思考了 ${formatThinkingSpan(item.ms!)}');
-    }
+    final label = thinkingLineOf(item);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
