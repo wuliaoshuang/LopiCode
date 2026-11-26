@@ -2,8 +2,10 @@
 // - 内容主次：一行一个事件。有逻辑的写“N 块积木 ›”，整行可点（进积木编辑器）；没逻辑的右边是一个“＋ 加逻辑”。
 // - 唯一主操作：没有——“＋ 加逻辑”是描边的次要按钮，一页可能有两三个。
 // - “加逻辑”替她把“当 某某 被点击”那块帽子建好再跳过去，不用她自己去积木盒里找。
-// - 下面一组“快捷动作（不用进积木）”：一行一个最常见的事（点击时打开网址 / 弹出提示），右边是现在填的值或“设置”；
+// - 下面一组“快捷动作（不用进积木）”：一行一个最常见的事（点击时打开网址 / 弹出提示 / 打开弹窗 / 关闭弹窗），右边是现在填的值或“设置”；
 //   点了弹一个填字的框，清空＝去掉。存下来的就是普通积木（见 quick_actions.dart），上面那行的积木数会跟着变。
+// - 打开 / 关闭弹窗不填字：点了出一张单子，一行一个页面里的弹窗（写它的标题），最下面一行“不要这个动作”。
+//   页面里还没有弹窗时这两行是灰的，右边写“先加一个弹窗”，点不动。
 // - 取用的 tokens：Space.x2/x3、textMuted、textFaint、accent、border。
 import 'package:lopicode/lowcode/edit_types.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
@@ -86,29 +88,41 @@ class InspectorEventsPage extends StatelessWidget {
           for (final a in kLcQuickActions)
             () {
               final value = lcQuickValue(doc, node.id, a);
+              final dialogs = a.picksDialog ? lcDialogsOf(doc) : const <LcNode>[];
+              final off = a.picksDialog && dialogs.isEmpty && value == null;
+              final picked = a.picksDialog && value != null ? doc.find(value) : null;
+              final shown = !a.picksDialog
+                  ? value
+                  : value == null
+                  ? null
+                  : (picked?.type == 'dialog' ? lcDialogName(picked!) : '弹窗已经删了');
               return InkWell(
-                key: Key('lc-quick-${a.op}'),
-                onTap: () async {
-                  final v = await promptDialog(context, title: a.label, initial: value ?? '', hint: '${a.hint}（清空＝不要这个动作）', confirmLabel: '保存');
-                  if (v == null) return;
-                  onEdit!((d) => lcSetQuick(d, node.id, a, v));
-                },
+                key: Key('lc-quick-${a.id}'),
+                onTap: off
+                    ? null
+                    : () async {
+                        final v = a.picksDialog
+                            ? await _pickDialog(context, a.label, dialogs, value)
+                            : await promptDialog(context, title: a.label, initial: value ?? '', hint: '${a.hint}（清空＝不要这个动作）', confirmLabel: '保存');
+                        if (v == null) return;
+                        onEdit!((d) => lcSetQuick(d, node.id, a, v));
+                      },
                 child: SizedBox(
                   height: 48,
                   child: Row(
                     children: [
-                      Text(a.label, style: t.bodyLarge),
+                      Text(a.label, style: t.bodyLarge?.copyWith(color: off ? c.textFaint : null)),
                       const SizedBox(width: Space.x3),
                       Expanded(
                         child: Text(
-                          value ?? '设置',
+                          off ? '先加一个弹窗' : shown ?? '设置',
                           textAlign: TextAlign.right,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: t.bodyMedium?.copyWith(color: value == null ? c.accent : c.textMuted),
+                          style: t.bodyMedium?.copyWith(color: off ? c.textFaint : (value == null ? c.accent : c.textMuted)),
                         ),
                       ),
-                      Icon(Icons.chevron_right, size: 20, color: c.textMuted),
+                      if (!off) Icon(Icons.chevron_right, size: 20, color: c.textMuted),
                     ],
                   ),
                 ),
@@ -121,3 +135,38 @@ class InspectorEventsPage extends StatelessWidget {
     );
   }
 }
+
+/// 选页面里的哪个弹窗。返回弹窗的 id；选“不要这个动作”返回空字；没选（点外面关掉）返回 null。
+Future<String?> _pickDialog(BuildContext context, String title, List<LcNode> dialogs, String? current) => showModalBottomSheet<String>(
+  context: context,
+  builder: (context) {
+    final c = context.colors;
+    final t = Theme.of(context).textTheme;
+    return SafeArea(
+      child: ListView(
+        shrinkWrap: true,
+        padding: const EdgeInsets.symmetric(vertical: Space.x3),
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(Space.x4, Space.x2, Space.x4, Space.x2),
+            child: Text(title, style: t.titleMedium),
+          ),
+          for (final (i, d) in dialogs.indexed)
+            ListTile(
+              key: Key('lc-quick-dialog-$i'),
+              leading: Icon(Icons.web_asset_outlined, color: c.textMuted),
+              title: Text(lcDialogName(d)),
+              trailing: d.id == current ? Icon(Icons.check, color: c.accent) : null,
+              onTap: () => Navigator.pop(context, d.id),
+            ),
+          if (current != null)
+            ListTile(
+              key: const Key('lc-quick-dialog-none'),
+              title: Text('不要这个动作', style: TextStyle(color: c.danger)),
+              onTap: () => Navigator.pop(context, ''),
+            ),
+        ],
+      ),
+    );
+  },
+);

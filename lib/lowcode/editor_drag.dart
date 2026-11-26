@@ -18,7 +18,7 @@ const double kDropLineWidth = 3;
 
 /// 量好的一个组件：在页面上占哪一块、是不是能放东西的容器、里面怎么排。
 class DropBox {
-  const DropBox({required this.id, required this.label, required this.rect, this.container = false, this.row = false, this.reverse = false, this.children = const []});
+  const DropBox({required this.id, required this.label, required this.rect, this.container = false, this.row = false, this.reverse = false, this.grid = false, this.children = const []});
   final String id;
 
   /// 显示用的名字（“卡片”“页面”）。
@@ -35,6 +35,9 @@ class DropBox {
 
   /// 里面是不是倒着排（row-reverse / column-reverse）。
   final bool reverse;
+
+  /// 里面是不是网格（一行排几个，排满换行）。
+  final bool grid;
   final List<DropBox> children;
 }
 
@@ -111,6 +114,7 @@ DropTarget _targetIn(DropBox box, Offset point, {required String? movingId, requ
   if (kids.isEmpty) {
     return DropTarget(parentId: box.id, index: 0, parentLabel: box.label, parentRect: box.rect, ordinal: 1, inside: true);
   }
+  if (box.grid) return _targetInGrid(box, point, movingId: movingId, inside: inside);
   double main(Offset o) => box.row ? o.dx : o.dy;
   // 手指越过了几个子项的中点（倒着排的容器里反过来数）。
   var passed = 0;
@@ -152,6 +156,28 @@ DropTarget _targetIn(DropBox box, Offset point, {required String? movingId, requ
     final y = at.clamp(outer.top + half, outer.bottom - half).toDouble();
     line = Rect.fromLTRB(ref.left.clamp(outer.left, outer.right).toDouble(), y - half, ref.right.clamp(outer.left, outer.right).toDouble(), y + half);
   }
+  return DropTarget(parentId: box.id, index: index, parentLabel: box.label, parentRect: box.rect, ordinal: ordinal, line: line, noop: noop, inside: inside);
+}
+
+/// 网格里的落点：格子按“从上到下、一行里从左到右”数；手指越过了几个格子就插在第几个。
+/// 蓝线是竖的：画在手指所在那一行里、后一个格子的左边（那一行后面没有格子了就画在前一个格子的右边）。
+DropTarget _targetInGrid(DropBox box, Offset point, {required String? movingId, required bool inside}) {
+  final kids = box.children;
+  bool before(Rect r) => r.bottom <= point.dy || (r.top <= point.dy && r.center.dx < point.dx);
+  var index = 0;
+  while (index < kids.length && before(kids[index].rect)) {
+    index++;
+  }
+  final self = movingId == null ? -1 : kids.indexWhere((k) => k.id == movingId);
+  final noop = self >= 0 && (index == self || index == self + 1);
+  final ordinal = index + 1 - (self >= 0 && self < index ? 1 : 0);
+  final next = index < kids.length ? kids[index].rect : null;
+  final prev = index > 0 ? kids[index - 1].rect : null;
+  const half = kDropLineWidth / 2;
+  final sameRow = next != null && next.top <= point.dy && point.dy < next.bottom;
+  final ref = sameRow || prev == null ? next! : prev;
+  final x = (identical(ref, next) ? ref.left - kDropLineWidth : ref.right + kDropLineWidth).clamp(box.rect.left + half, box.rect.right - half).toDouble();
+  final line = Rect.fromLTRB(x - half, ref.top, x + half, ref.bottom);
   return DropTarget(parentId: box.id, index: index, parentLabel: box.label, parentRect: box.rect, ordinal: ordinal, line: line, noop: noop, inside: inside);
 }
 

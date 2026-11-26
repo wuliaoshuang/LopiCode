@@ -4,6 +4,7 @@ import 'package:lopicode/lowcode/component_model.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 import 'package:lopicode/lowcode/model_props.dart';
 import 'package:lopicode/lowcode/model_v3_components.dart';
+import 'package:lopicode/lowcode/slots.dart';
 
 export 'package:lopicode/lowcode/model_history.dart';
 
@@ -519,6 +520,7 @@ class LcDocument {
     if (parent == null || !parent.isContainer || node.type == 'page') return false;
     final i = (index ?? parent.children.length).clamp(0, parent.children.length);
     parent.children.insert(i, node);
+    lcSettleSlot(parent, node, i);
     _normalizeIds();
     return true;
   }
@@ -541,7 +543,9 @@ class LcDocument {
     oldParent.children.removeAt(oldIndex);
     var i = index;
     if (identical(oldParent, newParent) && oldIndex < index) i -= 1;
-    newParent.children.insert(i.clamp(0, newParent.children.length), node);
+    final at = i.clamp(0, newParent.children.length);
+    newParent.children.insert(at, node);
+    lcSettleSlot(newParent, node, at);
     return true;
   }
 

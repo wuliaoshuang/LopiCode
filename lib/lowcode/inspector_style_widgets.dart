@@ -68,8 +68,11 @@ class StyleTabStrip extends StatelessWidget {
 
 /// “样式”页的内容：选中的那个分组 + 自定义 CSS。
 class InspectorStylePage extends StatelessWidget {
-  const InspectorStylePage({super.key, required this.ed, required this.tab, required this.dropped, required this.onDismissDropped});
+  const InspectorStylePage({super.key, required this.ed, required this.tab, required this.dropped, required this.onDismissDropped, this.top});
   final StyleEdit ed;
+
+  /// 最上面的一行（“状态”那一行）。
+  final Widget? top;
   final StyleTab tab;
 
   /// 上次“应用 CSS”时没收下的条目。
@@ -85,6 +88,7 @@ class InspectorStylePage extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        ?top,
         if (dropped.isNotEmpty) ...[
           Stack(
             children: [

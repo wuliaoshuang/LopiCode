@@ -261,7 +261,7 @@ class AgentToolbox {
       {
         'page': {
           'type': 'object',
-          'description': '完整的页面对象：{title, root, logic?, components?}，root.type 必须是 page；节点可带 style（CSS 声明表）、name（名字）；读到的不认识的字段原样带回、不要删。logic（积木逻辑）/ components（自定义组件）不传就沿用现有的，要清空请传 {} / []',
+          'description': '完整的页面对象：{title, root, logic?, components?}，root.type 必须是 page；节点可带 style（CSS 声明表）、name（名字）；读到的不认识的字段原样带回、不要删。除原有的节点类型外还有 11 种：icon{icon,size,color}、textarea{placeholder,rows,value}、switch{checked}、checkbox{text,checked}、radio{options:[{value,label}],value}、select{options:[{value,label}],value,placeholder}、listItem{title,subtitle,chevron}（插槽 left / right）、appBar{title}（插槽 left / right）、bottomNav{items:[{icon,label}],current}、tabs{tabs:[{id,label}],current}（每个页签的 id 就是一个插槽）、dialog{title,text,okText,cancelText,variant,open,dismissible}（插槽 content / footer）。放进带插槽组件里的子节点用节点上的 slot 字段指明放哪个插槽；拿不准某个属性时先用 lowcode_get_page 看现有页面的写法。logic（积木逻辑）/ components（自定义组件）不传就沿用现有的，要清空请传 {} / []',
         },
       },
       ['page'],

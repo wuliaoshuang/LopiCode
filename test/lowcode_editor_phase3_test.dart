@@ -694,6 +694,7 @@ void main() {
       expect(button.width, lessThan(120), reason: '这个按钮本来就比以前的最小宽度窄');
       expect(edit.width, closeTo(button.width, 1), reason: '框和按钮一样宽');
       expect(edit.left, closeTo(button.left, 1));
+      expect(tester.getRect(k('lc-inline-edit')).center.dy, closeTo(edit.center.dy, 1), reason: '字在框里上下居中，不贴着上沿');
       expect(kInlineEditMinWidth, lessThan(48));
       await shot(tester, '19-inline-edit-small-button');
       // 字打多了跟着变宽，不超出屏幕。
@@ -726,6 +727,7 @@ void main() {
       expect(k('lc-preset-padding-now'), findsOneWidget);
       expect(k('lc-scale-padding-16'), findsOneWidget);
       expect(find.descendant(of: k('lc-preset-padding-more'), matching: find.text('收起')), findsOneWidget);
+      await show(tester, k('lc-scale-padding-16')); // 展开的那条刻度滚进屏幕再截
       await shot(tester, '22-preset-open');
       await show(tester, k('lc-scale-padding-16'));
       await tap(tester, k('lc-scale-padding-16'));

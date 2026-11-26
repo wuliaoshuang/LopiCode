@@ -16,7 +16,8 @@ import 'package:material_ui/material_ui.dart';
 /// 输入框类型给人看的名字（顺序就是那一行里从左到右的顺序）。
 const Map<String, String> kLcInputTypeLabels = {'text': '文字', 'password': '密码', 'number': '数字', 'email': '邮箱', 'tel': '电话'};
 
-void _setOrDrop(LcNode n, String prop, Object? value) {
+/// 写一个内容属性；空的 / 关掉＝把这个键去掉。
+void lcSetOrDrop(LcNode n, String prop, Object? value) {
   if (value == null || value == false || value == '') {
     n.props.remove(prop);
   } else {
@@ -24,38 +25,51 @@ void _setOrDrop(LcNode n, String prop, Object? value) {
   }
 }
 
-Widget _switchRow(InspectorEdit ed, String prop, String label) => InspectorRow(
+/// 一行开关。[whenUnset]＝这个键没写时算开还是关（默认关）；拨到和它一样就把键去掉。
+Widget lcSwitchRow(InspectorEdit ed, String prop, String label, {bool whenUnset = false}) => InspectorRow(
   label: label,
   scroll: false,
   child: Align(
     alignment: Alignment.centerLeft,
-    child: Switch(key: Key('lc-common-$prop'), value: ed.node.props[prop] == true, onChanged: (v) => ed.apply((n, _) => _setOrDrop(n, prop, v))),
+    child: Switch(
+      key: Key('lc-common-$prop'),
+      value: ed.node.props[prop] is bool ? ed.node.props[prop] as bool : whenUnset,
+      onChanged: (v) => ed.apply((n, _) {
+        if (v == whenUnset) {
+          n.props.remove(prop);
+        } else {
+          n.props[prop] = v;
+        }
+      }),
+    ),
   ),
 );
 
-/// 按钮：图标、禁用。
-List<Widget> lcButtonV3Rows(BuildContext context, InspectorEdit ed) {
+/// 一行“图标”：点开选图标的面板。[required]＝必须有一个（图标组件）：选“不要图标”不改。
+Widget lcIconRow(BuildContext context, InspectorEdit ed, {bool required = false}) {
   final icon = lcIconByName(ed.node.strProp('icon'));
-  return [
-    InspectorRow(
-      label: '图标',
-      scroll: false,
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: OutlinedButton.icon(
-          key: const Key('lc-common-icon'),
-          onPressed: () async {
-            final picked = await showLcIconPicker(context, selected: icon?.name);
-            if (picked == null) return;
-            ed.apply((n, _) => _setOrDrop(n, 'icon', picked.isEmpty ? null : picked));
-          },
-          icon: Icon(icon == null ? Icons.add : lcIconData[icon.name], size: 18),
-          label: Text(icon == null ? '选一个' : icon.label),
-        ),
+  return InspectorRow(
+    label: '图标',
+    scroll: false,
+    child: Align(
+      alignment: Alignment.centerLeft,
+      child: OutlinedButton.icon(
+        key: const Key('lc-common-icon'),
+        onPressed: () async {
+          final picked = await showLcIconPicker(context, selected: icon?.name);
+          if (picked == null || (required && picked.isEmpty)) return;
+          ed.apply((n, _) => lcSetOrDrop(n, 'icon', picked.isEmpty ? null : picked));
+        },
+        icon: Icon(icon == null ? Icons.add : lcIconData[icon.name], size: 18),
+        label: Text(icon == null ? '选一个' : icon.label),
       ),
     ),
-    _switchRow(ed, 'disabled', '禁用'),
-  ];
+  );
+}
+
+/// 按钮：图标、禁用。
+List<Widget> lcButtonV3Rows(BuildContext context, InspectorEdit ed) {
+  return [lcIconRow(context, ed), lcSwitchRow(ed, 'disabled', '禁用')];
 }
 
 /// 图片：说明文字（看不见图的人、图没加载出来时读到的那句话）。
@@ -68,28 +82,32 @@ List<Widget> lcInputV3Rows(InspectorEdit ed) => [
     label: '类型',
     options: kLcInputTypeLabels,
     selected: ed.node.strProp('inputType') ?? 'text',
-    onChanged: (v) => ed.apply((n, _) => _setOrDrop(n, 'inputType', v == 'text' ? null : v)),
+    onChanged: (v) => ed.apply((n, _) => lcSetOrDrop(n, 'inputType', v == 'text' ? null : v)),
   ),
   LcPropTextRow(ed: ed, prop: 'value', label: '默认值', hint: '一打开就填着的字'),
   LcPropTextRow(ed: ed, prop: 'label', label: '标签', hint: '输入框上面的那行字'),
-  _switchRow(ed, 'required', '必填'),
-  _switchRow(ed, 'disabled', '禁用'),
+  lcSwitchRow(ed, 'required', '必填'),
+  lcSwitchRow(ed, 'disabled', '禁用'),
 ];
 
 /// 一行文字属性：打字就生效（连着打算一条撤销），清空＝把这个属性去掉。
 class LcPropTextRow extends StatefulWidget {
-  const LcPropTextRow({super.key, required this.ed, required this.prop, required this.label, this.hint});
+  const LcPropTextRow({super.key, required this.ed, required this.prop, required this.label, this.hint, this.maxLines = 1, this.number = false});
   final InspectorEdit ed;
   final String prop;
   final String label;
   final String? hint;
+  final int maxLines;
+
+  /// 这一项是个正整数（最多几个字）：只收数字，写成数；空的、0＝把这个属性去掉。
+  final bool number;
 
   @override
   State<LcPropTextRow> createState() => _LcPropTextRowState();
 }
 
 class _LcPropTextRowState extends State<LcPropTextRow> {
-  late final TextEditingController _text = TextEditingController(text: widget.ed.node.strProp(widget.prop) ?? '');
+  late final TextEditingController _text = TextEditingController(text: widget.number ? '${widget.ed.node.numProp(widget.prop)?.round() ?? ''}' : widget.ed.node.strProp(widget.prop) ?? '');
 
   @override
   void dispose() {
@@ -104,8 +122,14 @@ class _LcPropTextRowState extends State<LcPropTextRow> {
     child: TextField(
       key: Key('lc-common-${widget.prop}'),
       controller: _text,
+      minLines: 1,
+      maxLines: widget.maxLines,
+      keyboardType: widget.number ? TextInputType.number : null,
       decoration: InputDecoration(isDense: true, hintText: widget.hint),
-      onChanged: (v) => widget.ed.apply((n, _) => _setOrDrop(n, widget.prop, v), merge: true),
+      onChanged: (v) => widget.ed.apply((n, _) {
+        final count = int.tryParse(v.trim());
+        lcSetOrDrop(n, widget.prop, widget.number ? (count != null && count >= 1 && count <= 100000 ? count : null) : v);
+      }, merge: true),
     ),
   );
 }

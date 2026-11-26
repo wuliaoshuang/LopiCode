@@ -26,6 +26,7 @@ import 'package:lopicode/lowcode/multi_select_widgets.dart';
 import 'package:lopicode/lowcode/node_actions.dart';
 import 'package:lopicode/lowcode/palette_catalog.dart';
 import 'package:lopicode/lowcode/palette_widgets.dart';
+import 'package:lopicode/lowcode/slots.dart';
 import 'package:lopicode/lowcode/style_model.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/shell.dart';
@@ -209,11 +210,17 @@ class _ComponentEditorState extends State<_ComponentEditor> with LcMultiSelectHo
     return node;
   }
 
+  static const _noDialog = '弹窗是整页的东西，不能放进组件里。请回到页面上加弹窗。';
+
   String? _addByTap(String type, [String? ref]) {
     final top = _top;
     final sel = _selected == null ? null : _temp.find(_selected!);
     final target = sel ?? top;
     if (target == null) return null;
+    if (type == 'dialog') {
+      unawaited(tellComponentProblem(context, _noDialog));
+      return null;
+    }
     final node = _fresh(type, ref);
     if (target.isContainer) {
       _apply((d) => d.insert(target.id, node));
@@ -231,12 +238,16 @@ class _ComponentEditorState extends State<_ComponentEditor> with LcMultiSelectHo
 
   void _drop(LcDrag drag, String parentId, int index) {
     if (multiDrop(drag, parentId, index)) return;
+    if (drag.type == 'dialog') {
+      unawaited(tellComponentProblem(context, _noDialog));
+      return;
+    }
     if (drag.type != null) {
       final node = _fresh(drag.type!, drag.ref);
-      _apply((d) => d.insert(parentId, node, index));
+      _apply((d) => lcInsertAt(d, parentId, node, index));
       if (_temp.find(node.id) != null) setState(() => _selected = node.id);
     } else {
-      _apply((d) => d.move(drag.nodeId!, parentId, index));
+      _apply((d) => lcMoveTo(d, drag.nodeId!, parentId, index));
       if (_temp.find(drag.nodeId!) != null) setState(() => _selected = drag.nodeId);
     }
   }
@@ -249,7 +260,7 @@ class _ComponentEditorState extends State<_ComponentEditor> with LcMultiSelectHo
     if (drag.nodeId == null) return true;
     final node = _temp.find(drag.nodeId!);
     if (node == null) return false;
-    bool contains(LcNode n) => n.id == parentId || n.children.any(contains);
+    bool contains(LcNode n) => n.id == lcSplitSlotId(parentId).$1 || n.children.any(contains);
     return !contains(node);
   }
 

@@ -12,7 +12,10 @@ import 'package:material_ui/material_ui.dart';
 
 /// 面板交给各分组的“当前样子”和“怎么改”。每次重画换一份，分组自己不存样式。
 class StyleEdit {
-  const StyleEdit({required this.node, required this.own, required this.resolved, required this.apply});
+  const StyleEdit({required this.node, required this.own, required this.resolved, required this.apply, this.parentColumns});
+
+  /// 它放在网格里：那个网格一共几列；不在网格里是 null。
+  final int? parentColumns;
 
   /// 只用来看类型（是不是容器、是不是行）。样式不要从这里读，读 [own] / [resolved]。
   final LcNode node;

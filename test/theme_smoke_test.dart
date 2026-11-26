@@ -47,6 +47,7 @@ import 'support/backend_func_blocks.dart' as fb;
 import 'support/backend_lang_blocks.dart' as bk;
 import 'support/harness.dart';
 import 'support/runtime_fakes.dart';
+import 'support/v3_components_sample.dart';
 
 final bool writeShots = Platform.environment['LOPI_SHOTS'] == '1';
 final String shotDir = Platform.environment['LOPI_SHOT_DIR'] ?? '.tmp/theme-shots';
@@ -552,6 +553,65 @@ void main() {
         await shot(tester, 'lowcode-multi-style');
         await back();
         await tap(key('lc-multi-done'));
+      });
+
+      testWidgets('低代码编辑器 · 11 个新组件的新界面：全组件页、选项编辑块、状态行、网格设置、弹窗动作、只看这个弹层', (tester) async {
+        final (env, project, session) = await open(
+          tester,
+          ProjectTemplate.lowcode,
+          before: (project) => File(p.join(project.dir, kLowcodePageFile)).writeAsStringSync(const JsonEncoder.withIndent('  ').convert(v3AllPage().toJson())),
+        );
+        await show(tester, env, ProjectShell(project: project, session: session, initial: ShellDest.builder));
+        Finder key(String k) => find.byKey(ValueKey(k));
+        Future<void> tap(Finder f) async {
+          await tester.ensureVisible(f);
+          await tester.pump();
+          await tester.tap(f, warnIfMissed: false);
+          await tester.pumpAndSettle();
+        }
+
+        Future<void> pick(String id) async {
+          await tester.tap(key('lowcode-node-$id'), warnIfMissed: false);
+          await settle(tester, rounds: 2);
+        }
+
+        await shot(tester, 'lowcode-v3-components');
+        // 选项编辑块（单选组）。
+        await pick('rd');
+        await tester.tap(find.text('常用').last);
+        await tester.pumpAndSettle();
+        expect(key('lc-items-options'), findsOneWidget);
+        await shot(tester, 'lowcode-v3-options');
+        // 状态行、网格设置（样式页 › 布局）。
+        await tester.tap(find.text('样式').last);
+        await tester.pumpAndSettle();
+        await tap(key('lc-state-pressed'));
+        expect(key('lc-state-note'), findsOneWidget);
+        await shot(tester, 'lowcode-v3-state');
+        await tap(key('lc-state-normal'));
+        // 事件页：打开 / 关闭弹窗。
+        await pick('open');
+        await tester.tap(find.text('事件').last);
+        await tester.pumpAndSettle();
+        await tap(key('lc-quick-closeDialog'));
+        expect(key('lc-quick-dialog-0'), findsOneWidget);
+        await shot(tester, 'lowcode-v3-quick-dialog');
+        await tester.binding.handlePopRoute();
+        await tester.pumpAndSettle();
+        // 只看这个弹层。
+        await tester.binding.handlePopRoute();
+        await tester.pumpAndSettle();
+        await settle(tester, rounds: 2);
+        // 弹窗的小标签在长页面最下面，从图层里点它。
+        await tester.tap(find.byTooltip('图层'));
+        await tester.pumpAndSettle();
+        await tap(key('lc-layer-dlg'));
+        await tester.tapAt(const Offset(195, 60));
+        await settle(tester, rounds: 3);
+        expect(key('lc-overlay-bar'), findsOneWidget);
+        await shot(tester, 'lowcode-v3-overlay');
+        await tap(key('lc-overlay-exit'));
+        expect(key('lc-overlay-bar'), findsNothing);
       });
 
       // 打包页（本地表单、进行中、成功、失败、不适用、钥匙页、两种远程方式）在 test/theme_pack_smoke_test.dart。

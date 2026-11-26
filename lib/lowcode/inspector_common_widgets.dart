@@ -7,6 +7,7 @@
 // - 取用的 tokens：Space.x2/x3/x4、textMuted（名字）、textFaint（说明小字）。
 import 'package:lopicode/lowcode/component_values_widgets.dart';
 import 'package:lopicode/lowcode/inspector_presets_widgets.dart';
+import 'package:lopicode/lowcode/inspector_v3_components_widgets.dart';
 import 'package:lopicode/lowcode/inspector_v3_rows_widgets.dart';
 import 'package:lopicode/lowcode/inspector_write.dart';
 import 'package:lopicode/lowcode/model.dart';
@@ -390,7 +391,7 @@ class _InspectorCommonPageState extends State<InspectorCommonPage> {
           {'width', 'margin'},
         );
       default:
-        return (const [], const {});
+        return lcV3ComponentRows(context, ed, color: _color, more: _more) ?? (const [], const {});
     }
   }
 

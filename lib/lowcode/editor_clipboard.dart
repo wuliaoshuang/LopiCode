@@ -147,6 +147,7 @@ String? wrapInContainer(LcDocument doc, String nodeId) {
     ..remove('gap');
   // 原来占满一行的照样占满；原来随内容宽的，容器也随内容宽。
   if (node.props['width'] != 'fill' && !node.isContainer) box.props.remove('width');
+  box.slot = node.slot; // 包的是插槽里的组件：容器顶替它留在那个插槽里
   if (!doc.insert(parent.id, box, parent.children.indexOf(node))) return null;
   if (!doc.move(nodeId, box.id, 0)) {
     doc.remove(box.id);

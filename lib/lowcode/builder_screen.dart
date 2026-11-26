@@ -34,11 +34,11 @@ import 'package:lopicode/lowcode/logic_edit.dart';
 import 'package:lopicode/lowcode/logic_screen.dart';
 import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/lowcode/multi_select_widgets.dart';
-import 'package:lopicode/lowcode/newer_notice_widgets.dart';
 import 'package:lopicode/lowcode/node_actions.dart';
 import 'package:lopicode/lowcode/palette_catalog.dart';
 import 'package:lopicode/lowcode/palette_widgets.dart';
 import 'package:lopicode/lowcode/save_queue.dart';
+import 'package:lopicode/lowcode/slots.dart';
 import 'package:lopicode/lowcode/style_model.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/theme/tokens.dart';
@@ -197,9 +197,10 @@ class _BuilderScreenState extends State<BuilderScreen> with WidgetsBindingObserv
     final node = doc.newNode(type);
     if (ref != null) node.props['ref'] = ref; // 自定义组件的实例
     _apply((d) {
-      if (sel != null && sel.isContainer) {
+      if (sel != null && sel.isContainer && type != 'dialog') {
         d.insert(sel.id, node);
-      } else if (sel != null) {
+      } else if (sel != null && sel.id != d.root.id && type != 'dialog') {
+        // 弹窗是整页的东西：永远加在页面最后
         final parent = d.parentOf(sel.id)!;
         d.insert(parent.id, node, parent.children.indexOf(sel) + 1);
       } else {
@@ -215,10 +216,10 @@ class _BuilderScreenState extends State<BuilderScreen> with WidgetsBindingObserv
     if (drag.type != null) {
       final node = _doc!.newNode(drag.type!);
       if (drag.ref != null) node.props['ref'] = drag.ref;
-      _apply((d) => d.insert(parentId, node, index));
+      _apply((d) => lcInsertAt(d, parentId, node, index));
       setState(() => _selected = node.id);
     } else {
-      _apply((d) => d.move(drag.nodeId!, parentId, index));
+      _apply((d) => lcMoveTo(d, drag.nodeId!, parentId, index));
       setState(() => _selected = drag.nodeId);
     }
   }
@@ -230,7 +231,7 @@ class _BuilderScreenState extends State<BuilderScreen> with WidgetsBindingObserv
     final node = _doc!.find(drag.nodeId!);
     if (node == null) return false;
     // 不能拖进自己或自己的后代里
-    bool contains(LcNode n) => n.id == parentId || n.children.any(contains);
+    bool contains(LcNode n) => n.id == lcSplitSlotId(parentId).$1 || n.children.any(contains);
     return !contains(node);
   }
 
@@ -496,36 +497,33 @@ class _BuilderScreenState extends State<BuilderScreen> with WidgetsBindingObserv
           ? const Center(child: CircularProgressIndicator())
           : LcImageScope(
               resolve: _images.resolve,
-              child: LcNewerNoticeHost(
+              child: EditorWorkbench(
+                key: _bench,
+                onEdit: _apply,
+                pickImage: (from) => _images.pick(context, from),
+                onOpenLogic: (id) => unawaited(_openLogic(id)),
+                onAddLogic: _addLogic,
+                onNodeMenu: (id, at) => unawaited(_nodeMenu(id, at)),
                 doc: doc,
-                child: EditorWorkbench(
-                  key: _bench,
-                  onEdit: _apply,
-                  pickImage: (from) => _images.pick(context, from),
-                  onOpenLogic: (id) => unawaited(_openLogic(id)),
-                  onAddLogic: _addLogic,
-                  onNodeMenu: (id, at) => unawaited(_nodeMenu(id, at)),
-                  doc: doc,
-                  selected: multiOn ? null : _selected,
-                  marked: multiIds,
-                  onSelect: (id) => multiOn ? multiTap(id) : setState(() => _selected = id),
-                  onAdd: _addByTap,
-                  onDrop: _drop,
-                  canDrop: _canDrop,
-                  onDelete: (id) {
-                    final n = doc.find(id);
-                    if (n != null && !multiDeleteDragged(id)) unawaited(_delete(n));
-                  },
-                  onResize: _resize,
-                  recents: _recents,
-                  onLayers: () => unawaited(_openLayers()),
-                  onUndo: history!.canUndo ? () => _restore(history.undo()) : null,
-                  onRedo: history.canRedo ? () => _restore(history.redo()) : null,
-                  onPreview: () => unawaited(_preview()),
-                  presetWidth: _presetWidth,
-                  showBoxModel: _showBoxModel,
-                  selectionBar: multiOn ? multiBar() : (node == null ? null : _selectionBar(node)),
-                ),
+                selected: multiOn ? null : _selected,
+                marked: multiIds,
+                onSelect: (id) => multiOn ? multiTap(id) : setState(() => _selected = id),
+                onAdd: _addByTap,
+                onDrop: _drop,
+                canDrop: _canDrop,
+                onDelete: (id) {
+                  final n = doc.find(id);
+                  if (n != null && !multiDeleteDragged(id)) unawaited(_delete(n));
+                },
+                onResize: _resize,
+                recents: _recents,
+                onLayers: () => unawaited(_openLayers()),
+                onUndo: history!.canUndo ? () => _restore(history.undo()) : null,
+                onRedo: history.canRedo ? () => _restore(history.redo()) : null,
+                onPreview: () => unawaited(_preview()),
+                presetWidth: _presetWidth,
+                showBoxModel: _showBoxModel,
+                selectionBar: multiOn ? multiBar() : (node == null ? null : _selectionBar(node)),
               ),
             ),
     );

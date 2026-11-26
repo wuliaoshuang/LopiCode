@@ -1,10 +1,13 @@
 // 设计约束（样式面板分组内容之二：阴影、布局、定位；390×844）
 // - 阴影：第一行是总开关，开了才出现下面的数值；面板改不了的写法（多层）只显示原文并说明去哪里改。
+// - 布局：容器第一行是“排法（弹性 / 网格）”，选网格时下面换成列数、列间距、行间距（见 style_grid_widgets.dart）；放在网格里的组件多一行“跨几列”。
 // - 布局：容器才有“里面怎么排”的那几行；任何组件都有“自己在父容器里怎么放”的几行。两段之间用小标题分开。
 // - 定位：没选定位方式时不摆“上右下左”（设了也不起作用），只说一句为什么。
 // - 五六个选项的按钮组（主轴分布、交叉轴对齐、定位方式）标签在上、占满一行；用文字不用图标——
 //   这几个选项的图标（两端 / 环绕 / 均分）在手机上分不清。
+import 'package:lopicode/lowcode/grid_css.dart';
 import 'package:lopicode/lowcode/style_controls_widgets.dart';
+import 'package:lopicode/lowcode/style_grid_widgets.dart';
 import 'package:lopicode/lowcode/style_model.dart';
 import 'package:lopicode/lowcode/style_rows_widgets.dart';
 import 'package:lopicode/theme/tokens.dart';
@@ -117,15 +120,18 @@ class LayoutGroup extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final container = ed.node.isContainer;
+    // 带插槽的组件（列表行、导航栏、标签页、弹窗）里面怎么排是它自己定的，不出“排法”这些行。
+    final container = ed.node.isContainer && !ed.node.hasSlots;
     final rowGap = ed.shown.length('row-gap');
     final colGap = ed.shown.length('column-gap');
     final sameGap = rowGap == colGap;
     final hidden = ed.resolved['display']?.trim().toLowerCase() == 'none';
     const more = ['flex-shrink', 'flex-basis'];
+    final grid = container && lcIsGrid(ed.resolved);
+    final span = ed.parentColumns;
     return _column([
-      if (container) ...[
-        _heading(context, '里面的组件怎么排'),
+      if (container) ...[_heading(context, '里面的组件怎么排'), GridModeRow(ed), if (grid) GridRows(ed)],
+      if (container && !grid) ...[
         // 没设时的方向跟组件类型走（“行”是横的，其余容器是竖的），和导出的页面一致。
         StyleChoiceRow(ed, 'flex-direction', '方向', const [ChoiceOption('row', '横向'), ChoiceOption('column', '竖向')], fallback: ed.node.type == 'row' ? 'row' : 'column'),
         StyleSwitchRow(ed, 'flex-wrap', '放不下时换行', on: 'wrap'),
@@ -145,19 +151,20 @@ class LayoutGroup extends StatelessWidget {
             }, merge: merge),
           ),
         ),
-        _heading(context, '自己在父容器里怎么放'),
       ],
+      if (container) _heading(context, '自己在父容器里怎么放'),
+      if (span != null) GridSpanRow(ed, columns: span),
       StyleDropdownRow(ed, 'align-self', '自身对齐', _alignSelf, fallbackLabel: '跟着容器'),
       StyleNumberRow(ed, 'flex-grow', '伸展（分剩余空间）', min: 0),
       StyleDropdownRow(ed, 'display', '显示方式', _display),
       if (hidden) _note(context, '现在是“隐藏”：页面上看不到这个组件，也不占位置。'),
       MoreSection(
         id: 'layout',
-        initiallyOpen: more.any(ed.isOwn) || (container && !sameGap),
+        initiallyOpen: more.any(ed.isOwn) || (container && !grid && !sameGap),
         children: [
           StyleNumberRow(ed, 'flex-shrink', '收缩（空间不够时）', min: 0),
           StyleLengthRow(ed, 'flex-basis', '基准尺寸', allowAuto: true),
-          if (container) ...[StyleLengthRow(ed, 'row-gap', '行间距', stepper: true), StyleLengthRow(ed, 'column-gap', '列间距', stepper: true)],
+          if (container && !grid) ...[StyleLengthRow(ed, 'row-gap', '行间距', stepper: true), StyleLengthRow(ed, 'column-gap', '列间距', stepper: true)],
         ],
       ),
     ]);

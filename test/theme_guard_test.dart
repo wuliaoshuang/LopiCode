@@ -40,11 +40,21 @@ const _exceptions = <String, Map<String, String>>{
     'Color.fromARGB(255, g, g, g)': '默认深色主色的来历（降饱和时算出来的灰），是算法不是配色',
   },
   'lib/lowcode/canvas_render_widgets.dart': {
-    "textColor: _argb(s['color']) ?? Palette.neutral900,": '用户页面内容：没写文字颜色时的默认（和导出的网页一致），不是编辑器界面色',
+    "textColor: canvasArgb(s['color']) ?? Palette.neutral900,": '用户页面内容：没写文字颜色时的默认（和导出的网页一致），不是编辑器界面色',
     'colorSchemeSeed: Palette.primary700': '用户页面内容：页面里 Material 控件的种子色（和导出的 Flutter 代码一致）',
     'TextStyle(fontSize: 16, color: Palette.neutral900, height: 1.5, fontFamily: font)': '用户页面内容：正文默认色',
-    "_argb(s['background-color']) ?? Colors.white, border: _border(s, scale, Palette.neutral900, false)": '用户页面内容：页面默认白底、边框默认色',
-    'const [BoxShadow(color: Color(0x33000000), blurRadius: 3, offset: Offset(0, 1))]': '用户页面内容：卡片组件的默认阴影（和导出代码一致）',
+    "canvasArgb(s['background-color']) ?? Colors.white, border: canvasBorder(s, scale, Palette.neutral900, false)": '用户页面内容：页面默认白底、边框默认色',
+    "pageColor: canvasArgb(s['background-color']) ?? Colors.white,": '用户页面内容：页面默认白底（顶栏、底部导航、弹窗面板垫的底，和导出的网页一致）',
+  },
+  'lib/lowcode/canvas_style_widgets.dart': {'const [BoxShadow(color: Color(0x33000000), blurRadius: 3, offset: Offset(0, 1))]': '用户页面内容：卡片组件的默认阴影（和导出代码一致）'},
+  'lib/lowcode/canvas_v3_widgets.dart': {
+    'const Color kLcPageLine = Color(0xFFB1C0C8);': '用户页面内容：新组件的边线色（和导出的网页 .lc-textarea / .lc-select 的边框一致）',
+    'const Color kLcPageSoftLine = Color(0xFFD3DEE4);': '用户页面内容：新组件的分隔线色（和导出的网页 .lc-list-item / .lc-app-bar 的底线一致）',
+    'const Color kLcPageMuted = Color(0xFF5C6479);': '用户页面内容：副标题、没选中的页签的颜色（和导出的网页一致）',
+    'const Color kLcPageFaint = Color(0xFF8B93A7);': '用户页面内容：占位字、右箭头的颜色（和导出的网页一致）',
+    'const Color kLcPageAccent = Color(0xFF058654);': '用户页面内容：开关、勾选、当前页签的强调色（和导出的网页 --lc-accent 一致）',
+    'const Color kLcPageWhite = Color(0xFFFFFFFF);': '用户页面内容：开关的滑块、勾选框里的对勾（和导出的网页一致）',
+    'const Color kLcPagePill = Color(0x14000000);': '用户页面内容：角标、关着的开关的底（和导出的网页一致）',
   },
   'lib/lowcode/canvas_controls_widgets.dart': {
     'const Color _labelColor = Color(0xFF5C6479);': '用户页面内容：输入框标签的默认色（和导出的网页 .lc-label 一致）',
@@ -53,6 +63,11 @@ const _exceptions = <String, Map<String, String>>{
   'lib/lowcode/canvas_parts_widgets.dart': {'color: background ?? Palette.neutral200,': '用户页面内容：图片占位的底色（和导出代码一致）', 'child: Icon(icon, color: Palette.neutral500),': '用户页面内容：图片占位的图标色'},
   'lib/lowcode/canvas_drag_widgets.dart': {'color: Colors.white,': '用户页面内容：拖动时拎起来的那份缩略图垫的底，和页面默认白底一致，不跟应用主题走'},
   'lib/lowcode/inline_text_widgets.dart': {'(fg.computeLuminance() > 0.6 ? const Color(0xFF222435) : Colors.white)': '用户页面内容：就地改字时垫在字后面的底，只为和用户自己定的字色拉开反差，不是编辑器界面色'},
+  'lib/lowcode/export_dart_v3.dart': {
+    'style: const TextStyle(fontSize: 13, color: Color(0xFF5C6479))': '导出的 Flutter 代码里的字面量（列表行副标题的颜色，和导出的网页一致），不是应用界面',
+    'style: const TextStyle(fontSize: 14, color: Color(0xFF5C6479))': '导出的 Flutter 代码里的字面量（列表行右侧文字、右箭头的颜色），不是应用界面',
+    'indicator: BoxDecoration(color: const Color(0x14000000)': '导出的 Flutter 代码里的字面量（胶囊式页签的底色），不是应用界面',
+  },
   'lib/lowcode/export_dart.dart': {
     r"String _color(String hex) => 'const Color(0xFF${hex.substring(1).toUpperCase()})';": '生成的 Flutter 代码文本，不是界面',
     'color: const Color(0xFFD3DEE4), alignment: Alignment.center': '生成的 Flutter 代码文本',

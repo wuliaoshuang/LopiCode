@@ -54,6 +54,24 @@ String? lcSlotOfChild(LcNode host, LcNode child) {
   return s != null && slots.any((x) => x.name == s) ? s : lcFallbackSlot(host);
 }
 
+/// [node] 刚放进 [parent] 的第 [at] 个位置：把它的 `slot` 收拾对（LcDocument.insert / move 每次都调）。
+/// - 普通容器：去掉 `slot`（从插槽里拖出来的不带着旧插槽名走）。
+/// - 带插槽的组件：`slot` 本来就是它的某个插槽＝不动；不是——跟前一个兄弟放一起；没有前一个，标签页放进当前页签，别的按兜底算（不写）。
+void lcSettleSlot(LcNode parent, LcNode node, int at) {
+  if (!parent.hasSlots) {
+    node.slot = null;
+    return;
+  }
+  final names = {for (final s in lcSlotsOf(parent)) s.name};
+  if (names.contains(node.slot)) return;
+  final prev = at > 0 && at <= parent.children.length ? parent.children[at - 1] : null;
+  if (prev != null && !identical(prev, node) && names.contains(prev.slot)) {
+    node.slot = prev.slot;
+  } else {
+    node.slot = parent.type == 'tabs' ? lcCurrentTab(parent) : null;
+  }
+}
+
 /// [host] 的某个插槽里的子节点（按先后）。
 List<LcNode> lcSlotChildren(LcNode host, String slot) => [
   for (final c in host.children)
@@ -68,6 +86,9 @@ String? lcCurrentTab(LcNode tabs) {
   return all.any((t) => t['id'] == cur) ? cur as String : all.first['id'] as String;
 }
 
+/// 这个插槽里面是不是横着排（列表行、导航栏的左右，弹窗的底部按钮）；标签页的一页、弹窗的内容是竖着排。
+bool lcSlotIsRow(LcNode host, String slot) => host.type == 'listItem' || host.type == 'appBar' || (host.type == 'dialog' && slot == 'footer');
+
 // —— 画布落点用的“插槽 id” ——
 
 String lcSlotBoxId(String hostId, String slot) => '$hostId#$slot';
@@ -79,7 +100,7 @@ String lcSlotBoxId(String hostId, String slot) => '$hostId#$slot';
 }
 
 /// 插槽里的第 [index] 个位置，对应那串平铺的子节点里的第几个（都按动之前的顺序算）。
-int _flatIndex(LcNode host, String slot, int index) {
+int lcFlatIndex(LcNode host, String slot, int index) {
   final inSlot = lcSlotChildren(host, slot);
   if (index >= 0 && index < inSlot.length) return host.children.indexOf(inSlot[index]);
   return inSlot.isEmpty ? host.children.length : host.children.indexOf(inSlot.last) + 1;
@@ -100,7 +121,7 @@ bool lcInsertAt(LcDocument doc, String target, LcNode node, [int? index]) {
   final host = doc.find(hostId);
   if (host == null) return false;
   if (slot != null && !lcSlotsOf(host).any((s) => s.name == slot)) return false;
-  final at = slot == null ? index : _flatIndex(host, slot, index ?? 1 << 30);
+  final at = slot == null ? index : lcFlatIndex(host, slot, index ?? 1 << 30);
   if (slot != null) node.slot = slot;
   if (!doc.insert(hostId, node, at)) return false;
   // insert 会给新节点发 id，这时再按“在哪个容器里”收拾 slot
@@ -119,7 +140,7 @@ bool lcMoveTo(LcDocument doc, String id, String target, int index) {
     return true;
   }
   if (!lcSlotsOf(host).any((s) => s.name == slot)) return false;
-  final at = _flatIndex(host, slot, index);
+  final at = lcFlatIndex(host, slot, index);
   if (!doc.move(id, hostId, at)) return false;
   node.slot = slot;
   return true;

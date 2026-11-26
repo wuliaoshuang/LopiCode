@@ -16,6 +16,7 @@
 //       它开着时画布把选中的组件滚到面板上方。
 //     就地改字（inline_text_widgets.dart）：点一下已经选中的文字 / 按钮 / 输入框，原地变输入框。
 //     长按菜单：长按一个组件、没挪（不到 8 像素）就松手＝出菜单（由页面决定菜单里有什么）；挪了才是拖动。
+import 'package:lopicode/lowcode/canvas_banner_widgets.dart';
 import 'package:lopicode/lowcode/canvas_drag_widgets.dart';
 import 'package:lopicode/lowcode/canvas_view.dart';
 import 'package:lopicode/lowcode/edit_types.dart';
@@ -25,6 +26,7 @@ import 'package:lopicode/lowcode/inspector_sheet.dart';
 import 'package:lopicode/lowcode/lift_gesture_widgets.dart';
 import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/lowcode/multi_select_widgets.dart';
+import 'package:lopicode/lowcode/overlay_focus.dart';
 import 'package:lopicode/lowcode/palette_catalog.dart';
 import 'package:lopicode/lowcode/palette_widgets.dart';
 import 'package:lopicode/theme/tokens.dart';
@@ -153,6 +155,13 @@ class EditorWorkbenchState extends State<EditorWorkbench> {
   /// 正在就地改字的组件。
   String? _editing;
 
+  /// “只看这个弹层”（overlay_focus.dart）；画布顶上的横条一共多高（画布把页面顶边让出这么多）。
+  final LcOverlayFocus _overlay = LcOverlayFocus();
+  double _bannerHeight = 0;
+
+  /// 合一面板“样式”页正在看哪个状态（按下 / 禁用 / 聚焦）；null＝平时。
+  String? _stateShown;
+
   // 这次长按是从哪儿拿起来的、拿起来以后挪没挪过。
   Offset _liftAt = Offset.zero;
   bool _moved = false;
@@ -194,7 +203,7 @@ class EditorWorkbenchState extends State<EditorWorkbench> {
   void closeInspector() {
     if (_inspector == null) return;
     inspector?.flush();
-    setState(() => _inspector = null);
+    setState(() => _inspector = _stateShown = null);
   }
 
   void _revealSelected() => WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -213,6 +222,8 @@ class EditorWorkbenchState extends State<EditorWorkbench> {
 
   /// 画布上点了一个组件（或空白）。点的是已经选中的文字 / 按钮 / 输入框＝就地改字。
   void _tapNode(String? id) {
+    // 正在编辑弹窗时点到了弹窗外面（遮罩）：算点空白，不选中页面（选中页面＝退出这个状态）。
+    if (id == widget.doc.root.id && _overlay.sync(widget.doc, widget.selected) != null) id = null;
     final node = id == null ? null : widget.doc.find(id);
     if (_editing != null) {
       // 正在就地改字时点了别处：先把字交出去（输入框失焦就会提交），这一下只算“改完了”。
@@ -260,6 +271,9 @@ class EditorWorkbenchState extends State<EditorWorkbench> {
   // ───────────── 点一下添加 ─────────────
 
   void _tapAdd(PaletteEntry e) {
+    // 正在编辑弹窗、又什么都没选中：加进这个弹窗里（不然会加到看不见的页面上）。
+    final dialog = _overlay.sync(widget.doc, widget.selected);
+    if (dialog != null && widget.selected == null) widget.onSelect(dialog.id);
     final id = widget.onAdd(e.type, e.ref);
     if (id == null) return;
     widget.recents.touch(e.key);
@@ -350,7 +364,9 @@ class EditorWorkbenchState extends State<EditorWorkbench> {
 
   @override
   Widget build(BuildContext context) {
-    final topInset = PageBar.insetOf(context);
+    final barInset = PageBar.insetOf(context);
+    final topInset = barInset + (_bannerHeight > 0 ? _bannerHeight + Space.x1 * 2 : 0);
+    final dialog = _overlay.sync(widget.doc, widget.selected);
     final drag = _drag;
     final selected = widget.selected, editing = _editing == null ? null : widget.doc.find(_editing!);
     return Stack(
@@ -380,11 +396,27 @@ class EditorWorkbenchState extends State<EditorWorkbench> {
                                   onLiftCancel: () => _end(cancelled: true),
                                   presetWidth: widget.presetWidth,
                                   showBoxModel: widget.showBoxModel,
+                                  overlayId: dialog?.id,
+                                  statePreview: _inspector != null && selected != null && _stateShown != null ? (nodeId: selected, state: _stateShown!) : null,
                                   topInset: topInset,
                                   // 合一面板开着：它盖住的那一段不算画布的可见范围（选中的组件滚到它上方）。
                                   bottomInset: _inspector != null && selected != null
                                       ? ((box.maxHeight + kEditorSelectionBarHeight) * kInspectorInitialSize - kEditorSelectionBarHeight).clamp(0.0, box.maxHeight * 0.75).toDouble()
                                       : (_paletteOpen ? kPaletteHandleHeight : 0),
+                                ),
+                              ),
+                              Positioned(
+                                left: 0,
+                                right: 0,
+                                top: barInset + Space.x1,
+                                child: CanvasBanners(
+                                  doc: widget.doc,
+                                  dialog: dialog,
+                                  onExitDialog: () {
+                                    setState(_overlay.exit);
+                                    widget.onSelect(null);
+                                  },
+                                  onHeight: (h) => setState(() => _bannerHeight = h),
                                 ),
                               ),
                               if (widget.marked.isNotEmpty && drag == null)
@@ -434,6 +466,7 @@ class EditorWorkbenchState extends State<EditorWorkbench> {
                         pickImage: widget.pickImage,
                         onOpenLogic: widget.onOpenLogic,
                         onAddLogic: widget.onAddLogic,
+                        onState: (s) => setState(() => _stateShown = s),
                       ),
                     ),
                 ],

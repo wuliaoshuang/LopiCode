@@ -10,6 +10,7 @@ library;
 import 'package:lopicode/lowcode/css_codec.dart';
 import 'package:lopicode/lowcode/export_web_v3.dart';
 import 'package:lopicode/lowcode/model.dart';
+import 'package:lopicode/lowcode/states.dart';
 import 'package:lopicode/lowcode/style_resolve.dart';
 
 const Map<String, List<String>> _rules = {
@@ -147,23 +148,15 @@ String lcV3ComponentsCss(LcNode root) {
   return out.toString();
 }
 
-const Map<String, String> _pseudo = {'pressed': ':active', 'focused': ':focus', 'disabled': ':disabled'};
-
 /// 状态样式（节点的 `states`）的 CSS 规则，一种状态一条；没有返回空表。读法见 states.dart。
 List<String> lcStateRules(LcNode n, String selector) {
-  final states = n.more['states'];
-  if (states is! Map) return const [];
   final out = <String>[];
-  for (final e in _pseudo.entries) {
-    final s = states[e.key];
-    if (s is! Map || s.isEmpty) continue;
-    final decl = <String, String>{
-      for (final d in s.entries)
-        if (d.value is String) '${d.key}': d.value as String,
-    };
+  for (final state in kLcStateNames) {
+    final decl = lcStateStyle(n, state);
+    if (decl.isEmpty) continue;
     final body = declarationsToCss(canonicalDeclarations(decl), multiline: false);
     if (body.isEmpty || RegExp(r'[{}<>\n\r\\]|\*/|/\*').hasMatch(body)) continue;
-    out.add('$selector${e.value} { $body }');
+    out.add('$selector${kLcStatePseudo[state]} { $body }');
   }
   return out;
 }

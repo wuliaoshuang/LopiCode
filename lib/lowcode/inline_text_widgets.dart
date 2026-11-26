@@ -118,37 +118,40 @@ class _InlineTextEditorState extends State<InlineTextEditor> {
                         ),
                         child: ConstrainedBox(
                           constraints: BoxConstraints(minHeight: rect.height),
-                          child: Padding(
-                            padding: EdgeInsets.symmetric(horizontal: pad * scale, vertical: padV * scale),
-                            child: TextField(
-                              key: const Key('lc-inline-edit'),
-                              controller: _text,
-                              focusNode: _focus,
-                              autofocus: true,
-                              maxLines: multiline ? null : 1,
-                              textInputAction: multiline ? TextInputAction.newline : TextInputAction.done,
-                              textAlign: switch (n.type == 'button' ? 'center' : r['text-align']) {
-                                'center' => TextAlign.center,
-                                'right' => TextAlign.right,
-                                _ => TextAlign.left,
-                              },
-                              cursorColor: fg,
-                              style: TextStyle(
-                                fontSize: ((effectivePx(n, widget.parent, 'font-size') ?? 16) * scale).toDouble(),
-                                color: fg,
-                                fontWeight: weight == 'bold' || (int.tryParse(weight ?? '') ?? 400) >= 600 ? FontWeight.w600 : FontWeight.w400,
-                                height: n.type == 'text' ? 1.5 : null,
+                          child: // 字比组件矮（按钮、带内边距的输入框）时上下居中：以前贴着上沿，和画布上原来的字对不上。
+                          Align(
+                            child: Padding(
+                              padding: EdgeInsets.symmetric(horizontal: pad * scale, vertical: padV * scale),
+                              child: TextField(
+                                key: const Key('lc-inline-edit'),
+                                controller: _text,
+                                focusNode: _focus,
+                                autofocus: true,
+                                maxLines: multiline ? null : 1,
+                                textInputAction: multiline ? TextInputAction.newline : TextInputAction.done,
+                                textAlign: switch (n.type == 'button' ? 'center' : r['text-align']) {
+                                  'center' => TextAlign.center,
+                                  'right' => TextAlign.right,
+                                  _ => TextAlign.left,
+                                },
+                                cursorColor: fg,
+                                style: TextStyle(
+                                  fontSize: ((effectivePx(n, widget.parent, 'font-size') ?? 16) * scale).toDouble(),
+                                  color: fg,
+                                  fontWeight: weight == 'bold' || (int.tryParse(weight ?? '') ?? 400) >= 600 ? FontWeight.w600 : FontWeight.w400,
+                                  height: n.type == 'text' ? 1.5 : null,
+                                ),
+                                // 各种状态的边框都明说关掉，不跟着主题里输入框的描边走（外面那圈蓝边是这个编辑框自己的）
+                                decoration: const InputDecoration(
+                                  isCollapsed: true,
+                                  filled: false,
+                                  border: InputBorder.none,
+                                  enabledBorder: InputBorder.none,
+                                  focusedBorder: InputBorder.none,
+                                  contentPadding: EdgeInsets.zero,
+                                ),
+                                onSubmitted: (_) => _finish(),
                               ),
-                              // 各种状态的边框都明说关掉，不跟着主题里输入框的描边走（外面那圈蓝边是这个编辑框自己的）
-                              decoration: const InputDecoration(
-                                isCollapsed: true,
-                                filled: false,
-                                border: InputBorder.none,
-                                enabledBorder: InputBorder.none,
-                                focusedBorder: InputBorder.none,
-                                contentPadding: EdgeInsets.zero,
-                              ),
-                              onSubmitted: (_) => _finish(),
                             ),
                           ),
                         ),

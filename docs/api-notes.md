@@ -650,3 +650,18 @@ PHP 真跑撞到并修掉的 5 个问题，以及依据：
 | `Icons.add` / `Icons.send` 等 25 个名字在 Flutter 的 `Icons` 里存在 | 本机 Flutter SDK：`lib/lowcode/icon_set_widgets.dart` 直接引用它们，编译通过 | 已核对（编译） | 画布画这些图标；Flutter 导出写同名 `Icons.xxx` |
 | 网页 / Vue / React 导出里每个图标的 SVG 路径（24×24）和 Material Icons 官方的形状一致 | 凭记忆照 Material Icons（Apache-2.0）写的 | **未核对**（没逐个和官方 SVG 文件比对，也没在真浏览器里看过） | 导出的按钮里内嵌 `<svg class="lc-icon">`；形状不对只影响导出网页里图标的样子 |
 | `<button disabled>`、`<input required disabled type="email|tel|number|password">`、`<label>` 包住 `<input>` 即关联 | HTML 标准的常识用法 | 未逐条翻官方原文 | 第 3 版新属性的网页导出 |
+
+## 2026-11-26 低代码第 3 期 B2：网格、状态样式和新组件导出用到的 CSS（`lib/lowcode/grid_css.dart`、`states.dart`、`export_web_v3_css.dart`）
+
+| 写法 | 用在哪 | 核对情况 |
+|---|---|---|
+| `display: grid` + `grid-template-columns: repeat(N, 1fr)`；`repeat()` 第一个参数是重复次数、第二个是轨道写法；`fr` 是“剩余空间的一份” | 网格容器（等宽 N 列） | **核对过**：MDN《Basic concepts of grid layout》 https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Grid_layout/Basic_concepts ，例子里就有 `grid-template-columns: repeat(3, 1fr)` |
+| `grid-column: span N`（让自动摆放照常选起点，只定跨几列；N 是正整数，0 和负数无效）；它是 `grid-column-start` / `grid-column-end` 的简写 | 网格里的子组件“跨几列” | **核对过**：MDN `grid-column` https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/grid-column |
+| `:active`（正在被按下 / 激活）、`:disabled`（处于禁用状态的界面元素）、`:focus`（有焦点） | 状态样式“按下 / 禁用 / 聚焦” | **核对过**：MDN《Pseudo-classes》 https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Selectors/Pseudo-classes |
+| `column-gap` / `row-gap` 用在网格上 | 网格的列间距、行间距 | **未核对**（MDN 的网格教程里用的是简写 `gap`；这两个单项没单独打开页面看） |
+| `:where(...)`（不增加选择器权重） | 新组件的默认样式，让页面自己的样式总能盖过去 | **未核对** |
+| `:has(...)` | 勾选框 / 单选项“禁用时变淡”、按钮式单选“选中的那一项” | **未核对**（包括各浏览器从哪个版本起支持） |
+| `field-sizing: content` | 多行输入“自动长高” | **未核对**；不认识它的浏览器会忽略这一条，输入框就是固定行数、不自动长高 |
+| `accent-color`、`appearance: none`、`inset: 0`、`[hidden]` 属性选择器 | 表单控件的颜色、去掉原生外观、弹窗遮罩铺满、页签面板 / 弹窗的隐藏 | **未核对** |
+
+真编译只说明“Vue 3 / React 能把导出的代码编过、能服务端渲染出 HTML”；上面这些 CSS **没在真浏览器里看过效果**。

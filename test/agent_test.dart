@@ -9,9 +9,11 @@ import 'package:lopicode/agent/command_runner.dart';
 import 'package:lopicode/core/path_guard.dart';
 import 'package:lopicode/core/templates.dart';
 import 'package:lopicode/lowcode/model.dart';
+import 'package:lopicode/lowcode/model_v3_components.dart';
 import 'package:path/path.dart' as p;
 
 import 'support/fake_model_server.dart';
+import 'support/v3_components_sample.dart';
 
 /// 记录被执行的命令，不真的跑。
 class RecordingRunner implements CommandRunner {
@@ -257,6 +259,40 @@ void main() {
     expect(saved.title, '新标题');
     expect(File(p.join(guard.root, 'index.html')).readAsStringSync(), contains('Agent 改的标题'));
     expect(File(p.join(guard.root, 'style.css')).existsSync(), isTrue);
+  });
+
+  test('低代码工具认得 11 种新组件：工具说明里都点了名；Agent 写进去的新组件和插槽原样存下、导出里有', () async {
+    await saveLowcodePage(guard, LcDocument.starter('页面'));
+    final next = v3AllPage();
+    final runner = await runnerFor([
+      ScriptedReply(
+        calls: [
+          ScriptedCall('lowcode_update_page', jsonEncode({'page': next.toJson()})),
+        ],
+      ),
+      ScriptedReply(text: '好了'),
+    ]);
+    final done = finished(await runner.send('搭一个全组件页').toList());
+    expect(done[0].outcome.ok, isTrue, reason: done[0].outcome.text);
+    final tools = server!.requests.first['tools'] as List;
+    final about = jsonEncode(tools.firstWhere((t) => (t as Map)['function']['name'] == 'lowcode_update_page'));
+    for (final type in lcV3Specs.keys) {
+      expect(about, contains(type), reason: '工具说明里要提到 $type');
+    }
+    final saved = LcDocument.parse(File(p.join(guard.root, kLowcodePageFile)).readAsStringSync());
+    final types = <String>{};
+    void walk(LcNode n) {
+      types.add(n.type);
+      n.children.forEach(walk);
+    }
+
+    walk(saved.root);
+    expect(types, containsAll(lcV3Specs.keys));
+    expect(saved.find('barR')!.slot, 'right');
+    expect(saved.find('dlgOk')!.slot, 'footer');
+    final html = File(p.join(guard.root, 'index.html')).readAsStringSync();
+    expect(html, contains('role="dialog"'));
+    expect(html, contains('role="tablist"'));
   });
 
   test('低代码工具：原来的页面是新版做的——版本号不往回写、看不懂的最外层字段留着、回话里明说', () async {

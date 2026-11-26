@@ -156,3 +156,15 @@ Agent 用 `lowcode_update_page` 写页面时没写 `version` 的，按第 3 版�
 - 名字最长 40 字。
 - 内置图标 25 个，名字同 Material Icons（画布和 Flutter 导出用的就是 Flutter 自带的同名图标）。网页类导出里的 SVG 路径是照 Material Icons 的形状写的，**没有逐个和官方文件核对**（见 docs/api-notes.md）。
 - 组件嵌套上限还是 24 层（没变）。
+
+## 第 3 期 B2 之后的补充说明（格式没动，只是把“留给 B2”的几处怎么用写清楚）
+
+- 11 个新组件已经登记（`lib/lowcode/model_v3_components.dart` 的 `lcV3Specs`），不再读成“新版组件”占位。
+- `slot`：内置的带插槽组件是 列表行（`left` / `right`）、顶部导航栏（`left` / `right`）、弹窗（`content` / `footer`）、标签页（每个页签的 `id` 就是插槽名）。
+  子节点没写 `slot`、或者写了一个这个组件没有的名字：读的时候不改文件，画的时候算进“兜底插槽”（列表行 / 导航栏→`right`，弹窗→`content`，标签页→第一个页签）。
+  编辑器插入 / 移动节点时会收拾：放进普通容器去掉 `slot`，放进带插槽的组件写上落到的那个插槽。
+- 对象数组的规矩（`lcCleanV3`）：`options` 每项 `{value, label}`，`value` 不空、不重复、最长 80；`tabs` 每项 `{id, label}`，`id` 最长 24；`items`（底部导航）每项 `{icon, label, page?}`。
+  上限 50 / 8 / 5。**整串都合规矩才算数**：有一项不对，这个属性按“没写”处理（文件里原样留着，不删）。
+- `states`：`{"pressed" | "disabled" | "focused": {CSS 声明表}}`，只存和平时不一样的条目；别的状态名原样留着不解释。
+- 网格没有新字段：就是 `style` 里的 `display: grid`、`grid-template-columns: repeat(N, 1fr)`、`column-gap`、`row-gap`，子节点 `style` 里的 `grid-column: span N`。
+- “打开 / 关闭弹窗”没有新字段：是 `logic` 里一块普通的 `setProp` 积木（`node`＝弹窗 id、`prop`＝`visible`、`value`＝是 / 否）。
