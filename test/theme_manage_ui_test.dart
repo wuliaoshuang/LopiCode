@@ -2,32 +2,14 @@
 //
 //   flutter test test/theme_manage_ui_test.dart
 //   LOPI_SHOTS=1 flutter test test/theme_manage_ui_test.dart   # 同时写截图到 docs/screenshots/editor-*.png
-import 'dart:convert';
-import 'dart:io';
-import 'dart:ui' as ui;
 
-import 'package:flutter/rendering.dart';
-import 'package:flutter/services.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lopicode/appearance/theme_builtin.dart';
-import 'package:lopicode/appearance/theme_contrast.dart';
-import 'package:lopicode/appearance/theme_edit_model.dart';
-import 'package:lopicode/appearance/theme_export_file.dart';
-import 'package:lopicode/appearance/theme_fields.dart';
 import 'package:lopicode/appearance/theme_generate.dart';
-import 'package:lopicode/appearance/theme_json.dart';
-import 'package:lopicode/appearance/theme_spec.dart';
 import 'package:lopicode/core/stores.dart';
-import 'package:lopicode/core/templates.dart';
-import 'package:lopicode/state/theme_hooks.dart';
-import 'package:lopicode/state/themes_state.dart';
-import 'package:lopicode/theme/tokens.dart' hide ThemeSpec;
 import 'package:lopicode/ui/settings_code_font.dart';
 import 'package:lopicode/ui/settings_pages.dart';
 import 'package:lopicode/ui/theme_editor_screen.dart';
-import 'package:lopicode/ui/theme_export_sheet.dart';
-import 'package:lopicode/ui/theme_import_screen.dart';
 import 'package:lopicode/ui/themes_screen.dart';
 import 'package:material_ui/material_ui.dart';
 

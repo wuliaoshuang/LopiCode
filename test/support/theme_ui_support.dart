@@ -1,35 +1,17 @@
 // 主题界面测试（管理页、编辑器、导出 / 导入）共用的小工具：假剪贴板、起一页、等存盘、新建一套自己的主题、截图。
 // 原来都在 test/theme_editor_ui_test.dart 里；2026-11-26 那个文件按功能拆成三个以后挪到这里，内容没变。
-import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:lopicode/appearance/theme_builtin.dart';
-import 'package:lopicode/appearance/theme_contrast.dart';
-import 'package:lopicode/appearance/theme_edit_model.dart';
-import 'package:lopicode/appearance/theme_export_file.dart';
-import 'package:lopicode/appearance/theme_fields.dart';
-import 'package:lopicode/appearance/theme_generate.dart';
-import 'package:lopicode/appearance/theme_json.dart';
 import 'package:lopicode/appearance/theme_spec.dart';
-import 'package:lopicode/core/stores.dart';
-import 'package:lopicode/core/templates.dart';
-import 'package:lopicode/state/theme_hooks.dart';
 import 'package:lopicode/state/themes_state.dart';
 import 'package:lopicode/theme/tokens.dart' hide ThemeSpec;
-import 'package:lopicode/ui/settings_code_font.dart';
-import 'package:lopicode/ui/settings_pages.dart';
-import 'package:lopicode/ui/theme_editor_screen.dart';
-import 'package:lopicode/ui/theme_export_sheet.dart';
-import 'package:lopicode/ui/theme_import_screen.dart';
-import 'package:lopicode/ui/themes_screen.dart';
 import 'package:material_ui/material_ui.dart';
 
-import 'support/harness.dart';
+import 'harness.dart';
 
 final bool writeShots = Platform.environment['LOPI_SHOTS'] == '1';
 bool fontsLoaded = false;
