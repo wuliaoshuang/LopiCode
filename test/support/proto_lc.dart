@@ -82,6 +82,8 @@ class _Reader {
       '列表' => LType.listOf(ty(l[1])),
       '字典' => LType.dictOf(ty(l[1])),
       '函数' => LType.func([for (final p in l[1] as _L) ty(p), ty(l[2])]),
+      '要等函数' => LType.func([for (final p in l[1] as _L) ty(p), ty(l[2])], waits: true),
+      '稍后' => LType(LKind.future, of: ty(l[1])),
       _ => LType.ref(h, args: [for (final a in l.skip(1)) ty(a)]),
     };
   }
@@ -101,7 +103,7 @@ class _Reader {
 
   static const Map<String, String?> _bounds = {'能比较': kBoundComparable};
 
-  LFuncDecl func(_L d) {
+  LFuncDecl func(_L d, {bool waits = false}) {
     var i = 2;
     final tps = <LTypeParam>[];
     if (d[i] case final _L g when g.isNotEmpty && g[0] == '泛型') {
@@ -116,7 +118,7 @@ class _Reader {
       ret = ty(d[i + 1]);
       i += 2;
     }
-    return LFuncDecl(d[1] as String, ps, stmts(d.skip(i)), typeParams: tps, type: ret);
+    return LFuncDecl(d[1] as String, ps, stmts(d.skip(i)), typeParams: tps, type: ret, waits: waits);
   }
 
   LModule module({String name = '', List<String> uses = const []}) {
@@ -140,12 +142,13 @@ class _Reader {
             ], isPublic: public),
           );
         case '接口':
-          decls.add(LInterfaceDecl(name, [for (final m in d.skip(2).cast<_L>()) LSignature(m[0] as String, params(m[1]), returns: ty(m[2]))], isPublic: public));
+          decls.add(LInterfaceDecl(name, [for (final m in d.skip(2).cast<_L>()) LSignature(m[0] as String, params(m[1]), returns: ty(m[2]), waits: m.length > 3 && m[3] == '要等')], isPublic: public));
         case '别名':
           decls.add(LAliasDecl(name, ty(d[2]), isPublic: public));
-        case '函数':
-          final f = func(d);
-          decls.add(LFuncDecl(f.name, f.params, f.body, isPublic: public, typeParams: f.typeParams, type: f.type));
+        case '函数' || '要等函数':
+          // 要等函数＝里面有要等的事（等一会儿、开服务、调别的要等的函数…），写的人明着标。
+          final f = func(d, waits: d[0] == '要等函数');
+          decls.add(LFuncDecl(f.name, f.params, f.body, isPublic: public, typeParams: f.typeParams, type: f.type, waits: f.waits));
         case '类':
           final c = cls(d);
           decls.add(LClassDecl(c.name, parent: c.parent, interfaces: c.interfaces, fields: c.fields, ctor: c.ctor, methods: c.methods, typeParams: c.typeParams, isOpen: c.isOpen, isPublic: public));
@@ -190,8 +193,8 @@ class _Reader {
           fields.add(LFieldDecl(l[1] as String, l.length > 3 ? expr(l[3]) : null, type: ty(l[2]), isPrivate: kind.startsWith('内部'), isStatic: kind.endsWith('类字段')));
         case '创建':
           ctor = LFuncDecl('创建', params(l[1]), stmts(l.skip(2)));
-        case '方法':
-          methods.add(LMethodDecl(func(l)));
+        case '方法' || '要等方法':
+          methods.add(LMethodDecl(func(l, waits: l[0] == '要等方法')));
         case '类方法':
           methods.add(LMethodDecl(func(l), isStatic: true));
       }
@@ -307,6 +310,16 @@ class _Reader {
     '是数字': 'isNumeric',
     '转JSON': 'toJson',
     '网址解码': 'urlDecode',
+    '是类': 'isType',
+    '转数': 'toNumber',
+    '合并': 'dictMerge',
+    '找': 'listFind',
+    '接': 'listConcat',
+    '列有': 'listContains',
+    '换': 'replace',
+    '小写': 'lower',
+    '位置': 'indexOf',
+    '读JSON': 'fromJson',
   };
 
   LExpr expr(Object e) {
@@ -359,10 +372,17 @@ class _Reader {
           ]),
           const [],
         );
-      case 'λ':
-        return LLambda.short(params(a[0]), expr(a[1]));
-      case 'λ块':
-        return LLambda(params(a[0]), stmts(a.skip(1)));
+      case 'λ' || '要等λ':
+        return LLambda.short(params(a[0]), expr(a[1]), waits: h == '要等λ');
+      case 'λ块' || '要等λ块':
+        return LLambda(params(a[0]), stmts(a.skip(1)), waits: h == '要等λ块');
+      case '开始做':
+        // (开始做 f)：马上开始做 f（不带参数的函数），结果是“稍后的结果”。(开始做块 语句…) 是把语句包成要等的匿名函数。
+        return LSpawn([LReturn(LCall(expr(a[0]), const []))]);
+      case '开始做块':
+        return LSpawn([LReturn(LCall(LLambda(const [], stmts(a), waits: true), const []))]);
+      case '等':
+        return LAwait(expr(a[0]));
       case '调':
         final f = a[0];
         final args = exprs(a.skip(1));

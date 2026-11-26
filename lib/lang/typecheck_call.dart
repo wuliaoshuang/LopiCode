@@ -43,7 +43,7 @@ mixin _Calls on _Core {
         ret = ret.isNul ? r : w.join(ret, r);
       }
     }
-    return LType(LKind.fn, args: [...pts, ret]);
+    return LType(LKind.fn, args: [...pts, ret], waits: e.waits ? true : null);
   }
 
   static bool _sameMap(Map<String, LType> a, Map<String, LType> b) {

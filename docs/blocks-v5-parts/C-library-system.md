@@ -1490,3 +1490,5 @@ B01–B09（第 2 阶段的 9 条“我的积木”规则）继续管外观本�
 读过的本工程文件（只读）：`docs/blocks-v5-parts/BRIEF.md`、`AGENTS.md`、`docs/blocks-v4-language-design.md` 第 5–8 节和阶段 2 实施记录、`lib/lang/custom_block.dart`、`custom_block_edit.dart`、`ast.dart`、`lib/backend/` 的 `backend_blocks*.dart`、`runtime_*.dart`、`backend_validate*.dart`、`backend_project.dart`、`lib/lowcode/logic_blocks.dart`、`logic_js*.dart`、`logic_rules.dart`、`component_model.dart`、`pubspec.yaml`。
 
 > **2026-11-26 说明（核心 2 第 2 段）**：9.1 里不用等的四个（`sys.print`、`time.now`、`store.read`、`store.update`）已经在规矩版本 2 的五种语言小库里落地（清单 `lib/lang/host_v2.dart`）。和这里写的有三处出入，都记在 B-gen-notes 11.3：`sys.print` 的 `out` 通道现在和“打印”一起攒到程序结束才写；PHP 的格子现在是进程里的表、不是带锁的文件；Go / Java 的格子在“同时有两件事改同一个名字”时会报错而不是排队。三处都要等核心 3 有了 `http.serve` 一起改。
+>
+> **2026-11-26 说明（核心 2 第 4 段）**：上面三处出入都改掉了；9.1 里又落地了三个：`sys.env`、`time.sleep`、`http.serve`（明着标“要等”的最小版）。现在版本 2 有的是 1、2、3、4、7、8 六项（`store` 算一项两个接口），`random.bytes`、`net.fetch` 还没有。五种语言各自怎么做、PHP 用 `php -S` 带来的几处不一样（没有启动提示行、一次一个请求）、这一段自己定的几条，见 B-gen-notes 第 12 节。

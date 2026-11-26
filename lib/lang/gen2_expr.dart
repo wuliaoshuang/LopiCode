@@ -97,6 +97,22 @@ mixin Gen2Expr on Gen2Base {
   /// 调宿主接口（[fn] 是小库里的名字，见 host_v2.dart）。
   String hostCall(String fn, List<String> args);
 
+  /// 一件“要等”的事（调要等的函数、等一会儿…）在这种语言里要不要多写点什么。只有 Node 要（await）；别的语言直接停在那里等。
+  String awaited(String code) => code;
+
+  /// 开始做：[f] 是不带参数的函数（类型 [ft]），马上开始，结果是“稍后的结果”。
+  String spawnCode(String f, LType ft);
+
+  /// 等“稍后的结果”[task]（里面的值是 [of]）。
+  String waitCode(String task, LType of);
+
+  // “要等的事”只能出现在标了“要等”的函数里（现在靠写的人明着标；自动推、放错地方的检查在核心 3）。
+  String _wait(String code, LNode at) {
+    if (!fn.waits) unsupported('这里有“要等”的事，所在的函数要先标成“要等”', at);
+    fn.usedWait = true;
+    return awaited(code);
+  }
+
   /// 实参的代码：给了的照 [types] 转；没给的补上参数的默认值（没有默认值的补“空”）。
   List<String> argCodes(List<LExpr> args, List<LType> types, List<LParam>? ps) => [
     for (var i = 0; i < args.length; i++) x(args[i], i < types.length ? types[i] : null),
@@ -188,7 +204,7 @@ mixin Gen2Expr on Gen2Base {
       case LLambda():
         final ft = t(e).nonNull;
         final key = r.lambdaScope(e) ?? unsupported('这个匿名函数没有经过类型检查', e);
-        return lambdaCode(e, ft, V2Fn(key, ft.hasShape ? ft.returns : _any, parent: fn, lambda: e));
+        return lambdaCode(e, ft, V2Fn(key, ft.hasShape ? ft.returns : _any, parent: fn, lambda: e, waits: e.waits));
       case LRt():
         return _rt(e);
       case LField(:final of, :final name):
@@ -212,7 +228,8 @@ mixin Gen2Expr on Gen2Base {
         }
         final got = w.classMethod(parent, method) ?? unsupported('父类没有「$method」这个方法', e);
         final sig = r.funcs[got.$1.key]!;
-        return conv(superCall(method, argCodes(args, sig.params, sig.info.params)), sig.returns, t(e));
+        final code = superCall(method, argCodes(args, sig.params, sig.info.params));
+        return conv(sig.info.decl?.waits == true ? _wait(code, e) : code, sig.returns, t(e));
       case LNew(:final cls, :final args):
         final c = w.classes[cls] ?? unsupported('没有叫「$cls」的类', e);
         final ot = t(e).nonNull;
@@ -258,9 +275,20 @@ mixin Gen2Expr on Gen2Base {
         final same =
             d.params.length == sig.params.length && w.resolve(d.type) == sig.ret && [for (var i = 0; i < sig.params.length; i++) w.resolve(d.params[i].type) == sig.params[i]].every((ok) => ok);
         if (!same || args.length != sig.params.length) unsupported('宿主接口「$name」的声明和宿主给的对不上：应该是 (${sig.params.map((p) => p.show()).join(', ')}) → ${sig.ret.show()}', e);
-        return conv(hostCall(kHostV2Code[name]!, argCodes(args, sig.params, null)), sig.ret, t(e));
-      case LAwait() || LSpawn():
-        unsupported('异步（核心 3 才有）', e);
+        final host = hostCall(kHostV2Code[name]!, argCodes(args, sig.params, null));
+        return conv(kHostV2Waits.contains(name) ? _wait(host, e) : host, sig.ret, t(e));
+      case LAwait(x: final v):
+        final ft = t(v);
+        if (ft.kind != LKind.future || ft.nullable) unsupported('“等”后面要一个“稍后的结果”，这里是${ft.show()}', e);
+        final of = ft.of ?? _any;
+        return conv(_wait(waitCode(x(v, ft), of), e), of, t(e));
+      case LSpawn(:final body):
+        final only = body.length == 1 ? body.first : null;
+        final call = only is LReturn ? only.value : null;
+        if (call is! LCall || call.args.isNotEmpty) unsupported('“开始做”里现在只能放一句“返回 f()”（f 是不带参数的函数）；更随意的写法在核心 3', e);
+        final ft = t(call.callee).nonNull;
+        if (ft.kind != LKind.fn || !ft.hasShape || ft.params.isNotEmpty) unsupported('“开始做”要一个不带参数的函数，这里是${ft.show()}', e);
+        return spawnCode(x(call.callee, ft), ft);
     }
   }
 
@@ -345,13 +373,14 @@ mixin Gen2Expr on Gen2Base {
         final args = <String>[];
         args.addAll(argCodes(e.args, [for (final p in sig.params) w.subst(p, b)], ps));
         final code = callNamed(sig, args, [for (final v in sig.info.own) b[v] ?? _any]);
-        return conv(code, w.subst(sig.returns, b), t(e));
+        return conv(sig.info.decl?.waits == true ? _wait(code, e) : code, w.subst(sig.returns, b), t(e));
       }
     }
     final ft = t(callee).nonNull;
     if (ft.kind == LKind.fn && ft.hasShape) {
       final ps = ft.params;
-      return conv(callValue(x(callee, ft), [for (var i = 0; i < e.args.length; i++) x(e.args[i], i < ps.length ? ps[i] : null)], ft), ft.returns, t(e));
+      final code = callValue(x(callee, ft), [for (var i = 0; i < e.args.length; i++) x(e.args[i], i < ps.length ? ps[i] : null)], ft);
+      return conv(ft.waits == true ? _wait(code, e) : code, ft.returns, t(e));
     }
     return conv(dynCall(x(callee, _any), [for (final a in e.args) x(a, _any)]), _any, t(e));
   }
@@ -361,9 +390,11 @@ mixin Gen2Expr on Gen2Base {
     if (sk != null) {
       // 类本身的方法＝模块级的函数。
       final sig = r.funcs[sk] ?? unsupported('找不到「$sk」', e);
-      return conv(callNamed(sig, argCodes(e.args, sig.params, sig.info.params), const []), sig.returns, t(e));
+      final code = callNamed(sig, argCodes(e.args, sig.params, sig.info.params), const []);
+      return conv(sig.info.decl?.waits == true ? _wait(code, e) : code, sig.returns, t(e));
     }
     final ot = t(e.obj).nonNull;
+    var waits = false;
     var params = const <LType>[];
     List<LParam> ps;
     var ret = _any;
@@ -372,6 +403,7 @@ mixin Gen2Expr on Gen2Base {
       params = [for (final p in m.params) w.resolve(p.type)];
       ps = m.params;
       ret = w.resolve(m.returns ?? LType.nul);
+      waits = m.waits;
     } else if (ot.kind == LKind.object && w.classes.containsKey(ot.name)) {
       final got = w.classMethod(w.classes[ot.name], e.method) ?? unsupported('「${ot.name}」没有「${e.method}」这个方法', e);
       final sig = r.funcs[got.$1.key]!;
@@ -379,10 +411,12 @@ mixin Gen2Expr on Gen2Base {
       params = [for (final p in sig.params) w.subst(p, b)];
       ps = sig.info.params;
       ret = w.subst(sig.returns, b);
+      waits = sig.info.decl?.waits == true;
     } else {
       unsupported('调方法「${e.method}」：前面的值是${ot.show()}，不是对象', e);
     }
-    return conv(send(x(e.obj, ot), ot, e.method, argCodes(e.args, params, ps), e), ret, t(e));
+    final code = send(x(e.obj, ot), ot, e.method, argCodes(e.args, params, ps), e);
+    return conv(waits ? _wait(code, e) : code, ret, t(e));
   }
 
   String _rt(LRt e) {

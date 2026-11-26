@@ -7,6 +7,7 @@ import 'package:lopicode/lang/gen2.dart';
 import 'package:lopicode/lang/gen2_err.dart';
 import 'package:lopicode/lang/gen2_java.dart';
 import 'package:lopicode/lang/rt2_java_dyn.dart';
+import 'package:lopicode/lang/rt2_java_host.dart';
 import 'package:lopicode/lang/type_world.dart';
 import 'package:lopicode/lang/types.dart';
 
@@ -16,7 +17,7 @@ class JavaGen2 extends JavaGen2Types {
   @override
   String get mainFile => 'Main.java';
   @override
-  Map<String, String> get runtimeFiles => const {'Lc.java': kRt2JavaSource};
+  Map<String, String> get runtimeFiles => const {'Lc.java': kRt2JavaSource, 'LcHost.java': kRt2JavaHost};
 
   // —— 语句 ——
 
@@ -171,7 +172,7 @@ class JavaGen2 extends JavaGen2Types {
 
   List<String> _function(LFuncDecl d) {
     final sig = r.funcs[d.name]!;
-    final f = V2Fn(d.name, sig.returns);
+    final f = V2Fn(d.name, sig.returns, waits: d.waits);
     final (params, first) = _params(f, d.params, sig.params);
     final tp = _typeParams(sig.info.own, sig.info.bounds);
     return ['static ${tp.isEmpty ? '' : '$tp '}${_retOf(sig.returns)} ${funcName(d.name)}($params) {', ...indent(funcBody(f, d.body, first: () => first)), '}'];
@@ -308,7 +309,7 @@ class JavaGen2 extends JavaGen2Types {
     ]);
     for (final m in d.ownMethods) {
       final sig = r.funcs['${c.name}.${m.fn.name}']!;
-      final f = V2Fn(sig.key, sig.returns, cls: c);
+      final f = V2Fn(sig.key, sig.returns, cls: c, waits: m.fn.waits);
       final (ps, first) = _params(f, m.fn.params, sig.params);
       final own = _typeParams(sig.info.own, sig.info.bounds);
       out.addAll(['public ${own.isEmpty ? '' : '$own '}${_retOf(sig.returns)} ${member(m.fn.name)}($ps) {', ...indent(funcBody(f, m.fn.body, first: () => first)), '}']);
@@ -349,7 +350,7 @@ class JavaGen2 extends JavaGen2Types {
           break;
       }
     }
-    final main = V2Fn(Gen2Base.mainScope, LType.nul, isMain: true);
+    final main = V2Fn(Gen2Base.mainScope, LType.nul, isMain: true, waits: true);
     final body = funcBody(main, startup);
     return [
       '// 由 LopiCode 积木生成（Java，严格规矩、带原生类型）。',

@@ -321,6 +321,6 @@ LTypeResult checkTypes({decls, main, scripts: [LTypeScript(name, body, vars: {�
 | `native store.get (名字)` | `store.read(名字)` |
 | `native store.update (名字 函数)` | `store.update(名字, 函数)`（函数要标成 (任意) → 任意） |
 | `native url.decode (文字)` | 小库 `urlDecode` |
-| `native http.serve`、`native time.sleep`、`spawn`、等 | 还没有（核心 3） |
+| `native http.serve (端口 函数)`、`native time.sleep`、`spawn`、`await` | 核心 2 第 4 段做了明着标的最小版：`http.serve(端口, 主机, 函数)`、`time.sleep`、`LSpawn`、`LAwait`（B-gen-notes 第 12 节）；完整的换算表在 `test/fixtures/framework/README.md` |
 | `static-method`、`(send 类名 方法 …)` | `LMethodDecl(isStatic: true)`、`LSend(LName(类名), …)` |
 | `private-field` | `LFieldDecl(isPrivate: true)` |

@@ -26,7 +26,7 @@ const LType _listT = LType.listOf(_t);
 const LType _texts = LType.listOf(LType.text);
 
 /// 版本 2 新加的小库名字。
-const Set<String> kLangRtV2New = {'orElse', 'must', 'toInt', 'parseInt', 'codePoints', 'isNumeric', 'urlDecode'};
+const Set<String> kLangRtV2New = {'orElse', 'must', 'toInt', 'parseInt', 'codePoints', 'isNumeric', 'urlDecode', 'isType', 'toNumber', 'dictMerge'};
 
 const Map<String, LRtSig> kLangRtV2 = {
   // —— 高阶 ——
@@ -134,4 +134,10 @@ const Map<String, LRtSig> kLangRtV2 = {
   'isNumeric': LRtSig('是不是数字', [LType.any], LType.boolean),
   // 把网址里的 %XX 换回原来的字（按 UTF-8）；“+”不动。写坏了的 %、换回来不是 UTF-8 的＝出错。
   'urlDecode': LRtSig('网址解码', [LType.text], LType.text),
+  // 这个值是不是某一类。第二个参数是类的名字：null bool number text list dict function object（对象、记录、枚举都算 object）；别的名字＝出错。
+  'isType': LRtSig('是不是这一类', [LType.any, LType.text], LType.boolean),
+  // 文字变成小数：认的写法和“是不是数字”一样；不是数字的＝出错。
+  'toNumber': LRtSig('变成数字', [LType.text], LType.number),
+  // 两个字典合成一个新的，后面的盖住前面的；原来的两个不动。
+  'dictMerge': LRtSig('合并字典', [LType.dictOf(_t), LType.dictOf(_t)], LType.dictOf(_t), typeVars: ['T']),
 };

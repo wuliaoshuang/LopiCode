@@ -14,12 +14,10 @@ import (
 	"encoding/json"
 	"math"
 	"net/url"
-	"os"
 	"reflect"
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -176,7 +174,7 @@ func Round(x float64) int64 {
 	return ToInt(t)
 }
 func Sqrt(x float64) float64 { return math.Sqrt(x) }
-func Now() float64          { return float64(time.Now().UnixMilli()) }
+func Now() float64           { return float64(time.Now().UnixMilli()) }
 func Steps(a, b, s int64) int64 {
 	if s == 0 || (b > a && s < 0) || (b < a && s > 0) {
 		return 0
@@ -199,7 +197,7 @@ func FSteps(a, b, s float64) int64 {
 }
 
 // —— 文字（按码点） ——
-func TextLen(s string) int64 { return int64(utf8.RuneCountInString(s)) }
+func TextLen(s string) int64    { return int64(utf8.RuneCountInString(s)) }
 func CmpText(a, b string) int64 { return int64(strings.Compare(a, b)) }
 func Cmp[T Ordered](a, b T) int64 {
 	if a < b {
@@ -241,10 +239,10 @@ func CodePoints(s string) *List[int64] {
 	}
 	return out
 }
-func Split(s, sep string) *List[string]  { return &List[string]{Items: strings.Split(s, sep)} }
-func StartsWith(s, p string) bool        { return strings.HasPrefix(s, p) }
-func EndsWith(s, p string) bool          { return strings.HasSuffix(s, p) }
-func Contains(s, p string) bool          { return strings.Contains(s, p) }
+func Split(s, sep string) *List[string] { return &List[string]{Items: strings.Split(s, sep)} }
+func StartsWith(s, p string) bool       { return strings.HasPrefix(s, p) }
+func EndsWith(s, p string) bool         { return strings.HasSuffix(s, p) }
+func Contains(s, p string) bool         { return strings.Contains(s, p) }
 func IndexOf(s, p string) int64 {
 	at := strings.Index(s, p)
 	if at < 0 {
@@ -367,10 +365,10 @@ func Get[V any](d Dict[V], k string) *V {
 	}
 	return nil
 }
-func GetNil[V any](d Dict[V], k string) V       { return d[k] }
-func DictLen[V any](d Dict[V]) int64            { return int64(len(d)) }
-func DictHas[V any](d Dict[V], k string) bool   { _, ok := d[k]; return ok }
-func DictKeys[V any](d Dict[V]) *List[string]   { return &List[string]{Items: Keys(d)} }
+func GetNil[V any](d Dict[V], k string) V     { return d[k] }
+func DictLen[V any](d Dict[V]) int64          { return int64(len(d)) }
+func DictHas[V any](d Dict[V], k string) bool { _, ok := d[k]; return ok }
+func DictKeys[V any](d Dict[V]) *List[string] { return &List[string]{Items: Keys(d)} }
 func DictValues[V any](d Dict[V]) *List[V] {
 	out := &List[V]{}
 	for _, k := range Keys(d) {

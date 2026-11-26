@@ -650,3 +650,15 @@ PHP 真跑撞到并修掉的 5 个问题，以及依据：
 - 网址解码：Node `decodeURIComponent`（写坏的 `%`、不是 UTF-8 会抛错）；Python `urllib.parse.unquote(s, errors="strict")`（写坏的 `%` 它原样留着，所以先用正则查）；PHP `rawurldecode`（不查，所以先查 `%`、再用 `preg_match('//u')` 查 UTF-8）；Go `url.PathUnescape`＋`utf8.ValidString`；Java 自己一个字节一个字节解＋`CharsetDecoder`（`URLDecoder` 会把“+”变空格，不能用）。
 - “是不是数字”里文字变数：Node `Number`、Python `float`、PHP `(float)`、Go `strconv.ParseFloat`、Java `Double.parseDouble`——都先用同一条正则把关，只靠它们判断“是不是无穷大”。
 - Go 的接口可以嵌方法重复的接口（要求签名一样）：靠它让“能被继承的类”的接口嵌它实现的接口。未对官方文档核对版本下限（开发机 1.25 通过）。
+
+## 积木第 5 版·核心 2 第 4 段用到的各语言标准库（2026-11-26）
+
+状态：**实跑核对**（开发机 Node v24.22.1、Python 3.12.3、PHP 8.3.37、Go 1.25.0、Java Temurin 21.0.13.1；`test/lang_gen2_framework_test.dart` 五种语言各 39 条请求逐字节一样），**没有逐条对官方文档**——下面每条都标“未核对”，只说明本机上实测是这样。
+
+- Node `node:http`：`createServer`、`server.listen(端口, 主机)`；`res.writeHead(状态码, 头)`＋`res.end(内容)`，自己给了 Content-Length 就不分块。未核对。
+- Python `http.server.ThreadingHTTPServer`＋`BaseHTTPRequestHandler`：一个请求一条线程（`daemon_threads = True`）；没改 `protocol_version`（默认 HTTP/1.0，一个请求一条连接），Content-Length 自己给。未核对。
+- PHP 自带的服务 `php -S 主机:端口 脚本`：单进程、一次一个请求、脚本每个请求从头跑；往 `php://stdout` 写的东西到服务进程的标准输出，PHP 自己的启动行、访问记录写标准错误；`PHP_SAPI` 是 `cli-server`；`header_remove('X-Powered-By')` 有效；204 不带 Content-Length、HEAD 自动不写内容；`$_SERVER['REQUEST_URI']` 是原样没解码、带查询的。本机 PHP 没有 pcntl / posix / sockets 扩展（所以 PHP 上没法真的同时做几件事）。PHP 手册说这个自带服务只给开发用——这一句也未核对原文。重名的请求头到了 PHP 是什么样子没验证。
+- PHP `flock(LOCK_EX)`＋`serialize / unserialize`：格子的带锁文件。未核对。
+- Go `net/http`：`http.Server{Handler}`＋`net.Listen` 再 `Serve`；自己设了 Content-Length 就不分块。`runtime.Stack` 输出的第一行是 `goroutine 编号 [状态]:`（格子里拿来认“是不是同一条线”，Go 不保证这个格式长期不变）。未核对。
+- Java `com.sun.net.httpserver.HttpServer`（JDK 自带，模块 `jdk.httpserver`）：`sendResponseHeaders(状态码, 长度)` 里长度给 `-1`＝没有内容、给正数＝定长不分块、给 `0`＝分块（所以空内容要给 `-1`）。`Thread.ofVirtual()`、`Executors.newVirtualThreadPerTaskExecutor()` 要 JDK 21。未核对。
+- `gofmt -l`、`go vet ./...`：本机 Go 1.25.0 下小库干净、“小框架”整套 vet 不报。

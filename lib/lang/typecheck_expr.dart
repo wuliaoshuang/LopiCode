@@ -99,8 +99,11 @@ mixin _Exprs on _Core {
       case LAwait(:final x):
         final t = w.res(ex(sc, x));
         return t.kind == LKind.future && !t.nullable ? WL.elem(t) : t;
-      case LSpawn():
-        return _any; // 异步在核心 3。
+      case LSpawn(:final body):
+        // 现在只认“返回 f()”一句（见 LSpawn）：结果是“稍后的结果〈那个式子的类型〉”。别的样子先按任意（核心 3）。
+        final only = body.length == 1 ? body.first : null;
+        if (only is! LReturn || only.value == null) return _any;
+        return LType(LKind.future, of: ex(sc, only.value!));
       case LRt():
         return runtimeCall(sc, e, wantT);
       case LNative(:final name, :final args):

@@ -252,21 +252,38 @@ function dtext(x) {
   return "[" + (x.constructor.lcName || "对象") + "]";
 }
 
-// —— 输出：攒起来，最后一次写出 ——
-const out = [];
-const log = (s) => { out.push(s); };
+// —— 输出：写一行就马上写出去（服务被关掉的时候不会丢）——
+let wrote = false;
+const log = (s) => { wrote = true; process.stdout.write(s + "\n"); };
 
 // —— 是不是数字、网址解码 ——
 const NUM = /^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)([eE][+-]?[0-9]+)?$/;
 const numTrim = (s) => s.replace(/^[ \t\n\r]+|[ \t\n\r]+$/g, "");
+// 这个值是不是某一类：null bool number text list dict function object。
+function isType(x, name) {
+  switch (name) {
+    case "null": return x === null || x === undefined;
+    case "bool": return typeof x === "boolean";
+    case "number": return typeof x === "number";
+    case "text": return typeof x === "string";
+    case "list": return Array.isArray(x);
+    case "dict": return x instanceof Map;
+    case "function": return typeof x === "function";
+    case "object": return x instanceof Obj || x instanceof Rec || x instanceof Enum;
+  }
+  return fail("没有「" + name + "」这一类值");
+}
+// 两个字典合成一个新的：后面的盖住前面的。
+const dictMerge = (a, b) => new Map([...a, ...b]);
 const isNumeric = (x) => typeof x === "number" || (typeof x === "string" && NUM.test(numTrim(x)) && Number.isFinite(Number(numTrim(x))));
+const toNumber = (s) => (isNumeric(s) ? Number(numTrim(s)) : fail("「" + s + "」变不成数字"));
 function urlDecode(s) {
   try { return decodeURIComponent(s); } catch (e) { return fail("这段网址编码解不开"); }
 }
 
 // —— 宿主（清单见 host_v2.dart）——
 function hostPrint(s, ch) {
-  if (ch === "out") out.push(s);
+  if (ch === "out") log(s);
   else if (ch === "err") process.stderr.write(s + "\n");
   else fail("通道只能是 out 或 err");
 }
@@ -275,6 +292,7 @@ const copyVal = (v) => (Array.isArray(v) ? v.map(copyVal) : v instanceof Map ? n
 const store = new Map();
 const storeBusy = new Set();
 const storeRead = (name) => (store.has(name) ? copyVal(store.get(name)) : null);
+// Node 只有一条线，改格子的函数又不许“等”，所以别人插不进来；函数里再改同一个格子＝报错。
 function storeUpdate(name, f) {
   if (storeBusy.has(name)) fail("「" + name + "」这个格子正在改，不能在改它的函数里再改它");
   storeBusy.add(name);
@@ -284,10 +302,94 @@ function storeUpdate(name, f) {
     return copyVal(v);
   } finally { storeBusy.delete(name); }
 }
+const hostEnv = (name) => { const v = process.env[name]; return v === undefined ? null : v; };
 
+// —— 要等的事 ——
+const hostSleep = (ms) => new Promise((done) => setTimeout(() => done(null), Math.max(0, ms)));
+// 开始做一件事：马上开始，拿到“稍后的结果”；出了错先记着，等它的时候再抛。
+function spawn(f) {
+  const p = f();
+  p.catch(() => {});
+  return p;
+}
+
+// —— 开服务（细则见 docs/blocks-v5-parts/C-library-system.md 9.1 和 B-gen-notes.md 第 12 节）——
+const BODY_LIMIT = 1048576;
+const errText = (e) => (e instanceof LcError ? "出错：" + e.message : String((e && e.stack) || e));
+function writeRaw(req, res, status, headers, text) {
+  const bytes = Buffer.from(text, "utf8");
+  const noBody = status === 204 || status === 304 || status < 200;
+  const list = [];
+  for (const k of keys(headers)) if (k.toLowerCase() !== "content-length") list.push([k, dtext(headers.get(k))]);
+  if (!noBody) list.push(["Content-Length", String(bytes.length)]);
+  res.writeHead(status, list);
+  res.end(noBody || req.method === "HEAD" ? undefined : bytes);
+}
+const hostError = (req, res, status, message) =>
+  writeRaw(req, res, status, new Map([["Content-Type", "application/json; charset=utf-8"]]), toJson(new Map([["error", message]])));
+async function serveOne(req, res, handler) {
+  const chunks = [];
+  let total = 0;
+  for await (const chunk of req) {
+    total += chunk.length;
+    if (total <= BODY_LIMIT) chunks.push(chunk);
+  }
+  if (total > BODY_LIMIT) return hostError(req, res, 413, "请求内容太大");
+  let body;
+  try { body = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(Buffer.concat(chunks)); } catch (e) { body = null; }
+  const headers = new Map();
+  for (let i = 0; i + 1 < req.rawHeaders.length; i += 2) {
+    const name = req.rawHeaders[i].toLowerCase();
+    const value = req.rawHeaders[i + 1].replace(/^[ \t]+|[ \t]+$/g, "");
+    headers.set(name, headers.has(name) ? headers.get(name) + ", " + value : value);
+  }
+  const url = req.url || "/";
+  const q = url.indexOf("?");
+  const request = new Map([["method", req.method], ["path", q < 0 ? url : url.slice(0, q)], ["query", q < 0 ? "" : url.slice(q + 1)], ["headers", headers], ["body", body]]);
+  let out;
+  try { out = await handler(request); } catch (e) {
+    process.stderr.write(errText(e) + "\n");
+    return hostError(req, res, 500, "服务器内部出错");
+  }
+  const status = out instanceof Map ? out.get("status") : null;
+  if (!Number.isInteger(status) || status < 100 || status > 599) {
+    process.stderr.write("处理函数返回的响应不对（要一个字典，status 是 100 到 599 的整数）\n");
+    return hostError(req, res, 500, "服务器内部出错");
+  }
+  const hs = out.get("headers");
+  return writeRaw(req, res, status, hs instanceof Map ? hs : new Map(), dtext(out.get("body")));
+}
+// 一直服务，不返回；端口用不了＝出错。
+function hostServe(port, host, handler) {
+  return new Promise((done, bad) => {
+    if (port < 0 || port > 65535) return bad(new LcError("开不了服务：端口要在 0 到 65535 之间"));
+    const server = require("node:http").createServer((req, res) => {
+      serveOne(req, res, handler).catch((e) => {
+        process.stderr.write(errText(e) + "\n");
+        if (!res.headersSent) hostError(req, res, 500, "服务器内部出错");
+        else res.destroy();
+      });
+    });
+    server.on("error", () => bad(new LcError("开不了服务：" + host + ":" + port + " 用不了")));
+    server.listen(port, host, () => log("后端已启动：http://" + host + ":" + server.address().port));
+  });
+}
+
+function fatal(e) {
+  if (!(e instanceof LcError)) throw e;
+  log("出错：" + e.message);
+  process.exitCode = 1;
+}
+// 跑主程序。什么都没写过的，最后补一个空行（和原来“攒到最后一次写”的样子一样）。
+const finish = () => { if (!wrote) process.stdout.write("\n"); };
 function run(main) {
-  try { main(); } catch (e) { if (e instanceof LcError) { out.push("出错：" + e.message); process.exitCode = 1; } else throw e; }
-  process.stdout.write(out.join("\n") + "\n");
+  let r;
+  try { r = main(); } catch (e) {
+    try { fatal(e); } finally { finish(); }
+    return;
+  }
+  if (r instanceof Promise) r.then(finish, (e) => { try { fatal(e); } finally { finish(); } });
+  else finish();
 }
 
 module.exports = {
@@ -300,6 +402,7 @@ module.exports = {
   listMap, listFilter, listReduce, listFind, listEvery, listSome, listEach, listJoin, listReverse, listConcat, listSlice,
   listIndexOf, listContains, range, recCopy,
   dadd, dsub, dmul, ddiv, dpow, didiv, dmod, dynGet, dynSet, dynPush, dynPop, dynRemove, dynOrElse, dynSize,
-  toJson, fromJson, dtext, log, run, isNumeric, urlDecode, hostPrint, hostNow, storeRead, storeUpdate,
+  toJson, fromJson, dtext, log, run, isNumeric, isType, dictMerge, toNumber, urlDecode,
+  hostPrint, hostNow, hostEnv, hostSleep, hostServe, spawn, storeRead, storeUpdate,
 };
 ''';

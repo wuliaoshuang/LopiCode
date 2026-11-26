@@ -267,7 +267,7 @@ abstract class _Core {
 
   LType rtype(LTypedFunc f) => f.ret != null ? w.resolve(f.ret, f.typeVars) : (rt[f.key] ?? _never);
 
-  LType fnType(LTypedFunc f) => LType(LKind.fn, args: [for (var i = 0; i < f.params.length; i++) ptype(f, i), rtype(f)]);
+  LType fnType(LTypedFunc f) => LType(LKind.fn, args: [for (var i = 0; i < f.params.length; i++) ptype(f, i), rtype(f)], waits: f.decl?.waits == true ? true : null);
 
   // —— 各部分互相要用的 ——
   LType ex(_Scope sc, LExpr e, [LType? wantT]);

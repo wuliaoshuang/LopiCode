@@ -59,6 +59,8 @@ abstract class GoGen2Types extends Gen2 {
         return '*lc.List[${gt(t.of ?? LType.any)}]';
       case LKind.dict:
         return 'lc.Dict[${gt(t.of ?? LType.any)}]';
+      case LKind.future:
+        return '*lc.Task[${_taskOf(t.of)}]';
       case LKind.fn:
         if (!t.hasShape) return 'any';
         return 'func(${t.params.map(gt).join(', ')})${t.returns.isNul ? '' : ' ${gt(t.returns)}'}';
@@ -179,7 +181,12 @@ abstract class GoGen2Types extends Gen2 {
       // 函数当另一种样子的函数用（比如返回“列表”的当返回“任意”的）：Go 里函数类型要一模一样，包一层。
       final f = tmpName('F'), qs = [for (final _ in to.params) tmpName('Q')];
       final call = '$f(${[for (var i = 0; i < qs.length; i++) conv(qs[i], to.params[i], from.params[i])].join(', ')})';
-      final body = to.returns.isNul ? call : 'return ${conv(call, from.returns, to.returns)}';
+      // 不返回东西的当“返回任意”的用：做完交回空。
+      final body = to.returns.isNul
+          ? call
+          : from.returns.isNul
+          ? '$call; return nil'
+          : 'return ${conv(call, from.returns, to.returns)}';
       return 'func($f ${gt(from)}) ${gt(to)} { return func(${[for (var i = 0; i < qs.length; i++) '${qs[i]} ${gt(to.params[i])}'].join(', ')})${to.returns.isNul ? '' : ' ${gt(to.returns)}'} { $body } }($code)';
     }
     final fb = from.nonNull, tb = to.nonNull;
@@ -288,10 +295,18 @@ abstract class GoGen2Types extends Gen2 {
     'charAt': 'CharAt', 'codePoints': 'CodePoints', 'listReverse': 'Reverse', 'listConcat': 'Concat', 'listSlice': 'Slice',
     'listContains': 'ListContains', 'listIndexOf': 'ListIndexOf', 'range': 'Range', 'dictKeys': 'DictKeys', 'dictValues': 'DictValues',
     'dictHas': 'DictHas', 'toJson': 'ToJson', 'fromJson': 'FromJson', 'now': 'Now', 'isNumeric': 'IsNumeric', 'urlDecode': 'UrlDecode',
+    'isType': 'IsType', 'toNumber': 'ToNumber', 'dictMerge': 'DictMerge',
   };
 
   @override
   String hostCall(String fn, List<String> args) => 'lc.${fn[0].toUpperCase()}${fn.substring(1)}(${args.join(', ')})';
+
+  // “稍后的结果”里放什么：不返回东西的函数放 any（里面是 nil）。
+  String _taskOf(LType? of) => of == null || of.isNul ? 'any' : gt(of);
+  @override
+  String spawnCode(String f, LType ft) => ft.returns.isNul ? 'lc.Spawn(func() any { $f(); return nil })' : 'lc.Spawn($f)';
+  @override
+  String waitCode(String task, LType of) => 'lc.Wait($task)';
 
   @override
   String rtCall(String fn, List<String> args, List<LType> types, LType ret, LRt e) {

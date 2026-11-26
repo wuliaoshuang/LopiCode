@@ -101,7 +101,7 @@ class LParam {
 
 /// 函数（第 2 阶段）。[type] 是返回类型标注。
 class LFuncDecl extends LDecl {
-  const LFuncDecl(this.name, this.params, this.body, {this.isPublic = false, this.typeParams = const [], this.codeName, super.src, super.type});
+  const LFuncDecl(this.name, this.params, this.body, {this.isPublic = false, this.typeParams = const [], this.codeName, this.waits = false, super.src, super.type});
   @override
   final String name;
   final List<LParam> params;
@@ -113,6 +113,9 @@ class LFuncDecl extends LDecl {
 
   /// 代码名（拉丁字母开头，只含字母数字）：导出给别的包 / 文件用时在 Go、Java 里叫什么（第 5 版，GAP-B-1）。
   final String? codeName;
+
+  /// 这个函数“要等”（里面有要等的事）。现在由写的人明着标；自动推是核心 3 的事。
+  final bool waits;
 }
 
 class LFieldDecl {
@@ -168,10 +171,13 @@ class LClassDecl extends LDecl {
 }
 
 class LSignature {
-  const LSignature(this.name, this.params, {this.returns});
+  const LSignature(this.name, this.params, {this.returns, this.waits = false});
   final String name;
   final List<LParam> params;
   final LType? returns;
+
+  /// 这个方法“要等”。
+  final bool waits;
 }
 
 /// 接口（第 5 阶段）。
@@ -505,15 +511,18 @@ class LIsA extends LExpr {
 
 /// 匿名函数（第 2 阶段）。两种写法：带函数体的（[body]）；只有一个式子的短写法（[expr] 不是 null，这时 [body] 不用）。
 class LLambda extends LExpr {
-  const LLambda(this.params, this.body, {this.expr, super.src});
+  const LLambda(this.params, this.body, {this.expr, this.waits = false, super.src});
 
   /// 短写法：`(x) → 式子`。
-  const LLambda.short(this.params, LExpr this.expr, {super.src}) : body = const [];
+  const LLambda.short(this.params, LExpr this.expr, {this.waits = false, super.src}) : body = const [];
   final List<LParam> params;
   final List<LStmt> body;
 
   /// 短写法的那个式子；带函数体的是 null。
   final LExpr? expr;
+
+  /// 这个匿名函数“要等”。
+  final bool waits;
 
   /// 统一成函数体来看：短写法就是“返回 (式子)”。
   List<LStmt> get stmts => expr == null ? body : [LReturn(expr, src: src)];
@@ -529,7 +538,8 @@ class LAwait extends LExpr {
   final LExpr x;
 }
 
-/// 开始做（第 6 阶段）。
+/// 开始做（第 6 阶段）。严格规矩下现在只认一种样子：里面就一句“返回 f()”，f 是不带参数的函数——
+/// 马上开始做 f，结果是“稍后的结果〈f 返回的类型〉”。
 class LSpawn extends LExpr {
   const LSpawn(this.body, {super.src});
   final List<LStmt> body;

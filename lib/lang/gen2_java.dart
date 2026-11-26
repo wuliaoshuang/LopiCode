@@ -71,6 +71,8 @@ abstract class JavaGen2Types extends Gen2 {
         return 'ArrayList<${jb(t.of ?? LType.any)}>';
       case LKind.dict:
         return 'TreeMap<String, ${jb(t.of ?? LType.any)}>';
+      case LKind.future:
+        return 'LcHost.Task<${t.of == null || t.of!.isNul ? 'Object' : jb(t.of!)}>';
       case LKind.fn:
         return t.hasShape ? fnType(t.params, t.returns) : 'Object';
       case LKind.record || LKind.enumeration || LKind.variant || LKind.interface:
@@ -216,7 +218,12 @@ abstract class JavaGen2Types extends Gen2 {
       // 函数当另一种样子的函数用（比如返回“列表”的当返回“任意”的）：Java 的泛型不会自己转，包一层。
       final f = tmpName('F'), qs = [for (final _ in to.params) tmpName('Q')];
       final call = '$f.call(${[for (var i = 0; i < qs.length; i++) conv(qs[i], to.params[i], from.params[i])].join(', ')})';
-      final body = to.returns.isNul ? '{ $call; }' : conv(call, from.returns, to.returns);
+      // 不返回东西的当“返回任意”的用：做完交回空。
+      final body = to.returns.isNul
+          ? '{ $call; }'
+          : from.returns.isNul
+          ? '{ $call; return null; }'
+          : conv(call, from.returns, to.returns);
       return '((Lc.Fn1<${jt(from)}, ${jt(to)}>) ($f) -> (${jt(to)}) (${qs.join(', ')}) -> $body).call($code)';
     }
     if (from.nonNull.kind == LKind.integer && to.nonNull.kind == LKind.number) return from.nullable ? 'Lc.widenOpt($code)' : 'Lc.i2f($code)';
@@ -312,11 +319,31 @@ abstract class JavaGen2Types extends Gen2 {
   static const Set<String> _rt = {
     'listMap', 'listFilter', 'listReduce', 'listFind', 'listEvery', 'listSome', 'listEach', 'toInt', 'parseInt', 'sqrt', 'floor', 'ceil', 'round', //
     'listJoin', 'split', 'substring', 'startsWith', 'endsWith', 'contains', 'indexOf', 'replace', 'trim', 'upper', 'lower', 'repeatText', 'charAt',
-    'codePoints', 'listReverse', 'listConcat', 'listSlice', 'listContains', 'listIndexOf', 'range', 'dictValues', 'dictHas', 'toJson', 'fromJson', 'now', 'isNumeric', 'urlDecode',
+    'codePoints',
+    'listReverse',
+    'listConcat',
+    'listSlice',
+    'listContains',
+    'listIndexOf',
+    'range',
+    'dictValues',
+    'dictHas',
+    'toJson',
+    'fromJson',
+    'now',
+    'isNumeric',
+    'urlDecode',
+    'isType',
+    'toNumber',
+    'dictMerge',
   };
 
   @override
-  String hostCall(String fn, List<String> args) => 'Lc.$fn(${args.join(', ')})';
+  String hostCall(String fn, List<String> args) => 'LcHost.$fn(${args.join(', ')})';
+  @override
+  String spawnCode(String f, LType ft) => ft.returns.isNul ? 'LcHost.spawn(() -> { $f.call(); return null; })' : 'LcHost.spawn($f)';
+  @override
+  String waitCode(String task, LType of) => 'LcHost.await($task)';
 
   @override
   String rtCall(String fn, List<String> args, List<LType> types, LType ret, LRt e) {

@@ -43,7 +43,7 @@ class LTypedSig {
   final List<LType> params;
   final LType returns;
 
-  LType get type => LType(LKind.fn, args: [...params, returns]);
+  LType get type => LType(LKind.fn, args: [...params, returns], waits: info.decl?.waits == true ? true : null);
 }
 
 /// 检查的结果。所有类型都是收尾以后的：不含“待定”“永不”（没定下来的按“任意”）。

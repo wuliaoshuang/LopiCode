@@ -7,6 +7,7 @@ import 'package:lopicode/lang/gen2.dart';
 import 'package:lopicode/lang/gen2_err.dart';
 import 'package:lopicode/lang/gen2_go.dart';
 import 'package:lopicode/lang/rt2_go_dyn.dart';
+import 'package:lopicode/lang/rt2_go_host.dart';
 import 'package:lopicode/lang/type_world.dart';
 import 'package:lopicode/lang/types.dart';
 
@@ -22,7 +23,7 @@ class GoGen2 extends GoGen2Types {
   @override
   String get mainFile => 'main.go';
   @override
-  Map<String, String> get runtimeFiles => const {'go.mod': 'module lcprog\n\ngo 1.18\n', 'lc/lc.go': kRt2GoSource};
+  Map<String, String> get runtimeFiles => const {'go.mod': 'module lcprog\n\ngo 1.18\n', 'lc/lc.go': kRt2GoSource, 'lc/host.go': kRt2GoHost};
 
   final Map<V2Fn, _TryState> _states = Map.identity();
   _TryState get _st => _states[fn] ??= _TryState();
@@ -41,6 +42,9 @@ class GoGen2 extends GoGen2Types {
   List<String> exprStmt(String code, {required bool isVoid}) => code == 'nil' ? const [] : [isVoid ? code : '_ = $code'];
   @override
   List<String> throwLines(String message) => ['panic(lc.Error{Msg: $message})'];
+  // gofmt 的缩进是制表符。
+  @override
+  String get indentUnit => '\t';
   @override
   List<String> unreachable() => ['panic(lc.Error{Msg: "到不了这里"})'];
   @override
@@ -220,7 +224,7 @@ class GoGen2 extends GoGen2Types {
 
   List<String> _function(LFuncDecl d) {
     final sig = r.funcs[d.name]!;
-    final f = V2Fn(d.name, sig.returns);
+    final f = V2Fn(d.name, sig.returns, waits: d.waits);
     final (params, first) = _params(f, d.params, sig.params);
     return ['func ${funcName(d.name)}${_typeParams(sig.info.own, sig.info.bounds)}($params)${_retOf(sig.returns)} {', ...indent(funcBody(f, d.body, first: () => first)), '}'];
   }
@@ -399,7 +403,7 @@ class GoGen2 extends GoGen2Types {
     ]);
     for (final m in d.ownMethods) {
       final sig = sigs[m.fn.name]!;
-      final f = V2Fn(sig.key, sig.returns, cls: c);
+      final f = V2Fn(sig.key, sig.returns, cls: c, waits: m.fn.waits);
       final (ps, first) = _params(f, m.fn.params, sig.params);
       out.addAll(['func $recv ${member(m.fn.name)}($ps)${_retOf(sig.returns)} {', ...indent(funcBody(f, m.fn.body, first: () => first)), '}']);
     }
@@ -438,7 +442,7 @@ class GoGen2 extends GoGen2Types {
           break;
       }
     }
-    final main = V2Fn(Gen2Base.mainScope, LType.nul, isMain: true);
+    final main = V2Fn(Gen2Base.mainScope, LType.nul, isMain: true, waits: true);
     final body = funcBody(main, startup);
     return [
       '// 由 LopiCode 积木生成（Go，严格规矩、带原生类型）。',

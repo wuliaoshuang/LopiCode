@@ -328,9 +328,24 @@ const String _tail = r'''
     return v;
   }
 
-  // —— 出错、输出 ——
-  private static final ArrayList<String> out = new ArrayList<>();
-  static void log(String s) { out.add(s); }
+  // —— 输出：写一行就马上写出去（服务被关掉的时候不会丢）；几条线同时写，一行也不会被拆开 ——
+  private static final Object outLock = new Object();
+  private static boolean wrote = false;
+  static void log(String s) {
+    byte[] bytes = (s + "\n").getBytes(StandardCharsets.UTF_8);
+    synchronized (outLock) {
+      wrote = true;
+      System.out.write(bytes, 0, bytes.length);
+      System.out.flush();
+    }
+  }
+  static void errLine(String s) {
+    byte[] bytes = (s + "\n").getBytes(StandardCharsets.UTF_8);
+    synchronized (outLock) {
+      System.err.write(bytes, 0, bytes.length);
+      System.err.flush();
+    }
+  }
 
   // —— 是不是数字、网址解码 ——
   private static final java.util.regex.Pattern NUM = java.util.regex.Pattern.compile("[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)([eE][+-]?[0-9]+)?");
@@ -342,6 +357,31 @@ const String _tail = r'''
     while (b > a && " \t\n\r".indexOf(s.charAt(b - 1)) >= 0) b--;
     String t = s.substring(a, b);
     return NUM.matcher(t).matches() && !Double.isInfinite(Double.parseDouble(t));
+  }
+  static double toNumber(String s) {
+    if (!isNumeric(s)) return fail("「" + s + "」变不成数字");
+    return Double.parseDouble(s.strip());
+  }
+  /** 这个值是不是某一类：null bool number text list dict function object。 */
+  static boolean isType(Object x, String name) {
+    switch (name) {
+      case "null": return x == null;
+      case "bool": return x instanceof Boolean;
+      case "number": return x instanceof Double || x instanceof Long;
+      case "text": return x instanceof String;
+      case "list": return x instanceof ArrayList;
+      case "dict": return x instanceof TreeMap;
+      case "function": return x instanceof DynFn || x instanceof Fn;
+      case "object": return x instanceof Named;
+      default: return fail("没有「" + name + "」这一类值");
+    }
+  }
+  /** 两个字典合成一个新的：后面的盖住前面的。 */
+  static <V> TreeMap<String, V> dictMerge(TreeMap<String, V> a, TreeMap<String, V> b) {
+    TreeMap<String, V> d = dict();
+    d.putAll(a);
+    d.putAll(b);
+    return d;
   }
   static String urlDecode(String s) {
     byte[] in = s.getBytes(StandardCharsets.UTF_8);
@@ -361,17 +401,6 @@ const String _tail = r'''
     }
   }
 
-  // —— 宿主（清单见 host_v2.dart）——
-  static void hostPrint(String s, String ch) {
-    if (ch.equals("out")) { out.add(s); return; }
-    if (!ch.equals("err")) fail("通道只能是 out 或 err");
-    byte[] bytes = (s + "\n").getBytes(StandardCharsets.UTF_8);
-    System.err.write(bytes, 0, bytes.length);
-    System.err.flush();
-  }
-  static long hostNow() { return System.currentTimeMillis(); }
-  private static final TreeMap<String, Object> store = new TreeMap<>();
-  private static final java.util.HashSet<String> storeBusy = new java.util.HashSet<>();
   static Object copyVal(Object v) {
     if (v instanceof ArrayList<?> l) {
       ArrayList<Object> c = new ArrayList<>();
@@ -379,26 +408,11 @@ const String _tail = r'''
       return c;
     }
     if (v instanceof TreeMap<?, ?> m) {
-      TreeMap<String, Object> c = new TreeMap<>();
+      TreeMap<String, Object> c = dict();
       for (Map.Entry<?, ?> e : m.entrySet()) c.put((String) e.getKey(), copyVal(e.getValue()));
       return c;
     }
     return v;
-  }
-  static Object storeRead(String name) {
-    synchronized (store) { return copyVal(store.get(name)); }
-  }
-  static Object storeUpdate(String name, Fn1<Object, Object> f) {
-    synchronized (store) {
-      if (!storeBusy.add(name)) fail("「" + name + "」这个格子正在改，不能在改它的函数里再改它");
-    }
-    try {
-      Object v = copyVal(f.call(storeRead(name)));
-      synchronized (store) { store.put(name, v); }
-      return copyVal(v);
-    } finally {
-      synchronized (store) { storeBusy.remove(name); }
-    }
   }
 
   static void run(Act0 main) {
@@ -406,12 +420,13 @@ const String _tail = r'''
     try {
       main.call();
     } catch (LcError e) {
-      out.add("出错：" + e.getMessage());
+      log("出错：" + e.getMessage());
       failed = true;
     }
-    byte[] bytes = (String.join("\n", out) + "\n").getBytes(StandardCharsets.UTF_8);
-    System.out.write(bytes, 0, bytes.length);
-    System.out.flush();
+    synchronized (outLock) {
+      if (!wrote) System.out.write('\n'); // 什么都没写过的，补一个空行（和原来“攒到最后一次写”的样子一样）
+      System.out.flush();
+    }
     if (failed) System.exit(1);
   }
 }

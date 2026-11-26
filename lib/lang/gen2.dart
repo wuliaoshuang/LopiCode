@@ -42,7 +42,7 @@ class V2Var {
 
 /// 正在生成的那个函数（有名字的函数、方法、“创建时”、匿名函数、主程序）。
 class V2Fn {
-  V2Fn(this.scope, this.ret, {this.parent, this.lambda, this.cls, this.isCtor = false, this.isMain = false});
+  V2Fn(this.scope, this.ret, {this.parent, this.lambda, this.cls, this.isCtor = false, this.isMain = false, this.waits = false});
   final String scope;
 
   /// 返回类型；空＝不返回东西。
@@ -52,6 +52,12 @@ class V2Fn {
   final LClassInfo? cls;
   final bool isCtor;
   final bool isMain;
+
+  /// 这个函数标了“要等”（主程序总是可以等）。
+  final bool waits;
+
+  /// 里面真的出现了要等的事。
+  bool usedWait = false;
 
   int get depth => parent == null ? 0 : parent!.depth + 1;
   V2Fn get root => parent?.root ?? this;
@@ -545,7 +551,11 @@ abstract class Gen2Base {
     try {
       final head = first?.call() ?? const <String>[];
       final lines = stmts(body);
-      final tail = f.isVoid ? const <String>[] : (!fallsOff(body) ? alwaysTail(f) : (f.ret.nullable || f.ret.isAny ? [returnLine(nulOf(f.ret))] : unreachable()));
+      final tail = f.isVoid
+          ? const <String>[]
+          : (!fallsOff(body)
+                ? (body.isNotEmpty && (body.last is LReturn || body.last is LThrow) ? const <String>[] : alwaysTail(f))
+                : (f.ret.nullable || f.ret.isAny ? [returnLine(nulOf(f.ret))] : unreachable()));
       return [...declareLocals(f), ...head, ...lines, ...tail];
     } finally {
       _fnOrNull = saved;

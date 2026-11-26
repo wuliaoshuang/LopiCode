@@ -143,7 +143,7 @@ class _Rewriter {
 
   LFuncDecl func(LFuncDecl d) {
     final body = block(d.body);
-    return identical(body, d.body) ? d : LFuncDecl(d.name, d.params, body, isPublic: d.isPublic, typeParams: d.typeParams, codeName: d.codeName, src: d.src, type: d.type);
+    return identical(body, d.body) ? d : LFuncDecl(d.name, d.params, body, isPublic: d.isPublic, typeParams: d.typeParams, codeName: d.codeName, waits: d.waits, src: d.src, type: d.type);
   }
 
   LDecl decl(LDecl d) {
@@ -320,10 +320,10 @@ class _Rewriter {
       case LLambda():
         if (e.expr != null) {
           final x = expr(e.expr!);
-          return identical(x, e.expr) ? e : LLambda.short(e.params, x, src: e.src);
+          return identical(x, e.expr) ? e : LLambda.short(e.params, x, waits: e.waits, src: e.src);
         }
         final body = block(e.body);
-        return identical(body, e.body) ? e : LLambda(e.params, body, src: e.src);
+        return identical(body, e.body) ? e : LLambda(e.params, body, waits: e.waits, src: e.src);
       case LAwait():
         final x = expr(e.x);
         return identical(x, e.x) ? e : LAwait(x, src: e.src);

@@ -131,7 +131,11 @@ void lWalk(List<LStmt> list, void Function(LStmt s) visit) {
 
 /// 一个式子直接套着的子式子。
 List<LExpr> lExprChildren(LExpr e) => switch (e) {
-  LLit() || LName() || LThis() || LLambda() || LSpawn() => const [],
+  LLit() || LName() || LThis() || LLambda() => const [],
+  LSpawn(:final body) => [
+    for (final s in body)
+      if (s is LReturn && s.value != null) s.value!,
+  ],
   LListLit(:final items) => items,
   LDictLit(:final entries) => [
     for (final x in entries) ...[x.key, x.value],
@@ -196,5 +200,5 @@ List<LDecl> lStaticDecls(LClassDecl d) => [
   for (final f in d.fields)
     if (f.isStatic) LVarDecl(lStaticName(d.name, f.name), f.init ?? const LLit(null), src: d.src, type: f.type),
   for (final m in d.methods)
-    if (m.isStatic) LFuncDecl(lStaticName(d.name, m.fn.name), m.fn.params, m.fn.body, typeParams: m.fn.typeParams, src: m.fn.src ?? d.src, type: m.fn.type),
+    if (m.isStatic) LFuncDecl(lStaticName(d.name, m.fn.name), m.fn.params, m.fn.body, typeParams: m.fn.typeParams, waits: m.fn.waits, src: m.fn.src ?? d.src, type: m.fn.type),
 ];

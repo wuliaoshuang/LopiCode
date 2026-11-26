@@ -124,6 +124,9 @@ class PhpGen2 extends Gen2Dyn {
   }
 
   @override
+  String hostCall(String fn, List<String> args) => 'LcHost::$fn(${args.join(', ')})';
+
+  @override
   List<String> funcDecl(String name, List<String> params, List<String> body) => ['function $name(${params.join(', ')}) {', ...indent(body), '}'];
 
   @override
