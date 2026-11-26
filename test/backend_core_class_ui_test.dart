@@ -50,6 +50,98 @@ void main() {
   tearDown(BkDockMemory.clear);
 
   for (final (mode, suffix) in [(ThemeMode.light, 'light'), (ThemeMode.dark, 'dark')]) {
+    testWidgets('别的几种类型：自己的错误种类（继承内置种类、加字段）、枚举加情况、变体的情况带东西、新建接口加方法；类的字段设“内部”“类本身的”、方法设“类本身的”（$suffix）', (tester) async {
+      await open(tester, mode: mode, seed: seed());
+      final host = be(tester).host!;
+      Future<void> done() async {
+        await tester.tap(k('be-sheet-done').last);
+        await tester.pumpAndSettle();
+      }
+
+      BeTypeDef last() => doc(tester).core.types.last;
+
+      // 错误种类：父类选内置的“找不到”，加一个字段。
+      await more(tester, 'types');
+      await tapK(tester, 'be-core-add');
+      await tapK(tester, 'be-core-add-error');
+      await tapK(tester, 'be-core-name');
+      await typeName(tester, '没货');
+      await tapK(tester, 'be-core-parent');
+      await tapK(tester, 'be-core-parent-找不到');
+      await tapK(tester, 'be-core-add-field');
+      expect((last().kind, last().name, last().parent, last().fields.length), (BeTypeKind.error, '没货', '找不到', 1));
+      await shot(tester, '$out/7-error-kind-$suffix');
+      await done();
+
+      // 枚举：加情况、改名、删掉一种。
+      await tapK(tester, 'be-core-add');
+      await tapK(tester, 'be-core-add-enum');
+      await tapK(tester, 'be-core-add-case');
+      final first = last().cases.first.name;
+      await tapK(tester, 'be-core-case-$first');
+      await typeName(tester, '春');
+      expect(last().cases.first.name, '春');
+      final n = last().cases.length;
+      await tapK(tester, 'be-core-case-remove-${last().cases.last.name}');
+      expect(last().cases, hasLength(n - 1));
+      await shot(tester, '$out/7-enum-$suffix');
+      await done();
+
+      // 变体：给一种情况加带的东西。
+      await tapK(tester, 'be-core-add');
+      await tapK(tester, 'be-core-add-variant');
+      await tapK(tester, 'be-core-add-case');
+      await tapK(tester, 'be-core-add-field-${last().cases.first.name}');
+      expect(last().kind, BeTypeKind.variant);
+      expect(last().cases.first.fields, hasLength(1));
+      await shot(tester, '$out/7-variant-$suffix');
+      await done();
+
+      // 接口：加一个方法（只有签名）。
+      await tapK(tester, 'be-core-add');
+      await tapK(tester, 'be-core-add-interface');
+      await tapK(tester, 'be-core-add-method');
+      expect(last().kind, BeTypeKind.interface);
+      expect(last().methods.single.body, isEmpty);
+      await done();
+
+      // 类“动物”：字段设成“内部”、再设成“类本身的”；方法设成“类本身的”。
+      await tapK(tester, 'be-core-type-动物');
+      await tapK(tester, 'be-core-field-more-名字');
+      await tapK(tester, 'be-core-field-private-名字');
+      await tapK(tester, 'be-core-add-field');
+      final extra = doc(tester).core.typeNamed('动物')!.fields.last.name;
+      await tapK(tester, 'be-core-field-more-$extra');
+      await tapK(tester, 'be-core-field-static-$extra');
+      await tapK(tester, 'be-core-method-叫');
+      await tapK(tester, 'be-core-static');
+      final animal = doc(tester).core.typeNamed('动物')!;
+      expect((animal.fields.first.isPrivate, animal.fields.last.isStatic, animal.methods.single.isStatic), (true, true, true));
+      await shot(tester, '$out/7-class-members-$suffix');
+      await done();
+      await done();
+      await done();
+
+      // 新建的种类、类型在积木的下拉里选得到：“出错时 只接”有“没货”。
+      expect(host.core.errorKinds, contains('没货'));
+
+      final after = doc(tester).encode();
+      var steps = 0;
+      while (host.canUndo) {
+        host.undo();
+        steps++;
+      }
+      await tester.pumpAndSettle();
+      expect(doc(tester).core.types, hasLength(2));
+      for (var i = 0; i < steps; i++) {
+        host.redo();
+      }
+      await tester.pumpAndSettle();
+      expect(doc(tester).encode(), after);
+      await flushed(tester);
+      expect(saved().core.typeNamed('没货')?.parent, '找不到');
+    });
+
     testWidgets('子类和接口：选父类、照抄签名、自动放好“调父类的创建时”、类画布里拖“我自己”和“父类”一组；撤销重做（$suffix）', (tester) async {
       await open(tester, mode: mode, seed: seed());
       final host = be(tester).host!;
