@@ -187,7 +187,11 @@ void main() {
       final target = tester.widget<MessageActionBar>(find.ancestor(of: bar(last), matching: find.byType(MessageActionBar))).target;
       expect([for (final p in target.parts) p.id], [mid, last]);
       expect(target.copyText, '已经在后台跑了。\n\n构建成功。', reason: '复制＝这一轮各段正文连起来');
-      expect(tester.widget<MessageActionBar>(find.ancestor(of: bar(idOf('首页看完了。')), matching: find.byType(MessageActionBar))).target.copyText, '我先读一下。\n\n首页看完了。', reason: '工具调用之间说的话也是这一轮的正文');
+      expect(
+        tester.widget<MessageActionBar>(find.ancestor(of: bar(idOf('首页看完了。')), matching: find.byType(MessageActionBar))).target.copyText,
+        '我先读一下。\n\n首页看完了。',
+        reason: '工具调用之间说的话也是这一轮的正文',
+      );
       // 不该有的：一轮中间的话下面、压缩那一行、应用通知
       expect(session.chat.whereType<AssistantItem>().where((i) => i.text == '我先读一下。').single.id, isNotNull);
       expect(bar(idOf('我先读一下。')), findsNothing, reason: '工具之间说的话是一轮中间的一段，操作栏只在这一轮末尾');

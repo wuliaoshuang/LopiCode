@@ -95,7 +95,10 @@ void main() {
     Finder words(String text) => find.byWidgetPredicate((w) => w is MessageText && w.text == text);
     Finder boxed(Finder inner) => find.ancestor(
       of: inner,
-      matching: find.descendant(of: find.byType(ChatRowView), matching: find.byWidgetPredicate((w) => w is Container && w.decoration is BoxDecoration && (w.decoration! as BoxDecoration).color != null)),
+      matching: find.descendant(
+        of: find.byType(ChatRowView),
+        matching: find.byWidgetPredicate((w) => w is Container && w.decoration is BoxDecoration && (w.decoration! as BoxDecoration).color != null),
+      ),
     );
     Future<void> steps(WidgetTester tester) async {
       for (var i = 0; i < 4; i++) {
