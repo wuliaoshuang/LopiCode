@@ -144,6 +144,11 @@ func IMod(a, b int64) int64 {
 	}
 	return a % b
 }
+
+// 两边都是写死的数时用（Go 自己在编译时算会嫌出界）。
+func FAdd(a, b float64) float64 { return a + b }
+func FSub(a, b float64) float64 { return a - b }
+func FMul(a, b float64) float64 { return a * b }
 func FDiv(a, b float64) float64 {
 	if b == 0 {
 		Fail("除以 0")

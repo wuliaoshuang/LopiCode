@@ -8,6 +8,7 @@ package lc
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"net"
 	"net/http"
@@ -235,7 +236,11 @@ func serveOne(w http.ResponseWriter, r *http.Request, handler func(Dict[any]) Di
 		}
 		headers[strings.ToLower(name)] = strings.Join(values, ", ")
 	}
-	path, query, _ := strings.Cut(r.RequestURI, "?")
+	target := r.RequestURI
+	if c, ok := r.Context().Value(connKey{}).(*rawConn); ok && c.target != "" {
+		target = c.target
+	}
+	path, query, _ := strings.Cut(target, "?")
 	request := Dict[any]{"method": r.Method, "path": path, "query": query, "headers": headers, "body": body}
 	var out Dict[any]
 	failed := func() (bad bool) {
@@ -266,6 +271,93 @@ func serveOne(w http.ResponseWriter, r *http.Request, handler func(Dict[any]) Di
 	writeRaw(w, r, int(status), hs, DText(out["body"]))
 }
 
+// —— 请求行里写法不对的百分号 ——
+// Go 的 net/http 碰到地址里有 %zz 这种写法会直接回 400，到不了处理函数；规矩是“原样交给处理函数”（别的语言都这样）。
+// 所以在连接上先看一眼请求行：记下原样的地址，把路径里写法不对的 % 换成 %25 再交给 net/http。
+// 为此一个连接只处理一个请求（关掉连接复用）。
+
+type connKey struct{}
+
+type rawConn struct {
+	net.Conn
+	target  string // 请求行里原样的地址
+	pending []byte // 已经改写好、还没交出去的字节
+	done    bool   // 请求行已经处理过（或者放弃处理）
+}
+
+const requestLineLimit = 65536
+
+func (c *rawConn) Read(p []byte) (int, error) {
+	if !c.done {
+		buf := make([]byte, 0, 1024)
+		chunk := make([]byte, 1024)
+		for {
+			n, err := c.Conn.Read(chunk)
+			buf = append(buf, chunk[:n]...)
+			end := bytes.IndexByte(buf, '\n')
+			if end >= 0 {
+				c.pending = append(c.rewrite(buf[:end]), buf[end:]...)
+				break
+			}
+			if err != nil || len(buf) > requestLineLimit {
+				c.pending = buf
+				if len(buf) == 0 {
+					c.done = true
+					return 0, err
+				}
+				break
+			}
+		}
+		c.done = true
+	}
+	if len(c.pending) > 0 {
+		n := copy(p, c.pending)
+		c.pending = c.pending[n:]
+		return n, nil
+	}
+	return c.Conn.Read(p)
+}
+
+func rawHex(b byte) bool {
+	return (b >= '0' && b <= '9') || (b >= 'a' && b <= 'f') || (b >= 'A' && b <= 'F')
+}
+
+// rewrite 处理请求行（不带结尾的换行）：方式 地址 HTTP/1.1。
+func (c *rawConn) rewrite(line []byte) []byte {
+	first := bytes.IndexByte(line, ' ')
+	last := bytes.LastIndexByte(line, ' ')
+	if first < 0 || last <= first {
+		return line
+	}
+	target := string(line[first+1 : last])
+	c.target = target
+	path, query, hasQuery := strings.Cut(target, "?")
+	var b bytes.Buffer
+	b.Write(line[:first+1])
+	for i := 0; i < len(path); i++ {
+		b.WriteByte(path[i])
+		if path[i] == '%' && (i+2 >= len(path) || !rawHex(path[i+1]) || !rawHex(path[i+2])) {
+			b.WriteString("25")
+		}
+	}
+	if hasQuery {
+		b.WriteByte('?')
+		b.WriteString(query)
+	}
+	b.Write(line[last:])
+	return b.Bytes()
+}
+
+type rawListener struct{ net.Listener }
+
+func (l rawListener) Accept() (net.Conn, error) {
+	conn, err := l.Listener.Accept()
+	if err != nil {
+		return nil, err
+	}
+	return &rawConn{Conn: conn}, nil
+}
+
 // HostServe：一直服务，不返回；端口用不了＝出错。
 func HostServe(port int64, host string, handler func(Dict[any]) Dict[any]) {
 	if port < 0 || port > 65535 {
@@ -276,8 +368,12 @@ func HostServe(port int64, host string, handler func(Dict[any]) Dict[any]) {
 		Fail("开不了服务：" + host + ":" + strconv.FormatInt(port, 10) + " 用不了")
 	}
 	Log("后端已启动：http://" + host + ":" + strconv.Itoa(ln.Addr().(*net.TCPAddr).Port))
-	server := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { serveOne(w, r, handler) })}
-	server.Serve(ln)
+	server := &http.Server{
+		Handler:     http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { serveOne(w, r, handler) }),
+		ConnContext: func(ctx context.Context, c net.Conn) context.Context { return context.WithValue(ctx, connKey{}, c) },
+	}
+	server.SetKeepAlivesEnabled(false)
+	server.Serve(rawListener{ln})
 	select {}
 }
 ''';

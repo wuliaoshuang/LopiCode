@@ -350,8 +350,12 @@ final class LcHost {
     int hash = s.indexOf('#');
     byte[] raw = (hash < 0 ? s : s.substring(0, hash)).getBytes(StandardCharsets.UTF_8);
     StringBuilder out = new StringBuilder();
+    // 方括号只在主机那一段（:// 后面到第一个 / ? # 之前，IPv6 地址）原样；后面的 java.net.URI 不认，转义掉（对方解出来是一样的）。
+    int pathFrom = s.indexOf("://") + 3;
+    while (pathFrom < s.length() && "/?#".indexOf(s.charAt(pathFrom)) < 0) pathFrom++;
     for (int i = 0; i < raw.length; i++) {
       int c = raw[i] & 0xFF;
+      if ((c == '[' || c == ']') && i >= pathFrom) { out.append(c == '[' ? "%5B" : "%5D"); continue; }
       boolean escaped = c == '%' && i + 2 < raw.length && Character.digit(raw[i + 1], 16) >= 0 && Character.digit(raw[i + 2], 16) >= 0;
       boolean keep = (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || "-._~:/?[]@!$&'()*+,;=".indexOf(c) >= 0;
       if (escaped || keep) out.append((char) c);

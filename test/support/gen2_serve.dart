@@ -110,6 +110,8 @@ Map<String, String> _env(int port) => {
   'GOCACHE': '${Directory.systemTemp.path}/lopi_gen2_gocache',
   'PORT': '$port',
   'HOST': '127.0.0.1',
+  // PHP 自带的开发服务器默认一次只接一个请求；接口里“请求别的网址”指回自己时要有第二个进程接（产品里的启动命令也带这一项）。
+  'PHP_CLI_SERVER_WORKERS': '4',
 };
 
 /// 把 [files] 写进临时目录，按 [language] 编译，起服务，等它能连上。没起成＝抛 StateError（里面是原因）。
