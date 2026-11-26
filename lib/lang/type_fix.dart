@@ -88,24 +88,16 @@ LNode? _swapFor(LFix fix, LNode target, LTypeResult? types, LExpr? fill) {
     case LFixKind.removeRecordField:
       final field = fix.params['field'];
       if (target is LRecordNew && target.fields.any((f) => f.name == field)) {
-        return LRecordNew(
-          target.record,
-          [
-            for (final f in target.fields)
-              if (f.name != field) f,
-          ],
-          src: target.src,
-        );
+        return LRecordNew(target.record, [
+          for (final f in target.fields)
+            if (f.name != field) f,
+        ], src: target.src);
       }
       if (target is LRecordCopy && target.fields.any((f) => f.name == field)) {
-        return LRecordCopy(
-          target.of,
-          [
-            for (final f in target.fields)
-              if (f.name != field) f,
-          ],
-          src: target.src,
-        );
+        return LRecordCopy(target.of, [
+          for (final f in target.fields)
+            if (f.name != field) f,
+        ], src: target.src);
       }
       return null;
     case LFixKind.useRecordCopy:

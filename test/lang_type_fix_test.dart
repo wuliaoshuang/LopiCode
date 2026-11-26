@@ -7,13 +7,13 @@ import 'package:lopicode/lang/type_fix.dart';
 const _int = LType.integer;
 const _txt = LType.text;
 
-LFuncDecl _fn(String name, LType param, [LType? returns]) => LFuncDecl(name, [LParam('x', type: param)], [LReturn(LName('x'))], type: returns);
+LFuncDecl _fn(String name, LType param, [LType? returns]) => LFuncDecl(name, [LParam('x', type: param)], [const LReturn(LName('x'))], type: returns);
 
 LStmt _call(String fn, LExpr arg) => LExprStmt(LCall(LName(fn), [arg]));
 
 final List<LDecl> _types = [
-  LRecordDecl('点', [LTypedField('x', _int), LTypedField('y', _int), LTypedField('名', _txt)]),
-  LVariantDecl('形状', [
+  const LRecordDecl('点', [LTypedField('x', _int), LTypedField('y', _int), LTypedField('名', _txt)]),
+  const LVariantDecl('形状', [
     LVariantCase('圆', [LTypedField('r', _int)]),
     LVariantCase('方', [LTypedField('a', _int)]),
     LVariantCase('无'),
@@ -32,16 +32,16 @@ final List<LDecl> _types = [
 
 void main() {
   final cases = <LFixKind, (String code, LModule Function() build)>{
-    LFixKind.wrapToText: ('T01', () => LModule(decls: [_fn('喊', _txt)], body: [_call('喊', LLit(3))])),
-    LFixKind.wrapToInt: ('T01', () => LModule(decls: [_fn('数', _int)], body: [_call('数', LLit(2.5))])),
-    LFixKind.wrapParseInt: ('T01', () => LModule(decls: [_fn('数', _int)], body: [_call('数', LLit('12'))])),
+    LFixKind.wrapToText: ('T01', () => LModule(decls: [_fn('喊', _txt)], body: [_call('喊', const LLit(3))])),
+    LFixKind.wrapToInt: ('T01', () => LModule(decls: [_fn('数', _int)], body: [_call('数', const LLit(2.5))])),
+    LFixKind.wrapParseInt: ('T01', () => LModule(decls: [_fn('数', _int)], body: [_call('数', const LLit('12'))])),
     LFixKind.wrapOrElse: (
       'T02',
       () => LModule(
         decls: [_fn('数', _int)],
         body: [
-          LLet('n', LRt('parseInt', [LLit('7')])),
-          _call('数', LName('n')),
+          const LLet('n', LRt('parseInt', [LLit('7')])),
+          _call('数', const LName('n')),
         ],
       ),
     ),
@@ -50,14 +50,14 @@ void main() {
       () => LModule(
         decls: [_fn('数', _int)],
         body: [
-          LLet('n', LRt('parseInt', [LLit('7')])),
-          _call('数', LName('n')),
+          const LLet('n', LRt('parseInt', [LLit('7')])),
+          _call('数', const LName('n')),
         ],
       ),
     ),
     LFixKind.compareNotZero: (
       'T09',
-      () => LModule(
+      () => const LModule(
         body: [
           LLet('n', LLit(1)),
           LIf([LIfArm(LName('n'), [])]),
@@ -69,8 +69,10 @@ void main() {
       () => LModule(
         decls: _types,
         body: [
-          LLet('s', LVariantNew('形状', '圆', [LLit(1)])),
-          LMatch(LName('s'), [LMatchArm('圆', ['r'], [])]),
+          const LLet('s', LVariantNew('形状', '圆', [LLit(1)])),
+          const LMatch(LName('s'), [
+            LMatchArm('圆', ['r'], []),
+          ]),
         ],
       ),
     ),
@@ -79,8 +81,10 @@ void main() {
       () => LModule(
         decls: _types,
         body: [
-          LLet('s', LVariantNew('形状', '圆', [LLit(1)])),
-          LMatch(LName('s'), [LMatchArm('圆', ['r'], [])]),
+          const LLet('s', LVariantNew('形状', '圆', [LLit(1)])),
+          const LMatch(LName('s'), [
+            LMatchArm('圆', ['r'], []),
+          ]),
         ],
       ),
     ),
@@ -89,7 +93,7 @@ void main() {
       () => LModule(
         decls: _types,
         body: [
-          LLet('p', LRecordNew('点', [LFieldInit('x', LLit(1))])),
+          const LLet('p', LRecordNew('点', [LFieldInit('x', LLit(1))])),
         ],
       ),
     ),
@@ -98,7 +102,7 @@ void main() {
       () => LModule(
         decls: _types,
         body: [
-          LLet('p', LRecordNew('点', [LFieldInit('x', LLit(1)), LFieldInit('y', LLit(2)), LFieldInit('名', LLit('a')), LFieldInit('多的', LLit(0))])),
+          const LLet('p', LRecordNew('点', [LFieldInit('x', LLit(1)), LFieldInit('y', LLit(2)), LFieldInit('名', LLit('a')), LFieldInit('多的', LLit(0))])),
         ],
       ),
     ),
@@ -107,8 +111,8 @@ void main() {
       () => LModule(
         decls: _types,
         body: [
-          LLet('p', LRecordNew('点', [LFieldInit('x', LLit(1)), LFieldInit('y', LLit(2)), LFieldInit('名', LLit('a'))])),
-          LAssign(LTField(LName('p'), 'x'), LLit(5)),
+          const LLet('p', LRecordNew('点', [LFieldInit('x', LLit(1)), LFieldInit('y', LLit(2)), LFieldInit('名', LLit('a'))])),
+          const LAssign(LTField(LName('p'), 'x'), LLit(5)),
         ],
       ),
     ),
@@ -165,22 +169,26 @@ void main() {
   });
 
   test('“是空就用”可以自己给后面那个值', () {
-    final (_, next, after) = fixOnce(cases[LFixKind.wrapOrElse]!.$2(), LFixKind.wrapOrElse, fill: LLit(42));
+    final (_, next, after) = fixOnce(cases[LFixKind.wrapOrElse]!.$2(), LFixKind.wrapOrElse, fill: const LLit(42));
     final r = ((next.body.last as LExprStmt).expr as LCall).args.single as LRt;
     expect((r.args[1] as LLit).value, 42);
     expect(after.errors, isEmpty);
   });
 
   test('目标在函数里、套在别的式子里也找得到；别的节点还是原来的对象', () {
-    final keep = LLet('别的', LLit(1));
+    const keep = LLet('别的', LLit(1));
     final m = LModule(
       decls: [
         _fn('喊', _txt),
-        LFuncDecl('外', [], [
+        const LFuncDecl('外', [], [
           keep,
           LIf([
             LIfArm(LLit(true), [
-              LExprStmt(LListLit([LCall(LName('喊'), [LLit(3)])])),
+              LExprStmt(
+                LListLit([
+                  LCall(LName('喊'), [LLit(3)]),
+                ]),
+              ),
             ]),
           ]),
         ]),
@@ -194,9 +202,9 @@ void main() {
   });
 
   test('做不了就返回 null，什么都不改', () {
-    final m = LModule(body: [LLet('n', LLit(1))]);
+    const m = LModule(body: [LLet('n', LLit(1))]);
     // 目标不在这个模块里。
-    expect(lApplyFix(m, LFix(LFixKind.wrapToText, '变成文字', target: LLit(9))), isNull);
+    expect(lApplyFix(m, const LFix(LFixKind.wrapToText, '变成文字', target: LLit(9))), isNull);
     // 没有目标。
     expect(lApplyFix(m, const LFix(LFixKind.wrapToText, '变成文字')), isNull);
     // 种类和目标对不上。

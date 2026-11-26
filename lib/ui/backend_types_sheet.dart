@@ -103,12 +103,7 @@ String _show(LType? t) => t == null ? '没标' : t.show();
 Future<void> showBeTypeEditor(BuildContext context, BeBlockHost host, BlockSelection sel) async {
   if (sel.path.isNotEmpty) {
     final name = host.script(sel.scriptId)?.blockAt(sel.path)?.args['name'];
-    await showBeTypePicker(
-      context,
-      title: '「${name is String ? name : '变量'}」放什么',
-      read: () => host.letTypeAt(sel.scriptId, sel.path),
-      write: (t) => host.setLetType(sel.scriptId, sel.path, t),
-    );
+    await showBeTypePicker(context, title: '「${name is String ? name : '变量'}」放什么', read: () => host.letTypeAt(sel.scriptId, sel.path), write: (t) => host.setLetType(sel.scriptId, sel.path, t));
     return;
   }
   await showModalBottomSheet<void>(
@@ -162,7 +157,13 @@ Future<void> showBeTypeEditor(BuildContext context, BeBlockHost host, BlockSelec
                     shrinkWrap: true,
                     children: [
                       for (final p in f.params)
-                        row('be-type-param-${p.name}', '参数「${p.name}」', p.type, () => host.doc.function(f.id)?.params.where((x) => x.name == p.name).firstOrNull?.type, (v) => host.setParamType(f.id, p.name, v)),
+                        row(
+                          'be-type-param-${p.name}',
+                          '参数「${p.name}」',
+                          p.type,
+                          () => host.doc.function(f.id)?.params.where((x) => x.name == p.name).firstOrNull?.type,
+                          (v) => host.setParamType(f.id, p.name, v),
+                        ),
                       row('be-type-returns', '交回什么', f.returns, () => host.doc.function(f.id)?.returns, (v) => host.setReturnType(f.id, v)),
                     ],
                   ),
@@ -270,7 +271,12 @@ Future<void> showBeTypePicker(BuildContext context, {required String title, requ
                                 Text(_pickText[p]!.$1, style: t.bodyLarge),
                                 const SizedBox(width: Space.x3),
                                 Expanded(
-                                  child: Text(_pickText[p]!.$2, maxLines: 1, overflow: TextOverflow.ellipsis, style: t.bodySmall?.copyWith(color: c.textMuted)),
+                                  child: Text(
+                                    _pickText[p]!.$2,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: t.bodySmall?.copyWith(color: c.textMuted),
+                                  ),
                                 ),
                               ],
                             ),
@@ -302,7 +308,11 @@ Future<void> showBeTypePicker(BuildContext context, {required String title, requ
                       ),
                       Padding(
                         padding: const EdgeInsets.fromLTRB(Space.x4, Space.x1, Space.x4, Space.x3),
-                        child: Text('现在：${_show(now)}', key: const ValueKey('be-type-now'), style: t.bodyMedium?.copyWith(color: c.textMuted)),
+                        child: Text(
+                          '现在：${_show(now)}',
+                          key: const ValueKey('be-type-now'),
+                          style: t.bodyMedium?.copyWith(color: c.textMuted),
+                        ),
                       ),
                     ],
                   ),

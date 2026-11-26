@@ -13,12 +13,7 @@ import 'support/backend_lang_blocks.dart';
 
 J tpar(String name, J type) => {'name': name, 'type': type};
 
-BeDocument docOf({List<J> functions = const [], List<J> routes = const [], int rules = 2}) => BeDocument.fromJson({
-  'name': 't',
-  'rules': rules,
-  'functions': functions,
-  'routes': routes,
-}).doc;
+BeDocument docOf({List<J> functions = const [], List<J> routes = const [], int rules = 2}) => BeDocument.fromJson({'name': 't', 'rules': rules, 'functions': functions, 'routes': routes}).doc;
 
 BeDocument sample({int rules = 2}) => docOf(
   rules: rules,
@@ -31,7 +26,12 @@ BeDocument sample({int rules = 2}) => docOf(
       let('a', call('f1', {'x': tx('12')})),
       let('b', call('f1', {'x': nm(2.5)})),
       let('c', call('f2', {'话': nm(3)})),
-      let('d', call('f1', {'x': ex('parseInt', {'s': tx('7')})})),
+      let(
+        'd',
+        call('f1', {
+          'x': ex('parseInt', {'s': tx('7')}),
+        }),
+      ),
       iff(nm(1), [json(vr('a'))], noElse: true),
       json(nm(1)),
     ]),
@@ -60,13 +60,7 @@ void main() {
   });
 
   test('每条问题都对到了哪一块、哪一格，带着能在积木上做的修法', () {
-    expect(lines(sample()), [
-      'T01 第1块 value[x] wrapParseInt',
-      'T01 第2块 value[x] wrapToInt',
-      'T01 第3块 value[话] wrapToText',
-      'T02 第4块 value[x] wrapOrElse+wrapMust',
-      'T09 第5块 cond[] compareNotZero',
-    ]);
+    expect(lines(sample()), ['T01 第1块 value[x] wrapParseInt', 'T01 第2块 value[x] wrapToInt', 'T01 第3块 value[话] wrapToText', 'T02 第4块 value[x] wrapOrElse+wrapMust', 'T09 第5块 cond[] compareNotZero']);
     final check = beTypeCheck(sample())!;
     expect(check.findings.first.issue.message, '「加倍」的第 1 个参数要整数，放进来的是文字');
     expect(check.findings.last.issue.message, '这里要“是/否”，放进来的是整数');
@@ -87,7 +81,11 @@ void main() {
     fixIn(doc, LFixKind.compareNotZero);
     expect(at(4, 'cond'), {'e': 'bin', 'op': '!=', 'l': nm(1), 'r': nm(0)});
     fixIn(doc, LFixKind.wrapOrElse);
-    expect(inner(3, 'x'), {'e': 'orElse', 'x': ex('parseInt', {'s': tx('7')}), 'd': nm(0)});
+    expect(inner(3, 'x'), {
+      'e': 'orElse',
+      'x': ex('parseInt', {'s': tx('7')}),
+      'd': nm(0),
+    });
     expect(lines(doc), ['T01 第1块 value[x] wrapParseInt']);
 
     // “变成整数”变不了就是空：修完换成一条“可能是空”，再点“一定不是空”才干净。
@@ -95,7 +93,10 @@ void main() {
     expect(inner(0, 'x'), {'e': 'parseInt', 's': tx('12')});
     expect(lines(doc), ['T02 第1块 value[x] wrapOrElse+wrapMust']);
     fixIn(doc, LFixKind.wrapMust);
-    expect(inner(0, 'x'), {'e': 'must', 'x': ex('parseInt', {'s': tx('12')})});
+    expect(inner(0, 'x'), {
+      'e': 'must',
+      'x': ex('parseInt', {'s': tx('12')}),
+    });
     expect(lines(doc), isEmpty);
 
     // 存盘再读回来还是没问题（三块严格积木、参数上标的类型都存得住）。
@@ -112,18 +113,35 @@ void main() {
       ],
       routes: [
         route('r1', 'GET', '/a', [
-          let('xs', ls([tx('a'), call('f2', {'话': nm(1)})])),
-          iff(yes(), [], arms: [arm({'cond': nm(2)}, [let('y', call('f2', {'话': nm(3)}))])], noElse: true),
+          let(
+            'xs',
+            ls([
+              tx('a'),
+              call('f2', {'话': nm(1)}),
+            ]),
+          ),
+          iff(
+            yes(),
+            [],
+            arms: [
+              arm(
+                {'cond': nm(2)},
+                [
+                  let('y', call('f2', {'话': nm(3)})),
+                ],
+              ),
+            ],
+            noElse: true,
+          ),
           json(nm(1)),
         ]),
       ],
     );
     final check = beTypeCheck(doc)!;
-    expect([for (final f in check.findings) '${f.issue.code} ${f.at.path.map((s) => '${s.index}/${s.arm}').join('>')} ${f.at.arg}${f.at.exprPath}'], [
-      'T01 0/-1 value[items, 1, 话]',
-      'T09 1/-1 @0:cond[]',
-      'T01 1/-1>0/0 value[话]',
-    ]);
+    expect(
+      [for (final f in check.findings) '${f.issue.code} ${f.at.path.map((s) => '${s.index}/${s.arm}').join('>')} ${f.at.arg}${f.at.exprPath}'],
+      ['T01 0/-1 value[items, 1, 话]', 'T09 1/-1 @0:cond[]', 'T01 1/-1>0/0 value[话]'],
+    );
     for (final kind in [LFixKind.wrapToText, LFixKind.compareNotZero, LFixKind.wrapToText]) {
       fixIn(doc, kind);
     }
@@ -140,7 +158,9 @@ void main() {
         },
       ],
       routes: [
-        route('r1', 'GET', '/a', [json(call('f1', {'x': nm(1)}))]),
+        route('r1', 'GET', '/a', [
+          json(call('f1', {'x': nm(1)})),
+        ]),
       ],
     );
     final f = beTypeCheck(doc)!.findings.single;
@@ -151,8 +171,8 @@ void main() {
     expect(beFixDefaultValue(LType.integer), nm(0));
     expect(beFixDefaultValue(LType.text), tx(''));
     expect(beFixDefaultValue(LType.boolean), no());
-    expect(beFixDefaultValue(LType.listOf(LType.integer)), {'e': 'listLit', 'items': <dynamic>[]});
-    expect(beFixDefaultValue(LType.dictOf(LType.any)), {'e': 'obj', 'fields': <dynamic>[]});
+    expect(beFixDefaultValue(const LType.listOf(LType.integer)), {'e': 'listLit', 'items': <dynamic>[]});
+    expect(beFixDefaultValue(const LType.dictOf(LType.any)), {'e': 'obj', 'fields': <dynamic>[]});
     expect(beFixDefaultValue(LType.any), isNull);
     expect(beFixDefaultValue(null), isNull);
   });

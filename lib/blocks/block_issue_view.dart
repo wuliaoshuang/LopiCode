@@ -217,8 +217,7 @@ class _IconPainter extends CustomPainter {
   final Color color;
 
   @override
-  void paint(Canvas canvas, Size size) =>
-      bkPaintIssueBadge(canvas, size.center(Offset.zero), error: error, hint: hint, color: color, ring: const Color(0x00000000), size: size.shortestSide * 0.42);
+  void paint(Canvas canvas, Size size) => bkPaintIssueBadge(canvas, size.center(Offset.zero), error: error, hint: hint, color: color, ring: const Color(0x00000000), size: size.shortestSide * 0.42);
 
   @override
   bool shouldRepaint(_IconPainter old) => old.error != error || old.hint != hint || old.color != color;

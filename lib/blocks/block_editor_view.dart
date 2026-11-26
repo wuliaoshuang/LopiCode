@@ -408,48 +408,48 @@ class BlockEditorViewState extends State<BlockEditorView> with TickerProviderSta
   Widget _actionsPill(BuildContext context, BlockSelection sel, BlockIssue? issue) {
     final c = context.colors;
     return _pill(
-        context,
-        children: [
-          if (issue != null)
-            Flexible(
-              child: Padding(
-                padding: const EdgeInsets.only(left: 14, right: 4),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(issue.isHint ? Icons.info_rounded : Icons.error_rounded, size: 16, color: issue.isError ? c.danger : (issue.isHint ? c.textMuted : c.warning)),
-                    const SizedBox(width: 6),
-                    Flexible(
-                      child: Text(
-                        issue.message,
-                        key: const ValueKey('bk-selection-issue'),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(color: c.text),
-                      ),
+      context,
+      children: [
+        if (issue != null)
+          Flexible(
+            child: Padding(
+              padding: const EdgeInsets.only(left: 14, right: 4),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(issue.isHint ? Icons.info_rounded : Icons.error_rounded, size: 16, color: issue.isError ? c.danger : (issue.isHint ? c.textMuted : c.warning)),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      issue.message,
+                      key: const ValueKey('bk-selection-issue'),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(color: c.text),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
-          if (sel.path.isNotEmpty)
-            IconButton(
-              key: const ValueKey('bk-action-duplicate'),
-              tooltip: '复制一块',
-              onPressed: duplicateSelection,
-              icon: const Icon(Icons.copy_rounded, size: 20),
-              color: c.text,
-              constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-            ),
+          ),
+        if (sel.path.isNotEmpty)
           IconButton(
-            key: const ValueKey('bk-action-delete'),
-            tooltip: sel.path.isEmpty ? '删掉这一串' : '删除',
-            onPressed: deleteSelection,
-            icon: const Icon(Icons.delete_outline_rounded, size: 20),
-            color: c.danger,
+            key: const ValueKey('bk-action-duplicate'),
+            tooltip: '复制一块',
+            onPressed: duplicateSelection,
+            icon: const Icon(Icons.copy_rounded, size: 20),
+            color: c.text,
             constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
           ),
-        ],
+        IconButton(
+          key: const ValueKey('bk-action-delete'),
+          tooltip: sel.path.isEmpty ? '删掉这一串' : '删除',
+          onPressed: deleteSelection,
+          icon: const Icon(Icons.delete_outline_rounded, size: 20),
+          color: c.danger,
+          constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+        ),
+      ],
     );
   }
 }

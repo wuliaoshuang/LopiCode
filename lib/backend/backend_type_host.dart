@@ -22,14 +22,24 @@ const List<({String title, String detail})> kBeStrictChanges = [
   (title: '东西放错了地方会标红', detail: '比如要数字的地方放了文字。以前会悄悄换算（"abc" 当成 0），以后直接标出来；有红的时候不生成新代码。'),
   (title: '数字分成整数和小数', detail: '整数最大到 9007199254740991，加减乘超了会报“整数超出范围”；小数用在要整数的地方要先“取整”。'),
   (title: '除以 0 会报错', detail: '以前除以 0 得 0，以后运行到这里会报“除以 0”。'),
-  (title: '文字不再自动变成数字', detail: '要用“把 ▢ 变成整数”或“转换类型”积木自己转；变不了的时候得到“空”。'),
-  (title: '可能是空的值要先处理', detail: '用“如果 … 不是空”判断，或者包一层“▢ 是空就用 ▢”。'),
+  (title: '文字不再自动变成数字', detail: '要用“把 … 变成整数”或“转换类型”积木自己转；变不了的时候得到“空”。'),
+  (title: '可能是空的值要先处理', detail: '用“如果 … 不是空”判断，或者包一层“… 是空就用 …”。'),
   (title: '可以给参数、结果、变量标类型', detail: '选中“定义”或“新建变量”那块积木，上面多一行类型，点“标类型”。不标也行，会自己推。'),
 ];
 
 /// “运算”页加上严格规矩才有的那一组。
-BlockCategory beStrictOperatorCategory(BlockCategory c) =>
-    BlockCategory(id: c.id, label: c.label, colorKey: c.colorKey, hats: c.hats, blocks: c.blocks, exprs: c.exprs, groups: [...c.groups, const BlockGroup('空和整数', exprs: ['parseInt', 'orElse', 'must'])]);
+BlockCategory beStrictOperatorCategory(BlockCategory c) => BlockCategory(
+  id: c.id,
+  label: c.label,
+  colorKey: c.colorKey,
+  hats: c.hats,
+  blocks: c.blocks,
+  exprs: c.exprs,
+  groups: [
+    ...c.groups,
+    const BlockGroup('空和整数', exprs: ['parseInt', 'orElse', 'must']),
+  ],
+);
 
 /// 类型标注能选的几种（界面上的选择表；“不标”另算）。
 const List<LType> kBeTypeChoices = [LType.integer, LType.number, LType.text, LType.boolean, LType.any];

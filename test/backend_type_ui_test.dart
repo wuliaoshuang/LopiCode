@@ -10,6 +10,7 @@ import 'package:lopicode/backend/backend_model.dart';
 import 'package:lopicode/backend/backend_targets.dart';
 import 'package:lopicode/backend/backend_validate.dart';
 import 'package:lopicode/blocks/block_canvas_view.dart';
+import 'package:lopicode/blocks/block_dock.dart';
 import 'package:lopicode/blocks/block_host.dart';
 import 'package:lopicode/blocks/block_issue_view.dart';
 import 'package:lopicode/core/templates.dart';
@@ -19,9 +20,10 @@ import 'package:lopicode/lowcode/logic_model.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'backend_screen_test.dart' show at, be, boot, doc, ed, k, more, paletteTab, saved, text, until;
-import 'screens_test.dart' show shot;
+import 'screens_test.dart' show fontsLoaded, shot;
 import 'support/backend_func_blocks.dart';
 import 'support/backend_lang_blocks.dart' hide text;
+import 'support/harness.dart' show loadRealFonts;
 
 const String out = '../../../preview/types';
 
@@ -72,6 +74,9 @@ Future<void> open(WidgetTester tester, int rules, {ThemeMode mode = ThemeMode.li
 }
 
 void main() {
+  setUpAll(() async => fontsLoaded = await loadRealFonts());
+  tearDown(BkDockMemory.clear);
+
   for (final mode in [ThemeMode.light, ThemeMode.dark]) {
     final suffix = mode == ThemeMode.light ? 'light' : 'dark';
     testWidgets('严格规矩：标红 → 小卡里提示语原文和修法 → 点了修好 → 撤销回来（$suffix）', (tester) async {
@@ -188,8 +193,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.descendant(of: k('be-type-param-x'), matching: find.text('文字')), findsOneWidget);
     expect(host.doc.function('f1')!.params.single.type, LType.text);
-    // 参数改成文字以后：原来“要整数放了文字”那条没了。
-    expect([for (final i in typeIssues(tester)) i.problem].where((p) => p.contains('「加倍」的第 1 个参数')), isEmpty);
+    // 参数改成文字以后：用它的地方跟着重新查。
+    expect([for (final i in typeIssues(tester)) i.problem].where((p) => p.contains('「加倍」的第 1 个参数')), ['「加倍」的第 1 个参数要文字，放进来的是整数'], reason: '第 1 块放的文字现在对了，第 4 块放的整数现在不对了');
     await tester.tapAt(const Offset(40, 60));
     await tester.pumpAndSettle();
 
@@ -216,10 +221,23 @@ void main() {
       final host = be(tester).host!;
       // —— 版本 1 钉子 ——
       final plain = validateBackend(host.doc, languages: [for (final t in backendTargets) t.id], table: host.funcTable);
-      expect([for (final i in host.issues) '${i.rule}|${i.message}|${i.isError}|${i.isHint}|${i.actions.length}'], [for (final i in plain) '${i.rule}|${i.message}|${i.isError}|false|0'], reason: '老规矩：问题和原来的校验逐条一样，没有修法按钮');
+      expect(
+        [for (final i in host.issues) '${i.rule}|${i.message}|${i.isError}|${i.isHint}|${i.actions.length}'],
+        [for (final i in plain) '${i.rule}|${i.message}|${i.isError}|false|0'],
+        reason: '老规矩：问题和原来的校验逐条一样，没有修法按钮',
+      );
       expect(host.typeCheck, isNull);
-      expect([for (final c in host.categories) for (final g in c.groups) ...g.exprs].where((e) => const ['parseInt', 'orElse', 'must'].contains(e)), isEmpty);
-      for (final sel in <BlockSelection>[BlockSelection('r1', [lcStep(0)]), const BlockSelection('f1', <LcBlockStep>[])]) {
+      expect(
+        [
+          for (final c in host.categories)
+            for (final g in c.groups) ...g.exprs,
+        ].where((e) => const ['parseInt', 'orElse', 'must'].contains(e)),
+        isEmpty,
+      );
+      for (final sel in <BlockSelection>[
+        BlockSelection('r1', [lcStep(0)]),
+        const BlockSelection('f1', <LcBlockStep>[]),
+      ]) {
         expect(host.typeLineOf(sel.scriptId, sel.path), isNull);
         expect(host.typeEditableAt(sel.scriptId, sel.path), isFalse);
         ed(tester).select(sel);
