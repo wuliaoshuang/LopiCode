@@ -192,7 +192,7 @@ void main() {
   });
 
   group('类', () {
-    J animal({bool open = true, List<J> dogCtor = const [], bool withCtor = true, List<String> interfaces = const [], List<J> extra = const []}) => coreDoc(
+    J animal({bool open = true, List<J> dogCtor = const [], bool withCtor = true, List<String> interfaces = const [], List<J> extra = const [], List<J> dogMethods = const []}) => coreDoc(
       '修',
       types: [
         typeDef(
@@ -206,7 +206,7 @@ void main() {
             method('m2', '叫', [tpar('times', tInt, def: 1)], [ret(tx('…'))], returns: tText),
           ],
         ),
-        typeDef('t2', 'class', '狗', parent: '动物', interfaces: interfaces, ctor: withCtor ? method('m3', '创建时', [tpar('name', tText)], dogCtor) : null),
+        typeDef('t2', 'class', '狗', parent: '动物', interfaces: interfaces, ctor: withCtor ? method('m3', '创建时', [tpar('name', tText)], dogCtor) : null, methods: dogMethods),
         ...extra,
       ],
       main: [
@@ -248,6 +248,25 @@ void main() {
       );
       final d = fixed(h, '可以被继承');
       expect(d.core.typeNamed('动物')!.isOpen, isTrue);
+    });
+
+    test('T18 重写的方法和父类的对不上 → 照抄上面的签名（连默认值；方法里的积木留着）', () {
+      final h = hostOf(
+        animal(
+          dogCtor: [
+            blk('superInit', {
+              'args': [pm('name')],
+            }),
+          ],
+          dogMethods: [
+            method('m8', '叫', [tpar('n', tText)], [ret(tx('汪'))], returns: tText),
+          ],
+        ),
+      );
+      final d = fixed(h, '照抄上面的签名');
+      final m = d.core.typeNamed('狗')!.methods.single;
+      expect((m.params.single.name, m.params.single.defaultValue, m.params.single.type?.show(), m.returns?.show()), ('times', 1, '整数', '文字'));
+      expect(m.body.single.op, 'return', reason: '方法里原来的积木没动');
     });
 
     test('接口要的方法没有 → 加上这个方法（签名照抄，连默认值）', () {
@@ -320,6 +339,21 @@ void main() {
     test('M05 没说用到了谁 → 勾上', () {
       final d = fixed(hostOf(shop(uses: const [])), '勾上用到了');
       expect(d.core.module('店')!.uses, ['仓库']);
+    });
+
+    test('M08 顶上的变量初始值用到了排在后面的 → 把后面那个挪到前面', () {
+      final h = hostOf(
+        coreDoc(
+          '修',
+          globals: [
+            {'name': 'a', 'init': op2('+', vr('b'), nm(1)), 'type': tInt},
+            {'name': 'b', 'init': nm(2), 'type': tInt},
+          ],
+          main: [log(vr('a'))],
+        ),
+      );
+      final d = fixed(h, '挪到');
+      expect([for (final g in d.core.globals) g.name], ['b', 'a']);
     });
 
     test('M06 没有公开 → 设成公开', () {

@@ -206,8 +206,17 @@ BeTypeCheck? beTypeCheck(BeDocument doc, {bool pure = false}) {
     final findings = <BeTypeFinding>[];
     // 模块之间的事（M01–M08）：按模块分好再查一遍；问题不在哪块积木上，记在整份文档名下。
     final program = beCoreProgram(core, decls, main);
-    if (program != null) {
-      for (final i in linkProgram(program).issues) {
+    // 没分模块也有一件要查：顶上的变量初始值用到了排在它后面的（M08）。
+    final linked =
+        program ??
+        (core.globals.length > 1
+            ? LProgram([
+                LModule(name: 'main', decls: [for (final d in decls) d.decl], body: main),
+              ], entry: 'main')
+            : null);
+    if (linked != null) {
+      for (final i in linkProgram(linked).issues) {
+        if (program == null && i.code != 'M08') continue;
         findings.add(BeTypeFinding(i, const BeSlotRef('', [], null, []), const [], extra: beCoreExtraFixes(doc, i, treeId: '')));
       }
     }

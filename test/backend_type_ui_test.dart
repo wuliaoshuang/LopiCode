@@ -21,7 +21,7 @@ import 'package:lopicode/lowcode/logic_model.dart';
 import 'package:lopicode/ui/backend_screen.dart';
 import 'package:material_ui/material_ui.dart';
 
-import 'backend_screen_test.dart' show at, be, boot, doc, ed, k, more, paletteTab, saved, text, until;
+import 'backend_screen_test.dart' show at, be, boot, doc, ed, flushed, k, more, paletteTab, saved, text, until;
 import 'screens_test.dart' show fontsLoaded, shot;
 import 'support/backend_func_blocks.dart';
 import 'support/backend_lang_blocks.dart' hide text;
@@ -199,6 +199,7 @@ void main() {
     expect([for (final i in typeIssues(tester)) i.problem].where((p) => p.contains('「加倍」的第 1 个参数')), ['「加倍」的第 1 个参数要文字，放进来的是整数'], reason: '第 1 块放的文字现在对了，第 4 块放的整数现在不对了');
     await tester.tapAt(const Offset(40, 60));
     await tester.pumpAndSettle();
+    await flushed(tester); // 提示条是存盘、重新生成做完以后才出的（真的读写文件）：等它做完再看，不靠碰巧
     // 合并以后类型错误也拦在“生成”那一层：存盘时提示一次“有 N 个错误，代码没有更新”。提示条带按钮、不会自己消失，会盖住积木盒的页签，先收掉。
     expect(find.descendant(of: find.byType(SnackBar), matching: find.textContaining('个错误，代码没有更新')), findsOneWidget);
     ScaffoldMessenger.of(tester.element(find.byType(SnackBar))).hideCurrentSnackBar();
