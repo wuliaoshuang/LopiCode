@@ -46,12 +46,18 @@ extension _BuilderActions on _BuilderScreenState {
   }
 
   /// 拖柄松手：把宽 / 高写进组件自己的样式。整次拖动只走这一次统一入口，所以只记一条撤销。
+  /// 画布切到了平板 / 桌面时，写的是那一档的差别（手机的样子不动）。
   void _resize(String id, int? width, int? height) => _apply((d) {
     final n = d.find(id);
     if (n == null) return;
-    final style = LcStyle(n.style);
-    if (width != null) style.setLength('width', LcLength.px(width.toDouble()));
-    if (height != null) style.setLength('height', LcLength.px(height.toDouble()));
+    void set(Map<String, String> map) {
+      final style = LcStyle(map);
+      if (width != null) style.setLength('width', LcLength.px(width.toDouble()));
+      if (height != null) style.setLength('height', LcLength.px(height.toDouble()));
+    }
+
+    final bp = _bp;
+    bp == null ? set(n.style) : lcEditAtBp(n, bp, set);
   });
 
   /// 删除组件。积木逻辑里还有地方在用它（或它里面的组件）时先问一句；
@@ -132,6 +138,11 @@ extension _BuilderActions on _BuilderScreenState {
     }
   }
 
+  Future<void> _openTheme() async {
+    await showThemeVarsScreen(context, doc: () => _doc!, onEdit: _apply);
+    if (mounted) _refresh();
+  }
+
   void _openView() {
     final canvas = _bench.currentState?.canvas;
     if (canvas == null) return;
@@ -140,7 +151,11 @@ extension _BuilderActions on _BuilderScreenState {
         context,
         canvas: canvas,
         presetWidth: () => _presetWidth,
-        onPresetWidth: (v) => _mut(() => _presetWidth = v),
+        // 在这里挑了屏宽档＝回到手机（默认）那一档看：平板 / 桌面的宽度是固定的。
+        onPresetWidth: (v) => _mut(() {
+          _presetWidth = v;
+          _bp = null;
+        }),
         showBoxModel: () => _showBoxModel,
         onShowBoxModel: (v) => _mut(() => _showBoxModel = v),
       ),
@@ -151,6 +166,8 @@ extension _BuilderActions on _BuilderScreenState {
     switch (v) {
       case 'view':
         _openView();
+      case 'theme':
+        unawaited(_openTheme());
       case 'dart':
         unawaited(_exportDart());
       case 'framework':

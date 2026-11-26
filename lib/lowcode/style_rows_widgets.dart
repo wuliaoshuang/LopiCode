@@ -6,12 +6,14 @@ import 'package:lopicode/lowcode/css_color.dart';
 import 'package:lopicode/lowcode/style_color_sheet.dart';
 import 'package:lopicode/lowcode/style_controls_widgets.dart';
 import 'package:lopicode/lowcode/style_model.dart';
+import 'package:lopicode/lowcode/theme_scope_widgets.dart';
+import 'package:lopicode/lowcode/theme_vars.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:material_ui/material_ui.dart';
 
 const String kInheritedHint = '来自常用页';
 
-String? _hint(StyleEdit ed, String name) => ed.inherited(name) ? kInheritedHint : null;
+String? _hint(StyleEdit ed, String name) => ed.inherited(name) ? (ed.inheritedHint ?? kInheritedHint) : null;
 
 /// 一个长度属性。
 class StyleLengthRow extends StatelessWidget {
@@ -211,11 +213,22 @@ class ColorButton extends StatelessWidget {
     final c = context.colors;
     final t = Theme.of(context).textTheme;
     final v = value;
+    // 值是主题变量：色块画变量现在的颜色，字写变量的名字（前面一个链环，看得出“这是跟着变量走的”）。
+    final theme = LcThemeScope.of(context);
+    final named = lcVarNameIn(v);
+    final varName = named != null && theme.values.containsKey(named) ? named : null;
+    final shown = v == null ? null : lcSubstVars(v, theme.values);
     return InkWell(
       key: Key('lc-color-$id'),
       borderRadius: BorderRadius.circular(Radii.md),
       onTap: () async {
-        final r = await showStyleColorPicker(context, initial: v, title: title);
+        final r = await showStyleColorPicker(
+          context,
+          initial: shown,
+          title: title,
+          themeColors: [for (final name in theme.namesOf(LcVarKind.color)) (name: name, label: theme.labelOf(name), css: theme.resolved(name))],
+          currentVar: varName,
+        );
         if (r != null) onChanged(r.css);
       },
       child: Container(
@@ -229,12 +242,13 @@ class ColorButton extends StatelessWidget {
         ),
         child: Row(
           children: [
-            ColorDot(argb: cssColorToArgb(v)),
+            ColorDot(argb: cssColorToArgb(shown)),
             const SizedBox(width: Space.x2),
+            if (varName != null) ...[Icon(Icons.link, key: Key('lc-color-$id-var'), size: 16, color: c.accent, semanticLabel: '主题变量'), const SizedBox(width: Space.x1)],
             Expanded(
               child: Text(
-                v ?? '未设置',
-                style: t.bodyMedium?.copyWith(color: v == null ? c.textFaint : (faint ? c.textMuted : c.text)),
+                varName != null ? theme.labelOf(varName) : (v ?? '未设置'),
+                style: t.bodyMedium?.copyWith(color: v == null ? c.textFaint : (varName != null ? c.accent : (faint ? c.textMuted : c.text))),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -296,7 +310,7 @@ class _StyleSidesRowsState extends State<StyleSidesRows> {
         if (_linked)
           StyleRow(
             label: widget.label,
-            hint: sides.isUniform ? (names.every(ed.inherited) ? kInheritedHint : null) : '四个不一样，改了会一起变',
+            hint: sides.isUniform ? (names.every(ed.inherited) ? (ed.inheritedHint ?? kInheritedHint) : null) : '四个不一样，改了会一起变',
             child: LengthField(
               id: widget.group,
               value: sides.isUniform ? sides.top : null,

@@ -1,5 +1,5 @@
 // 设计约束（低代码搭建页自己的两处小部件 · 390×844）
-// - 顶栏右边两样：“页面”按钮（一个纸张图标＋现在有几页；点开页面面板，换页、新建都在里面——第 4 期·多页面）和“⋮”菜单
+// - 顶栏右边三样：“看哪种屏宽”按钮（一个设备图标，点开选 手机 / 平板 / 桌面——第 4 期·断点）、“页面”按钮（一个纸张图标＋现在有几页；点开页面面板，换页、新建都在里面——第 4 期·多页面）和“⋮”菜单
 //   （不常点的都收在里面，一行一项；第一项也是“页面”，给先点开菜单找的人）。
 // - 选中条（高 48，外壳在 editor_selection_bar_widgets.dart）：左边“选上一层”＋名字，右边 常用（实心，唯一主操作）/
 //   样式（描边）/ 逻辑（文字，有逻辑带小圆点）/“更多操作”。三个带字的按钮打开的是同一张合一面板的三页。
@@ -13,6 +13,7 @@ import 'package:lopicode/lowcode/editor_clipboard.dart';
 import 'package:lopicode/lowcode/editor_workbench_widgets.dart';
 import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/lowcode/palette_widgets.dart';
+import 'package:lopicode/lowcode/responsive.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/top_bar.dart';
 import 'package:material_ui/material_ui.dart';
@@ -29,6 +30,7 @@ class BuilderMoreMenu extends StatelessWidget {
     itemBuilder: (_) => const [
       PopupMenuItem(value: 'pages', child: Text('页面（换页、新建）')),
       PopupMenuItem(value: 'view', child: Text('屏宽与缩放')),
+      PopupMenuItem(value: 'theme', child: Text('主题变量')),
       PopupMenuItem(value: 'logic', child: Text('积木逻辑')),
       PopupMenuItem(value: 'components', child: Text('自定义组件')),
       PopupMenuItem(value: 'dart', child: Text('导出 Flutter 代码')),
@@ -36,6 +38,44 @@ class BuilderMoreMenu extends StatelessWidget {
       PopupMenuItem(value: 'title', child: Text('修改页面标题')),
     ],
   );
+}
+
+/// 顶栏的“看哪种屏宽”按钮（第 4 期·断点）：图标就是现在看的那一档（手机 / 平板 / 桌面）；不是手机时用强调色，
+/// 提醒“现在在‘样式’页改的只记成这一档的差别”。点开一个三项的菜单，每项写清楚从多宽起算。
+class BuilderBpButton extends StatelessWidget {
+  const BuilderBpButton({super.key, required this.bp, required this.onChanged});
+
+  /// 现在看的那一档；null＝手机。
+  final String? bp;
+  final void Function(String? bp) onChanged;
+
+  static const Map<String, IconData> _icons = {'': Icons.smartphone, 'tablet': Icons.tablet_mac, 'desktop': Icons.desktop_windows_outlined};
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return PopupMenuButton<String>(
+      key: const Key('lc-bp-open'),
+      tooltip: '看哪种屏宽：${lcBpLabel(bp)}',
+      icon: Icon(_icons[bp ?? ''], size: 20, color: bp == null ? c.text : c.accent),
+      onSelected: (v) => onChanged(v.isEmpty ? null : v),
+      itemBuilder: (_) => [
+        for (final b in ['', ...kLcBreakpoints])
+          PopupMenuItem(
+            key: Key('lc-bp-${b.isEmpty ? 'phone' : b}'),
+            value: b,
+            child: Row(
+              children: [
+                Icon(_icons[b], size: 20, color: b == (bp ?? '') ? c.accent : c.textMuted),
+                const SizedBox(width: Space.x3),
+                Expanded(child: Text(b.isEmpty ? '手机（默认）' : '${kLcBpLabels[b]}（≥${kLcBpMinWidth[b]}）')),
+                if (b == (bp ?? '')) Icon(Icons.check, size: 18, color: c.accent),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
 }
 
 /// 顶栏的“页面”按钮：纸张图标＋现在有几页。

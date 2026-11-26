@@ -27,7 +27,7 @@ mixin _CanvasDragging on State<CanvasView> {
   /// 拖动中算出来的落点（测试用）。
   DropTarget? get dropTarget => _target.value;
 
-  DropBox? _boxes(RenderBox pageBox) => lcDropBoxTree(widget.doc, (id) => _rectOf(id, pageBox), overlayId: widget.overlayId);
+  DropBox? _boxes(RenderBox pageBox) => lcDropBoxTree(widget.doc, (id) => _rectOf(id, pageBox), overlayId: widget.overlayId, env: LcViewEnv.of(widget.doc, widget.bp));
 
   /// 在拖柄上点了一下（没拖）：当成点在它下面的组件上——拖柄能按的范围比看到的大，不能把旁边的小组件挡得点不着。
   void _tapThrough(Offset global) {

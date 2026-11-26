@@ -22,6 +22,7 @@ class _Ctx {
     required this.textColor,
     required this.buttonText,
     required this.styles,
+    required this.env,
   });
   final LcNode parent;
   final CssFlow flow;
@@ -47,7 +48,10 @@ class _Ctx {
   /// 这一次重搭里已经算过的最终样式（按组件对象记）：同一个组件不算第二遍。
   final Map<LcNode, Map<String, String>> styles;
 
-  Map<String, String> styleOf(LcNode n, LcNode? parent) => styles[n] ??= resolvedStyle(n, parent);
+  /// 按什么条件看（主题变量的值、现在是哪一档屏宽）。
+  final LcViewEnv env;
+
+  Map<String, String> styleOf(LcNode n, LcNode? parent) => styles[n] ??= resolvedStyle(lcViewNode(n, env), parent);
 }
 
 bool _has(Map<String, String> s, String prefix) => s.keys.any((k) => k.startsWith(prefix));

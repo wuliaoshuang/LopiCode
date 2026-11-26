@@ -1,5 +1,5 @@
 // 设计约束（取色面板；390×844，浅色 + 深色）
-// - 从上到下：当前颜色（色块 + 十六进制输入）→ 常用色 → 最近用过 → 色相 / 饱和度 / 明度 / 不透明度四条滑块 → 底部一行操作。
+// - 从上到下：当前颜色（色块 + 十六进制输入）→ 主题色（项目有颜色变量才有；点一个就是“用这个变量”，直接关面板）→ 常用色 → 最近用过 → 色相 / 饱和度 / 明度 / 不透明度四条滑块 → 底部一行操作。
 // - 主操作只有一个：“用这个颜色”。“透明”“清除”是次要操作，放在它左边、不抢眼。
 // - 点色块、拖滑块只是换“当前颜色”，不关面板；这样能先点个色块再调透明度。
 // - 色块每个 40px；滑块的可拖区域 40px 高。
@@ -44,16 +44,26 @@ int? parseHexColor(String text) {
 }
 
 /// 打开取色面板。[initial] 是当前的颜色原文（可以是 `red`、`var(--c)` 这种）。
-Future<StyleColorResult?> showStyleColorPicker(BuildContext context, {String? initial, String title = '选择颜色'}) => showModalBottomSheet<StyleColorResult>(
+Future<StyleColorResult?> showStyleColorPicker(
+  BuildContext context, {
+  String? initial,
+  String title = '选择颜色',
+  List<({String name, String label, String css})> themeColors = const [],
+  String? currentVar,
+}) => showModalBottomSheet<StyleColorResult>(
   context: context,
   isScrollControlled: true,
-  builder: (_) => _ColorSheet(initial: initial, title: title),
+  builder: (_) => _ColorSheet(initial: initial, title: title, themeColors: themeColors, currentVar: currentVar),
 );
 
 class _ColorSheet extends StatefulWidget {
-  const _ColorSheet({required this.initial, required this.title});
+  const _ColorSheet({required this.initial, required this.title, required this.themeColors, required this.currentVar});
   final String? initial;
   final String title;
+
+  /// 项目的主题色（变量）：点一个＝“用这个变量”，直接关面板（结果是 `var(--名字)`）。[currentVar] 是现在用着的那个。
+  final List<({String name, String label, String css})> themeColors;
+  final String? currentVar;
 
   @override
   State<_ColorSheet> createState() => _ColorSheetState();
@@ -203,6 +213,38 @@ class _ColorSheetState extends State<_ColorSheet> {
                 ],
               ),
               if (unreadable) ...[const SizedBox(height: Space.x2), Text('现在的值是 ${initial.trim()}，这里显示不了它；选一个新颜色会把它换掉。', style: t.bodySmall?.copyWith(color: c.textFaint))],
+              if (widget.themeColors.isNotEmpty) ...[
+                const SizedBox(height: Space.x4),
+                Text('主题色（改了变量，用到的地方一起变）', style: t.labelMedium),
+                const SizedBox(height: Space.x1),
+                Wrap(
+                  spacing: Space.x2,
+                  runSpacing: Space.x2,
+                  children: [
+                    for (final v in widget.themeColors)
+                      Material(
+                        color: v.name == widget.currentVar ? c.accentSoft : c.surfaceMuted,
+                        borderRadius: BorderRadius.circular(Radii.sm),
+                        clipBehavior: Clip.antiAlias,
+                        child: InkWell(
+                          key: Key('lc-color-var-${v.name}'),
+                          onTap: () => Navigator.pop(context, StyleColorResult('var(--${v.name})')),
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(Space.x1, Space.x1, Space.x3, Space.x1),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                ColorDot(argb: cssColorToArgb(v.css), size: 28),
+                                const SizedBox(width: Space.x2),
+                                Text(v.label, style: t.bodyMedium?.copyWith(color: v.name == widget.currentVar ? c.accent : c.text)),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ],
               const SizedBox(height: Space.x4),
               Text('常用', style: t.labelMedium),
               const SizedBox(height: Space.x1),

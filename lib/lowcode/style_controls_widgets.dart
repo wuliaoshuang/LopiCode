@@ -13,7 +13,10 @@ export 'package:lopicode/lowcode/style_number_widgets.dart';
 
 /// 面板交给各分组的“当前样子”和“怎么改”。每次重画换一份，分组自己不存样式。
 class StyleEdit {
-  const StyleEdit({required this.node, required this.own, required this.resolved, required this.apply, this.parentColumns});
+  const StyleEdit({required this.node, required this.own, required this.resolved, required this.apply, this.parentColumns, this.inheritedHint});
+
+  /// “这个值不是在这儿设的”那句小字换个说法（改某一档屏宽时是“跟手机一样”）；不给用平常那句“来自常用页”。
+  final String? inheritedHint;
 
   /// 它放在网格里：那个网格一共几列；不在网格里是 null。
   final int? parentColumns;

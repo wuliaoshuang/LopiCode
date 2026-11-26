@@ -119,6 +119,8 @@ Widget? buildDragGhost(LcDocument doc, LcDrag drag, {required double layoutWidth
     root: LcNode(id: 'ghost-page', type: 'page', props: {'padding': 0, 'gap': 0}, style: {'background-color': 'transparent'}, children: [node]),
     components: [for (final c in doc.components) LcComponentDef(id: c.id, name: c.name, props: c.props.toList(), root: copyLcTree(c.root))],
   );
+  // 主题变量也带上（缩略图里用到变量的颜色才对）。
+  if (doc.more['theme'] != null) temp.more['theme'] = doc.more['theme'];
   final width = layoutWidth.clamp(48.0, 1200.0).toDouble();
   return IgnorePointer(
     child: Opacity(

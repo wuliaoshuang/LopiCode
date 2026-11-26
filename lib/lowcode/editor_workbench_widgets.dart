@@ -73,6 +73,7 @@ class EditorWorkbench extends StatefulWidget {
     this.selectionBar,
     this.toolbarExtra = const [],
     this.presetWidth = 0,
+    this.bp,
     this.showBoxModel = true,
     this.onEdit,
     this.pickImage,
@@ -135,6 +136,9 @@ class EditorWorkbench extends StatefulWidget {
   final List<Widget> toolbarExtra;
 
   final int presetWidth;
+
+  /// 画布按哪一档屏宽看（null＝手机）；面板在“样式”页改的也只记成这一档的差别。
+  final String? bp;
   final bool showBoxModel;
 
   @override
@@ -394,6 +398,7 @@ class EditorWorkbenchState extends State<EditorWorkbench> {
                                   onLiftDrop: () => _end(cancelled: false),
                                   onLiftCancel: () => _end(cancelled: true),
                                   presetWidth: widget.presetWidth,
+                                  bp: widget.bp,
                                   showBoxModel: widget.showBoxModel,
                                   overlayId: dialog?.id,
                                   statePreview: _inspector != null && selected != null && _stateShown != null ? (nodeId: selected, state: _stateShown!) : null,
@@ -466,6 +471,7 @@ class EditorWorkbenchState extends State<EditorWorkbench> {
                         onOpenLogic: widget.onOpenLogic,
                         onAddLogic: widget.onAddLogic,
                         onState: (s) => setState(() => _stateShown = s),
+                        bp: widget.bp,
                       ),
                     ),
                 ],

@@ -22,6 +22,7 @@ library;
 import 'package:lopicode/lowcode/component_model.dart';
 import 'package:lopicode/lowcode/export_framework_common.dart';
 import 'package:lopicode/lowcode/export_pages.dart';
+import 'package:lopicode/lowcode/export_theme_bp.dart';
 import 'package:lopicode/lowcode/export_v3_fields.dart';
 import 'package:lopicode/lowcode/export_web_v3.dart';
 import 'package:lopicode/lowcode/logic_blocks.dart';
@@ -99,7 +100,11 @@ LcFrameworkExport exportReact(LcDocument doc) {
   final pageName = lcPageName(doc);
   final plans = LcComponentPlans.build(doc, pageName: pageName, notes: notes);
   final (jsx, css) = _page(doc, pageName, plans, notes);
-  final files = <LcExportFile>[lcFormatted('$pageName.jsx', jsx, 'jsx'), lcFormatted('$pageName.css', css, 'css'), lcFormatted(kReactBaseCss, '/* $kExportHeader */\n$kFrameworkBaseCss', 'css')];
+  final files = <LcExportFile>[
+    lcFormatted('$pageName.jsx', jsx, 'jsx'),
+    lcFormatted('$pageName.css', css, 'css'),
+    lcFormatted(kReactBaseCss, '/* $kExportHeader */\n$kFrameworkBaseCss${lcThemeCssIfUsed(doc)}', 'css'),
+  ];
   for (final plan in plans.all) {
     final (cJsx, cCss) = _component(plan, plans, notes);
     files
@@ -129,7 +134,7 @@ LcFrameworkExport _exportSite(LcDocument doc) {
         ..add(lcFormatted('components/${plan.name}.css', cCss, 'css'));
     }
   }
-  files.add(lcFormatted(kReactBaseCss, '/* $kExportHeader */\n$kFrameworkBaseCss', 'css'));
+  files.add(lcFormatted(kReactBaseCss, '/* $kExportHeader */\n$kFrameworkBaseCss${lcThemeCssIfUsed(doc)}', 'css'));
   return LcFrameworkExport(files: [...files, ...components], notes: {...notes}.toList());
 }
 

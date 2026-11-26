@@ -16,22 +16,23 @@ import 'package:lopicode/lowcode/component_ops.dart';
 import 'package:lopicode/lowcode/editor_drag.dart';
 import 'package:lopicode/lowcode/grid_css.dart';
 import 'package:lopicode/lowcode/model.dart';
+import 'package:lopicode/lowcode/responsive.dart';
 import 'package:lopicode/lowcode/slots.dart';
 import 'package:lopicode/lowcode/style_resolve.dart';
 
 /// [rectOf]：一个组件（或插槽）的边框盒在页面上的位置，没画出来返回 null。
-DropBox? lcDropBoxTree(LcDocument doc, Rect? Function(String id) rectOf, {String? overlayId}) {
+DropBox? lcDropBoxTree(LcDocument doc, Rect? Function(String id) rectOf, {String? overlayId, LcViewEnv env = LcViewEnv.plain}) {
   final rootRect = rectOf(doc.root.id);
   if (rootRect == null) return null;
   final dialog = overlayId == null ? null : doc.find(overlayId);
   if (dialog != null && dialog.type == 'dialog') {
-    final box = _boxOf(doc, dialog, doc.parentOf(dialog.id), rectOf);
+    final box = _boxOf(doc, dialog, doc.parentOf(dialog.id), rectOf, env);
     return DropBox(id: doc.root.id, label: doc.root.spec.label, rect: rootRect, children: [?box]);
   }
-  return _boxOf(doc, doc.root, null, rectOf);
+  return _boxOf(doc, doc.root, null, rectOf, env);
 }
 
-DropBox? _boxOf(LcDocument doc, LcNode node, LcNode? parent, Rect? Function(String id) rectOf) {
+DropBox? _boxOf(LcDocument doc, LcNode node, LcNode? parent, Rect? Function(String id) rectOf, LcViewEnv env) {
   final rect = rectOf(node.id);
   if (rect == null) return null;
   final instance = node.type == 'component';
@@ -43,7 +44,7 @@ DropBox? _boxOf(LcDocument doc, LcNode node, LcNode? parent, Rect? Function(Stri
       final r = rectOf(id);
       if (r == null) continue;
       final row = lcSlotIsRow(node, slot.name);
-      final kids = [for (final c in lcSlotChildren(node, slot.name)) ?_boxOf(doc, c, node, rectOf)];
+      final kids = [for (final c in lcSlotChildren(node, slot.name)) ?_boxOf(doc, c, node, rectOf, env)];
       slots.add(DropBox(id: id, label: '$label · ${slot.label}', rect: kids.isEmpty && row ? r.inflate(8) : r, container: true, row: row, children: kids));
     }
     return DropBox(id: node.id, label: label, rect: rect, children: slots);
@@ -51,7 +52,7 @@ DropBox? _boxOf(LcDocument doc, LcNode node, LcNode? parent, Rect? Function(Stri
   final container = node.isContainer && !instance;
   // 插槽占位（组件编辑页里）：里面照它外面那个容器的排法排。
   final like = node.type == 'slot' && parent != null ? parent : node;
-  final style = container ? resolvedStyle(like, identical(like, node) ? parent : null) : const <String, String>{};
+  final style = container ? resolvedStyle(lcViewNode(like, env), identical(like, node) ? parent : null) : const <String, String>{};
   final flow = container ? cssFlow(style, rowByDefault: like.type == 'row') : null;
   return DropBox(
     id: node.id,
@@ -61,6 +62,6 @@ DropBox? _boxOf(LcDocument doc, LcNode node, LcNode? parent, Rect? Function(Stri
     row: flow?.row ?? false,
     reverse: flow?.reverse ?? false,
     grid: container && lcIsGrid(style),
-    children: container ? [for (final c in node.children) ?_boxOf(doc, c, node, rectOf)] : const [],
+    children: container ? [for (final c in node.children) ?_boxOf(doc, c, node, rectOf, env)] : const [],
   );
 }

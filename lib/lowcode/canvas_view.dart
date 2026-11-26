@@ -22,6 +22,7 @@ import 'package:lopicode/lowcode/canvas_viewport.dart';
 import 'package:lopicode/lowcode/editor_drag.dart';
 import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/lowcode/palette_widgets.dart';
+import 'package:lopicode/lowcode/responsive.dart';
 import 'package:lopicode/lowcode/slots.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/app_backdrop.dart';
@@ -49,6 +50,7 @@ class CanvasView extends StatefulWidget {
     this.bottomInset = 0,
     this.overlayId,
     this.statePreview,
+    this.bp,
   });
 
   final LcDocument doc;
@@ -83,6 +85,9 @@ class CanvasView extends StatefulWidget {
   /// “只看这个弹层”的那个弹窗；正在预览的状态样式（见 CanvasPage 同名的两项）。
   final String? overlayId;
   final ({String nodeId, String state})? statePreview;
+
+  /// 按哪一档屏宽画（null＝手机）。页面画多宽由 [presetWidth] 定，外面两样一起给。
+  final String? bp;
 
   @override
   State<CanvasView> createState() => CanvasViewState();
@@ -146,6 +151,9 @@ class CanvasViewState extends State<CanvasView> with SingleTickerProviderStateMi
 
   /// 缩放 / 位置变了会通知（外面要显示比例时订阅它）。
   ValueListenable<CanvasViewport> get view => _view;
+
+  /// 按什么条件看组件（主题变量的值、现在是哪一档屏宽）：选中框、落点、就地改字都按它算样式。
+  LcViewEnv get env => LcViewEnv.of(widget.doc, widget.bp);
 
   /// 当前页面宽度（屏幕像素 ÷ 缩放之前的）。
   double get pageWidth => widget.presetWidth == 0 ? _viewport.width : widget.presetWidth.toDouble();
@@ -294,7 +302,7 @@ class CanvasViewState extends State<CanvasView> with SingleTickerProviderStateMi
       for (final id in _keys.keys)
         if (_rectOf(id, pageBox) case final box? when sizeLabelAvoids(doc, node.id, rect, id, box)) box,
     ];
-    _selection.value = CanvasSelection.of(node, parent, rect, base: base, page: _pageSize, avoid: avoid);
+    _selection.value = CanvasSelection.of(lcViewNode(node, env), parent, rect, base: base, page: _pageSize, avoid: avoid);
   }
 
   /// 一个组件此刻在屏幕上占的那一块（屏幕坐标）；量不到是 null。
@@ -408,6 +416,7 @@ class CanvasViewState extends State<CanvasView> with SingleTickerProviderStateMi
               preview: _preview,
               overlayId: widget.overlayId,
               statePreview: widget.statePreview,
+              bp: widget.bp,
             ),
             Positioned.fill(
               child: ListenableBuilder(

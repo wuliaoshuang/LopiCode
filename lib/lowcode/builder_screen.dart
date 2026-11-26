@@ -38,9 +38,11 @@ import 'package:lopicode/lowcode/node_actions.dart';
 import 'package:lopicode/lowcode/pages_sheet.dart';
 import 'package:lopicode/lowcode/palette_catalog.dart';
 import 'package:lopicode/lowcode/palette_widgets.dart';
+import 'package:lopicode/lowcode/responsive.dart';
 import 'package:lopicode/lowcode/save_queue.dart';
 import 'package:lopicode/lowcode/slots.dart';
 import 'package:lopicode/lowcode/style_model.dart';
+import 'package:lopicode/lowcode/theme_vars_screen.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/app_backdrop.dart';
@@ -83,6 +85,9 @@ class _BuilderScreenState extends State<BuilderScreen> with WidgetsBindingObserv
   bool _missing = false;
   String? _selected;
   int _presetWidth = 0;
+
+  /// 画布现在按哪一档屏宽看（null＝手机）。不是手机时页面画成那一档的起算宽度，“样式”页改的只记成那一档的差别。
+  String? _bp;
   bool _showBoxModel = true;
   // 每一页一个工作台（各有各的缩放、滚到哪儿、开着的面板）：换页时整个换掉，不把上一页的状态带过来。
   final Map<String, GlobalKey<EditorWorkbenchState>> _benches = {};
@@ -341,8 +346,16 @@ class _BuilderScreenState extends State<BuilderScreen> with WidgetsBindingObserv
       appBar: ShellAppBar(
         background: context.colors.surfaceMuted,
         title: doc?.title ?? '低代码搭建',
-        subtitle: doc == null ? null : '${doc.isMultiPage ? '第 ${doc.pageIndex + 1}/${doc.pages.length} 页 · ' : ''}${canvasWidthLabel(_presetWidth)} · $_saveLabel',
-        actions: doc == null ? null : [BuilderPagesButton(count: doc.pages.length, onTap: () => unawaited(_openPages())), BuilderMoreMenu(onSelected: _onMenu)],
+        subtitle: doc == null
+            ? null
+            : '${doc.isMultiPage ? '第 ${doc.pageIndex + 1}/${doc.pages.length} 页 · ' : ''}${_bp == null ? canvasWidthLabel(_presetWidth) : '${lcBpLabel(_bp)} ${kLcBpMinWidth[_bp]}'} · $_saveLabel',
+        actions: doc == null
+            ? null
+            : [
+                BuilderBpButton(bp: _bp, onChanged: (v) => setState(() => _bp = v)),
+                BuilderPagesButton(count: doc.pages.length, onTap: () => unawaited(_openPages())),
+                BuilderMoreMenu(onSelected: _onMenu),
+              ],
       ),
       body: _loadError != null
           ? BelowBar(
@@ -390,7 +403,8 @@ class _BuilderScreenState extends State<BuilderScreen> with WidgetsBindingObserv
                 onUndo: history!.canUndo ? () => _restore(history.undo()) : null,
                 onRedo: history.canRedo ? () => _restore(history.redo()) : null,
                 onPreview: () => unawaited(_preview()),
-                presetWidth: _presetWidth,
+                presetWidth: _bp == null ? _presetWidth : kLcBpMinWidth[_bp]!,
+                bp: _bp,
                 showBoxModel: _showBoxModel,
                 selectionBar: multiOn ? multiBar() : (node == null ? null : _selectionBar(node)),
               ),

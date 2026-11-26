@@ -20,6 +20,7 @@ import 'package:lopicode/lowcode/component_ops.dart';
 import 'package:lopicode/lowcode/lift_gesture_widgets.dart';
 import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/lowcode/palette_widgets.dart';
+import 'package:lopicode/lowcode/responsive.dart';
 import 'package:lopicode/lowcode/slots.dart';
 import 'package:lopicode/lowcode/states.dart';
 import 'package:lopicode/lowcode/style_resolve.dart';
@@ -48,6 +49,7 @@ class CanvasPage extends StatelessWidget {
     this.overlayId,
     this.statePreview,
     this.live,
+    this.bp,
   });
 
   /// 只画样子的页面（拖动时手指下面的缩略图、测试）：不能点、不能拖。
@@ -64,6 +66,7 @@ class CanvasPage extends StatelessWidget {
       overlayId = null,
       statePreview = null,
       live = null,
+      bp = null,
       inert = true;
 
   static void _ignoreSelect(String _) {}
@@ -108,12 +111,16 @@ class CanvasPage extends StatelessWidget {
   /// 只画样子的这一份是替哪张活页面画的（实例里填进插槽的内容交回给它画，见 canvas_render_slots.dart）。
   final CanvasPage? live;
 
-  CanvasPage _inertCopy() => CanvasPage(doc: doc, pageWidth: pageWidth, minHeight: minHeight, selected: null, onSelect: (_) {}, boxKey: boxKey, inert: true, live: inert ? live : this);
+  /// 按哪一档屏宽画（null＝手机；见 responsive.dart）。
+  final String? bp;
+
+  CanvasPage _inertCopy() => CanvasPage(doc: doc, pageWidth: pageWidth, minHeight: minHeight, selected: null, onSelect: (_) {}, boxKey: boxKey, inert: true, live: inert ? live : this, bp: bp);
 
   @override
   Widget build(BuildContext context) {
     debugBuilds++;
-    final root = doc.root;
+    final env = LcViewEnv.of(doc, bp);
+    final root = lcViewNode(doc.root, env);
     final s = resolvedStyle(root, null);
     final base = CssScale(pageWidth: pageWidth, pageHeight: minHeight);
     final scale = base.withFont(cssSizePx(s['font-size'], base) ?? 16);
@@ -132,6 +139,7 @@ class CanvasPage extends StatelessWidget {
       textColor: canvasArgb(s['color']) ?? Palette.neutral900,
       buttonText: Theme.of(context).textTheme.labelLarge,
       styles: Map.identity(),
+      env: env,
     );
     final dialog = overlayId == null ? null : doc.find(overlayId!);
     final page = dialog != null && dialog.type == 'dialog'
@@ -204,6 +212,7 @@ class CanvasPage extends StatelessWidget {
         textColor: inner.textColor,
         buttonText: inner.buttonText,
         styles: inner.styles,
+        env: inner.env,
       );
       return canvasGrid(grid, [for (final c in kids) (span: canvasGridSpan(inner.styleOf(c, n)), child: _item(context, n, s, cell, c))]);
     }
@@ -276,10 +285,11 @@ class CanvasPage extends StatelessWidget {
     // 展开不了、或者已经在别的实例里面了（inert）就不展开，下面画占位。
     final instance = node.type == 'component' && !inert;
     final shown = instance ? expandInstance(doc, node, markers: true) ?? node : node;
+    // 主题变量换成值、现在这一档屏宽的差别并进来（都没有时还是原来那个对象）。
     final n = canvasPreviewNode(
-      shown,
+      lcViewNode(shown, ctx.env),
       resize: p != null && p.nodeId == node.id ? (p.width, p.height) : null,
-      state: statePreview?.nodeId == node.id ? lcStateStyle(node, statePreview!.state) : const {},
+      state: statePreview?.nodeId == node.id ? lcSubstMap(lcStateStyle(node, statePreview!.state), ctx.env.vars) : const {},
     );
     // 没被改过的组件用这一轮记着的那份（父容器数“要放大的子项”时已经算过了）；展开的实例、拖柄预览是临时造的，现算。
     final s = identical(n, node) ? ctx.styleOf(n, parent) : resolvedStyle(n, parent);
@@ -336,6 +346,7 @@ class CanvasPage extends StatelessWidget {
           textColor: textColor,
           buttonText: ctx.buttonText,
           styles: ctx.styles,
+          env: ctx.env,
         );
         content = (instance ? _inertCopy() : this)._flex(context, n, s, inner, tightW: tightW, tightH: tightH);
         final align = canvasTextAlign(s);
@@ -535,6 +546,7 @@ class CanvasPage extends StatelessWidget {
       textColor: textColor ?? base.textColor,
       buttonText: base.buttonText,
       styles: base.styles,
+      env: base.env,
     );
     final style = row ? {'align-items': 'center', 'column-gap': '8px', if (end) 'justify-content': 'flex-end'} : const {'row-gap': '8px', 'align-items': 'stretch'};
     final label = lcSlotsOf(host).where((s) => s.name == name).firstOrNull?.label ?? name;

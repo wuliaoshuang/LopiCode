@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:lopicode/lowcode/component_ops.dart';
 import 'package:lopicode/lowcode/export_pages.dart';
+import 'package:lopicode/lowcode/export_theme_bp.dart';
 import 'package:lopicode/lowcode/export_v3_fields.dart';
 import 'package:lopicode/lowcode/export_web_v3.dart';
 import 'package:lopicode/lowcode/export_web_v3_css.dart';
@@ -55,8 +56,9 @@ const String kLowcodeLogicMarker = '// 由 LopiCode 低代码搭建器生成';
 /// 把页面导出成 `index.html` + `style.css`（有逻辑时再加 `logic.js`）的内容。
 /// [cssFile] / [jsFile]：这一页引用的样式和脚本文件名（多页面时除首页外每页各有一份，见 export_pages.dart）。
 LcHtmlExport exportHtml(LcDocument doc, {String cssFile = 'style.css', String jsFile = kLowcodeLogicFile}) {
-  final css = StringBuffer(_baseCss);
+  final css = StringBuffer();
   final body = StringBuffer();
+  final bp = LcBpCss();
 
   late final LcWebCtx web;
   void walk(LcNode n, LcNode? parent, int depth) {
@@ -66,6 +68,7 @@ LcHtmlExport exportHtml(LcDocument doc, {String cssFile = 'style.css', String js
     final rule = nodeCssRule(n, parent);
     if (rule.isNotEmpty) css.writeln(rule);
     lcStateRules(n, nodeCssSelector(n)).forEach(css.writeln);
+    bp.add(n, parent, nodeCssSelector(n));
     // 第 3 版的新组件：元素树三种导出共用（export_web_v3.dart）。
     final el = lcWebElement(n, web);
     if (el != null) {
@@ -148,6 +151,10 @@ LcHtmlExport exportHtml(LcDocument doc, {String cssFile = 'style.css', String js
   walk(tree, null, 0);
   // 第 3 版加的属性要的公共样式：用到了才写（没用到的页面一个字节都不多）。
   css.write(lcV3ExtraCss(tree));
+  // 断点的规则放最后（同样的选择器，后写的赢）；主题变量那一段放在基础样式后面，这一页用到了变量才写。
+  css.write(bp.css());
+  final rules = css.toString();
+  final cssText = '$_baseCss${rules.contains('var(--') ? lcThemeRootCss(doc) : ''}$rules';
   final js = exportLogicJs(doc);
   // 没有逻辑的页面一个字节都不多（和第 1 版导出的一样）。
   final script = js.isEmpty ? '' : '  <script src="$jsFile" defer></script>\n';
@@ -165,5 +172,5 @@ $script</head>
 $body</body>
 </html>
 ''';
-  return LcHtmlExport(html, css.toString(), js);
+  return LcHtmlExport(html, cssText, js);
 }

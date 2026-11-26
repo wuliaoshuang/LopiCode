@@ -40,7 +40,8 @@ LcDocument? componentEditingDocument(LcDocument doc, String componentId) {
             root: copyLcTree(c.root),
           ),
     ],
-  );
+    // 主题变量也带上（只读：画布和面板要认得变量；写回定义时不看它）。
+  )..more.addAll({if (doc.more['theme'] != null) 'theme': doc.more['theme']});
 }
 
 /// 把“编辑组件”的临时文档写回定义：定义的 id、名字、props 都不动，所以实例不会断开。

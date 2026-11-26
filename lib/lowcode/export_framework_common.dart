@@ -7,6 +7,7 @@ library;
 
 import 'package:lopicode/format/format.dart';
 import 'package:lopicode/lowcode/component_model.dart';
+import 'package:lopicode/lowcode/export_theme_bp.dart';
 import 'package:lopicode/lowcode/export_v3_fields.dart';
 import 'package:lopicode/lowcode/export_web_v3.dart';
 import 'package:lopicode/lowcode/export_web_v3_css.dart';
@@ -161,6 +162,7 @@ String lcComponentPrefix(LcComponentDef def) => '${_safeId(def.id)}-';
 /// “父容器”都按占位节点所在的那个容器算（撑满、对齐这些规则跟着它走）。
 String lcCollectCss(LcNode root, String prefix, List<String> notes, {LcComponentPlans? plans}) {
   final out = StringBuffer();
+  final bp = LcBpCss();
   void walk(LcNode n, LcNode? parent, int depth) {
     if (depth > kExportMaxDepth) return;
     if (n.type == 'slot') {
@@ -176,6 +178,7 @@ String lcCollectCss(LcNode root, String prefix, List<String> notes, {LcComponent
       out.writeln('.n-$prefix${_safeId(n.id)} { $body }');
     }
     lcStateRules(n, '.n-$prefix${_safeId(n.id)}').forEach(out.writeln);
+    bp.add(n, parent, '.n-$prefix${_safeId(n.id)}');
     final fieldRule = lcFieldRule(n, parent, '.n-$prefix${_safeId(n.id)}');
     if (fieldRule.isNotEmpty) out.writeln(fieldRule);
     for (final c in n.children) {
@@ -186,6 +189,8 @@ String lcCollectCss(LcNode root, String prefix, List<String> notes, {LcComponent
   walk(root, null, 0);
   // 第 3 版加的属性要的公共样式：用到了才写。
   out.write(lcV3ExtraCss(root));
+  // 断点的规则放最后（同样的选择器，后写的赢）。
+  out.write(bp.css());
   return out.toString();
 }
 

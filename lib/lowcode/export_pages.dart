@@ -89,7 +89,8 @@ List<String> _pageTable(LcSitePlan site) => [
 ];
 
 /// Vue 3 的外壳（单文件组件）。
-String lcVueShell(LcSitePlan site) => [
+/// [themeCss]：主题变量那一段（所有页面共用，所以放外壳里；没用到是空串）。
+String lcVueShell(LcSitePlan site, {String themeCss = ''}) => [
   '<script setup>',
   '// $kExportHeader',
   '// 多页面的外壳：看地址栏里 #/ 后面那段决定显示哪一页。在你的工程里挂这个组件。',
@@ -111,6 +112,7 @@ String lcVueShell(LcSitePlan site) => [
   '  <component :is="lcPages[lcCurrent]" :key="lcCurrent" />',
   '</template>',
   '',
+  if (themeCss.isNotEmpty) ...['<style>', themeCss.trimRight(), '</style>', ''],
 ].join('\n');
 
 /// React 的外壳。

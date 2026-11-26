@@ -12,8 +12,11 @@ import 'package:lopicode/lowcode/inspector_v3_components_widgets.dart';
 import 'package:lopicode/lowcode/inspector_v3_rows_widgets.dart';
 import 'package:lopicode/lowcode/inspector_write.dart';
 import 'package:lopicode/lowcode/model.dart';
+import 'package:lopicode/lowcode/responsive.dart';
 import 'package:lopicode/lowcode/style_controls_widgets.dart';
 import 'package:lopicode/lowcode/style_rows_widgets.dart';
+import 'package:lopicode/lowcode/theme_scope_widgets.dart';
+import 'package:lopicode/lowcode/theme_vars.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -38,6 +41,9 @@ class InspectorEdit {
 }
 
 const Map<int, String> _zeroNone = {0: '无'};
+
+/// 颜色写进简写属性时一律大写（和旧面板一样）；主题变量原样。
+String? _colorValue(String? v) => v == null || v.startsWith('var(') ? v : v.toUpperCase();
 
 class InspectorCommonPage extends StatefulWidget {
   const InspectorCommonPage({super.key, required this.ed, this.only});
@@ -66,7 +72,16 @@ class _InspectorCommonPageState extends State<InspectorCommonPage> {
 
   void _set(String prop, Object? value, {bool merge = false}) => ed.apply((n, _) => writeCommon(n, prop, value), merge: merge);
 
-  num? _px(String cssName) => effectivePx(n, ed.parent, cssName);
+  /// 项目的主题变量；数值显示用“变量已经换成值”的那份（不然用了变量的项读不出数）。
+  LcTheme get _theme => lcThemeOf(ed.doc);
+  num? _px(String cssName) => effectivePx(lcViewNode(n, LcViewEnv(vars: _theme.values)), ed.parent, cssName);
+
+  /// 这一项现在用着哪个变量（没用是 null）。
+  String? _varOf(String cssName) {
+    final name = lcVarNameIn(_css(cssName));
+    return name != null && _theme.values.containsKey(name) ? name : null;
+  }
+
   String? _css(String cssName) => effectiveCss(n, ed.parent, cssName);
 
   // ───────────── 各种行 ─────────────
@@ -98,6 +113,9 @@ class _InspectorCommonPageState extends State<InspectorCommonPage> {
         scale: scale,
         names: names,
         clearable: clearable,
+        vars: lcVarChoices(_theme, cssName),
+        varName: _varOf(cssName),
+        onVar: (name) => _set(prop, lcVarRef(name)),
         onChanged: (v, {typing = false}) => _set(prop, v, merge: typing),
       );
 
@@ -113,7 +131,7 @@ class _InspectorCommonPageState extends State<InspectorCommonPage> {
     scroll: false,
     child: Align(
       alignment: Alignment.centerLeft,
-      child: ColorButton(id: 'common-$prop', value: _css(cssName), title: label, onChanged: onChanged ?? (v) => _set(prop, v?.toUpperCase())),
+      child: ColorButton(id: 'common-$prop', value: _css(cssName), title: label, onChanged: onChanged ?? (v) => _set(prop, _colorValue(v))),
     ),
   );
 
@@ -304,7 +322,7 @@ class _InspectorCommonPageState extends State<InspectorCommonPage> {
             ),
             InspectorChoiceRow(id: 'size', label: '大小', options: const {'s': '小', 'm': '中', 'l': '大'}, selected: buttonSize(n, ed.parent), onChanged: (v) => ed.apply((n, _) => setButtonSize(n, v))),
             _width(),
-            _color('accent', '颜色', buttonVariant(n, ed.parent) == 'solid' ? 'background-color' : 'color', onChanged: (v) => ed.apply((n, p) => setButtonAccent(n, p, (v ?? '#058654').toUpperCase()))),
+            _color('accent', '颜色', buttonVariant(n, ed.parent) == 'solid' ? 'background-color' : 'color', onChanged: (v) => ed.apply((n, p) => setButtonAccent(n, p, _colorValue(v ?? '#058654')!))),
             ...lcButtonV3Rows(context, ed),
           ],
           {'text', 'width'},

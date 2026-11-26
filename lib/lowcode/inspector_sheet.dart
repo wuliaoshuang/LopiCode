@@ -17,17 +17,21 @@ import 'package:lopicode/lowcode/component_ops.dart';
 import 'package:lopicode/lowcode/css_codec.dart';
 import 'package:lopicode/lowcode/edit_types.dart';
 import 'package:lopicode/lowcode/grid_css.dart';
+import 'package:lopicode/lowcode/inspector_bp_widgets.dart';
 import 'package:lopicode/lowcode/inspector_common_widgets.dart';
 import 'package:lopicode/lowcode/inspector_events_widgets.dart';
 import 'package:lopicode/lowcode/inspector_state_widgets.dart';
 import 'package:lopicode/lowcode/inspector_style_widgets.dart';
 import 'package:lopicode/lowcode/model.dart';
+import 'package:lopicode/lowcode/responsive.dart';
 import 'package:lopicode/lowcode/states.dart';
 import 'package:lopicode/lowcode/style_controls_widgets.dart';
 import 'package:lopicode/lowcode/style_css_sheet.dart';
 import 'package:lopicode/lowcode/style_groups_widgets.dart';
 import 'package:lopicode/lowcode/style_model.dart';
 import 'package:lopicode/lowcode/style_resolve.dart';
+import 'package:lopicode/lowcode/theme_scope_widgets.dart';
+import 'package:lopicode/lowcode/theme_vars.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/shell.dart';
 import 'package:lopicode/ui/widgets.dart';
@@ -62,6 +66,7 @@ class InspectorPanel extends StatefulWidget {
     this.onOpenLogic,
     this.onAddLogic,
     this.onState,
+    this.bp,
   });
   final LcDocument doc;
   final String nodeId;
@@ -83,6 +88,9 @@ class InspectorPanel extends StatefulWidget {
 
   /// “样式”页顶上选了哪个状态（null＝平时）：搭建台拿它让画布照这个状态画选中的组件。
   final ValueChanged<String?>? onState;
+
+  /// 画布现在看的是哪一档屏宽（null＝手机）：不是手机时，“样式”页改的只记成那一档的差别。
+  final String? bp;
 
   @override
   State<InspectorPanel> createState() => InspectorPanelState();
@@ -369,37 +377,72 @@ class InspectorPanelState extends State<InspectorPanel> {
     final parent = _doc.parentOf(node.id);
     _scroll = scroll;
     final state = _state;
-    final parentStyle = parent == null ? null : resolvedStyle(parent, _doc.parentOf(parent.id));
+    final parentStyle = parent == null ? null : resolvedStyle(lcViewNode(parent, LcViewEnv.of(_doc, widget.bp)), _doc.parentOf(parent.id));
     final parentColumns = parentStyle != null && lcIsGrid(parentStyle) ? lcGridColumns(parentStyle) : null;
     final stateOwn = state == null ? const <String, String>{} : lcStateStyle(preview, state);
+    final bp = widget.bp;
+    // 这一档看到的样子（手机的 + 更窄各档的 + 这一档的差别）；变量不换成值，控件上才看得出“这是变量”。
+    final seen = bp == null ? preview : lcViewNode(preview, LcViewEnv(bp: bp));
+    final bpOwn = bp == null ? const <String, String>{} : canonicalDeclarations(lcBpStyle(preview, bp));
+    final bpNote = bp == null
+        ? null
+        : LcBpNote(
+            bp: bp,
+            onStylePage: _page == InspectorPage.style,
+            filled: bpOwn.isNotEmpty,
+            stateLabel: state == null ? null : kLcStateLabels[state],
+            onClear: () => _apply((n, _) => lcReplaceBp(n, bp, const {})),
+            onGoStyle: () => showPage(InspectorPage.style),
+          );
     final Widget content = switch (_page) {
-      InspectorPage.common => InspectorCommonPage(
-        key: ValueKey('common-${node.id}'),
-        ed: InspectorEdit(doc: _doc, node: preview, parent: parent, apply: _apply, pickImage: widget.pickImage, editDoc: _editDoc),
+      InspectorPage.common => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ?bpNote,
+          InspectorCommonPage(
+            key: ValueKey('common-${node.id}'),
+            ed: InspectorEdit(doc: _doc, node: preview, parent: parent, apply: _apply, pickImage: widget.pickImage, editDoc: _editDoc),
+          ),
+        ],
       ),
       InspectorPage.style => InspectorStylePage(
         key: ValueKey('style-${node.id}'),
-        ed: state == null
-            ? StyleEdit(node: node, own: _style, resolved: resolvedStyle(preview, parent), apply: _applyStyle, parentColumns: parentColumns)
-            : StyleEdit(
+        ed: state != null
+            ? StyleEdit(
                 node: node,
                 own: stateOwn,
-                resolved: {...resolvedStyle(preview, parent), ...stateOwn},
+                resolved: {...resolvedStyle(seen, parent), ...stateOwn},
                 apply: (change, {merge = false}) => _applyState(state, change, merge: merge),
                 parentColumns: parentColumns,
-              ),
+              )
+            : bp != null
+            ? StyleEdit(
+                node: node,
+                own: bpOwn,
+                resolved: resolvedStyle(seen, parent),
+                apply: (change, {merge = false}) => _apply((n, _) => lcEditAtBp(n, bp, (m) => change(LcStyle(m))), merge: merge),
+                parentColumns: parentColumns,
+                inheritedHint: '跟手机一样',
+              )
+            : StyleEdit(node: node, own: _style, resolved: resolvedStyle(preview, parent), apply: _applyStyle, parentColumns: parentColumns),
         tab: _tab,
         dropped: _dropped,
         onDismissDropped: () => setState(() => _dropped = const []),
-        top: LcStateBar(
-          state: state,
-          filled: {
-            for (final s in kLcStateNames)
-              if (lcStateStyle(preview, s).isNotEmpty) s,
-          },
-          onPick: (s) => setState(() => _pickState(s)),
-          onClear: () => _apply((n, _) => lcReplaceState(n, state!, const {})),
-          caveat: lcStateCaveat(preview.type, state),
+        top: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ?bpNote,
+            LcStateBar(
+              state: state,
+              filled: {
+                for (final s in kLcStateNames)
+                  if (lcStateStyle(preview, s).isNotEmpty) s,
+              },
+              onPick: (s) => setState(() => _pickState(s)),
+              onClear: () => _apply((n, _) => lcReplaceState(n, state!, const {})),
+              caveat: lcStateCaveat(preview.type, state),
+            ),
+          ],
         ),
       ),
       InspectorPage.events => InspectorEventsPage(
@@ -417,16 +460,19 @@ class InspectorPanelState extends State<InspectorPanel> {
         },
       ),
     };
-    return CustomScrollView(
-      controller: scroll,
-      slivers: [
-        PinnedHeaderSliver(child: _header(context, node)),
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(Space.x4, Space.x2, Space.x4, Space.x6),
-          // 不用懒加载的列表：内容就这么几行，一次排好，滚动位置和“滚到被编辑的那一行”都更稳。
-          sliver: SliverToBoxAdapter(child: content),
-        ),
-      ],
+    return LcThemeScope(
+      theme: lcThemeOf(_doc),
+      child: CustomScrollView(
+        controller: scroll,
+        slivers: [
+          PinnedHeaderSliver(child: _header(context, node)),
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(Space.x4, Space.x2, Space.x4, Space.x6),
+            // 不用懒加载的列表：内容就这么几行，一次排好，滚动位置和“滚到被编辑的那一行”都更稳。
+            sliver: SliverToBoxAdapter(child: content),
+          ),
+        ],
+      ),
     );
   }
 
@@ -473,7 +519,8 @@ class InspectorPanelState extends State<InspectorPanel> {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  if (_page == InspectorPage.style) ...[
+                  // “CSS”“重置”改的是手机（默认）那份：画布切到别的屏宽时收起来，免得以为改的是这一档。
+                  if (_page == InspectorPage.style && widget.bp == null) ...[
                     TextButton(
                       key: const Key('lc-style-css'),
                       onPressed: () => _openCss(node),
@@ -501,7 +548,7 @@ class InspectorPanelState extends State<InspectorPanel> {
           if (_page == InspectorPage.style)
             StyleTabStrip(
               tab: _tab,
-              own: _style,
+              own: widget.bp == null ? _style : canonicalDeclarations(lcBpStyle(_preview(node), widget.bp!)),
               onSelect: (tab) {
                 _jumpTop();
                 setState(() => _tab = tab);

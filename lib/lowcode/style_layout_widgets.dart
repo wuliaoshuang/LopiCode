@@ -139,7 +139,7 @@ class LayoutGroup extends StatelessWidget {
         StyleChoiceRow(ed, 'align-items', '交叉轴对齐（垂直于排列方向）', _alignItems, stacked: true),
         StyleRow(
           label: '子项间距',
-          hint: sameGap ? (ed.inherited('row-gap') && ed.inherited('column-gap') ? kInheritedHint : null) : '行、列间距不一样',
+          hint: sameGap ? (ed.inherited('row-gap') && ed.inherited('column-gap') ? (ed.inheritedHint ?? kInheritedHint) : null) : '行、列间距不一样',
           child: LengthField(
             id: 'gap',
             value: sameGap ? rowGap : null,

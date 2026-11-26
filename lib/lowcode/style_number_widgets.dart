@@ -4,6 +4,8 @@
 import 'package:flutter/services.dart';
 import 'package:lopicode/lowcode/style_controls_widgets.dart';
 import 'package:lopicode/lowcode/style_model.dart';
+import 'package:lopicode/lowcode/theme_scope_widgets.dart';
+import 'package:lopicode/lowcode/theme_vars.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/keyboard_tap_dismiss.dart';
 import 'package:material_ui/material_ui.dart';
@@ -172,6 +174,16 @@ class LengthField extends StatefulWidget {
   State<LengthField> createState() => _LengthFieldState();
 }
 
+const String _useVar = '\u0000var';
+
+/// 菜单从这个控件的右下角弹出来。
+RelativeRect _menuPosition(BuildContext context) {
+  final box = context.findRenderObject()! as RenderBox;
+  final overlay = Overlay.of(context).context.findRenderObject()! as RenderBox;
+  final at = box.localToGlobal(box.size.bottomRight(Offset.zero), ancestor: overlay);
+  return RelativeRect.fromLTRB(at.dx - 200, at.dy, overlay.size.width - at.dx, 0);
+}
+
 class _LengthFieldState extends State<LengthField> {
   /// 还没填数字时先选的单位：只记在控件里，等填了数字才一起写进去。
   String _unit = 'px';
@@ -228,6 +240,32 @@ class _LengthFieldState extends State<LengthField> {
     final clear = widget.clearable
         ? StyleIconButton(key: Key('lc-len-${widget.id}-clear'), icon: Icons.close, semantic: '清除', onTap: canClear ? () => widget.onChanged(null, merge: false) : null)
         : null;
+    // 主题变量：这种属性有能用的变量时，单位菜单里多一项“用变量…”；值已经是变量时整格换成变量的小牌子（点它换一个）。
+    final theme = LcThemeScope.of(context);
+    final choices = lcVarChoices(theme, widget.id);
+    final named = isRaw ? lcVarNameIn(v.toCss()) : null;
+    final varName = named != null && theme.values.containsKey(named) ? named : null;
+    Future<void> pickVar() async {
+      final name = await showMenu<String>(
+        context: context,
+        position: _menuPosition(context),
+        items: [for (final o in choices) PopupMenuItem(key: Key('lc-len-${widget.id}-var-${o.name}'), value: o.name, height: 44, child: Text('${o.label}　${o.value}'))],
+      );
+      if (name != null) widget.onChanged(LcLength.raw(lcVarRef(name)), merge: false);
+    }
+
+    if (varName != null) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 168),
+            child: LcVarBadge(key: Key('lc-len-${widget.id}-var'), label: theme.labelOf(varName), value: theme.resolved(varName), onTap: choices.isEmpty ? null : pickVar),
+          ),
+          ?clear,
+        ],
+      );
+    }
     if (isRaw) {
       return Row(
         mainAxisSize: MainAxisSize.min,
@@ -277,8 +315,8 @@ class _LengthFieldState extends State<LengthField> {
           width: 60,
           text: isAuto ? 'auto' : _unit,
           faint: widget.inherited,
-          options: [for (final u in LcLength.units) ChoiceOption(u, u), if (widget.allowAuto) const ChoiceOption('auto', 'auto（自动）')],
-          onSelected: _pickUnit,
+          options: [for (final u in LcLength.units) ChoiceOption(u, u), if (widget.allowAuto) const ChoiceOption('auto', 'auto（自动）'), if (choices.isNotEmpty) const ChoiceOption(_useVar, '用变量…')],
+          onSelected: (u) => u == _useVar ? pickVar() : _pickUnit(u),
         ),
         ?clear,
       ],

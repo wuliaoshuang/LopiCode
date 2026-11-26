@@ -723,3 +723,16 @@ Flutter 导出在测试里真的跳了页（`test/lowcode_pages_export_test.dart
 - React：`useState(函数)` 把函数当“第一次取初值”用；`useEffect(…, [])` 里加监听、返回的函数里取消；组件变量名要大写开头才能当标签用（`<LcCurrentPage />`）。未核对（真编译通过）。
 - 服务端渲染时没有 `location` / `window`：外壳里取当前页的函数先判 `typeof location === "undefined"`；监听都放在只在浏览器里跑的钩子里（`onMounted` / `useEffect`）。实跑如此。
 - Flutter：`Navigator.of(context).push(MaterialPageRoute(...))` 叠一页、`pushReplacement` 换掉当前页；`NavigationBar.onDestinationSelected` 给的是点中项的下标。未核对（测试里真跑过）。
+
+## 低代码主题变量和断点导出用到的 CSS / Vue 写法（2026-11-27，编辑器第 4 期 B2；`lib/lowcode/export_theme_bp.dart`、`export_vue.dart`）
+
+| 用到的 | 核对情况 | 来源 |
+|---|---|---|
+| CSS 自定义属性：名字以两个连字符开头（`--color-primary: #058654;`），名字区分大小写；写在 `:root` 上整个网页都能用 | 核对过（2026-11-27） | MDN《Using CSS custom properties (variables)》https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Cascading_variables/Using_custom_properties |
+| `var(--名)` 取值；`var(--名, 后备)`，第一个逗号后面全部是后备值，后备值里可以再套 `var()` | 核对过（同上） | 同上 |
+| 自定义属性会继承（所以放在 `:root` 就够） | 核对过（同上） | 同上 |
+| `@media (min-width: 768px) { … }`：屏宽不小于 768 时生效；写在后面的规则盖前面同样分量的规则 | **未核对**（这次没打开 MDN 的 `@media` 页；写法是多年通用的，esbuild 解析通过） | — |
+| 断点里“去掉某一条”写成 `属性: initial` | **未核对**（`initial` 是 CSS 通用关键字；对继承类属性，`initial` 回到的是属性的初始值而不是手机档继承来的值，见 §10.7 的局限） | — |
+| Vue 单文件组件：`<style scoped>` 会给每条选择器加上 `[data-v-xxxx]`；同一个文件里可以同时有一段不带 `scoped` 的 `<style>`（全局）和一段带的 | 核对过（2026-11-27） | Vue 官方文档《SFC CSS Features》（Scoped CSS、Mixing Local and Global Styles）https://de.vuejs.org/api/sfc-css-features |
+| 所以 `:root { … }` 写在 `scoped` 的样式里会变成 `:root[data-v-xxxx]`、对不上网页的根元素 | **推断，没在真浏览器里试**；我们的做法是把它放进不带 `scoped` 的那段，绕开这个问题 | 由上一条推出 |
+

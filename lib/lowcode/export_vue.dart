@@ -19,6 +19,7 @@ import 'dart:convert';
 import 'package:lopicode/lowcode/component_model.dart';
 import 'package:lopicode/lowcode/export_framework_common.dart';
 import 'package:lopicode/lowcode/export_pages.dart';
+import 'package:lopicode/lowcode/export_theme_bp.dart';
 import 'package:lopicode/lowcode/export_v3_fields.dart';
 import 'package:lopicode/lowcode/export_web_v3.dart';
 import 'package:lopicode/lowcode/logic_blocks.dart';
@@ -112,7 +113,7 @@ LcFrameworkExport exportVue(LcDocument doc) {
 LcFrameworkExport _exportSite(LcDocument doc) {
   final notes = <String>[kNoteBody, kNotePages];
   final site = LcSitePlan(doc);
-  final files = <LcExportFile>[lcFormatted('$kLcShellName.vue', lcVueShell(site), 'vue')];
+  final files = <LcExportFile>[lcFormatted('$kLcShellName.vue', lcVueShell(site, themeCss: lcThemeCssIfUsed(doc)), 'vue')];
   final components = <LcExportFile>[];
   final done = <String>{};
   for (final p in site.pages) {
@@ -300,7 +301,8 @@ class _Template {
   List<String> imports() => [for (final p in used) 'import ${p.name} from ${jsString('$importDir${p.name}.vue')};'];
 }
 
-String _sfc({required List<String> script, required String template, required String css}) {
+/// [globalCss]：不带 scoped 的一段（主题变量的 `:root` 写在 scoped 里不生效，所以单独一段）。
+String _sfc({required List<String> script, required String template, required String css, String globalCss = ''}) {
   final out = StringBuffer()
     ..writeln('<script setup>')
     ..writeln('// $kExportHeader');
@@ -316,6 +318,13 @@ String _sfc({required List<String> script, required String template, required St
     ..write(kFrameworkBaseCss)
     ..write(css)
     ..writeln('</style>');
+  if (globalCss.isNotEmpty) {
+    out
+      ..writeln()
+      ..writeln('<style>')
+      ..write(globalCss)
+      ..writeln('</style>');
+  }
   return out.toString();
 }
 
@@ -398,6 +407,8 @@ String _page(LcDocument doc, LcComponentPlans plans, List<String> notes) {
     script: script,
     template: template.out.toString(),
     css: lcCollectCss(doc.root, '', notes, plans: plans),
+    // 只有一页的项目没有外壳：主题变量写在页面自己这个文件里。
+    globalCss: doc.isMultiPage ? '' : lcThemeCssIfUsed(doc),
   );
 }
 

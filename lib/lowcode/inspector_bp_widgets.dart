@@ -1,0 +1,58 @@
+// 设计约束（低代码 · 合一面板顶上的“屏宽”提示条 · 390×844）
+// - 只在画布切到“平板”或“桌面”时出现；手机（默认）时不占地方。
+// - 一行只做一件事：说清楚“现在改的记到哪儿”。浅强调底（和“状态”的提示条一个样子，都是“你现在改的不是平常那份”）。
+//   “样式”页：只记这一档和手机不一样的地方，右边“清掉”（这一档写过东西才有）。
+//   “常用”页：这一页改的是所有屏宽共用的，想只改这一档去“样式”页——右边一个“去样式页”。
+// - 取用的 tokens：Space.x1/x2/x3、Radii.sm、accentSoft、text。
+import 'package:lopicode/lowcode/responsive.dart';
+import 'package:lopicode/theme/tokens.dart';
+import 'package:material_ui/material_ui.dart';
+
+class LcBpNote extends StatelessWidget {
+  const LcBpNote({super.key, required this.bp, required this.onStylePage, required this.filled, this.onClear, this.onGoStyle, this.stateLabel});
+
+  /// 画布现在看的那一档（tablet / desktop）。
+  final String bp;
+
+  /// 现在是不是“样式”页。
+  final bool onStylePage;
+
+  /// 这一档给这个组件写过东西没有。
+  final bool filled;
+  final VoidCallback? onClear;
+  final VoidCallback? onGoStyle;
+
+  /// 正在改某个状态的样子时它叫什么（状态样式不分屏宽，要说一声）；平时是 null。
+  final String? stateLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final t = Theme.of(context).textTheme;
+    final name = lcBpLabel(bp);
+    final text = !onStylePage
+        ? '这一页改的是所有屏宽共用的。只想改$name的样子，去“样式”页。'
+        : stateLabel != null
+        ? '“$stateLabel”时的样子不分屏宽：现在改的在手机上也生效。'
+        : '现在改的只在$name及更宽的屏上生效（≥${kLcBpMinWidth[bp]}）：只记和手机不一样的地方。';
+    final Widget action = !onStylePage
+        ? TextButton(key: const Key('lc-bp-go-style'), onPressed: onGoStyle, child: const Text('去样式页'))
+        : (filled && stateLabel == null ? TextButton(key: const Key('lc-bp-clear'), onPressed: onClear, child: const Text('清掉')) : const SizedBox(height: 40));
+    return Padding(
+      padding: const EdgeInsets.only(bottom: Space.x3),
+      child: Container(
+        key: const Key('lc-bp-note'),
+        padding: const EdgeInsets.fromLTRB(Space.x3, Space.x1, Space.x1, Space.x1),
+        decoration: BoxDecoration(color: c.accentSoft, borderRadius: BorderRadius.circular(Radii.sm)),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(text, style: t.bodySmall?.copyWith(color: c.text)),
+            ),
+            action,
+          ],
+        ),
+      ),
+    );
+  }
+}

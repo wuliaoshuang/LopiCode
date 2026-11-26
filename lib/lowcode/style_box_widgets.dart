@@ -165,7 +165,9 @@ class _BoxModelEditorState extends State<BoxModelEditor> {
         const SizedBox(height: Space.x2),
         StyleRow(
           label: linked ? '$_ringLabel（四边）' : '${_sideText[_side]}$_ringLabel',
-          hint: linked ? (sides.isUniform ? (names.every(ed.inherited) ? kInheritedHint : null) : '四边不一样，改了会一起变') : (ed.inherited(_name) ? kInheritedHint : null),
+          hint: linked
+              ? (sides.isUniform ? (names.every(ed.inherited) ? (ed.inheritedHint ?? kInheritedHint) : null) : '四边不一样，改了会一起变')
+              : (ed.inherited(_name) ? (ed.inheritedHint ?? kInheritedHint) : null),
           child: LengthField(
             // 换了圈 / 换了边就是另一个输入框：不带着上一个框里敲到一半的字。
             key: ValueKey('box-$_ring-${linked ? 'all' : _side}'),

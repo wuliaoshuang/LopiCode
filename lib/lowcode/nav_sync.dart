@@ -67,12 +67,15 @@ int lcSyncBottomNav(LcDocument doc, String navId) {
     there.style
       ..clear()
       ..addAll(nav.style);
-    // “按下时 / 停用时”的样式也一起抄（它们存在节点的 states 里）；名字、隐藏、锁定这些编辑器自己的记号各页留各页的。
-    final states = nav.more['states'];
-    if (states is Map<String, dynamic>) {
-      there.more['states'] = copy(states);
-    } else {
-      there.more.remove('states');
+    // “按下时 / 停用时”的样式、各断点的样式差别也一起抄（它们存在节点的 states / responsive 里）；
+    // 名字、隐藏、锁定这些编辑器自己的记号各页留各页的。
+    for (final key in const ['states', 'responsive']) {
+      final v = nav.more[key];
+      if (v is Map<String, dynamic>) {
+        there.more[key] = copy(v);
+      } else {
+        there.more.remove(key);
+      }
     }
     there.props['current'] = indexOf(page.id) ?? 0;
   }
