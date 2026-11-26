@@ -182,8 +182,9 @@ func encodeURL(s string) string {
 var fetchMethods = map[string]bool{"GET": true, "HEAD": true, "POST": true, "PUT": true, "PATCH": true, "DELETE": true, "OPTIONS": true}
 var fetchSkip = map[string]bool{"host": true, "content-length": true, "connection": true, "expect": true, "upgrade": true}
 
-func HostFetch(method string, url string, headers Dict[string], body *string, timeoutMs int64) Dict[any] {
+func HostFetch(lt *Line, method string, url string, headers Dict[string], body *string, timeoutMs int64) Dict[any] {
 	lower := strings.ToLower(url)
+	lineCheck(lt) // 被取消了的事，到了要等的地方就停
 	if !strings.HasPrefix(lower, "http://") && !strings.HasPrefix(lower, "https://") {
 		Fail("请求不了：网址要以 http:// 或 https:// 开头")
 	}

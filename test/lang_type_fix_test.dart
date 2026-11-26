@@ -1,4 +1,4 @@
-// 一键修真的改语法树（lib/lang/type_fix.dart）：十一种修法每种来一个会报错的小程序，
+// 一键修真的改语法树（lib/lang/type_fix.dart）：十三种修法每种来一个会报错的小程序，
 // 拿检查器自己给的修法去改，改完再查一遍——原来那条问题得没了，而且没有冒出新的错。
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lopicode/lang/lang.dart';
@@ -116,9 +116,21 @@ void main() {
         ],
       ),
     ),
+    // 核心 3 加的两种。
+    LFixKind.dropAwait: ('T31', () => const LModule(body: [LLet('n', LAwait(LLit(1)))])),
+    LFixKind.wrapSpawn: (
+      'T29',
+      () => const LModule(
+        decls: [
+          LNativeDecl('time.sleep', [LParam('毫秒', type: _int)], type: LType.nul),
+          LFuncDecl('快', [], [LExprStmt(LNative('time.sleep', [LLit(1)]))], noWait: true),
+        ],
+        body: [LExprStmt(LCall(LName('快'), []))],
+      ),
+    ),
   };
 
-  test('十一种修法一种不少', () => expect(cases.keys.toSet(), LFixKind.values.toSet()));
+  test('十三种修法一种不少', () => expect(cases.keys.toSet(), LFixKind.values.toSet()));
 
   for (final MapEntry(key: kind, value: (code, build)) in cases.entries) {
     test('${kind.name}：修完 $code 那条没了，也没有新的错', () {

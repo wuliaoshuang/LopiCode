@@ -249,17 +249,20 @@ func DynSize(x any) int64 {
 }
 
 // DynCall：调一个“任意”里的函数（参数、结果都当任意）。
-func DynCall(f any, args ...any) any {
+func DynCall(lt *Line, f any, args ...any) any {
 	rv := reflect.ValueOf(f)
 	if f == nil || rv.Kind() != reflect.Func {
 		return want[any]("函数", f)
 	}
 	ft := rv.Type()
-	if ft.NumIn() != len(args) {
-		Fail("这个函数要 " + strconv.Itoa(ft.NumIn()) + " 个参数，给了 " + strconv.Itoa(len(args)) + " 个")
+	// 生成的函数第一个参数都是“这条线”，后面才是它自己的参数。
+	if ft.NumIn() != len(args)+1 {
+		Fail("这个函数要 " + strconv.Itoa(ft.NumIn()-1) + " 个参数，给了 " + strconv.Itoa(len(args)) + " 个")
 	}
-	in := make([]reflect.Value, len(args))
-	for i, a := range args {
+	in := make([]reflect.Value, len(args)+1)
+	in[0] = reflect.ValueOf(lt)
+	for n, a := range args {
+		i := n + 1
 		pt := ft.In(i)
 		switch {
 		case pt.Kind() == reflect.Int64 && a != nil:
@@ -269,7 +272,7 @@ func DynCall(f any, args ...any) any {
 		case reflect.TypeOf(a).AssignableTo(pt):
 			in[i] = reflect.ValueOf(a)
 		default:
-			Fail("这个函数的第 " + strconv.Itoa(i+1) + " 个参数类型对不上，拿到的是" + Kind(a))
+			Fail("这个函数的第 " + strconv.Itoa(n+1) + " 个参数类型对不上，拿到的是" + Kind(a))
 		}
 	}
 	out := rv.Call(in)

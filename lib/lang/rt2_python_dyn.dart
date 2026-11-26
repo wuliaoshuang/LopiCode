@@ -3,9 +3,10 @@ library;
 
 import 'package:lopicode/lang/rt2_python.dart';
 import 'package:lopicode/lang/rt2_python_more.dart';
+import 'package:lopicode/lang/rt2_python_task.dart';
 
 /// 整份小库。
-const String kRt2PythonSource = kRt2PythonHead + _tail + kRt2PythonMore;
+const String kRt2PythonSource = kRt2PythonHead + _tail + kRt2PythonTask + _serve + kRt2PythonMore;
 
 const String _tail = r'''
 # —— 列表、字典 ——
@@ -413,38 +414,9 @@ def hostEnv(name):
     return _os.environ.get(name)
 
 
-# —— 要等的事：一件事一条线 ——
-def hostSleep(ms):
-    _time.sleep(max(0, ms) / 1000.0)
+''';
 
-
-class Task:
-    def __init__(self, f):
-        self._done = _threading.Event()
-        self._val = None
-        self._err = None
-        _threading.Thread(target=self._run, args=(f,), daemon=True).start()
-
-    def _run(self, f):
-        try:
-            self._val = f()
-        except BaseException as e:  # 出了错先记着，等它的时候再抛
-            self._err = e
-        finally:
-            self._done.set()
-
-
-def spawn(f):
-    return Task(f)
-
-
-def wait(t):
-    t._done.wait()
-    if t._err is not None:
-        raise t._err
-    return t._val
-
-
+const String _serve = r'''
 # —— 开服务（细则见 docs/blocks-v5-parts/C-library-system.md 9.1 和 B-gen-notes.md 第 12 节）——
 _BODY_LIMIT = 1048576
 
@@ -494,6 +466,7 @@ def hostServe(port, host, handler):
             path, _, query = self.path.partition("?")
             request = {"method": self.command, "path": path, "query": query, "headers": headers, "body": body}
             try:
+                _new_line()  # 一个请求一条线
                 out = handler(request)
             except Exception as e:  # 处理函数自己没接住的错：记到错误输出，回 500
                 sys.stderr.write(_err_text(e) + "\n")

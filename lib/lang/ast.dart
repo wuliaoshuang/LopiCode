@@ -101,7 +101,7 @@ class LParam {
 
 /// 函数（第 2 阶段）。[type] 是返回类型标注。
 class LFuncDecl extends LDecl {
-  const LFuncDecl(this.name, this.params, this.body, {this.isPublic = false, this.typeParams = const [], this.codeName, this.waits = false, super.src, super.type});
+  const LFuncDecl(this.name, this.params, this.body, {this.isPublic = false, this.typeParams = const [], this.codeName, this.waits = false, this.noWait = false, super.src, super.type});
   @override
   final String name;
   final List<LParam> params;
@@ -114,8 +114,12 @@ class LFuncDecl extends LDecl {
   /// 代码名（拉丁字母开头，只含字母数字）：导出给别的包 / 文件用时在 Go、Java 里叫什么（第 5 版，GAP-B-1）。
   final String? codeName;
 
-  /// 这个函数“要等”（里面有要等的事）。现在由写的人明着标；自动推是核心 3 的事。
+  /// 写的人明着说这个函数“要等”。不写也行：要不要等是检查器自己推出来的（核心 3，typecheck_wait.dart）；
+  /// 写了＝不管里面有没有要等的事，都按“要等”对待（给库的作者用，接口稳定）。
   final bool waits;
+
+  /// 写的人规定这个函数“不许等”：里面出现要等的事、或者子类重写成要等的＝T29。只有库的文字写法里能写。
+  final bool noWait;
 }
 
 class LFieldDecl {
@@ -171,13 +175,16 @@ class LClassDecl extends LDecl {
 }
 
 class LSignature {
-  const LSignature(this.name, this.params, {this.returns, this.waits = false});
+  const LSignature(this.name, this.params, {this.returns, this.waits = false, this.noWait = false});
   final String name;
   final List<LParam> params;
   final LType? returns;
 
-  /// 这个方法“要等”。
+  /// 明着说这个方法“要等”。不写＝看实现它的类：有一个实现要等，它就算要等（核心 3）。
   final bool waits;
+
+  /// 规定这个方法“不许等”：实现它的方法里有要等的事＝T29。
+  final bool noWait;
 }
 
 /// 接口（第 5 阶段）。
@@ -538,12 +545,17 @@ class LAwait extends LExpr {
   final LExpr x;
 }
 
-/// 开始做（第 6 阶段）。严格规矩下现在只认一种样子：里面就一句“返回 f()”，f 是不带参数的函数——
-/// 马上开始做 f，结果是“稍后的结果〈f 返回的类型〉”。
+/// 开始做（第 6 阶段；核心 3 放开）：[body] 是随便几句话，当成一个不带参数的匿名函数马上开始做，
+/// 结果是“稍后的结果〈里面“返回”的类型〉”（没有“返回”＝稍后的结果〈空〉）。里面的“返回”只结束这件事，不结束外面的函数。
 class LSpawn extends LExpr {
   const LSpawn(this.body, {super.src});
   final List<LStmt> body;
 }
+
+final Expando<LLambda> _spawnLambdas = Expando('开始做');
+
+/// “开始做”里那几句话当成的匿名函数。同一个 [LSpawn] 每次拿到的是同一个对象（检查结果是按节点对象记的）。
+LLambda lSpawnLambda(LSpawn s) => _spawnLambdas[s] ??= LLambda(const [], s.body, src: s.src);
 
 /// 调运行时小库的函数。`fn` 要在 rt.dart 的表里（语言核心的，或宿主登记的）。
 class LRt extends LExpr {

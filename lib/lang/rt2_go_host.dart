@@ -1,4 +1,4 @@
-/// 规矩版本 2 的小库·Go·宿主那一半（`lc/host.go`，和 lc.go 同一个包）：输出、格子、要等的事、开服务。
+/// 规矩版本 2 的小库·Go·宿主那一半（`lc/host.go`，和 lc.go 同一个包）：输出、格子、开服务。要等的事在 rt2_go_task.dart（`lc/task.go`）。
 /// 细则见 docs/blocks-v5-parts/C-library-system.md 9.1 和 B-gen-notes.md 第 12 节。只用 Go 自带的包。
 library;
 
@@ -13,7 +13,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"runtime"
 	"runtime/debug"
 	"sort"
 	"strconv"
@@ -61,8 +60,8 @@ func HostEnv(name string) *string {
 	return &v
 }
 
-func Run(main func()) {
-	msg, ok := Try(main)
+func Run(main func(*Line)) {
+	msg, ok := Try(func() { main(&Line{}) })
 	if !ok {
 		Log("出错：" + msg)
 	}
@@ -77,25 +76,12 @@ func Run(main func()) {
 // —— 格子：每个名字一把锁。别的线同时改同一个名字＝排队；改它的函数里再改它＝报错（不然会自己等自己）——
 type storeCell struct {
 	lock  sync.Mutex
-	owner int64 // 正在改它的那条线的编号；没人在改是 0
+	owner *Line // 正在改它的那条线；没人在改是 nil
 }
 
 var storeLock sync.Mutex
 var store = map[string]any{}
 var storeCells = map[string]*storeCell{}
-
-// 这条线的编号。Go 不给现成的，从“我在哪”那段文字的开头（goroutine 12 [running]:）里读。
-func lineID() int64 {
-	buf := make([]byte, 64)
-	buf = buf[:runtime.Stack(buf, false)]
-	buf = bytes.TrimPrefix(buf, []byte("goroutine "))
-	if i := bytes.IndexByte(buf, ' '); i > 0 {
-		if id, err := strconv.ParseInt(string(buf[:i]), 10, 64); err == nil {
-			return id
-		}
-	}
-	return -1
-}
 
 func copyVal(v any) any {
 	switch x := v.(type) {
@@ -121,8 +107,7 @@ func StoreRead(name string) any {
 	return copyVal(store[name])
 }
 
-func StoreUpdate(name string, f func(any) any) any {
-	me := lineID()
+func StoreUpdate(me *Line, name string, f func(*Line, any) any) any {
 	storeLock.Lock()
 	cell := storeCells[name]
 	if cell == nil {
@@ -140,47 +125,15 @@ func StoreUpdate(name string, f func(any) any) any {
 	storeLock.Unlock()
 	defer func() {
 		storeLock.Lock()
-		cell.owner = 0
+		cell.owner = nil
 		storeLock.Unlock()
 		cell.lock.Unlock()
 	}()
-	v := copyVal(f(StoreRead(name)))
+	v := copyVal(f(me, StoreRead(name)))
 	storeLock.Lock()
 	store[name] = v
 	storeLock.Unlock()
 	return copyVal(v)
-}
-
-// —— 要等的事：一件事一条线 ——
-func HostSleep(ms int64) {
-	if ms > 0 {
-		time.Sleep(time.Duration(ms) * time.Millisecond)
-	}
-}
-
-// Task：“开始做”的结果。做完了 done 会关上；出了错先记着，等它的时候再抛。
-type Task[T any] struct {
-	done chan struct{}
-	val  T
-	err  any
-}
-
-func Spawn[T any](f func() T) *Task[T] {
-	t := &Task[T]{done: make(chan struct{})}
-	go func() {
-		defer close(t.done)
-		defer func() { t.err = recover() }()
-		t.val = f()
-	}()
-	return t
-}
-
-func Wait[T any](t *Task[T]) T {
-	<-t.done
-	if t.err != nil {
-		panic(t.err)
-	}
-	return t.val
 }
 
 // —— 开服务 ——
@@ -210,7 +163,7 @@ func hostError(w http.ResponseWriter, r *http.Request, status int, message strin
 	writeRaw(w, r, status, Dict[any]{"Content-Type": "application/json; charset=utf-8"}, ToJson(Dict[any]{"error": message}))
 }
 
-func serveOne(w http.ResponseWriter, r *http.Request, handler func(Dict[any]) Dict[any]) {
+func serveOne(w http.ResponseWriter, r *http.Request, handler func(*Line, Dict[any]) Dict[any]) {
 	if r.ContentLength > bodyLimit {
 		w.Header()["Connection"] = []string{"close"}
 		hostError(w, r, 413, "请求内容太大")
@@ -254,7 +207,7 @@ func serveOne(w http.ResponseWriter, r *http.Request, handler func(Dict[any]) Di
 				}
 			}
 		}()
-		out = handler(request)
+		out = handler(&Line{}, request) // 一个请求一条线
 		return false
 	}()
 	if failed {
@@ -359,7 +312,8 @@ func (l rawListener) Accept() (net.Conn, error) {
 }
 
 // HostServe：一直服务，不返回；端口用不了＝出错。
-func HostServe(port int64, host string, handler func(Dict[any]) Dict[any]) {
+func HostServe(lt *Line, port int64, host string, handler func(*Line, Dict[any]) Dict[any]) {
+	lineCheck(lt)
 	if port < 0 || port > 65535 {
 		Fail("开不了服务：端口要在 0 到 65535 之间")
 	}

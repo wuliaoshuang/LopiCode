@@ -158,8 +158,8 @@ BeCoreFix? beCoreFixOf(LFix fix, {BeSpot? block, BeSpot? slot}) {
         );
         return true;
       });
-    case LFixKind.wrapToText || LFixKind.wrapToInt || LFixKind.wrapParseInt || LFixKind.wrapOrElse || LFixKind.wrapMust || LFixKind.compareNotZero:
-      return null; // 这六种在 backend_type_fix.dart
+    case LFixKind.wrapToText || LFixKind.wrapToInt || LFixKind.wrapParseInt || LFixKind.wrapOrElse || LFixKind.wrapMust || LFixKind.compareNotZero || LFixKind.dropAwait || LFixKind.wrapSpawn:
+      return null; // 这几种在 backend_type_fix.dart
   }
 }
 

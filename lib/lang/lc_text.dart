@@ -5,6 +5,7 @@
 library;
 
 import 'package:lopicode/lang/ast.dart';
+import 'package:lopicode/lang/ast_util.dart';
 import 'package:lopicode/lang/types.dart';
 
 final RegExp _tok = RegExp(r'\s*(;[^\n]*|\(|\)|"(?:[^"\\]|\\.)*"|[^\s()";]+)');
@@ -117,6 +118,7 @@ class LcReader {
       '字典' => LType.dictOf(ty(l[1])),
       '函数' => LType.func([for (final p in l[1] as LcList) ty(p), ty(l[2])]),
       '要等函数' => LType.func([for (final p in l[1] as LcList) ty(p), ty(l[2])], waits: true),
+      '不等函数' => LType.func([for (final p in l[1] as LcList) ty(p), ty(l[2])], waits: false),
       '稍后' => LType(LKind.future, of: ty(l[1])),
       _ => LType.ref(h, args: [for (final a in l.skip(1)) ty(a)]),
     };
@@ -137,7 +139,7 @@ class LcReader {
 
   static const Map<String, String?> _bounds = {'能比较': kBoundComparable};
 
-  LFuncDecl func(LcList d, {bool waits = false}) {
+  LFuncDecl func(LcList d, {bool waits = false, bool noWait = false}) {
     var i = 2;
     final tps = <LTypeParam>[];
     if (d[i] case final LcList g when g.isNotEmpty && g[0] == '泛型') {
@@ -152,7 +154,7 @@ class LcReader {
       ret = ty(d[i + 1]);
       i += 2;
     }
-    return LFuncDecl(d[1] as String, ps, stmts(d.skip(i)), typeParams: tps, type: ret, waits: waits);
+    return LFuncDecl(d[1] as String, ps, stmts(d.skip(i)), typeParams: tps, type: ret, waits: waits, noWait: noWait);
   }
 
   LModule module({String name = '', List<String> uses = const []}) {
@@ -177,14 +179,14 @@ class LcReader {
           );
         case '接口':
           decls.add(
-            LInterfaceDecl(name, [for (final m in d.skip(2).cast<LcList>()) LSignature(m[0] as String, params(m[1]), returns: ty(m[2]), waits: m.length > 3 && m[3] == '要等')], isPublic: public),
+            LInterfaceDecl(name, [for (final m in d.skip(2).cast<LcList>()) LSignature(m[0] as String, params(m[1]), returns: ty(m[2]), waits: m.length > 3 && m[3] == '要等', noWait: m.length > 3 && m[3] == '不等')], isPublic: public),
           );
         case '别名':
           decls.add(LAliasDecl(name, ty(d[2]), isPublic: public));
-        case '函数' || '要等函数':
-          // 要等函数＝里面有要等的事（等一会儿、开服务、调别的要等的函数…），写的人明着标。
-          final f = func(d, waits: d[0] == '要等函数');
-          decls.add(LFuncDecl(f.name, f.params, f.body, isPublic: public, typeParams: f.typeParams, type: f.type, waits: f.waits));
+        case '函数' || '要等函数' || '不等函数':
+          // 要不要等是检查器自己推的，一般写“函数”就行。要等函数＝明着说它要等（不管里面有没有要等的事）；不等函数＝规定它不许等。
+          final f = func(d, waits: d[0] == '要等函数', noWait: d[0] == '不等函数');
+          decls.add(LFuncDecl(f.name, f.params, f.body, isPublic: public, typeParams: f.typeParams, type: f.type, waits: f.waits, noWait: f.noWait));
         case '类':
           final c = cls(d);
           decls.add(LClassDecl(c.name, parent: c.parent, interfaces: c.interfaces, fields: c.fields, ctor: c.ctor, methods: c.methods, typeParams: c.typeParams, isOpen: c.isOpen, isPublic: public));
@@ -229,14 +231,16 @@ class LcReader {
           fields.add(LFieldDecl(l[1] as String, l.length > 3 ? expr(l[3]) : null, type: ty(l[2]), isPrivate: kind.startsWith('内部'), isStatic: kind.endsWith('类字段')));
         case '创建':
           ctor = LFuncDecl('创建', params(l[1]), stmts(l.skip(2)));
-        case '方法' || '要等方法':
-          methods.add(LMethodDecl(func(l, waits: l[0] == '要等方法')));
+        case '方法' || '要等方法' || '不等方法':
+          methods.add(LMethodDecl(func(l, waits: l[0] == '要等方法', noWait: l[0] == '不等方法')));
         case '类方法':
           methods.add(LMethodDecl(func(l), isStatic: true));
       }
     }
     return LClassDecl(d[1] as String, parent: parent, interfaces: impl, fields: fields, ctor: ctor, methods: methods, typeParams: tps, isOpen: open);
   }
+
+  int _locks = 0;
 
   List<LStmt> stmts(Iterable<Object> list) {
     final out = <LStmt>[];
@@ -245,6 +249,9 @@ class LcReader {
       final got = l.isNotEmpty && l[0] is String ? stmtHole?.call(l[0] as String, l.sublist(1)) : null;
       if (got != null) {
         out.addAll(got);
+      } else if (l.isNotEmpty && l[0] == '一次一个') {
+        // (一次一个 名字 语句…)：一次只让一个做。
+        out.addAll(lCritical(expr(l[1]), stmts(l.skip(2)), '锁记号${++_locks}'));
       } else {
         out.add(stmt(l));
       }
@@ -321,6 +328,8 @@ class LcReader {
         return LTry(body, errorName: name, onError: onError, handlers: handlers, finallyBody: last);
       case '打印':
         return LExprStmt(LRt('log', exprs(a)));
+      case '取消':
+        return LExprStmt(LRt('cancel', exprs(a)));
       case '做':
         return LExprStmt(expr(a[0]));
       case '父创建':
@@ -432,12 +441,21 @@ class LcReader {
       case 'λ块' || '要等λ块':
         return LLambda(params(a[0]), stmts(a.skip(1)), waits: h == '要等λ块');
       case '开始做':
-        // (开始做 f)：马上开始做 f（不带参数的函数），结果是“稍后的结果”。(开始做块 语句…) 是把语句包成要等的匿名函数。
+        // (开始做 f)：马上开始做 f（不带参数的函数），结果是“稍后的结果”。(开始做块 语句…)：马上开始做这几句话。
         return LSpawn([LReturn(LCall(expr(a[0]), const []))]);
       case '开始做块':
-        return LSpawn([LReturn(LCall(LLambda(const [], stmts(a), waits: true), const []))]);
+        return LSpawn(stmts(a));
       case '等':
         return LAwait(expr(a[0]));
+      case '等最多':
+        // (等最多 稍后的结果 毫秒)
+        return LRt('awaitMax', exprs(a));
+      case '等全部':
+        return LRt('awaitAll', exprs(a));
+      case '等最先':
+        return LRt('awaitAny', exprs(a));
+      case '被取消了吗':
+        return LRt('cancelled', exprs(a));
       case '调':
         final f = a[0];
         final args = exprs(a.skip(1));

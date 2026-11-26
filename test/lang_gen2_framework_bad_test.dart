@@ -1,6 +1,6 @@
 // “小框架”库故意用错的几组：都要在检查阶段被拦下来（五种语言一行都不生成）。
 // 库的七个模块就是 test/fixtures/framework/bookshop.lc 里的那七个，后面换上一个写错的入口模块。
-// 最后一组是“要等的事写在没标‘要等’的函数里”：这一轮检查器还不管（核心 3 才做自动推断和拦截），由生成器拦，五种语言一样。
+// 最后两组是“要不要等”（核心 3）：处理函数里有要等的事不用标，检查器自己推出来，五种语言照常生成；放错地方的在检查阶段拦（T30）。
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -85,13 +85,26 @@ void main() {
     _only('$_app (主 (做 (新 未授权 401)))', 'T01', const []);
   });
 
-  test('要等的事写在没标“要等”的函数里：生成器拦下，五种语言一样', () {
+  test('要等的事写在没标“要等”的处理函数里：检查器自己推出来它要等，五种语言照常生成', () {
     const body =
         '(宿主 time.sleep ((毫秒 整数)) -> 空) $_app '
         '(主 (做 (发 app GET "/" (λ块 ((c 上下文)) (做 (宿 time.sleep 5)) (返回 (标 任意 1))))))';
-    expect(_said(body), isEmpty, reason: '这一轮检查器不管“要不要等”');
+    expect(_said(body), isEmpty);
     for (final l in kGen2Languages) {
-      expect(() => gen2ProgramFiles(l, _program(body)), throwsA(isA<LangUnsupported>().having((e) => e.message, '提示语', contains('所在的函数要先标成“要等”'))), reason: l);
+      expect(gen2ProgramFiles(l, _program(body)), isNotEmpty, reason: l);
     }
+    // Node 里这个匿名函数自动带上 async、里面那句自动带上 await。
+    final js = gen2ProgramFiles('node', _program(body)).values.join('\n');
+    expect(js, contains('(async (v1_c) => {'));
+    expect(js, contains('(await lc.hostSleep(5))'));
+  });
+
+  test('要等的函数放进只收不用等的函数的地方（T30）：检查阶段拦下', () {
+    _only(
+      '(宿主 time.sleep ((毫秒 整数)) -> 空) $_app '
+      '(主 (打印 (长 (调 筛选 (列 1 2 3) (λ块 ((x 整数)) (做 (宿 time.sleep 5)) (返回 (> x 1)))))))',
+      'T30',
+      ['只收不用等的函数', '用了「等一会儿」'],
+    );
   });
 }

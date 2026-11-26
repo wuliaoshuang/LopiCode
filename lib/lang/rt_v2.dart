@@ -35,7 +35,16 @@ const Set<String> kLangRtV2Ported = {'abs', 'max', 'min', 'random', 'copy', 'tem
 
 const Map<String, String> _numT = {'T': kBoundNumeric};
 
-const Set<String> kLangRtV2New = {'orElse', 'must', 'toInt', 'parseInt', 'codePoints', 'isNumeric', 'urlDecode', 'isType', 'toNumber', 'dictMerge'};
+const Set<String> kLangRtV2New = {'orElse', 'must', 'toInt', 'parseInt', 'codePoints', 'isNumeric', 'urlDecode', 'isType', 'toNumber', 'dictMerge', ...kLangRtV2Tasks};
+
+/// 核心 3 加的七个：“稍后的结果”上的事（等最多、等全部、等最先的、取消、被取消了吗）和“一次只让一个做”的进、出。
+/// 规矩见 docs/blocks-v5-parts/B-gen-notes.md 第 16 节。
+const Set<String> kLangRtV2Tasks = {'awaitMax', 'awaitAll', 'awaitAny', 'cancel', 'cancelled', 'lockEnter', 'lockLeave'};
+
+/// 小库函数里“要等”的那几个。
+const Set<String> kLangRtV2Waits = {'awaitMax', 'awaitAll', 'awaitAny', 'lockEnter'};
+
+const LType _futT = LType(LKind.future, of: _t);
 
 const Map<String, LRtSig> kLangRtV2 = {
   // —— 高阶 ——
@@ -43,7 +52,7 @@ const Map<String, LRtSig> kLangRtV2 = {
     '映射',
     [
       _listT,
-      LType.func([_t, _u]),
+      LType.func([_t, _u], waits: false),
     ],
     LType.listOf(_u),
     typeVars: ['T', 'U'],
@@ -52,7 +61,7 @@ const Map<String, LRtSig> kLangRtV2 = {
     '筛选',
     [
       _listT,
-      LType.func([_t, LType.boolean]),
+      LType.func([_t, LType.boolean], waits: false),
     ],
     _listT,
     typeVars: ['T'],
@@ -61,7 +70,7 @@ const Map<String, LRtSig> kLangRtV2 = {
     '归并',
     [
       _listT,
-      LType.func([_a, _t, _a]),
+      LType.func([_a, _t, _a], waits: false),
       _a,
     ],
     _a,
@@ -71,7 +80,7 @@ const Map<String, LRtSig> kLangRtV2 = {
     '找第一个',
     [
       _listT,
-      LType.func([_t, LType.boolean]),
+      LType.func([_t, LType.boolean], waits: false),
     ],
     LType(LKind.typeVar, name: 'T', nullable: true),
     typeVars: ['T'],
@@ -80,7 +89,7 @@ const Map<String, LRtSig> kLangRtV2 = {
     '每个都',
     [
       _listT,
-      LType.func([_t, LType.boolean]),
+      LType.func([_t, LType.boolean], waits: false),
     ],
     LType.boolean,
     typeVars: ['T'],
@@ -89,7 +98,7 @@ const Map<String, LRtSig> kLangRtV2 = {
     '有一个',
     [
       _listT,
-      LType.func([_t, LType.boolean]),
+      LType.func([_t, LType.boolean], waits: false),
     ],
     LType.boolean,
     typeVars: ['T'],
@@ -98,7 +107,7 @@ const Map<String, LRtSig> kLangRtV2 = {
     '每个都做',
     [
       _listT,
-      LType.func([_t, LType.nul]),
+      LType.func([_t, LType.nul], waits: false),
     ],
     LType.nul,
     typeVars: ['T'],
@@ -168,6 +177,20 @@ const Map<String, LRtSig> kLangRtV2 = {
   'isType': LRtSig('是不是这一类', [LType.any, LType.text], LType.boolean),
   // 文字变成小数：认的写法和“是不是数字”一样；不是数字的＝出错。
   'toNumber': LRtSig('变成数字', [LType.text], LType.number),
+  // —— 稍后的结果、一次只让一个做（核心 3）——
+  // 等，最多等这么多毫秒：到时候还没做完＝抛“超时”错误（那件事自己接着做，不会被取消）。毫秒数 ≤ 0＝马上看一眼，没做完就超时。
+  'awaitMax': LRtSig('等，最多', [_futT, LType.integer], _t, typeVars: ['T'], slots: ['“等，最多”里要等的东西', '“等，最多”的毫秒数']),
+  // 等全部：按列表的顺序一件件等，结果按原来的顺序排成列表。有一件出了错＝把还没做完的都取消，把这个错抛出去。
+  'awaitAll': LRtSig('等全部', [LType.listOf(_futT)], _listT, typeVars: ['T'], slots: ['“等全部”的列表']),
+  // 等最先做完的一个：谁先做完（成了或者出错）就用谁的，别的接着做、不取消。列表是空的＝出错。
+  'awaitAny': LRtSig('等最先的一个', [LType.listOf(_futT)], _t, typeVars: ['T'], slots: ['“等最先的一个”的列表']),
+  // 取消：给那件事做个记号。它下一次要等的时候（等一会儿、等别的事、请求网址、排队进“一次只让一个做”）抛“取消了”错误；已经做完的＝什么都不做。
+  'cancel': LRtSig('取消', [_futT], LType.nul, typeVars: ['T'], slots: ['“取消”的东西']),
+  // 现在这件事被取消了吗（不在“开始做”里面＝否）。
+  'cancelled': LRtSig('被取消了吗', [], LType.boolean),
+  // 一次只让一个做：进（别人在里面就排队等；自己已经在里面＝出错）、出。成对用，中间的事放在“试着做…最后”里（读入器 / 积木自动这么包）。
+  'lockEnter': LRtSig('一次只让一个做', [LType.text], LType.text, slots: ['“一次只让一个做”的名字']),
+  'lockLeave': LRtSig('一次只让一个做（出来）', [LType.text], LType.nul),
   // 两个字典合成一个新的，后面的盖住前面的；原来的两个不动。
   'dictMerge': LRtSig('合并字典', [LType.dictOf(_t), LType.dictOf(_t)], LType.dictOf(_t), typeVars: ['T']),
 };

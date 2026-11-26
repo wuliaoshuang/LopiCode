@@ -17,7 +17,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.locks.ReentrantLock;
 
 final class LcHost {
@@ -51,45 +50,8 @@ final class LcHost {
     }
   }
 
-  // —— 要等的事：一件事一条（虚拟）线 ——
-  static void hostSleep(long ms) {
-    if (ms <= 0) return;
-    try {
-      Thread.sleep(ms);
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-      Lc.fail("等的时候被打断了");
-    }
-  }
-  /** “开始做”的结果。出了错先记着，等它的时候再抛。 */
-  static final class Task<T> {
-    private final CountDownLatch done = new CountDownLatch(1);
-    private T val;
-    private RuntimeException err;
-  }
-  static <T> Task<T> spawn(Lc.Fn0<T> f) {
-    Task<T> t = new Task<>();
-    Thread.ofVirtual().start(() -> {
-      try {
-        t.val = f.call();
-      } catch (RuntimeException e) {
-        t.err = e;
-      } finally {
-        t.done.countDown();
-      }
-    });
-    return t;
-  }
-  static <T> T await(Task<T> t) {
-    try {
-      t.done.await();
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-      return Lc.fail("等的时候被打断了");
-    }
-    if (t.err != null) throw t.err;
-    return t.val;
-  }
+  // —— 要等的事在 LcTask.java（rt2_java_task.dart）——
+  static void hostSleep(long ms) { LcTask.sleep(ms); }
 
   // —— 开服务 ——
   // 没有用 JDK 自带的 com.sun.net.httpserver：它先把请求的地址解析一遍，路径以两个斜杠开头、百分号写法不对的请求自己就回 400，
@@ -211,6 +173,7 @@ final class LcHost {
     request.put("body", body);
     TreeMap<String, Object> res;
     try {
+      LcTask.newLine(); // 一个请求一条线
       res = handler.call(request);
     } catch (Lc.LcError e) {
       Lc.errLine("出错：" + e.getMessage());
@@ -366,6 +329,7 @@ final class LcHost {
   private static final List<String> FETCH_METHODS = List.of("GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS");
   private static final List<String> FETCH_SKIP = List.of("host", "content-length", "connection", "expect", "upgrade");
   static TreeMap<String, Object> hostFetch(String method, String url, TreeMap<String, String> headers, String body, long timeoutMs) {
+    LcTask.check(); // 被取消了的事，到了要等的地方就停
     String lower = url.toLowerCase(java.util.Locale.ROOT);
     if (!lower.startsWith("http://") && !lower.startsWith("https://")) Lc.fail("请求不了：网址要以 http:// 或 https:// 开头");
     if (!FETCH_METHODS.contains(method)) Lc.fail("请求不了：不认识的方式「" + method + "」");

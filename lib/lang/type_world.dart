@@ -187,7 +187,9 @@ class LTypeWorld {
     if (b.isNul) return a.orNull;
     if (a.nullable || b.nullable) return join(a.nonNull, b.nonNull).orNull;
     if (a.kind == LKind.fn && b.kind == LKind.fn && a.hasShape && a.args.length == b.args.length) {
-      return LType(LKind.fn, args: [for (var i = 0; i < a.args.length; i++) join(a.args[i], b.args[i])], waits: a.waits ?? b.waits);
+      // 要不要等：有一边要等＝要等；都规定了不等＝不等；别的＝没说。
+      final waits = a.waits == true || b.waits == true ? true : (a.waits == false && b.waits == false ? false : null);
+      return LType(LKind.fn, args: [for (var i = 0; i < a.args.length; i++) join(a.args[i], b.args[i])], waits: waits);
     }
     if (a.kind == b.kind && (a.kind == LKind.list || a.kind == LKind.dict)) {
       final ia = elem(a), ib = elem(b);
@@ -227,6 +229,7 @@ class LTypeWorld {
   /// [src] 能不能放进要 [dst] 的地方。任意 → 确定类型：允许（运行时查一次）。
   bool ok(LType src0, LType dst0) {
     final src = res(src0), dst = res(dst0);
+    if (!waitEscaped && isAny(dst) && src.anyPart((x) => x.kind == LKind.fn && x.waits == true)) _escape();
     if (src == dst || isAny(dst) || isNever(dst) || isNever(src) || isAny(src) || isHole(src) || isHole(dst)) return true;
     if (src == LType.integer && dst == LType.number) return true;
     if (dst.nullable) return src.isNul || ok(src.nonNull, dst.nonNull);
@@ -239,10 +242,15 @@ class LTypeWorld {
       return true;
     }
     if (src.kind == LKind.fn && dst.kind == LKind.fn) {
+      // 要等的函数放进“没说要不要等”的地方：记下来（见 waitEscaped）。放进“规定不等”的地方由检查器另报（T30），这里不算类型不对。
+      if (src.waits == true && dst.waits == null) _escape();
       if (!src.hasShape || !dst.hasShape) return true;
       if (src.args.length != dst.args.length) return false;
       for (var i = 0; i < src.params.length; i++) {
-        if (!ok(dst.params[i], src.params[i])) return false;
+        // 参数是反着看的。里面一层没有 T30 管着：要等的（或者说不准的）函数会被放进只收不用等的函数的参数里＝对不上。
+        final from = res(dst.params[i]), to = res(src.params[i]);
+        if (from.kind == LKind.fn && to.kind == LKind.fn && to.waits == false && (from.waits == true || (from.waits == null && waitEscaped))) return false;
+        if (!ok(from, to)) return false;
       }
       return dst.returns.isNul || ok(src.returns, dst.returns);
     }
@@ -252,7 +260,31 @@ class LTypeWorld {
 
   bool same(LType a0, LType b0) {
     final a = res(a0), b = res(b0);
-    return a == b || isHole(a) || isHole(b) || isNever(a) || isNever(b);
+    if (a == b || isHole(a) || isHole(b) || isNever(a) || isNever(b)) return true;
+    // 只差在“要不要等”上、而且有一边没说的：算一样（要等的那边混进了没说的地方，记下来）。
+    if (!_sameButWaits(a, b)) return false;
+    if (a.anyPart((x) => x.kind == LKind.fn && x.waits == true) || b.anyPart((x) => x.kind == LKind.fn && x.waits == true)) _escape();
+    return true;
+  }
+
+  /// 有没有“要等”的函数值混进了“没说要不要等”的地方（没标的函数类型、任意）。混进去过＝凡是调“没说”的函数值都得当它可能要等；
+  /// 一次都没有＝这种调用肯定不用等。只会从否变成是。核心 3，见 typecheck_wait.dart。
+  bool waitEscaped = false;
+
+  void _escape() {
+    if (waitEscaped) return;
+    waitEscaped = true;
+    changed = true;
+  }
+
+  static bool _sameButWaits(LType a, LType b) {
+    if (a.kind != b.kind || a.name != b.name || a.nullable != b.nullable || a.args.length != b.args.length || (a.of == null) != (b.of == null)) return false;
+    if (a.kind == LKind.fn && a.waits != b.waits && a.waits != null && b.waits != null) return false;
+    if (a.of != null && !_sameButWaits(a.of!, b.of!)) return false;
+    for (var i = 0; i < a.args.length; i++) {
+      if (!_sameButWaits(a.args[i], b.args[i])) return false;
+    }
+    return true;
   }
 
   /// 用实际类型 [act] 去定 [pat] 里的类型变量（记进 [b]）和待定的洞。

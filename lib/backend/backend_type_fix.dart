@@ -68,6 +68,8 @@ Map<String, dynamic>? beTypeFixWrap(LFix fix, Object? inner, {LType? got}) => sw
   LFixKind.wrapOrElse => {'e': 'orElse', 'x': inner, 'd': beFixDefaultValue(got?.nonNull)},
   LFixKind.wrapMust => {'e': 'must', 'x': inner},
   LFixKind.compareNotZero => {'e': 'bin', 'op': '!=', 'l': inner, 'r': exNum(0)},
+  LFixKind.dropAwait => inner is Map && inner['e'] == 'await' && inner['x'] is Map ? Map<String, dynamic>.from(inner['x'] as Map) : null,
+  LFixKind.wrapSpawn => {'e': 'spawnOf', 'x': inner},
   LFixKind.addMatchCases || LFixKind.addMatchElse || LFixKind.addRecordFields || LFixKind.removeRecordField || LFixKind.useRecordCopy => null,
 };
 

@@ -88,7 +88,7 @@ mixin _Decls on _Core {
     for (var i = 0; i < f.params.length; i++) {
       final p = f.params[i];
       sc.names.add(p.name);
-      vt[vkey(f.key, p.name)] = _Var(p.rest ? LType(LKind.list, of: ptype(f, i)) : ptype(f, i), fixed: true, hidden: true, kind: LVarKind.param);
+      vt[vkey(f.key, p.name)] = _Var(p.rest ? LType(LKind.list, of: ptype(f, i)) : ptype(f, i), fixed: true, hidden: true, kind: LVarKind.param, slot: p.rest ? null : '${f.key}#$i');
     }
     block(sc, f.body);
     if (f.ret != null) return;

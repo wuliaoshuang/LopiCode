@@ -9,6 +9,7 @@ import 'package:lopicode/lang/gen2_java.dart';
 import 'package:lopicode/lang/gen2_split.dart';
 import 'package:lopicode/lang/rt2_java_dyn.dart';
 import 'package:lopicode/lang/rt2_java_host.dart';
+import 'package:lopicode/lang/rt2_java_task.dart';
 import 'package:lopicode/lang/type_world.dart';
 import 'package:lopicode/lang/types.dart';
 
@@ -18,7 +19,7 @@ class JavaGen2 extends JavaGen2Types {
   @override
   String get mainFile => 'Main.java';
   @override
-  Map<String, String> get runtimeFiles => const {'Lc.java': kRt2JavaSource, 'LcHost.java': kRt2JavaHost};
+  Map<String, String> get runtimeFiles => const {'Lc.java': kRt2JavaSource, 'LcHost.java': kRt2JavaHost, 'LcTask.java': kRt2JavaTask};
 
   // —— 语句 ——
 
@@ -173,7 +174,7 @@ class JavaGen2 extends JavaGen2Types {
 
   List<String> _function(LFuncDecl d) {
     final sig = r.funcs[d.name]!;
-    final f = V2Fn(d.name, sig.returns, waits: d.waits);
+    final f = V2Fn(d.name, sig.returns, waits: sig.waits);
     final (params, first) = _params(f, d.params, sig.params);
     final tp = _typeParams(sig.info.own, sig.info.bounds);
     return ['static ${tp.isEmpty ? '' : '$tp '}${_retOf(sig.returns)} ${funcName(d.name)}($params) {', ...indent(funcBody(f, d.body, first: () => first)), '}'];
@@ -310,7 +311,7 @@ class JavaGen2 extends JavaGen2Types {
     ]);
     for (final m in d.ownMethods) {
       final sig = r.funcs['${c.name}.${m.fn.name}']!;
-      final f = V2Fn(sig.key, sig.returns, cls: c, waits: m.fn.waits);
+      final f = V2Fn(sig.key, sig.returns, cls: c, waits: sig.waits);
       final (ps, first) = _params(f, m.fn.params, sig.params);
       final own = _typeParams(sig.info.own, sig.info.bounds);
       out.addAll(['public ${own.isEmpty ? '' : '$own '}${_retOf(sig.returns)} ${member(m.fn.name)}($ps) {', ...indent(funcBody(f, m.fn.body, first: () => first)), '}']);

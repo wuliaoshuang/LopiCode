@@ -59,6 +59,10 @@ LNode? _swapFor(LFix fix, LNode target, LTypeResult? types, LExpr? fill) {
       return target is LExpr ? LRt('must', [target], src: target.src) : null;
     case LFixKind.compareNotZero:
       return target is LExpr ? LBinary('!=', target, const LLit(0), src: target.src) : null;
+    case LFixKind.dropAwait:
+      return target is LAwait ? target.x : null;
+    case LFixKind.wrapSpawn:
+      return target is LExpr ? LSpawn([LExprStmt(target, src: target.src)], src: target.src) : null;
     case LFixKind.addMatchCases:
       if (target is! LMatch) return null;
       final have = {for (final a in target.arms) a.caseName};
@@ -143,7 +147,7 @@ class _Rewriter {
 
   LFuncDecl func(LFuncDecl d) {
     final body = block(d.body);
-    return identical(body, d.body) ? d : LFuncDecl(d.name, d.params, body, isPublic: d.isPublic, typeParams: d.typeParams, codeName: d.codeName, waits: d.waits, src: d.src, type: d.type);
+    return identical(body, d.body) ? d : LFuncDecl(d.name, d.params, body, isPublic: d.isPublic, typeParams: d.typeParams, codeName: d.codeName, waits: d.waits, noWait: d.noWait, src: d.src, type: d.type);
   }
 
   LDecl decl(LDecl d) {

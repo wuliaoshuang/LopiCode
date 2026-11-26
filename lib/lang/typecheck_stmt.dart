@@ -123,6 +123,7 @@ mixin _Stmts on _Core {
             arg(sc, value, field(sc, of, name, target), '「$name」');
         }
       case LExprStmt(:final expr):
+        noteAlone(expr);
         ex(sc, expr);
       case LIf():
         if (s.arms.isEmpty) {
@@ -177,6 +178,7 @@ mixin _Stmts on _Core {
             err('T01', sc, '「${sc.fn}」说好返回${wt.show()}，这里返回的是${t.show()}', node: value ?? s, fixes: value == null ? const [] : fixesFor(value, t, wt));
           }
         }
+        if (wt != null && value != null && w.ok(t, wt)) waitFit(sc, value, t, wt, '「${sc.fn}」返回的东西');
         sc.rets.add(t);
         if (finalPass && value != null && wt == null && f != null) _returned.add((value, f));
       case LThrow():

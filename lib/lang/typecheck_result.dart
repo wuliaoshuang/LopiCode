@@ -37,13 +37,16 @@ class LVarInfo {
 }
 
 class LTypedSig {
-  const LTypedSig(this.key, this.info, this.params, this.returns);
+  const LTypedSig(this.key, this.info, this.params, this.returns, {this.waits = false});
   final String key;
   final LTypedFunc info;
   final List<LType> params;
   final LType returns;
 
-  LType get type => LType(LKind.fn, args: [...params, returns], waits: info.decl?.waits == true ? true : null);
+  /// 这个函数 / 方法“要等”（推出来的，或者明着标的）。
+  final bool waits;
+
+  LType get type => LType(LKind.fn, args: [...params, returns], waits: waits ? true : null);
 }
 
 /// 检查的结果。所有类型都是收尾以后的：不含“待定”“永不”（没定下来的按“任意”）。
@@ -64,7 +67,25 @@ class LTypeResult {
     this.shared,
     this.prelude,
     this.usesErrors,
+    this._waitKeys,
+    this._waitIface,
+    this.waitEscaped,
   );
+
+  final Set<String> _waitKeys;
+  final Set<String> _waitIface;
+
+  /// 有没有“要等”的函数值混进过“没说要不要等”的地方（见 [LTypeWorld.waitEscaped]）。
+  final bool waitEscaped;
+
+  /// 这个函数 / 方法 /“创建时”要不要等（记号见 [LTypedFunc.key]；匿名函数用 [lambdaScope] 给的记号；“主”永远许等）。
+  bool waitsOf(String key) => _waitKeys.contains(key);
+
+  /// 接口 [iface] 的方法 [method] 要不要等。
+  bool ifaceWaits(String iface, String method) => _waitIface.contains('$iface.$method');
+
+  /// 调一个类型是 [ft] 的函数值要不要等。
+  bool valueWaits(LType ft) => ft.kind == LKind.fn ? ft.waits == true || (ft.waits == null && waitEscaped) : waitEscaped;
 
   /// 声明表（记录、枚举、变体、接口、类、函数、别名），生成器要查字段顺序、情况列表时用。
   final LTypeWorld world;
@@ -187,7 +208,7 @@ extension _Finish on _Checker {
     final sigs = <String, LTypedSig>{};
     for (final c in w.classes.values) {
       final f = c.ctor;
-      if (f != null) sigs[f.key] = LTypedSig(f.key, f, [for (var i = 0; i < f.params.length; i++) w.close(ptype(f, i))], _nul);
+      if (f != null) sigs[f.key] = LTypedSig(f.key, f, [for (var i = 0; i < f.params.length; i++) w.close(ptype(f, i))], _nul, waits: waitKeys.contains(f.key));
     }
     for (final key in sigOrder) {
       final dot = key.indexOf('.');
@@ -195,7 +216,7 @@ extension _Finish on _Checker {
       final f = w.funcs[key] ?? w.classes[key.substring(0, dot)]!.methods[key.substring(dot + 1)]!;
       final ps = [for (var i = 0; i < f.params.length; i++) w.close(ptype(f, i))];
       final r = w.close(rtype(f));
-      sigs[key] = LTypedSig(key, f, ps, r);
+      sigs[key] = LTypedSig(key, f, ps, r, waits: waitKeys.contains(key));
       final g = f.own.isEmpty ? '' : '〈${f.own.map((v) => f.bounds.containsKey(v) ? '$v: ${_bound(f.bounds[v]!)}' : v).join(', ')}〉';
       lines.add('$key: $g(${ps.map((p) => p.show()).join(', ')}) → ${r.show()}');
     }
@@ -240,6 +261,6 @@ extension _Finish on _Checker {
         w.classes.values.any((c) => !prelude.contains(c.decl) && w.supers(c.name).contains(kErrBase)) ||
         closedTypes.values.any((t) => t.anyPart((x) => x.kind == LKind.object && langIsBuiltinError(x.name))) ||
         vars.any((v) => v.type.anyPart((x) => x.kind == LKind.object && langIsBuiltinError(x.name)));
-    return LTypeResult._(w, issues, closedTypes, closedWants, ops, closedArgs, outChecks, sigs, vars, lambdaKeys, lines, passes, _sharedNodes(), prelude, usesErrors);
+    return LTypeResult._(w, issues, closedTypes, closedWants, ops, closedArgs, outChecks, sigs, vars, lambdaKeys, lines, passes, _sharedNodes(), prelude, usesErrors, waitKeys, waitIface, w.waitEscaped);
   }
 }

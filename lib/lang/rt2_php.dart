@@ -487,7 +487,7 @@ final class Lc {
   }
 
   // —— 错误对象 ——
-  private const ERR_KINDS = [["除以 0", "数值不对"], ["整数超出范围", "数值不对"], ["变不成整数", "数值不对"], ["超出了", "找不到"], ["拿到的是", "类型不对"], ["值是空", "类型不对"]];
+  private const ERR_KINDS = [["除以 0", "数值不对"], ["整数超出范围", "数值不对"], ["变不成整数", "数值不对"], ["超出了", "找不到"], ["拿到的是", "类型不对"], ["值是空", "类型不对"], ["还没做完", "超时"], ["被取消了", "取消了"]];
   private static ?Closure $errMake = null;
   static function errKind(string $m): string {
     foreach (self::ERR_KINDS as [$part, $k]) { if (str_contains($m, $part)) return $k; }

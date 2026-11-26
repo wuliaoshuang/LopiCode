@@ -3,28 +3,32 @@
 /// PHP 一个请求把程序从头跑一遍（`php -S 主机:端口 main.php`），所以：
 /// - 格子：直接跑（`php main.php`）的时候在内存里；开服务的时候放在带锁的文件里（请求之间才留得住）。
 /// - 要等的事：没有“同时做”——“开始做”就是马上做完，“等”就是把结果拿出来；“等一会儿”停的就是这个请求。
+///   超时、取消、等全部 / 等最先的一个、一次只让一个做怎么算，见 rt2_php_task.dart。
 /// - 开服务：跑到“开服务”这一句，就处理眼前这一个请求，回完就结束。
 /// 细则见 docs/blocks-v5-parts/C-library-system.md 9.1 和 B-gen-notes.md 第 12 节。
 library;
 
-const String kRt2PhpHost = r'''
-// “开始做”的结果：PHP 里已经做完了，值或者错记在里面。
-final class LcTask { public function __construct(public mixed $val, public ?LcError $err) {} }
+import 'package:lopicode/lang/rt2_php_task.dart';
 
+const String kRt2PhpHost = r'''
+''' + kRt2PhpTask + r'''
 final class LcHost {
   const BODY_LIMIT = 1048576;
 
   static function hostPrint(string $s, string $ch): void { Lc::hostPrint($s, $ch); }
   static function hostNow(): int { return Lc::hostNow(); }
   static function hostEnv(string $name): ?string { $v = getenv($name); return $v === false ? null : $v; }
-  static function hostSleep(int $ms): void { if ($ms > 0) usleep($ms * 1000); }
-  static function spawn(Closure $f): LcTask {
-    try { return new LcTask($f(), null); } catch (LcError $e) { return new LcTask(null, $e); }
-  }
-  static function wait(LcTask $t): mixed {
-    if ($t->err !== null) throw $t->err;
-    return $t->val;
-  }
+  // 要等的事在 LcWait 里（rt2_php_task.dart）；这几个留在这里只是转一下。
+  static function hostSleep(int $ms): void { LcWait::sleep($ms); }
+  static function spawn(Closure $f): LcTask { return LcWait::spawn($f); }
+  static function wait(LcTask $t): mixed { return LcWait::wait($t); }
+  static function awaitMax(LcTask $t, int $ms): mixed { return LcWait::awaitMax($t, $ms); }
+  static function awaitAll(LcList $ts): LcList { return LcWait::awaitAll($ts); }
+  static function awaitAny(LcList $ts): mixed { return LcWait::awaitAny($ts); }
+  static function cancel(LcTask $t): void { LcWait::cancel($t); }
+  static function cancelled(): bool { return false; } // PHP 里一件事当场做完，没有“做到一半被取消”
+  static function lockEnter(string $name): string { return LcWait::lockEnter($name, self::file()); }
+  static function lockLeave(string $name): void { LcWait::lockLeave($name); }
 
   // —— 格子 ——
   private static array $mem = [];
@@ -33,7 +37,7 @@ final class LcHost {
   private static ?string $path = null;
 
   // 开服务的时候格子放在哪个文件：名字里带服务进程的编号和它开始的时刻，所以重新开服务是新的格子。
-  private static function file(): ?string {
+  static function file(): ?string {
     if (PHP_SAPI !== 'cli-server') return null;
     if (self::$path !== null) return self::$path;
     // 开了几个工作进程（PHP_CLI_SERVER_WORKERS）时每个请求落在不同的进程上：格子要认“最上面那个服务进程”，不然各存各的。
@@ -54,7 +58,7 @@ final class LcHost {
     self::$path = $dir . '/lcstore-' . $pid . '-' . $start . '.dat';
     if (!file_exists(self::$path) && is_dir('/proc')) {
       // 顺手清掉已经不在了的服务留下的格子文件。
-      foreach (glob($dir . '/lcstore-*.dat') ?: [] as $old) {
+      foreach (glob($dir . '/lcstore-*') ?: [] as $old) { // 格子文件和“一次只让一个做”的锁文件
         if (preg_match('/lcstore-([0-9]+)-/', $old, $m) === 1 && !is_dir('/proc/' . $m[1])) @unlink($old);
       }
     }
@@ -211,7 +215,12 @@ final class LcHost {
     $cut = '\xE0[\xA0-\xBF]|[\xE1-\xEC\xEE\xEF][\x80-\xBF]|\xED[\x80-\x9F]|\xF0[\x90-\xBF][\x80-\xBF]?|[\xF1-\xF3][\x80-\xBF]{1,2}|\xF4[\x80-\x8F][\x80-\xBF]?';
     return preg_replace_callback('/((?:' . $good . ')+)|' . $cut . '|[\x80-\xFF]/', fn($m) => isset($m[1]) && $m[1] !== '' ? $m[1] : "\xEF\xBF\xBD", $raw);
   }
+  // 请求花了多久，记到“这件事做到第几毫秒了”上（超时按它算，见 LcWait）。
   static function hostFetch(string $method, string $url, LcDict $headers, ?string $body, int $timeoutMs): LcDict {
+    $from = hrtime(true);
+    try { return self::fetchNow($method, $url, $headers, $body, $timeoutMs); } finally { LcWait::spent(intdiv(hrtime(true) - $from, 1000000)); }
+  }
+  private static function fetchNow(string $method, string $url, LcDict $headers, ?string $body, int $timeoutMs): LcDict {
     if (!preg_match('/\Ahttps?:\/\//i', $url)) Lc::fail("请求不了：网址要以 http:// 或 https:// 开头");
     if (!in_array($method, ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"], true)) Lc::fail("请求不了：不认识的方式「" . $method . "」");
     if ($timeoutMs <= 0) Lc::fail("请求不了：超时毫秒要大于 0");

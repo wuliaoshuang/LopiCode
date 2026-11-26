@@ -132,10 +132,8 @@ void lWalk(List<LStmt> list, void Function(LStmt s) visit) {
 /// 一个式子直接套着的子式子。
 List<LExpr> lExprChildren(LExpr e) => switch (e) {
   LLit() || LName() || LThis() || LLambda() => const [],
-  LSpawn(:final body) => [
-    for (final s in body)
-      if (s is LReturn && s.value != null) s.value!,
-  ],
+  // “开始做”里的几句话当成一个匿名函数（凡是往匿名函数里走的遍历，也就走进了“开始做”）。
+  LSpawn() => [lSpawnLambda(e)],
   LListLit(:final items) => items,
   LDictLit(:final entries) => [
     for (final x in entries) ...[x.key, x.value],
@@ -200,7 +198,7 @@ List<LDecl> lStaticDecls(LClassDecl d) => [
   for (final f in d.fields)
     if (f.isStatic) LVarDecl(lStaticName(d.name, f.name), f.init ?? const LLit(null), src: d.src, type: f.type),
   for (final m in d.methods)
-    if (m.isStatic) LFuncDecl(lStaticName(d.name, m.fn.name), m.fn.params, m.fn.body, typeParams: m.fn.typeParams, waits: m.fn.waits, src: m.fn.src ?? d.src, type: m.fn.type),
+    if (m.isStatic) LFuncDecl(lStaticName(d.name, m.fn.name), m.fn.params, m.fn.body, typeParams: m.fn.typeParams, waits: m.fn.waits, noWait: m.fn.noWait, src: m.fn.src ?? d.src, type: m.fn.type),
 ];
 
 /// 展开出来的语句没有来处的（库积木展开的）：最外面那几句补上“是哪一块积木”。有来处的不动。
@@ -217,4 +215,11 @@ List<LStmt> lStampSrc(List<LStmt> list, LSrc src) => [
         LIf(:final arms, :final orElse) => LIf(arms, orElse: orElse, src: src),
         _ => s,
       },
+];
+
+/// “一次只让一个做（名字）{…}”：没有单独的节点，就是“进 → 试着做 {…} 最后 {出}”。[temp] 是记“进了哪一个”的临时变量名（一处一个，别重名）。
+/// 里面的“返回”“跳出”照常算外面那个函数 / 循环的；不管怎么出来的，“出”都会做。
+List<LStmt> lCritical(LExpr name, List<LStmt> body, String temp, {LSrc? src}) => [
+  LLet(temp, LRt('lockEnter', [name], src: src), isConst: true, src: src),
+  LTry(body, handlers: const [], finallyBody: [LExprStmt(LRt('lockLeave', [LName(temp)]), src: src)], src: src),
 ];

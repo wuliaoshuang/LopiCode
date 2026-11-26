@@ -54,7 +54,7 @@ class LRenamer {
   LFuncDecl func(LFuncDecl d) {
     final tv = [for (final p in d.typeParams) p.name];
     return _scoped([for (final p in d.params) p.name], tv, () {
-      return LFuncDecl(d.name, params(d.params), block(d.body), isPublic: d.isPublic, typeParams: _tps(d.typeParams), codeName: d.codeName, waits: d.waits, src: d.src, type: typeQ(d.type));
+      return LFuncDecl(d.name, params(d.params), block(d.body), isPublic: d.isPublic, typeParams: _tps(d.typeParams), codeName: d.codeName, waits: d.waits, noWait: d.noWait, src: d.src, type: typeQ(d.type));
     });
   }
 
@@ -65,7 +65,7 @@ class LRenamer {
       case LFuncDecl():
         final name = resolve(d.name); // 函数自己的名字不会被自己的参数挡住
         final f = func(d);
-        return LFuncDecl(name, f.params, f.body, isPublic: f.isPublic, typeParams: f.typeParams, codeName: f.codeName, waits: f.waits, src: f.src, type: f.type);
+        return LFuncDecl(name, f.params, f.body, isPublic: f.isPublic, typeParams: f.typeParams, codeName: f.codeName, waits: f.waits, noWait: f.noWait, src: f.src, type: f.type);
       case LClassDecl():
         final name = resolve(d.name);
         return _scoped(const [], [for (final p in d.typeParams) p.name], () {
@@ -86,7 +86,7 @@ class LRenamer {
       case LInterfaceDecl():
         return LInterfaceDecl(
           resolve(d.name),
-          [for (final m in d.methods) LSignature(m.name, params(m.params), returns: typeQ(m.returns), waits: m.waits)],
+          [for (final m in d.methods) LSignature(m.name, params(m.params), returns: typeQ(m.returns), waits: m.waits, noWait: m.noWait)],
           isPublic: d.isPublic,
           codeName: d.codeName,
           src: d.src,

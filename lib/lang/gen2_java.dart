@@ -6,6 +6,7 @@ import 'package:lopicode/lang/ast.dart';
 import 'package:lopicode/lang/gen2.dart';
 import 'package:lopicode/lang/gen2_expr.dart';
 import 'package:lopicode/lang/gen_support.dart';
+import 'package:lopicode/lang/rt_v2.dart';
 import 'package:lopicode/lang/type_world.dart';
 import 'package:lopicode/lang/typecheck.dart';
 import 'package:lopicode/lang/types.dart';
@@ -72,7 +73,7 @@ abstract class JavaGen2Types extends Gen2 {
       case LKind.dict:
         return 'TreeMap<String, ${jb(t.of ?? LType.any)}>';
       case LKind.future:
-        return 'LcHost.Task<${t.of == null || t.of!.isNul ? 'Object' : jb(t.of!)}>';
+        return 'LcTask.Task<${t.of == null || t.of!.isNul ? 'Object' : jb(t.of!)}>';
       case LKind.fn:
         return t.hasShape ? fnType(t.params, t.returns) : 'Object';
       case LKind.record || LKind.enumeration || LKind.variant || LKind.interface:
@@ -342,13 +343,14 @@ abstract class JavaGen2Types extends Gen2 {
   @override
   String hostCall(String fn, List<String> args) => 'LcHost.$fn(${args.join(', ')})';
   @override
-  String spawnCode(String f, LType ft) => ft.returns.isNul ? 'LcHost.spawn(() -> { $f.call(); return null; })' : 'LcHost.spawn($f)';
+  String spawnCode(String f, LType ft) => ft.returns.isNul ? 'LcTask.spawn(() -> { $f.call(); return null; })' : 'LcTask.spawn($f)';
   @override
-  String waitCode(String task, LType of) => 'LcHost.await($task)';
+  String waitCode(String task, LType of) => 'LcTask.await($task)';
 
   @override
   String rtCall(String fn, List<String> args, List<LType> types, LType ret, LRt e) {
     if (fn == 'dictKeys') return 'Lc.keys(${args.join(', ')})';
+    if (kLangRtV2Tasks.contains(fn)) return 'LcTask.$fn(${args.join(', ')})';
     if (!_rt.contains(fn)) unsupported('小库函数「$fn」在 Java 的带类型生成路径里还没有', e);
     return 'Lc.$fn(${args.join(', ')})';
   }
