@@ -43,7 +43,10 @@ class MdImageLoader {
     final hit = cached(uri);
     if (hit != null) return Future.value(hit);
     // 同一张图同时只下一次
-    return _pending['$uri'] ??= _fetch(uri).whenComplete(() => _pending.remove('$uri'));
+    // 注意：whenComplete 的回调不能把 remove 的返回值（就是这个 Future 自己）交回去，否则它会等自己，永远不结束
+    return _pending['$uri'] ??= _fetch(uri).whenComplete(() {
+      _pending.remove('$uri');
+    });
   }
 
   Future<Uint8List> _fetch(Uri first) async {

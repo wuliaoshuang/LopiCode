@@ -320,7 +320,7 @@ void main() {
     expect(requests.last.scrollable, isTrue);
     expect(requests.last.document, contains(kHtmlPreviewCspOnline), reason: '全屏沿用刚才“允许这次联网”');
     expect(tester.takeException(), isNull);
-    await tester.pageBack();
+    Navigator.of(tester.element(find.byType(HtmlPreviewScreen))).pop();
     await tester.pumpAndSettle();
     // 回到看代码
     await tester.tap(find.byKey(const Key('md-code-preview')));
@@ -343,6 +343,7 @@ void main() {
       await tester.pump();
       await tester.tap(button);
       await tester.pump(const Duration(milliseconds: 300));
+      await tester.pump();
     }
     expect(find.byKey(const Key('html-preview-box'), skipOffstage: false), findsNWidgets(kHtmlPreviewMaxLive));
     expect(find.byKey(const Key('html-preview-reopen'), skipOffstage: false), findsOneWidget, reason: '最早开的那个收起了');
@@ -398,7 +399,7 @@ void main() {
 
   testWidgets('性能冒烟：四万多字、三百多块的消息，首次排出来和来回滚都不慢', (tester) async {
     final b = StringBuffer();
-    for (var i = 0; i < 110; i++) {
+    for (var i = 0; i < 130; i++) {
       b
         ..writeln('## 第 $i 节')
         ..writeln()

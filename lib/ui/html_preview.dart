@@ -77,7 +77,9 @@ class _HtmlPreviewBoxState extends State<HtmlPreviewBox> {
   void _enter() {
     _live.add(this);
     while (_live.length > kHtmlPreviewMaxLive) {
-      _live.removeAt(0)._evict();
+      final oldest = _live.removeAt(0);
+      // 现在可能正在搭界面（新预览刚建出来）：不能当场改别的控件的状态，等这一帧画完再收起最早的那个
+      WidgetsBinding.instance.addPostFrameCallback((_) => oldest._evict());
     }
   }
 
