@@ -30,6 +30,7 @@ import 'package:lopicode/lowcode/multi_select_widgets.dart';
 import 'package:lopicode/lowcode/node_actions.dart';
 import 'package:lopicode/lowcode/palette_catalog.dart';
 import 'package:lopicode/lowcode/palette_widgets.dart';
+import 'package:lopicode/lowcode/responsive.dart';
 import 'package:lopicode/lowcode/slots.dart';
 import 'package:lopicode/lowcode/style_model.dart';
 import 'package:lopicode/theme/tokens.dart';
@@ -86,6 +87,9 @@ class _ComponentEditorState extends State<_ComponentEditor> with LcMultiSelectHo
   late LcHistory _history;
   String? _selected;
   int _presetWidth = 0;
+
+  /// 现在看的是哪一档屏宽（null＝手机）。和搭建页一样：不是手机时，“样式”页改的只记成这一档的差别。
+  String? _bp;
   bool _showBoxModel = true;
   final GlobalKey<EditorWorkbenchState> _bench = GlobalKey();
 
@@ -344,7 +348,10 @@ class _ComponentEditorState extends State<_ComponentEditor> with LcMultiSelectHo
         context,
         canvas: canvas,
         presetWidth: () => _presetWidth,
-        onPresetWidth: (v) => setState(() => _presetWidth = v),
+        onPresetWidth: (v) => setState(() {
+          _presetWidth = v;
+          _bp = null;
+        }),
         showBoxModel: () => _showBoxModel,
         onShowBoxModel: (v) => setState(() => _showBoxModel = v),
       ),
@@ -362,6 +369,7 @@ class _ComponentEditorState extends State<_ComponentEditor> with LcMultiSelectHo
         title: '编辑组件',
         subtitle: name,
         actions: [
+          BuilderBpButton(bp: _bp, onChanged: (v) => setState(() => _bp = v)),
           PopupMenuButton<String>(
             tooltip: '更多',
             onSelected: (v) => v == 'view' ? _openView() : unawaited(_openComponentProps()),
@@ -396,7 +404,8 @@ class _ComponentEditorState extends State<_ComponentEditor> with LcMultiSelectHo
           onLayers: () => unawaited(_openLayers()),
           onUndo: _history.canUndo ? () => _restore(undo: true) : null,
           onRedo: _history.canRedo ? () => _restore(undo: false) : null,
-          presetWidth: _presetWidth,
+          presetWidth: _bp == null ? _presetWidth : kLcBpMinWidth[_bp]!,
+          bp: _bp,
           showBoxModel: _showBoxModel,
           selectionBar: multiOn ? multiBar() : (node == null ? null : _selectionBar(context, node)),
         ),

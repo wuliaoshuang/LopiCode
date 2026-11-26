@@ -32,7 +32,11 @@ class LcEl {
   final Map<String, String?> attrs;
 
   /// 里面的文字（有文字就没有子元素）。
-  final String? text;
+  String? text;
+
+  /// 绑定用（第 5 期）：已经是这种写法的代码、不再转义的文字（给了就不用 [text]）和属性（每条前面带一个空格）。
+  String? rawText;
+  final List<String> rawAttrs = [];
 
   /// [LcEl]，或者一个子组件（[LcNode]，由各导出自己接着往下画）。
   final List<Object> kids;
@@ -341,6 +345,7 @@ List<LcWebPiece> lcRenderEl(LcEl root, LcWebDialect d, {required String hostAttr
         b.write(attr(react ? _reactNames[name] ?? name : name, value));
       }
     });
+    e.rawAttrs.forEach(b.write);
     if (e.tag == 'option' && selectValue != null && e.attrs['value'] == selectValue) b.write(' selected');
     e.on.forEach((event, js) {
       final code = js.replaceAll(kLcEv, ev);
@@ -351,7 +356,9 @@ List<LcWebPiece> lcRenderEl(LcEl root, LcWebDialect d, {required String hostAttr
       });
     });
     final inner = areaText ?? e.text;
-    if (inner != null) {
+    if (e.rawText != null) {
+      out.add(LcWebPiece.line('$b>${e.rawText}</${e.tag}>', depth));
+    } else if (inner != null) {
       out.add(LcWebPiece.line('$b>${text(inner)}</${e.tag}>', depth));
     } else if (e.kids.isEmpty) {
       out.add(LcWebPiece.line(react ? '$b />' : (_void.contains(e.tag) ? '$b>' : '$b></${e.tag}>'), depth));

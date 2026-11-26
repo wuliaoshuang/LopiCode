@@ -226,8 +226,8 @@ class _Validator {
       } else if (!seen.add(v.name)) {
         _error(LcIssueCode.badVariable, '有两个变量叫这个名字', where: where);
       }
-      if (!LcVariable.types.contains(v.type)) {
-        _error(LcIssueCode.badVariable, '不认识的类型 ${v.type}（只能是文字、数字、是 / 否）', where: where);
+      if (!LcVariable.stateTypes.contains(v.type)) {
+        _error(LcIssueCode.badVariable, '不认识的类型 ${v.type}（只能是文字、数字、是 / 否、列表、记录）', where: where);
       }
     }
   }

@@ -1,6 +1,9 @@
 import 'dart:convert';
 
+import 'package:lopicode/lowcode/bind_model.dart';
 import 'package:lopicode/lowcode/component_ops.dart';
+import 'package:lopicode/lowcode/export_bind_plan.dart';
+import 'package:lopicode/lowcode/export_html_bind.dart';
 import 'package:lopicode/lowcode/export_pages.dart';
 import 'package:lopicode/lowcode/export_theme_bp.dart';
 import 'package:lopicode/lowcode/export_v3_fields.dart';
@@ -61,17 +64,26 @@ LcHtmlExport exportHtml(LcDocument doc, {String cssFile = 'style.css', String js
   final bp = LcBpCss();
 
   late final LcWebCtx web;
-  void walk(LcNode n, LcNode? parent, int depth) {
+  // 第 5 期：这一页用了状态与绑定才有（没用的页面下面每一处都走原来那条路）。
+  late final LcBindPlan? plan;
+  var inRepeat = 0;
+  late final void Function(LcNode n, LcNode? parent, int depth) walk;
+  void emit(LcNode raw, LcNode? parent, int depth) {
     final pad = '  ' * (depth + 1);
-    final cls = '${lcTypeClass(n.type)} n-${n.id}';
+    // 初始界面：绑定按初值算好写进去；条件不成立的、“重复”的样板先藏着，脚本跑起来再管。
+    final p = plan;
+    final n = p == null ? raw : p.shown(raw, inRepeat: inRepeat > 0);
+    final hide = p != null && p.startsHidden(raw, inRepeat: inRepeat > 0);
+    final cls = '${lcTypeClass(n.type)} n-${n.id}${hide ? '" style="display: none' : ''}';
     // 每个节点一条规则，内容是它的最终样式（简写属性 + 自己的 style，见 style_resolve.dart）。
     final rule = nodeCssRule(n, parent);
     if (rule.isNotEmpty) css.writeln(rule);
     lcStateRules(n, nodeCssSelector(n)).forEach(css.writeln);
     bp.add(n, parent, nodeCssSelector(n));
     // 第 3 版的新组件：元素树三种导出共用（export_web_v3.dart）。
-    final el = lcWebElement(n, web);
+    final el = p == null ? lcWebElement(n, web) : lcBoundWebElement(raw, web);
     if (el != null) {
+      if (p != null) lcHtmlMarkEl(el, raw, n);
       final fieldRule = lcFieldRule(n, parent, nodeCssSelector(n));
       if (fieldRule.isNotEmpty) css.writeln(fieldRule);
       for (final p in lcRenderEl(el, LcWebDialect.html, hostAttrs: ' class="$cls"', text: _esc.convert, attr: (k, v) => ' $k="${_escAttr.convert(v)}"')) {
@@ -138,6 +150,13 @@ LcHtmlExport exportHtml(LcDocument doc, {String cssFile = 'style.css', String js
     }
   }
 
+  walk = (n, parent, depth) {
+    final repeated = plan != null && lcCanWrapBind(n) && lcRepeatOf(n) != null;
+    if (repeated) inRepeat++;
+    emit(n, parent, depth);
+    if (repeated) inRepeat--;
+  };
+
   // 实例展开后最外层沿用实例的 id、里面是“实例id__内部id”，所以 class 和 CSS 规则全页不重复。
   final tree = expandedTree(doc);
   web = LcWebCtx(
@@ -148,6 +167,7 @@ LcHtmlExport exportHtml(LcDocument doc, {String cssFile = 'style.css', String js
     plainHtml: true,
     pageJump: doc.isMultiPage ? lcPageJumper(doc, hash: false) : null,
   );
+  plan = LcBindPlan.of(doc, tree);
   walk(tree, null, 0);
   // 第 3 版加的属性要的公共样式：用到了才写（没用到的页面一个字节都不多）。
   css.write(lcV3ExtraCss(tree));
@@ -155,7 +175,8 @@ LcHtmlExport exportHtml(LcDocument doc, {String cssFile = 'style.css', String js
   css.write(bp.css());
   final rules = css.toString();
   final cssText = '$_baseCss${rules.contains('var(--') ? lcThemeRootCss(doc) : ''}$rules';
-  final js = exportLogicJs(doc);
+  final bound = plan;
+  final js = bound == null ? exportLogicJs(doc) : exportBoundLogicJs(bound, tree);
   // 没有逻辑的页面一个字节都不多（和第 1 版导出的一样）。
   final script = js.isEmpty ? '' : '  <script src="$jsFile" defer></script>\n';
 

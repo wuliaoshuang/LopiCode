@@ -736,3 +736,23 @@ Flutter 导出在测试里真的跳了页（`test/lowcode_pages_export_test.dart
 | Vue 单文件组件：`<style scoped>` 会给每条选择器加上 `[data-v-xxxx]`；同一个文件里可以同时有一段不带 `scoped` 的 `<style>`（全局）和一段带的 | 核对过（2026-11-27） | Vue 官方文档《SFC CSS Features》（Scoped CSS、Mixing Local and Global Styles）https://de.vuejs.org/api/sfc-css-features |
 | 所以 `:root { … }` 写在 `scoped` 的样式里会变成 `:root[data-v-xxxx]`、对不上网页的根元素 | **推断，没在真浏览器里试**；我们的做法是把它放进不带 `scoped` 的那段，绕开这个问题 | 由上一条推出 |
 
+## 低代码状态与数据绑定导出用到的 Vue / React / 浏览器写法（2026-11-27，编辑器第 5 期 B3；`lib/lowcode/export_*_bind.dart`）
+
+核对方式：2026-11-27 读官方文档页面的文字（不是凭记忆）；另外三种产物都在开发机上真编译、并用 jsdom 当浏览器真跑过（见下面“验证环境”）。
+
+| 用到的写法 | 核对结果 | 来源 |
+|---|---|---|
+| Vue `v-model` 用在文本输入框（value＋input 事件）、勾选框（checked＋change 事件）；绑的状态是唯一真相，元素上原有的 `value` / `checked` 会被忽略 | 已核对 | https://vuejs.org/guide/essentials/forms.html |
+| Vue `v-model` 在中文等输入法拼字过程中**不更新**，拼完才更新 | 已核对（同一页的提示） | 同上 |
+| Vue `v-for="(item, index) in 列表"` 加 `:key`；`v-if` 和 `v-for` 写在同一个元素上时 `v-if` 先算、读不到这一项，要把 `v-for` 挪到外面一层 `<template>` | 已核对；导出里“又重复又有存在条件”就是这么包的 | https://vuejs.org/guide/essentials/list.html |
+| React `useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot?)`：`subscribe` 返回取消订阅的函数；仓库没变时 `getSnapshot` 必须返回同一个值，变了要返回不一样的值（按 `Object.is` 比） | 已核对（读的是 react.dev 的匈牙利语镜像站，页面正文是英文原文）。导出里快照是一个只增不减的版本号，满足这两条 | https://hu.react.dev/reference/react/useSyncExternalStore |
+| Vue `reactive()` 对象被多个组件 import 后共用一份、`ref` / `computed` 的写法；`v-show`、`:class` 对象写法、`:style` 对象写法 | **未核对文档**（没去读对应页面）；真编译 0 错 0 警告、真跑通过 | — |
+| React 受控输入框（`value`＋`onChange`）、勾选框（`checked`＋`onChange`）、列表 `map` 加 `key`、`cond && <元素>` | **未核对文档**；真编译、真跑通过 | — |
+| React `onChange` 在中文输入法拼字过程中每敲一下都触发 | **未核对**（文档没读到，jsdom 也模拟不了输入法），只能真机验 | — |
+| 浏览器 `sessionStorage`：同一个标签页里换页还在、关掉标签页就没 | **未核对文档**；jsdom 里跨页带过去再带回来跑通了 | — |
+
+验证环境（只在开发机，不进应用、不进安装包）：在原有 `~/workspace/tools/webdev`（vue、react、esbuild 等）之外，新装了 `~/workspace/tools/webdev-dom/`，
+里面只有 `jsdom 31.0.1`（从 npm 官方源装的，装的时候联过一次网）。`tool/verify/run_dom.mjs` 用它当浏览器：把导出的页面装进去，照一串步骤点按钮、打字，
+再看界面上的字、属性、行内样式对不对。jsdom 不排版，所以**看不了样式表的效果**（比如类名开关加上以后长什么样）；它也没有真的换页和 `scrollTo`，这两处报的“没实现”被脚本当成正常。
+测试 `test/lowcode_bind_run_test.dart` 找不到这套环境时明确跳过并打印原因。
+

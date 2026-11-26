@@ -7,6 +7,8 @@
 // - 每个组件的最终样式一次重搭里只算一遍（_Ctx.styles 记着），父容器数“要放大的子项”和画子项用的是同一份。
 import 'dart:math' as math;
 
+import 'package:lopicode/lowcode/bind_eval.dart';
+import 'package:lopicode/lowcode/bind_preview.dart';
 import 'package:lopicode/lowcode/canvas_component_widgets.dart';
 import 'package:lopicode/lowcode/canvas_controls_widgets.dart';
 import 'package:lopicode/lowcode/canvas_css.dart';
@@ -214,11 +216,14 @@ class CanvasPage extends StatelessWidget {
         styles: inner.styles,
         env: inner.env,
       );
-      return canvasGrid(grid, [for (final c in kids) (span: canvasGridSpan(inner.styleOf(c, n)), child: _item(context, n, s, cell, c))]);
+      return canvasGrid(grid, [
+        for (final c in kids)
+          for (final w in _items(context, n, s, cell, c)) (span: canvasGridSpan(inner.styleOf(c, n)), child: w),
+      ]);
     }
     // 子项之间的间距由容器自己留（拖动时也不往里插东西），这样“两端对齐”之类的分布才准。
     // “编辑器里隐藏”的（图层面板的眼睛）不画、不占位；导出不受影响。
-    final children = [for (final c in kids) _item(context, n, s, inner, c)];
+    final children = [for (final c in kids) ..._items(context, n, s, inner, c)];
     final spacing = mainGap;
     final textDirection = flow.row && flow.reverse ? TextDirection.rtl : null;
     final verticalDirection = !flow.row && flow.reverse ? VerticalDirection.up : VerticalDirection.down;
@@ -277,7 +282,8 @@ class CanvasPage extends StatelessWidget {
 
   // ───────────── 一个组件 ─────────────
 
-  Widget _node(BuildContext context, LcNode node, _Ctx ctx) {
+  /// [copy]：“重复”画出来的第几份（0＝活的那一份）；[badge]：绑定给的角标。
+  Widget _node(BuildContext context, LcNode node, _Ctx ctx, {int copy = 0, String? badge}) {
     final parent = ctx.parent;
     // 拖柄拖动中：把临时尺寸当成这个组件自己的样式来算，“撑满”之类的规则才会跟着让路。
     final p = preview;
@@ -305,6 +311,8 @@ class CanvasPage extends StatelessWidget {
     final self = cssAlign(s['align-self']);
     final position = s['position']?.trim().toLowerCase();
     final hidden = s['display']?.trim().toLowerCase() == 'none';
+    // 显示条件 / 存在条件按初值不成立：照样占位（不然选不中），调淡加角标。
+    final condOff = ctx.env.bind != null && !lcCondHolds(node, ctx.env.bind!);
 
     // 在父容器里怎么占位。和导出规则一致：行里撑满的组件、没给固定宽度的容器平分剩余空间；自适应的文本可以被压窄。
     final expanded = grow > 0 && !wrap && (inRow ? ctx.boundedW : ctx.boundedH);
@@ -482,10 +490,10 @@ class CanvasPage extends StatelessWidget {
     if (!inert) box = KeyedSubtree(key: boxKey(n.id), child: box);
 
     // 角标：隐藏的、脱离文档流的组件画布上照样占位（不然选不中），用角标说明。
-    final badge = hidden ? '已隐藏' : (position == 'absolute' || position == 'fixed' ? '绝对定位' : (position == 'sticky' ? '粘性定位' : null));
-    final opacity = cssOpacity(s['opacity']) * (hidden ? 0.35 : 1);
+    final tag = hidden ? '已隐藏' : (condOff ? '条件不成立' : (position == 'absolute' || position == 'fixed' ? '绝对定位' : (position == 'sticky' ? '粘性定位' : badge)));
+    final opacity = cssOpacity(s['opacity']) * (hidden || condOff ? 0.35 : 1) * (copy > 0 ? 0.5 : 1);
     if (opacity < 1) box = Opacity(opacity: opacity, child: box);
-    if (badge != null) box = canvasBadged(box, badge);
+    if (tag != null) box = canvasBadged(box, tag);
     if (!margin.isZero) box = Padding(padding: EdgeInsets.fromLTRB(margin.left, margin.top, margin.right, margin.bottom), child: box);
 
     // 选中框和拖柄由画布叠在上面画；这里只管点选和长按拖动。
@@ -525,7 +533,7 @@ class CanvasPage extends StatelessWidget {
       );
     }
     // key 放在最外层：拖动开始时兄弟之间会插进插入位，靠 key 认回原来的组件，拖动才不会断。
-    final key = ValueKey('lc-item-${n.id}');
+    final key = ValueKey(copy == 0 ? 'lc-item-${n.id}' : 'lc-item-${n.id}#$copy');
     if (expanded) return Expanded(key: key, flex: grow.round().clamp(1, 1000), child: wrapped);
     if (flexible) return Flexible(key: key, child: wrapped);
     return KeyedSubtree(key: key, child: wrapped);

@@ -31,6 +31,7 @@ class BuilderMoreMenu extends StatelessWidget {
       PopupMenuItem(value: 'pages', child: Text('页面（换页、新建）')),
       PopupMenuItem(value: 'view', child: Text('屏宽与缩放')),
       PopupMenuItem(value: 'theme', child: Text('主题变量')),
+      PopupMenuItem(value: 'state', child: Text('状态')),
       PopupMenuItem(value: 'logic', child: Text('积木逻辑')),
       PopupMenuItem(value: 'components', child: Text('自定义组件')),
       PopupMenuItem(value: 'dart', child: Text('导出 Flutter 代码')),

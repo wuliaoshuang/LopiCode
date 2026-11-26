@@ -1,4 +1,5 @@
 import 'package:lopicode/lowcode/component_ops.dart';
+import 'package:lopicode/lowcode/export_dart_bind.dart';
 import 'package:lopicode/lowcode/export_dart_theme.dart';
 import 'package:lopicode/lowcode/export_dart_v3.dart';
 import 'package:lopicode/lowcode/icon_set.dart';
@@ -12,7 +13,7 @@ import 'package:lopicode/lowcode/quick_actions.dart';
 /// “点击时去页面”的快捷操作用 Navigator 跳过去。别的积木逻辑这一份一直不导出（按钮的 `onPressed` 是空的）。
 /// 只有一页时和以前逐字节一样。
 String exportDart(LcDocument doc, {String? className}) {
-  if (!doc.isMultiPage) return _file([_pageClass(doc, className ?? dartClassName(doc.title))], '', dartThemeHeader(doc));
+  if (!doc.isMultiPage) return _file([_pageClass(doc, className ?? dartClassName(doc.title))], '', dartThemeHeader(doc) + dartBindHeader(doc));
   final names = <String>[];
   for (final p in doc.pages) {
     final base = names.isEmpty && className != null ? className : dartClassName(p.title);
@@ -42,7 +43,7 @@ String exportDart(LcDocument doc, {String? className}) {
     dartPageJumps = null;
     doc.openPageAt(keep);
   }
-  return _file(classes, kDartPageHelpers, dartThemeHeader(doc));
+  return _file(classes, kDartPageHelpers, dartThemeHeader(doc) + dartBindHeader(doc));
 }
 
 String _file(List<String> classes, String tail, String note) =>
@@ -53,7 +54,7 @@ ${classes.join('\n')}$tail''';
 
 String _pageClass(LcDocument doc, String name) {
   // 自定义组件的实例先展开成普通控件再生成；展开不了的那个位置是一个空的 SizedBox。
-  final tree = dartThemeTree(expandedTree(doc), doc);
+  final tree = dartThemeTree(dartBoundTree(expandedTree(doc), doc), doc);
   final body = _node(tree, null, 3);
   // 弹窗不在控件树里：每个弹窗一个静态方法（没有弹窗的页面一个字都不多）。
   final dialogs = [for (final d in dartDialogsOf(tree)) '\n${dartDialogMethodCode(d, _node)}'].join();

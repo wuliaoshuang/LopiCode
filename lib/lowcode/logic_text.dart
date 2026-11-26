@@ -172,5 +172,7 @@ String describeVarType(String type) => switch (type) {
   'number' => '数字',
   'bool' => '是 / 否',
   'text' => '文字',
+  'list' => '列表',
+  'record' => '记录',
   _ => type,
 };

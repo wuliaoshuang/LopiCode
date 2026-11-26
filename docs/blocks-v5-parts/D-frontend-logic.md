@@ -503,6 +503,9 @@ export default function Page() {
   variables 每项多一个可选 "kind": "state"（缺省）| "derived"，derived 带 "expr"；"type" 放开成完整类型写法
 ```
 
+> **2026-11-27 实现时的对齐**：编辑器第 5 期实际用的字段名是格式文档第 3 版早就留好的 `data` / `repeat{list,item,index,key,empty,preview}`，`model` 只存状态名，
+> 页面级状态就是 `logic.variables`（有没有 `derived` 区分派生值），项目级状态在最外层 `state`。以 `docs/lowcode-page-format-v3.md` 和 E 分册 §10.8 为准，上面这段是当时的草稿。
+
 式子用现有的值积木存法（`logic_expr.dart` 那套），不另发明。旧文档没有这些字段，读出来全是“没绑定”。节点上已有的 `bind`（组件定义里“接到组件属性”）保留原意思，读的时候当成 `binds` 里“式子＝读某个属性”的简写。文档版本从 2 升到 3；第 2 版照常能开（和 v2 当时的做法一样）。
 
 ---

@@ -52,6 +52,22 @@ class _Ctx {
   final LcViewEnv env;
 
   Map<String, String> styleOf(LcNode n, LcNode? parent) => styles[n] ??= resolvedStyle(lcViewNode(n, env), parent);
+
+  /// 进到“重复”的某一份里：换绑定环境；记着的样式另起一份（同一个组件在每一份里可以不一样）。
+  _Ctx inScope(LcBindEnv bind) => _Ctx(
+    parent: parent,
+    flow: flow,
+    boundedW: boundedW,
+    boundedH: boundedH,
+    availW: availW,
+    availH: availH,
+    scale: scale,
+    growCount: growCount,
+    textColor: textColor,
+    buttonText: buttonText,
+    styles: Map.identity(),
+    env: env.withBind(bind),
+  );
 }
 
 bool _has(Map<String, String> s, String prefix) => s.keys.any((k) => k.startsWith(prefix));
@@ -65,6 +81,18 @@ bool _hasRadius(Map<String, String> s) => s.keys.any((k) => k.startsWith('border
 ///   没填的画定义里的默认内容（只是样子）；连默认内容也没有，画一个空位提示。落点 id 是 `实例id#插槽名`。
 extension _CanvasSlots on CanvasPage {
   Widget _item(BuildContext context, LcNode container, Map<String, String> s, _Ctx inner, LcNode c) => c.type == 'slot' ? _slotBox(context, container, s, inner, c) : _node(context, c, inner);
+
+  /// 一个子项要画成哪几个：平常就是它自己；设了“重复”的按初值列表画几份（第 5 期）——
+  /// 第一份是活的（能选中、能改），后面几份只是样子（调淡、点不中）。列表是空的也画一份（不然选不中它），角标写明。
+  List<Widget> _items(BuildContext context, LcNode container, Map<String, String> s, _Ctx inner, LcNode c) {
+    final bind = inner.env.bind;
+    final scopes = bind == null || c.type == 'slot' ? null : lcRepeatScopes(c, bind);
+    if (scopes == null) return [_item(context, container, s, inner, c)];
+    if (scopes.isEmpty) return [_node(context, c, inner, badge: '重复 · 列表是空的')];
+    return [
+      for (final (i, scope) in scopes.indexed) (i == 0 ? this : _inertCopy())._node(context, c, inner.inScope(scope), copy: i, badge: i == 0 ? '重复' : null),
+    ];
+  }
 
   Widget _slotBox(BuildContext context, LcNode container, Map<String, String> s, _Ctx inner, LcNode slot) {
     final hostId = slot.strProp('host');

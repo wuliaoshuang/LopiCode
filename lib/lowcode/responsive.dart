@@ -9,6 +9,9 @@
 /// [lcViewNode] 把一个节点换成“在这个条件下的样子”（变量换成值、断点的差别并进来）。画布和面板共用。
 library;
 
+import 'package:lopicode/lowcode/bind_eval.dart';
+import 'package:lopicode/lowcode/bind_model.dart';
+import 'package:lopicode/lowcode/bind_preview.dart';
 import 'package:lopicode/lowcode/css_codec.dart';
 import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/lowcode/theme_vars.dart';
@@ -102,12 +105,14 @@ void lcEditAtBp(LcNode n, String bp, void Function(Map<String, String> style) ch
 
 /// 画布（和面板）按什么条件看一个节点。
 class LcViewEnv {
-  const LcViewEnv({this.vars = const {}, this.bp});
+  const LcViewEnv({this.vars = const {}, this.bp, this.bind});
   static const LcViewEnv plain = LcViewEnv();
 
   factory LcViewEnv.of(LcDocument doc, [String? bp]) {
     final vars = lcThemeOf(doc).values;
-    return vars.isEmpty && bp == null ? plain : LcViewEnv(vars: vars, bp: bp);
+    // 这一页一个绑定都没有：不带绑定环境，画布走的还是原来那条路。
+    final bind = lcTreeHasBindings(doc.root) ? LcBindEnv.of(doc) : null;
+    return vars.isEmpty && bp == null && bind == null ? plain : LcViewEnv(vars: vars, bp: bp, bind: bind);
   }
 
   /// 主题变量：名字 → 值。
@@ -116,7 +121,13 @@ class LcViewEnv {
   /// 现在看的是哪一档；null＝手机。
   final String? bp;
 
-  bool get isPlain => vars.isEmpty && bp == null;
+  /// 绑定按什么算（状态的初值 + “重复”带出来的这一项）；null＝不算绑定。
+  final LcBindEnv? bind;
+
+  /// 换一个绑定环境（进到“重复”的某一份里）。
+  LcViewEnv withBind(LcBindEnv bind) => LcViewEnv(vars: vars, bp: bp, bind: bind);
+
+  bool get isPlain => vars.isEmpty && bp == null && bind == null;
 }
 
 /// 一份声明表里的变量换成值；没有变量就是原来那份（同一个对象）。
@@ -126,13 +137,17 @@ Map<String, String> lcSubstMap(Map<String, String> decl, Map<String, String> var
 }
 
 /// [n] 在 [env] 下的样子：断点的差别并进 `style`、变量换成值。没什么可换的就是 [n] 本身（同一个对象——
-/// 画布靠这个判断能不能用记着的样式）。只换样式，属性、子节点、别的字段都是原来那份。
+/// 画布靠这个判断能不能用记着的样式）。换样式；有绑定时再把绑了的属性换成初值；子节点、别的字段都是原来那份。
 LcNode lcViewNode(LcNode n, LcViewEnv env) {
   if (env.isPlain || n.isUnknown) return n;
   final over = env.bp == null ? const <String, String>{} : lcBpMerged(n, env.bp!);
   final merged = over.isEmpty ? n.style : {...n.style, ...over};
   final style = lcSubstMap(merged, env.vars);
-  if (identical(style, n.style)) return n;
-  return LcNode(id: n.id, type: n.type, props: n.props, children: n.children, style: style, bind: n.bind, name: n.name, locked: n.locked, hidden: n.hidden, keptProps: n.keptProps, more: n.more)
-    ..instSlots = n.instSlots;
+  final styled = identical(style, n.style)
+      ? n
+      : (LcNode(id: n.id, type: n.type, props: n.props, children: n.children, style: style, bind: n.bind, name: n.name, locked: n.locked, hidden: n.hidden, keptProps: n.keptProps, more: n.more)
+          ..instSlots = n.instSlots);
+  // 绑定换成初值（第 5 期，bind_preview.dart）。
+  final bind = env.bind;
+  return bind == null ? styled : lcBoundNode(styled, bind);
 }

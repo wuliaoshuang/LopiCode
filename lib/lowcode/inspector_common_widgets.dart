@@ -7,6 +7,7 @@
 // - 取用的 tokens：Space.x2/x3/x4、textMuted（名字）、textFaint（说明小字）。
 import 'package:lopicode/lowcode/component_values_widgets.dart';
 import 'package:lopicode/lowcode/edit_types.dart';
+import 'package:lopicode/lowcode/inspector_bind_widgets.dart';
 import 'package:lopicode/lowcode/inspector_presets_widgets.dart';
 import 'package:lopicode/lowcode/inspector_v3_components_widgets.dart';
 import 'package:lopicode/lowcode/inspector_v3_rows_widgets.dart';
@@ -22,7 +23,7 @@ import 'package:material_ui/material_ui.dart';
 
 /// 合一面板里“正在改的这个组件”。
 class InspectorEdit {
-  const InspectorEdit({required this.doc, required this.node, required this.parent, required this.apply, this.pickImage, this.editDoc});
+  const InspectorEdit({required this.doc, required this.node, required this.parent, required this.apply, this.pickImage, this.editDoc, this.canBind = false});
   final LcDocument doc;
 
   /// 组件现在的样子（已经算上还没提交的改动）。只读；要改走 [apply]。
@@ -38,6 +39,9 @@ class InspectorEdit {
 
   /// 改整份文档（不只是这个组件；现在只有“把导航栏同步到其它页面”用）。不给＝这类操作不出现。
   final LcEdit? editDoc;
+
+  /// 这里的设置能不能绑到状态（页面里的控件能；自定义组件里面的这一期不能）。
+  final bool canBind;
 }
 
 const Map<int, String> _zeroNone = {0: '无'};
@@ -88,17 +92,22 @@ class _InspectorCommonPageState extends State<InspectorCommonPage> {
 
   Widget _textRow(String prop, String label, {int maxLines = 1, String? hint, TextInputType? keyboard}) {
     final c = _text.putIfAbsent(prop, () => TextEditingController(text: n.strProp(prop) ?? ''));
-    return InspectorRow(
+    return LcBindableRow(
+      ed: ed,
+      prop: prop,
       label: label,
-      scroll: false,
-      child: TextField(
-        key: Key('lc-common-$prop'),
-        controller: c,
-        minLines: 1,
-        maxLines: maxLines,
-        keyboardType: keyboard,
-        decoration: InputDecoration(isDense: true, hintText: hint),
-        onChanged: (v) => ed.apply((n, _) => n.props[prop] = v, merge: true),
+      child: InspectorRow(
+        label: label,
+        scroll: false,
+        child: TextField(
+          key: Key('lc-common-$prop'),
+          controller: c,
+          minLines: 1,
+          maxLines: maxLines,
+          keyboardType: keyboard,
+          decoration: InputDecoration(isDense: true, hintText: hint),
+          onChanged: (v) => ed.apply((n, _) => n.props[prop] = v, merge: true),
+        ),
       ),
     );
   }
@@ -357,16 +366,21 @@ class _InspectorCommonPageState extends State<InspectorCommonPage> {
         final c = _text.putIfAbsent('items', () => TextEditingController(text: ((n.props['items'] as List?) ?? const []).join('\n')));
         return (
           [
-            InspectorRow(
+            LcBindableRow(
+              ed: ed,
+              prop: 'items',
               label: '列表项',
-              scroll: false,
-              child: TextField(
-                key: const Key('lc-common-items'),
-                controller: c,
-                minLines: 3,
-                maxLines: 8,
-                decoration: const InputDecoration(isDense: true, hintText: '一行一项'),
-                onChanged: (v) => ed.apply((n, _) => n.props['items'] = v.split('\n').where((s) => s.trim().isNotEmpty).toList(), merge: true),
+              child: InspectorRow(
+                label: '列表项',
+                scroll: false,
+                child: TextField(
+                  key: const Key('lc-common-items'),
+                  controller: c,
+                  minLines: 3,
+                  maxLines: 8,
+                  decoration: const InputDecoration(isDense: true, hintText: '一行一项'),
+                  onChanged: (v) => ed.apply((n, _) => n.props['items'] = v.split('\n').where((s) => s.trim().isNotEmpty).toList(), merge: true),
+                ),
               ),
             ),
             _fontSize(),
@@ -457,6 +471,7 @@ class _InspectorCommonPageState extends State<InspectorCommonPage> {
       children: [
         ...rows,
         if (more.isNotEmpty && rows.isEmpty) ...more else if (more.isNotEmpty) MoreSection(id: 'common', children: more),
+        InspectorDataSection(ed: ed),
         const SizedBox(height: Space.x3),
         Text('更细的（四边分别设、边框、定位…）在“样式”页。', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: c.textFaint)),
       ],

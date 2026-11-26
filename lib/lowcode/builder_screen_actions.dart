@@ -143,6 +143,11 @@ extension _BuilderActions on _BuilderScreenState {
     if (mounted) _refresh();
   }
 
+  Future<void> _openState() async {
+    await showStateScreen(context, doc: () => _doc!, onEdit: _apply);
+    if (mounted) _refresh();
+  }
+
   void _openView() {
     final canvas = _bench.currentState?.canvas;
     if (canvas == null) return;
@@ -168,6 +173,8 @@ extension _BuilderActions on _BuilderScreenState {
         _openView();
       case 'theme':
         unawaited(_openTheme());
+      case 'state':
+        unawaited(_openState());
       case 'dart':
         unawaited(_exportDart());
       case 'framework':

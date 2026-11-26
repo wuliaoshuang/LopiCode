@@ -4,6 +4,8 @@
 // - 编辑 / 新建是同一个对话框，从上到下：名字 → 类型（三选一）→ 初始值（按类型换成文字框 / 数字框 / 开关）；
 //   删除放在对话框左下角（弱化的危险色），不和“保存”抢。保存一次＝一条撤销记录。
 // - 名字不合规矩、重名、数字填错：就地在输入框下面说清楚原因，不关对话框。
+import 'dart:convert';
+
 import 'package:lopicode/lowcode/edit_types.dart';
 import 'package:lopicode/lowcode/logic_edit.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
@@ -33,17 +35,39 @@ String _initialText(Object v) => switch (v) {
   final bool b => b ? '是' : '否',
   final num n => n is int || n == n.roundToDouble() && n.abs() < 1e15 ? '${n.round()}' : '$n',
   final String s => s.isEmpty ? '（空）' : '“$s”',
+  final List<Object?> l => l.isEmpty ? '（空）' : '${l.length} 项',
+  final Map<Object?, Object?> m => m.isEmpty ? '（空）' : '${m.length} 格',
   _ => '',
 };
 
+/// 初始值给人看的短写法（变量面板、状态页共用）。
+String lcInitialText(Object v) => _initialText(v);
+
+/// 把输入框里的字读成列表 / 记录（JSON）；空着＝空的；读不出来或者种类不对返回 null。
+Object? lcParseJsonInitial(String type, String text) {
+  final s = text.trim();
+  if (s.isEmpty) return type == 'list' ? <Object?>[] : <String, Object?>{};
+  try {
+    final v = jsonDecode(s);
+    return (type == 'list' ? v is List : v is Map) ? v : null;
+  } on FormatException {
+    return null;
+  }
+}
+
 /// 新建 / 编辑一个变量。[taken]＝别的变量已经占用的名字。取消返回 null。
-Future<LcVarDraft?> showLcVariableDialog(BuildContext context, {required Set<String> taken, LcVariable? editing, String? suggestType, int refCount = 0}) => showDialog<LcVarDraft>(
-  context: context,
-  builder: (_) => _VariableDialog(taken: taken, editing: editing, suggestType: suggestType, refCount: refCount),
-);
+/// [wide]：类型里多“列表”“记录”两种（搭建页的状态用；初值填 JSON）。正在改的本来就是这两种时也自动带上。
+/// [noun]：对话框里怎么叫它（“变量”/“状态”）。
+Future<LcVarDraft?> showLcVariableDialog(BuildContext context, {required Set<String> taken, LcVariable? editing, String? suggestType, int refCount = 0, bool wide = false, String noun = '变量'}) =>
+    showDialog<LcVarDraft>(
+      context: context,
+      builder: (_) => _VariableDialog(taken: taken, editing: editing, suggestType: suggestType, refCount: refCount, wide: wide || (editing != null && !LcVariable.types.contains(editing.type)), noun: noun),
+    );
 
 class _VariableDialog extends StatefulWidget {
-  const _VariableDialog({required this.taken, this.editing, this.suggestType, required this.refCount});
+  const _VariableDialog({required this.taken, this.editing, this.suggestType, required this.refCount, required this.wide, required this.noun});
+  final bool wide;
+  final String noun;
   final Set<String> taken;
   final LcVariable? editing;
   final String? suggestType;
@@ -56,7 +80,9 @@ class _VariableDialog extends StatefulWidget {
 class _VariableDialogState extends State<_VariableDialog> {
   late final TextEditingController _name = TextEditingController(text: widget.editing?.name ?? '');
   late final TextEditingController _value = TextEditingController();
-  late String _type = widget.editing?.type ?? (LcVariable.types.contains(widget.suggestType) ? widget.suggestType! : 'text');
+  List<String> get _types => widget.wide ? LcVariable.stateTypes : LcVariable.types;
+  bool get _json => _type == 'list' || _type == 'record';
+  late String _type = widget.editing?.type ?? (_types.contains(widget.suggestType) ? widget.suggestType! : 'text');
   bool _flag = false;
   String? _nameError;
   String? _valueError;
@@ -68,6 +94,7 @@ class _VariableDialogState extends State<_VariableDialog> {
     if (v is bool) _flag = v;
     if (v is num) _value.text = _initialText(v);
     if (v is String) _value.text = v;
+    if (v is List || v is Map) _value.text = (v is List ? v.isEmpty : (v as Map).isEmpty) ? '' : jsonEncode(v);
   }
 
   @override
@@ -83,10 +110,13 @@ class _VariableDialogState extends State<_VariableDialog> {
     if (!LcVariable.namePattern.hasMatch(name)) {
       nameError = '只能用英文字母、数字和下划线，不能用数字开头，最多 32 个字符';
     } else if (name != widget.editing?.name && widget.taken.contains(name)) {
-      nameError = '已经有一个变量叫 $name 了';
+      nameError = '已经有一个${widget.noun}叫 $name 了';
     }
     final number = lcParseNumber(_value.text);
-    final valueError = _type == 'number' && _value.text.trim().isNotEmpty && number == null ? '这里要填一个数字' : null;
+    final json = _json ? lcParseJsonInitial(_type, _value.text) : null;
+    final valueError = _type == 'number' && _value.text.trim().isNotEmpty && number == null
+        ? '这里要填一个数字'
+        : (_json && json == null ? (_type == 'list' ? '要写成一个列表，比如 ["苹果", "香蕉"]' : '要写成一条记录，比如 {"name": "小明", "age": 18}') : null);
     if (nameError != null || valueError != null) {
       setState(() {
         _nameError = nameError;
@@ -97,6 +127,7 @@ class _VariableDialogState extends State<_VariableDialog> {
     final Object initial = switch (_type) {
       'number' => number ?? 0,
       'bool' => _flag,
+      'list' || 'record' => json ?? _value.text,
       _ => _value.text,
     };
     Navigator.pop(context, LcVarDraft(name: name, type: _type, initial: initial));
@@ -109,7 +140,7 @@ class _VariableDialogState extends State<_VariableDialog> {
     final editing = widget.editing;
     return AlertDialog(
       scrollable: true,
-      title: Text(editing == null ? '新建变量' : '编辑变量'),
+      title: Text(editing == null ? '新建${widget.noun}' : '编辑${widget.noun}'),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -129,7 +160,7 @@ class _VariableDialogState extends State<_VariableDialog> {
           Wrap(
             spacing: Space.x2,
             children: [
-              for (final type in LcVariable.types)
+              for (final type in _types)
                 LcChoiceChip(
                   key: ValueKey('lc-var-type-$type'),
                   label: describeVarType(type),
@@ -137,6 +168,7 @@ class _VariableDialogState extends State<_VariableDialog> {
                   onSelected: () => setState(() {
                     // 换类型时原来填的值多半对不上，清掉（数字换文字这种能留的留着）。
                     if (type == 'number' && lcParseNumber(_value.text) == null) _value.clear();
+                    if ((type == 'list' || type == 'record') != _json || (_json && type != _type)) _value.clear();
                     _type = type;
                     _valueError = null;
                   }),
@@ -150,9 +182,23 @@ class _VariableDialogState extends State<_VariableDialog> {
             TextField(
               key: const ValueKey('lc-var-initial'),
               controller: _value,
-              keyboardType: _type == 'number' ? const TextInputType.numberWithOptions(decimal: true, signed: true) : TextInputType.text,
-              decoration: InputDecoration(labelText: '初始值', hintText: _type == 'number' ? '不填就是 0' : '可以不填', errorText: _valueError),
-              onSubmitted: (_) => _save(),
+              keyboardType: _type == 'number' ? const TextInputType.numberWithOptions(decimal: true, signed: true) : (_json ? TextInputType.multiline : TextInputType.text),
+              minLines: _json ? 3 : 1,
+              maxLines: _json ? 8 : 1,
+              autocorrect: !_json,
+              style: _json ? const TextStyle(fontFamily: kMonoFont, fontFamilyFallback: kMonoFallback) : null,
+              decoration: InputDecoration(
+                labelText: '初始值',
+                hintText: switch (_type) {
+                  'number' => '不填就是 0',
+                  'list' => '比如 ["苹果", "香蕉"]；不填就是空的',
+                  'record' => '比如 {"name": "小明"}；不填就是空的',
+                  _ => '可以不填',
+                },
+                errorText: _valueError,
+                errorMaxLines: 3,
+              ),
+              onSubmitted: _json ? null : (_) => _save(),
             ),
           if (editing != null && widget.refCount > 0) ...[const SizedBox(height: Space.x3), Text('有 ${widget.refCount} 处在用它；改名会一起改过去。', style: t.bodySmall)],
         ],

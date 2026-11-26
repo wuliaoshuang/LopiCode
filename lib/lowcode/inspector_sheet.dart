@@ -395,7 +395,7 @@ class InspectorPanelState extends State<InspectorPanel> {
           ?bpNote,
           InspectorCommonPage(
             key: ValueKey('common-${node.id}'),
-            ed: InspectorEdit(doc: _doc, node: preview, parent: parent, apply: _apply, pickImage: widget.pickImage, editDoc: _editDoc),
+            ed: InspectorEdit(doc: _doc, node: preview, parent: parent, apply: _apply, pickImage: widget.pickImage, editDoc: _editDoc, canBind: _hasEvents),
           ),
         ],
       ),

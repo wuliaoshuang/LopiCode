@@ -5,6 +5,8 @@
 /// 保证同一页导出来的两份代码结构、命名、简化项一致。
 library;
 
+import 'dart:convert';
+
 import 'package:lopicode/format/format.dart';
 import 'package:lopicode/lowcode/component_model.dart';
 import 'package:lopicode/lowcode/export_theme_bp.dart';
@@ -142,8 +144,21 @@ String lcInitialLiteral(LcVariable v) => lcValueLiteral(v.type, v.initial);
 String lcValueLiteral(String type, Object? value) => switch (type) {
   'number' => value is num && value.isFinite ? (value is int || value == value.roundToDouble() && value.abs() < 1e15 ? '${value.round()}' : '$value') : '0',
   'bool' => value == true ? 'true' : 'false',
+  'list' => lcJsonLiteral(value is List ? value : const <Object?>[]),
+  'record' => lcJsonLiteral(value is Map ? value : const <String, Object?>{}),
   _ => jsString(value is String ? value : ''),
 };
+
+/// 列表 / 记录的初值写成 JS 字面量（就是 JSON；`<` 和行分隔符转义掉，放进网页、Vue 文件里都不会把文件截断）。
+String lcJsonLiteral(Object? value) {
+  String text;
+  try {
+    text = jsonEncode(value);
+  } on Object {
+    text = value is List ? '[]' : '{}';
+  }
+  return text.replaceAll('<', r'\u003c').replaceAll('\u2028', r'\u2028').replaceAll('\u2029', r'\u2029');
+}
 
 // —— 类名和 CSS ——
 

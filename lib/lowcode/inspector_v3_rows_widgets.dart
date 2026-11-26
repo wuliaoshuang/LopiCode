@@ -7,6 +7,7 @@
 // - 取用的 tokens：Space.x1/x2/x3/x4、Radii.sm、accent / accentSoft（选中的那格）、textMuted、border。
 import 'package:lopicode/lowcode/icon_set.dart';
 import 'package:lopicode/lowcode/icon_set_widgets.dart';
+import 'package:lopicode/lowcode/inspector_bind_widgets.dart';
 import 'package:lopicode/lowcode/inspector_common_widgets.dart';
 import 'package:lopicode/lowcode/inspector_presets_widgets.dart';
 import 'package:lopicode/lowcode/model.dart';
@@ -26,21 +27,26 @@ void lcSetOrDrop(LcNode n, String prop, Object? value) {
 }
 
 /// 一行开关。[whenUnset]＝这个键没写时算开还是关（默认关）；拨到和它一样就把键去掉。
-Widget lcSwitchRow(InspectorEdit ed, String prop, String label, {bool whenUnset = false}) => InspectorRow(
+Widget lcSwitchRow(InspectorEdit ed, String prop, String label, {bool whenUnset = false}) => LcBindableRow(
+  ed: ed,
+  prop: prop,
   label: label,
-  scroll: false,
-  child: Align(
-    alignment: Alignment.centerLeft,
-    child: Switch(
-      key: Key('lc-common-$prop'),
-      value: ed.node.props[prop] is bool ? ed.node.props[prop] as bool : whenUnset,
-      onChanged: (v) => ed.apply((n, _) {
-        if (v == whenUnset) {
-          n.props.remove(prop);
-        } else {
-          n.props[prop] = v;
-        }
-      }),
+  child: InspectorRow(
+    label: label,
+    scroll: false,
+    child: Align(
+      alignment: Alignment.centerLeft,
+      child: Switch(
+        key: Key('lc-common-$prop'),
+        value: ed.node.props[prop] is bool ? ed.node.props[prop] as bool : whenUnset,
+        onChanged: (v) => ed.apply((n, _) {
+          if (v == whenUnset) {
+            n.props.remove(prop);
+          } else {
+            n.props[prop] = v;
+          }
+        }),
+      ),
     ),
   ),
 );
@@ -116,20 +122,25 @@ class _LcPropTextRowState extends State<LcPropTextRow> {
   }
 
   @override
-  Widget build(BuildContext context) => InspectorRow(
+  Widget build(BuildContext context) => LcBindableRow(
+    ed: widget.ed,
+    prop: widget.prop,
     label: widget.label,
-    scroll: false,
-    child: TextField(
-      key: Key('lc-common-${widget.prop}'),
-      controller: _text,
-      minLines: 1,
-      maxLines: widget.maxLines,
-      keyboardType: widget.number ? TextInputType.number : null,
-      decoration: InputDecoration(isDense: true, hintText: widget.hint),
-      onChanged: (v) => widget.ed.apply((n, _) {
-        final count = int.tryParse(v.trim());
-        lcSetOrDrop(n, widget.prop, widget.number ? (count != null && count >= 1 && count <= 100000 ? count : null) : v);
-      }, merge: true),
+    child: InspectorRow(
+      label: widget.label,
+      scroll: false,
+      child: TextField(
+        key: Key('lc-common-${widget.prop}'),
+        controller: _text,
+        minLines: 1,
+        maxLines: widget.maxLines,
+        keyboardType: widget.number ? TextInputType.number : null,
+        decoration: InputDecoration(isDense: true, hintText: widget.hint),
+        onChanged: (v) => widget.ed.apply((n, _) {
+          final count = int.tryParse(v.trim());
+          lcSetOrDrop(n, widget.prop, widget.number ? (count != null && count >= 1 && count <= 100000 ? count : null) : v);
+        }, merge: true),
+      ),
     ),
   );
 }
