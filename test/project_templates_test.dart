@@ -21,6 +21,7 @@ import 'package:lopicode/core/path_guard.dart';
 import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/core/safe_file.dart';
 import 'package:lopicode/core/templates.dart';
+import 'package:lopicode/lang/rules.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 import 'package:lopicode/templates/code_starters.dart';
 import 'package:lopicode/templates/project_templates.dart';
@@ -208,7 +209,7 @@ void main() {
 
     for (final id in ['node', 'python']) {
       test('$id：样本生成的服务真的起起来，问候 / 增删改查 / 计数都对', () async {
-        final target = backendTargetFor(id);
+        final target = backendTargetForRules(id, kLangRulesForNewDocs);
         if (target == null || !await toolExists(target.startCommand.first)) {
           markTestSkipped('这台机器上没有 $id 的工具（或没有它的生成器），跳过实际运行');
           return;
@@ -264,7 +265,8 @@ void main() {
 
   group('每个模板生成的文件', () {
     test('后端服务（积木）：backend.lc.json + 所选语言的代码 + README；每种语言都齐', () async {
-      for (final t in backendTargets) {
+      // 新建的文档现在默认是严格规矩：入口文件、启动命令用严格规矩那一套的。
+      for (final t in [for (final b in backendTargets) backendTargetForRules(b.id, kLangRulesForNewDocs)!]) {
         final files = projectTemplateFiles(ProjectTemplate.backendBlocks, '我的接口', language: t.id);
         expect(files.keys, containsAll([kBackendFileName, t.entryFile, 'README.md']), reason: t.id);
         final doc = BeDocument.parse(files[kBackendFileName]!);
@@ -299,7 +301,8 @@ void main() {
     });
 
     test('前端 + 后端：web/ 页面 + server/ 积木后端 + 根 README + 把预览带到 web/ 的 index.html', () async {
-      for (final t in backendTargets) {
+      // 新建的文档现在默认是严格规矩：入口文件、启动命令用严格规矩那一套的。
+      for (final t in [for (final b in backendTargets) backendTargetForRules(b.id, kLangRulesForNewDocs)!]) {
         final files = projectTemplateFiles(ProjectTemplate.fullstack, '待办 <小站>', language: t.id);
         expect(files.keys, containsAll(['README.md', 'index.html', 'web/index.html', 'web/style.css', 'web/app.js', 'server/$kBackendFileName', 'server/${t.entryFile}', 'server/README.md']));
         // 后端那一半和单独的积木模板一样，只是挪到 server/ 下、README 里多一步 cd server

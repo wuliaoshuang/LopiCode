@@ -24,10 +24,25 @@ const List<({String title, String detail})> kBeStrictChanges = [
   (title: '东西放错了地方会标红', detail: '比如要数字的地方放了文字。以前会悄悄换算（"abc" 当成 0），以后直接标出来；有红的时候不生成新代码。'),
   (title: '数字分成整数和小数', detail: '整数最大到 9007199254740991，加减乘超了会报“整数超出范围”；小数用在要整数的地方要先“取整”。'),
   (title: '除以 0 会报错', detail: '以前除以 0 得 0，以后运行到这里会报“除以 0”。'),
+  (title: '“等于”不再悄悄换算', detail: '以前 1 和 "1"、空和 "" 算相等，以后不算：要比就先转成同一种，可能是空的先处理空。这一条不一定会标红，升级后请自己看一遍用到“等于”的地方。'),
   (title: '文字不再自动变成数字', detail: '要用“把 … 变成整数”或“转换类型”积木自己转；变不了的时候得到“空”。'),
   (title: '可能是空的值要先处理', detail: '用“如果 … 不是空”判断，或者包一层“… 是空就用 …”。'),
   (title: '可以给参数、结果、变量标类型', detail: '选中“定义”或“新建变量”那块积木，上面多一行类型，点“标类型”。不标也行，会自己推。'),
 ];
+
+/// “升级到严格规矩”之前先算给用户看的：升级后会多出什么。
+class BeStrictPreview {
+  const BeStrictPreview(this.errors, this.others, this.fixable, this.items);
+
+  /// 要改的（标红）有几处、提醒 / 警告有几处。
+  final int errors, others;
+
+  /// 要改的里面有几处能一键修。
+  final int fixable;
+
+  /// 逐条：在哪、什么问题、是不是要改的、能不能一键修。
+  final List<({String where, String problem, bool isError, bool fixable})> items;
+}
 
 /// “运算”页加上严格规矩才有的那一组。
 BlockCategory beStrictOperatorCategory(BlockCategory c) => BlockCategory(
@@ -223,14 +238,32 @@ mixin BeTypeHost on BlockHost {
 
   // —— 升级 ——
 
-  /// 现在升级的话，会多出几处要改的（错误）、几处提醒 / 警告。已经是严格规矩返回 null。
-  ({int errors, int others})? previewStrict() {
+  /// 现在升级的话会多出什么：几处要改的（错误）、几处提醒 / 警告、其中几处错误能一键修，外加逐条的清单（错误在前）。
+  /// 已经是严格规矩返回 null。
+  BeStrictPreview? previewStrict() {
     if (strictRules) return null;
     final copy = doc.clone()..rules = kLangRulesStrict;
     final check = beTypeCheck(copy);
-    if (check == null) return (errors: 0, others: 0);
-    final errors = check.findings.where((f) => f.issue.isError).length;
-    return (errors: errors, others: check.findings.length - errors);
+    if (check == null) return const BeStrictPreview(0, 0, 0, []);
+    String where(BeTypeFinding f) {
+      final tree = beTreeById(copy, f.at.treeId);
+      if (tree is BeFunction) return '积木「${tree.name}」';
+      if (tree is BeRoute) return '接口「${describeBeRoute(tree)}」';
+      if (tree != null) return coreScopeName(tree) ?? '';
+      final t = copy.core.type(f.at.treeId);
+      return t == null ? '模块' : '${t.kind.label}「${t.name}」';
+    }
+
+    final items = [for (final f in check.findings) (where: where(f), problem: f.problem, isError: f.issue.isError, fixable: f.fixes.isNotEmpty || f.extra.isNotEmpty)];
+    final errors = [
+      for (final i in items)
+        if (i.isError) i,
+    ];
+    return BeStrictPreview(errors.length, items.length - errors.length, errors.where((i) => i.fixable).length, [
+      ...errors,
+      for (final i in items)
+        if (!i.isError) i,
+    ]);
   }
 
   /// 升级到严格规矩（一条撤销记录：刚升完后悔可以点撤销；存盘以后再打开就回不去了）。

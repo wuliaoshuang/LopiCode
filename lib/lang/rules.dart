@@ -19,23 +19,19 @@ const String kLangRulesField = 'rules';
 
 /// **开关：新建的文档用哪个规矩版本。** 新建的入口（后端是 `backendStarterDocument`）都读它。
 ///
-/// 现在是 1：严格规矩的生成路径（带类型的生成、运行时检查的小函数）还没接上，这时候把新文档标成 2，它实际还是按老规矩跑，
-/// 等生成路径接上那天行为又会变——正好违反“版本号保证行为不变”。生成路径接上的那一段把它改成 [kLangRulesStrict]（就这一行）；
-/// 改完以后哪几条现有断言要跟着改，见 docs/blocks-v5-parts/B-impl-notes.md 第 6 节。
-const int kLangRulesForNewDocs = kLangRulesLoose;
+/// 2026-11-27（库 1 下半）起是 2：严格规矩的后端生成接上了（见 [kLangStrictBackendGen]），新建的文档直接用严格规矩。
+/// 老文档没有这个字段，还是 1，一个字不变。
+const int kLangRulesForNewDocs = kLangRulesStrict;
 
-/// **后端文档的严格生成接上了没有。** 现在没有：版本 2 的生成器（gen2_*.dart）还不认后端的宿主语句（返回响应、数据集合…），
-/// 后端文档的代码还是版本 1 的生成器写的。它对严格规矩的文档会写出和严格规矩不符的代码（2026-11-26 用 Node 真跑过）：
-/// 放在旧积木里的“把…变成整数 / …是空就用… / 一定不是空…”整格变成空（null）、照样回 200；放在新积木语句里的那个接口整段不生成、回 500；
-/// 除以 0 还是得 0。所以是 false 的时候，严格规矩的后端文档**不生成、不启动**，并明说原因（backend_project.dart 的 `kBeStrictGenPending`）。
-/// “库 1”把后端接上版本 2 生成的那个提交里改成 true。
-const bool kLangStrictBackendGen = false;
+/// **后端文档的严格生成接上了没有。** 2026-11-27 起接上了：严格规矩的后端文档走“接口服务”库那条路
+/// （backend_to_service.dart → 版本 2 的生成器），135 条一致性样例的严格版在 Node / Python / PHP / Go / Java 上真跑逐字节一致
+/// （test/backend_conformance_strict_test.dart）。改回 false 的话，严格规矩的后端文档**不生成、不启动**，并明说原因
+/// （backend_targets.dart 的 `kBeStrictGenPending`）——老的生成器对严格文档会写出和严格规矩不符的代码。
+const bool kLangStrictBackendGen = true;
 
-/// **开关：后端积木页“⋯”菜单里出不出现“升级到严格规矩…”。** 默认关：等后端接上版本 2 生成（库 1）再打开——
-/// 现在让用户升级，得到的是一份“按严格规矩查、但生成不了代码”的文档（见 [kLangStrictBackendGen]）。
-/// 已经是严格规矩的文档（现在只可能来自测试或手改文件）照常标红、一键修、显示类型。
-/// 界面读的是 backend_screen.dart 的 `beStrictUpgradeEntry`（测试里可以打开）。
-const bool kStrictRulesUpgradeEnabled = false;
+/// **开关：后端积木页“⋯”菜单里出不出现“升级到严格规矩…”。** 2026-11-27 起打开（严格生成接上了）。
+/// 界面读的是 backend_screen.dart 的 `beStrictUpgradeEntry`（测试里可以改）。
+const bool kStrictRulesUpgradeEnabled = true;
 
 /// 从存盘的值读规矩版本：没有、不是整数、小于 1 → 1。比 [kLangRulesLatest] 大的原样留着（可能是新版本的应用写的）。
 int langRulesFromJson(Object? raw) => raw is int && raw >= 1 ? raw : kLangRulesLoose;

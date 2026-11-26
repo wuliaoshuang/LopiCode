@@ -10,7 +10,6 @@ import 'package:lopicode/backend/backend_targets.dart';
 import 'package:lopicode/backend/backend_templates.dart';
 import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/core/templates.dart';
-import 'package:lopicode/lang/rules.dart';
 import 'package:lopicode/templates/code_starters.dart';
 import 'package:lopicode/templates/fullstack_web.dart';
 
@@ -60,7 +59,7 @@ Map<String, String> projectTemplateFiles(ProjectTemplate template, String name, 
       return codeStarterFor(lang!)?.files(name) ?? _fallback(name);
     case ProjectTemplate.fullstack:
       final server = backendBlocksTemplateFiles(name, lang!, dir: 'server');
-      final target = backendTargetForRules(lang, kLangRulesForNewDocs);
+      final target = backendTargetForRules(lang, beNewDocRules);
       if (server == null || target == null) return _fallback(name);
       final command = ['cd server', for (final c in target.buildCommands) c.join(' '), target.startCommand.join(' ')].join(' && ');
       return {

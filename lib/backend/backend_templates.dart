@@ -17,8 +17,9 @@ LcBlock _if(Map<String, dynamic> cond, List<LcBlock> then, [List<LcBlock>? orEls
 
 /// 入门样本。`name`＝服务名（一般是项目名），`language`＝语言 id。
 ///
-/// 这是“新建后端积木文档”唯一的入口，所以新文档的规矩版本在这里定：默认读开关 `kLangRulesForNewDocs`（lang/rules.dart）。
-BeDocument backendStarterDocument(String name, {String language = kBeDefaultLanguage, int port = kBeDefaultPort, int rules = kLangRulesForNewDocs}) {
+/// 这是“新建后端积木文档”唯一的入口，所以新文档的规矩版本在这里定：默认读 `beNewDocRules`（backend_targets.dart；它默认跟着开关 `kLangRulesForNewDocs`）。
+BeDocument backendStarterDocument(String name, {String language = kBeDefaultLanguage, int port = kBeDefaultPort, int? rules}) {
+  rules ??= beNewDocRules;
   final id = bePathParam('id');
   final doc = BeDocument(
     name: name.trim().isEmpty ? '我的后端' : name.trim(),
@@ -29,6 +30,12 @@ BeDocument backendStarterDocument(String name, {String language = kBeDefaultLang
     rules: rules,
   );
   void route(String method, String path, List<LcBlock> body) => doc.addRoute(method, path)!.body.addAll(body);
+  // 严格规矩下“等于”不再把空和 "" 当成一样，所以可能是空的值先明着处理：网址参数“是空就用 \"\"”，请求内容的字段先问“是空”。
+  // 老规矩的样本一个字不变。
+  final strict = langRulesStrict(rules);
+  final who = strict ? {'e': 'orElse', 'x': beQuery('name'), 'd': exText('')} : beQuery('name');
+  final title = beBodyField('title');
+  final noTitle = strict ? {'e': 'logic', 'op': 'or', 'l': beIsNull(title), 'r': exBin('==', title, exText(''))} : exBin('==', title, exText(''));
   LcBlock notFound() => _if(beIsNull(beDbGet('todos', id)), [
     _json(
       404,
@@ -41,12 +48,12 @@ BeDocument backendStarterDocument(String name, {String language = kBeDefaultLang
   // 问候：/hello?name=小明 → 带名字；没带名字 → 你好，世界
   route('GET', '/hello', [
     _if(
-      exBin('!=', beQuery('name'), exText('')),
+      exBin('!=', who, exText('')),
       [
         _json(
           200,
           beObj({
-            'message': exJoin([exText('你好，'), beQuery('name'), exText('！')]),
+            'message': exJoin([exText('你好，'), who, exText('！')]),
           }),
         ),
       ],
@@ -59,7 +66,7 @@ BeDocument backendStarterDocument(String name, {String language = kBeDefaultLang
   // 待办：增删改查
   route('GET', '/todos', [_json(200, beDbAll('todos'))]);
   route('POST', '/todos', [
-    _if(exBin('==', beBodyField('title'), exText('')), [
+    _if(noTitle, [
       _json(400, beObj({'error': exText('缺少 title')})),
     ]),
     _b('dbInsert', {

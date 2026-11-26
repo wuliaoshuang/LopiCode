@@ -47,7 +47,7 @@ import 'package:material_ui/material_ui.dart';
 /// 改动后等多久再存盘 + 重新生成（连着改几下只存一次）。
 const Duration kBackendSaveDelay = Duration(milliseconds: 500);
 
-/// “⋯”菜单里出不出现“升级到严格规矩…”。默认跟着 [kStrictRulesUpgradeEnabled]（现在是关）；测试里可以改成 true 来测升级那条路，测完改回去。
+/// “⋯”菜单里出不出现“升级到严格规矩…”。默认跟着 [kStrictRulesUpgradeEnabled]（现在是开）；测试里可以改，测完改回去。
 @visibleForTesting
 bool beStrictUpgradeEntry = kStrictRulesUpgradeEnabled;
 
@@ -532,7 +532,7 @@ class BackendScreenState extends ConsumerState<BackendScreen> {
             ),
             PopupMenuItem(key: const ValueKey('be-menu-data'), value: 'data', child: _menuRow(Icons.data_object_rounded, '变量与集合（${host.doc.variables.length} + ${host.doc.collections.length}）')),
             PopupMenuItem(key: const ValueKey('be-menu-settings'), value: 'settings', child: _menuRow(Icons.tune_rounded, '服务设置（端口 ${host.doc.port}）')),
-            // 规矩版本：已经是严格规矩的只说一声（不能点）；老规矩的文档给“升级”的入口——入口现在默认不出现（beStrictUpgradeEntry）。
+            // 规矩版本：已经是严格规矩的只说一声（不能点）；老规矩的文档给“升级”的入口（beStrictUpgradeEntry 管出不出现，现在默认出现）。
             // 类型与类、模块：只有严格规矩的文档才有（老规矩的文档这个菜单一项不多）。
             if (host.strictRules) PopupMenuItem(key: const ValueKey('be-menu-types'), value: 'types', child: _menuRow(Icons.category_outlined, '类型与类（${host.core.types.length}）…')),
             if (host.strictRules) PopupMenuItem(key: const ValueKey('be-menu-modules'), value: 'modules', child: _menuRow(Icons.view_module_outlined, '模块（${host.core.modules.length}）…')),

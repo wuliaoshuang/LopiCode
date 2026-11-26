@@ -362,46 +362,42 @@ void main() {
         await shot(tester, 'blocks-menu');
       });
 
+      // 一份带类型问题的后端文档：参数要整数给了文字、要文字给了整数、条件位放了整数。[rules]＝规矩版本。
+      void typeSeed(Project project, int rules) {
+        final file = File(p.join(project.dir, kBackendFileName));
+        final json = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
+        json['rules'] = rules;
+        json['functions'] = [
+          fb.fnDef(
+            'f1',
+            '加倍',
+            [
+              {'name': 'x', 'type': lTypeToJson(LType.integer)},
+            ],
+            [fb.ret(bk.op2('*', fb.pm('x'), bk.nm(2)))],
+          ),
+          fb.fnDef(
+            'f2',
+            '喊',
+            [
+              {'name': '话', 'type': lTypeToJson(LType.text)},
+            ],
+            [fb.ret(fb.pm('话'))],
+          ),
+        ];
+        json['routes'] = [
+          bk.route('r1', 'GET', '/a', [
+            bk.let('total', fb.call('f1', {'x': bk.tx('12')})),
+            bk.let('b', fb.call('f2', {'话': bk.nm(3)})),
+            bk.iff(bk.nm(1), [bk.json(bk.vr('total'))], noElse: true),
+            bk.json(bk.nm(1)),
+          ]),
+        ];
+        file.writeAsStringSync(jsonEncode(json));
+      }
+
       testWidgets('后端积木页 · 严格规矩的文档：类型问题标红、点角标出小卡和修法按钮', (tester) async {
-        final (env, project, session) = await open(
-          tester,
-          ProjectTemplate.backendBlocks,
-          language: 'node',
-          fakePty: true,
-          before: (project) {
-            // 一份带类型问题的文档（规矩版本 2）：参数要整数给了文字、要文字给了整数、条件位放了整数。
-            final file = File(p.join(project.dir, kBackendFileName));
-            final json = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
-            json['rules'] = 2;
-            json['functions'] = [
-              fb.fnDef(
-                'f1',
-                '加倍',
-                [
-                  {'name': 'x', 'type': lTypeToJson(LType.integer)},
-                ],
-                [fb.ret(bk.op2('*', fb.pm('x'), bk.nm(2)))],
-              ),
-              fb.fnDef(
-                'f2',
-                '喊',
-                [
-                  {'name': '话', 'type': lTypeToJson(LType.text)},
-                ],
-                [fb.ret(fb.pm('话'))],
-              ),
-            ];
-            json['routes'] = [
-              bk.route('r1', 'GET', '/a', [
-                bk.let('total', fb.call('f1', {'x': bk.tx('12')})),
-                bk.let('b', fb.call('f2', {'话': bk.nm(3)})),
-                bk.iff(bk.nm(1), [bk.json(bk.vr('total'))], noElse: true),
-                bk.json(bk.nm(1)),
-              ]),
-            ];
-            file.writeAsStringSync(jsonEncode(json));
-          },
-        );
+        final (env, project, session) = await open(tester, ProjectTemplate.backendBlocks, language: 'node', fakePty: true, before: (project) => typeSeed(project, 2));
         await show(tester, env, ProjectShell(project: project, session: session, initial: ShellDest.builder));
         final editor = tester.state<BlockEditorViewState>(find.byType(BlockEditorView));
         await tester.drag(find.byKey(const ValueKey('bk-palette-grip')), const Offset(0, 300), warnIfMissed: false);
@@ -428,6 +424,19 @@ void main() {
         await tester.tap(find.byKey(const ValueKey('bk-issues')));
         await tester.pumpAndSettle();
         await shot(tester, 'blocks-type-list');
+      });
+
+      testWidgets('后端积木页 · 老规矩的文档：“升级到严格规矩”面板（多出几条、哪些能一键修、逐条清单）', (tester) async {
+        final (env, project, session) = await open(tester, ProjectTemplate.backendBlocks, language: 'node', fakePty: true, before: (project) => typeSeed(project, 1));
+        await show(tester, env, ProjectShell(project: project, session: session, initial: ShellDest.builder));
+        await tester.tap(find.byKey(const ValueKey('be-more')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('be-menu-strict')));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const ValueKey('be-strict-sheet')), findsOneWidget);
+        expect(find.byKey(const ValueKey('be-strict-how')), findsOneWidget);
+        expect(find.byKey(const ValueKey('be-strict-item-0')), findsOneWidget);
+        await shot(tester, 'blocks-upgrade');
       });
 
       testWidgets('后端积木页 · 核心 2：新积木在画布上、积木盒的“错误”“类型”页、类型与类 / 一个类型 / 方法 / 模块 / 一个模块的面板、类的画布', (tester) async {

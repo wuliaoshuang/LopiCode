@@ -8,10 +8,12 @@ import 'package:lopicode/backend/backend_core.dart';
 import 'package:lopicode/backend/backend_core_edit.dart';
 import 'package:lopicode/backend/backend_core_gen.dart';
 import 'package:lopicode/backend/backend_model.dart';
+import 'package:lopicode/backend/backend_targets.dart';
 import 'package:lopicode/backend/backend_templates.dart';
 import 'package:lopicode/backend/backend_type_bridge.dart';
 import 'package:lopicode/backend/backend_validate.dart';
 import 'package:lopicode/lang/gen2_all.dart';
+import 'package:lopicode/lang/rules.dart';
 
 import 'support/backend_conformance.dart';
 import 'support/backend_core_samples.dart';
@@ -20,6 +22,10 @@ import 'support/backend_lang_blocks.dart';
 import 'support/backend_lang_blocks_routes.dart';
 
 void main() {
+  // 这个文件考的是老规矩（规矩版本 1）的行为：新建的文档现在默认是严格规矩，这里钉回 1，测完改回去。
+  setUp(() => beNewDocRules = kLangRulesLoose);
+  tearDown(() => beNewDocRules = kLangRulesForNewDocs);
+
   test('样例至少 8 个，六类每一类都有', () {
     expect(coreSamples.length, greaterThanOrEqualTo(8));
     expect({for (final s in coreSamples) ...s.covers}, {1, 2, 3, 4, 5, 6});

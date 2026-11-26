@@ -30,7 +30,10 @@ typedef BeGenerated = ({BackendTarget target, Map<String, String> files});
 /// 严格规矩的后端文档走不走新的生成（“接口服务”库那条路）。默认跟着 [kLangStrictBackendGen]；测试里可以改，测完改回去。
 bool beStrictBackendGen = kLangStrictBackendGen;
 
-/// 严格规矩的生成关着的时候，严格文档为什么不生成、不启动（给人看的原话）。
+/// 新建的后端文档用哪个规矩版本。默认跟着 [kLangRulesForNewDocs]（现在是 2，严格规矩）；考老规矩行为的测试里可以改成 1，测完改回去。
+int beNewDocRules = kLangRulesForNewDocs;
+
+/// 严格规矩的生成关着的时候（现在默认开着，只有把开关改回去或者测试里关掉才会走到），严格文档为什么不生成、不启动（给人看的原话）。
 const String kBeStrictGenPending = '这份积木用的是严格规矩，严格规矩的代码生成还没有接上：照老办法生成的话，除以 0 还是得 0，“变成整数 / 是空就用 / 一定不是空”这几块也生成不出来，和标红说的对不上。所以代码没有更新（上一次生成的文件原样留着）';
 
 /// 这份文档是不是“严格规矩、但严格生成关着”。

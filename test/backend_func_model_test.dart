@@ -15,6 +15,7 @@ import 'package:lopicode/backend/backend_targets.dart';
 import 'package:lopicode/backend/backend_templates.dart';
 import 'package:lopicode/backend/backend_validate.dart';
 import 'package:lopicode/blocks/block_host.dart';
+import 'package:lopicode/lang/rules.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 
 import 'support/backend_conformance.dart';
@@ -38,6 +39,10 @@ List<LcLogicIssue> issuesOf(BeDocument doc, String rule) => [
 ];
 
 void main() {
+  // 这个文件考的是老规矩（规矩版本 1）的行为：新建的文档现在默认是严格规矩，这里钉回 1，测完改回去。
+  setUp(() => beNewDocRules = kLangRulesLoose);
+  tearDown(() => beNewDocRules = kLangRulesForNewDocs);
+
   group('读写', () {
     test('往返：带函数的样本文档读进来再写出去再读，内容一样；functions 排在 routes 后面，版本是 3', () {
       final source = funcBlocksDocumentJson();

@@ -1,7 +1,9 @@
 // 设计约束（后端积木·类型相关的三张底部面板，390 宽，浅色 + 深色）— 2026-11-26
-// - 升级到严格规矩：标题一行；一句话说这是什么；下面“会变的地方”一条一行（上：变什么，下：小字说明）；
-//   再一行说“现在升级会多出几处要改的”（照现在的积木真查出来的数）；一行小字说后果（存盘后回不去，刚升完能撤销）。
-//   主操作＝“升级”（实心按钮），次操作＝“先不升”（文字按钮），上下排，不并排挤。
+// - 升级到严格规矩（2026-11-27 重排）：标题一行；紧跟一块说结果的（最要紧，放最前）：第一行“升级后会多出几处要改的”，
+//   第二行“其中几处能一键修，几处要自己改”（照现在的积木真查出来的数；没有要改的就一句“没有要改的地方”）。
+//   下面“会多出的问题”一条一行：上＝在哪（小字次要色），中＝什么问题，右＝“能一键修”（强调色）或“自己改”（次要色）的小字；
+//   最多列 [_kMaxListed] 条，多的说“还有几条，升级后在问题列表里看”。再下面“升级后这些地方会变”一条一行（上：变什么，下：小字说明）；
+//   最后一行小字说后果（存盘后回不去，刚升完能撤销）。主操作＝“升级”（实心按钮），次操作＝“先不升”（文字按钮），上下排，不并排挤。
 // - 标类型（“定义”帽子）：标题一行（哪块积木）；每个参数一行（左：名字，右：现在的类型，没标是灰色“没标”）；最后一行“交回什么”。
 //   点一行进“选类型”。主操作＝点一行去改。
 // - 选类型：一种类型一行（单选）；选了“列表 / 字典”才多出一行“里面放什么”（下拉）；最后一行开关“可以是空”。
@@ -14,6 +16,9 @@ import 'package:lopicode/lang/types.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:material_ui/material_ui.dart';
 
+/// 升级面板里“会多出的问题”最多列几条。
+const int _kMaxListed = 8;
+
 /// “升级到严格规矩”的确认面板。点了“升级”就升（一条撤销记录）并返回 true。
 Future<bool> showBeUpgradeStrict(BuildContext context, BeBlockHost host) async {
   final preview = host.previewStrict();
@@ -25,8 +30,12 @@ Future<bool> showBeUpgradeStrict(BuildContext context, BeBlockHost host) async {
       final c = sheet.colors;
       final t = Theme.of(sheet).textTheme;
       final after = preview.errors > 0
-          ? '照现在的积木，升级后会有 ${preview.errors} 处标红要改${preview.others > 0 ? '、${preview.others} 处提醒' : ''}。改好之前不会生成新代码，现在的代码原样留着。'
+          ? '照现在的积木，升级后会有 ${preview.errors} 处标红要改${preview.others > 0 ? '、${preview.others} 处提醒' : ''}。'
           : (preview.others > 0 ? '照现在的积木，升级后没有要改的错误，有 ${preview.others} 处提醒。' : '照现在的积木，升级后没有要改的地方。');
+      final byHand = preview.errors - preview.fixable;
+      final how = preview.errors == 0 ? null : '${preview.fixable > 0 ? '其中 ${preview.fixable} 处能一键修' : '都要自己改'}${preview.fixable > 0 && byHand > 0 ? '，$byHand 处要自己改' : ''}。改好之前不会生成新代码，现在的代码原样留着。';
+      final listed = preview.items.take(_kMaxListed).toList();
+      final rest = preview.items.length - listed.length;
       return SafeArea(
         top: false,
         child: ConstrainedBox(
@@ -37,18 +46,81 @@ Future<bool> showBeUpgradeStrict(BuildContext context, BeBlockHost host) async {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x1),
-                child: Text('升级到严格规矩', style: t.titleMedium),
-              ),
-              Padding(
                 padding: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x2),
-                child: Text('严格规矩会检查每个地方放的东西对不对，错的当场标出来，而不是悄悄换算。升级后这些地方会变：', style: t.bodySmall?.copyWith(color: c.textMuted)),
+                child: Text('升级到严格规矩', style: t.titleMedium),
               ),
               Flexible(
                 child: ListView(
                   shrinkWrap: true,
                   padding: const EdgeInsets.symmetric(horizontal: Space.x4),
                   children: [
+                    const SizedBox(height: Space.x1),
+                    DecoratedBox(
+                      decoration: BoxDecoration(color: preview.errors > 0 ? c.warningSoft : c.surfaceMuted, borderRadius: BorderRadius.circular(12)),
+                      child: Padding(
+                        padding: const EdgeInsets.all(Space.x3),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              after,
+                              key: const ValueKey('be-strict-preview'),
+                              style: t.bodyMedium?.copyWith(color: c.text, fontWeight: FontWeight.w600),
+                            ),
+                            if (how != null) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                how,
+                                key: const ValueKey('be-strict-how'),
+                                style: t.bodySmall?.copyWith(color: c.text),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                    if (listed.isNotEmpty) ...[
+                      const SizedBox(height: Space.x4),
+                      Text('会多出的问题', style: t.labelLarge?.copyWith(color: c.textMuted)),
+                      for (final (i, it) in listed.indexed)
+                        Padding(
+                          key: ValueKey('be-strict-item-$i'),
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    if (it.where.isNotEmpty)
+                                      Text(
+                                        it.where,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: t.bodySmall?.copyWith(color: c.textMuted),
+                                      ),
+                                    Text(it.problem, style: t.bodyMedium),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: Space.x3),
+                              Text(
+                                it.fixable ? '能一键修' : (it.isError ? '自己改' : '提醒'),
+                                style: t.bodySmall?.copyWith(color: it.fixable ? c.accent : c.textMuted, fontWeight: it.fixable ? FontWeight.w600 : FontWeight.w400),
+                              ),
+                            ],
+                          ),
+                        ),
+                      if (rest > 0)
+                        Text(
+                          '还有 $rest 条，升级后在问题列表里看。',
+                          key: const ValueKey('be-strict-rest'),
+                          style: t.bodySmall?.copyWith(color: c.textMuted),
+                        ),
+                    ],
+                    const SizedBox(height: Space.x4),
+                    Text('升级后这些地方会变', style: t.labelLarge?.copyWith(color: c.textMuted)),
                     for (final (i, ch) in kBeStrictChanges.indexed)
                       Padding(
                         key: ValueKey('be-strict-change-$i'),
@@ -62,14 +134,6 @@ Future<bool> showBeUpgradeStrict(BuildContext context, BeBlockHost host) async {
                           ],
                         ),
                       ),
-                    const SizedBox(height: Space.x2),
-                    DecoratedBox(
-                      decoration: BoxDecoration(color: c.surfaceMuted, borderRadius: BorderRadius.circular(12)),
-                      child: Padding(
-                        padding: const EdgeInsets.all(Space.x3),
-                        child: Text(after, key: const ValueKey('be-strict-preview'), style: t.bodyMedium),
-                      ),
-                    ),
                     const SizedBox(height: Space.x2),
                     Text('升级并存盘以后不能降回老规矩；刚升完后悔，可以马上点“撤销”。', style: t.bodySmall?.copyWith(color: c.textMuted)),
                   ],

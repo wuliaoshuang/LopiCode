@@ -8,9 +8,14 @@ import 'package:lopicode/backend/backend_templates.dart';
 import 'package:lopicode/backend/backend_validate.dart';
 import 'package:lopicode/blocks/block_colors.dart';
 import 'package:lopicode/blocks/block_host.dart';
+import 'package:lopicode/lang/rules.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 
 void main() {
+  // 这个文件考的是老规矩（规矩版本 1）的行为：新建的文档现在默认是严格规矩，这里钉回 1，测完改回去。
+  setUp(() => beNewDocRules = kLangRulesLoose);
+  tearDown(() => beNewDocRules = kLangRulesForNewDocs);
+
   late BeBlockHost host;
   late int edited;
   late List<String> notices;

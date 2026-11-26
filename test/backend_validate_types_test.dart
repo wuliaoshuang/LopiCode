@@ -30,9 +30,9 @@ const String _mixedPush = '往列表里加的东西要文字，放进来的是�
 const String _nullableQuery = '「变成数字」的第 1 个参数要文字，这个值可能是空，要先判断“不是空”';
 
 void main() {
-  test('开关现在的值：新文档还是规矩版本 1（后端的严格生成还没接上，见 B-gen-notes.md 第 5 节）', () {
-    expect(kLangRulesForNewDocs, kLangRulesLoose);
-    expect(backendStarterDocument('样本').rules, kLangRulesLoose);
+  test('开关现在的值：新文档是规矩版本 2（后端的严格生成接上了，见 B-gen-notes.md 15.2.2）', () {
+    expect(kLangRulesForNewDocs, kLangRulesStrict);
+    expect(backendStarterDocument('样本').rules, kLangRulesStrict);
   });
 
   test('版本 1 的文档：一条类型规则都不报', () {

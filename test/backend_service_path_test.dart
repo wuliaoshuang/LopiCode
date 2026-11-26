@@ -1,6 +1,6 @@
 // 库 1·A1：后端文档 → 翻译（backend_to_service.dart）→ 内置库“接口服务”（lib_service.dart）→ 版本 2 生成器，这条产品路径。
 // 拿一致性样本里只考服务这一层的那些请求（期望一个字不改）在五种语言里真起服务比：状态码、Content-Type、内容逐字节。
-// 服务只开在本机回环地址的随机端口上，不联外网。开关（kLangStrictBackendGen）关着，这里是直接调翻译。
+// 服务只开在本机回环地址的随机端口上，不联外网。这里是直接调翻译（不看开关）。
 @Tags(['external'])
 @Timeout(Duration(minutes: 30))
 library;
@@ -23,10 +23,10 @@ import 'support/service_strict_doc.dart';
 void main() {
   final cases = serviceCases();
 
-  test('三个开关都还关着', () {
-    expect(kLangStrictBackendGen, isFalse);
-    expect(kStrictRulesUpgradeEnabled, isFalse);
-    expect(kLangRulesForNewDocs, kLangRulesLoose);
+  test('三个开关都开了（库 1 下半，2026-11-27）', () {
+    expect(kLangStrictBackendGen, isTrue);
+    expect(kStrictRulesUpgradeEnabled, isTrue);
+    expect(kLangRulesForNewDocs, kLangRulesStrict);
   });
 
   test('内置库读得进来、查不出问题：19 块积木、3 个类型、2 个设置项', () {

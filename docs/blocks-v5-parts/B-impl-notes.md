@@ -185,7 +185,8 @@ LTypeResult checkTypes({decls, main, scripts: [LTypeScript(name, body, vars: {�
 - 常量：`kLangRulesLoose = 1`、`kLangRulesStrict = 2`、`kLangRulesLatest`、字段名 `kLangRulesField = 'rules'`，都在 `lib/lang/rules.dart`。
 - 文档上：`BeDocument.rules`（整数）。存盘在最外层 `"rules": 2`；**是 1 就不写**，所以旧文档存出来和以前一个字节不差。读：没有、不是整数、小于 1 都当 1；比 2 大的原样留着。`clone()` 带着。
 - **开关**：`kLangRulesForNewDocs`（`lib/lang/rules.dart`）。新建后端积木文档唯一的入口 `backendStarterDocument(name, {language, port, rules = kLangRulesForNewDocs})` 读它；界面层（`lib/ui/backend_screen.dart` 两处）不用改。
-- **现在开关是 1。** 原因：严格规矩的生成路径还没有。现在就把新文档标成 2，它实际还是按老规矩检查、生成；等生成路径接上，这些“版本 2”的文档行为又变一次——正好违反版本号要保证的事。
+- **2026-11-27（库 1 下半）起开关是 2**，`kLangStrictBackendGen`、`kStrictRulesUpgradeEnabled` 也都开了；跟着改的断言见 A2 的汇报。下面几条是当初为什么是 1，留作记录。
+- **那时开关是 1。** 原因：严格规矩的生成路径还没有。现在就把新文档标成 2，它实际还是按老规矩检查、生成；等生成路径接上，这些“版本 2”的文档行为又变一次——正好违反版本号要保证的事。
 - **谁来翻成 2**：生成器那一段，在“版本 2 的后端文档真的走严格检查＋严格生成”接上的同一个提交里，把这一行改成 `kLangRulesStrict`。
 - **翻成 2 以后哪些现有断言会坏**：我临时翻过去跑了全量测试，结果见本节末尾的表。
 - 版本 1 的文档：不调用 `checkTypes`，校验结果、五种语言的生成结果逐字不变。钉子是 `test/rules_v1_frozen_test.dart`（4 份样本文档 × 5 种语言每个生成文件的指纹、`validateBackend` 逐条原文、7 组语言核心用例的生成指纹和检查结果，记录在 `test/golden/rules_v1_frozen.txt`）。这份记录是**在动产品代码之前**生成的。只有真的要改版本 1 的行为才能重出（`LOPI_GOLDEN_WRITE=1 flutter test test/rules_v1_frozen_test.dart`）。
