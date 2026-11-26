@@ -75,6 +75,17 @@ Java 里被匿名函数捕获又会被改的局部变量装进 `Lc.Ref`。
   不会误报；版本 2 的生成器遇到会明说“还没有”。其中 abs / max / min 和带步长的数列要“整数进整数出、小数进小数出”，
   现在的签名表一个名字只能写一种参数，表达不了——得先定是拆成两个名字还是给签名表加“数字”这种约束（设计上没写）。
 
+### 5.2 和界面段（分支 v5-typeui）的临时桥怎么对
+
+- 界面段的 `backend_type_bridge.dart`：`beTypeCheck(doc)` → `BeTypeCheck`（整份结果＋每条问题落到哪一格 `BeSlotRef`，带式子里的位置和一键修），
+  靠它那边在翻译器里加的 `origins` 表和“没用到第 4 版积木的接口也翻”（`all`）。
+- 这一段的 `backend_validate_types.dart`：`beTypeFindings(doc, route)` / `beFuncTypeFindings(doc, table, f)` → `BeLangFinding`
+  （规则号、是不是错、提示语、哪一块、哪个参数、怎么改），只靠原有的来源表；只查用到第 4 版积木的接口和“我的积木”。
+- 差别：这边粒度到“哪块积木的哪个参数”，不到式子里的位置；只用旧积木的接口这边不查；文档变量和“这次请求”两边都当“任意”；
+  同一格上已有类型问题时两边都不再显示 G10。
+- 合并建议：以界面段的 `beTypeCheck` 为准（它更细），把这边 `beTypeFindings` 的函数体换成“调 `beTypeCheck`、把 `BeTypeFinding` 转成
+  `BeLangFinding`”，`validateBackend` 里的两处调用不用动；`test/backend_validate_types_test.dart` 里的条数要按合并后的结果重对一遍。
+
 ## 6. 验收
 
 `test/lang_gen2_proto_test.dart`（标了 `external`）：16 个程序 × 五种语言生成、真编译、真跑，和 `expect.txt` 逐字节比；
