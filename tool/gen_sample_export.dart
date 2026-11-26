@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:lopicode/lowcode/export_dart.dart';
 
 import '../test/support/sample_doc.dart';
+import '../test/support/slot_sample.dart';
 import '../test/support/v3_components_sample.dart';
 import '../test/support/v3_sample.dart';
 
@@ -17,5 +18,7 @@ void main() {
   File('test/generated/v3_settings_page.dart').writeAsStringSync(exportDart(v3SettingsPage(), className: 'V3SettingsPage'));
   File('test/generated/v3_home_page.dart').writeAsStringSync(exportDart(v3HomePage(), className: 'V3HomePage'));
   File('test/generated/v3_all_page.dart').writeAsStringSync(exportDart(v3AllPage(), className: 'V3AllPage'));
+  // 第 3 期第 3 段：带插槽的自定义组件（test/lowcode_slots_export_test.dart 会 import 它）。
+  File('test/generated/slot_card_page.dart').writeAsStringSync(exportDart(slotCardPage(), className: 'SlotCardPage'));
   stdout.writeln('ok');
 }

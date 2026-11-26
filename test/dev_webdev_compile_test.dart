@@ -16,6 +16,7 @@ import 'lowcode_export_vue_test.dart' show nastyJson;
 import 'support/dev_tools.dart';
 import 'support/lowcode_samples.dart';
 import 'support/sample_doc.dart';
+import 'support/slot_sample.dart';
 import 'support/v3_components_sample.dart';
 import 'support/v3_sample.dart';
 
@@ -37,6 +38,8 @@ void main() {
     '新建页面的默认内容': () => LcDocument.starter('我的页面'),
     // 第 3 期第 2 段：11 个新组件的四个样例页
     ...v3ComponentSamples(),
+    // 第 3 期第 3 段：带插槽的自定义组件
+    '带插槽的商品卡片': slotCardPage,
   };
 
   for (final kind in ['vue', 'react']) {
@@ -61,6 +64,22 @@ void main() {
         expect(r.ok, isTrue, reason: r.raw);
         expect(e.files.length, greaterThan(1), reason: '样本带自定义组件，应该不止一个文件');
         expect(RegExp(r'>[^<>]*[\u4e00-\u9fff][^<>]*<').hasMatch(r.html), isTrue, reason: '网页里应该有中文文字：${r.html}');
+      }, skip: skipWithoutWebdev);
+
+      test('带插槽的商品卡片：填进去的内容和默认内容各在该在的位置', () async {
+        final e = kind == 'vue' ? exportVue(slotCardPage()) : exportReact(slotCardPage());
+        final r = await compileExport(kind == 'vue' ? 'compile_vue.mjs' : 'compile_react.mjs', _files(e), _entry(e, kind == 'vue' ? '.vue' : '.jsx'));
+        expect(r.ok, isTrue, reason: r.raw);
+        final order = ['今日推荐', '草莓蛋糕', '新鲜草莓，当天现做', '¥ 68', '立即购买', '收藏', '商品名', '暂无介绍', '加入购物车'];
+        var at = -1;
+        for (final t in order) {
+          final i = r.html.indexOf(t, at + 1);
+          expect(i, greaterThan(at), reason: '“$t”不在该在的位置：${r.html}');
+          at = i;
+        }
+        expect('暂无介绍'.allMatches(r.html).length, 1, reason: '填了内容的那个实例里不该再有默认内容：${r.html}');
+        expect('加入购物车'.allMatches(r.html).length, 1, reason: r.html);
+        expect('草莓蛋糕'.allMatches(r.html).length, 1, reason: r.html);
       }, skip: skipWithoutWebdev);
 
       test('编译器真的在把关：故意写坏的文件会报错', () async {
