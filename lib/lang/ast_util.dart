@@ -81,10 +81,12 @@ List<String> lDeclaredNames(List<LStmt> list) {
           add(key);
           add(value);
           walk(body);
-        case LTry(:final body, :final errorName, :final onError, :final finallyBody):
+        case LTry(:final body, :final catches, :final finallyBody):
           walk(body);
-          add(errorName);
-          walk(onError);
+          for (final c in catches) {
+            add(c.name);
+            walk(c.body);
+          }
           walk(finallyBody);
         case LStmtV5(:final binds, :final childBlocks):
           binds.forEach(add);
@@ -111,9 +113,11 @@ void lWalk(List<LStmt> list, void Function(LStmt s) visit) {
         lWalk(orElse, visit);
       case LWhile(:final body) || LRepeat(:final body) || LForCount(:final body) || LForEach(:final body) || LForPairs(:final body):
         lWalk(body, visit);
-      case LTry(:final body, :final onError, :final finallyBody):
+      case LTry(:final body, :final catches, :final finallyBody):
         lWalk(body, visit);
-        lWalk(onError, visit);
+        for (final c in catches) {
+          lWalk(c.body, visit);
+        }
         lWalk(finallyBody, visit);
       case LStmtV5(:final childBlocks):
         for (final b in childBlocks) {

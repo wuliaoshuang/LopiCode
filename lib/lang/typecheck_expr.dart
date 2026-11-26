@@ -30,6 +30,11 @@ mixin _Exprs on _Core {
         final k = find(sc, name);
         if (k != null) {
           final t = w.res(vt[k]!.t);
+          final n = narrowed(sc, name);
+          if (n != null && n != t) {
+            op(e, 'narrow');
+            return n;
+          }
           return sc.nn.contains(name) ? t.nonNull : t;
         }
         final f = w.funcs[name];
@@ -453,6 +458,10 @@ mixin _Exprs on _Core {
       final f = d.fields.where((x) => x.name == name).firstOrNull;
       if (f != null) return w.res(w.subst(w.resolve(f.type, _tvOf(d)), _recordArgs(d, t)));
     } else if (w.isClass(t)) {
+      if (name == kErrKindField && isErr(t)) {
+        op(node, 'errKind');
+        return _txt;
+      }
       final got = w.classField(w.classes[t.name], name);
       if (got != null) {
         final (ft, c) = got;

@@ -10,7 +10,8 @@ const String kRt2PhpSource = r'''<?php
 // LopiCode 积木的小库（PHP，严格规矩）。由 LopiCode 生成，别手改。
 declare(strict_types=1);
 
-class LcError extends Exception {}
+// 抛出去的错：外面这层带着那句话；obj 是错误对象（小库自己报的错没有，接住的时候才按种类造）。
+class LcError extends Exception { public ?object $obj = null; }
 class LcRec {}
 class LcVariant extends LcRec {}
 class LcEnum { public function __construct(public string $name, public int $index) {} }
@@ -355,8 +356,26 @@ final class Lc {
   // —— 输出：攒起来，最后一次写出 ——
   static function log(string $s): void { self::$out[] = $s; }
   static function run(Closure $main): void {
-    try { $main(); } catch (LcError $e) { self::$out[] = "出错：" . $e->getMessage(); }
+    $failed = false;
+    try { $main(); } catch (LcError $e) { self::$out[] = "出错：" . $e->getMessage(); $failed = true; }
     fwrite(STDOUT, implode("\n", self::$out) . "\n");
+    if ($failed) exit(1);
+  }
+
+  // —— 错误对象 ——
+  private const ERR_KINDS = [["除以 0", "数值不对"], ["整数超出范围", "数值不对"], ["变不成整数", "数值不对"], ["超出了", "找不到"], ["拿到的是", "类型不对"], ["值是空", "类型不对"]];
+  private static ?Closure $errMake = null;
+  static function errKind(string $m): string {
+    foreach (self::ERR_KINDS as [$part, $k]) { if (str_contains($m, $part)) return $k; }
+    return "错误";
+  }
+  static function errSetup(Closure $f): void { self::$errMake = $f; }
+  static function errOf(string $m, object $obj): LcError { $e = new LcError($m); $e->obj = $obj; return $e; }
+  static function errObj(LcError $e): object {
+    if ($e->obj === null) $e->obj = (self::$errMake)(self::errKind($e->getMessage()), $e->getMessage());
+    return $e->obj;
+  }
+  static function kindOf(object $x): string { return $x::lcName;
   }
 }
 ''';

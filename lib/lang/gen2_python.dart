@@ -88,13 +88,34 @@ class PythonGen2 extends Gen2Dyn {
   String _fieldsOf(String cls) => 'lcf_${v2Ident(cls)}';
 
   @override
-  List<String> tryLines(LTry s, List<String> Function(List<LStmt>) gen, String? errTarget) {
+  List<String> throwObjLines(String obj, String message) => ['raise lc.LcError($message, $obj)'];
+  @override
+  String errObjCode(String e) => 'lc.errObj($e)';
+  @override
+  List<String> rethrowLines(String e) => ['raise'];
+  @override
+  String errKindCode(String obj, LType type) => 'lc.kindOf($obj)';
+  @override
+  String errNarrow(String code, LType from, LType to) => code;
+  @override
+  List<String> errSupport() => [
+    'def lc_err_make(lcK, lcM):',
+    ...suite([
+      for (final (k, make) in errMakers('lcM').skip(1)) ...['if lcK == ${textLit(k)}:', ...suite(['return $make'])],
+      'return ${errMakers('lcM').first.$2}',
+    ]),
+    '',
+    '',
+    'lc.errSetup(lc_err_make)',
+  ];
+
+  @override
+  List<String> tryFrame(LTry s, List<String> Function(List<LStmt>) gen, List<String> Function(String e)? handler) {
     final e = tmpName('E');
     return [
       'try:',
       ...suite(gen(s.body)),
-      'except lc.LcError as $e:',
-      ...suite([if (errTarget != null) '$errTarget = str($e)', ...gen(s.onError)]),
+      if (handler != null) ...['except lc.LcError as $e:', ...suite(handler(e))],
       if (s.finallyBody.isNotEmpty) ...['finally:', ...suite(gen(s.finallyBody))],
     ];
   }

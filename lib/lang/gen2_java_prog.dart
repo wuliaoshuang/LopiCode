@@ -4,6 +4,7 @@ library;
 import 'package:lopicode/lang/ast.dart';
 import 'package:lopicode/lang/ast_util.dart';
 import 'package:lopicode/lang/gen2.dart';
+import 'package:lopicode/lang/gen2_err.dart';
 import 'package:lopicode/lang/gen2_java.dart';
 import 'package:lopicode/lang/rt2_java_dyn.dart';
 import 'package:lopicode/lang/type_world.dart';
@@ -51,13 +52,40 @@ class JavaGen2 extends JavaGen2Types {
   String stepsCode(String a, String b, String s, {required bool ints}) => 'Lc.${ints ? 'steps' : 'fsteps'}($a, $b, $s)';
 
   @override
-  List<String> tryLines(LTry s, List<String> Function(List<LStmt>) gen, String? errTarget) {
+  List<String> throwObjLines(String obj, String message) => ['throw new Lc.LcError($message, $obj);'];
+  @override
+  String errObjCode(String e) => 'lcErrObj($e)';
+  @override
+  List<String> rethrowLines(String e) => ['throw $e;'];
+  @override
+  String errKindCode(String obj, LType type) => '$obj.lcName()';
+  @override
+  List<String> errSupport() {
+    final et = jt(Gen2Err.errType);
+    return [
+      'static $et lcErrObj(Lc.LcError lcE) {',
+      ...indent([
+        'if (lcE.obj == null) {',
+        ...indent([
+          'final String lcM = lcE.getMessage();',
+          'switch (Lc.errKind(lcM)) {',
+          ...indent([for (final (k, make) in errMakers('lcM').skip(1)) 'case ${textLit(k)} -> lcE.obj = $make;', 'default -> lcE.obj = ${errMakers('lcM').first.$2};']),
+          '}',
+        ]),
+        '}',
+        'return ($et) lcE.obj;',
+      ]),
+      '}',
+    ];
+  }
+
+  @override
+  List<String> tryFrame(LTry s, List<String> Function(List<LStmt>) gen, List<String> Function(String e)? handler) {
     final e = tmpName('E');
     return [
       'try {',
       ...indent(gen(s.body)),
-      '} catch (Lc.LcError $e) {',
-      ...indent([if (errTarget != null) '$errTarget = $e.getMessage();', ...gen(s.onError)]),
+      if (handler != null) ...['} catch (Lc.LcError $e) {', ...indent(handler(e))],
       if (s.finallyBody.isNotEmpty) ...['} finally {', ...indent(gen(s.finallyBody))],
       '}',
     ];
@@ -69,7 +97,7 @@ class JavaGen2 extends JavaGen2Types {
   bool _stmtCompletes(LStmt s) => switch (s) {
     LReturn() || LThrow() || LBreak() || LContinue() => false,
     LIf(:final arms, :final orElse) => arms.isEmpty ? _completes(orElse) : orElse.isEmpty || arms.any((a) => _completes(a.body)) || _completes(orElse),
-    LTry(:final body, :final onError, :final finallyBody) => (_completes(body) || _completes(onError)) && _completes(finallyBody),
+    LTry(:final body, :final catches, :final finallyBody) => (_completes(body) || catches.any((c) => _completes(c.body))) && _completes(finallyBody),
     LMatch(:final arms, :final orElse) => arms.any((a) => _completes(a.body)) || (orElse != null && _completes(orElse)),
     _ => true,
   };
@@ -302,7 +330,8 @@ class JavaGen2 extends JavaGen2Types {
     }
 
     add([for (final g in globals) 'static ${jt(g.type)} ${varBase(V2Var(g, 0, global: true))} = ${zero(g.type)};']);
-    for (final d in module.decls) {
+    if (r.usesErrors) add(errSupport());
+    for (final d in decls) {
       switch (d) {
         case LRecordDecl():
           add(_recordDecl(d));

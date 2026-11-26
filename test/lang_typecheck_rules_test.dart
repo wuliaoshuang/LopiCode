@@ -15,8 +15,9 @@ LTypeIssue _one(LTypeResult r, String code) => r.issues.singleWhere((i) => i.cod
 
 void main() {
   group('新做的规则', () {
-    test('规则表：T01–T18 都在，级别照设计（T12 提醒，T13、T14 警告，其余是错）', () {
-      expect(kTypeRules.keys.toList(), [for (var i = 1; i <= 18; i++) 'T${'$i'.padLeft(2, '0')}']);
+    test('规则表：T01–T21 都在，级别照设计（T12 提醒，T13、T14 警告，其余是错）', () {
+      // 核心 2 加了 T19–T21（抛出 / 接住的不是错误、撞了内置错误的名字、这一节“出错时”永远轮不到）。
+      expect(kTypeRules.keys.toList(), [for (var i = 1; i <= 21; i++) 'T${'$i'.padLeft(2, '0')}']);
       for (final r in kTypeRules.values) {
         final want = r.code == 'T12' ? LTypeLevel.hint : (r.code == 'T13' || r.code == 'T14' ? LTypeLevel.warning : LTypeLevel.error);
         expect(r.level, want, reason: r.code);

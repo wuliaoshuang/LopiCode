@@ -46,13 +46,33 @@ class NodeGen2 extends Gen2Dyn {
   List<String> throwLines(String message) => ['throw new lc.LcError($message);'];
 
   @override
-  List<String> tryLines(LTry s, List<String> Function(List<LStmt>) gen, String? errTarget) {
+  List<String> throwObjLines(String obj, String message) => ['throw new lc.LcError($message, $obj);'];
+  @override
+  String errObjCode(String e) => 'lc.errObj($e)';
+  @override
+  List<String> rethrowLines(String e) => ['throw $e;'];
+  @override
+  String errKindCode(String obj, LType type) => 'lc.kindOf($obj)';
+  @override
+  String errNarrow(String code, LType from, LType to) => code;
+  @override
+  List<String> errSupport() => [
+    'lc.errSetup((lcK, lcM) => {',
+    ...indent([
+      'switch (lcK) {',
+      ...indent([for (final (k, make) in errMakers('lcM').skip(1)) 'case ${textLit(k)}: return $make;', 'default: return ${errMakers('lcM').first.$2};']),
+      '}',
+    ]),
+    '});',
+  ];
+
+  @override
+  List<String> tryFrame(LTry s, List<String> Function(List<LStmt>) gen, List<String> Function(String e)? handler) {
     final e = tmpName('E');
     return [
       'try {',
       ...indent(gen(s.body)),
-      '} catch ($e) {',
-      ...indent(['if (!($e instanceof lc.LcError)) throw $e;', if (errTarget != null) '$errTarget = $e.message;', ...gen(s.onError)]),
+      if (handler != null) ...['} catch ($e) {', ...indent(['if (!($e instanceof lc.LcError)) throw $e;', ...handler(e)])],
       if (s.finallyBody.isNotEmpty) ...['} finally {', ...indent(gen(s.finallyBody))],
       '}',
     ];

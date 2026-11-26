@@ -409,10 +409,29 @@ func Try(f func()) (msg string, ok bool) {
 	f()
 	return "", true
 }
+
+// TryE：和 Try 一样，交回来的是整个错（带着错误对象）。
+func TryE(f func()) (e Error, ok bool) {
+	defer func() {
+		if r := recover(); r != nil {
+			got, is := r.(Error)
+			if !is {
+				panic(r)
+			}
+			e, ok = got, false
+		}
+	}()
+	f()
+	return Error{}, true
+}
 func Run(main func()) {
-	if msg, ok := Try(main); !ok {
+	msg, ok := Try(main)
+	if !ok {
 		out = append(out, "出错："+msg)
 	}
 	os.Stdout.WriteString(strings.Join(out, "\n") + "\n")
+	if !ok {
+		os.Exit(1)
+	}
 }
 ''';

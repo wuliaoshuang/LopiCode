@@ -3,7 +3,9 @@
 library;
 
 import 'package:lopicode/lang/ast.dart';
+import 'package:lopicode/lang/errors.dart';
 import 'package:lopicode/lang/gen2.dart';
+import 'package:lopicode/lang/gen2_err.dart';
 import 'package:lopicode/lang/rt_v2.dart';
 import 'package:lopicode/lang/type_world.dart';
 import 'package:lopicode/lang/typecheck.dart';
@@ -81,6 +83,10 @@ mixin Gen2Expr on Gen2Base {
   String recordNew(LRecordDecl d, LType type, List<String> values);
   String recordCopy(LRecordDecl d, LType type, String of, Map<String, String> changes);
   String fieldGet(String of, LType ofType, String name, LField e);
+
+  /// 错误那一块（gen2_err.dart）要的两件：读“种类”、“出错时”里按这一节的种类看错误变量。
+  String errKindCode(String obj, LType type);
+  String errNarrow(String code, LType from, LType to);
   String variantNew(LVariantDecl d, LVariantCase c, List<String> args);
   String newObject(LClassInfo c, LType type, List<String> args);
   String send(String obj, LType objType, String method, List<String> args, LSend e);
@@ -140,7 +146,7 @@ mixin Gen2Expr on Gen2Base {
       case LName(:final name, :final kind):
         if (kind == LNameKind.host) unsupported('宿主给的名字「$name」', e);
         final v = lookup(name);
-        if (v != null) return conv(varCode(v), v.type, t(e));
+        if (v != null) return r.opOf(e) == 'narrow' ? errNarrow(varCode(v), v.type, t(e)) : conv(varCode(v), v.type, t(e));
         final f = r.funcs[name];
         if (f != null && w.funcs.containsKey(name)) return funcValue(f);
         unsupported('找不到「$name」', e);
@@ -168,6 +174,7 @@ mixin Gen2Expr on Gen2Base {
       case LField(:final of, :final name):
         final ot = t(of).nonNull;
         if (!ot.isNamed) unsupported('取字段「$name」：前面的值是${ot.show()}，不是记录也不是对象', e);
+        if (name == kErrKindField && r.opOf(e) == 'errKind') return conv(errKindCode(x(of, ot), ot), LType.text, t(e));
         return conv(fieldGet(x(of, ot), ot, name, e), fieldType(ot, name, e), t(e));
       case LSend():
         return _send(e);
@@ -397,7 +404,7 @@ mixin Gen2Expr on Gen2Base {
 }
 
 /// 一种语言的版本 2 生成器＝骨架＋式子。
-abstract class Gen2 extends Gen2Base with Gen2Expr {
+abstract class Gen2 extends Gen2Base with Gen2Expr, Gen2Err {
   Gen2(super.module, super.r);
 
   /// 这种语言的小库文件（相对路径 → 内容），和 [program] 生成的主文件放在一起就能跑。

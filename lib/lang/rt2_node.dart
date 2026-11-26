@@ -7,7 +7,16 @@ library;
 const String kRt2NodeSource = r'''
 // LopiCode 积木的小库（Node.js，严格规矩）。由 LopiCode 生成，别手改。
 "use strict";
-class LcError extends Error {}
+// 抛出去的错：外面这层带着那句话；obj 是错误对象（小库自己报的错没有，接住的时候才按种类造）。
+class LcError extends Error {
+  constructor(m, obj) { super(m); this.obj = obj === undefined ? null : obj; }
+}
+const ERR_KINDS = [["除以 0", "数值不对"], ["整数超出范围", "数值不对"], ["变不成整数", "数值不对"], ["超出了", "找不到"], ["拿到的是", "类型不对"], ["值是空", "类型不对"]];
+const errKind = (m) => { for (const [part, k] of ERR_KINDS) if (m.includes(part)) return k; return "错误"; };
+let errMake = null;
+const errSetup = (f) => { errMake = f; };
+const errObj = (e) => { if (e.obj === null) e.obj = errMake(errKind(e.message), e.message); return e.obj; };
+const kindOf = (x) => x.constructor.lcName;
 class Rec {}
 class Variant extends Rec {}
 class Enum { constructor(name, index) { this.name = name; this.index = index; Object.freeze(this); } }
@@ -247,12 +256,12 @@ function dtext(x) {
 const out = [];
 const log = (s) => { out.push(s); };
 function run(main) {
-  try { main(); } catch (e) { if (e instanceof LcError) out.push("出错：" + e.message); else throw e; }
+  try { main(); } catch (e) { if (e instanceof LcError) { out.push("出错：" + e.message); process.exitCode = 1; } else throw e; }
   process.stdout.write(out.join("\n") + "\n");
 }
 
 module.exports = {
-  LcError, Rec, Variant, Enum, Obj, MAX, fail, fmtNum, itext, boolText,
+  LcError, errKind, errSetup, errObj, kindOf, Rec, Variant, Enum, Obj, MAX, fail, fmtNum, itext, boolText,
   iadd, isub, imul, imod, idiv, fdiv, fpow, toInt, floor, ceil, round, sqrt, now, steps, fsteps,
   textLen, cmpText, substring, charAt, codePoints, split, startsWith, endsWith, contains, indexOf, replace, trim, upper, lower,
   repeatText, parseInt: parseInt_,

@@ -25,11 +25,27 @@ import (
 
 const Max = 9007199254740991
 
-type Error struct{ Msg string }
+// Error：抛出去的错。Msg 是那句话；Obj 是错误对象（小库自己报的错没有，接住的时候才按种类造）。
+type Error struct {
+	Msg string
+	Obj any
+}
 
-func Fail(m string) { panic(Error{m}) }
+func Fail(m string) { panic(Error{Msg: m}) }
 func FailV[T any](m string) T {
-	panic(Error{m})
+	panic(Error{Msg: m})
+}
+
+var errKinds = [][2]string{{"除以 0", "数值不对"}, {"整数超出范围", "数值不对"}, {"变不成整数", "数值不对"}, {"超出了", "找不到"}, {"拿到的是", "类型不对"}, {"值是空", "类型不对"}}
+
+// ErrKind：小库自己报的错归到哪一种。
+func ErrKind(m string) string {
+	for _, p := range errKinds {
+		if strings.Contains(m, p[0]) {
+			return p[1]
+		}
+	}
+	return "错误"
 }
 
 type Ordered interface {

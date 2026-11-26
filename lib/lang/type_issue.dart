@@ -49,6 +49,21 @@ const Map<String, LTypeRule> kTypeRules = {
   'T16': LTypeRule('T16', '整数写得太大了', LTypeLevel.error, '整数最大只能到 9007199254740991；更大的用小数'),
   'T17': LTypeRule('T17', '继承了一个没勾“可以被继承”的类', LTypeLevel.error, '在父类上勾“可以被继承”，或者不要继承它'),
   'T18': LTypeRule('T18', '重写的方法和父类的对不上', LTypeLevel.error, '参数的个数、类型和返回的东西要和父类的一样'),
+  'T19': LTypeRule('T19', '抛出、接住的不是错误', LTypeLevel.error, '“抛出”后面放一句话或者一个错误对象；“只接”后面选一种错误（“错误”或者父类是它的类）'),
+  'T20': LTypeRule('T20', '这个名字是内置的，不能再用', LTypeLevel.error, '换一个名字（错误、找不到、类型不对、数值不对、超时、取消了、读写失败是内置的错误种类）'),
+  'T21': LTypeRule('T21', '这一节“出错时”永远轮不到', LTypeLevel.error, '把接得更细的那一节挪到前面，或者删掉这一节'),
+};
+
+/// 模块规则表（M 开头，核心 2）：一个程序里几个模块之间的事。link.dart 的 `linkProgram` 报。
+const Map<String, LTypeRule> kModuleRules = {
+  'M01': LTypeRule('M01', '模块的名字不对（没起名字，或者两个模块重名）', LTypeLevel.error, '给每个模块起一个不一样的名字'),
+  'M02': LTypeRule('M02', '找不到入口模块，或者“用到了谁”里写了不存在的模块', LTypeLevel.error, '检查模块的名字；一个程序要有一个入口模块'),
+  'M03': LTypeRule('M03', '模块之间绕圈了（你用我、我又用你）', LTypeLevel.error, '把两边都要用的东西挪到第三个模块里，让两边都去用它'),
+  'M04': LTypeRule('M04', '只有入口模块能有“程序开始时”', LTypeLevel.error, '把这些积木挪到入口模块，或者包成一个公开的函数让入口模块来调'),
+  'M05': LTypeRule('M05', '用了别的模块里的东西，但是没有说“用到了它”', LTypeLevel.error, '在这个模块的“用到了谁”里加上那个模块'),
+  'M06': LTypeRule('M06', '用了别的模块里没有公开的东西', LTypeLevel.error, '在那个模块里给它勾上“公开”，或者不要用它'),
+  'M07': LTypeRule('M07', '这个名字在好几个地方都有，分不清是哪个', LTypeLevel.error, '给其中一个换个名字'),
+  'M08': LTypeRule('M08', '模块顶上的变量，初始值用到了排在它后面才准备好的变量', LTypeLevel.error, '把被用到的那个变量挪到前面'),
 };
 
 /// 一键修的种类（界面层据此出按钮、改积木；这里只出数据）。设计 6.2 的七种＋几种顺手能给的。
@@ -128,7 +143,7 @@ class LTypeIssue {
   final List<LFix> fixes;
 
   bool get isError => level == LTypeLevel.error;
-  LTypeRule get rule => kTypeRules[code]!;
+  LTypeRule get rule => kTypeRules[code] ?? kModuleRules[code]!;
 
   /// 和推断原型打印的格式一样：`T01 主：「重复」的第 2 个参数要整数，放进来的是文字`。
   @override

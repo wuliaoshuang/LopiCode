@@ -12,6 +12,7 @@ import 'dart:collection';
 
 import 'package:lopicode/lang/ast.dart';
 import 'package:lopicode/lang/ast_util.dart';
+import 'package:lopicode/lang/errors.dart';
 import 'package:lopicode/lang/rt_v2.dart';
 import 'package:lopicode/lang/type_issue.dart';
 import 'package:lopicode/lang/type_world.dart';
@@ -19,6 +20,7 @@ import 'package:lopicode/lang/types.dart';
 
 part 'typecheck_call.dart';
 part 'typecheck_decl.dart';
+part 'typecheck_err.dart';
 part 'typecheck_expr.dart';
 part 'typecheck_result.dart';
 part 'typecheck_rt.dart';
@@ -86,6 +88,9 @@ class _Scope {
   Map<String, String> bounds;
   Set<String> reassigned;
   LTypedFunc? f;
+
+  /// “出错时”那一节里，接到的错误变量按这一节接的种类看（变量自己的类型是几节合起来的）。
+  final Map<String, LType> narrow = {};
 }
 
 abstract class _Core {
@@ -96,6 +101,15 @@ abstract class _Core {
   final Map<String, LType> outer;
 
   final LTypeWorld w = LTypeWorld();
+
+  /// 内置的错误类（errors.dart）：和用户的声明一起进声明表。
+  final List<LClassDecl> prelude = langErrorPrelude();
+
+  /// 程序里有没有“抛出 / 试着做”（生成器据此决定要不要把内置错误类生成出来）。
+  bool sawErrors = false;
+
+  /// 用户的声明里撞了内置错误名字的（T20）。
+  final List<LDecl> clashes = [];
   final Map<String, LNativeDecl> natives = {};
   final List<LVarDecl> globals = [];
   final List<String> sigOrder = [];
@@ -276,12 +290,16 @@ abstract class _Core {
   void push(_Scope sc, LExpr of, LExpr value, LNode node);
   void block(_Scope sc, List<LStmt> body);
   void runFn(LTypedFunc f, {LType? thisType, _Scope? parent});
+  void throwStmt(_Scope sc, LThrow s);
+  void tryStmt(_Scope sc, LTry s);
+  LType? narrowed(_Scope sc, String name);
+  bool isErr(LType t);
 }
 
 /// 写起来短一点。
 typedef WL = LTypeWorld;
 
-class _Checker extends _Core with _Exprs, _Calls, _Rt, _Stmts, _Decls {
+class _Checker extends _Core with _Exprs, _Calls, _Rt, _Errs, _Stmts, _Decls {
   _Checker(super.decls, super.main, super.scripts, super.outer);
 
   LTypeResult run() {

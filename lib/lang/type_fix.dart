@@ -240,8 +240,15 @@ class _Rewriter {
         return identical(m, s.message) ? s : LThrow(m, src: s.src);
       case LTry():
         final b = block(s.body), e = block(s.onError), f = block(s.finallyBody);
-        if (identical(b, s.body) && identical(e, s.onError) && identical(f, s.finallyBody)) return s;
-        return LTry(b, errorName: s.errorName, errorClass: s.errorClass, onError: e, finallyBody: f, src: s.src);
+        final hs = s.handlers;
+        final h = hs == null
+            ? null
+            : _list(hs, (LCatch c) {
+                final cb = block(c.body);
+                return identical(cb, c.body) ? c : LCatch(cb, kind: c.kind, name: c.name);
+              });
+        if (identical(b, s.body) && identical(e, s.onError) && identical(f, s.finallyBody) && identical(h, hs)) return s;
+        return LTry(b, errorName: s.errorName, errorClass: s.errorClass, onError: e, handlers: h, finallyBody: f, src: s.src);
       case LMatch():
         final subject = expr(s.subject);
         final arms = _list(s.arms, (LMatchArm a) {

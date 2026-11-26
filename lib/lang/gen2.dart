@@ -157,7 +157,7 @@ abstract class Gen2Base {
   // —— 先扫一遍：哪些变量被里层的匿名函数用到 ——
 
   void _scanAll() {
-    for (final d in module.decls) {
+    for (final d in decls) {
       if (d is LFuncDecl) _scan(d.body, [d.name], const []);
       if (d is LClassDecl) {
         final c = d.ctor;
@@ -226,8 +226,10 @@ abstract class Gen2Base {
         case LForPairs(:final key, :final value):
           w(key);
           w(value);
-        case LTry(:final errorName):
-          w(errorName);
+        case LTry(:final catches):
+          for (final c in catches) {
+            w(c.name);
+          }
         case LMatch(:final arms):
           for (final a in arms) {
             a.binds.forEach(w);
@@ -299,8 +301,12 @@ abstract class Gen2Base {
   /// 走不到的地方（“看是哪种情况”每种都写了以后的那个“否则”）。
   List<String> unreachable();
 
-  /// 试着做 / 出错了 / 最后。[errTarget]＝接错误文字的变量（没起名字是 null）。
-  List<String> tryLines(LTry s, List<String> Function(List<LStmt>) gen, String? errTarget);
+  /// 抛出；试着做 / 出错时 / 最后（gen2_err.dart）。
+  List<String> throwStmt(LThrow s);
+  List<String> tryStmt(LTry s, List<String> Function(List<LStmt>) gen);
+
+  /// 要生成的声明：用到错误的程序，前面带上内置的错误类。
+  List<LDecl> get decls => [if (r.usesErrors) ...r.prelude, ...module.decls];
 
   /// 列表拍一份这种语言自己的数组（遍历时用）；它有几项、第 k 项。
   String snapshot(String list, LType elem);
@@ -460,11 +466,11 @@ abstract class Gen2Base {
         return continueLines();
       case LReturn(:final value):
         return returnLines(value == null ? (fn.isVoid ? null : nulOf(fn.ret)) : (fn.isVoid ? null : x(value, fn.ret)), value: value);
-      case LThrow(:final message):
-        return throwLines(x(message, LType.text));
-      case LTry(:final errorName):
+      case LThrow():
+        return throwStmt(s);
+      case LTry():
         fn.hasTry = true;
-        return tryLines(s, stmts, errorName == null ? null : varCode(mustVar(errorName, s)));
+        return tryStmt(s, stmts);
       case LMatch():
         return _match(s);
       case LHost():

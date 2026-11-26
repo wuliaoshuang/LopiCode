@@ -39,9 +39,12 @@ String? gen2SkipReason(String language) {
 
 /// 一次真跑的结果：[stdout] 是原始字节；[problem] 不是 null 说明没跑成（编译没过、超时…），里面是原因。
 class Gen2Run {
-  const Gen2Run(this.stdout, this.problem);
+  const Gen2Run(this.stdout, this.problem, {this.exitCode});
   final List<int> stdout;
   final String? problem;
+
+  /// 程序的退出码（没跑成＝null）。约定：正常结束是 0；有没接住的错，打印“出错：…”以后是 1。
+  final int? exitCode;
 }
 
 // JAVA_TOOL_OPTIONS 会让 java 往标准错误多写一行；编译和运行都不要它。输出一律按 UTF-8。
@@ -90,8 +93,8 @@ Future<Gen2Run> gen2RunFiles(String language, Map<String, String> files) async {
       default:
         return Gen2Run(const [], '不认识的语言 $language');
     }
-    // 退出码不看：程序里没接住的错按约定打印“出错：…”，那也是要逐字节比的输出的一部分。
-    return Gen2Run(r.stdout as List<int>, null);
+    // 退出码不在这里判：程序里没接住的错按约定打印“出错：…”（也是要逐字节比的输出的一部分），然后退出码是 1；要查的测试自己看 exitCode。
+    return Gen2Run(r.stdout as List<int>, null, exitCode: r.exitCode);
   } on Exception catch (e) {
     return Gen2Run(const [], '没跑成：$e');
   } finally {

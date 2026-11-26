@@ -72,13 +72,33 @@ class PhpGen2 extends Gen2Dyn {
   String _fieldsOf(String cls) => 'lcf_${v2Ident(cls)}';
 
   @override
-  List<String> tryLines(LTry s, List<String> Function(List<LStmt>) gen, String? errTarget) {
+  List<String> throwObjLines(String obj, String message) => ['throw Lc::errOf($message, $obj);'];
+  @override
+  String errObjCode(String e) => 'Lc::errObj($e)';
+  @override
+  List<String> rethrowLines(String e) => ['throw $e;'];
+  @override
+  String errKindCode(String obj, LType type) => 'Lc::kindOf($obj)';
+  @override
+  String errNarrow(String code, LType from, LType to) => code;
+  @override
+  List<String> errSupport() => [
+    r'Lc::errSetup(function (string $lcK, string $lcM): object {',
+    ...indent([
+      r'switch ($lcK) {',
+      ...indent([for (final (k, make) in errMakers(r'$lcM').skip(1)) 'case ${textLit(k)}: return $make;', 'default: return ${errMakers(r'$lcM').first.$2};']),
+      '}',
+    ]),
+    '});',
+  ];
+
+  @override
+  List<String> tryFrame(LTry s, List<String> Function(List<LStmt>) gen, List<String> Function(String e)? handler) {
     final e = tmpName('E');
     return [
       'try {',
       ...indent(gen(s.body)),
-      '} catch (LcError $e) {',
-      ...indent([if (errTarget != null) '$errTarget = $e->getMessage();', ...gen(s.onError)]),
+      if (handler != null) ...['} catch (LcError $e) {', ...indent(handler(e))],
       if (s.finallyBody.isNotEmpty) ...['} finally {', ...indent(gen(s.finallyBody))],
       '}',
     ];

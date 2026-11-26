@@ -283,9 +283,14 @@ def log(s):
 
 
 def run(main):
+    failed = False
     try:
         main()
     except LcError as e:
         _out.append("出错：" + str(e))
+        failed = True
     sys.stdout.buffer.write(("\n".join(_out) + "\n").encode("utf-8"))
+    sys.stdout.buffer.flush()
+    if failed:
+        sys.exit(1)
 ''';

@@ -45,6 +45,9 @@ class _Reader {
   }
   final List<Object> prog;
   final Map<String, String> caseOf = {};
+
+  /// 正在读的“出错”那一节接到的错误变量（见 stmt 里的“试”）。
+  final Set<String> errVars = {};
   var _n = 0;
 
   static const Map<String, LType> _basic = {'整数': LType.integer, '小数': LType.number, '文字': LType.text, '是否': LType.boolean, '空': LType.nul, '任意': LType.any};
@@ -189,19 +192,29 @@ class _Reader {
       case '抛出':
         return LThrow(expr(a[0]));
       case '试':
+        // 老写法 (出错 e …)：原型是按“接到一句话”写的；版本 2 接到的是错误对象，所以这一节里读 e 都翻成“e 的消息”。
+        // 新写法 (出错时 种类 名字 …)：种类、名字不要就写 _；(不接)＝一节“出错时”都没有（只有“最后”）。
         var body = <LStmt>[], onError = <LStmt>[], last = <LStmt>[];
         String? name;
+        List<LCatch>? handlers;
         for (final p in a.cast<_L>()) {
           if (p[0] == '做') {
             body = stmts(p.skip(1));
           } else if (p[0] == '出错') {
             name = p[1] as String;
+            final added = errVars.add(name);
             onError = stmts(p.skip(2));
+            if (added) errVars.remove(name);
+          } else if (p[0] == '出错时') {
+            String? opt(Object x) => x == '_' ? null : x as String;
+            (handlers ??= []).add(LCatch(stmts(p.skip(3)), kind: opt(p[1]), name: opt(p[2])));
+          } else if (p[0] == '不接') {
+            handlers ??= [];
           } else {
             last = stmts(p.skip(1));
           }
         }
-        return LTry(body, errorName: name, onError: onError, finallyBody: last);
+        return LTry(body, errorName: name, onError: onError, handlers: handlers, finallyBody: last);
       case '打印':
         return LExprStmt(LRt('log', exprs(a)));
       case '做':
@@ -252,7 +265,7 @@ class _Reader {
       if (_fltRe.hasMatch(e)) return LLit(double.parse(e));
       if (e == '空') return const LLit(null);
       if (e == '是' || e == '否') return LLit(e == '是');
-      return LName(e);
+      return errVars.contains(e) ? LField(LName(e), '消息') : LName(e);
     }
     final l = e as _L;
     final h = l[0] as String;
@@ -290,7 +303,7 @@ class _Reader {
                 LReturn(LRt('toText', [expr(a[0])])),
               ],
               errorName: name,
-              onError: [LReturn(LName(name))],
+              onError: [LReturn(LField(LName(name), '消息'))],
             ),
           ]),
           const [],

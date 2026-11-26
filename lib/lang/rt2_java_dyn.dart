@@ -332,14 +332,17 @@ const String _tail = r'''
   private static final ArrayList<String> out = new ArrayList<>();
   static void log(String s) { out.add(s); }
   static void run(Act0 main) {
+    boolean failed = false;
     try {
       main.call();
     } catch (LcError e) {
       out.add("出错：" + e.getMessage());
+      failed = true;
     }
     byte[] bytes = (String.join("\n", out) + "\n").getBytes(StandardCharsets.UTF_8);
     System.out.write(bytes, 0, bytes.length);
     System.out.flush();
+    if (failed) System.exit(1);
   }
 }
 ''';

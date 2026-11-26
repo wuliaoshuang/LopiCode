@@ -22,7 +22,35 @@ sys.setrecursionlimit(20000)
 
 
 class LcError(Exception):
-    pass
+    # 抛出去的错：外面这层带着那句话；obj 是错误对象（小库自己报的错没有，接住的时候才按种类造）。
+    def __init__(self, m, obj=None):
+        super().__init__(m)
+        self.obj = obj
+
+
+_ERR_KINDS = (("除以 0", "数值不对"), ("整数超出范围", "数值不对"), ("变不成整数", "数值不对"), ("超出了", "找不到"), ("拿到的是", "类型不对"), ("值是空", "类型不对"))
+_err_make = [None]
+
+
+def errKind(m):
+    for part, k in _ERR_KINDS:
+        if part in m:
+            return k
+    return "错误"
+
+
+def errSetup(f):
+    _err_make[0] = f
+
+
+def errObj(e):
+    if e.obj is None:
+        e.obj = _err_make[0](errKind(str(e)), str(e))
+    return e.obj
+
+
+def kindOf(x):
+    return type(x).lcName
 
 
 class Rec:

@@ -25,7 +25,17 @@ final class Lc {
 
   static final class LcError extends RuntimeException {
     private static final long serialVersionUID = 1L;
+    /** 错误对象（小库自己报的错没有，接住的时候才按种类造）。 */
+    transient Object obj;
     LcError(String m) { super(m); }
+    LcError(String m, Object obj) { super(m); this.obj = obj; }
+  }
+
+  private static final String[][] ERR_KINDS = {{"除以 0", "数值不对"}, {"整数超出范围", "数值不对"}, {"变不成整数", "数值不对"}, {"超出了", "找不到"}, {"拿到的是", "类型不对"}, {"值是空", "类型不对"}};
+  /** 小库自己报的错归到哪一种。 */
+  static String errKind(String m) {
+    for (String[] p : ERR_KINDS) if (m.contains(p[0])) return p[1];
+    return "错误";
   }
 
   static <T> T fail(String m) { throw new LcError(m); }

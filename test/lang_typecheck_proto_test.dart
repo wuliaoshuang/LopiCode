@@ -34,7 +34,15 @@ void main() {
       final r = checkModuleTypes(lcModule(File('$_dir/$p/prog.lc').readAsStringSync()));
       final want = _read('$_dir/$p/types.txt');
       final cut = want.indexOf('—— 报的问题 ——');
-      final wantTypes = cut < 0 ? want : want.sublist(0, cut);
+      // 核心 2 起“出错时”接到的是错误对象：原型记成“文字”的错误变量，现在是“错误”（原型的 types.txt 不改，在这里换算）。
+      final errVars = {
+        for (final v in r.vars)
+          if (v.kind == LVarKind.error) '${v.scope}.${v.name}',
+      };
+      final wantTypes = [
+        for (final l in cut < 0 ? want : want.sublist(0, cut))
+          if (l.endsWith(': 文字') && errVars.contains(l.substring(0, l.length - 4))) '${l.substring(0, l.length - 4)}: 错误' else l,
+      ];
       final wantIssues = cut < 0 ? const <String>[] : want.sublist(cut + 1);
       // 行的先后不比（原型记录里循环变量排在后面，和它自己打印的先后也不完全一样）；内容逐行相同。
       expect([...r.describe()]..sort(), [...wantTypes]..sort());

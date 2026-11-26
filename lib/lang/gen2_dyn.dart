@@ -364,7 +364,7 @@ abstract class Gen2Dyn extends Gen2 {
     }
 
     add(globalDecls([for (final g in globals) varCode(V2Var(g, 0, global: true))]));
-    for (final d in module.decls) {
+    for (final d in decls) {
       switch (d) {
         case LRecordDecl():
           add(recordDecl(typeName(d.name), d.name, [for (final f in d.fields) member(f.name)]));
@@ -387,6 +387,7 @@ abstract class Gen2Dyn extends Gen2 {
     }
     final main = V2Fn(Gen2Base.mainScope, LType.nul, isMain: true);
     final inits = <LStmt>[for (final d in module.decls.whereType<LVarDecl>()) LAssign(LTName(d.name), d.init), ...module.body];
+    if (r.usesErrors) add(errSupport());
     return programText(top, funcBody(main, inits));
   }
 }

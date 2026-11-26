@@ -23,7 +23,11 @@ mixin _Decls on _Core {
   }
 
   void collect() {
-    for (final d in decls) {
+    for (final d in [...prelude, ...decls]) {
+      if (langIsBuiltinError(d.name) && !prelude.contains(d)) {
+        clashes.add(d);
+        continue;
+      }
       switch (d) {
         case LRecordDecl():
           w.records[d.name] = d;
@@ -136,6 +140,10 @@ mixin _Decls on _Core {
       }
       if (finalPass) _assigned.add((g.init, vkey(_mainKey, g.name)));
       curSrc = keep;
+    }
+    for (final d in clashes) {
+      curSrc = d.src;
+      err('T20', top, '「${d.name}」是内置的错误种类，自己的东西换一个名字', node: d, where: d.name);
     }
     for (final c in w.classes.values) {
       curSrc = c.decl.src;

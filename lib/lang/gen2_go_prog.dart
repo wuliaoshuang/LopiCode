@@ -4,6 +4,7 @@ library;
 import 'package:lopicode/lang/ast.dart';
 import 'package:lopicode/lang/ast_util.dart';
 import 'package:lopicode/lang/gen2.dart';
+import 'package:lopicode/lang/gen2_err.dart';
 import 'package:lopicode/lang/gen2_go.dart';
 import 'package:lopicode/lang/rt2_go_dyn.dart';
 import 'package:lopicode/lang/type_world.dart';
@@ -108,16 +109,47 @@ class GoGen2 extends GoGen2Types {
   }
 
   @override
-  List<String> tryLines(LTry s, List<String> Function(List<LStmt>) gen, String? errTarget) {
+  List<String> throwObjLines(String obj, String message) => ['panic(lc.Error{Msg: $message, Obj: $obj})'];
+  @override
+  String errObjCode(String e) => 'lcErrObj(&$e)';
+  @override
+  List<String> rethrowLines(String e) => ['panic($e)'];
+  @override
+  String errKindCode(String obj, LType type) => '$obj.LcName()';
+  @override
+  List<String> errSupport() {
+    final et = gt(Gen2Err.errType);
+    return [
+      'func lcErrObj(lcE *lc.Error) $et {',
+      ...indent([
+        'if lcE.Obj == nil {',
+        ...indent([
+          'lcM := lcE.Msg',
+          'switch lc.ErrKind(lcM) {',
+          for (final (k, make) in errMakers('lcM').skip(1)) ...['case ${textLit(k)}:', ...indent(['lcE.Obj = $make'])],
+          'default:',
+          ...indent(['lcE.Obj = ${errMakers('lcM').first.$2}']),
+          '}',
+        ]),
+        '}',
+        'return lcE.Obj.($et)',
+      ]),
+      '}',
+    ];
+  }
+
+  @override
+  List<String> tryFrame(LTry s, List<String> Function(List<LStmt>) gen, List<String> Function(String e)? handler) {
     List<String> core() {
+      if (handler == null) return gen(s.body);
       final m = tmpName('E'), ok = tmpName('O');
       final body = _closure(() => gen(s.body));
       return [
-        '$m, $ok := lc.Try(func() {',
+        '$m, $ok := lc.TryE(func() {',
         ...indent(body),
         '})',
         'if !$ok {',
-        ...indent([errTarget != null ? '$errTarget = $m' : '_ = $m', ...gen(s.onError)]),
+        ...indent(['_ = &$m', ...handler(m)]),
         '}',
         ..._after(),
       ];
@@ -381,7 +413,8 @@ class GoGen2 extends GoGen2Types {
     }
 
     add([for (final g in globals) 'var ${varCode(V2Var(g, 0, global: true))} ${gt(g.type)}']);
-    for (final d in module.decls) {
+    if (r.usesErrors) add(errSupport());
+    for (final d in decls) {
       switch (d) {
         case LRecordDecl():
           add(_record(d));
