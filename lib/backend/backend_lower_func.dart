@@ -22,7 +22,10 @@ class BeLoweredFunction {
 /// 函数的定义借接口的翻译器用：给它套一个不会被生成的壳。
 BeRoute _shell(BeFunction f) => BeRoute(id: f.id, method: 'GET', path: '/', body: f.body);
 
-List<LParam> beLangParams(BeFunction f) => [for (final p in f.params) LParam(beIdent(p.name), defaultValue: p.defaultValue == null ? null : LLit(p.defaultValue), rest: p.rest)];
+/// [typed]＝带上标的类型（只有规矩版本 2 的类型检查要；老规矩的检查和生成不看类型，不带，结果和以前一样）。
+List<LParam> beLangParams(BeFunction f, {bool typed = false}) => [
+  for (final p in f.params) LParam(beIdent(p.name), defaultValue: p.defaultValue == null ? null : LLit(p.defaultValue), rest: p.rest, type: typed ? p.type : null),
+];
 
 /// 把文档里的函数全部翻出来。[shadow]＝给校验用的影子模式。任何输入都不抛异常。
 List<BeLoweredFunction> beLowerFunctionsWithSpots(BeDocument doc, {bool shadow = false}) {

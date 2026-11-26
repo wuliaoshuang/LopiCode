@@ -7,6 +7,7 @@
 library;
 
 import 'package:lopicode/backend/backend_blocks_func.dart';
+import 'package:lopicode/backend/backend_blocks_strict.dart';
 import 'package:lopicode/backend/backend_function.dart';
 import 'package:lopicode/lowcode/logic_blocks.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
@@ -303,7 +304,7 @@ bool _exprUsesLang(Object? value, int depth) {
   if (value is List) return value.any((v) => _exprUsesLang(v, depth + 1));
   if (value is! Map) return false;
   final kind = value['e'];
-  if (kind is String && (beLangExprSpecs.containsKey(kind) || beFuncExprSpecs.containsKey(kind) || beCallId(kind) != null)) return true;
+  if (kind is String && (beLangExprSpecs.containsKey(kind) || beFuncExprSpecs.containsKey(kind) || beStrictExprSpecs.containsKey(kind) || beCallId(kind) != null)) return true;
   return value.values.any((v) => _exprUsesLang(v, depth + 1));
 }
 

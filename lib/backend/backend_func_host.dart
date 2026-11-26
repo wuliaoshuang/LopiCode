@@ -136,7 +136,10 @@ mixin BeFuncHost on BlockHost {
           return i < 0 ? null : i;
         }(),
     ];
-    final next = [for (final p in params) BeParam(p.name.trim(), defaultValue: p.rest ? null : p.defaultValue, rest: p.rest)];
+    // 标过的类型跟着原来那个参数走（改名、调顺序都不丢）。
+    final next = [
+      for (final (i, p) in params.indexed) BeParam(p.name.trim(), defaultValue: p.rest ? null : p.defaultValue, rest: p.rest, type: origin[i] == null ? null : old[origin[i]!].type),
+    ];
     // 帽子上给的默认值同时是调用积木那个槽里先放的内容。
     var look = tree.look;
     for (final p in next) {
@@ -230,7 +233,7 @@ class _BeCustomHost extends BlockCustomHost {
           final slot = look.slotFor(p);
           final was = o != null && o >= 0 && o < old.length ? old[o] : null;
           // 值槽“先放什么”就是参数的默认值；“剩下的全收”跟着原来那个参数走。
-          return BeParam(p, defaultValue: was?.rest == true || slot.kind != CustomSlotKind.value ? null : slot.defaultValue, rest: was?.rest ?? false);
+          return BeParam(p, defaultValue: was?.rest == true || slot.kind != CustomSlotKind.value ? null : slot.defaultValue, rest: was?.rest ?? false, type: was?.type);
         }(),
     ];
     final dropped = beReshapeFunction(_doc, f, look, next, origin, lookIsNew: true);

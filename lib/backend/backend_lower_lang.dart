@@ -11,6 +11,7 @@
 library;
 
 import 'package:lopicode/backend/backend_blocks.dart';
+import 'package:lopicode/backend/backend_blocks_strict.dart';
 import 'package:lopicode/backend/backend_function.dart';
 import 'package:lopicode/backend/backend_ir.dart';
 import 'package:lopicode/backend/backend_lang.dart';
@@ -18,6 +19,7 @@ import 'package:lopicode/backend/backend_model.dart';
 import 'package:lopicode/backend/backend_text.dart';
 import 'package:lopicode/lang/ast.dart';
 import 'package:lopicode/lang/ast_util.dart';
+import 'package:lopicode/lang/types.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 
 /// 语法树节点的来源：哪块积木（路径）、哪一格（参数名；段参数是 `@段号:名字`；null＝整块）。
@@ -25,6 +27,14 @@ class BeLangSpot {
   const BeLangSpot(this.path, this.arg);
   final LcBlockPath path;
   final String? arg;
+}
+
+/// 语法树里一个式子的来处：积木文档里的那个值（[value]），它放在谁里面（[holder]：积木、外面那层式子、列表）、叫什么（[key]）。
+class BeLangOrigin {
+  const BeLangOrigin(this.value, this.holder, this.key);
+  final Object? value;
+  final Object? holder;
+  final Object? key;
 }
 
 /// 旧的翻译器（backend_ir.dart 的 `_Lowerer`）借给这边用的几样。
@@ -126,6 +136,22 @@ class BeLangLower {
 
   static LExpr _toLang(BeX x) => beToLangExpr(x, request: kBeRequestName);
 
+  /// 语法树里的式子 → 它是积木文档里的哪个值翻来的（文档里那个对象本身）。规矩版本 2 的类型检查靠它把问题、
+  /// 一键修对回到具体哪一格上（backend_type_bridge.dart）；别处不用。
+  final Map<LExpr, BeLangOrigin> origins = Map.identity();
+
+  /// 给类型检查用（配合影子模式）：旧的“干活”积木往变量里放的东西说不准是什么，记成“任意”而不是“空”。
+  bool typed = false;
+
+  /// 积木文档里的一个值 → 语法树的式子，顺手记下它的来处。
+  /// [holder]＝装着这个值的东西（积木、外面那层式子、列表），[key]＝在它里面叫什么（参数名、字段名、第几项）。
+  LExpr _lx(Object? value, [int depth = 0, Object? holder, Object? key]) {
+    final x = _toLang(host.expr(value, depth));
+    // “空”的字面量是同一个常量对象到处用，记不准是哪一处，不记。
+    if (!(x is LLit && x.value == null) && (value is Map || holder != null)) origins[x] = BeLangOrigin(value, holder, key);
+    return x;
+  }
+
   /// 这个名字现在能不能用：文档里声明的变量，或这个接口里新建的名字。影子模式下合规矩的名字都算（看不看得见交给检查器）。
   bool knows(Object? name) {
     if (name is! String || !beNamePattern.hasMatch(name)) return false;
@@ -139,7 +165,7 @@ class BeLangLower {
   BeX? expr(Object? e, int depth) {
     final kind = exprKind(e);
     if (kind == null) return null;
-    LExpr sub(String key) => _toLang(host.expr(exprField(e, key), depth + 1));
+    LExpr sub(String key) => _lx(exprField(e, key), depth + 1, e, key);
     BeX lang(LExpr x) => BeXLang(x);
     BeX hole(String why) {
       host.addNote(why);
@@ -163,7 +189,7 @@ class BeLangLower {
               host.addNote('字典里有一个字段没填名字，已跳过');
               continue;
             }
-            entries.add(LDictEntry(LLit(key), _toLang(host.expr(exprField(f, 'value'), depth + 1))));
+            entries.add(LDictEntry(LLit(key), _lx(exprField(f, 'value'), depth + 1, f, 'value')));
           }
         }
         return lang(LDictLit(entries));
@@ -184,12 +210,14 @@ class BeLangLower {
         return lang(
           LListLit([
             if (items is List)
-              for (final item in items) _toLang(host.expr(item, depth + 1)),
+              for (final (i, item) in items.indexed) _lx(item, depth + 1, items, i),
           ]),
         );
       case 'index':
         return lang(LIndex(sub('of'), sub('key')));
     }
+    final strict = kBeStrictRtArgs[kind];
+    if (strict != null) return lang(LRt(kind, [for (final a in strict) sub(a)], src: _src()));
     final func = _funcExpr(kind, e!, depth, sub);
     if (func != null) return lang(func);
     final family = _families[kind];
@@ -217,12 +245,13 @@ class BeLangLower {
   }
 
   /// 调用的实参表：按定义的参数顺序一个个取（实参按参数名存）。“剩下的全收”的槽里放的是“列表”积木就把每一项各当一个实参，放别的就当一个。
-  List<LExpr> _callArgs(BeFunction f, Object? Function(String name) read, int depth) {
+  /// [holder]＝这次调用本身（值积木是那个式子，语句积木是那块积木）。
+  List<LExpr> _callArgs(BeFunction f, Object? Function(String name) read, int depth, Object holder) {
     final arg = _arg;
     final out = <LExpr>[];
-    LExpr one(String name, Object? value) {
+    LExpr one(String name, Object? value, [Object? inList, int? i]) {
       _arg = name;
-      return _toLang(host.expr(value, depth + 1));
+      return inList == null ? _lx(value, depth + 1, holder, name) : _lx(value, depth + 1, inList, i);
     }
 
     for (final p in f.params) {
@@ -231,7 +260,7 @@ class BeLangLower {
         out.add(value == null ? LLit(p.defaultValue) : one(p.name, value));
       } else if (exprKind(value) == 'listLit') {
         final items = exprField(value, 'items');
-        if (items is List) out.addAll([for (final item in items) one(p.name, item)]);
+        if (items is List) out.addAll([for (final (i, item) in items.indexed) one(p.name, item, items, i)]);
       } else if (value != null) {
         out.add(one(p.name, value));
       }
@@ -242,7 +271,7 @@ class BeLangLower {
 
   List<LExpr> _listArgs(Object? list, int depth) => [
     if (list is List)
-      for (final item in list) _toLang(host.expr(item, depth + 1)),
+      for (final (i, item) in list.indexed) _lx(item, depth + 1, list, i),
   ];
 
   /// 第 2 阶段的式子；不是的返回 null。
@@ -255,7 +284,7 @@ class BeLangLower {
     final callee = beCallId(kind);
     if (callee != null) {
       final f = host.function(callee);
-      return f == null ? gone() : LCall(LName(f.ident), _callArgs(f, (n) => exprField(e, n), depth), src: _src());
+      return f == null ? gone() : LCall(LName(f.ident), _callArgs(f, (n) => exprField(e, n), depth, e), src: _src());
     }
     switch (kind) {
       case 'param':
@@ -298,7 +327,7 @@ class BeLangLower {
     if (callee != null) {
       final f = host.function(callee);
       if (f == null) return _skip('这块自定义积木的定义已经不在了');
-      return [LExprStmt(LCall(LName(f.ident), _callArgs(f, (n) => b.args[n], 0), src: src()), src: src())];
+      return [LExprStmt(LCall(LName(f.ident), _callArgs(f, (n) => b.args[n], 0, b), src: src()), src: src())];
     }
     switch (b.op) {
       case 'return':
@@ -362,7 +391,7 @@ class BeLangLower {
       _owner = b;
       _depth = depth;
       _arg = name;
-      final x = _toLang(host.expr(value));
+      final x = _lx(value, 0, b, name);
       _arg = null;
       return x;
     }
@@ -484,9 +513,9 @@ class BeLangLower {
       _path = path;
       _arg = a.name;
       if (a.kind == LcArgKind.expr && isExpr(value)) {
-        out.add(LExprStmt(_toLang(host.expr(value)), src: _src()));
+        out.add(LExprStmt(_lx(value, 0, b, a.name), src: _src()));
       } else if (a.kind == LcArgKind.variable && value is String && value.isNotEmpty && beNamePattern.hasMatch(value) && !host.useDocVar(value)) {
-        out.add(LAssign(LTName(value), const LLit(null), src: _src()));
+        out.add(LAssign(LTName(value), typed ? const LAscribe(LLit(null), LType.any) : const LLit(null), src: _src()));
       }
     }
     _arg = null;

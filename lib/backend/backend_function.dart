@@ -13,6 +13,8 @@
 library;
 
 import 'package:lopicode/lang/custom_block.dart';
+import 'package:lopicode/lang/types.dart';
+import 'package:lopicode/lang/types_json.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 
 /// 调用自定义积木的 op / e 的前缀：`call:<函数 id>`。
@@ -53,7 +55,7 @@ Object? beParamDefault(Object? v) => v is String || v is bool || (v is num && v.
 
 /// 函数的一个参数。
 class BeParam {
-  BeParam(this.name, {Object? defaultValue, this.rest = false}) : defaultValue = beParamDefault(defaultValue);
+  BeParam(this.name, {Object? defaultValue, this.rest = false, this.type}) : defaultValue = beParamDefault(defaultValue);
 
   String name;
 
@@ -63,21 +65,24 @@ class BeParam {
   /// “剩下的全收”。
   bool rest;
 
-  Map<String, dynamic> toJson() => {'name': name, 'default': ?defaultValue, if (rest) 'rest': true};
+  /// 标的类型（严格规矩才看；没标＝null，存盘不写这个键，旧文档存出来一个字节不差）。
+  LType? type;
 
-  BeParam clone() => BeParam(name, defaultValue: defaultValue, rest: rest);
+  Map<String, dynamic> toJson() => {'name': name, 'default': ?defaultValue, if (rest) 'rest': true, if (type != null) 'type': lTypeToJson(type!)};
+
+  BeParam clone() => BeParam(name, defaultValue: defaultValue, rest: rest, type: type);
 
   static BeParam? tryParse(Object? json) {
     if (json is! Map) return null;
     final name = json['name'];
     if (name is! String || name.trim().isEmpty) return null;
-    return BeParam(name.trim(), defaultValue: json['default'], rest: json['rest'] == true);
+    return BeParam(name.trim(), defaultValue: json['default'], rest: json['rest'] == true, type: json['type'] == null ? null : lTypeFromJson(json['type']));
   }
 }
 
 /// 一个函数（画布上一串“定义 [名字] (参数…)”）。名字在外观里（[CustomBlockLook.name]）。
 class BeFunction with LcBlockTree {
-  BeFunction({required this.id, required this.look, List<BeParam>? params, List<LcBlock>? body, double? x, double? y}) : params = params ?? [], body = body ?? [] {
+  BeFunction({required this.id, required this.look, List<BeParam>? params, List<LcBlock>? body, double? x, double? y, this.returns}) : params = params ?? [], body = body ?? [] {
     this.x = x;
     this.y = y;
   }
@@ -89,6 +94,9 @@ class BeFunction with LcBlockTree {
   @override
   final List<LcBlock> body;
 
+  /// 标的“交回什么”（严格规矩才看；没标＝null＝看定义自己推，存盘不写这个键）。
+  LType? returns;
+
   String get name => look.name;
   List<String> get paramNames => [for (final p in params) p.name];
 
@@ -99,12 +107,13 @@ class BeFunction with LcBlockTree {
     'id': id,
     'look': look.toJson(),
     'params': [for (final p in params) p.toJson()],
+    if (returns != null) 'returns': lTypeToJson(returns!),
     if (x != null) 'x': x,
     if (y != null) 'y': y,
     'body': [for (final b in body) b.toJson()],
   };
 
-  BeFunction clone() => BeFunction(id: id, look: look, params: [for (final p in params) p.clone()], body: [for (final b in body) b.clone()], x: x, y: y);
+  BeFunction clone() => BeFunction(id: id, look: look, params: [for (final p in params) p.clone()], body: [for (final b in body) b.clone()], x: x, y: y, returns: returns);
 
   /// 不是对象的跳过；外观坏了给一个叫“积木”的默认外观；参数坏的逐个跳过、重名的只留第一个、超过上限的丢掉。
   static BeFunction? tryParse(Object? json) {
@@ -127,6 +136,7 @@ class BeFunction with LcBlockTree {
       body: LcBlock.parseList(json['body'], 0),
       x: x is num && x.isFinite ? x.toDouble() : null,
       y: y is num && y.isFinite ? y.toDouble() : null,
+      returns: json['returns'] == null ? null : lTypeFromJson(json['returns']),
     );
   }
 

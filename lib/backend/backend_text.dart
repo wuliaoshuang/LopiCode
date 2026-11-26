@@ -2,6 +2,7 @@
 library;
 
 import 'package:lopicode/backend/backend_blocks.dart';
+import 'package:lopicode/backend/backend_blocks_strict.dart';
 import 'package:lopicode/backend/backend_model.dart';
 import 'package:lopicode/backend/backend_text_func.dart';
 import 'package:lopicode/backend/backend_text_lang.dart';
@@ -99,7 +100,7 @@ String _expr(Object? expr, int depth, bool nested, [String? Function(String id)?
     case 'field':
       return '${sub('of')} 的 ${_name(exprString(expr, 'key'), '没填字段')}';
     default:
-      return describeBeLangExpr(expr, sub) ?? describeBeFuncExpr(expr, sub, fnName) ?? '不认识的值（${_clip(kind)}）';
+      return describeBeLangExpr(expr, sub) ?? describeBeFuncExpr(expr, sub, fnName) ?? describeBeStrictExpr(expr, sub) ?? '不认识的值（${_clip(kind)}）';
   }
 }
 
