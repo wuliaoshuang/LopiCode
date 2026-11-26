@@ -19,17 +19,46 @@ import 'package:lopicode/backend/backend_model.dart';
 import 'package:lopicode/backend/backend_text.dart';
 import 'package:lopicode/backend/lib_service.dart';
 import 'package:lopicode/lang/ast.dart';
+import 'package:lopicode/lang/ast_util.dart';
 import 'package:lopicode/lang/gen.dart' show LangUnsupported;
 import 'package:lopicode/lang/gen2_all.dart';
 import 'package:lopicode/lang/lib_apply.dart';
 import 'package:lopicode/lang/lib_model.dart';
+import 'package:lopicode/lang/link.dart';
 import 'package:lopicode/lang/rt.dart';
 import 'package:lopicode/lang/rules.dart';
 import 'package:lopicode/lang/typecheck.dart';
 import 'package:lopicode/lang/types.dart';
+import 'package:lopicode/lowcode/logic_model.dart';
 
 /// 翻出来的程序；[problems] 不空就是有地方翻不了（程序还是给，方便看是哪里）。
 typedef BeServiceProgram = ({LProgram? program, List<String> problems, List<String> skipped});
+
+/// 翻译的全部结果：除了程序，还有类型检查要用的东西——文档自己的声明和入口的语句（节点就是翻译器翻出来的那些对象，
+/// 没有经过合并改名，所以“哪个式子是哪一格翻来的”还对得上）、每一串积木用的翻译器、每个接口的处理函数是哪个匿名函数。
+class BeServiceBuilt {
+  const BeServiceBuilt({this.program, this.problems = const [], this.skipped = const [], this.decls = const [], this.body = const [], this.trees = const {}, this.lowers = const {}, this.names = const {}, this.lambdas = const {}, this.split = false});
+  final LProgram? program;
+  final List<String> problems;
+  final List<String> skipped;
+
+  /// 文档自己的声明（函数、类型、顶上的变量），带着是哪一串（串的 id；类型是类型的 id）。
+  final List<({String key, LDecl decl})> decls;
+
+  /// 入口的语句：库的准备 → 每个接口登记 → “程序开始时” → 库的“最后启动”。
+  final List<LStmt> body;
+  final Map<String, LcBlockTree> trees;
+  final Map<String, BeLangLower> lowers;
+
+  /// 函数、方法、“程序开始时”这些串在检查结果里叫什么。
+  final Map<String, String> names;
+
+  /// 接口的 id → 它的处理函数（帽子展开出来的那个匿名函数）。
+  final Map<String, LLambda> lambdas;
+
+  /// 文档自己分了模块没有。
+  final bool split;
+}
 
 /// 库里“这次请求”“路由表”这两样隐含的东西叫什么。
 const String kBeServiceRequest = '请求';
@@ -86,8 +115,7 @@ class _Bridge implements BeLibBridge {
           final got = libApply(lib, block, LibUse(values: _values(block, args)), _cx);
           final value = got.value;
           if (value == null) return _bad(got.problem ?? '「${block.look.name}」用不了');
-          // 类型检查那边（backend_type_bridge.dart）把这些值都当“任意”，这里说成一样的，免得“查过了却生成不了”。
-          return LAscribe(value, LType.any);
+          return value;
         }
         if (fn == 'obj') {
           return LAscribe(LDictLit([for (var i = 0; i + 1 < args.length; i += 2) LDictEntry(expr(args[i]), LAscribe(expr(args[i + 1]), LType.any))]), const LType.dictOf(LType.any));
@@ -106,7 +134,7 @@ class _Bridge implements BeLibBridge {
     }
     final value = got.value;
     if (value == null) return got.stmts;
-    return [into == null ? LExprStmt(value) : LAssign(LTName(into), LAscribe(value, LType.any))];
+    return [into == null ? LExprStmt(value) : LAssign(LTName(into), value)];
   }
 
   @override
@@ -168,29 +196,61 @@ Map<String, Object?> beServiceSettings(BeDocument doc) => {
 
 /// 严格规矩的后端文档 → 程序（库的模块 + 文档自己的模块）。版本 1 的文档不归这里管，返回没有程序。
 BeServiceProgram beServiceProgram(BeDocument doc) {
+  final out = beServiceBuild(doc);
+  return (program: out.program, problems: out.problems, skipped: out.skipped);
+}
+
+LLambda? _firstLambda(List<LStmt> stmts) {
+  LLambda? hit;
+  void look(LExpr e) {
+    if (hit != null) return;
+    if (e is LLambda) {
+      hit = e;
+    } else {
+      lExprChildren(e).forEach(look);
+    }
+  }
+
+  lWalkExprs(stmts, look);
+  return hit;
+}
+
+/// 翻译。[shadow]＝给类型检查用的影子模式：名字不管新建没新建都照写（检查器才报得出“看不见”），写坏了的接口也照翻。
+/// 生成用的（不带影子）和检查用的是同一套翻法、同一个库，只差这一点。
+BeServiceBuilt beServiceBuild(BeDocument doc, {bool shadow = false}) {
   final problems = <String>[], skipped = <String>[];
-  if (!langRulesStrict(doc.rules)) return (program: null, problems: ['这份文档照的是规矩版本 1，不走库'], skipped: skipped);
+  if (!langRulesStrict(doc.rules)) return const BeServiceBuilt(problems: ['这份文档照的是规矩版本 1，不走库']);
   final lib = beServiceLibrary();
-  if (lib.problems.isNotEmpty) return (program: null, problems: ['内置库“接口服务”读不了：${lib.problems.first}'], skipped: skipped);
+  if (lib.problems.isNotEmpty) return BeServiceBuilt(problems: ['内置库“接口服务”读不了：${lib.problems.first}']);
   try {
     final core = doc.core;
     final fresh = _Fresh();
     final settings = beServiceSettings(doc);
     final cx = LibCx(context: lib.provides, settings: settings, fresh: fresh.call);
-    BeLangLower? lowerOf(BeRoute shell, {required bool inFunction, Map<String, String> more = const {}}) {
-      final lower = beLangLowerOf(doc, shell, inFunction: inFunction, all: true);
+    final trees = <String, LcBlockTree>{};
+    final lowers = <String, BeLangLower>{};
+    final names = <String, String>{};
+    final lambdas = <String, LLambda>{};
+    BeLangLower? lowerOf(LcBlockTree? tree, BeRoute shell, {required bool inFunction, Map<String, String> more = const {}}) {
+      final lower = beLangLowerOf(doc, shell, shadow: shadow, inFunction: inFunction, all: true);
+      if (lower == null) return null;
       lower
-        ?..typed = true
+        ..typed = true
         ..pure = true
         ..core = core
         ..bridge = _Bridge(lib, settings, fresh, problems, {...lib.provides, ...more});
+      if (tree != null) {
+        trees[tree.id] = tree;
+        lowers[tree.id] = lower;
+      }
       return lower;
     }
 
     final decls = <({String key, LDecl decl})>[];
     for (final f in doc.functions) {
-      final lower = lowerOf(BeRoute(id: f.id, method: 'GET', path: '/', body: f.body), inFunction: true);
+      final lower = lowerOf(f, BeRoute(id: f.id, method: 'GET', path: '/', body: f.body), inFunction: true);
       if (lower == null) continue;
+      names[f.id] = f.ident;
       decls.add((
         key: f.id,
         decl: LFuncDecl(
@@ -205,10 +265,13 @@ BeServiceProgram beServiceProgram(BeDocument doc) {
     }
     var main = const <LStmt>[];
     if (!core.isEmpty) {
-      final values = lowerOf(BeRoute(id: '', method: 'GET', path: '/'), inFunction: true);
+      final values = lowerOf(null, BeRoute(id: '', method: 'GET', path: '/'), inFunction: true);
       final unit = beCoreUnit(
         doc,
-        body: (m, owner) => lowerOf(BeRoute(id: m.id, method: 'GET', path: '/', body: m.body), inFunction: true)?.stmts(m.body, const [], 0) ?? const [],
+        body: (m, owner) {
+          names[m.id] = owner == null ? '程序开始时' : '${owner.name}.${m.name}';
+          return lowerOf(m, BeRoute(id: m.id, method: 'GET', path: '/', body: m.body), inFunction: true)?.stmts(m.body, const [], 0) ?? const [];
+        },
         value: (v) => values?.value(v) ?? const LLit(null),
       );
       decls.addAll(unit.decls);
@@ -216,20 +279,16 @@ BeServiceProgram beServiceProgram(BeDocument doc) {
     }
 
     final hat = lib.block('onRequest');
-    if (hat == null) return (program: null, problems: ['内置库里没有“当收到请求”'], skipped: skipped);
+    if (hat == null) return const BeServiceBuilt(problems: ['内置库里没有“当收到请求”']);
     final routes = <LStmt>[];
     for (final r in doc.routes) {
       final title = describeBeRoute(r);
-      if (!kBeMethods.contains(r.method)) {
-        skipped.add('$title：请求方式不认识');
-        continue;
-      }
-      if (parseBePath(r.path) == null) {
-        skipped.add('$title：路径格式不对');
-        continue;
-      }
+      final badMethod = !kBeMethods.contains(r.method), badPath = parseBePath(r.path) == null;
+      if (badMethod) skipped.add('$title：请求方式不认识');
+      if (!badMethod && badPath) skipped.add('$title：路径格式不对');
+      if ((badMethod || badPath) && !shadow) continue;
       final provided = libProvided(hat, fresh.call);
-      final lower = lowerOf(r, inFunction: false, more: provided);
+      final lower = lowerOf(r, r, inFunction: false, more: provided);
       if (lower == null) continue;
       final body = <LStmt>[
         // 文档里声明的变量：每次请求都从初始值开始（和版本 1 一样）；里面放什么说不准，当“任意”。
@@ -237,11 +296,13 @@ BeServiceProgram beServiceProgram(BeDocument doc) {
           if (!lower.locals.containsKey(v.name)) LLet(v.name, LAscribe(LLit(beInitialValue(v)), LType.any)),
         ...lower.stmts(r.body, const [], 0),
       ];
-      final got = libApply(lib, hat, LibUse(values: {'method': LLit(r.method), 'path': LLit(r.path)}, mouths: {'body': body}, provided: provided), cx);
+      final got = libApply(lib, hat, LibUse(values: {'method': LLit(badMethod ? 'GET' : r.method), 'path': LLit(badPath ? '/' : r.path)}, mouths: {'body': body}, provided: provided), cx);
       if (got.problem != null) {
         problems.add('$title：${got.problem}');
         continue;
       }
+      final lambda = _firstLambda(got.stmts);
+      if (lambda != null) lambdas[r.id] = lambda;
       routes.addAll(got.stmts);
     }
 
@@ -261,10 +322,21 @@ BeServiceProgram beServiceProgram(BeDocument doc) {
               if (m.name != own.entry) m,
             linked.modules.last,
           ], entry: own.entry);
-    return (program: program, problems: problems, skipped: skipped);
+    return BeServiceBuilt(program: program, problems: problems, skipped: skipped, decls: decls, body: body, trees: trees, lowers: lowers, names: names, lambdas: lambdas, split: own != null);
   } on Object catch (e) {
-    return (program: null, problems: [...problems, '积木翻不成语法树（$e）'], skipped: skipped);
+    return BeServiceBuilt(problems: [...problems, '积木翻不成语法树（$e）'], skipped: skipped);
   }
+}
+
+List<LDecl>? _libDecls;
+
+/// 内置库合好以后的全部声明（类型检查把它们和文档自己的声明放在一起查）。只算一次。
+List<LDecl> beServiceLibDecls() {
+  final cached = _libDecls;
+  if (cached != null) return cached;
+  final lib = beServiceLibrary();
+  final linked = linkProgram(LProgram([...lib.modules, LModule(name: 'main', uses: lib.moduleNames)], entry: 'main'));
+  return _libDecls = linked.module?.decls ?? const [];
 }
 
 /// 出工程的结果：成了是文件表（第一个是主文件），不成是一句原因。

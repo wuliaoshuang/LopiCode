@@ -89,7 +89,11 @@ BeDocument _doc() {
     _b('respondJson', {
       'status': exNum(201),
       'value': beObj({
-        'count': {'e': beCallOp('addThing'), 'title': beQuery('t')},
+        // 网址参数是“可空的文字”，积木的参数要文字：先“是空就用”（A2 起类型检查认识库，查得出这一处）。
+        'count': {
+          'e': beCallOp('addThing'),
+          'title': {'e': 'orElse', 'x': beQuery('t'), 'd': exText('')},
+        },
       }),
     }),
   ]);

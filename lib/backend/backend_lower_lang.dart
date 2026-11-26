@@ -532,7 +532,8 @@ class BeLangLower {
         final url = arg('url');
         final data = method == 'POST' && isExpr(b.args['data']) ? arg('data') : const LLit(null);
         final okBody = inner(b.body), failBody = inner(b.orElse, inElse: true);
-        return bridge!.mouthBlock('fetch', [LLit(method), url, data], mouths: {'body': okBody, 'orElse': failBody}, into: knows(into) ? into as String : null) ?? _skip('“请求别的网址”还没有接到库上');
+        final got = bridge!.mouthBlock('fetch', [LLit(method), url, data], mouths: {'body': okBody, 'orElse': failBody}, into: knows(into) ? into as String : null);
+        return got == null ? _skip('“请求别的网址”还没有接到库上') : lStampSrc(got, src());
       case 'fetch':
         // 旧路翻出来是“存临时值 + 如果（没拿到）…否则…”；口里的积木换成这边翻的。
         final old = host.leaf(b.copyWith(body: const [], orElse: const []));
@@ -553,6 +554,8 @@ class BeLangLower {
           ),
         ];
       default:
+        // 走库：翻成了库里的调用，检查器看得见，不补影子；记上是哪一块（问题才标得到这一块上）。
+        if (bridge != null) return lStampSrc(_host(host.leaf(b)), src());
         return [if (shadow) ..._shadow(b), ..._host(host.leaf(b))];
     }
   }

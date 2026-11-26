@@ -26,6 +26,9 @@ final J _ok = json(dc({'ok': yes()}));
 
 const String _mixedPush = '往列表里加的东西要文字，放进来的是小数';
 
+// 库 1 下半（A2）：类型检查认识了内置库，“网址参数”是“可空的文字”（以前当“任意”）。直接拿它“变成数字”在严格规矩下要先处理空。
+const String _nullableQuery = '「变成数字」的第 1 个参数要文字，这个值可能是空，要先判断“不是空”';
+
 void main() {
   test('开关现在的值：新文档还是规矩版本 1（后端的严格生成还没接上，见 B-gen-notes.md 第 5 节）', () {
     expect(kLangRulesForNewDocs, kLangRulesLoose);
@@ -86,8 +89,11 @@ void main() {
       final v2 = _issues(make()..rules = kLangRulesStrict);
       // “我的积木”样本的 /wrap 两个接口往同一个列表里先放文字、再放“变成数字”的结果乘 2：“变成数字”有了版本 2 的签名（结果是小数）以后，
       // 这是一处真的类型不一致，严格规矩下各报一条（接口里一条、包成积木以后积木里一条）。别的一条不多。
-      expect(v2.where((x) => !x.contains(_mixedPush)), v1);
+      // 另外（A2 起）：样本里 6 处“把 网址参数 变成数字”没先处理空，各报一条 T02（/call 4 处，/wrap 两个接口各 1 处）。
+      expect(v2.where((x) => !x.contains(_mixedPush) && !x.contains(_nullableQuery)), v1);
       expect(v2.where((x) => x.contains(_mixedPush)), hasLength(make == starter ? 0 : 2));
+      expect(v2.where((x) => x.contains(_nullableQuery)), hasLength(make == starter ? 0 : 6));
+      expect(v2.where((x) => x.contains(_nullableQuery)).every((x) => x.startsWith('error T02 ')), isTrue);
     }
 
     // 一致性样本全是旧积木。合并以后旧积木的接口也查（老的“运算 / 比较”“不是”翻成语言核心的式子），所以它故意放的那些
@@ -95,7 +101,10 @@ void main() {
     // 对文字“每个”、空 + 空。同一格上原来那 5 条“填的是固定的数字 / 文字”（老规则 G10）被说得更准的 T09 换掉。
     expect(_typeIssues(conformanceDocument()..rules = kLangRulesLoose), isEmpty);
     final conf = _typeIssues(conformanceDocument()..rules = kLangRulesStrict);
-    expect(byCode(conf), {'T06': 2, 'T16': 1, 'T09': 6, 'T01': 1});
+    // A2 起类型检查认识内置库：“网址参数”是可空的文字、“集合里全部”是列表（以前都当“任意”），所以又多报出 15 条：
+    // /calc 拿网址参数直接算、直接比（T02 9 条）、直接当条件（T09 2 条）；/branch 同样（T02 1 条、T09 1 条）；
+    // /truthy 里“不是（不是（集合里全部））”（T09 1 条）；/loop 的次数是网址参数（T01 1 条）。
+    expect(byCode(conf), {'T06': 2, 'T16': 1, 'T09': 10, 'T01': 2, 'T02': 10});
     expect(conf.every((i) => i.level == LcIssueLevel.error), isTrue);
     final rest1 = _issues(conformanceDocument()..rules = kLangRulesLoose);
     final rest2 = [
@@ -123,7 +132,7 @@ void main() {
     final all = [for (final i in _typeIssues(doc)) '${i.where}｜${i.problem}'];
     expect(all.where((x) => x.contains('要任意的列表')), isEmpty);
     // 剩下的只有 /wrap 那一处真的类型不一致（见上一条测试的说明）。
-    expect(all.where((x) => !x.contains(_mixedPush)), isEmpty);
+    expect(all.where((x) => !x.contains(_mixedPush) && !x.contains(_nullableQuery)), isEmpty);
   });
 
   test('校验和编辑器拿的是同一批类型问题：校验里每条“错 / 警告”在检查结果里都有，提醒（T12）不进校验', () {
