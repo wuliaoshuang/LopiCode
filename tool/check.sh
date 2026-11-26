@@ -69,7 +69,8 @@ step "排版（dart format）" check_format
 step "静态检查（flutter analyze，必须零问题）" flutter analyze --no-pub
 step "架构守门（依赖方向、文件行数、存盘写法）" flutter test --no-pub test/architecture_test.dart
 if [ "$quick" = 0 ]; then
-  step "全量测试（flutter test）" flutter test --no-pub
+  # 机器内存紧的时候：LOPI_TEST_JOBS=1 tool/check.sh（一次只跑一个测试文件）
+  step "全量测试（flutter test）" flutter test --no-pub ${LOPI_TEST_JOBS:+--concurrency=$LOPI_TEST_JOBS}
 fi
 
 echo
