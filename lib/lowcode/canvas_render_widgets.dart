@@ -15,6 +15,7 @@ import 'package:lopicode/lowcode/canvas_grid_widgets.dart';
 import 'package:lopicode/lowcode/canvas_parts_widgets.dart';
 import 'package:lopicode/lowcode/canvas_style_widgets.dart';
 import 'package:lopicode/lowcode/canvas_v3_widgets.dart';
+import 'package:lopicode/lowcode/component_editing.dart';
 import 'package:lopicode/lowcode/component_ops.dart';
 import 'package:lopicode/lowcode/lift_gesture_widgets.dart';
 import 'package:lopicode/lowcode/model.dart';
@@ -25,59 +26,7 @@ import 'package:lopicode/lowcode/style_resolve.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:material_ui/material_ui.dart';
 
-/// 拖柄拖动中的临时尺寸：只影响画布怎么画，不动页面数据（松手才真的写进去）。
-class CanvasResizePreview {
-  const CanvasResizePreview(this.nodeId, this.width, this.height);
-  final String nodeId;
-  final int? width;
-  final int? height;
-}
-
-/// 画一个子组件时，从父容器那里知道的事。
-class _Ctx {
-  const _Ctx({
-    required this.parent,
-    required this.flow,
-    required this.boundedW,
-    required this.boundedH,
-    required this.availW,
-    required this.availH,
-    required this.scale,
-    required this.growCount,
-    required this.textColor,
-    required this.buttonText,
-    required this.styles,
-  });
-  final LcNode parent;
-  final CssFlow flow;
-
-  /// 父容器给的宽 / 高是不是有上限。没有上限时不能“撑满”，不然排版会报错。
-  final bool boundedW;
-  final bool boundedH;
-
-  /// 父容器内容区的宽高（估的），百分比尺寸参照它；高度不知道是 null。
-  final double availW;
-  final double? availH;
-  final CssScale scale;
-
-  /// 父容器里有几个子项要“放大占满”，用来估每个能分到多宽。
-  final int growCount;
-
-  /// 继承下来的文字颜色（边框、阴影没写颜色时用它，CSS 的 currentcolor）。
-  final Color textColor;
-
-  /// 设了字号的按钮，文字的基础样式沿用应用主题里的（第 1 版就是这样，换掉的话旧页面的按钮会变样）。
-  final TextStyle? buttonText;
-
-  /// 这一次重搭里已经算过的最终样式（按组件对象记）：同一个组件不算第二遍。
-  final Map<LcNode, Map<String, String>> styles;
-
-  Map<String, String> styleOf(LcNode n, LcNode? parent) => styles[n] ??= resolvedStyle(n, parent);
-}
-
-bool _has(Map<String, String> s, String prefix) => s.keys.any((k) => k.startsWith(prefix));
-
-bool _hasRadius(Map<String, String> s) => s.keys.any((k) => k.startsWith('border-') && k.endsWith('-radius'));
+part 'canvas_render_slots.dart';
 
 /// 画布里的那块“页面”。
 class CanvasPage extends StatelessWidget {
@@ -98,6 +47,7 @@ class CanvasPage extends StatelessWidget {
     this.inert = false,
     this.overlayId,
     this.statePreview,
+    this.live,
   });
 
   /// 只画样子的页面（拖动时手指下面的缩略图、测试）：不能点、不能拖。
@@ -113,6 +63,7 @@ class CanvasPage extends StatelessWidget {
       preview = null,
       overlayId = null,
       statePreview = null,
+      live = null,
       inert = true;
 
   static void _ignoreSelect(String _) {}
@@ -154,7 +105,10 @@ class CanvasPage extends StatelessWidget {
   /// 正在预览哪个组件的哪种状态样式（按下 / 禁用 / 聚焦）。
   final ({String nodeId, String state})? statePreview;
 
-  CanvasPage _inertCopy() => CanvasPage(doc: doc, pageWidth: pageWidth, minHeight: minHeight, selected: null, onSelect: (_) {}, boxKey: boxKey, inert: true);
+  /// 只画样子的这一份是替哪张活页面画的（实例里填进插槽的内容交回给它画，见 canvas_render_slots.dart）。
+  final CanvasPage? live;
+
+  CanvasPage _inertCopy() => CanvasPage(doc: doc, pageWidth: pageWidth, minHeight: minHeight, selected: null, onSelect: (_) {}, boxKey: boxKey, inert: true, live: inert ? live : this);
 
   @override
   Widget build(BuildContext context) {
@@ -251,11 +205,11 @@ class CanvasPage extends StatelessWidget {
         buttonText: inner.buttonText,
         styles: inner.styles,
       );
-      return canvasGrid(grid, [for (final c in kids) (span: canvasGridSpan(inner.styleOf(c, n)), child: _node(context, c, cell))]);
+      return canvasGrid(grid, [for (final c in kids) (span: canvasGridSpan(inner.styleOf(c, n)), child: _item(context, n, s, cell, c))]);
     }
     // 子项之间的间距由容器自己留（拖动时也不往里插东西），这样“两端对齐”之类的分布才准。
     // “编辑器里隐藏”的（图层面板的眼睛）不画、不占位；导出不受影响。
-    final children = [for (final c in kids) _node(context, c, inner)];
+    final children = [for (final c in kids) _item(context, n, s, inner, c)];
     final spacing = mainGap;
     final textDirection = flow.row && flow.reverse ? TextDirection.rtl : null;
     final verticalDirection = !flow.row && flow.reverse ? VerticalDirection.up : VerticalDirection.down;
@@ -321,7 +275,7 @@ class CanvasPage extends StatelessWidget {
     // 自定义组件的实例：按展开后的内容画（最外层沿用实例的 id，所以选中框、拖柄照常认得它）。
     // 展开不了、或者已经在别的实例里面了（inert）就不展开，下面画占位。
     final instance = node.type == 'component' && !inert;
-    final shown = instance ? expandInstance(doc, node) ?? node : node;
+    final shown = instance ? expandInstance(doc, node, markers: true) ?? node : node;
     final n = canvasPreviewNode(
       shown,
       resize: p != null && p.nodeId == node.id ? (p.width, p.height) : null,
@@ -524,8 +478,8 @@ class CanvasPage extends StatelessWidget {
     if (!margin.isZero) box = Padding(padding: EdgeInsets.fromLTRB(margin.left, margin.top, margin.right, margin.bottom), child: box);
 
     // 选中框和拖柄由画布叠在上面画；这里只管点选和长按拖动。
-    // 实例整块只当一个东西：里面的内容一律不接手势（点哪儿选中的都是实例）。
-    final droppable = n.isContainer && !instance && n.type != 'dialog';
+    // 实例整块只当一个东西：里面的内容不接手势（点哪儿选中的都是实例）；只有填进它插槽里的东西是活的。
+    final droppable = n.isContainer && (!instance || node.hasSlots) && n.type != 'dialog';
     // 锁着的：点不中、拖不动（点它等于点它外面那一层）；它里面的东西照常能点。
     Widget wrapped = inert
         ? box

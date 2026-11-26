@@ -1,4 +1,6 @@
 import 'package:lopicode/lowcode/model.dart';
+import 'package:lopicode/lowcode/model_v3_components.dart';
+import 'package:lopicode/lowcode/slots.dart';
 
 /// 自定义组件：把一棵控件子树存下来反复用。JSON 结构约定见 docs/lowcode-v2-design.md。
 ///
@@ -35,13 +37,51 @@ class LcComponentProp {
 }
 
 class LcComponentDef {
-  LcComponentDef({required this.id, required this.name, List<LcComponentProp>? props, required this.root, List<Object?>? keptProps, Map<String, dynamic>? more})
-    : props = props ?? [],
-      keptProps = keptProps ?? [],
-      more = more ?? {};
+  LcComponentDef({
+    required this.id,
+    required this.name,
+    List<LcComponentProp>? props,
+    required this.root,
+    List<Object?>? keptProps,
+    Map<String, dynamic>? more,
+    Map<String, String>? slotLabels,
+    List<Object?>? keptSlots,
+  }) : props = props ?? [],
+       keptProps = keptProps ?? [],
+       more = more ?? {},
+       slotLabels = slotLabels ?? {},
+       keptSlots = keptSlots ?? [];
 
-  /// 定义上这一版会读的字段；别的（给第 6 期留的 events / slots / variants / state / logic，以及任何不认识的）都进 [more]。
-  static const Set<String> knownKeys = {'id', 'name', 'props', 'root'};
+  /// 定义上这一版会读的字段；别的（给第 6 期留的 events / variants / state / logic，以及任何不认识的）都进 [more]。
+  static const Set<String> knownKeys = {'id', 'name', 'props', 'root', 'slots'};
+
+  /// 文件的 `slots` 里写的“插槽名 → 给人看的名字”。有哪些插槽以 [root] 里的插槽占位节点为准（见 [slots]），这里只管名字。
+  final Map<String, String> slotLabels;
+
+  /// 文件的 `slots` 里读不懂的、或者定义里已经没有对应占位节点的项：不解释，原样留着。
+  final List<Object?> keptSlots;
+
+  /// 这个组件有哪些插槽：[root] 里的插槽占位节点（`type: slot`），按出现的先后；同名的只算第一个。
+  /// 给人看的名字：占位节点自己起了名字用它的，不然用文件 `slots` 里写的，再不然默认插槽叫“默认插槽”、别的就叫插槽名。
+  List<LcSlot> get slots {
+    final out = <LcSlot>[];
+    void walk(LcNode n, LcNode? parent) {
+      if (n.type == 'slot') {
+        final name = lcSlotNameOf(n);
+        if (!out.any((s) => s.name == name)) {
+          final flow = parent?.style['flex-direction'];
+          final row = parent == null || parent.type == 'component' ? false : (flow == null ? parent.type == 'row' : flow.startsWith('row'));
+          out.add(LcSlot(name, n.name.isNotEmpty ? n.name : slotLabels[name] ?? lcDefaultSlotLabel(name), row: row));
+        }
+      }
+      for (final c in n.children) {
+        walk(c, n);
+      }
+    }
+
+    walk(root, null);
+    return out;
+  }
 
   /// 读不懂的属性（类型是这一版不认识的、名字不合规矩的、重名的）：不解释，原样留着。
   final List<Object?> keptProps;
@@ -64,8 +104,18 @@ class LcComponentDef {
     'name': name,
     if (props.isNotEmpty || keptProps.isNotEmpty) 'props': [for (final p in props) p.toJson(), ...keptProps],
     'root': root.toJson(),
+    if (_slotsJson().isNotEmpty) 'slots': _slotsJson(),
     ...more,
   };
+
+  List<Object?> _slotsJson() {
+    final live = slots;
+    return [
+      for (final s in live) {'name': s.name, 'label': s.label},
+      for (final k in keptSlots)
+        if (!(k is Map && live.any((s) => s.name == k['name']))) k,
+    ];
+  }
 
   LcComponentProp? prop(String name) {
     for (final p in props) {
@@ -85,7 +135,19 @@ class LcComponentDef {
     } on FormatException {
       return null;
     }
-    if (root.type == 'page' || root.isUnknown) return null;
+    // 最外层不能是页面、不认识的类型、插槽占位（组件得有一个真的最外层）。
+    if (root.type == 'page' || root.isUnknown || root.type == 'slot') return null;
+    final rawSlots = json['slots'];
+    final labels = <String, String>{};
+    final keptSlots = <Object?>[];
+    for (final x in rawSlots is List ? rawSlots : const <Object?>[]) {
+      final n = x is Map ? x['name'] : null, l = x is Map ? x['label'] : null;
+      if (n is String && lcSlotName.hasMatch(n) && l is String && !labels.containsKey(n)) {
+        labels[n] = LcNode.cleanName(l);
+      } else {
+        keptSlots.add(x);
+      }
+    }
     final id = json['id'];
     final name = json['name'];
     final rawProps = json['props'];
@@ -105,6 +167,8 @@ class LcComponentDef {
       name: name is String && name.trim().isNotEmpty ? name.trim() : '未命名组件',
       props: good,
       keptProps: kept,
+      slotLabels: labels,
+      keptSlots: keptSlots,
       more: {
         for (final e in json.entries)
           if (!knownKeys.contains(e.key) && e.value != null) e.key: e.value,

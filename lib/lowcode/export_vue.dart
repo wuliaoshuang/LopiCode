@@ -25,6 +25,7 @@ import 'package:lopicode/lowcode/logic_js_core.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 import 'package:lopicode/lowcode/logic_text.dart';
 import 'package:lopicode/lowcode/model.dart';
+import 'package:lopicode/lowcode/slots.dart';
 
 export 'package:lopicode/lowcode/export_framework_common.dart' show LcExportFile, LcFrameworkExport;
 
@@ -130,6 +131,7 @@ class _Template {
 
   /// 模板里用到的组件（要在脚本里 import）。
   final Set<LcComponentPlan> used = {};
+  final Set<String> _slotsSeen = {};
 
   String _attrs(LcNode n) {
     final b = StringBuffer(' class="${lcNodeClass(n, prefix)}"');
@@ -231,7 +233,32 @@ class _Template {
           // 文字、颜色当普通属性传；数字、是否要用绑定写法才是真的数字 / 布尔。
           values.write(v is String ? vueAttr(attr, v) : ' :$attr="${lcValueLiteral(p.type, v)}"');
         }
-        out.writeln('$pad<${plan.name}$a$values />');
+        final filled = plan.filled(n);
+        if (n.children.isNotEmpty && plan.def.slots.isEmpty) notes.add(kNoteHomeless);
+        if (filled.isEmpty) {
+          out.writeln('$pad<${plan.name}$a$values />');
+          return;
+        }
+        // 填进插槽的内容：每个插槽一个 <template #名字>（Vue 的具名插槽写法；默认插槽是 #default）。
+        out.writeln('$pad<${plan.name}$a$values>');
+        filled.forEach((slot, kids) {
+          out.writeln('$pad  <template #$slot>');
+          for (final c in kids) {
+            node(c, depth + 2);
+          }
+          out.writeln('$pad  </template>');
+        });
+        out.writeln('$pad</${plan.name}>');
+      case 'slot':
+        // 组件定义里：<slot>，里面是没填时显示的默认内容。同名的第二个、页面里误放的：只留里面的内容。
+        final name = lcSlotNameOf(n);
+        final real = ownerId != null && _slotsSeen.add(name);
+        if (ownerId == null) notes.add(kNoteStraySlot);
+        if (real) out.writeln('$pad<slot${name == kLcDefaultSlot ? '' : ' name="$name"'}>');
+        for (final c in n.children) {
+          node(c, depth + (real ? 1 : 0));
+        }
+        if (real) out.writeln('$pad</slot>');
       default:
         final tag = n.type == 'page' ? 'main' : 'div';
         out.writeln('$pad<$tag$a>');
@@ -338,7 +365,11 @@ String _page(LcDocument doc, LcComponentPlans plans, List<String> notes) {
     if (handlers.load.isNotEmpty) ...['// 页面准备好以后，执行“页面打开时”的处理', 'onMounted(() => {', for (final f in handlers.load) '  $f();', '});'],
   ];
   if (!logic.isEmpty) notes.add(kNoteNoBinding);
-  return _sfc(script: script, template: template.out.toString(), css: lcCollectCss(doc.root, '', notes));
+  return _sfc(
+    script: script,
+    template: template.out.toString(),
+    css: lcCollectCss(doc.root, '', notes, plans: plans),
+  );
 }
 
 String _propType(LcComponentProp p) => switch (p.type) {
@@ -357,5 +388,9 @@ String _component(LcComponentPlan plan, LcComponentPlans plans, List<String> not
     ...template.imports(),
     if (def.props.isNotEmpty) ...['', 'defineProps({', for (final p in def.props) '  ${plan.attrs[p.name]}: { type: ${_propType(p)}, default: ${lcPropDefaultLiteral(p)} },', '});'],
   ];
-  return _sfc(script: script, template: template.out.toString(), css: lcCollectCss(def.root, prefix, notes));
+  return _sfc(
+    script: script,
+    template: template.out.toString(),
+    css: lcCollectCss(def.root, prefix, notes, plans: plans),
+  );
 }

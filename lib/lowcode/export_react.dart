@@ -28,6 +28,7 @@ import 'package:lopicode/lowcode/logic_js_core.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 import 'package:lopicode/lowcode/logic_text.dart';
 import 'package:lopicode/lowcode/model.dart';
+import 'package:lopicode/lowcode/slots.dart';
 
 export 'package:lopicode/lowcode/export_framework_common.dart' show LcExportFile, LcFrameworkExport;
 
@@ -152,6 +153,7 @@ class _View {
   final bool Function(LcNode n)? textNeedsString;
 
   final Set<LcComponentPlan> used = {};
+  final Set<String> _slotsSeen = {};
 
   /// 页面的根节点（组件定义里是 null）：判断“页面级的栏”用。
   LcNode? pageRoot;
@@ -267,7 +269,31 @@ class _View {
         for (final (attr, p, v) in lcInstanceValues(plan, n)) {
           values.write(v is String ? jsxAttr(attr, v) : ' $attr={${lcValueLiteral(p.type, v)}}');
         }
-        return _Jsx(['<${plan.name}$a$values />']);
+        final filled = plan.filled(n);
+        if (n.children.isNotEmpty && plan.def.slots.isEmpty) notes.add(kNoteHomeless);
+        if (filled.isEmpty) return _Jsx(['<${plan.name}$a$values />']);
+        // 填进插槽的内容：默认插槽写成子节点（组件那边是 children），具名插槽当属性传一段 JSX。
+        List<String> kidsOf(String slot) => [for (final c in filled[slot]!) ...node(c, depth + 1).asChild];
+        final named = [
+          for (final slot in filled.keys)
+            if (slot != kLcDefaultSlot) ...['  ${plan.slotAttrs[slot]}={', '    <>', ..._indent(_indent(_indent(kidsOf(slot)))), '    </>', '  }'],
+        ];
+        final inner = filled.containsKey(kLcDefaultSlot) ? kidsOf(kLcDefaultSlot) : null;
+        if (named.isEmpty) return _Jsx(['<${plan.name}$a$values>', ..._indent(inner!), '</${plan.name}>']);
+        return _Jsx([
+          '<${plan.name}$a$values',
+          ...named,
+          if (inner == null) '/>' else ...['>', ..._indent(inner), '</${plan.name}>'],
+        ]);
+      case 'slot':
+        // 组件定义里：外面传了就用外面的，没传用默认内容。同名的第二个、页面里误放的：只留里面的内容。
+        final name = lcSlotNameOf(n);
+        final attr = ownerId == null ? null : plans.planOf(ownerId!)?.slotAttrs[name];
+        if (ownerId == null) notes.add(kNoteStraySlot);
+        final kids = [for (final c in n.children) ...node(c, depth + 1).asChild];
+        if (attr == null || !_slotsSeen.add(name)) return _Jsx(['<>', ..._indent(kids), '</>']);
+        if (kids.isEmpty) return _Jsx([attr], _Kind.expression);
+        return _Jsx(['$attr ?? (', '  <>', ..._indent(_indent(kids)), '  </>', ')'], _Kind.expression);
       default:
         final tag = n.type == 'page' ? 'main' : 'div';
         return _Jsx(['<$tag$a>', for (final c in n.children) ..._indent(node(c, depth + 1).asChild), '</$tag>']);
@@ -390,7 +416,7 @@ String _objectLiteral(Iterable<(String, String)> entries) =>
   out
     ..writeln('  );')
     ..writeln('}');
-  return (out.toString(), '/* $kExportHeader */\n${lcCollectCss(doc.root, '', notes)}');
+  return (out.toString(), '/* $kExportHeader */\n${lcCollectCss(doc.root, '', notes, plans: plans)}');
 }
 
 (String, String) _component(LcComponentPlan plan, LcComponentPlans plans, List<String> notes) {
@@ -408,7 +434,7 @@ String _objectLiteral(Iterable<(String, String)> entries) =>
     textNeedsString: (n) => !lcBoundIsText(plan, n, 'text'),
   );
   final root = view.node(def.root, 0);
-  final params = [for (final LcComponentProp p in def.props) '${plan.attrs[p.name]} = ${lcPropDefaultLiteral(p)}', 'className', 'style', '...lcRest'];
+  final params = [for (final LcComponentProp p in def.props) '${plan.attrs[p.name]} = ${lcPropDefaultLiteral(p)}', ...plan.slotAttrs.values, 'className', 'style', '...lcRest'];
   final out = StringBuffer()
     ..writeln('// $kExportHeader')
     ..writeln('// 自定义组件：${jsComment(def.name, 60)}')
@@ -425,5 +451,5 @@ String _objectLiteral(Iterable<(String, String)> entries) =>
   out
     ..writeln('  );')
     ..writeln('}');
-  return (out.toString(), '/* $kExportHeader */\n${lcCollectCss(def.root, prefix, notes)}');
+  return (out.toString(), '/* $kExportHeader */\n${lcCollectCss(def.root, prefix, notes, plans: plans)}');
 }

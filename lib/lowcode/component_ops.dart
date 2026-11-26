@@ -6,8 +6,10 @@
 /// - 展开实例不改文档：返回一棵新的子树。展开后最外层节点的 id 就是实例自己的 id（这样选中框、拖柄、
 ///   挂在实例上的积木逻辑都还认得它），里面的节点是 `<实例 id>__<定义里的 id>`，全页唯一。
 /// - 实例自己的 `width` / `margin` 属性和 `style` 盖在定义最外层节点之上。
+/// - 展开本身在 component_expand.dart；插槽在定义那一头的操作在 component_slots.dart。
 library;
 
+import 'package:lopicode/lowcode/component_expand.dart';
 import 'package:lopicode/lowcode/component_model.dart';
 import 'package:lopicode/lowcode/logic_edit.dart';
 import 'package:lopicode/lowcode/model.dart';
@@ -53,6 +55,8 @@ Object? _cloneValue(Object? v) => switch (v) {
   List() => [for (final x in v) _cloneValue(x)],
   _ => v,
 };
+
+Map<String, dynamic> cloneLcProps(Map<String, dynamic> props) => _cloneProps(props);
 
 Map<String, dynamic> _cloneProps(Map<String, dynamic> props) => {for (final e in props.entries) e.key: _cloneValue(e.value)};
 
@@ -127,89 +131,22 @@ bool propTypeFitsAttr(String propType, String attr) => attr == 'bg' || attr == '
 
 /// 展开时认不认这条绑定。比 [bindablePropsFor] 松：和 Vue / React 导出认的范围一样
 /// （文字只有文本和按钮有，提示文字只有输入框有，图片地址只有图片有，颜色谁都行），免得两边导出的结果不一样。
-bool _attrFitsType(String attr, String type) => switch (attr) {
+bool lcAttrFitsType(String attr, String type) => switch (attr) {
   'text' => type == 'text' || type == 'button',
   'placeholder' => type == 'input',
   'src' => type == 'image',
   _ => type != 'component' && type != 'page',
 };
 
-class _Expander {
-  _Expander(this.doc, {this.deep = true}) {
-    // 页面里本来就长得像“展开后的 id”的节点（带 __ 的）要避开。绝大多数页面一个都没有。
-    _walk(doc.root, (n) {
-      if (n.id.contains('__')) taken.add(n.id);
-    });
-  }
-
-  final LcDocument doc;
-
-  /// false＝只展开一层：里面套的别的组件实例原样留着（拆开实例时用）。
-  final bool deep;
-  final Set<String> taken = {};
-  final Set<String> visiting = {};
-  int budget = kComponentExpandBudget;
-
-  LcNode? expand(LcNode inst, [int depth = 0]) {
-    final ref = _refOf(inst);
-    final def = ref == null ? null : doc.component(ref);
-    // 定义没了、套得太深、绕回自己：这一层不展开。
-    if (def == null || depth >= kComponentNestMax || visiting.contains(def.id) || budget <= 0) return null;
-    visiting.add(def.id);
-    final values = instanceValues(def, inst);
-    final rootId = inst.id;
-
-    LcNode build(LcNode src, bool isRoot) {
-      budget--;
-      var id = isRoot ? rootId : '${rootId}__${src.id}';
-      while (!isRoot && taken.contains(id)) {
-        id = '${id}_';
-      }
-      if (src.type == 'component') {
-        final placed = LcNode(id: id, type: 'component', props: _cloneProps(src.props), style: Map.of(src.style));
-        return (deep ? expand(placed, depth + 1) : null) ?? placed;
-      }
-      final props = _cloneProps(src.props);
-      src.bind.forEach((attr, name) {
-        final p = def.prop(name);
-        if (p == null || !_attrFitsType(attr, src.type)) return;
-        final v = values[name];
-        if (attr == 'bg' || attr == 'color') {
-          // 颜色必须是 #RRGGBB；不是就留着控件自己原来的颜色。
-          if (v is String && _hex.hasMatch(v)) props[attr] = v.toUpperCase();
-        } else {
-          props[attr] = componentValueText(v);
-        }
-      });
-      return LcNode(
-        id: id,
-        type: src.type,
-        props: props,
-        style: Map.of(src.style),
-        children: [
-          for (final c in src.children)
-            if (budget > 0) build(c, false),
-        ],
-      );
-    }
-
-    final root = build(def.root, true);
-    visiting.remove(def.id);
-    // 实例自己的摆放（宽度、外边距、样式）盖在最外层。
-    for (final key in const ['width', 'margin']) {
-      if (inst.props.containsKey(key)) root.props[key] = inst.props[key];
-    }
-    root.style.addAll(inst.style);
-    return root;
-  }
-}
-
 /// 把一个实例展开成普通控件的子树（不改文档）。bind 的属性换成实际的值（传了用传的，没传 / 类型不对用默认值）；
-/// 里面套的实例一起展开。定义不存在、或这个实例会绕回自己（循环）返回 null；
+/// 里面套的实例一起展开；填进插槽的内容接在插槽占位的位置上，没填的插槽用定义里的默认内容。
+/// 定义不存在、或这个实例会绕回自己（循环）返回 null；
 /// 里面某一层出了这种问题，那一层原样留成 `component` 节点（调用方画占位 / 输出注释）。
-LcNode? expandInstance(LcDocument doc, LcNode instance) {
+///
+/// [markers]（画布用）：插槽的位置留一个 `slot` 节点当记号（见 component_expand.dart），填进去的内容是页面里的原节点。
+LcNode? expandInstance(LcDocument doc, LcNode instance, {bool markers = false}) {
   if (instance.type != 'component') return null;
-  final out = _Expander(doc).expand(instance);
+  final out = LcExpander(doc, markers: markers).expand(instance);
   return out == null || out.type == 'component' ? null : out;
 }
 
@@ -217,16 +154,8 @@ LcNode? expandInstance(LcDocument doc, LcNode instance) {
 /// 页面里一个实例都没有时直接返回原来的根（不拷贝），所以没有组件的页面导出结果和以前一个字都不差。
 LcNode expandedTree(LcDocument doc) {
   var any = false;
-  _walk(doc.root, (n) => any = any || n.type == 'component');
-  if (!any) return doc.root;
-  final ex = _Expander(doc);
-  LcNode walk(LcNode n) {
-    if (n.type == 'component') return ex.expand(n) ?? n;
-    if (n.children.isEmpty) return n;
-    return LcNode(id: n.id, type: n.type, props: n.props, style: n.style, bind: n.bind, children: [for (final c in n.children) walk(c)], raw: n.raw);
-  }
-
-  return walk(doc.root);
+  _walk(doc.root, (n) => any = any || n.type == 'component' || n.type == 'slot');
+  return any ? LcExpander(doc).outer(doc.root) : doc.root;
 }
 
 /// 这个组件被用了几次（页面里的实例 + 别的组件定义里的实例）。
@@ -298,6 +227,10 @@ String? canSaveAsComponent(LcDocument doc, String nodeId) {
   if (node.type == 'component') return '它已经是一个组件了';
   // 组件定义里的控件不支持积木逻辑（定义里的 id 和页面互不相干，逻辑找不到它们）。
   final refs = _subtreeLogicRefs(doc, node);
+  var dialogs = 0;
+  _walk(node, (n) => dialogs += n.type == 'dialog' ? 1 : 0);
+  if (node.type == 'dialog') return '弹窗是整页的东西，不能存成组件';
+  if (dialogs > 0) return '里面有 $dialogs 个弹窗。弹窗是整页的东西，不能放进组件里：先把弹窗拖到外面，再存成组件';
   if (refs > 0) return '这几个控件有积木逻辑在用（$refs 处），先去掉逻辑再存成组件';
   return null;
 }
@@ -354,11 +287,17 @@ LcOpResult insertInstance(LcDocument doc, String componentId, {String? nearId}) 
 /// [mint] 给里面的节点发新 id。定义不在了返回 false。
 bool _detachAt(LcDocument doc, List<LcNode> list, int index, String Function() mint) {
   final inst = list[index];
-  final flat = _Expander(doc, deep: false).expand(inst);
+  // 填进插槽的内容是页面里本来就有的节点：原样接到插槽的位置上，编号不换（挂在它们上面的积木逻辑还认得）。
+  final own = Set<LcNode>.identity()..addAll(inst.children);
+  final flat = LcExpander(doc, deep: false).expand(inst);
   if (flat == null) return false;
-  for (final c in flat.children) {
-    _walk(c, (n) => n.id = mint());
+  void renumber(LcNode n) {
+    if (own.contains(n)) return;
+    n.id = mint();
+    n.children.forEach(renumber);
   }
+
+  flat.children.forEach(renumber);
   list[index] = flat;
   return true;
 }
@@ -554,7 +493,10 @@ LcOpResult deleteComponent(LcDocument doc, String componentId, {LcDeleteInstance
       for (var i = parent.children.length - 1; i >= 0; i--) {
         final c = parent.children[i];
         if (_refOf(c) == componentId) {
-          if (detach && _detachAt(doc, parent.children, i, mint)) continue;
+          if (detach && _detachAt(doc, parent.children, i, mint)) {
+            sweep(parent.children[i], mint, onRemove); // 填在它插槽里的内容里可能还有这个组件的实例
+            continue;
+          }
           onRemove(c);
           parent.children.removeAt(i);
         } else {
@@ -563,7 +505,8 @@ LcOpResult deleteComponent(LcDocument doc, String componentId, {LcDeleteInstance
       }
     }
 
-    sweep(doc.root, () => doc.newNode('spacer').id, (inst) => doc.logic.removeNodeRefs(inst.id));
+    // 连实例一起删：填在它插槽里的内容也跟着没了，挂在上面的逻辑一并清掉。
+    sweep(doc.root, () => doc.newNode('spacer').id, (inst) => _walk(inst, (n) => doc.logic.removeNodeRefs(n.id)));
     for (final other in doc.components) {
       if (other.id == componentId) continue;
       final mint = _minterFor(other.root);

@@ -20,7 +20,7 @@ String? lcMultiToggle(LcDocument doc, Set<String> ids, String id) {
   if (ids.remove(id)) return null;
   final parent = doc.parentOf(id);
   if (parent == null) return doc.find(id) == null ? '找不到这个组件' : '页面本身不能和别的一起选';
-  if (ids.isNotEmpty && !identical(doc.parentOf(ids.first), parent)) return kLcMultiSameLevelOnly;
+  if (ids.isNotEmpty && !_sameLevel(doc, ids.first, id)) return kLcMultiSameLevelOnly;
   ids.add(id);
   return null;
 }
@@ -29,8 +29,16 @@ String? lcMultiToggle(LcDocument doc, Set<String> ids, String id) {
 void lcMultiPrune(LcDocument doc, Set<String> ids) {
   ids.removeWhere((id) => doc.parentOf(id) == null);
   if (ids.isEmpty) return;
-  final parent = doc.parentOf(ids.first);
-  ids.removeWhere((id) => !identical(doc.parentOf(id), parent));
+  final first = ids.first;
+  ids.removeWhere((id) => !_sameLevel(doc, first, id));
+}
+
+/// 是不是同一层：同一个容器里的兄弟；自定义组件实例里的，还得在同一个插槽里（不同插槽在画面上不挨着）。
+bool _sameLevel(LcDocument doc, String a, String b) {
+  final parent = doc.parentOf(a);
+  if (parent == null || !identical(parent, doc.parentOf(b))) return false;
+  if (parent.type != 'component') return true;
+  return lcSlotOfChild(parent, doc.find(a)!) == lcSlotOfChild(parent, doc.find(b)!);
 }
 
 /// 选中的这几个，按页面上的先后排好。

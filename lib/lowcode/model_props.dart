@@ -45,6 +45,8 @@ Object? _clean(String type, String key, Object? value, int version) {
       return lcInputTypes.contains(value) ? value : null;
     case 'items':
       return value is List ? [for (final v in value) '$v'] : null;
+    case 'name':
+      return type == 'slot' && value is String && lcSlotName.hasMatch(value) ? value : null;
     case 'ref':
       return type == 'component' && value is String && LcComponentDef.idPattern.hasMatch(value) ? value : null;
     case 'values':

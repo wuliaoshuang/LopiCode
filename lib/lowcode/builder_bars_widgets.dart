@@ -7,6 +7,7 @@
 //   页面本身不能移动、复制、删除：只有剪贴板里有东西时才有“更多操作”，里面只有“粘贴到页面里”。
 // - 长按菜单摆在被按的组件下面（隔 4），下面放不下摆上面，都放不下才摆在手指那儿：不盖住她正按着的东西（lcNodeMenuTop）。
 import 'package:lopicode/lowcode/component_ops.dart';
+import 'package:lopicode/lowcode/component_slots.dart';
 import 'package:lopicode/lowcode/editor_clipboard.dart';
 import 'package:lopicode/lowcode/editor_workbench_widgets.dart';
 import 'package:lopicode/lowcode/model.dart';
@@ -38,14 +39,29 @@ class BuilderMoreMenu extends StatelessWidget {
 /// 一个组件能做的事（长按菜单和选中条的“更多操作”共用一份）。
 ///
 /// 选了哪项，value 是：clip 复制 / paste 粘贴到它后面 / dup 重复一份 / multi 多选（从它开始）/ wrap 包成容器 / save 存成组件 /
-/// edit 编辑组件 / detach 拆开 / up 上移 / down 下移 / delete 删除 / pasteInto 粘贴到页面里。
+/// edit 编辑组件 / detach 拆开 / up 上移 / down 下移 / delete 删除 / pasteInto 粘贴到页面里 /
+/// slot 设成插槽 / slotRename 改插槽名 / slotUnwrap 取消插槽（这三项只在组件编辑页里有，见 [slotActions]）。
 ///
 /// [withMove]：带不带“上移 / 下移”。[componentActions]：带不带和自定义组件有关的三项（组件编辑页里没有）。
 /// [fixed]：这个组件不能移动、复制、删除（页面本身、组件的最外层）——只剩“粘贴到里面”。
-List<PopupMenuEntry<String>> lcNodeMenuItems(BuildContext context, LcNode node, {bool withMove = false, bool componentActions = true, bool fixed = false, bool multi = true}) {
+/// [slotActions]：在组件编辑页里——容器多一项“把内容设成插槽”，插槽占位多“改插槽名 / 取消插槽”。
+List<PopupMenuEntry<String>> lcNodeMenuItems(
+  BuildContext context,
+  LcNode node, {
+  bool withMove = false,
+  bool componentActions = true,
+  bool fixed = false,
+  bool multi = true,
+  bool slotActions = false,
+}) {
   final canPaste = lcClipboardHasContent && (componentActions || !lcClipboardHasInstances);
-  if (fixed) return [PopupMenuItem(value: 'pasteInto', enabled: canPaste, child: Text(node.type == 'page' ? '粘贴到页面里' : '粘贴到里面'))];
+  final slotItems = <PopupMenuEntry<String>>[
+    if (slotActions && node.type == 'slot') ...const [PopupMenuItem(value: 'slotRename', child: Text('改插槽名')), PopupMenuItem(value: 'slotUnwrap', child: Text('取消插槽')), PopupMenuDivider()],
+    if (slotActions && kSlotHostTypes.contains(node.type) && slotInside(node) == null) ...const [PopupMenuItem(value: 'slot', child: Text('把内容设成插槽')), PopupMenuDivider()],
+  ];
+  if (fixed) return [...slotItems, PopupMenuItem(value: 'pasteInto', enabled: canPaste, child: Text(node.type == 'page' ? '粘贴到页面里' : '粘贴到里面'))];
   return [
+    ...slotItems,
     const PopupMenuItem(value: 'clip', child: Text('复制')),
     PopupMenuItem(value: 'paste', enabled: canPaste, child: const Text('粘贴到它后面')),
     const PopupMenuItem(value: 'dup', child: Text('重复一份')),
@@ -67,9 +83,9 @@ List<PopupMenuEntry<String>> lcNodeMenuItems(BuildContext context, LcNode node, 
 ///
 /// [avoid]：被按的那个组件在屏幕上占的那一块。给了就把菜单摆在它**下面**（放不下摆上面），不盖住它——
 /// 她长按完要看得见自己按的是谁；上下都放不下（组件比屏幕还高）才退回手指那儿。
-Future<String?> showLcNodeMenu(BuildContext context, Offset at, LcNode node, {bool componentActions = true, bool fixed = false, bool multi = true, Rect? avoid}) {
+Future<String?> showLcNodeMenu(BuildContext context, Offset at, LcNode node, {bool componentActions = true, bool fixed = false, bool multi = true, bool slotActions = false, Rect? avoid}) {
   final size = MediaQuery.sizeOf(context);
-  final items = lcNodeMenuItems(context, node, componentActions: componentActions, fixed: fixed, multi: multi);
+  final items = lcNodeMenuItems(context, node, componentActions: componentActions, fixed: fixed, multi: multi, slotActions: slotActions);
   final top = lcNodeMenuTop(at: at, avoid: avoid, menuHeight: lcMenuHeight(items), screen: size, topInset: PageBar.insetOf(context));
   return showMenu<String>(context: context, position: RelativeRect.fromLTRB(at.dx, top, size.width - at.dx, size.height - top), items: items);
 }
@@ -89,7 +105,8 @@ double lcNodeMenuTop({required Offset at, required Rect? avoid, required double 
 
 /// 选中条上的“更多操作”。
 class LcNodeMoreButton extends StatelessWidget {
-  const LcNodeMoreButton({super.key, required this.node, required this.onAction, this.componentActions = true, this.fixed = false});
+  const LcNodeMoreButton({super.key, required this.node, required this.onAction, this.componentActions = true, this.fixed = false, this.slotActions = false});
+  final bool slotActions;
   final LcNode node;
   final void Function(String action) onAction;
   final bool componentActions;
@@ -100,7 +117,7 @@ class LcNodeMoreButton extends StatelessWidget {
     tooltip: '更多操作',
     icon: const Icon(Icons.more_horiz, size: 20),
     onSelected: onAction,
-    itemBuilder: (context) => lcNodeMenuItems(context, node, withMove: true, componentActions: componentActions, fixed: fixed),
+    itemBuilder: (context) => lcNodeMenuItems(context, node, withMove: true, componentActions: componentActions, fixed: fixed, slotActions: slotActions),
   );
 }
 
@@ -118,7 +135,7 @@ class BuilderSelectionBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) => EditorSelectionBar(
     icon: lcIcon(node.type),
-    label: node.type == 'component' ? componentLabel(doc, node) : node.spec.label,
+    label: node.type == 'component' ? componentLabel(doc, node) : (node.type == 'slot' ? '插槽（只在组件里有用）' : node.spec.label),
     onParent: node.type == 'page' ? null : onParent,
     actions: [
       EditorSelectionBar.primary('常用', onCommon),

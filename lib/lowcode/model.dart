@@ -81,7 +81,10 @@ class LcNode {
   final Map<String, String> bind;
 
   LcSpec get spec => lcSpecs[type] ?? lcUnknownSpec;
-  bool get isContainer => spec.isContainer;
+
+  /// 自定义组件的实例：它的定义里有哪些插槽（不进文件；文档每次改完重新对一遍，见 slots.dart 的 lcLinkInstances）。
+  List<LcSlot> instSlots = const [];
+  bool get isContainer => spec.isContainer || instSlots.isNotEmpty;
 
   num? numProp(String key) {
     final v = props[key];
@@ -99,8 +102,8 @@ class LcNode {
   String? get slot => more['slot'] is String ? more['slot'] as String : null;
   set slot(String? v) => v == null ? more.remove('slot') : more['slot'] = v;
 
-  /// 是不是带插槽的组件（列表行、顶部导航栏、标签页、弹窗）；插槽怎么读见 slots.dart。
-  bool get hasSlots => spec.slots != null;
+  /// 是不是带插槽的组件（列表行、顶部导航栏、标签页、弹窗，定义里有插槽的自定义组件实例）；插槽怎么读见 slots.dart。
+  bool get hasSlots => spec.slots != null || instSlots.isNotEmpty;
 
   /// 字段顺序固定：id、type、name、locked、hidden、props、style、bind、（别的字段）、children；空的不写。
   Map<String, dynamic> toJson() {
@@ -140,7 +143,7 @@ class LcNode {
     keptProps: _deep(keptProps),
     more: _deep(more),
     raw: raw == null ? null : _deep(raw!),
-  );
+  )..instSlots = instSlots;
 
   LcNode clone() => LcNode.fromJson(jsonDecode(jsonEncode(toJson())) as Map<String, dynamic>, 0);
 
@@ -174,7 +177,8 @@ class LcNode {
       }
       children.add(LcNode.fromJson(c, depth + 1, version: version));
     }
-    if (children.isNotEmpty && !lcSpecs[type]!.isContainer) {
+    // 自定义组件的实例可以有子节点（填进插槽的内容）；它的定义有没有插槽读文件时还不知道。
+    if (children.isNotEmpty && !lcSpecs[type]!.isContainer && type != 'component') {
       throw FormatException('${lcSpecs[type]!.label}（$type）不能包含子组件');
     }
     if (children.any((c) => c.type == 'page')) {
@@ -299,6 +303,8 @@ const Map<String, LcSpec> lcSpecs = {
   // 这一版不认识的类型（LcNode.raw）：不能放子组件、不在组件盒里、没有可改的属性。
   // 自定义组件的实例：props.ref 指向 LcDocument.components 里的定义。不在组件栏的固定清单里。
   'component': LcSpec('component', '组件', defaults: {}, fields: ['width', 'margin']),
+  // 插槽占位：只在自定义组件的定义里用（props.name 是插槽名，子节点是没填时显示的默认内容）。不在组件盒里。
+  'slot': LcSpec('slot', '插槽', isContainer: true, defaults: {}, fields: []),
   // 第 3 版的 11 个新组件（model_v3_components.dart）。
   ...lcV3Specs,
 };
@@ -314,6 +320,7 @@ class LcDocument {
       keptComponents = keptComponents ?? [] {
     _normalizeIds();
     _normalizeComponents();
+    lcLinkInstances(this);
   }
 
   /// 1＝只有组件树；2＝加了 style / logic / components（都可省略，所以第 1 版的文件照样能读）。
@@ -517,6 +524,7 @@ class LcDocument {
   /// 把节点插到某个容器的指定位置；返回是否成功。
   bool insert(String parentId, LcNode node, [int? index]) {
     final parent = find(parentId);
+    lcLinkInstances(this, extra: node);
     if (parent == null || !parent.isContainer || node.type == 'page') return false;
     final i = (index ?? parent.children.length).clamp(0, parent.children.length);
     parent.children.insert(i, node);
@@ -538,6 +546,7 @@ class LcDocument {
     final oldParent = parentOf(id);
     final newParent = find(newParentId);
     if (node == null || oldParent == null || newParent == null) return false;
+    lcLinkInstances(this);
     if (!newParent.isContainer || _contains(node, newParentId)) return false;
     final oldIndex = oldParent.children.indexOf(node);
     oldParent.children.removeAt(oldIndex);
@@ -574,6 +583,7 @@ class LcDocument {
     clear(copy);
     parent.children.insert(parent.children.indexOf(node) + 1, copy);
     _normalizeIds();
+    lcLinkInstances(this);
     return copy.id;
   }
 }

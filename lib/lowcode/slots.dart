@@ -11,25 +11,56 @@
 ///   [lcInsertAt] / [lcMoveTo] 认这种 id：放进去以后把子节点的 `slot` 写对；放进普通容器的把 `slot` 去掉。
 /// - 一个插槽里子节点的先后＝它们在那串平铺的子节点里的先后。
 ///
-/// 第 3 段（B3）的自定义组件插槽可以直接用这一套：只要让 [lcSlotsOf] 对 `component` 实例返回定义里的 `slots`，
-/// 兜底插槽取 `default`，画布落点、放进去写 `slot`、导出时按插槽分拣（[lcSlotChildren]）都不用再写。
+/// 自定义组件的插槽（B3）也用这一套：实例的插槽就是它的定义里有的那些（[LcNode.instSlots]，由 [lcLinkInstances] 对上），
+/// 兜底插槽是 `default`（定义里没有默认插槽就是第一个）。定义那一头的操作在 component_slots.dart。
 library;
 
 import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/lowcode/model_v3_components.dart';
 
 class LcSlot {
-  const LcSlot(this.name, this.label);
+  const LcSlot(this.name, this.label, {this.row = false});
   final String name;
 
   /// 给人看的名字（“左侧”“内容”“页签一”）。
   final String label;
+
+  /// 自定义组件的插槽：占位节点所在的容器是不是横着排（画布算落点用）。
+  final bool row;
+}
+
+/// 自定义组件的默认插槽的名字（同 Vue 的默认插槽）。
+const String kLcDefaultSlot = 'default';
+
+/// 插槽占位节点（`type: slot`）的插槽名：`props.name`，没写＝默认插槽。
+String lcSlotNameOf(LcNode slotNode) => slotNode.strProp('name') ?? kLcDefaultSlot;
+
+String lcDefaultSlotLabel(String name) => name == kLcDefaultSlot ? '默认插槽' : name;
+
+/// 给页面里、各组件定义里的每个组件实例对上“它的定义现在有哪些插槽”（[LcNode.instSlots]）。
+/// 文档每次建好、插入 / 移动 / 复制之前、编辑器每次改完都调一遍；[extra] 是一棵还没放进文档的子树。
+void lcLinkInstances(LcDocument doc, {LcNode? extra}) {
+  final cache = <String, List<LcSlot>>{};
+  void walk(LcNode n) {
+    if (n.type == 'component') {
+      final ref = n.props['ref'];
+      n.instSlots = ref is String ? cache[ref] ??= doc.component(ref)?.slots ?? const [] : const [];
+    }
+    n.children.forEach(walk);
+  }
+
+  walk(doc.root);
+  for (final c in doc.components) {
+    walk(c.root);
+  }
+  if (extra != null) walk(extra);
 }
 
 const Map<String, String> _labels = {'left': '左侧', 'right': '右侧', 'content': '内容', 'footer': '底部按钮'};
 
 /// 这个组件有哪些插槽（按顺序）；不带插槽的返回空表。
 List<LcSlot> lcSlotsOf(LcNode host) {
+  if (host.type == 'component') return host.instSlots;
   final fixed = host.spec.slots;
   if (fixed == null) return const [];
   if (host.type == 'tabs') return [for (final t in lcObjects(host, 'tabs')) LcSlot(t['id'] as String, lcItemLabel(t, 'id'))];
@@ -43,6 +74,7 @@ String? lcFallbackSlot(LcNode host) {
   return switch (host.type) {
     'listItem' || 'appBar' => 'right',
     'dialog' => 'content',
+    'component' => slots.any((s) => s.name == kLcDefaultSlot) ? kLcDefaultSlot : slots.first.name,
     _ => slots.first.name,
   };
 }
@@ -87,7 +119,8 @@ String? lcCurrentTab(LcNode tabs) {
 }
 
 /// 这个插槽里面是不是横着排（列表行、导航栏的左右，弹窗的底部按钮）；标签页的一页、弹窗的内容是竖着排。
-bool lcSlotIsRow(LcNode host, String slot) => host.type == 'listItem' || host.type == 'appBar' || (host.type == 'dialog' && slot == 'footer');
+bool lcSlotIsRow(LcNode host, String slot) =>
+    host.type == 'component' ? host.instSlots.any((s) => s.name == slot && s.row) : host.type == 'listItem' || host.type == 'appBar' || (host.type == 'dialog' && slot == 'footer');
 
 // —— 画布落点用的“插槽 id” ——
 

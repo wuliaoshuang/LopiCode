@@ -324,7 +324,7 @@ void main() {
           }
         }
       }
-      expect(checked, 24 * 6 * 16);
+      expect(checked, 25 * 6 * 16);
     });
 
     test('翻出来的是拆开的单项', () {

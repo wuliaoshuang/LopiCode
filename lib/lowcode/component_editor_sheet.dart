@@ -5,15 +5,19 @@
 //   打开同一张合一面板的两页；其余收进“更多操作”，和长按菜单同一份）→ 最底下的工具条（添加 / 图层 / 撤销 / 重做；这里没有预览）。
 // - 这里没有积木逻辑的入口：组件里面的控件不支持逻辑。
 // - 组件最外层只能有一个控件：最外层不能删、不能移走，旁边也放不了别的控件（要放就放进它里面）。
+// - 插槽：选中一个容器 › 更多操作 ›“把内容设成插槽”（先起名）；选中插槽 › 更多操作 ›“改插槽名 / 取消插槽”。
+//   画布上插槽是一个带“插槽 · 名字”角标的框，里面放的是没填时显示的默认内容。
 // - 每改一下立刻写回组件定义（搭建页那边记一条撤销），所以回到页面时所有实例已经是新样子；“完成”只是关掉这一页。
 import 'dart:async';
 
 import 'package:lopicode/lowcode/builder_bars_widgets.dart';
 import 'package:lopicode/lowcode/canvas_parts_widgets.dart';
 import 'package:lopicode/lowcode/canvas_view_sheet.dart';
-import 'package:lopicode/lowcode/component_model.dart';
+import 'package:lopicode/lowcode/component_editing.dart';
 import 'package:lopicode/lowcode/component_ops.dart';
 import 'package:lopicode/lowcode/component_props_sheet.dart';
+import 'package:lopicode/lowcode/component_slot_sheet.dart';
+import 'package:lopicode/lowcode/component_slots.dart';
 import 'package:lopicode/lowcode/component_values_widgets.dart';
 import 'package:lopicode/lowcode/edit_types.dart';
 import 'package:lopicode/lowcode/editor_clipboard.dart';
@@ -30,71 +34,10 @@ import 'package:lopicode/lowcode/slots.dart';
 import 'package:lopicode/lowcode/style_model.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/shell.dart';
+import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
 
-/// “编辑组件”用的临时页面的根 id。带下划线：定义里的节点 id 只有字母数字，不会和它撞。
-const String kComponentEditRootId = 'page_';
-
-void _walk(LcNode n, void Function(LcNode n) visit) {
-  visit(n);
-  for (final c in n.children) {
-    _walk(c, visit);
-  }
-}
-
-/// 造一份只在“编辑组件”时用的临时文档：一张空白页，里面只放这个组件的内容（拷贝）。
-/// 搭建页现成的画布、属性、样式面板都能直接作用在它上面；改完用 [applyComponentEditing] 写回去。
-/// 临时文档里带着别的组件定义（拷贝，供里面套的实例显示、供组件栏列出），会造成循环的那些不带。
-LcDocument? componentEditingDocument(LcDocument doc, String componentId) {
-  final def = doc.component(componentId);
-  if (def == null) return null;
-  return LcDocument(
-    title: def.name,
-    root: LcNode(id: kComponentEditRootId, type: 'page', props: Map.of(lcSpecs['page']!.defaults), children: [copyLcTree(def.root)]),
-    components: [
-      for (final c in doc.components)
-        if (c.id != componentId && !wouldCycle(doc, componentId, c.id))
-          LcComponentDef(
-            id: c.id,
-            name: c.name,
-            props: [for (final p in c.props) LcComponentProp(name: p.name, type: p.type, defaultValue: p.defaultValue)],
-            keptProps: c.keptProps,
-            more: c.more,
-            root: copyLcTree(c.root),
-          ),
-    ],
-  );
-}
-
-/// 把“编辑组件”的临时文档写回定义：定义的 id、名字、props 都不动，所以实例不会断开。
-/// 临时页面里必须正好有一个最外层控件；接到已经不存在的 prop 上的绑定顺手清掉。失败时什么都不改。
-LcOpResult applyComponentEditing(LcDocument doc, String componentId, LcDocument editing) {
-  final def = doc.component(componentId);
-  if (def == null) return const LcOpResult.fail('这个组件已经不存在了');
-  if (editing.root.children.length != 1) return const LcOpResult.fail('组件最外层只能有一个控件');
-  final root = copyLcTree(editing.root.children.single);
-  var cycle = false;
-  final seen = <String>{};
-  var next = 1;
-  _walk(root, (n) {
-    final ref = n.props['ref'];
-    if (n.type == 'component' && ref is String && wouldCycle(doc, componentId, ref)) cycle = true;
-    // 定义里的 id 只能是字母数字、互不重复（临时文档里新加的节点是 n数字，本来就合规矩；这里防万一）。
-    if (!RegExp(r'^[A-Za-z0-9]+$').hasMatch(n.id) || !seen.add(n.id)) {
-      while (!seen.add('e$next')) {
-        next++;
-      }
-      n.id = 'e$next';
-    }
-    n.bind.removeWhere((attr, name) {
-      final p = def.prop(name);
-      return p == null || !bindablePropsFor(n.type).contains(attr) || !propTypeFitsAttr(p.type, attr);
-    });
-  });
-  if (cycle) return const LcOpResult.fail('组件里不能放它自己（或者里面用到了它的组件）');
-  def.root = root;
-  return LcOpResult.ok(componentId: componentId);
-}
+export 'package:lopicode/lowcode/component_editing.dart';
 
 /// 打开“编辑组件内容”页。关掉后组件定义已经是改好的（每一步都即时写回）。
 Future<void> showComponentEditor(BuildContext context, {required LcDocument doc, required LcEdit onEdit, required String componentId, PaletteRecents? recents, LcImages? images}) async {
@@ -166,22 +109,26 @@ class _ComponentEditorState extends State<_ComponentEditor> with LcMultiSelectHo
 
   LcNode? get _top => _temp.root.children.length == 1 ? _temp.root.children.single : null;
 
-  /// 把临时文档写回定义（搭建页记一条撤销）。写不回去返回原因。
-  String? _writeBack() {
+  /// 把临时文档写回定义（搭建页记一条撤销）。写不回去返回原因。[before]：写回之前先在搭建页的文档上做的事（同一条撤销）。
+  String? _writeBack([void Function(LcDocument real)? before]) {
     LcOpResult? result;
     widget.onEdit((d) {
       _real = d;
+      before?.call(d);
       result = applyComponentEditing(d, widget.componentId, _temp);
     });
     return result?.error;
   }
 
   /// 这一页所有的修改都走这里：改临时文档 → 写回定义；写不回去（比如最外层被弄没了）就退回改之前的样子并说明原因。
-  void _apply(void Function(LcDocument doc) change) {
+  void _apply(void Function(LcDocument doc) change, {void Function(LcDocument real)? onReal}) {
     final before = _temp.encode();
-    setState(() => change(_temp));
+    setState(() {
+      change(_temp);
+      lcLinkInstances(_temp);
+    });
     if (_temp.encode() == before) return;
-    final error = _writeBack();
+    final error = _writeBack(onReal);
     if (error == null) {
       _history.record(_temp);
       return;
@@ -311,12 +258,60 @@ class _ComponentEditorState extends State<_ComponentEditor> with LcMultiSelectHo
       return;
     }
     _select(id);
-    final v = await showLcNodeMenu(context, at, node, componentActions: false, fixed: identical(node, _top), avoid: _bench.currentState?.canvas?.nodeScreenRect(id));
+    final v = await showLcNodeMenu(context, at, node, componentActions: false, slotActions: true, fixed: identical(node, _top), avoid: _bench.currentState?.canvas?.nodeScreenRect(id));
     if (v != null && mounted) _nodeAction(v, id);
+  }
+
+  /// 设成插槽 / 改插槽名：先问名字（不合适的原因就写在对话框里），再改。
+  Future<void> _nameSlot(String id, {required bool rename}) async {
+    final node = _temp.find(id);
+    if (node == null) return;
+    if (!rename) {
+      final blocked = canMakeSlot(_temp, id);
+      if (blocked != null) return tellComponentProblem(context, blocked);
+    }
+    final isDefault = rename && lcSlotNameOf(node) == kLcDefaultSlot;
+    final hasDefault = slotNamesIn(_temp.root).contains(kLcDefaultSlot);
+    final r = await showSlotNameDialog(
+      context,
+      title: rename ? '改插槽名' : '把内容设成插槽',
+      initial: rename ? slotNodeLabel(node) : (hasDefault ? '' : '内容'),
+      initialDefault: rename ? isDefault : !hasDefault,
+      canDefault: !hasDefault,
+      check: (label, asDefault) => slotLabelProblem(_temp, label, asDefault: asDefault, slotNodeId: rename ? id : null),
+    );
+    if (r == null || !mounted) return;
+    LcOpResult? result;
+    _apply((d) => result = rename ? renameSlot(d, id, label: r.label, asDefault: r.asDefault) : makeSlot(d, id, label: r.label, asDefault: r.asDefault));
+    if (result?.error != null) return tellComponentProblem(context, result!.error!);
+    final select = result?.nodeId;
+    if (select != null && _temp.find(select) != null) setState(() => _selected = select);
+  }
+
+  /// 取消插槽：已有实例在里面填了东西的，先说清楚有几处、内容会挪到哪儿，确认了再做（内容挪到实例后面，不删）。
+  Future<void> _unwrapSlot(String id) async {
+    final node = _temp.find(id);
+    if (node == null || node.type != 'slot') return;
+    final name = lcSlotNameOf(node);
+    final fill = slotFillCount(_real, widget.componentId, name);
+    if (fill.nodes > 0) {
+      final ok = await confirmDialog(
+        context,
+        title: '取消插槽「${slotNodeLabel(node)}」',
+        message: '有 ${fill.instances} 个用到这个组件的地方在这个插槽里填了东西（共 ${fill.nodes} 个组件）。取消以后，这些内容会挪到各自那个组件的后面，不会删掉。',
+        confirmLabel: '取消插槽',
+      );
+      if (!ok || !mounted) return;
+    }
+    String? select;
+    _apply((d) => select = unwrapSlot(d, id).nodeId, onReal: (real) => evictSlotContent(real, widget.componentId, name));
+    if (_temp.find(id) == null) setState(() => _selected = select);
   }
 
   void _nodeAction(String v, String id) {
     if (v == 'multi') return multiEnter(id);
+    if (v == 'slot' || v == 'slotRename') return unawaited(_nameSlot(id, rename: v == 'slotRename'));
+    if (v == 'slotUnwrap') return unawaited(_unwrapSlot(id));
     final (done, select) = runLcNodeAction(v, _temp, id, _apply);
     if (done) {
       setState(() => _selected = select);
@@ -405,7 +400,7 @@ class _ComponentEditorState extends State<_ComponentEditor> with LcMultiSelectHo
     final isTop = identical(node, _top);
     return EditorSelectionBar(
       icon: lcIcon(node.type),
-      label: '${node.type == 'component' ? componentLabel(_temp, node) : node.spec.label}${isTop ? '（最外层）' : ''}',
+      label: '${node.type == 'component' ? componentLabel(_temp, node) : (node.type == 'slot' ? '插槽 · ${slotNodeLabel(node)}' : node.spec.label)}${isTop ? '（最外层）' : ''}',
       onParent: isTop
           ? null
           : () {
@@ -417,9 +412,9 @@ class _ComponentEditorState extends State<_ComponentEditor> with LcMultiSelectHo
         EditorSelectionBar.outlined('样式', () => _bench.currentState?.openInspector(InspectorPage.style)),
         // 最外层不能移动、复制、删除（组件只能有一个最外层）：剪贴板里有东西时只有“粘贴到里面”。
         if (!isTop)
-          LcNodeMoreButton(node: node, componentActions: false, onAction: (v) => _nodeAction(v, node.id))
-        else if (lcClipboardHasContent && node.isContainer)
-          LcNodeMoreButton(node: node, componentActions: false, fixed: true, onAction: (v) => _nodeAction(v, node.id))
+          LcNodeMoreButton(node: node, componentActions: false, slotActions: true, onAction: (v) => _nodeAction(v, node.id))
+        else if ((lcClipboardHasContent && node.isContainer) || (kSlotHostTypes.contains(node.type) && slotInside(node) == null))
+          LcNodeMoreButton(node: node, componentActions: false, slotActions: true, fixed: true, onAction: (v) => _nodeAction(v, node.id))
         else
           const SizedBox(width: Space.x3),
       ],

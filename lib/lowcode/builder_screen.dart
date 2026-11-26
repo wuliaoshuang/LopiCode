@@ -172,7 +172,10 @@ class _BuilderScreenState extends State<BuilderScreen> with WidgetsBindingObserv
   /// 所有修改都走这里：改模型 → 记历史 → 存盘并重新导出网页。
   void _apply(void Function(LcDocument doc) change) {
     final doc = _doc!;
-    setState(() => change(doc));
+    setState(() {
+      change(doc);
+      lcLinkInstances(doc); // 实例的插槽跟着定义走：定义可能刚被改过
+    });
     _history!.record(doc);
     _save();
   }

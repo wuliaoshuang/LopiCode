@@ -15,6 +15,7 @@ import 'package:lopicode/lowcode/logic_js_core.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 import 'package:lopicode/lowcode/logic_text.dart';
 import 'package:lopicode/lowcode/model.dart';
+import 'package:lopicode/lowcode/slots.dart';
 import 'package:lopicode/lowcode/style_resolve.dart';
 
 /// 导出的一个文件。[path] 相对导出目录（`LcPage.vue`、`components/TitleCard.vue`），一律用 `/`。
@@ -77,6 +78,8 @@ const String kFrameworkBaseCss =
 ''';
 
 const String kNoteBody = '字体和文字颜色写在页面最外层的元素上，没有去动 body；想去掉浏览器默认的页边距，在你工程的全局样式里加一条 body { margin: 0 }。';
+const String kNoteStraySlot = '页面里有插槽占位（它只在自定义组件里有用），导出时只留了它里面的内容。';
+const String kNoteHomeless = '有组件实例带着填好的内容，可它的组件定义里已经没有插槽了，这些内容没有导出（页面文件里还留着）。';
 const String kNoteUnknownNode = '页面里有新版应用加的组件，这一版不认识，没有导出。';
 const String kNoteNoBinding = '变量改了以后界面不会自己跟着变（页面里没有“把变量显示出来”的写法，和导出的网页一样）；要让界面变，用“改控件”积木。';
 
@@ -153,10 +156,19 @@ String lcComponentPrefix(LcComponentDef def) => '${_safeId(def.id)}-';
 
 /// 把一棵节点树的 CSS 规则（每个节点一条）收集起来。样式值里要是有会把 CSS / Vue 文件截断的字符
 /// （模型读文件时已经挡掉，这里防的是内存里被改坏的），这条规则不写并记一笔。
-String lcCollectCss(LcNode root, String prefix, List<String> notes) {
+///
+/// 插槽（[plans] 给了才认）：占位节点自己没有规则，它里面的默认内容、实例里填进来的内容，
+/// “父容器”都按占位节点所在的那个容器算（撑满、对齐这些规则跟着它走）。
+String lcCollectCss(LcNode root, String prefix, List<String> notes, {LcComponentPlans? plans}) {
   final out = StringBuffer();
   void walk(LcNode n, LcNode? parent, int depth) {
     if (depth > kExportMaxDepth) return;
+    if (n.type == 'slot') {
+      for (final c in n.children) {
+        walk(c, parent, depth + 1);
+      }
+      return;
+    }
     final body = nodeCssDeclarations(n, parent);
     if (RegExp(r'[{}<>\n\r\\]|\*/|/\*').hasMatch(body)) {
       notes.add('${lcSpecs[n.type]?.label ?? n.type}（${_safeId(n.id)}）的样式里有不能写进 CSS 的字符，这个控件的样式没有导出。');
@@ -167,7 +179,7 @@ String lcCollectCss(LcNode root, String prefix, List<String> notes) {
     final fieldRule = lcFieldRule(n, parent, '.n-$prefix${_safeId(n.id)}');
     if (fieldRule.isNotEmpty) out.writeln(fieldRule);
     for (final c in n.children) {
-      walk(c, n, depth + 1);
+      walk(c, n.type == 'component' ? plans?.slotContainer(n, c) ?? n : n, depth + 1);
     }
   }
 
@@ -268,8 +280,29 @@ const Set<String> _reservedPropNames = {'key', 'ref', 'class', 'style', 'classNa
 
 /// 一个要导出的组件定义：导出后叫什么、它的每个 prop 在代码里叫什么。
 class LcComponentPlan {
-  LcComponentPlan(this.def, this.name, this.attrs);
+  LcComponentPlan(this.def, this.name, this.attrs, this.slotAttrs);
   final LcComponentDef def;
+
+  /// 插槽名 → React 里接它的 prop 名（默认插槽是 `children`；别的绝大多数就是插槽名，撞了保留字 / 别的 prop 的会加后缀）。
+  final Map<String, String> slotAttrs;
+
+  /// 实例里填的内容按插槽分好（按定义里插槽的先后；没填的插槽不在里面）。没写 `slot` 或写错的算在兜底插槽里。
+  /// 定义里一个插槽都没有时是空的（实例带着的子节点没地方放）。
+  Map<String, List<LcNode>> filled(LcNode instance) {
+    final slots = def.slots;
+    if (slots.isEmpty || instance.children.isEmpty) return const {};
+    final names = {for (final s in slots) s.name};
+    final fallback = names.contains(kLcDefaultSlot) ? kLcDefaultSlot : slots.first.name;
+    final out = <String, List<LcNode>>{};
+    for (final s in slots) {
+      final mine = [
+        for (final c in instance.children)
+          if ((names.contains(c.slot) ? c.slot : fallback) == s.name) c,
+      ];
+      if (mine.isNotEmpty) out[s.name] = mine;
+    }
+    return out;
+  }
 
   /// 组件名 / 文件名（大驼峰，互不重复，也不和页面重名）。
   final String name;
@@ -294,6 +327,34 @@ class LcComponentPlans {
     if (ownerId != null && _broken.contains(_edge(ownerId, instance))) return null;
     final ref = instance.props['ref'];
     return ref is String ? _byId[ref] : null;
+  }
+
+  LcComponentPlan? planOf(String componentId) => _byId[componentId];
+
+  /// 实例里填的这个子节点，实际排在定义里的哪个容器里（插槽占位节点所在的那个）；找不到返回 null。
+  LcNode? slotContainer(LcNode instance, LcNode child) {
+    final ref = instance.props['ref'];
+    final plan = ref is String ? _byId[ref] : null;
+    if (plan == null) return null;
+    String? name;
+    plan.filled(instance).forEach((slot, kids) {
+      if (kids.contains(child)) name = slot;
+    });
+    if (name == null) return null;
+    LcNode? found;
+    void walk(LcNode n, int depth) {
+      if (found != null || depth > kExportMaxDepth) return;
+      for (final c in n.children) {
+        if (c.type == 'slot' && lcSlotNameOf(c) == name) {
+          found = n;
+          return;
+        }
+        walk(c, depth + 1);
+      }
+    }
+
+    walk(plan.def.root, 0);
+    return found;
   }
 
   /// 从页面出发把用到的组件都找出来。找不到定义的、循环引用的各记一条说明。
@@ -322,8 +383,9 @@ class LcComponentPlans {
             name = '$base$i';
           }
           final attrNames = LcNames(_reservedPropNames);
-          final plan = LcComponentPlan(def, name, {
-            for (final p in def.props) p.name: RegExp('^on[A-Z]').hasMatch(p.name) ? attrNames.take('${p.name}Prop', tag: 'prop') : attrNames.take(p.name, tag: 'prop'),
+          final propAttrs = {for (final p in def.props) p.name: RegExp('^on[A-Z]').hasMatch(p.name) ? attrNames.take('${p.name}Prop', tag: 'prop') : attrNames.take(p.name, tag: 'prop')};
+          final plan = LcComponentPlan(def, name, propAttrs, {
+            for (final s in def.slots) s.name: s.name == kLcDefaultSlot ? 'children' : attrNames.take(RegExp('^on[A-Z]').hasMatch(s.name) ? '${s.name}Slot' : s.name, tag: 'slot'),
           });
           byId[def.id] = plan;
           all.add(plan);

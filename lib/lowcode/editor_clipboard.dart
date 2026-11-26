@@ -4,13 +4,16 @@
 /// - 复制的是整棵子树的一份快照；里面用到的自定义组件（连同它们又用到的）一起带上。
 /// - 粘贴时：子树里的编号全部重新编；带来的自定义组件，这一页里已经有内容一模一样的就直接用，没有的补进来
 ///   （编号撞了换一个，名字撞了加序号）。
+/// - 插槽占位（只在组件定义里有用）贴进页面时拿掉，里面的默认内容留在原位。
 /// - 积木逻辑不跟着复制（和“重复一份”一样）：逻辑是挂在原来那个组件上的。
 library;
 
 import 'dart:convert';
 
+import 'package:lopicode/lowcode/component_editing.dart';
 import 'package:lopicode/lowcode/component_model.dart';
 import 'package:lopicode/lowcode/component_ops.dart';
+import 'package:lopicode/lowcode/component_slots.dart';
 import 'package:lopicode/lowcode/model.dart';
 
 class _Clip {
@@ -116,6 +119,17 @@ List<String> lcClipboardPasteAll(LcDocument doc, String parentId, [int? index]) 
     def.name = uniqueComponentName(doc, def.name);
     doc.components.add(def);
     remap[oldId] = def.id;
+  }
+  // 插槽占位只在组件定义里有用：贴进页面时拿掉，它里面的默认内容留在原位。
+  // （贴进“编辑组件”的临时页面时留着；重名的由写回定义那一步换名字。）
+  if (doc.root.id != kComponentEditRootId) {
+    for (var i = 0; i < trees.length; i++) {
+      stripSlots(trees[i]);
+      if (trees[i].type != 'slot') continue;
+      final inside = trees.removeAt(i).children;
+      trees.insertAll(i, inside);
+      i--;
+    }
   }
   var at = index ?? parent.children.length;
   final ids = <String>[];

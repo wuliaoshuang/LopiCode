@@ -1,7 +1,7 @@
 /// 拖动开始时把画布上每个组件“在哪、能不能往里放”量成一棵 [DropBox] 树（不带界面；位置由调用方给）。
 ///
 /// - 普通容器：能放，子项就是它的子组件。
-/// - 自定义组件的实例：整块不能放。
+/// - 自定义组件的实例：整块不能放；定义里有插槽的，能放的是它的每个插槽（同下一条）。
 /// - 带插槽的组件（列表行、导航栏、标签页、弹窗）：它自己不能放，能放的是它的每个插槽（id 是 `组件id#插槽名`，见 slots.dart）；
 ///   画布上现在没画出来的插槽（标签页别的页签、没进编辑状态的弹窗）量不到位置，就不算。
 ///   横排的空插槽只有 28 见方，落点往外放大 8，手指好对准。
@@ -49,8 +49,10 @@ DropBox? _boxOf(LcDocument doc, LcNode node, LcNode? parent, Rect? Function(Stri
     return DropBox(id: node.id, label: label, rect: rect, children: slots);
   }
   final container = node.isContainer && !instance;
-  final style = container ? resolvedStyle(node, parent) : const <String, String>{};
-  final flow = container ? cssFlow(style, rowByDefault: node.type == 'row') : null;
+  // 插槽占位（组件编辑页里）：里面照它外面那个容器的排法排。
+  final like = node.type == 'slot' && parent != null ? parent : node;
+  final style = container ? resolvedStyle(like, identical(like, node) ? parent : null) : const <String, String>{};
+  final flow = container ? cssFlow(style, rowByDefault: like.type == 'row') : null;
   return DropBox(
     id: node.id,
     label: label,
