@@ -65,6 +65,9 @@ class MainActivity : FlutterActivity() {
             }
         }
 
+        // 应用内安装 APK（单独一个文件：ApkInstallChannel.kt）
+        ApkInstallChannel.attach(this, flutterEngine.dartExecutor.binaryMessenger)
+
         val channel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "lopicode/agent_keepalive")
         agentChannel = channel
         channel.setMethodCallHandler { call, result -> onAgentCall(call, result) }
