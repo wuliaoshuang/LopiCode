@@ -57,7 +57,7 @@ mixin _Rt on _Core {
       return _any;
     }
     if (const {'toInt', 'floor', 'ceil', 'round'}.contains(e.fn)) check(LCheckKind.floatToInt, e, sc);
-    return apply(sc, sig.label, sig.params, sig.ret, sig.typeVars, const {}, a, node: e, slots: sig.slots);
+    return apply(sc, sig.label, sig.params, sig.ret, sig.typeVars, sig.bounds, a, node: e, slots: sig.slots);
   }
 
   static String _container(LType t) => t.kind == LKind.dict ? '字典' : '列表';

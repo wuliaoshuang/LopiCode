@@ -336,6 +336,7 @@ abstract class JavaGen2Types extends Gen2 {
     'isType',
     'toNumber',
     'dictMerge',
+    'abs', 'max', 'min', 'random', 'copy', 'template', 'toBool', 'listInsert', 'listRemove', 'listSort', 'dictPairs', //
   };
 
   @override

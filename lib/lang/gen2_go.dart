@@ -295,7 +295,9 @@ abstract class GoGen2Types extends Gen2 {
     'charAt': 'CharAt', 'codePoints': 'CodePoints', 'listReverse': 'Reverse', 'listConcat': 'Concat', 'listSlice': 'Slice',
     'listContains': 'ListContains', 'listIndexOf': 'ListIndexOf', 'range': 'Range', 'dictKeys': 'DictKeys', 'dictValues': 'DictValues',
     'dictHas': 'DictHas', 'toJson': 'ToJson', 'fromJson': 'FromJson', 'now': 'Now', 'isNumeric': 'IsNumeric', 'urlDecode': 'UrlDecode',
-    'isType': 'IsType', 'toNumber': 'ToNumber', 'dictMerge': 'DictMerge',
+    'isType': 'IsType', 'toNumber': 'ToNumber', 'dictMerge': 'DictMerge', 'abs': 'Abs', 'max': 'MaxOf', 'min': 'MinOf', 'random': 'Random',
+    'copy': 'Copy', 'template': 'Template', 'toBool': 'ToBool', 'listInsert': 'Insert', 'listRemove': 'RemoveAt', 'listSort': 'Sort',
+    'dictPairs': 'DictPairs',
   };
 
   @override
@@ -310,6 +312,10 @@ abstract class GoGen2Types extends Gen2 {
 
   @override
   String rtCall(String fn, List<String> args, List<LType> types, LType ret, LRt e) {
+    // “任意”进来的：数字那三个、排序没法按类型挑实现，换成运行时再查的那一份。
+    if (const {'abs', 'max', 'min'}.contains(fn) && ret.isAny) return 'lc.Dyn${_rt[fn]!.replaceAll('Of', '')}(${args.join(', ')})';
+    if (fn == 'listSort' && (ret.of?.isAny ?? true)) return 'lc.DynSort(${args.join(', ')})';
+    if (fn == 'copy') return 'lc.Copy[${gt(types[0])}](${args.join(', ')})'; // 放进来的是“空”的时候 Go 自己推不出类型
     if (fn == 'listFind') return 'lc.${_boxResult(ret.nonNull) ? 'Find' : 'FindNil'}(${args.join(', ')})';
     final name = _rt[fn] ?? unsupported('小库函数「$fn」在 Go 的带类型生成路径里还没有', e);
     return 'lc.$name(${args.join(', ')})';

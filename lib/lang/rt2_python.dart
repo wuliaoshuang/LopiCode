@@ -12,6 +12,7 @@ import copy as _copy
 import json as _json
 import math
 import os as _os
+import random as _random
 import re as _re
 import sys
 import threading as _threading
@@ -410,4 +411,66 @@ def dcmp(a, b):
         return cmp(a, b)
     fail("比大小的两边要都是数字或者都是文字，拿到的是" + kind(a) + "和" + kind(b))
 
+# —— 后端积木里早就有的那几个（严格规矩下的说法见 rt_v2.dart） ——
+def _num_arg(name, x):
+    if isinstance(x, bool) or not isinstance(x, (int, float)):
+        fail("「" + name + "」要数字，拿到的是" + kind(x))
+    return x
+
+
+def abs(x):
+    return _b.abs(_num_arg("绝对值", x))
+
+
+def max(a, b):
+    return a if _num_arg("较大的", a) >= _num_arg("较大的", b) else b
+
+
+def min(a, b):
+    return a if _num_arg("较小的", a) <= _num_arg("较小的", b) else b
+
+
+def random(a, b):
+    return _random.randint(_b.min(a, b), _b.max(a, b))
+
+
+def copy(x):
+    if isinstance(x, list):
+        return [copy(v) for v in x]
+    if isinstance(x, dict):
+        return {k: copy(v) for k, v in x.items()}
+    return x
+
+
+def template(s, d):
+    return _re.sub(r"\{([^{}]*)\}", lambda m: dtext(d[m.group(1)]) if m.group(1) in d else m.group(0), s)
+
+
+def toBool(x):
+    if x is None or x is False or x == "":
+        return False
+    return not (isinstance(x, (int, float)) and not isinstance(x, bool) and x == 0)
+
+
+def listInsert(xs, i, v):
+    if i < 0 or i > _b.len(xs):
+        _out_of(i, _b.len(xs))
+    xs.insert(i, v)
+
+
+def listRemove(xs, i):
+    if i < 0 or i >= _b.len(xs):
+        _out_of(i, _b.len(xs))
+    return xs.pop(i)
+
+
+def listSort(xs):
+    nums = all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in xs)
+    if not nums and not all(isinstance(v, str) for v in xs):
+        fail("排序要全是数字或者全是文字的列表，拿到的是混着的")
+    return sorted(xs)
+
+
+def dictPairs(d):
+    return [[k, toDyn(d[k])] for k in keys(d)]
 ''';

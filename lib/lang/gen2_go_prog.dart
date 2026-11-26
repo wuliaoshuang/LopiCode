@@ -8,6 +8,7 @@ import 'package:lopicode/lang/gen2_err.dart';
 import 'package:lopicode/lang/gen2_go.dart';
 import 'package:lopicode/lang/rt2_go_dyn.dart';
 import 'package:lopicode/lang/rt2_go_host.dart';
+import 'package:lopicode/lang/rt2_go_more.dart';
 import 'package:lopicode/lang/type_world.dart';
 import 'package:lopicode/lang/types.dart';
 
@@ -23,7 +24,7 @@ class GoGen2 extends GoGen2Types {
   @override
   String get mainFile => 'main.go';
   @override
-  Map<String, String> get runtimeFiles => const {'go.mod': 'module lcprog\n\ngo 1.18\n', 'lc/lc.go': kRt2GoSource, 'lc/host.go': kRt2GoHost};
+  Map<String, String> get runtimeFiles => const {'go.mod': 'module lcprog\n\ngo 1.18\n', 'lc/lc.go': kRt2GoSource, 'lc/host.go': kRt2GoHost, 'lc/more.go': kRt2GoMore};
 
   final Map<V2Fn, _TryState> _states = Map.identity();
   _TryState get _st => _states[fn] ??= _TryState();

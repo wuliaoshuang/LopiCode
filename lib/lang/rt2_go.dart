@@ -463,13 +463,6 @@ func ListIndexOf[T any](xs *List[T], v T) int64 {
 	return -1
 }
 func ListContains[T any](xs *List[T], v T) bool { return ListIndexOf(xs, v) >= 0 }
-func Range(a, b int64) *List[int64] {
-	out := &List[int64]{Items: []int64{}}
-	for i := a; i <= b; i++ {
-		out.Items = append(out.Items, i)
-	}
-	return out
-}
 
 // —— 可空 ——
 func Box[T any](v T) *T { return &v }

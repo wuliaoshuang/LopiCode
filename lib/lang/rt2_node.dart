@@ -192,7 +192,28 @@ function listSlice(xs, from, to) {
 }
 const listIndexOf = (xs, v) => xs.findIndex((x) => eq(x, v));
 const listContains = (xs, v) => listIndexOf(xs, v) >= 0;
-function range(a, b) { const out = []; for (let i = a; i <= b; i++) out.push(i); return out; }
+function range(a, b, s) { const n = Math.min(steps(a, b, s), 10000), out = []; for (let k = 0; k < n; k++) out.push(a + k * s); return out; }
+// —— 后端积木里早就有的那几个（严格规矩下的说法见 rt_v2.dart） ——
+const numArg = (name, x) => (typeof x === "number" ? x : fail("「" + name + "」要数字，拿到的是" + kind(x)));
+const abs = (x) => Math.abs(numArg("绝对值", x)) + 0;
+const max = (a, b) => (numArg("较大的", a) >= numArg("较大的", b) ? a : b);
+const min = (a, b) => (numArg("较小的", a) <= numArg("较小的", b) ? a : b);
+function random(a, b) { const lo = Math.min(a, b), hi = Math.max(a, b); return lo + Math.floor(Math.random() * (hi - lo + 1)); }
+function copy(x) {
+  if (Array.isArray(x)) return x.map(copy);
+  if (x instanceof Map) return new Map(Array.from(x, ([k, v]) => [k, copy(v)]));
+  return x;
+}
+const template = (s, d) => s.replace(/\{([^{}]*)\}/g, (whole, key) => (d.has(key) ? dtext(d.get(key)) : whole));
+const toBool = (x) => !(x === null || x === undefined || x === false || x === 0 || x === "");
+function listInsert(xs, i, v) { if (i >= 0 && i <= xs.length) xs.splice(i, 0, v); else outOf(i, xs.length); }
+const listRemove = (xs, i) => (i >= 0 && i < xs.length ? xs.splice(i, 1)[0] : outOf(i, xs.length));
+function listSort(xs) {
+  const nums = xs.every((v) => typeof v === "number"), texts = xs.every((v) => typeof v === "string");
+  if (!nums && !texts) fail("排序要全是数字或者全是文字的列表，拿到的是混着的");
+  return xs.slice().sort(cmp);
+}
+const dictPairs = (d) => keys(d).map((k) => [k, toDyn(d.get(k))]);
 function recCopy(r, changes) {
   const o = Object.create(Object.getPrototypeOf(r));
   return Object.freeze(Object.assign(o, r, changes));
@@ -401,6 +422,7 @@ module.exports = {
   eq, cmp, dcmp, at, setAt, push, pop, len, items, keys, get, dictSet, dictRemove, dictKeys, dictValues, dictHas, must,
   listMap, listFilter, listReduce, listFind, listEvery, listSome, listEach, listJoin, listReverse, listConcat, listSlice,
   listIndexOf, listContains, range, recCopy,
+  abs, max, min, random, copy, template, toBool, listInsert, listRemove, listSort, dictPairs,
   dadd, dsub, dmul, ddiv, dpow, didiv, dmod, dynGet, dynSet, dynPush, dynPop, dynRemove, dynOrElse, dynSize,
   toJson, fromJson, dtext, log, run, isNumeric, isType, dictMerge, toNumber, urlDecode,
   hostPrint, hostNow, hostEnv, hostSleep, hostServe, spawn, storeRead, storeUpdate,

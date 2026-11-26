@@ -120,6 +120,11 @@ mixin _Calls on _Core {
     }
     for (final MapEntry(key: v, value: c) in bounds.entries) {
       final t = w.res(b[v] ?? _never);
+      if (c == kBoundNumeric) {
+        // “是数字”：整数、小数可以；“任意”留到运行时查；类型变量不行（它说不出“我是数字”）。
+        if (!(t.isNever || t.isAny || WL.isHole(t) || t == _int || t == _flt)) err('T05', sc, '「$name」要的是数字（整数或小数），${t.show()}不行', node: node);
+        continue;
+      }
       if (t.isNever || t.isAny || WL.isVar(t) || WL.isHole(t)) continue;
       if (c == kBoundComparable) {
         if (t != _int && t != _flt && t != _txt) err('T05', sc, '「$name」要的是能比大小的东西（数字或文字），${t.show()}不能比大小', node: node);

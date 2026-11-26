@@ -413,6 +413,9 @@ class _Reader {
         return LIsA(expr(a[1]), a[0] as String);
       case '宿':
         return LNative(a[0] as String, exprs(a.skip(1)));
+      case '库':
+        // (库 名字 参数…)：直接按名字调小库函数（没有专门写法的那些）。
+        return LRt(a[0] as String, exprs(a.skip(1)));
     }
     throw StateError('原型的写法里不认识的式子：$h');
   }

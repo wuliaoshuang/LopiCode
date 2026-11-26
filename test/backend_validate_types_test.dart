@@ -24,6 +24,8 @@ List<LcLogicIssue> _typeIssues(BeDocument doc) => [
 
 final J _ok = json(dc({'ok': yes()}));
 
+const String _mixedPush = '往列表里加的东西要文字，放进来的是小数';
+
 void main() {
   test('开关现在的值：新文档还是规矩版本 1（后端的严格生成还没接上，见 B-gen-notes.md 第 5 节）', () {
     expect(kLangRulesForNewDocs, kLangRulesLoose);
@@ -82,7 +84,10 @@ void main() {
     for (final make in [starter, funcBlocksDocument]) {
       final v1 = _issues(make()..rules = kLangRulesLoose);
       final v2 = _issues(make()..rules = kLangRulesStrict);
-      expect(v2, v1);
+      // “我的积木”样本的 /wrap 两个接口往同一个列表里先放文字、再放“变成数字”的结果乘 2：“变成数字”有了版本 2 的签名（结果是小数）以后，
+      // 这是一处真的类型不一致，严格规矩下各报一条（接口里一条、包成积木以后积木里一条）。别的一条不多。
+      expect(v2.where((x) => !x.contains(_mixedPush)), v1);
+      expect(v2.where((x) => x.contains(_mixedPush)), hasLength(make == starter ? 0 : 2));
     }
 
     // 一致性样本全是旧积木。合并以后旧积木的接口也查（老的“运算 / 比较”“不是”翻成语言核心的式子），所以它故意放的那些
@@ -107,15 +112,18 @@ void main() {
     expect(_typeIssues(lang()..rules = kLangRulesLoose), isEmpty);
     final extra = _typeIssues(lang()..rules = kLangRulesStrict);
     // 问题带着“参数里的哪个位置”，同一块同一个参数里的几处各算各的（合并前同一个参数里的只留一条，是 T01 8 条、T07 1 条）。
-    expect(byCode(extra), {'T01': 11, 'T06': 1, 'T07': 3});
-    // 其中三条是老积木“数列”带步长（3 个参数）对不上版本 2 的签名（2 个）：翻开关前要先解决。
-    expect({for (final i in extra.where((i) => i.code == 'T07')) i.problem}, {'「数列」要 2 个参数，给了 3 个'});
+    // “数列”的版本 2 签名改成三个参数（从、到、步长）以后，原来那三条 T07（“「数列」要 2 个参数，给了 3 个”）没有了。
+    expect(extra.where((i) => i.code == 'T07'), isEmpty);
+    expect(byCode(extra)['T06'], 1);
   });
 
   test('“我的积木”没标类型的参数被别处用得很宽（任意）时，把它当函数值交给“映射”不该报“要任意的列表”', () {
     // 合并时查到的误报：样本里「加倍」的参数没标类型，从各处的调用推出来是“任意”；“映射(整数的列表, 加倍)”就被说成第 1 个参数要列表〈任意〉。
     final doc = funcBlocksDocument()..rules = kLangRulesStrict;
-    expect([for (final i in _typeIssues(doc)) '${i.where}｜${i.problem}'], isEmpty);
+    final all = [for (final i in _typeIssues(doc)) '${i.where}｜${i.problem}'];
+    expect(all.where((x) => x.contains('要任意的列表')), isEmpty);
+    // 剩下的只有 /wrap 那一处真的类型不一致（见上一条测试的说明）。
+    expect(all.where((x) => !x.contains(_mixedPush)), isEmpty);
   });
 
   test('校验和编辑器拿的是同一批类型问题：校验里每条“错 / 警告”在检查结果里都有，提醒（T12）不进校验', () {

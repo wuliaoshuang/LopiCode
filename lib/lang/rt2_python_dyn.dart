@@ -134,8 +134,8 @@ def listContains(xs, v):
     return listIndexOf(xs, v) >= 0
 
 
-def range(a, b):
-    return list(_b.range(a, b + 1))
+def range(a, b, s):
+    return [a + k * s for k in _b.range(_b.min(steps(a, b, s), 10000))]
 
 
 def recCopy(r, changes):

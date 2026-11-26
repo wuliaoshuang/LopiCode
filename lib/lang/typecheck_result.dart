@@ -178,6 +178,7 @@ extension _Finish on _Checker {
   static String _bound(String b) => switch (b) {
     kBoundComparable => '能比较',
     kBoundKey => '能当键',
+    kBoundNumeric => '是数字',
     _ => b,
   };
 

@@ -277,7 +277,43 @@ final class Lc {
     return -1;
   }
   static function listContains(LcList $xs, mixed $v): bool { return self::listIndexOf($xs, $v) >= 0; }
-  static function range(int $a, int $b): LcList { return new LcList($a <= $b ? range($a, $b) : []); }
+  static function range(int $a, int $b, int $s): LcList {
+    $out = [];
+    for ($k = 0, $n = min(self::steps($a, $b, $s), 10000); $k < $n; $k++) $out[] = $a + $k * $s;
+    return new LcList($out);
+  }
+  // —— 后端积木里早就有的那几个（严格规矩下的说法见 rt_v2.dart） ——
+  private static function numArg(string $name, mixed $x): int|float { return self::isNum($x) ? $x : self::fail("「" . $name . "」要数字，拿到的是" . self::kind($x)); }
+  static function abs(mixed $x): int|float { return abs(self::numArg("绝对值", $x)); }
+  static function max(mixed $a, mixed $b): int|float { return self::numArg("较大的", $a) >= self::numArg("较大的", $b) ? $a : $b; }
+  static function min(mixed $a, mixed $b): int|float { return self::numArg("较小的", $a) <= self::numArg("较小的", $b) ? $a : $b; }
+  static function random(int $a, int $b): int { return random_int(min($a, $b), max($a, $b)); }
+  static function copy(mixed $x): mixed {
+    if ($x instanceof LcList) return new LcList(array_map(fn($v) => self::copy($v), $x->a));
+    if ($x instanceof LcDict) return new LcDict(array_map(fn($v) => self::copy($v), $x->a));
+    return $x;
+  }
+  static function template(string $s, LcDict $d): string {
+    return preg_replace_callback('/\{([^{}]*)\}/', fn($m) => array_key_exists($m[1], $d->a) ? self::dtext($d->a[$m[1]]) : $m[0], $s);
+  }
+  static function toBool(mixed $x): bool { return !($x === null || $x === false || $x === 0 || $x === 0.0 || $x === ""); }
+  static function listInsert(LcList $xs, int $i, mixed $v): void {
+    if ($i < 0 || $i > count($xs->a)) self::outOf($i, count($xs->a));
+    array_splice($xs->a, $i, 0, [$v]);
+  }
+  static function listRemove(LcList $xs, int $i): mixed {
+    if ($i < 0 || $i >= count($xs->a)) self::outOf($i, count($xs->a));
+    return array_splice($xs->a, $i, 1)[0];
+  }
+  static function listSort(LcList $xs): LcList {
+    $nums = true; $texts = true;
+    foreach ($xs->a as $v) { $nums = $nums && self::isNum($v); $texts = $texts && is_string($v); }
+    if (!$nums && !$texts) self::fail("排序要全是数字或者全是文字的列表，拿到的是混着的");
+    $out = $xs->a;
+    usort($out, fn($a, $b) => self::cmp($a, $b));
+    return new LcList($out);
+  }
+  static function dictPairs(LcDict $d): LcList { return new LcList(array_map(fn($k) => new LcList([$k, self::toDyn($d->a[$k])]), self::keys($d))); }
   static function recCopy(object $r, array $changes): object {
     $o = clone $r;
     foreach ($changes as $k => $v) $o->$k = $v;
