@@ -162,3 +162,12 @@ GitHub 工作流模板按语言生成（`lib/build/deploy_workflows.dart`），�
 
 - 手机 PRoot 里 Go / Java 真编译、npm install：开发机是 x86、没有手机的 Ubuntu 环境，验证不了。命令本身在开发机上对样例项目真跑（结果见实施记录）。
 - 工作流模板没在真实的 GitHub Actions 上跑过；没有对真实 GitHub 发过请求；没有连过真实 SSH 主机。
+
+## 实施记录（2026-11-26）
+
+- 文件：逻辑在 `lib/build/deploy_project.dart`（识别）、`deploy_files.dart`（收文件、挡板、压缩包）、`deploy_commands.dart`（默认命令）、`deploy_workflows.dart`（工作流模板）、`deploy_backends.dart`（运行环境 / GitHub / SSH 的接口和可替换的假实现入口）；状态在 `lib/state/deploy_*.dart`；界面在 `lib/build/deploy_*_view.dart`、`deploy_widgets.dart`、`deploy_confirm_sheet.dart`。`build_screen.dart` 只加了分叉和顶栏一个图标。
+- 和设计不一样的地方：
+  - 运行页链接只能“复制”，不能点开：应用里没有打开外部浏览器的能力（要加原生代码或新依赖），所以“链接点了先确认”没有对应的东西可确认。
+  - 细粒度令牌权限不够时 GitHub 可能回 404，所以推送里带工作流文件时，403 和 404 都会附上“去哪开权限”的说明。
+- 在开发机（x86）上真跑过默认命令（`LOPI_REAL_DEPLOY=1 flutter test test/deploy_real_commands_test.dart`，对后端积木起步工程）：Go（根目录和 server/ 子目录各一次，arm64 和 amd64 都出了对应架构的 ELF）、javac＋jar（清单里有 Main-Class，连跑两次不报错）、node --check、python3 -m py_compile、php -l 全部退出码 0；故意写错语法时 node / python / php 的检查命令退出码非 0；工作流模板（五种语言＋其它，Java 四种结构）用 PyYAML 都能解析。Go 是断网跑的（`GOFLAGS=-mod=mod GOPROXY=off`），起步工程没有第三方依赖。
+- 没验证的：手机 Ubuntu 环境里的真编译、真实 GitHub、真实 Actions、真实 SSH 主机、真机界面。

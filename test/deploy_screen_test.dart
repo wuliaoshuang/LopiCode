@@ -361,7 +361,7 @@ void main() {
 
       await tapOn(tester, find.byKey(const Key('deploy-start')), rounds: 4);
       expect(find.text('确认推送并启动'), findsWidgets);
-      expect(find.text('shuang/demo'), findsOneWidget);
+      expect(find.text('shuang/demo'), findsWidgets, reason: '表单里一处、确认清单里一处');
       expect(find.text('只构建并上传产物，不部署'), findsOneWidget);
       expect(find.textContaining('推送 3 个文件'), findsOneWidget);
       await tester.tap(find.byKey(const Key('deploy-files-toggle')));
