@@ -19,6 +19,9 @@ import 'package:lopicode/core/path_guard.dart';
 import 'package:lopicode/core/safe_file.dart';
 import 'package:path/path.dart' as p;
 
+// 钥匙备份文件名的开头定义在约定文件里（打包器收集文件时也要认它），这里转出去给界面用。
+export 'package:lopicode/apkpack/apk_pack_contract.dart' show kKeyBackupPrefix;
+
 const int kAppNameDefaultMax = 30;
 const int kPackageTailMax = 30;
 const String kPackagePrefix = 'com.lopicode.app.';
@@ -130,9 +133,6 @@ String apkFileName({required String appName, required String versionName, requir
   final version = clean(versionName);
   return '${name.isEmpty ? 'app' : name}-${version.isEmpty ? '0' : version}-$versionCode.apk';
 }
-
-/// 钥匙备份文件名的开头（放在工作区 `build/` 下，后面跟日期时间）。
-const String kKeyBackupPrefix = 'lopicode-key-backup-';
 
 /// 本地打包留在工作区 `build/` 下的东西（安装包、钥匙备份）：远程打包推送 / 上传项目文件时跳过它们。
 bool isLocalPackOutput(String relativePath) {

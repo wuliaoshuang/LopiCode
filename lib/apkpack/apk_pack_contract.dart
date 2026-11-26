@@ -5,6 +5,11 @@
 // 全部纯 Dart（不 import 界面库），开发机上的测试能直接产出 APK 给官方工具验。
 import 'dart:typed_data';
 
+/// 钥匙备份文件名的开头（界面把备份存在工作区 `build/` 下，后面跟日期时间）。
+/// 放在约定里是因为两边都要认它：界面用它起名字，打包器收集网页文件时见到这个开头的文件一律不收——
+/// 网页目录恰好就是 `build/` 的项目（构建产物在 build/ 里），不能把钥匙备份装进安装包发出去。
+const String kKeyBackupPrefix = 'lopicode-key-backup-';
+
 /// 这个项目能不能走“网页套壳”。
 class WebProjectInfo {
   const WebProjectInfo({required this.applicable, required this.reason, this.webRoot, this.entry, this.kind});

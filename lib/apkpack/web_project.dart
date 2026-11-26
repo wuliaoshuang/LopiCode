@@ -89,6 +89,7 @@ class WebFile {
 /// 从 [webRoot] 收集要打包的文件，按路径排序（保证每次顺序一样）。同步读盘：只在后台 isolate 里调。
 ///
 /// 不收：以 `.` 开头的文件和目录（.git、.lopicode、.env…）、node_modules、顶层的 build 目录和 .apk 文件（打包产物自己）、
+/// 签名钥匙的备份文件（名字以 [kKeyBackupPrefix] 开头，在哪一层都不收）、
 /// 低代码项目的页面源文件和 export 目录、指到网页目录外面的符号链接、链接到目录的符号链接、[skipPaths] 里的文件。
 List<WebFile> collectWebFiles(
   String webRoot, {
@@ -139,6 +140,7 @@ List<WebFile> collectWebFiles(
         walk(e, rel);
       } else if (e is File) {
         if (top && (name.toLowerCase().endsWith('.apk') || (isLowcode && name == kLowcodePageFile))) continue;
+        if (name.startsWith(kKeyBackupPrefix)) continue;
         add(rel, e.path);
       } else if (e is Link) {
         // 符号链接：只收指向网页目录里面的普通文件

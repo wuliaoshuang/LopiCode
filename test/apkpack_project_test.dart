@@ -115,6 +115,12 @@ void main() {
       expect([for (final f in collectWebFiles(tmp.path, entry: 'index.html')) f.rel], ['index.html', 'logic.js', 'style.css']);
     });
 
+    test('签名钥匙的备份文件在哪一层都不收（网页目录就是 build/ 的项目，备份正好存在里面）', () {
+      sampleStatic(tmp.path);
+      writeFiles(tmp.path, {'${kKeyBackupPrefix}20261126-0230.txt': 'LOPIKEY…', 'sub/${kKeyBackupPrefix}x.txt': 'LOPIKEY…', 'my-lopicode-key-backup-notes.txt': 'ok'});
+      expect([for (final f in collectWebFiles(tmp.path, entry: 'index.html')) f.rel], ['index.html', 'my-lopicode-key-backup-notes.txt', 'script.js', 'style.css']);
+    });
+
     test('符号链接：指到外面的不收，指到里面文件的收，指到目录的不收', () {
       sampleStatic(tmp.path);
       final outside = Directory.systemTemp.createTempSync('apkpack_out_');
