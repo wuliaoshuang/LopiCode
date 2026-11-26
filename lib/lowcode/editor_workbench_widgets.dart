@@ -35,23 +35,9 @@ import 'package:lopicode/ui/top_bar.dart';
 import 'package:material_ui/material_ui.dart';
 
 // 选中条的外壳原来就定义在这个文件里，别处还从这里引用。
+export 'package:lopicode/lowcode/editor_hint_widgets.dart' show showEditorHint;
 export 'package:lopicode/lowcode/editor_selection_bar_widgets.dart' show EditorSelectionBar, kEditorSelectionBarHeight;
 export 'package:lopicode/lowcode/editor_toolbar_widgets.dart' show kEditorToolbarHeight;
-
-/// 搭建台里的一句提示（“已复制…”）：浮在工具条和选中条**上面**。
-/// 用全应用那种贴底的提示会把撤销 / 重做盖住好几秒（测试里点撤销点到了提示上才发现）。
-void showEditorHint(BuildContext context, String text) {
-  ScaffoldMessenger.of(context)
-    ..hideCurrentSnackBar()
-    ..showSnackBar(
-      SnackBar(
-        content: Text(text),
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 3),
-        margin: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, kEditorToolbarHeight + kEditorSelectionBarHeight + Space.x2),
-      ),
-    );
-}
 
 class EditorWorkbench extends StatefulWidget {
   const EditorWorkbench({

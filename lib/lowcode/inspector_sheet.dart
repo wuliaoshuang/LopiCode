@@ -20,6 +20,7 @@ import 'package:lopicode/lowcode/grid_css.dart';
 import 'package:lopicode/lowcode/inspector_bp_widgets.dart';
 import 'package:lopicode/lowcode/inspector_common_widgets.dart';
 import 'package:lopicode/lowcode/inspector_events_widgets.dart';
+import 'package:lopicode/lowcode/inspector_header_widgets.dart';
 import 'package:lopicode/lowcode/inspector_state_widgets.dart';
 import 'package:lopicode/lowcode/inspector_style_widgets.dart';
 import 'package:lopicode/lowcode/model.dart';
@@ -37,21 +38,14 @@ import 'package:lopicode/ui/shell.dart';
 import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
 
+export 'package:lopicode/lowcode/inspector_header_widgets.dart' show InspectorPage;
+
 /// 连续操作（打字、加减、拖动）停多久算“告一段落”、提交成一条撤销记录。
 const Duration kStyleCommitDelay = Duration(milliseconds: 400);
 
 /// 合一面板的三页。
 /// 面板刚打开时占多高（占它能用的高度的几成）。
 const double kInspectorInitialSize = 0.5;
-
-enum InspectorPage {
-  common('常用'),
-  style('样式'),
-  events('事件');
-
-  const InspectorPage(this.label);
-  final String label;
-}
 
 class InspectorPanel extends StatefulWidget {
   const InspectorPanel({
@@ -476,111 +470,28 @@ class InspectorPanelState extends State<InspectorPanel> {
     );
   }
 
-  Widget _header(BuildContext context, LcNode node) {
-    final c = context.colors;
-    final t = Theme.of(context).textTheme;
-    final quiet = TextButton.styleFrom(
-      foregroundColor: c.textMuted,
-      minimumSize: const Size(48, 40),
-      padding: const EdgeInsets.symmetric(horizontal: Space.x3),
-    );
-    final pages = [
+  Widget _header(BuildContext context, LcNode node) => InspectorHeader(
+    title: '${node.type == 'component' ? componentLabel(_doc, node) : node.spec.label}${widget.modal ? ' 样式' : ''}',
+    modal: widget.modal,
+    page: _page,
+    pages: [
       for (final p in InspectorPage.values)
         if (p != InspectorPage.events || _hasEvents) p,
-    ];
-    return ColoredBox(
-      color: c.surface,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (!widget.modal)
-            Center(
-              child: Container(
-                margin: const EdgeInsets.only(top: Space.x2),
-                width: 36,
-                height: 4,
-                decoration: BoxDecoration(color: c.border, borderRadius: BorderRadius.circular(2)),
-              ),
-            ),
-          Padding(
-            padding: const EdgeInsets.only(left: Space.x4, right: Space.x2),
-            child: SizedBox(
-              height: 44,
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      // 单独弹出来的那种（只为改样式开的）标题带“样式”两个字；搭建页里的合一面板只写名字，页签已经说了是哪一页。
-                      '${node.type == 'component' ? componentLabel(_doc, node) : node.spec.label}${widget.modal ? ' 样式' : ''}',
-                      key: const Key('lc-inspector-title'),
-                      style: t.titleLarge,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  // “CSS”“重置”改的是手机（默认）那份：画布切到别的屏宽时收起来，免得以为改的是这一档。
-                  if (_page == InspectorPage.style && widget.bp == null) ...[
-                    TextButton(
-                      key: const Key('lc-style-css'),
-                      onPressed: () => _openCss(node),
-                      style: TextButton.styleFrom(
-                        minimumSize: const Size(48, 40),
-                        padding: const EdgeInsets.symmetric(horizontal: Space.x3),
-                      ),
-                      child: const Text('CSS'),
-                    ),
-                    TextButton(key: const Key('lc-style-reset'), onPressed: _style.isEmpty ? null : _reset, style: quiet, child: const Text('重置')),
-                  ],
-                  if (!widget.modal) IconButton(key: const Key('lc-inspector-close'), tooltip: '收起', icon: const Icon(Icons.close, size: 20), onPressed: _close),
-                ],
-              ),
-            ),
+    ],
+    onPage: showPage,
+    // “CSS”“重置”改的是手机（默认）那份：画布切到别的屏宽时收起来，免得以为改的是这一档。
+    onCss: _page == InspectorPage.style && widget.bp == null ? () => _openCss(node) : null,
+    onReset: _style.isEmpty ? null : _reset,
+    onClose: _close,
+    strip: _page != InspectorPage.style
+        ? null
+        : StyleTabStrip(
+            tab: _tab,
+            own: widget.bp == null ? _style : canonicalDeclarations(lcBpStyle(_preview(node), widget.bp!)),
+            onSelect: (tab) {
+              _jumpTop();
+              setState(() => _tab = tab);
+            },
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x2),
-            child: Container(
-              decoration: BoxDecoration(color: c.surfaceMuted, borderRadius: BorderRadius.circular(Radii.sm)),
-              padding: const EdgeInsets.all(2),
-              child: Row(children: [for (final p in pages) Expanded(child: _segment(context, p))]),
-            ),
-          ),
-          if (_page == InspectorPage.style)
-            StyleTabStrip(
-              tab: _tab,
-              own: widget.bp == null ? _style : canonicalDeclarations(lcBpStyle(_preview(node), widget.bp!)),
-              onSelect: (tab) {
-                _jumpTop();
-                setState(() => _tab = tab);
-              },
-            ),
-          Divider(height: 1, color: c.border),
-        ],
-      ),
-    );
-  }
-
-  Widget _segment(BuildContext context, InspectorPage p) {
-    final c = context.colors;
-    final t = Theme.of(context).textTheme;
-    final on = p == _page;
-    return Material(
-      color: on ? c.surface : Colors.transparent,
-      borderRadius: BorderRadius.circular(Radii.sm - 2),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        key: Key('lc-page-${p.name}'),
-        onTap: () => showPage(p),
-        child: SizedBox(
-          height: 36,
-          child: Center(
-            child: Text(
-              p.label,
-              style: t.bodyMedium?.copyWith(color: on ? c.accent : c.textMuted, fontWeight: on ? FontWeight.w600 : FontWeight.w400, height: 1.2),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+  );
 }

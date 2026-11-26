@@ -117,3 +117,37 @@ extension _CanvasSlots on CanvasPage {
     return inner.boundedW ? SizedBox(key: key, width: double.infinity, child: body) : KeyedSubtree(key: key, child: body);
   }
 }
+
+/// 组件自带的插槽（列表行左右、导航栏左右、标签页的一页、弹窗的内容和底部）和“长按拿起”。
+extension _CanvasHostSlots on CanvasPage {
+  /// 画一个插槽（列表行左右、导航栏左右、标签页的一页、弹窗的内容和底部）。它的落点 id 是“宿主 id#插槽名”。
+  Widget _slot(BuildContext context, LcNode host, _Ctx base, String name, {required bool row, required double availW, bool end = false, CssScale? scale, Color? textColor}) {
+    final kids = lcSlotChildren(host, name);
+    final inner = _Ctx(
+      parent: host,
+      flow: CssFlow(row: row, reverse: false, wrap: false),
+      boundedW: !row,
+      boundedH: false,
+      availW: availW,
+      availH: null,
+      scale: scale ?? base.scale,
+      growCount: 0,
+      textColor: textColor ?? base.textColor,
+      buttonText: base.buttonText,
+      styles: base.styles,
+      env: base.env,
+    );
+    final style = row ? {'align-items': 'center', 'column-gap': '8px', if (end) 'justify-content': 'flex-end'} : const {'row-gap': '8px', 'align-items': 'stretch'};
+    final label = lcSlotsOf(host).where((s) => s.name == name).firstOrNull?.label ?? name;
+    final Widget body = kids.isEmpty
+        ? (inert ? const SizedBox.shrink() : CanvasSlotHint(key: ValueKey('lc-slot-hint-${host.id}-$name'), label: label, row: row, quiet: row && selected != host.id))
+        : _flex(context, host, style, inner, tightW: !row, tightH: false, only: kids);
+    return inert ? body : KeyedSubtree(key: boxKey(lcSlotBoxId(host.id, name)), child: body);
+  }
+
+  Widget _liftable(LcNode n, Widget child) {
+    final lift = onLift;
+    if (lift == null) return child;
+    return LcLiftDetector(onLift: (at) => lift(LcDrag.move(n.id), at), onMove: (at) => onLiftMove?.call(at), onDrop: () => onLiftDrop?.call(), onCancel: () => onLiftCancel?.call(), child: child);
+  }
+}
