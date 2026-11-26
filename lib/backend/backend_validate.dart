@@ -1,5 +1,4 @@
 /// 后端积木的校验：把“生成后会出错 / 不起作用”的地方找出来，用人话说清楚是哪个接口、第几块、什么问题。
-///
 /// 只读不改。问题的结构沿用前端的 [LcLogicIssue]（`handlerId` 这里放接口的 id），这样积木编辑器只认一种问题。
 /// 分两级：错误（这一块不会按想的那样工作）和警告 / 提示（能跑，但多半不是你想要的）。
 /// 每种问题有稳定的规则编号和一句“怎么改”（lib/lowcode/logic_rules.dart）；类型、次数、除以 0 这些和页面逻辑共用的检查在
@@ -7,6 +6,8 @@
 library;
 
 import 'package:lopicode/backend/backend_blocks.dart';
+import 'package:lopicode/backend/backend_blocks_core.dart';
+import 'package:lopicode/backend/backend_core.dart';
 import 'package:lopicode/backend/backend_func_table.dart';
 import 'package:lopicode/backend/backend_function.dart';
 import 'package:lopicode/backend/backend_ir.dart' show kBeRepeatLimit;
@@ -15,6 +16,7 @@ import 'package:lopicode/backend/backend_text.dart';
 import 'package:lopicode/backend/backend_validate_func.dart';
 import 'package:lopicode/backend/backend_validate_lang.dart';
 import 'package:lopicode/backend/backend_validate_types.dart';
+import 'package:lopicode/lang/rules.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 import 'package:lopicode/lowcode/logic_rules.dart';
 import 'package:lopicode/lowcode/logic_validate.dart';
@@ -134,7 +136,10 @@ class _Validator {
   /// 正在检查的是哪个函数的定义（“我的积木”）；null＝在接口里。[_lambdas]＝现在套在几层匿名函数的口里。
   BeFunction? _fn;
   int _lambdas = 0;
-  LcBlockTree? get _tree => _fn ?? _route;
+  BeMethod? _core;
+  bool get _inFn => _fn != null || _core != null;
+  LcBlockTree? get _tree => _fn ?? _core ?? _route;
+  Map<String, bool> _withGlobals(Map<String, bool> m) => {...m, for (final g in doc.core.globals) g.name: g.isConst, for (final p in _core?.params ?? const <BeParam>[]) p.name: false};
   String? _fnName(String id) => doc.function(id)?.name;
 
   /// 这一串里出现过的参数名（定义的 + 匿名函数的）。
@@ -159,7 +164,7 @@ class _Validator {
   void _add(LcIssueLevel level, String code, String problem, {String? arg, String? where, List<Object>? xp, String? fix}) {
     final r = _tree;
     final b = _block;
-    final scope = where ?? (r == null ? '后端' : (r is BeFunction ? '积木「${r.name}」' : '接口「${describeBeRoute(r as BeRoute)}」'));
+    final scope = where ?? (r == null ? '后端' : (r is BeFunction ? '积木「${r.name}」' : (r is BeMethod ? doc.core.labelOf(r) : '接口「${describeBeRoute(r as BeRoute)}」')));
     final spot = where != null || r == null || b == null ? '' : '${describeBeBlockPath(r, _path)}（${describeBeBlock(b, _fnName)}）';
     final at = _top ?? arg;
     issues.add(
@@ -211,6 +216,13 @@ class _Validator {
     }
     _route = null;
     _functions(used);
+    for (final m in doc.core.trees) {
+      _core = m; // 核心 2 的串（方法、“创建时”、“程序开始时”）：这里只看格子填没填好，类型由类型检查说
+      _locals = _withGlobals(beLocalNames(m.body, beNamePattern));
+      _known = beTreeParamNames(m);
+      _blocks(m.body, const [], false);
+    }
+    _core = null;
   }
 
   /// “我的积木”的定义：外观、参数表、函数体里的每一块，再加语言核心的检查器对这一批函数说的。
@@ -223,7 +235,7 @@ class _Validator {
       for (final p in beFuncHeadProblems(f, table)) {
         _add(p.isError ? LcIssueLevel.error : LcIssueLevel.warning, p.code, p.problem, arg: p.arg, xp: const [], fix: p.fix);
       }
-      _locals = beLocalNames(f.body, beNamePattern);
+      _locals = _withGlobals(beLocalNames(f.body, beNamePattern));
       _known = beTreeParamNames(f);
       _blocks(f.body, const [], false);
       _lang(f, beFuncFindings(table, f, used));
@@ -380,7 +392,7 @@ class _Validator {
     _values.block(b, spec);
     _newNames(b);
     if (b.op == 'fetch') _url(b);
-    final misplaced = beHostOnlyProblem(b.op, inFunction: _fn != null, inLambda: _lambdas > 0);
+    final misplaced = beHostOnlyProblem(b.op, inFunction: _inFn, inLambda: _lambdas > 0);
     if (misplaced != null) _error(BeFuncIssueCode.hostInFunction, misplaced.$1, fix: misplaced.$2);
     if (!spec.hasBody && b.body.isNotEmpty) {
       _warn(LcIssueCode.strayBody, '“${spec.label}”里面不能放积木，里面的 ${b.body.length} 块生成代码时会被忽略');
@@ -486,7 +498,7 @@ class _Validator {
         } else if (value is! List) {
           _error(LcIssueCode.badArg, '“${a.label}”应该是一串值', arg: a.name);
         } else {
-          final inObj = ownerKind == 'obj';
+          final inObj = ownerKind == 'obj' || (a.name == 'fields' && beIsCoreExpr(ownerKind));
           final keys = <String>{};
           for (var i = 0; i < value.length; i++) {
             final item = value[i];
@@ -511,7 +523,7 @@ class _Validator {
           if (!a.optional) _error(LcIssueCode.missingArg, '还没选变量', arg: a.name);
         } else if (value is! String) {
           _error(LcIssueCode.badArg, '“${a.label}”应该是变量的名字', arg: a.name);
-        } else if (_fn != null && !_locals.containsKey(value)) {
+        } else if (_inFn && !_locals.containsKey(value)) {
           _error(LcIssueCode.unknownVar, doc.variable(value) == null ? '变量 $value 在这块积木里还没有新建' : '变量 $value 是接口里用的，自定义积木里看不见', arg: a.name, fix: '在这块积木里用“新建变量”，或者给它加一个参数、调用时把值传进来。');
         } else if (doc.variable(value) == null && !_locals.containsKey(value)) {
           _error(LcIssueCode.unknownVar, '变量 $value 还没有声明（先到“变量”里加一个）', arg: a.name);
@@ -529,8 +541,8 @@ class _Validator {
       case LcArgKind.choice:
         if (missing) {
           _error(LcIssueCode.missingArg, '“${a.label}”还没选', arg: a.name);
-        } else if (value is! String || !a.choices.contains(value)) {
-          _error(LcIssueCode.badArg, '“${a.label}”只能是 ${a.choices.join(' / ')}', arg: a.name);
+        } else if (value is! String || (!a.choices.contains(value) && !(a.choices.isEmpty && value.isNotEmpty && langRulesStrict(doc.rules)))) {
+          _error(LcIssueCode.badArg, a.choices.isEmpty ? '“${a.label}”还没选' : '“${a.label}”只能是 ${a.choices.join(' / ')}', arg: a.name);
         }
       case LcArgKind.literalText:
         if (a.optional && (missing || value == '')) {

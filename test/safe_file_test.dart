@@ -19,8 +19,11 @@ import 'package:lopicode/appearance/theme_store.dart';
 import 'package:lopicode/backdrop/backdrop_model.dart';
 import 'package:lopicode/backdrop/backdrop_store.dart';
 import 'package:lopicode/backdrop/crop_math.dart';
+import 'package:lopicode/backend/backend_block_host.dart';
+import 'package:lopicode/backend/backend_core_gen.dart';
 import 'package:lopicode/backend/backend_model.dart';
 import 'package:lopicode/backend/backend_project.dart';
+import 'package:lopicode/backend/backend_type_bridge.dart';
 import 'package:lopicode/backend/backend_validate.dart';
 import 'package:lopicode/build/local_pack_form.dart';
 import 'package:lopicode/core/crash_log.dart';
@@ -29,6 +32,7 @@ import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/core/safe_file.dart';
 import 'package:lopicode/core/stores.dart';
 import 'package:lopicode/core/templates.dart';
+import 'package:lopicode/lang/gen2_all.dart';
 import 'package:lopicode/lowcode/editor_recents.dart';
 import 'package:lopicode/session/conversation.dart';
 import 'package:lopicode/session/favorites.dart';
@@ -446,6 +450,130 @@ void main() {
       await saveBackendFile(file, parsed.doc);
       final again = (await loadBackendFile(file))!;
       expect(again.doc.encode(), parsed.doc.encode());
+    });
+
+    test('后端积木文件 backend.lc.json（第 4 版，核心 2）：core / 类型 / 字段 / 情况 / 方法 / 模块 / 积木的参数类型全错 → 读到哪算哪，不抛异常、不算坏文件，再存一次是稳定的', () async {
+      for (final core in <Object?>[
+        '不是对象',
+        [1, 2],
+        {
+          'types': '不是列表',
+          'globals': 7,
+          'modules': {'a': 1},
+          'entry': 3,
+          'public': '不是列表',
+          'main': '不是对象',
+        },
+        {
+          'types': [
+            null,
+            3,
+            {'id': 9, 'kind': '没有这种', 'name': '甲'},
+            {'id': 't1', 'kind': 'record', 'name': 5},
+            {
+              'id': 't1',
+              'kind': 'record',
+              'name': '点',
+              'fields': [
+                null,
+                {'name': 3},
+                {'name': 'x', 'type': '不是类型', 'init': 5, 'private': 'yes'},
+              ],
+              'cases': '不是列表',
+              'parent': 4,
+              'interfaces': [1, null],
+              'open': 'yes',
+              'ctor': '不是对象',
+              'methods': [
+                7,
+                {'id': 'm1', 'name': '做', 'params': '不是列表', 'returns': 3, 'body': '不是列表'},
+              ],
+            },
+            {
+              'id': 't1',
+              'kind': 'variant',
+              'name': '形状',
+              'cases': [
+                3,
+                {'name': '圆', 'fields': 'x'},
+              ],
+            },
+          ],
+          'globals': [
+            null,
+            {'name': '9bad'},
+            {'name': 'n', 'init': '不是值', 'const': 1, 'type': 9},
+          ],
+          'modules': [
+            4,
+            {'name': 7},
+            {
+              'name': '甲',
+              'uses': 'x',
+              'owns': [1, null, 't1'],
+            },
+          ],
+          'entry': '没有这个模块',
+          'public': [3, 'g:没有'],
+          'main': {
+            'body': [
+              {'op': 'try', 'arms': '不是列表', 'args': 3},
+              {
+                'op': 'match',
+                'args': {'value': 7},
+                'arms': [
+                  3,
+                  {'args': 'x', 'body': 9},
+                  {
+                    'args': {'case': 5, 'binds': <Object?>[]},
+                  },
+                ],
+              },
+              {
+                'op': 'throw',
+                'args': {
+                  'value': {'e': 'errNew', 'kind': 3, 'message': null, 'fields': 'x'},
+                },
+              },
+              {
+                'op': 'log',
+                'args': {
+                  'value': {
+                    'e': 'recNew',
+                    'type': <Object?>[],
+                    'fields': [
+                      1,
+                      {'e': 'pair'},
+                      {'e': 'pair', 'key': 3, 'value': 'x'},
+                    ],
+                  },
+                },
+              },
+              {
+                'op': 'setField',
+                'args': {
+                  'of': {'e': 'classNew', 'type': '没有', 'args': 3},
+                  'name': 4,
+                  'value': {'e': 'callMethod', 'of': 1, 'name': null, 'args': <String, Object?>{}},
+                },
+              },
+            ],
+          },
+        },
+      ]) {
+        final file = File(p.join(tmp.path, 'backend.lc.json'))..writeAsStringSync(jsonEncode({'version': 4, 'kind': 'backend', 'language': 'node', 'rules': 2, 'routes': <Object?>[], 'core': core}));
+        final parsed = (await loadBackendFile(file))!;
+        expect(badBackups(file), isEmpty, reason: '文件本身是合法 JSON，不算坏文件');
+        expect(() => validateBackend(parsed.doc), returnsNormally);
+        expect(() => beTypeCheck(parsed.doc), returnsNormally);
+        for (final language in kGen2Languages) {
+          expect(() => beCoreCodeText(parsed.doc, language), returnsNormally);
+        }
+        expect(() => BeBlockHost(doc: parsed.doc.clone()).issues, returnsNormally);
+        await saveBackendFile(file, parsed.doc);
+        final again = (await loadBackendFile(file))!;
+        expect(again.doc.encode(), parsed.doc.encode());
+      }
     });
 
     test('后端积木文件 backend.lc.json（第 3 版，带“我的积木”）：functions / 外观 / 参数 / 调用 / 匿名函数的类型全错 → 读到哪算哪，不抛异常、不算坏文件，再存一次是稳定的', () async {

@@ -203,7 +203,15 @@ const Map<_Pick, (String, String)> _pickText = {
 };
 
 /// 选一种类型。选了马上写回去（[write]），面板留着；[read] 取现在的值。
-Future<void> showBeTypePicker(BuildContext context, {required String title, required LType? Function() read, required void Function(LType? type) write}) {
+/// [named]：自己定义的类型（记录、枚举、类…）的名字，排在最后各占一行；[allowNone]＝false 时没有“不标”。
+Future<void> showBeTypePicker(
+  BuildContext context, {
+  required String title,
+  required LType? Function() read,
+  required void Function(LType? type) write,
+  List<String> named = const [],
+  bool allowNone = true,
+}) {
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
@@ -212,9 +220,10 @@ Future<void> showBeTypePicker(BuildContext context, {required String title, requ
         final c = sheet.colors;
         final t = Theme.of(sheet).textTheme;
         final now = read();
-        final pick = _pickOf(now);
+        final ref = now != null && now.isNamed ? now.name : null;
+        final pick = ref != null ? null : _pickOf(now);
         final inner = now?.of ?? LType.any;
-        final canNull = pick != _Pick.none && pick != _Pick.any;
+        final canNull = ref != null || (pick != _Pick.none && pick != _Pick.any);
         void set(LType? next) {
           write(next);
           refresh(() {});
@@ -259,25 +268,44 @@ Future<void> showBeTypePicker(BuildContext context, {required String title, requ
                     shrinkWrap: true,
                     children: [
                       for (final p in _Pick.values)
+                        if (allowNone || p != _Pick.none)
+                          InkWell(
+                            key: ValueKey('be-type-${p.name}'),
+                            onTap: () => set(build(p, of: inner, nullable: now?.nullable ?? false)),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: Space.x4, vertical: 10),
+                              child: Row(
+                                children: [
+                                  Icon(p == pick ? Icons.radio_button_checked_rounded : Icons.radio_button_off_rounded, size: 20, color: p == pick ? c.accent : c.textMuted),
+                                  const SizedBox(width: Space.x3),
+                                  Text(_pickText[p]!.$1, style: t.bodyLarge),
+                                  const SizedBox(width: Space.x3),
+                                  Expanded(
+                                    child: Text(
+                                      _pickText[p]!.$2,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: t.bodySmall?.copyWith(color: c.textMuted),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                      for (final n in named)
                         InkWell(
-                          key: ValueKey('be-type-${p.name}'),
-                          onTap: () => set(build(p, of: inner, nullable: now?.nullable ?? false)),
+                          key: ValueKey('be-type-ref-$n'),
+                          onTap: () => set(now?.nullable ?? false ? LType.ref(n).orNull : LType.ref(n)),
                           child: Padding(
                             padding: const EdgeInsets.symmetric(horizontal: Space.x4, vertical: 10),
                             child: Row(
                               children: [
-                                Icon(p == pick ? Icons.radio_button_checked_rounded : Icons.radio_button_off_rounded, size: 20, color: p == pick ? c.accent : c.textMuted),
-                                const SizedBox(width: Space.x3),
-                                Text(_pickText[p]!.$1, style: t.bodyLarge),
+                                Icon(n == ref ? Icons.radio_button_checked_rounded : Icons.radio_button_off_rounded, size: 20, color: n == ref ? c.accent : c.textMuted),
                                 const SizedBox(width: Space.x3),
                                 Expanded(
-                                  child: Text(
-                                    _pickText[p]!.$2,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: t.bodySmall?.copyWith(color: c.textMuted),
-                                  ),
+                                  child: Text(n, maxLines: 1, overflow: TextOverflow.ellipsis, style: t.bodyLarge),
                                 ),
+                                Text('自己定义的', style: t.bodySmall?.copyWith(color: c.textMuted)),
                               ],
                             ),
                           ),
@@ -293,7 +321,7 @@ Future<void> showBeTypePicker(BuildContext context, {required String title, requ
                                 value: kBeTypeChoices.contains(inner) ? inner : LType.any,
                                 underline: const SizedBox.shrink(),
                                 items: [for (final x in kBeTypeChoices) DropdownMenuItem(value: x, child: Text(x.show()))],
-                                onChanged: (x) => set(build(pick, of: x, nullable: now?.nullable ?? false)),
+                                onChanged: (x) => set(build(pick!, of: x, nullable: now?.nullable ?? false)),
                               ),
                             ],
                           ),
@@ -304,7 +332,7 @@ Future<void> showBeTypePicker(BuildContext context, {required String title, requ
                         title: const Text('可以是空'),
                         subtitle: Text(canNull ? '开了以后，用它之前要先判断“不是空”' : '“不标”和“任意”本来就可以是空', style: t.bodySmall?.copyWith(color: c.textMuted)),
                         value: canNull && (now?.nullable ?? false),
-                        onChanged: canNull ? (v) => set(build(pick, of: inner, nullable: v)) : null,
+                        onChanged: canNull ? (v) => set(ref != null ? (v ? now!.orNull : now!.nonNull) : build(pick!, of: inner, nullable: v)) : null,
                       ),
                       Padding(
                         padding: const EdgeInsets.fromLTRB(Space.x4, Space.x1, Space.x4, Space.x3),

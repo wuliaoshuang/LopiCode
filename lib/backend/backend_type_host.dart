@@ -7,6 +7,7 @@
 /// 做成 mixin 混进 `BeBlockHost`。类型检查本身和“问题对回哪一格”在 backend_type_bridge.dart；`validateBackend` 用的也是那一份。
 library;
 
+import 'package:lopicode/backend/backend_core_fix.dart';
 import 'package:lopicode/backend/backend_function.dart';
 import 'package:lopicode/backend/backend_lower_lang.dart';
 import 'package:lopicode/backend/backend_model.dart';
@@ -63,7 +64,7 @@ mixin BeTypeHost on BlockHost {
 
   bool get strictRules => langRulesStrict(doc.rules);
 
-  LcBlockTree? _tree(String id) => doc.function(id) ?? doc.routes.where((r) => r.id == id).firstOrNull;
+  LcBlockTree? _tree(String id) => beTreeById(doc, id);
 
   /// 把类型问题并进 [base]（原来那些校验的结果）。版本 1 原样返回 [base]（同一个对象）。
   List<BlockIssue> withTypeIssues(List<BlockIssue> base) {
@@ -90,9 +91,32 @@ mixin BeTypeHost on BlockHost {
     ];
     for (final f in check.findings) {
       final tree = _tree(f.at.treeId);
-      if (tree == null) continue;
+      List<BlockIssueAction> extra() => [for (final x in f.extra) BlockIssueAction(x.label, () => applyCoreFix(x))];
+      if (tree == null) {
+        // 不在哪一串积木上的问题：类一级的（继承、实现接口）记在那个类型名下；模块之间的记在“模块”名下。
+        final t = doc.core.type(f.at.treeId);
+        if (t == null && f.at.treeId.isNotEmpty) continue;
+        final scope = t == null ? '模块' : '${t.kind.label}「${t.name}」';
+        out.add(
+          BlockIssue(
+            message: '$scope：${f.problem}',
+            isError: f.issue.level == LTypeLevel.error,
+            isHint: f.issue.level == LTypeLevel.hint,
+            rule: f.issue.code,
+            problem: f.problem,
+            fix: f.issue.rule.advice,
+            group: scope,
+            actions: extra(),
+          ),
+        );
+        continue;
+      }
       final block = f.at.path.isEmpty ? null : tree.blockAt(f.at.path);
-      final scope = tree is BeFunction ? '积木「${tree.name}」' : '接口「${describeBeRoute(tree as BeRoute)}」';
+      final scope = tree is BeFunction
+          ? '积木「${tree.name}」'
+          : tree is BeRoute
+          ? '接口「${describeBeRoute(tree)}」'
+          : (coreScopeName(tree) ?? '');
       final spot = block == null ? '' : '${describeBeBlockPath(tree, f.at.path)}（${describeBeBlock(block, fnName)}）';
       final issue = f.issue;
       out.add(
@@ -109,11 +133,21 @@ mixin BeTypeHost on BlockHost {
           fix: issue.rule.advice,
           group: scope,
           spot: spot,
-          actions: [for (final x in f.fixes) BlockIssueAction(x.fix.label, () => applyTypeFix(x.fix, x.slot))],
+          actions: [for (final x in f.fixes) BlockIssueAction(x.fix.label, () => applyTypeFix(x.fix, x.slot)), ...extra()],
         ),
       );
     }
     return out;
+  }
+
+  /// 核心 2 的串（方法、“创建时”、“程序开始时”）在问题列表里叫什么；宿主的另一半（BeCoreHost）给。
+  String? coreScopeName(LcBlockTree tree) => null;
+
+  /// 做一次核心 2 的“一键修”（一条撤销记录）。改成了返回 true。
+  bool applyCoreFix(BeCoreFix fix) {
+    var done = false;
+    edit(() => done = fix.apply(doc));
+    return done;
   }
 
   /// 做一次“一键修”（一条撤销记录）。改成了返回 true。

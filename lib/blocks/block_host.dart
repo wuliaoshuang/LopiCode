@@ -345,6 +345,9 @@ abstract class BlockHost {
   /// 返回 null＝用通用排法（段名 + 每个参数的槽）。可覆盖。
   String? armSentence(String op) => null;
 
+  /// 这块积木的段分先后（“出错时”从上往下第一个对得上的接走）：段的“−”上多出“往上挪 / 往下挪”。默认不分。
+  bool armsOrdered(LcBlock block) => false;
+
   /// 表达式上的话，同上，例如 `{l} {op} {r}`、`不是 {x}`。可覆盖。
   String? exprSentence(String kind) => null;
 

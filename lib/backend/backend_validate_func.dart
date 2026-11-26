@@ -8,6 +8,7 @@
 library;
 
 import 'package:lopicode/backend/backend_blocks_func.dart';
+import 'package:lopicode/backend/backend_core.dart';
 import 'package:lopicode/backend/backend_func_table.dart';
 import 'package:lopicode/backend/backend_function.dart';
 import 'package:lopicode/backend/backend_model.dart';
@@ -53,7 +54,11 @@ class BeFuncHeadProblem {
 /// 这一串里（定义的参数 + 所有匿名函数的参数）出现过的参数名。读一个不在里面的参数一定是错的；
 /// 在里面但那个位置看不见的（比如在匿名函数外面读它的参数）由语言核心的检查器报。
 Set<String> beTreeParamNames(LcBlockTree tree) {
-  final out = <String>{if (tree is BeFunction) ...tree.paramNames};
+  final out = <String>{
+    if (tree is BeFunction) ...tree.paramNames,
+    if (tree is BeMethod)
+      for (final p in tree.params) p.name,
+  };
   beVisitBlocks(
     tree.body,
     (b) => beVisitExprs(b, (e) {

@@ -5,6 +5,7 @@
 library;
 
 import 'package:lopicode/backend/backend_blocks.dart';
+import 'package:lopicode/backend/backend_blocks_core.dart';
 import 'package:lopicode/backend/backend_blocks_strict.dart';
 import 'package:lopicode/backend/backend_function.dart';
 import 'package:lopicode/backend/backend_lang.dart';
@@ -25,7 +26,19 @@ class BeFuncTable {
   late final List<BeLoweredFunction> lowered = _guard(() => beLowerFunctionsWithSpots(doc, shadow: true), const []);
 
   /// 语言核心的检查器看完这一批函数的结果。
-  late final LangFunctionsAnalysis analysis = _guard(() => analyzeFunctions([for (final f in lowered) f.decl], inspect: beHostInspect), const LangFunctionsAnalysis([], {}));
+  late final LangFunctionsAnalysis analysis = _guard(
+    () => analyzeFunctions(
+      [for (final f in lowered) f.decl],
+      // 模块顶上的变量（核心 2）函数里看得见。
+      outer: {for (final g in doc.core.globals) g.name},
+      outerConsts: {
+        for (final g in doc.core.globals)
+          if (g.isConst) g.name,
+      },
+      inspect: beHostInspect,
+    ),
+    const LangFunctionsAnalysis([], {}),
+  );
 
   static T _guard<T>(T Function() run, T fallback) {
     try {
@@ -91,12 +104,12 @@ class BeFuncTable {
   /// 内置的加上自定义的。调用积木不看形状：值型的也能单独当一句用（结果不要），语句型的当值用得到空（校验给警告）。
   LcBlockSpec? blockSpec(String op) {
     final c = callOf(op);
-    return c != null ? bkLookBlockSpec(c) : beBlockSpecs[op];
+    return c != null ? bkLookBlockSpec(c) : beBlockSpecs[op] ?? (langRulesStrict(doc.rules) ? beCoreBlockSpecs[op] : null);
   }
 
   LcExprSpec? exprSpec(String? kind) {
     final c = callOf(kind);
-    return c != null ? bkLookExprSpec(c) : beExprSpecs[kind] ?? beStrictExprSpecs[kind];
+    return c != null ? bkLookExprSpec(c) : beExprSpecs[kind] ?? beStrictExprSpecs[kind] ?? (langRulesStrict(doc.rules) ? beCoreExprSpecs[kind] : null);
   }
 
   /// 调用时这个参数没给也行：它有默认值，或者是“剩下的全收”（没给＝一个都不多带）。不是调用返回 false。

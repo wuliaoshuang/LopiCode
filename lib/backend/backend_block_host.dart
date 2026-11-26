@@ -8,7 +8,11 @@
 library;
 
 import 'package:lopicode/backend/backend_blocks.dart';
+import 'package:lopicode/backend/backend_blocks_core.dart';
 import 'package:lopicode/backend/backend_blocks_strict.dart';
+import 'package:lopicode/backend/backend_core.dart';
+import 'package:lopicode/backend/backend_core_edit.dart';
+import 'package:lopicode/backend/backend_core_host.dart';
 import 'package:lopicode/backend/backend_edit.dart';
 import 'package:lopicode/backend/backend_func_edit.dart';
 import 'package:lopicode/backend/backend_func_host.dart';
@@ -105,7 +109,7 @@ String bePathProblem(String path) {
   return '路径格式不对';
 }
 
-class BeBlockHost extends BlockHost with BeFuncHost, BeTypeHost {
+class BeBlockHost extends BlockHost with BeFuncHost, BeCoreHost, BeTypeHost {
   /// `doc`＝要编辑的文档（宿主拿走以后外面别再直接改它，要改走 [edit]）。
   /// `onEdited`＝内容真的变了以后调（改动、撤销、重做；外面拿去落盘、重新生成）。
   /// `onNotice`＝有一句话要告诉用户（比如路径格式不对、为什么没改）。
@@ -160,7 +164,13 @@ class BeBlockHost extends BlockHost with BeFuncHost, BeTypeHost {
       BlockHat([const BlockHatPart.text('当收到'), BlockHatPart.slot('method', method), BlockHatPart.slot('path', path.isEmpty ? '路径' : path, empty: path.isEmpty, kind: LcArgKind.literalText)]);
 
   @override
-  List<BlockCategory> get categories => _categories ??= [
+  void canvasChanged() => _bump();
+
+  @override
+  String? coreScopeName(LcBlockTree tree) => coreScopeOf(tree);
+
+  @override
+  List<BlockCategory> get categories => _categories ??= coreCategories([
     BlockCategory(
       id: 'event',
       label: '事件',
@@ -169,7 +179,7 @@ class BeBlockHost extends BlockHost with BeFuncHost, BeTypeHost {
     ),
     // 严格规矩才有的三块（处理“空”、文字变整数）接在“运算”页最后；老规矩的文档积木盒和以前一样。
     if (!strictRules) ...bePaletteCategories else for (final c in bePaletteCategories) c.id == '运算' ? beStrictOperatorCategory(c) : c,
-  ];
+  ]);
 
   @override
   List<String> aliasesOf(BlockItemRef item) => beAliasesOf(item);
@@ -181,7 +191,11 @@ class BeBlockHost extends BlockHost with BeFuncHost, BeTypeHost {
   List<BlockItemRef> get starterItems => beStarterItems;
 
   @override
-  String? armSentence(String op) => beArmSentences[op];
+  String? armSentence(String op) => beArmSentences[op] ?? coreArmSentence(op);
+  @override
+  bool armsOrdered(LcBlock block) => strictRules && (block.op == 'try' || block.op == 'match');
+  @override
+  LcArm newArm(LcBlock block) => block.op == 'try' ? LcArm(args: {'kind': kBeCatchAny, 'name': 'e'}) : super.newArm(block);
 
   @override
   LcBlockSpec? blockSpec(String op) => funcBlockSpec(op);
@@ -191,16 +205,16 @@ class BeBlockHost extends BlockHost with BeFuncHost, BeTypeHost {
 
   /// `pair` 不在积木盒里（只能出现在“对象”里），颜色跟着“对象”。
   @override
-  String exprColorKey(String kind) => kind == 'pair' ? BlockColorKey.dict : (funcColorKey(kind) ?? (kind == 'param' ? BlockColorKey.function : super.exprColorKey(kind)));
+  String exprColorKey(String kind) => kind == 'pair' ? BlockColorKey.dict : (funcColorKey(kind) ?? coreColorKey(kind) ?? (kind == 'param' ? BlockColorKey.function : super.exprColorKey(kind)));
 
   @override
-  String blockColorKey(String op) => funcColorKey(op) ?? super.blockColorKey(op);
+  String blockColorKey(String op) => funcColorKey(op) ?? coreColorKey(op) ?? super.blockColorKey(op);
 
   @override
-  String? blockSentence(String op) => funcTable.sentenceOf(op) ?? beBlockSentences[op];
+  String? blockSentence(String op) => funcTable.sentenceOf(op) ?? beBlockSentences[op] ?? coreBlockSentence(op);
 
   @override
-  String? exprSentence(String kind) => funcTable.sentenceOf(kind) ?? beExprSentences[kind];
+  String? exprSentence(String kind) => funcTable.sentenceOf(kind) ?? beExprSentences[kind] ?? coreExprSentence(kind);
 
   @override
   bool isBooleanExpr(Map<String, dynamic> expr) => funcTable.isBool(expr) || beExprIsBool(expr);
@@ -208,20 +222,20 @@ class BeBlockHost extends BlockHost with BeFuncHost, BeTypeHost {
   // —— 脚本 ——
 
   @override
-  List<LcBlockTree> get scripts => beTrees(_doc);
+  List<LcBlockTree> get scripts => coreScripts(beTrees(_doc));
 
   @override
   BlockHat hatOf(LcBlockTree tree) => tree is BeFunction
       ? beDefineHat(tree.name)
       : tree is BeRoute
       ? _hat(tree.method, tree.path)
-      : const BlockHat([BlockHatPart.text('不认识的接口')], colorKey: BlockColorKey.unknown);
+      : coreHatOf(tree) ?? const BlockHat([BlockHatPart.text('不认识的接口')], colorKey: BlockColorKey.unknown);
 
   @override
   String hatSlotValue(LcBlockTree tree, String slotId) => tree is BeFunction
       ? (slotId == 'name' ? tree.name : '')
       : tree is! BeRoute
-      ? ''
+      ? (tree is BeMethod && slotId == 'name' ? tree.name : '')
       : switch (slotId) {
           'method' => tree.method,
           'path' => tree.path,
@@ -236,7 +250,7 @@ class BeBlockHost extends BlockHost with BeFuncHost, BeTypeHost {
   @override
   bool setHatSlot(LcBlockTree tree, String slotId, String value) {
     if (tree is BeFunction) return slotId == 'name' && renameFunction(tree, value);
-    if (tree is! BeRoute) return false;
+    if (tree is! BeRoute) return coreSetHatSlot(tree, slotId, value) ?? false;
     if (slotId == 'method') return _doc.setRouteMethod(tree.id, value);
     if (slotId != 'path') return false;
     final path = value.trim();
@@ -250,37 +264,38 @@ class BeBlockHost extends BlockHost with BeFuncHost, BeTypeHost {
   @override
   LcBlockTree? addScript(String templateId, {double? x, double? y}) {
     if (templateId == kBeDefineTemplate) return addDefinition(x: x, y: y);
+    if (isCoreTemplate(templateId)) return coreAddScript(templateId, x: x, y: y);
     final method = templateId.toUpperCase();
     if (!kBeMethods.contains(method)) return null;
     return _doc.addRoute(method, freePath(method), x: x, y: y);
   }
 
   @override
-  bool removeScript(String id) => _doc.function(id) != null ? removeFunctionScript(id) : _doc.removeRoute(id);
+  bool removeScript(String id) => _doc.function(id) != null ? removeFunctionScript(id) : (beRemoveCoreTree(_doc, id) || _doc.removeRoute(id));
 
   // —— 造新的 ——
 
   @override
   LcBlock newBlock(String op) {
     final f = _doc.function(beCallId(op) ?? '');
-    return f != null ? beNewCallBlock(f) : newBeBlock(op, _doc);
+    return f != null ? beNewCallBlock(f) : (coreNewBlock(op) ?? newBeBlock(op, _doc));
   }
 
   @override
   Map<String, dynamic> newExpr(String kind) {
     final f = _doc.function(beCallId(kind) ?? '');
-    return f != null ? beNewCallExpr(f) : (newBeStrictExpr(kind) ?? newBeExpr(kind, _doc));
+    return f != null ? beNewCallExpr(f) : (newBeStrictExpr(kind) ?? coreNewExpr(kind) ?? newBeExpr(kind, _doc));
   }
 
   /// “对象”的字段里加一项＝加一个“名字 : 值”；别的“一串值”加一段空文字。
   @override
-  Map<String, dynamic> newListItem(Map<String, dynamic> expr, LcArgSpec arg) => newBeListItem(exprKind(expr) ?? '', arg.name);
+  Map<String, dynamic> newListItem(Map<String, dynamic> expr, LcArgSpec arg) => coreNewListItem(expr, arg) ?? newBeListItem(exprKind(expr) ?? '', arg.name);
 
   // —— 参数 ——
 
   @override
   List<BlockOption> options(LcArgSpec arg, {LcBlockTree? tree, LcBlock? block, Map<String, dynamic>? expr}) {
-    final own = funcOptions(arg, tree: tree, expr: expr);
+    final own = funcOptions(arg, tree: tree, expr: expr) ?? coreOptions(arg, block: block, expr: expr);
     if (own != null) return own;
     switch (arg.kind) {
       case LcArgKind.variable:
@@ -293,6 +308,11 @@ class BeBlockHost extends BlockHost with BeFuncHost, BeTypeHost {
             for (final v in _doc.variables) BlockOption(v.name, v.name),
           for (final e in locals.entries)
             if (_doc.variable(e.key) == null) BlockOption(e.key, e.key, hint: e.value ? '这个接口里新建的常量' : '这个接口里新建的'),
+          if (tree is BeMethod)
+            for (final p in tree.params)
+              if (!locals.containsKey(p.name)) BlockOption(p.name, p.name, hint: '参数'),
+          for (final g in core.globals)
+            if (!locals.containsKey(g.name) && _doc.variable(g.name) == null) BlockOption(g.name, g.name, hint: g.isConst ? '模块顶上的常量' : '模块顶上的变量'),
         ];
       case LcArgKind.collection:
         return [for (final c in _doc.collections) BlockOption(c.name, c.name)];
@@ -317,6 +337,7 @@ class BeBlockHost extends BlockHost with BeFuncHost, BeTypeHost {
   /// 路径里正好只有一个参数时换成它（没有歧义）；有好几个就不猜，留给校验去提示。
   @override
   void argChanged(LcBlockTree tree, LcBlock block, String arg, List<Object> exprPath) {
+    coreArgChanged(block, arg, exprPath);
     if (tree is! BeRoute) return;
     final params = bePathParams(tree.path);
     if (params.length != 1) return;
@@ -340,7 +361,7 @@ class BeBlockHost extends BlockHost with BeFuncHost, BeTypeHost {
   @override
   String optionLabel(LcArgSpec arg, String value) {
     if (arg.kind != LcArgKind.choice) return value;
-    final fn = funcOptionLabel(arg, value);
+    final fn = funcOptionLabel(arg, value) ?? coreOptionLabel(arg, value);
     if (fn != null) return fn;
     if (arg.name == 'op') return _opSigns[value] ?? arg.choiceLabel(value);
     return arg.choiceLabel(value).split('（').first;
@@ -378,6 +399,8 @@ class BeBlockHost extends BlockHost with BeFuncHost, BeTypeHost {
     final cached = _code;
     if (cached != null) return cached;
     // 严格规矩的文档现在不生成（见 kBeStrictGenPending）：不拿老办法翻出来的代码冒充。
+    // 只用语言核心的严格文档（没有接口、有“程序开始时”）例外：走版本 2 的生成器（见 backend_core_gen.dart）。
+    if (coreCodeMode) return _code = coreCodeText(_doc.language);
     if (beStrictGenPending(_doc)) return _code = '$kBeStrictGenPending。\n\n没有代码可看。';
     final gen = generateBackend(_doc);
     return _code = gen == null ? '语言“${_doc.language}”还没有生成器，没有代码可看。' : (gen.files[gen.target.entryFile] ?? '');
@@ -388,7 +411,7 @@ class BeBlockHost extends BlockHost with BeFuncHost, BeTypeHost {
 
   /// 看的就是入口文件，高亮按它的文件名来；这种语言没有生成器时不高亮。
   @override
-  String get codeFileName => target?.entryFile ?? '';
+  String get codeFileName => coreCodeMode ? coreCodeFileName(_doc.language) : (target?.entryFile ?? '');
 
   // —— 改动、撤销 ——
 

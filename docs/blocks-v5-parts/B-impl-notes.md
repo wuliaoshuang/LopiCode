@@ -324,3 +324,78 @@ LTypeResult checkTypes({decls, main, scripts: [LTypeScript(name, body, vars: {�
 | `native http.serve (端口 函数)`、`native time.sleep`、`spawn`、`await` | 核心 2 第 4 段做了明着标的最小版：`http.serve(端口, 主机, 函数)`、`time.sleep`、`LSpawn`、`LAwait`（B-gen-notes 第 12 节）；完整的换算表在 `test/fixtures/framework/README.md` |
 | `static-method`、`(send 类名 方法 …)` | `LMethodDecl(isStatic: true)`、`LSend(LName(类名), …)` |
 | `private-field` | `LFieldDecl(isPrivate: true)` |
+
+## 核心 2 第 3 段以后的说明（2026-11-26，分支 v5r2-core）：积木文档里怎么存、怎么翻、一键修
+
+### 积木文档里怎么存（backend.lc.json）
+
+- 核心 2 的东西全放在文档顶上的一个键 **`core`** 里；`core` 是空的就不写这个键。所以没用到的文档读进来再写出去**一个字节不差**（`test/backend_core_samples_test.dart` 和 `test/backend_func_model_test.dart` 里的“旧文档字节不变”钉着）。
+- 文档版本号沿用“用到才升”：有 `core`、或者哪一串里用到了核心 2 的积木 / 值 → 写 **4**；拿掉又回到 3 / 2 / 1。读的时候不看版本号，只看内容。
+- `core` 里：
+
+  | 键 | 内容 |
+  |---|---|
+  | `types` | 一个类型一项：`{id, kind, name, fields?, cases?, parent?, interfaces?, open?, ctor?, methods?}`。`kind` 是 `record / enum / variant / error / class / interface` |
+  | 字段 | `{name, type, private?, static?, init?}`；`type` 用 `types_json.dart` 的写法，`init` 是一个值（积木的表达式） |
+  | 情况 | `{name, fields?}`（枚举的没有 `fields`） |
+  | 方法、`ctor` | `{id, name, params?, returns?, static?, x?, y?, body?}`；`params` 和“我的积木”的参数同一种写法（`{name, default?, type?}`）；接口的方法没有 `body`，只是一行签名 |
+  | `globals` | 模块顶上的变量：`{name, init?, const?, type?}` |
+  | `modules` | `{name, uses?, owns?}`；`owns` 里是键：类型的 id、“我的积木”的 id、变量是 `g:名字`。一个模块都没有＝整份文档是一个模块 |
+  | `entry` | 入口模块的名字 |
+  | `public` | 公开的东西的键（同 `owns`） |
+  | `main` | “程序开始时”那一串：`{x?, y?, body}`，id 固定是 `main` |
+
+- 新积木（都只在规矩版本 2 的文档里认；版本 1 的文档里出现＝不认识的积木，照旧原样留着、标出来）：
+  - 语句：`try`（多段：每段 `{kind, name}`，`kind` 是错误种类的名字或 `@any`；收尾口＝“最后总要”，`noElse` 表示没有）、`throw {value}`、`match {value}`（每段 `{case, binds}`；`case` 是情况的名字，或 `@null / @some`（可空的值）、`@is:number|text|bool|list|dict`（“任意”的值）；`binds` 是逗号隔开的变量名；收尾口＝“其他情况”）、`setField {of, name, value}`、`callMethodStmt {of, name, args}`、`superInit {args}`、`superCallStmt {name, args}`。
+  - 值：`errNew {kind, message, fields}`、`getField {of, name}`、`recNew {type, fields}`、`recCopy {of, fields}`、`enumVal {type, case}`、`varNew {type, case, args}`、`classNew {type, args}`、`callMethod {of, name, args}`、`superCall {name, args}`、`this`、`isA {x, type}`、`classRef {type}`。`fields` 是一串 `{e:'pair', key, value}`。
+- 坏内容不崩：`core` 不是对象、里面的表不是表、条目不是对象、名字不合规矩、类型写错、id 缺了重了、超过上限（类型 64、每个类型的成员 32、模块 16、“出错时”8 节）——都是丢掉坏的那一项，别的照读（`test/safe_file_test.dart` 里“核心 2”那一条）。
+
+### 怎么翻成语法树
+
+- `backend_lower_core.dart`：`beCoreProgram(doc)` 把整份文档翻成 `LProgram`（没有模块时是一个模块）；类型 → 记录 / 枚举 / 变体 / 类 / 接口的声明；**自定义错误种类翻成“父类是错误的类”**，新建时参数顺序是 消息＋各字段（从最上面的父类往下）。
+- “看是哪种情况”：看枚举 / 变体时翻成 `LMatch`（没列全由类型检查报 T03）；看可空的值、“任意”的值时翻成一段段“如果”（`== 空`、`是不是 某类型`），带出的东西是“一定有”“当成某类型”——这两种**列没列全由积木层自己查**（`beMatchGap`），也记成 T03，带“补上少的情况”“加一个其他情况”两种修法。
+- 翻的时候每个节点都新造（不共用 `const` 节点）：类型检查的结果是按“是不是同一个节点”记的，共用会互相盖掉（Go 里出过把“可空的整数”当成指针再判空的错代码，就是这个原因）。
+- “调父类的创建时”前面不插说明用的注释节点：它必须是“创建时”的第一句，插了就必报 T27。
+
+### 能看代码
+
+`backend_core_gen.dart`：`beIsCoreProgram(doc)`＝**严格规矩＋没有接口（路由）＋有“程序开始时”**。是的话，“看代码”走 `gen2ProgramFiles`，五种语言都出；“打印”翻成小库的 `log`。只管“看”：不写文件、不启动。含接口的严格文档还是原来那一行说明。`kLangStrictBackendGen`、`kStrictRulesUpgradeEnabled` 都没动、没读新的含义。
+
+### 一键修：这一段接上的
+
+| 哪条 | 修法（按钮上的字） | 做什么 |
+|---|---|---|
+| T03 没列全 | 补上漏掉的情况 / 加一个“其他情况” | 给“看是哪种情况”加段（带出的东西按字段名起变量名）/ 打开收尾口 |
+| T04 记录少字段 | 补上… | 按字段的类型放一个默认值 |
+| T04 记录多字段 | 去掉… | 删掉那一对 |
+| T06 改记录的字段 | 改成“复制并改” | 只在“把 (某个变量) 的字段改成 …”时能修：换成“把那个变量设为 复制它并改” |
+| T01 错误当文字 | 读它的消息 | 外面套“… 的 消息” |
+| T05 要数字 | 变成数字 | 外面套“变成数字” |
+| T17 | 给父类勾上“可以被继承” | |
+| T18 / T11 | 照抄上面的签名 / 加上这个方法 | 名字、参数（连默认值）、交回什么都照父类 / 接口的来；已有的方法只换签名，积木留着 |
+| T21 | 删掉这一节 | 另外，“试着做”“看是哪种情况”的段可以在积木上往上挪 / 往下挪 |
+| T27 | 在第一句放上“调父类的创建时” / 挪到第一句 | 参数先按父类“创建时”的个数放空槽 |
+| M05 | 在「乙」里勾上用到了「甲」 | |
+| M06 | 把「名」设成公开（需要的话顺手勾上“用到了谁”） | |
+| M08 | 把「后面那个」挪到「前面这个」前面 | |
+
+接不了的，和理由：
+
+| 哪条 | 为什么没有一键修 |
+|---|---|
+| T19（抛出的不是话也不是错误；接的种类不存在） | 不知道人想抛什么 / 想接哪一种——要人自己选；种类的下拉里已经只列得出能选的 |
+| T20（起了内置错误的名字） | 要人起一个新名字；改名的面板里直接拦着，积木文档里出不来 |
+| T22（在类外面碰内部的字段） | 两种改法（去掉“内部”、或者在类里加一个方法）意思差得远，不替人选 |
+| T23（新建接口、拿接口当父类…） | 下拉里已经不列接口；只有手改文件才出得来，修法是换一个类，要人选 |
+| T24（继承绕圈） | 断哪一条边要人定；选父类的时候已经拦着 |
+| T25（对象上调类本身的方法…） | 两头都可能是写错的那一头 |
+| T26（有默认值的参数后面跟着没默认值的） | 是挪顺序还是补默认值，要人定 |
+| T28（成员重名） | 要人起新名字；面板里加、改名时已经拦着 |
+| M01（模块重名、没名字）、M07（两个东西重名） | 要人起新名字；面板里已经拦着 |
+| M02（入口不存在、用到了不存在的模块） | 面板里只能从现有的模块里选，出不来 |
+| M03（模块绕圈） | 提示语已经说了怎么拆，拆法要人定 |
+| M04（不是入口的模块有“程序开始时”） | 积木文档里“程序开始时”只有一串、永远算在入口模块里，出不来 |
+
+### 这一段没做成积木界面的
+
+“要等的事”（明着标“要等”、`LSpawn`、`LAwait`）没有做成积木：下一轮（核心 3）要改成自动推，现在做界面会返工。语言层那一套原样留着。
