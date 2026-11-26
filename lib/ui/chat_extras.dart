@@ -13,6 +13,7 @@ import 'package:lopicode/state/code_font.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/chrome.dart';
 import 'package:lopicode/ui/code_view.dart';
+import 'package:lopicode/ui/message_text.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// 聊天行里要用到、但行自己拿不到的几个动作。由聊天页在列表外面套一层提供；没套（比如只读的子对话页）就不出现对应按钮。
@@ -176,7 +177,8 @@ class _ThinkingRowState extends State<ThinkingRow> {
               // 还在想：贴着底看最新的
               reverse: item.streaming,
               padding: const EdgeInsets.all(Space.x3),
-              child: SelectableText(item.text.trim(), style: t.bodySmall?.copyWith(color: c.textMuted, height: 1.6)),
+              // 和正文同一套 Markdown 排版，只是小字、灰色
+              child: MessageText(item.text.trim(), muted: true, streaming: false),
             ),
           ),
       ],

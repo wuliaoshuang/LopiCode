@@ -39,6 +39,7 @@ const _allowedLayers = {
   'terminal': {'core', 'terminal'},
   'lang': {'core', 'lang'},
   'apkpack': {'core', 'apkpack'},
+  'markdown': {'core', 'markdown'}, // 聊天正文的 Markdown / HTML 解析（纯逻辑）
 };
 
 /// 还没迁到 Riverpod 的旧式状态对象（`文件 类名或字段名` ⇒ 为什么还在）。只许变短，不许加新的。

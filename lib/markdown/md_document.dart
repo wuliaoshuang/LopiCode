@@ -18,11 +18,14 @@ const int kMdCacheMaxChars = 2000000;
 
 /// 一大块的解析结果。
 class MdPiece {
-  const MdPiece(this.source, this.blocks, {this.kind = MdChunkKind.markdown, this.closed = true});
+  const MdPiece(this.source, this.blocks, {this.kind = MdChunkKind.markdown, this.closed = true, this.tail = false});
   final String source;
   final List<MdBlock> blocks;
   final MdChunkKind kind;
   final bool closed;
+
+  /// 解析的时候它是“还在往外冒的最后一块”。
+  final bool tail;
 }
 
 class MdDocument {
@@ -57,19 +60,12 @@ MdDocument mdParseDocument(String text, {bool streaming = false, MdDocument? pre
   for (var i = 0; i < chunks.length; i++) {
     final c = chunks[i];
     final tail = streaming && i == chunks.length - 1;
-    // 没收尾的围栏在“说完了”以后也要重新算一次（closed 的含义变了）
-    final closed = c.closed || !tail && c.kind != MdChunkKind.fence && c.kind != MdChunkKind.math;
     final before = i < old.length ? old[i] : null;
-    if (before != null && before.kind == c.kind && before.source == c.source && before.closed == closed && !tail) {
-      pieces.add(before);
+    if (before != null && before.kind == c.kind && before.source == c.source && before.closed == c.closed && before.tail == tail) {
+      pieces.add(before); // 原文没变：沿用同一个对象
       continue;
     }
-    if (before != null && tail && before.kind == c.kind && before.source == c.source && before.closed == closed) {
-      pieces.add(before); // 末尾块原文也没变（比如只是多了个半截记号）
-      continue;
-    }
-    final use = MdChunk(c.kind, c.source, info: c.info, body: c.body, closed: tail ? c.closed : true);
-    pieces.add(MdPiece(c.source, mdParseChunk(use, refs: refs, streamingTail: tail), kind: c.kind, closed: closed));
+    pieces.add(MdPiece(c.source, mdParseChunk(c, refs: refs, streamingTail: tail), kind: c.kind, closed: c.closed, tail: tail));
   }
   return MdDocument(pieces, refs: refs);
 }

@@ -14,6 +14,21 @@ import 'package:markdown/markdown.dart' as md;
 /// 解析时互相嵌套（HTML 里的 Markdown 里的 HTML……）最多几层，超过就当文字。
 const int kMdMaxNesting = 6;
 
+/// 一串不带空白的字母数字超过这么长，这一块就不交给解析器、按纯文字显示（自己定的）。
+/// 原因：`markdown` 包遇到很长的不断开的字母数字（比如一大段 base64）会慢到卡死——测试里 10 万字一串跑不完。
+const int kMdMaxWordRun = 2000;
+final RegExp _longRun = RegExp('[A-Za-z0-9]{${kMdMaxWordRun + 1}}');
+
+/// 写在消息里的 data: 图片地址很长，解析前先换成短记号，解析完再换回来。
+final RegExp _dataUri = RegExp(r'data:image/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=]+');
+const String _dataMark = 'lopi-data-uri:';
+List<String> _dataUris = const [];
+String _restoreUri(String s) {
+  if (!s.startsWith(_dataMark)) return s;
+  final i = int.tryParse(s.substring(_dataMark.length));
+  return i != null && i >= 0 && i < _dataUris.length ? _dataUris[i] : s;
+}
+
 /// 把整个标签（和注释）当成一个整体吃掉，后面再按安全清单决定它算不算数。
 class _HtmlTagSyntax extends md.InlineSyntax {
   _HtmlTagSyntax() : super('$kHtmlTagPattern|<!--[\\s\\S]*?-->', startCharacter: 0x3c);
@@ -80,6 +95,7 @@ List<MdBlock> mdParseText(String text, {String refs = '', int depth = 0}) {
 List<MdInline> mdParseInline(String text) {
   final t = text.trim();
   if (t.isEmpty) return const [];
+  if (_longRun.hasMatch(t)) return [MdText(t)];
   try {
     return _inlines(_newDocument().parseInline(t));
   } on Object {
@@ -101,13 +117,28 @@ String _dedent(String text) {
 }
 
 List<MdBlock> _parseMarkdown(String source, String refs, {bool streamingTail = false}) {
-  List<md.Node> nodes;
+  final uris = <String>[];
+  final text = source.contains('data:image/')
+      ? source.replaceAllMapped(_dataUri, (m) {
+          uris.add(m[0]!);
+          return '$_dataMark${uris.length - 1}';
+        })
+      : source;
+  if (_longRun.hasMatch(text)) return [MdParagraph([MdText(source)])];
+  final List<md.Node> nodes;
+  final saved = _dataUris;
+  _dataUris = uris;
   try {
-    nodes = _newDocument().parse(refs.isEmpty ? source : '$source\n\n$refs');
+    nodes = _newDocument().parse(refs.isEmpty ? text : '$text\n\n$refs');
+    return _finish(_blocks(nodes), source, streamingTail);
   } on Object {
-    return [MdParagraph([MdText(source)])]; // 同上：解析器出错就按纯文字
+    return [MdParagraph([MdText(source)])]; // 解析器自己出错：退回纯文字，不让一条消息把页面弄崩
+  } finally {
+    _dataUris = saved;
   }
-  final blocks = _blocks(nodes);
+}
+
+List<MdBlock> _finish(List<MdBlock> blocks, String source, bool streamingTail) {
   if (streamingTail && blocks.isNotEmpty) {
     // 嵌在列表 / 引用里的围栏还没收尾：标成“开着的”
     final last = _deepLast(blocks.last);
@@ -286,7 +317,7 @@ List<MdInline> _inlines(List<md.Node> nodes) {
         } else if (tag.name == 'br') {
           add(const MdBreak());
         } else if (tag.name == 'img') {
-          final src = tag.attrs['src'] ?? '';
+          final src = _restoreUri(tag.attrs['src'] ?? '');
           if (src.isNotEmpty) add(MdImage(src, tag.attrs['alt'] ?? ''));
         } else if (tag.closing) {
           final at = stack.lastIndexWhere((f) => f.tag?.name == tag.name);
@@ -311,7 +342,7 @@ List<MdInline> _inlines(List<md.Node> nodes) {
       case 'math':
         add(MdInlineCode(n.textContent, math: true));
       case 'a':
-        final href = n.attributes['href'] ?? '';
+        final href = _restoreUri(n.attributes['href'] ?? '');
         final inner = _inlines(kids);
         if (href.isEmpty) {
           inner.forEach(add);
@@ -319,7 +350,7 @@ List<MdInline> _inlines(List<md.Node> nodes) {
           add(MdLink(href, inner));
         }
       case 'img':
-        final src = n.attributes['src'] ?? '';
+        final src = _restoreUri(n.attributes['src'] ?? '');
         if (src.isNotEmpty) add(MdImage(src, n.attributes['alt'] ?? n.textContent));
       case 'br':
         add(const MdBreak());

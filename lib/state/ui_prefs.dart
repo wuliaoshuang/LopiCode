@@ -25,7 +25,10 @@ final themeModeProvider = NotifierProvider<ThemeModeNotifier, AppThemeMode>(Them
 
 /// 聊天页的几个开关。
 class ChatPrefs {
-  const ChatPrefs({required this.suggestions, required this.usage, this.thinking = true});
+  const ChatPrefs({required this.suggestions, required this.usage, this.thinking = true, this.autoImages = false});
+
+  /// 消息里的 https 图片自动加载（默认关：点一下才联网）。
+  final bool autoImages;
 
   /// 在聊天里显示思考过程（默认开）。
   final bool thinking;
@@ -37,10 +40,10 @@ class ChatPrefs {
   final bool usage;
 
   @override
-  bool operator ==(Object other) => other is ChatPrefs && other.suggestions == suggestions && other.usage == usage && other.thinking == thinking;
+  bool operator ==(Object other) => other is ChatPrefs && other.suggestions == suggestions && other.usage == usage && other.thinking == thinking && other.autoImages == autoImages;
 
   @override
-  int get hashCode => Object.hash(suggestions, usage, thinking);
+  int get hashCode => Object.hash(suggestions, usage, thinking, autoImages);
 }
 
 class ChatPrefsNotifier extends Notifier<ChatPrefs> {
@@ -49,9 +52,12 @@ class ChatPrefsNotifier extends Notifier<ChatPrefs> {
     ref
       ..watch(settingRevProvider(SettingKeys.chatSuggestions))
       ..watch(settingRevProvider(SettingKeys.chatUsage))
-      ..watch(settingRevProvider(SettingKeys.chatThinking));
+      ..watch(settingRevProvider(SettingKeys.chatThinking))
+      ..watch(settingRevProvider(SettingKeys.chatAutoImages));
     final s = ref.watch(settingsStoreProvider);
-    return ChatPrefs(suggestions: s.getBool(SettingKeys.chatSuggestions, true), usage: s.getBool(SettingKeys.chatUsage, true), thinking: s.getBool(SettingKeys.chatThinking, true));
+    return ChatPrefs(suggestions: s.getBool(SettingKeys.chatSuggestions, true), usage: s.getBool(SettingKeys.chatUsage, true), thinking: s.getBool(SettingKeys.chatThinking, true),
+      autoImages: s.getBool(SettingKeys.chatAutoImages, false),
+    );
   }
 
   Future<void> setSuggestions(bool on) => ref.read(settingsStoreProvider).set(SettingKeys.chatSuggestions, on);

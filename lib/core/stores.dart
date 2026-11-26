@@ -118,6 +118,7 @@ class SettingKeys {
   static const chatUsage = 'chat.usage'; // 在回复下方显示用量，默认开
   static const codeFontSize = 'ui.codeFontSize'; // 代码区域的字号（10–24，默认 14），全应用一个值
   static const chatThinking = 'chat.thinking'; // 在聊天里显示思考过程，默认开
+  static const chatAutoImages = 'chat.autoImages'; // 消息里的 https 图片自动加载，默认关（点一下才联网）
   static const agentAutoCompact = 'agent.autoCompact'; // 上下文快满时自动把较早的对话压成摘要，默认开
   static const agentMaxSteps = 'agent.maxSteps'; // 连着执行多少步后停下来问，10–100，默认 30
   static const agentKeepAlive = 'agent.keepAlive'; // Agent 干活时保持后台运行（前台服务 + 常驻通知），默认开

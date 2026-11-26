@@ -82,16 +82,12 @@ MdImageSource mdResolveImage(String src, PathGuard? guard) {
     // 不是合法的百分号写法：按原样当文件名
   }
   // 运行环境里工作区挂在 /workspace：模型常写这种绝对路径，换成工作区内的相对路径
-  if (rel == '/workspace' || rel.startsWith('/workspace/')) rel = rel.substring('/workspace'.length);
-  while (rel.startsWith('/') && guard.root != '/') {
-    // 其余以 / 开头的：只有本来就落在工作区里的才认
-    if (rel.startsWith('${guard.root}/')) {
-      rel = rel.substring(guard.root.length);
-    } else if (src.trim().startsWith('/workspace')) {
-      rel = rel.substring(1);
-    } else {
-      return const MdBlockedImage('只显示工作区里面的图片');
-    }
+  if (rel.startsWith('/workspace/')) {
+    rel = rel.substring('/workspace/'.length);
+  } else if (rel.startsWith('${guard.root}/')) {
+    rel = rel.substring(guard.root.length + 1);
+  } else if (rel.startsWith('/') || rel.startsWith('~')) {
+    return const MdBlockedImage('只显示工作区里面的图片');
   }
   while (rel.startsWith('./')) {
     rel = rel.substring(2);
