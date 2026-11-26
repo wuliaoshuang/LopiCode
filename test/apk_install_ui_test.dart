@@ -17,6 +17,7 @@ import 'package:lopicode/build/apk_install_view.dart';
 import 'package:lopicode/build/apk_installer.dart';
 import 'package:lopicode/build/apk_output.dart';
 import 'package:lopicode/build/build_controller.dart';
+import 'package:lopicode/build/build_job_view.dart';
 import 'package:lopicode/build/build_screen.dart';
 import 'package:lopicode/build/local_pack_backend.dart';
 import 'package:lopicode/core/project_store.dart';
@@ -411,6 +412,45 @@ void main() {
       expect(message(tester), contains('已经交给系统安装器'));
     });
 
+    testWidgets('远程打包（GitHub / SSH）完成的卡上也有“安装”：装的是下载回来的那一份', (tester) async {
+      await boot(tester);
+      const apk = '/storage/emulated/0/Android/data/com.lopicode.app/files/apk/demo/app-release.apk';
+      final job = _DoneJob()
+        ..phase = BuildPhase.done
+        ..log.add('APK 已保存（21.3 MB）')
+        ..apkPath = apk;
+      await tester.pumpWidget(
+        appFor(
+          env,
+          Scaffold(
+            body: SingleChildScrollView(padding: const EdgeInsets.all(16), child: BuildJobCard(job: job)),
+          ),
+          font: kTestFont,
+        ),
+      );
+      await settle(tester, rounds: 2);
+      expect(find.text('打包完成'), findsOneWidget);
+      await tester.tap(button('安装'));
+      await settle(tester, rounds: 2);
+      expect(installer.installed, [apk]);
+      expect(message(tester), contains('已经交给系统安装器'));
+      // 没打完 / 没成的卡上没有“安装”
+      final failed = _DoneJob()
+        ..phase = BuildPhase.failed
+        ..log.add('构建命令失败');
+      await tester.pumpWidget(
+        appFor(
+          env,
+          Scaffold(
+            body: SingleChildScrollView(padding: const EdgeInsets.all(16), child: BuildJobCard(key: UniqueKey(), job: failed)),
+          ),
+          font: kTestFont,
+        ),
+      );
+      await settle(tester, rounds: 2);
+      expect(find.byKey(const Key('apk-install')), findsNothing);
+    });
+
     testWidgets('这台设备没有外部目录：装工作区里的那一份', (tester) async {
       await boot(tester);
       externalFilesDirOverride = () async => null;
@@ -426,4 +466,9 @@ void main() {
       expect(installer.installed, [state.result!.path]);
     });
   });
+}
+
+class _DoneJob extends BuildJob {
+  @override
+  void cancel() {}
 }

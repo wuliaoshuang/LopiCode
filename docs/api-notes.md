@@ -477,19 +477,20 @@ PHP 估计 7.4+（PHP 那份代码从没运行过）。下面选的版本都够�
 
 ## 2026-11-26 应用内安装 APK（`android/…/ApkInstallChannel.kt`、`ApkFileProvider.kt`、`lib/build/apk_installer.dart`）
 
-核对日期 2026-11-26。能打开原文的写“已核对”，只看到搜索摘录的写“摘录”，没查到的写“未核对”。
+核对日期 2026-11-26（当天下午又对着 developer.android.com 补核了一遍，升级了几行的状态）。能打开原文的写“已核对”，只看到搜索摘录的写“摘录”，没查到的写“未核对”。
 
 | 事实 | 来源 | 状态 | 我们怎么用 |
 |---|---|---|---|
 | Android 8（API 26）起没有全局的“未知来源”开关，改成按应用给“安装未知应用”；targetSdk ≥ 26 的应用要让用户装别的应用，清单里必须声明 `REQUEST_INSTALL_PACKAGES`，没声明的装不了 | Android Developers Blog《Making it safer to get apps on Android O》 https://android-developers.googleblog.com/2017/08/making-it-safer-to-get-apps-on-android-o.html?hl=bn | 摘录 | 清单加这一项（霜霜 2026-11-26 同意，只这一项） |
 | 可以用 `Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES` 把用户带到这个应用的“安装未知应用”设置页；可以用 `PackageManager.canRequestPackageInstalls()` 查现在让不让 | 同上 | 摘录 | 交给安装器之前先查；不让就回“还没允许”，界面给“去设置里允许” |
-| `canRequestPackageInstalls()`：返回 false 时安装请求会被系统安装器拦下并弹框带用户去设置；应用必须 target O 以上并声明 `REQUEST_INSTALL_PACKAGES` 才能用这个方法 | 微软对 Android Java 文档的转载 https://learn.microsoft.com/en-us/dotnet/api/android.content.pm.packagemanager.canrequestpackageinstalls?view=net-android-35.0 （developer.android.com 的 PackageManager 原页这次没打开） | 摘录（转载） | 只在 API ≥ 26 时调用；更低版本当作“允许” |
-| `Intent.ACTION_INSTALL_PACKAGE` 在 API 29 弃用（“use PackageInstaller instead”） | developer.android.com 的 Intent 常量表（经 LabeledIntent 页的继承常量表看到） https://developer.android.com/reference/android/content/pm/LabeledIntent?authuser=8 | 摘录 | **不用它**。用没被弃用的 `ACTION_VIEW` + 类型 `application/vnd.android.package-archive` |
+| `canRequestPackageInstalls()`：返回 false 时安装请求会被系统安装器拦下并弹框带用户去设置；应用必须 target O 以上并声明 `REQUEST_INSTALL_PACKAGES` 才能用这个方法 | developer.android.com 的 PackageManager 参考页 https://developer.android.com/reference/kotlin/android/content/pm/PackageManager?authuser=2 （搜索摘录里是官方原文；和微软转载 https://learn.microsoft.com/en-us/dotnet/api/android.content.pm.packagemanager.canrequestpackageinstalls?view=net-android-35.0 一字不差） | 摘录（官方页） | 只在 API ≥ 26 时调用；更低版本当作“允许” |
+| `Intent.ACTION_INSTALL_PACKAGE` 在 API 29 弃用（“use PackageInstaller instead”） | developer.android.com 的 Intent 参考页常量表 https://developer.android.com/reference/android/content/Intent.html?authuser=6 | 摘录（官方页） | **不用它**。用没被弃用的 `ACTION_VIEW` + 类型 `application/vnd.android.package-archive` |
 | `ACTION_VIEW` + APK 的 MIME 类型能拉起系统安装器 | 没找到 developer.android.com 上的明文说明；是多年通行做法 | **未核对** | 自己选的。真机没验证；拉不起来会回“没有找到系统安装器” |
-| `ACTION_MANAGE_UNKNOWN_APP_SOURCES` 带 `package:<包名>` 可以直达本应用那一页 | 同上（博客只说了这个动作，没说带不带包名） | **未核对** | 先带包名试，系统不认（`ActivityNotFoundException`）就退成不带包名的总列表 |
-| `FileProvider`：给文件生成 `content://` 地址；只能给事先在 `<paths>` 里登记过的目录；`<files-path>`＝`Context.getFilesDir()`，`<cache-path>`＝`getCacheDir()`，`<external-files-path>`＝`Context.getExternalFilesDir(null)` | https://developer.android.com/reference/androidx/core/content/FileProvider?authuser=002 | 摘录 | `res/xml/apk_install_paths.xml` 只登记三处，见下 |
-| `FileProvider` 必须 `exported=false`、`grantUriPermissions=true`，路径表用 meta-data `android.support.FILE_PROVIDER_PATHS` 指过去；登记目录时会把路径规范化（`getCanonicalFile`） | 直接看开发机上 androidx.core 1.18.0 的 `FileProvider` 类（字节码里的字符串 “Provider must not be exported”“Provider must grant uri permissions” 和 `addRoot` 里的 `getCanonicalFile` 调用） | 已核对（看的是实现，不是文档） | 清单照这个写；`../app_flutter/projects/` 这种写法靠的就是规范化 |
-| 给安装器读文件要在 Intent 上加 `FLAG_GRANT_READ_URI_PERMISSION` | FileProvider 参考页的“Granting Temporary Permissions to a URI”一节（只看到小标题） | 摘录 | 加了 |
+| `ACTION_MANAGE_UNKNOWN_APP_SOURCES` 带 `package:<包名>` 可以直达本应用那一页（原文：“Input: Optionally, the Intent's data URI can specify the application package name to directly invoke the management GUI specific to the package name. For example "package:com.my.app". Output: Nothing.”） | developer.android.com 的 Settings 参考页 https://developer.android.com/reference/kotlin/android/provider/Settings?authuser=166 | 摘录（官方页） | 先带包名试，系统不认（`ActivityNotFoundException`）就退成不带包名的总列表。“Output: Nothing”＝设置页不回结果，所以回到应用时自己再问一次 `canRequestPackageInstalls()` |
+| `FileProvider`：给文件生成 `content://` 地址；只能给事先在 `<paths>` 里登记过的目录；`<files-path>`＝`Context.getFilesDir()`，`<cache-path>`＝`getCacheDir()`，`<external-files-path>`＝`Context.getExternalFilesDir(null)` | https://developer.android.com/reference/androidx/core/content/FileProvider?authuser=002 | 已核对（打开了原文） | `res/xml/apk_install_paths.xml` 只登记三处，见下 |
+| `FileProvider` 必须 `exported=false`、`grantUriPermissions=true`，路径表用 meta-data `android.support.FILE_PROVIDER_PATHS` 指过去；登记目录时会把路径规范化（`getCanonicalFile`） | `exported=false`、`grantUriPermissions=true`、meta-data 名字：FileProvider 参考页“Defining a FileProvider”“Specifying Available Files”两节（同上网址）；规范化：直接看开发机上 androidx.core 1.18.0 的 `FileProvider` 类（`addRoot` 里的 `getCanonicalFile` 调用），文档没提 | 前三项已核对（原文）；规范化只对过实现 | 清单照这个写；`../app_flutter/projects/` 这种写法靠的就是规范化 |
+| 给安装器读文件要在 Intent 上加 `FLAG_GRANT_READ_URI_PERMISSION` | FileProvider 参考页的“Granting Temporary Permissions to a URI › Include the Permission in an Intent”一节（同上网址）：把 content 地址 `setData()` 进 Intent，再加 `FLAG_GRANT_READ_URI_PERMISSION`；这样给的权限在接收方那个界面栈还在时有效，栈结束自动收回 | 已核对（打开了原文） | 加了 |
+| 官方建议自己继承 `FileProvider` 而不是直接登记它（原文：直接用“is not reliable and will causes crashes on some devices”） | 同上，“Defining a FileProvider”一节 | 已核对（打开了原文） | 用的是自己的子类 `ApkFileProvider` |
 | 系统安装器装完会不会告诉发起的应用 | — | — | `ACTION_VIEW` 不带回结果。所以界面只说“已经交给系统安装器”，不说“装好了” |
 
 **登记给 FileProvider 的目录**（authorities 是 `${applicationId}.apkinstall`，跟着包名走）：
