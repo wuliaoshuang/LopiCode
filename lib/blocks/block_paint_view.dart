@@ -350,7 +350,7 @@ class BkScriptPainter {
     final marks = state.marks;
     bool same(LcBlockPath p) => bkSameBlockPath(p, b.path) && (p.isEmpty == b.isHat);
     final level = marks != null ? marks.levelOf(b) : (state.errors.any(same) ? true : (state.warnings.any(same) ? false : null));
-    if (level != null) bkPaintBlockMark(canvas, palette, metrics, shape, path, error: level);
+    if (level != null) bkPaintBlockMark(canvas, palette, metrics, shape, path, error: level, hint: !level && (marks?.hintOnly(b) ?? false));
   }
 
   /// 多口积木上的小按钮：一个压进去的深色小圆，里面白色的“＋”或“−”（和“一串值”末尾的小“＋”同一个样子）。

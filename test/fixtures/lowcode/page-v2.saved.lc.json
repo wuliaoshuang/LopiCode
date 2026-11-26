@@ -1,0 +1,136 @@
+{
+  "version": 2,
+  "title": "新页面",
+  "root": {
+    "id": "root",
+    "type": "page",
+    "props": {
+      "padding": 16,
+      "gap": 12
+    },
+    "style": {
+      "background-color": "#f6f7fb"
+    },
+    "children": [
+      {
+        "id": "n1",
+        "type": "text",
+        "props": {
+          "text": "标题"
+        },
+        "style": {
+          "font-size": "1.5em",
+          "font-weight": "700"
+        }
+      },
+      {
+        "id": "n2",
+        "type": "row",
+        "props": {
+          "gap": 8,
+          "width": "fill"
+        },
+        "style": {
+          "justify-content": "space-between"
+        },
+        "children": [
+          {
+            "id": "n3",
+            "type": "button",
+            "props": {
+              "text": "加一"
+            }
+          },
+          {
+            "id": "n4",
+            "type": "text",
+            "props": {
+              "text": "0"
+            },
+            "bind": {
+              "text": "count"
+            }
+          }
+        ]
+      },
+      {
+        "id": "n5",
+        "type": "component",
+        "props": {
+          "ref": "c1"
+        }
+      },
+      {
+        "id": "n6",
+        "type": "container",
+        "props": {
+          "width": "fill"
+        },
+        "style": {
+          "min-height": "48px"
+        }
+      }
+    ]
+  },
+  "logic": {
+    "variables": [
+      {
+        "name": "count",
+        "type": "number",
+        "initial": 0
+      }
+    ],
+    "handlers": [
+      {
+        "id": "h1",
+        "event": "click",
+        "target": "n3",
+        "body": [
+          {
+            "op": "setVar",
+            "args": {
+              "name": "count",
+              "value": {
+                "e": "num",
+                "v": 1
+              }
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "c1",
+      "name": "问候卡",
+      "props": [
+        {
+          "name": "title",
+          "type": "text",
+          "default": "标题"
+        }
+      ],
+      "root": {
+        "id": "k1",
+        "type": "card",
+        "props": {
+          "padding": 12,
+          "gap": 8
+        },
+        "children": [
+          {
+            "id": "k2",
+            "type": "text",
+            "props": {
+              "text": "标题"
+            },
+            "bind": {
+              "text": "title"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

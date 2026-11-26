@@ -86,6 +86,9 @@ List<String> lDeclaredNames(List<LStmt> list) {
           add(errorName);
           walk(onError);
           walk(finallyBody);
+        case LStmtV5(:final binds, :final childBlocks):
+          binds.forEach(add);
+          childBlocks.forEach(walk);
         case LAssign() || LExprStmt() || LBreak() || LContinue() || LReturn() || LThrow() || LHost() || LNote():
           break;
       }
@@ -112,6 +115,10 @@ void lWalk(List<LStmt> list, void Function(LStmt s) visit) {
         lWalk(body, visit);
         lWalk(onError, visit);
         lWalk(finallyBody, visit);
+      case LStmtV5(:final childBlocks):
+        for (final b in childBlocks) {
+          lWalk(b, visit);
+        }
       case LLet() || LAssign() || LExprStmt() || LBreak() || LContinue() || LReturn() || LThrow() || LHost() || LNote():
         break;
     }
@@ -133,6 +140,7 @@ List<LExpr> lExprChildren(LExpr e) => switch (e) {
   LCall(:final callee, :final args) => [callee, ...args],
   LSend(:final obj, :final args) => [obj, ...args],
   LSuperSend(:final args) || LNew(:final args) || LRt(:final args) || LNative(:final args) => args,
+  LExprV5(:final childExprs) => childExprs,
 };
 
 /// 一条语句自己（不算套着的语句）直接带的式子。
@@ -156,6 +164,7 @@ List<LExpr> lStmtExprs(LStmt s) => switch (s) {
   LReturn(:final value) => [?value],
   LThrow(:final message) => [message],
   LBreak() || LContinue() || LTry() || LHost() || LNote() => const [],
+  LStmtV5(:final childExprs) => childExprs,
 };
 
 /// 把一串语句里所有的式子（连同套着的语句里的）挨个交给 [visit]（只给最外层的，子式子用 [lExprChildren] 往里走）。

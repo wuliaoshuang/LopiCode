@@ -8,6 +8,7 @@ import 'package:lopicode/backend/backend_blocks.dart';
 import 'package:lopicode/backend/backend_model.dart';
 import 'package:lopicode/backend/backend_project.dart';
 import 'package:lopicode/backend/backend_targets.dart';
+import 'package:lopicode/lang/rules.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 
 LcBlock _b(String op, Map<String, dynamic> args, {List<LcBlock>? body, List<LcBlock>? orElse}) => LcBlock(op: op, args: args, body: body, orElse: orElse);
@@ -15,7 +16,9 @@ LcBlock _json(int status, Map<String, dynamic> value) => _b('respondJson', {'sta
 LcBlock _if(Map<String, dynamic> cond, List<LcBlock> then, [List<LcBlock>? orElse]) => _b('if', {'cond': cond}, body: then, orElse: orElse);
 
 /// 入门样本。`name`＝服务名（一般是项目名），`language`＝语言 id。
-BeDocument backendStarterDocument(String name, {String language = kBeDefaultLanguage, int port = kBeDefaultPort}) {
+///
+/// 这是“新建后端积木文档”唯一的入口，所以新文档的规矩版本在这里定：默认读开关 `kLangRulesForNewDocs`（lang/rules.dart）。
+BeDocument backendStarterDocument(String name, {String language = kBeDefaultLanguage, int port = kBeDefaultPort, int rules = kLangRulesForNewDocs}) {
   final id = bePathParam('id');
   final doc = BeDocument(
     name: name.trim().isEmpty ? '我的后端' : name.trim(),
@@ -23,6 +26,7 @@ BeDocument backendStarterDocument(String name, {String language = kBeDefaultLang
     language: language,
     variables: [LcVariable(name: 'todo')],
     collections: [BeCollection(name: 'todos')],
+    rules: rules,
   );
   void route(String method, String path, List<LcBlock> body) => doc.addRoute(method, path)!.body.addAll(body);
   LcBlock notFound() => _if(beIsNull(beDbGet('todos', id)), [

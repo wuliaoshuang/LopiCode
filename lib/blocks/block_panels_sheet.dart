@@ -1,5 +1,6 @@
 // 设计约束（问题列表 / 有错误先别继续 / 看代码 三张底部面板，390 宽，浅色 + 深色）— 2026-11-24
 // - 问题列表：标题一行（“N 个问题”），副标题一行（几个错误、几个警告，有错误时说明“代码没有更新”）。
+//   （“提醒”和警告放在同一段里，图标不一样；有一键修的那条，建议下面一行是修法按钮，点了就改并关掉列表。）
 //   下面先“错误”再“警告”两段；每段里按事件 / 接口分组，组名一行小字；每条：图标（错误圆、警告三角）+ 原因 + “建议：…” + 规则编号。
 //   能定位到积木的那几条右边带一个小箭头，点了就关掉面板、画布跳到那块积木并闪一下。没有问题时只有一句“没有发现问题”。主操作＝点一条去修。
 // - 有错误先别继续（启动 / 导出被拦时）：一句标题“有 N 个错误，代码没有更新”，一句说明，主按钮“查看问题”，次按钮“知道了”。
@@ -64,7 +65,7 @@ Future<BlockIssue?> showBlockIssues(BuildContext context, List<BlockIssue> issue
                   child: Row(
                     children: [
                       Expanded(
-                        child: BkIssueLines(issue: issues[i], head: issues[i].spot),
+                        child: BkIssueLines(issue: issues[i], head: issues[i].spot, onFixed: () => Navigator.pop(sheet)),
                       ),
                       if (issues[i].scriptId != null) Icon(Icons.chevron_right_rounded, size: 20, color: c.textMuted),
                     ],

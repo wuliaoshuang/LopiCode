@@ -8,6 +8,7 @@
 library;
 
 import 'package:lopicode/backend/backend_blocks.dart';
+import 'package:lopicode/backend/backend_blocks_strict.dart';
 import 'package:lopicode/backend/backend_edit.dart';
 import 'package:lopicode/backend/backend_func_edit.dart';
 import 'package:lopicode/backend/backend_func_host.dart';
@@ -16,6 +17,7 @@ import 'package:lopicode/backend/backend_model.dart';
 import 'package:lopicode/backend/backend_palette.dart';
 import 'package:lopicode/backend/backend_targets.dart';
 import 'package:lopicode/backend/backend_text.dart';
+import 'package:lopicode/backend/backend_type_host.dart';
 import 'package:lopicode/backend/backend_validate.dart';
 import 'package:lopicode/blocks/block_host.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
@@ -60,6 +62,7 @@ const Map<String, String> beExprSentences = {
   'field': '{of} 的 {key}',
   ...beLangExprSentences,
   ...beFuncExprSentences,
+  ...beStrictExprSentences,
 };
 
 /// 运算符在积木上显示成符号（下拉里还是中文全称）。
@@ -102,7 +105,7 @@ String bePathProblem(String path) {
   return '路径格式不对';
 }
 
-class BeBlockHost extends BlockHost with BeFuncHost {
+class BeBlockHost extends BlockHost with BeFuncHost, BeTypeHost {
   /// `doc`＝要编辑的文档（宿主拿走以后外面别再直接改它，要改走 [edit]）。
   /// `onEdited`＝内容真的变了以后调（改动、撤销、重做；外面拿去落盘、重新生成）。
   /// `onNotice`＝有一句话要告诉用户（比如路径格式不对、为什么没改）。
@@ -164,7 +167,8 @@ class BeBlockHost extends BlockHost with BeFuncHost {
       colorKey: BlockColorKey.event,
       hats: [for (final m in kBeMethods) BlockHatTemplate(m, _hat(m, freePath(m)), hint: '新接口：${describeBeMethod(m)}')],
     ),
-    ...bePaletteCategories,
+    // 严格规矩才有的三块（处理“空”、文字变整数）接在“运算”页最后；老规矩的文档积木盒和以前一样。
+    if (!strictRules) ...bePaletteCategories else for (final c in bePaletteCategories) c.id == '运算' ? beStrictOperatorCategory(c) : c,
   ];
 
   @override
@@ -265,7 +269,7 @@ class BeBlockHost extends BlockHost with BeFuncHost {
   @override
   Map<String, dynamic> newExpr(String kind) {
     final f = _doc.function(beCallId(kind) ?? '');
-    return f != null ? beNewCallExpr(f) : newBeExpr(kind, _doc);
+    return f != null ? beNewCallExpr(f) : (newBeStrictExpr(kind) ?? newBeExpr(kind, _doc));
   }
 
   /// “对象”的字段里加一项＝加一个“名字 : 值”；别的“一串值”加一段空文字。
@@ -345,9 +349,9 @@ class BeBlockHost extends BlockHost with BeFuncHost {
   // —— 校验与代码 ——
 
   late final BlockIssueCache _issueCache = BlockIssueCache(
-    () => [
+    () => withTypeIssues([
       for (final i in validateBackend(_doc, languages: [for (final t in backendTargets) t.id], table: funcTable)) blockIssueOf(i),
-    ],
+    ]),
     () => _revision,
     () => onChanged?.call(),
   );
@@ -373,6 +377,8 @@ class BeBlockHost extends BlockHost with BeFuncHost {
   String get codeText {
     final cached = _code;
     if (cached != null) return cached;
+    // 严格规矩的文档现在不生成（见 kBeStrictGenPending）：不拿老办法翻出来的代码冒充。
+    if (beStrictGenPending(_doc)) return _code = '$kBeStrictGenPending。\n\n没有代码可看。';
     final gen = generateBackend(_doc);
     return _code = gen == null ? '语言“${_doc.language}”还没有生成器，没有代码可看。' : (gen.files[gen.target.entryFile] ?? '');
   }

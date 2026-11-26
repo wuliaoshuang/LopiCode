@@ -217,7 +217,9 @@
   （用了 `readNBytes`、`String.repeat` 之类），**只在 JDK 21 上跑过**。
   已知差别：只认 `Content-Length`，不解分块传输；“请求别的网址”的时限是连接、读各 10 秒；`HttpURLConnection` 默认会跟着跳转、
   对 `127.*` / `localhost` 不走系统代理（本机设了代理的情况下请求自己成功，算是验证了这一点）。
-- PHP（`runtime_php*.dart`、`target_php.dart`）：**整份没有实际运行过**（本机没有 php，也不许联网查文档），下面每一条都是凭记忆写的，**全部未核对**：
+- PHP（`runtime_php*.dart`、`target_php.dart`）：**2026-11-26 更新：已在开发机上用 PHP 8.3.37 真跑**，一致性测试 135 条全过、和别的语言逐字节一致
+  （经过和修掉的 5 个问题见本文件末尾“开发机验证环境”一节）。下面每一条当初是凭记忆写的，**官方文档仍然没有逐条核对**；
+  “没法确认”的那几处现在的状态是“PHP 8.3.37 命令行构建上一致性测试通过”，手机上 Ubuntu 软件源的 PHP 8.3 **没验证**：
   - 自带开发服务器 `php -S 地址:端口 路由脚本`：每个请求跑一遍路由脚本；`$_SERVER['REQUEST_METHOD']`、`$_SERVER['REQUEST_URI']`（假定是没解码的原样地址，含 `?` 后面的部分）、
     `$_SERVER['CONTENT_LENGTH']`、`file_get_contents('php://input')`、`getallheaders()`（假定开发服务器下可用，没有就退回 `$_SERVER['HTTP_*']`）。
     **没法确认**：它对 `/a/%zz`、开头 `//`、带扩展名的路径（`/a.css`）是不是原样交给路由脚本；重名请求头怎么合并；`HEAD` 怎么处理。
@@ -495,3 +497,54 @@ PHP 估计 7.4+（PHP 那份代码从没运行过）。下面选的版本都够�
 - Dart 那头再校验一遍文件头（只收 JPG / PNG / WebP；GIF 拒收）和两个上限，搬进应用私有目录 `<设置所在目录>/appearance/background/`，缓存副本用完就删。
 
 没验证的：真机上两种选择器的实际样子、`inSampleSize` 降采样和 EXIF 摆正的效果（开发机上没有安卓环境可跑；release 配置下 Kotlin 编译通过，完整打包没跑成，详见 `docs/backdrop-integration.md` 第 6 节）。
+
+## 开发机验证环境（2026-11-26；只装在开发机，不进应用）
+
+用途：把以前“本机没有、从没跑过”的东西真跑、真编译：PHP 生成结果、低代码导出的 Vue 3 / React 工程、TypeScript。
+全部装在 `~/workspace/tools/` 下（重启不丢）。测试找不到它们时明确跳过并打印原因。
+
+| 东西 | 版本 | 来源（都是官方、免费） | 装在哪 | 占用 |
+|---|---|---|---|---|
+| PHP（命令行） | 8.3.37 | 源码包 https://www.php.net/distributions/php-8.3.37.tar.xz（12,682,796 字节，sha256 `0237af84478b7a7649d3964153f1b8653d622550b846f56d63062de683fb86bb`，和 php.net 发布信息里的一致），本机用 gcc 编译 | `~/workspace/tools/php/`（命令 `bin/php`） | 33MB |
+| TypeScript（tsc） | 7.0.2 | npm 官方仓库 https://registry.npmjs.org/ 的 `typescript` | `~/workspace/tools/webdev/node_modules/` | 下面七个包连同它们的依赖一共 30 个包、68MB |
+| Vue 3 | 3.5.46 | 同上：`vue`、`@vue/compiler-sfc`（官方单文件组件编译器）、`@vue/server-renderer`（官方服务端渲染） | 同上 | |
+| React | 19.3.1 | 同上：`react`、`react-dom` | 同上 | |
+| 打包工具 esbuild | 0.28.2 | 同上：`esbuild`（选它是因为最小够用：一个包就能把 JSX、CSS、多个文件打成一份；没装 vite） | 同上 | |
+
+- PHP 的编译选项：`--disable-all --enable-cli --disable-cgi --disable-phpdbg --without-pear`。带的模块只有
+  Core、date、hash、json、pcre、random、Reflection、SPL、standard——**故意装最小的**：手机上 `apt install php-cli` 带的只会比它多，
+  这样开发机上能过的，不会是靠了手机上没有的扩展。
+- 版本对齐：手机端装的是 Ubuntu 24.04 软件源的 `php-cli`（PHP 8.3，见 `lib/runtime/runtime_sources.dart`）；开发机是同一个 8.3 系列的 8.3.37。
+  **小版本号可能不同，手机上没有验证过。**
+- 源码包（`php-8.3.37.tar.xz`，13MB）和编译目录（`php-build/`，约 295MB）留在 `~/workspace/tools/dl/`，只是为了以后重编；删掉不影响使用。
+  （`dl/` 整个目录约 741MB，其余是以前装 Go、JDK 等留下的，和这次无关。）
+- `~/workspace/tools/env.sh` 末尾追加了 4 行（一行注释＋三行）：`LOPI_PHP`、`LOPI_WEBDEV` 两个变量，以及把 `php/bin`、`webdev/node_modules/.bin` 接在 PATH **后面**。
+- 测试怎么找：PHP——PATH 里的 `php` → `LOPI_PHP` → `~/workspace/tools/php/bin/php`；网页那一套——`LOPI_WEBDEV` → `~/workspace/tools/webdev`。
+- 验证脚本在 `tool/verify/`（说明见那里的 README）。
+
+第一次真跑的结果（2026-11-26）：
+
+| 项目 | 结果 |
+|---|---|
+| PHP · 语言核心（v4 第 1、2 阶段，`lib/lang/gen_php.dart`） | 49 个用例（语法树节点 18、小库函数 11、函数 10、函数补充 5、拿函数当参数的列表操作 5）＋10 个出错程序＋抛错用例，修完 2 个问题后全过，和 Node 等四种语言逐字节相同 |
+| PHP · 后端一致性 135 条 | 第一次跑 0 条能过（第 3 条就崩）；修完 3 个问题后 135/135，`php -l` 语法检查通过，刁钻文字样本通过 |
+| PHP · 新积木搭的接口 19 条、函数接口 14 条、新旧混用 7 条、函数混用 5 条 | 全过 |
+| Vue 3 导出 | 4 份样本用 `@vue/compiler-sfc` 解析、编译脚本、编译模板（客户端和服务端两种）、编译样式，再用 esbuild 打包、服务端渲染：0 错误 0 警告 |
+| React 导出 | 同样 4 份样本用 esbuild 打包（JSX 自动运行时）、`react-dom/server` 渲染：0 错误 0 警告 |
+| TypeScript | 产品里没有 TS 生成器；只确认了 tsc 能用：最小样本严格模式编译通过并跑对，类型写错的样本被拦下 |
+
+**没覆盖的**：真浏览器、点击之后的变化（服务端渲染只出第一屏）、手机上的 PHP。
+
+PHP 真跑撞到并修掉的 5 个问题，以及依据：
+
+| 问题 | 依据 | 来源 | 核对日期 | 状态 |
+|---|---|---|---|---|
+| 短写法的匿名函数读模块级变量读到空 | PHP 函数里要用全局变量得先写 `global` | 实测（PHP 8.3.37 报 `Undefined variable`） | 2026-11-26 | 实测确认；官方手册那一页没去核对 |
+| 命令行程序的报错混进标准输出 | `display_errors` 默认是 `"1"`（写到标准输出）；值 `stderr` 写到标准错误，只对命令行、phpdbg、CGI 有效 | https://www.php.net/manual/en/errorfunc.configuration.php | 2026-11-26 | 已核对，并实测 |
+| `php -S` 下警告被当成网页内容发出去、连带响应头发不出去 | 同上一页：`display_errors` 默认开、`log_errors` 默认 `"0"`。我们改成 `display_errors=0`、`log_errors=1`（没设 `error_log` 时写到服务器的错误输出，也就是终端） | 同上 | 2026-11-26 | 已核对，并实测 |
+| 集合写回文件时崩（`Attempt to read property "f" on array`） | 我们自己小库的 bug：PHP 数组没包成 `LcList` 就交给了 `lc_to_json` | 实测 | 2026-11-26 | 实测确认 |
+| “请求别的网址”请求到自己会等 10 秒然后失败 | 手册原话大意：自带服务器只跑一个单线程进程，一个请求卡住整个就停；PHP 7.4.0 起可以设环境变量 `PHP_CLI_SERVER_WORKERS` 开多个工作进程；Windows 不支持；标着“实验性” | https://www.php.net/manual/en/features.commandline.webserver.php | 2026-11-26 | 已核对，并实测（设成 4 后 135 条全过，关主进程后工作进程不残留） |
+
+- 工作进程数 4 是我们自己定的（`kPhpServerWorkers`）：一条“请求自己”的链最多同时占 2 个，留一倍余量。
+- 启动命令写成 `env PHP_CLI_SERVER_WORKERS=4 php -S …`：`env` 是 Ubuntu 自带的命令。**手机上的终端里这样写能不能用，没验证。**
+- 仍然成立的限制：用到集合的接口去请求这个服务自己、对方那个接口也要用集合时，两边抢同一把文件锁，会等到超时（和进程数无关）。

@@ -5,6 +5,7 @@
 #   tool/check.sh          全部跑
 #   tool/check.sh --quick  只跑排版、静态检查、架构守门（几十秒），不跑全量测试
 #   tool/check.sh --fix    先自动排版再检查
+#   LOPI_TEST_JOBS=1 tool/check.sh   全量测试只开一路（内存紧的机器上用，慢但不会被系统杀掉）
 #
 # 说明：
 # - 全量测试要写很多临时文件。有的机器 /tmp 很小（512MB），所以这里把 TMPDIR 指到工程里的 .tmp/。

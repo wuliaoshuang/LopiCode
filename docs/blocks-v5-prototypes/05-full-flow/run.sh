@@ -4,7 +4,7 @@
 cd "$(dirname "$0")" || exit 1
 [ -f ~/workspace/tools/env.sh ] && source ~/workspace/tools/env.sh
 T=../03-frontend-lib/tool-f2; fail=0; mkdir -p out
-BASE=$((18300 + RANDOM % 600)); DEAD=$((BASE + 50))
+if [ -n "${LC_PROTO_PORT_BASE:-}" ]; then BASE=$((LC_PROTO_PORT_BASE + 200)); else BASE=$((18300 + RANDOM % 600)); fi; DEAD=$((BASE + 50))
 # 后端：用 F1 的翻译脚本和 F1 的库，原样。
 python3 ../tool/lcx.py build backend/main.lcx -o out/backend -L ../02-web-framework/libs --round 2 --report out/backend.report.txt > out/backend.build.log 2>&1 || { cat out/backend.build.log; exit 1; }
 build_front() { # 轮名 接口库所在目录

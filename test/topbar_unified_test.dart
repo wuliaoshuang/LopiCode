@@ -333,7 +333,7 @@ void main() {
       await settle(tester, rounds: 6);
       await tester.pump(const Duration(seconds: 1));
       expect(project.name, '我的小站');
-      expectFloatingBar(tester, '低代码搭建');
+      expectFloatingBar(tester, '我的小站'); // 顶栏标题是页面名（第 5 版第 1 期）
       final view = find.byType(CanvasView).hitTestable();
       expect(tester.getRect(view).top, 0, reason: '画布从屏幕最顶铺起');
       expect(tester.state<CanvasViewState>(view).pageRect.top, kInset, reason: '页面顶边起始在顶栏下沿');

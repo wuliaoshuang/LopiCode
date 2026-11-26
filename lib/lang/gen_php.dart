@@ -1,6 +1,6 @@
 /// PHP 生成器。小库：`lc_runtime.php`、`lc_json.php`（值的规矩）＋ `lc_lang.php`（第 4 版新加的）。
 ///
-/// **这份生成器和它的小库还没有实际运行过**（本机没有 PHP）：只做过文本级的检查。
+/// 2026-11-26 起在开发机上用 PHP 8.3 真跑（语言核心一致性测试，和别的四种语言逐字节对比）。
 /// 列表在 PHP 里是 `LcList` 对象（不是 PHP 数组）：PHP 数组传来传去是复制的，“在末尾加一项”改不到原来那个。
 library;
 
@@ -54,7 +54,7 @@ class PhpLangGen extends LangGen {
   @override
   String intToNumber(String k) => '(float) $k';
 
-  // —— 函数（未实测）——
+  // —— 函数 ——
 
   @override
   Map<String, LCap> get caps => {...kLangBaseCaps, 'closures': LCap.lowered};
@@ -91,6 +91,11 @@ class PhpLangGen extends LangGen {
   /// 不用 `fn() =>`：它抓的是当时的值，外层后来改了里层看不见。
   @override
   String lambdaShort(List<LParam> params, LangScope scope, String code, List<String> uses, String args) => 'function (${_params(params, scope)})${_use(uses)} { return $code; }';
+
+  /// 短写法里用到模块级变量也要先 `global`（2026-11-26 第一次真跑 PHP 时发现：漏了这句，读到的是没定义的局部变量）。
+  @override
+  String lambdaShortWithGlobals(List<LParam> params, LangScope scope, String code, List<String> uses, String args, List<String> globalsUsed) =>
+      globalsUsed.isEmpty ? lambdaShort(params, scope, code, uses, args) : 'function (${_params(params, scope)})${_use(uses)} { global ${globalsUsed.join(', ')}; return $code; }';
   @override
   String namedImpl(LFuncDecl f, String fname) => "'$fname'";
 
@@ -112,6 +117,9 @@ class PhpLangGen extends LangGen {
       ..writeln('// 由 LopiCode 积木生成（PHP）。')
       ..writeln()
       ..writeln('declare(strict_types=1);')
+      ..writeln()
+      // 命令行下 PHP 默认把报错写到标准输出，和程序自己的输出混在一起；改到标准错误（别的语言都是这样）。
+      ..writeln("ini_set('display_errors', 'stderr');")
       ..writeln();
     for (final f in ['lc_runtime.php', 'lc_json.php', runtimeFile]) {
       out.writeln("require_once __DIR__ . '/$f';");

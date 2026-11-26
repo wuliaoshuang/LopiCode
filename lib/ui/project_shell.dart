@@ -48,6 +48,7 @@ class ProjectShell extends ConsumerStatefulWidget {
 
 class _ProjectShellState extends ConsumerState<ProjectShell> {
   final _drawer = PushDrawerController();
+  final List<bool Function()> _backClaims = [];
   ProjectSession? _session;
   late ShellDest _dest = widget.initial;
   final Set<ShellDest> _visited = {};
@@ -168,11 +169,14 @@ class _ProjectShellState extends ConsumerState<ProjectShell> {
       openDrawer: _drawer.open,
       go: _go,
       projectName: widget.project.name,
+      backClaims: _backClaims,
       child: PopScope(
         // 返回键：侧边栏开着先关它；不在聊天页先回聊天页；都不是才退出。
         canPop: _dest == ShellDest.chat && !_drawer.isOpen,
         onPopInvokedWithResult: (didPop, _) {
           if (didPop) return;
+          // 页面里有东西要自己接这一下返回键（搭建页的合一面板）：让给它，不回聊天页
+          if (!_drawer.isOpen && _backClaims.any((claim) => claim())) return;
           if (_drawer.isOpen) {
             _closeDrawer();
           } else {

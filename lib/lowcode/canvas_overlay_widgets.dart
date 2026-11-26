@@ -1,9 +1,12 @@
 // 设计约束（低代码 · 画布上叠的选中层）
 // - 选中框、盒模型示意（外边距橙色、内边距绿色，都半透明）只是画上去的，不挡手指。
-// - 拖柄：画出来是 9px 的小方块，能按住的范围是 32px（都按屏幕上的大小算，不随缩放变大变小）。
-//   能按的范围往组件外侧偏 8px，尽量不盖住组件本身（还要能点它、长按拖它）。
-// - 组件太小时只留四个角的拖柄，边上的省掉。
-// - 尺寸标签（“160 × 48”）贴在选中框左下角外面。
+// - 拖柄：画出来是 9px 的小方块，能按住的范围是 44px（都按屏幕上的大小算，不随缩放变大变小）。
+//   能按的范围往组件外侧偏 14px：伸进组件里面的只有 8px，尽量不盖住组件本身（还要能点它、长按拖它）。
+// - 组件太小时只留四个角的拖柄：边上的要这条边够长（屏幕上 ≥ 60px：两个角各伸进来 8，中间还放得下 44）才放。
+// - 尺寸标签（“160 × 48”）放在选中框里面的右下角，不挡框外面别的组件；框不够宽裕（不到两个标签宽、三个标签高）就放到框的上方（上方没地方放下方）。
+//   不管放哪都收在屏幕看得见的那一块里面，不会被屏幕边切掉。
+import 'dart:math' as math;
+
 import 'package:flutter/gestures.dart';
 import 'package:lopicode/lowcode/canvas_css.dart';
 import 'package:lopicode/theme/tokens.dart';
@@ -33,24 +36,38 @@ class CanvasSelection {
 /// 八个拖柄：名字 → 在哪一侧（-1 左 / 上，0 中，1 右 / 下）。角上的排在后面，叠在边上的上面。
 const Map<String, (int, int)> kCanvasHandles = {'n': (0, -1), 's': (0, 1), 'w': (-1, 0), 'e': (1, 0), 'nw': (-1, -1), 'ne': (1, -1), 'sw': (-1, 1), 'se': (1, 1)};
 
-const double _hit = 32;
-const double _outward = 8;
+/// 拖柄能按住的范围（屏幕像素）。
+const double kCanvasHandleHit = 44;
+const double _hit = kCanvasHandleHit;
+const double _outward = 14;
+
+/// 边上的拖柄要这条边在屏幕上至少这么长才放。
+const double _edgeHandleMin = 60;
+
+// 尺寸标签：11 号字，左右各留 6。按字数估宽度（数字、空格、乘号都差不多宽），估大一点没关系。
+const double _labelHeight = 19;
+double _labelWidth(String text) => text.length * 7.0 + 12;
 
 class CanvasSelectionOverlay extends StatelessWidget {
   const CanvasSelectionOverlay({
     super.key,
     required this.selection,
     required this.scale,
+    required this.visible,
     required this.showBoxModel,
     required this.onResizeStart,
     required this.onResizeUpdate,
     required this.onResizeEnd,
+    required this.onTapThrough,
   });
 
   final CanvasSelection selection;
 
   /// 画布当前的缩放比例：拖柄、线宽、标签按它反着缩，保证屏幕上看起来一样大。
   final double scale;
+
+  /// 屏幕上看得见的那一块（页面坐标）：尺寸标签收在它里面。
+  final Rect visible;
   final bool showBoxModel;
   final void Function(String handle, Offset globalPosition) onResizeStart;
   final void Function(Offset globalPosition) onResizeUpdate;
@@ -58,12 +75,17 @@ class CanvasSelectionOverlay extends StatelessWidget {
   /// [cancelled]：手势被打断，不要写入。
   final void Function({required bool cancelled}) onResizeEnd;
 
+  /// 在拖柄上只是点了一下（没拖）：交给画布当成点在下面的组件上。
+  final void Function(Offset globalPosition) onTapThrough;
+
   @override
   Widget build(BuildContext context) {
     final rect = selection.rect;
     final ui = context.themeSpec;
     final k = 1 / scale;
     final screenW = rect.width * scale, screenH = rect.height * scale;
+    final text = '${rect.width.round()} × ${rect.height.round()}';
+    final at = sizeLabelOrigin(rect, visible, scale, text);
     return Stack(
       clipBehavior: Clip.none,
       children: [
@@ -71,8 +93,8 @@ class CanvasSelectionOverlay extends StatelessWidget {
           child: IgnorePointer(child: CustomPaint(painter: _SelectionPainter(selection, scale, showBoxModel, ui))),
         ),
         Positioned(
-          left: rect.left,
-          top: rect.bottom + 6 * k,
+          left: at.dx,
+          top: at.dy,
           child: IgnorePointer(
             child: Transform.scale(
               scale: k,
@@ -82,7 +104,7 @@ class CanvasSelectionOverlay extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(color: ui.lowcodeColor(LowcodeKey.selection), borderRadius: BorderRadius.circular(4)),
                 child: Text(
-                  '${rect.width.round()} × ${rect.height.round()}',
+                  text,
                   style: TextStyle(fontSize: 11, height: 1.3, color: ui.lowcodeColor(LowcodeKey.selectionText), fontWeight: FontWeight.w500, decoration: TextDecoration.none),
                 ),
               ),
@@ -92,7 +114,7 @@ class CanvasSelectionOverlay extends StatelessWidget {
         if (!selection.isRoot)
           for (final e in kCanvasHandles.entries)
             // 边上的拖柄要给两头的角让出地方：这个方向不够长就不放。
-            if ((e.value.$1 == 0 || e.value.$2 == 0) ? (e.value.$1 == 0 ? screenW : screenH) >= 56 : true) _handle(e.key, e.value.$1, e.value.$2, k, ui),
+            if ((e.value.$1 == 0 || e.value.$2 == 0) ? (e.value.$1 == 0 ? screenW : screenH) >= _edgeHandleMin : true) _handle(e.key, e.value.$1, e.value.$2, k, ui),
       ],
     );
   }
@@ -113,6 +135,7 @@ class CanvasSelectionOverlay extends StatelessWidget {
         behavior: HitTestBehavior.opaque,
         // 从按下的那一点算起：不然开始拖之前“试探”的那一小段位移会丢，组件的边跟不上手指
         dragStartBehavior: DragStartBehavior.down,
+        onTapUp: (d) => onTapThrough(d.globalPosition),
         onPanStart: (d) => onResizeStart(name, d.globalPosition),
         onPanUpdate: (d) => onResizeUpdate(d.globalPosition),
         onPanEnd: (_) => onResizeEnd(cancelled: false),
@@ -133,6 +156,29 @@ class CanvasSelectionOverlay extends StatelessWidget {
       ),
     );
   }
+}
+
+/// 尺寸标签的左上角放哪（页面坐标）。[rect]＝选中框，[visible]＝屏幕上看得见的那一块，都是页面坐标。
+Offset sizeLabelOrigin(Rect rect, Rect visible, double scale, String text) {
+  final k = 1 / scale;
+  final w = _labelWidth(text) * k, h = _labelHeight * k, gap = 6 * k;
+  double left, top;
+  // “放得下”要宽裕：框至少有两个标签宽、三个标签高。刚好塞得进的小组件（一个按钮、一行标题）放进去会把它的字盖住
+  // （第 2 期出截图时看到 88×48 的按钮上的字被标签挡了）。
+  if (rect.width >= w * 2 + gap * 2 && rect.height >= h * 3 + gap * 2) {
+    // 放得下：框里面的右下角
+    left = rect.right - gap - w;
+    top = rect.bottom - gap - h;
+  } else {
+    // 放不下：框的上方靠右；上方露不出来就放下方
+    left = rect.right - w;
+    top = rect.top - gap - h;
+    if (top < visible.top) top = rect.bottom + gap;
+  }
+  // 收进看得见的那一块（那一块比标签还小就贴它的左上）
+  left = math.max(visible.left, math.min(left, visible.right - w));
+  top = math.max(visible.top, math.min(top, visible.bottom - h));
+  return Offset(left, top);
 }
 
 class _SelectionPainter extends CustomPainter {

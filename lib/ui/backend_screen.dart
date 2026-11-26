@@ -24,6 +24,7 @@ import 'package:lopicode/blocks/block_editor_view.dart';
 import 'package:lopicode/blocks/block_palette_model.dart';
 import 'package:lopicode/blocks/block_panels_sheet.dart';
 import 'package:lopicode/core/path_guard.dart';
+import 'package:lopicode/lang/rules.dart';
 import 'package:lopicode/lowcode/logic_blocks.dart';
 import 'package:lopicode/lowcode/logic_vars_sheet.dart';
 import 'package:lopicode/project_session.dart';
@@ -34,6 +35,7 @@ import 'package:lopicode/ui/app_backdrop.dart';
 import 'package:lopicode/ui/app_ref.dart';
 import 'package:lopicode/ui/backend_panels_sheet.dart';
 import 'package:lopicode/ui/backend_run_sheet.dart';
+import 'package:lopicode/ui/backend_types_sheet.dart';
 import 'package:lopicode/ui/file_icon.dart';
 import 'package:lopicode/ui/shell.dart';
 import 'package:lopicode/ui/top_bar.dart';
@@ -42,6 +44,10 @@ import 'package:material_ui/material_ui.dart';
 
 /// 改动后等多久再存盘 + 重新生成（连着改几下只存一次）。
 const Duration kBackendSaveDelay = Duration(milliseconds: 500);
+
+/// “⋯”菜单里出不出现“升级到严格规矩…”。默认跟着 [kStrictRulesUpgradeEnabled]（现在是关）；测试里可以改成 true 来测升级那条路，测完改回去。
+@visibleForTesting
+bool beStrictUpgradeEntry = kStrictRulesUpgradeEnabled;
 
 class BackendScreen extends ConsumerStatefulWidget {
   const BackendScreen({super.key, required this.session, this.file, this.go});
@@ -82,6 +88,7 @@ class BackendScreenState extends ConsumerState<BackendScreen> {
   /// 上一次生成是不是因为有错误被拦下了（刚变成被拦时提示一次，之后不重复弹）。
   bool _wasBlocked = false;
   int _conflictsShown = 0;
+  bool _strictSaid = false;
 
   ProjectSession get _s => widget.session;
   String get _dir => _rel.contains('/') ? _rel.substring(0, _rel.lastIndexOf('/')) : '';
@@ -276,6 +283,13 @@ class BackendScreenState extends ConsumerState<BackendScreen> {
         );
       return;
     }
+    // 严格规矩的文档现在不生成：说一次原因，之后每次存盘不再重复弹（副标题一直写着“代码没有重新生成”）。
+    if (result.strictPending) {
+      if (!_strictSaid) _say(result.error!);
+      _strictSaid = true;
+      return;
+    }
+    _strictSaid = false;
     if (!result.ok) return _say('代码没有重新生成：${result.error}');
     final conflicts = result.conflicts.length;
     if (conflicts > 0 && conflicts != _conflictsShown) {
@@ -365,6 +379,8 @@ class BackendScreenState extends ConsumerState<BackendScreen> {
   Future<void> _openRun() async {
     if (await _gate('启动') || !mounted) return;
     final host = _host!;
+    // 严格规矩的文档现在没有生成代码：启动起来的会是升级前的旧代码，不让启动，说清楚。
+    if (beStrictGenPending(host.doc)) return _say(kBeStrictGenPending.replaceFirst('所以代码没有更新（上一次生成的文件原样留着）', '所以现在不能启动'));
     final action = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
@@ -393,7 +409,16 @@ class BackendScreenState extends ConsumerState<BackendScreen> {
         unawaited(_openSettings());
       case 'regen':
         unawaited(_openRegen());
+      case 'strict':
+        unawaited(_upgradeStrict());
     }
+  }
+
+  /// “升级到严格规矩”：先给变化清单，确认了才升；升完有标红的就直接打开问题列表。
+  Future<void> _upgradeStrict() async {
+    final host = _host;
+    if (host == null || !await showBeUpgradeStrict(context, host) || !mounted) return;
+    if (host.errorCount > 0) unawaited(_editor.currentState?.openIssues());
   }
 
   /// 变量 / 集合的下拉菜单最后一项“新建…”：建出来并选中是同一次改动。
@@ -475,6 +500,7 @@ class BackendScreenState extends ConsumerState<BackendScreen> {
       dockMemoryKey: 'backend',
       stars: _stars,
       menuExtra: _menuExtra,
+      onEditTypes: (sel) => unawaited(showBeTypeEditor(context, host, sel)),
       onHostChanged: () => setState(() {}),
       extraActions: [
         IconButton(key: const ValueKey('be-run'), tooltip: '运行', onPressed: _openRun, icon: const Icon(Icons.play_arrow_rounded)),
@@ -497,6 +523,11 @@ class BackendScreenState extends ConsumerState<BackendScreen> {
             ),
             PopupMenuItem(key: const ValueKey('be-menu-data'), value: 'data', child: _menuRow(Icons.data_object_rounded, '变量与集合（${host.doc.variables.length} + ${host.doc.collections.length}）')),
             PopupMenuItem(key: const ValueKey('be-menu-settings'), value: 'settings', child: _menuRow(Icons.tune_rounded, '服务设置（端口 ${host.doc.port}）')),
+            // 规矩版本：已经是严格规矩的只说一声（不能点）；老规矩的文档给“升级”的入口——入口现在默认不出现（beStrictUpgradeEntry）。
+            if (host.strictRules)
+              PopupMenuItem(key: const ValueKey('be-menu-strict-on'), enabled: false, child: _menuRow(Icons.verified_outlined, '严格规矩：已开启'))
+            else if (beStrictUpgradeEntry)
+              PopupMenuItem(key: const ValueKey('be-menu-strict'), value: 'strict', child: _menuRow(Icons.upgrade_rounded, '升级到严格规矩…')),
             PopupMenuItem(
               key: const ValueKey('be-menu-regen'),
               value: 'regen',

@@ -45,15 +45,15 @@ const _exceptions = <String, Map<String, String>>{
     'TextStyle(fontSize: 16, color: Palette.neutral900, height: 1.5, fontFamily: font)': '用户页面内容：正文默认色',
     "_argb(s['background-color']) ?? Colors.white, border: _border(s, scale, Palette.neutral900, false)": '用户页面内容：页面默认白底、边框默认色',
     'const [BoxShadow(color: Color(0x33000000), blurRadius: 3, offset: Offset(0, 1))]': '用户页面内容：卡片组件的默认阴影（和导出代码一致）',
-    'color: bg ?? Palette.neutral200,': '用户页面内容：图片占位的底色（和导出代码一致）',
-    'child: Icon(icon, color: Palette.neutral500),': '用户页面内容：图片占位的图标色',
   },
+  'lib/lowcode/canvas_parts_widgets.dart': {'color: background ?? Palette.neutral200,': '用户页面内容：图片占位的底色（和导出代码一致）', 'child: Icon(icon, color: Palette.neutral500),': '用户页面内容：图片占位的图标色'},
+  'lib/lowcode/canvas_drag_widgets.dart': {'color: Colors.white,': '用户页面内容：拖动时拎起来的那份缩略图垫的底，和页面默认白底一致，不跟应用主题走'},
+  'lib/lowcode/inline_text_widgets.dart': {'(fg.computeLuminance() > 0.6 ? const Color(0xFF222435) : Colors.white)': '用户页面内容：就地改字时垫在字后面的底，只为和用户自己定的字色拉开反差，不是编辑器界面色'},
   'lib/lowcode/export_dart.dart': {
     r"String _color(String hex) => 'const Color(0xFF${hex.substring(1).toUpperCase()})';": '生成的 Flutter 代码文本，不是界面',
     'color: const Color(0xFFD3DEE4), alignment: Alignment.center': '生成的 Flutter 代码文本',
     "'boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 3, offset: Offset(0, 1))]'": '生成的 Flutter 代码文本',
   },
-  'lib/lowcode/props_sheet.dart': {'Color _hex(String hex) => Color(0xFF000000 | int.parse(hex.substring(1), radix: 16));': '把用户填的颜色文本变成颜色（数据转换）'},
   'lib/lowcode/style_color_sheet.dart': {
     "slider('l', '明度'": '取色器的明度条：从黑到白是这根条本身的含义',
     'const CheckerPainter(Color(0xFFFFFFFF), Color(0xFFCFD2D6), 4)': '取色器的透明棋盘格：约定俗成的灰白格，表示“透明”',

@@ -5,6 +5,7 @@
 library;
 
 import 'package:lopicode/backend/backend_blocks.dart';
+import 'package:lopicode/backend/backend_blocks_strict.dart';
 import 'package:lopicode/backend/backend_function.dart';
 import 'package:lopicode/backend/backend_lang.dart';
 import 'package:lopicode/backend/backend_lower_func.dart';
@@ -95,7 +96,7 @@ class BeFuncTable {
 
   LcExprSpec? exprSpec(String? kind) {
     final c = callOf(kind);
-    return c != null ? bkLookExprSpec(c) : beExprSpecs[kind];
+    return c != null ? bkLookExprSpec(c) : beExprSpecs[kind] ?? beStrictExprSpecs[kind];
   }
 
   /// 调用时这个参数没给也行：它有默认值，或者是“剩下的全收”（没给＝一个都不多带）。不是调用返回 false。

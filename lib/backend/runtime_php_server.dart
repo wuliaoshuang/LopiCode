@@ -1,6 +1,6 @@
 /// PHP 运行时小库的源码（读请求、写响应、请求别的网址、路由；生成的工程里的 `lc_server.php`）。每份工程都一样。
 ///
-/// **没有在真机器上实际运行过**（本机没有 php）：只做了结构检查（test/backend_codegen_langs_test.dart）。凭记忆写的 PHP 函数清单见 docs/api-notes.md。
+/// 2026-11-26 起在开发机上用 PHP 8.3 真跑（test/backend_conformance_test.dart，和别的语言同一份样本）；手机上的 PHP 没验证过。用到的 PHP 函数清单见 docs/api-notes.md。
 /// 值的规矩见 backend_ir.dart 的 `kBeRuntimeFns`，改这里的行为要同时改别的语言的小库。
 library;
 
@@ -8,7 +8,11 @@ const String kPhpRuntimeServerSource = r'''
 <?php
 // LopiCode 后端运行时小库（PHP）：读请求、写响应、请求别的网址、路由。每份生成的工程都一样，不用改。
 // 用 PHP 自带的开发服务器跑：php -S 0.0.0.0:端口 server.php ——每来一个请求，server.php 从头跑一遍。
-// 注意：这份 PHP 代码还没有在真机器上实际运行过。
+// 这份代码在电脑上用 PHP 8.3 跑通过一致性测试。
+
+// 报错（警告、提示）不许混进响应里：PHP 默认会把它们当网页内容输出，响应就坏了。改成只写到服务的终端（标准错误）。
+ini_set('display_errors', '0');
+ini_set('log_errors', '1');
 
 // 这次请求。
 final class LcRequest

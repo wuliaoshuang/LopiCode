@@ -97,6 +97,25 @@ void expectButton(WidgetTester tester, Finder button, String what) {
   expect(size.height, greaterThanOrEqualTo(44), reason: what);
 }
 
+/// 低代码底部工具条里的一个按钮：在工具条里、可按范围至少 44×44。
+void expectToolbarButton(WidgetTester tester, String tip) {
+  final f = find
+      .descendant(
+        of: find.byKey(const ValueKey('lc-toolbar')),
+        matching: find.widgetWithIcon(IconButton, switch (tip) {
+          '撤销' => Icons.undo,
+          '重做' => Icons.redo,
+          _ => Icons.layers_outlined,
+        }),
+      )
+      .hitTestable();
+  expect(f, findsOneWidget, reason: tip);
+  expect(tester.widget<IconButton>(f).tooltip, tip);
+  final size = tester.getSize(f);
+  expect(size.width, greaterThanOrEqualTo(44), reason: tip);
+  expect(size.height, greaterThanOrEqualTo(44), reason: tip);
+}
+
 /// 顶栏里一块“什么都没有”的地方：按钮上面那一条的正中间。
 Offset blankInBar(double top) => Offset(195, top + 5);
 
@@ -283,24 +302,33 @@ void main() {
     });
 
     group('低代码画布页（$tag）', () {
-      testWidgets('顶栏没有底色，画布从屏幕最顶铺起；页面顶边在顶栏下沿；撤销、重做、图层、更多都在、都能点', (tester) async {
+      testWidgets('顶栏没有底色，画布从屏幕最顶铺起；页面顶边在顶栏下沿；更多在顶栏、撤销 / 重做 / 图层在底部工具条，都在、都能点', (tester) async {
         await openBuilder(tester, safe: safe);
         expectNoBarBackground(tester, top: top);
         final canvas = tester.getRect(k('lowcode-canvas'));
         expect(canvas.top, 0);
         expect(canvas.width, 390);
         expect(pageRect(tester).top, barBottom, reason: '页面的顶边起始时正好在悬浮顶栏的下沿');
-        expect(pageRect(tester).bottom, lessThanOrEqualTo(canvas.bottom - kCanvasToolsInset + 0.5), reason: '一屏放得下的页面不压到底部的小胶囊下面');
-        expect(find.descendant(of: bar(), matching: find.text('低代码搭建')), findsOneWidget);
-        for (final tip in ['撤销', '重做', '图层', '更多']) {
-          expectButton(tester, find.byTooltip(tip), tip);
+        expect(pageRect(tester).bottom, lessThanOrEqualTo(canvas.bottom + 0.5), reason: '一屏放得下的页面不超出画布');
+        // 顶栏标题是页面名，下面一行小字是“屏宽档 · 保存状态”。
+        expect(find.descendant(of: bar(), matching: find.text('我的小站')), findsOneWidget);
+        expect(find.descendant(of: bar(), matching: find.text('自适应 · 已保存')), findsOneWidget);
+        expectButton(tester, find.byTooltip('更多'), '更多');
+        // 撤销、重做、图层挪到了画布下面的工具条里（拇指边），不在顶栏；都在、够大（≥44）。
+        final toolbar = tester.getRect(k('lc-toolbar'));
+        expect(toolbar.top, closeTo(canvas.bottom, 0.5));
+        for (final tip in ['撤销', '重做', '图层']) {
+          expect(
+            find.descendant(of: bar(), matching: find.byTooltip(tip)),
+            findsNothing,
+            reason: tip,
+          );
+          expectToolbarButton(tester, tip);
         }
-        // “怎么看”的两个小胶囊浮在画布底部，中间是透明的。
-        final width = tester.getRect(k('lowcode-width-pill')), zoom = tester.getRect(k('lowcode-zoom-pill'));
-        expect(width.bottom, lessThanOrEqualTo(canvas.bottom));
-        expect(width.top, greaterThanOrEqualTo(canvas.bottom - kCanvasToolsInset));
-        expect(width.right, lessThan(zoom.left));
-        expect(find.byTooltip('适应屏幕').hitTestable(), findsOneWidget);
+        expect(find.byTooltip('图层').hitTestable(), findsOneWidget);
+        // 画布上不再浮着小胶囊。
+        expect(k('lowcode-width-pill'), findsNothing);
+        expect(k('lowcode-zoom-pill'), findsNothing);
 
         await tester.tap(find.byTooltip('图层'));
         await tester.pumpAndSettle();
@@ -315,7 +343,7 @@ void main() {
         expect(tester.takeException(), isNull);
       });
 
-      testWidgets('长页面：在顶栏空白处往上拖＝滚动画布，页面从顶栏下面滑过去；滚到底时底边停在小胶囊上面；适应屏幕回到顶栏下沿', (tester) async {
+      testWidgets('长页面：在顶栏空白处往上拖＝滚动画布，页面从顶栏下面滑过去；滚到底时底边贴着画布底边；适应屏幕回到顶栏下沿', (tester) async {
         await openBuilder(tester, doc: longDoc(), safe: safe);
         final canvas = tester.getRect(k('lowcode-canvas'));
         expect(pageRect(tester).top, barBottom);
@@ -333,9 +361,9 @@ void main() {
           await tester.pump(const Duration(seconds: 2));
         }
         await settle(tester, rounds: 2);
-        expect(pageRect(tester).bottom, closeTo(canvas.bottom - kCanvasToolsInset, 0.5));
+        expect(pageRect(tester).bottom, closeTo(canvas.bottom, 0.5));
 
-        await tester.tap(find.byTooltip('适应屏幕'));
+        tester.state<CanvasViewState>(find.byType(CanvasView)).fitToScreen();
         await settle(tester, rounds: 2);
         expect(pageRect(tester).top, barBottom);
         // 往下拖不动：顶边不会离开顶栏下沿。
@@ -348,7 +376,7 @@ void main() {
     });
   }
 
-  testWidgets('编辑组件页：同一个悬浮顶栏，标题、组件名、撤销、重做、更多、“完成”都在；“完成”能关掉', (tester) async {
+  testWidgets('编辑组件页：同一个悬浮顶栏，标题、组件名、更多、“完成”都在（撤销、重做在底部工具条）；“完成”能关掉', (tester) async {
     await comp.openBuilder(tester, doc: comp.cardDoc());
     await comp.select(tester, 'a');
     await comp.moreAction(tester, '编辑组件');
@@ -358,8 +386,11 @@ void main() {
     final canvas = find.byKey(const ValueKey('lowcode-canvas')).hitTestable();
     expect(tester.getRect(canvas).top, 0);
     expect(pageRect(tester).top, PageBar.kHeight);
-    for (final tip in ['返回', '撤销', '重做', '更多']) {
+    for (final tip in ['返回', '更多']) {
       expectButton(tester, find.byTooltip(tip), tip);
+    }
+    for (final tip in ['撤销', '重做']) {
+      expectToolbarButton(tester, tip);
     }
     await tester.tap(k('comp-editor-done'));
     await tester.pumpAndSettle();

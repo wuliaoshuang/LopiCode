@@ -2,7 +2,7 @@
 # 翻译脚本的自测 ＋ 两个探针。用法：bash tool/selftest/run.sh
 cd "$(dirname "$0")/../.." || exit 1
 [ -f ~/workspace/tools/env.sh ] && source ~/workspace/tools/env.sh
-OUT=/tmp/v5-F1/run; mkdir -p $OUT
+OUT=${LC_PROTO_TMP:-/tmp/v5-F1}/run; mkdir -p $OUT
 fail=0
 python3 tool/lcx.py build tool/selftest/features.lcx -o $OUT/self > $OUT/self.log 2>&1 || { cat $OUT/self.log; exit 1; }
 node $OUT/self/node/main.js > $OUT/self.node.txt 2>&1

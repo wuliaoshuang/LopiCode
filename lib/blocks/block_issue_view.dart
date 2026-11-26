@@ -2,9 +2,11 @@
 // - 标记要克制：积木还是积木，标记只是“贴在上面的小记号”，不改积木的颜色和形状。
 // - 有错误的积木：沿轮廓一圈细红线 + 右上角红色圆形角标；只有警告的积木：不描边，只在右上角放黄色三角角标。
 //   角标里都有“!”，而且错误是圆、警告是三角——不只靠颜色分。选中是亮黄的柔光描边、吸附是白色，都和红色细线分得开。
+// - 只有“提醒”的积木（2026-11-26 加，类型检查的“先当成任意”这类）：不描边，右上角一个蓝灰色圆角方块、里面是“i”——形状、字、颜色都和错误 / 警告不一样。
 // - 出问题的那一格（槽）：外面一圈同色虚线（空着的必填格就是红色虚线框）。
 // - 点角标弹出小卡，贴着角标：一条问题两行——原因（正文色）、“建议：…”（次要色），右上角是规则编号；多条依次列出。
 //   小卡外面点一下就关，不挡画布别的操作。主操作＝看完去改那一格。
+// - 有“一键修”的问题（2026-11-26 加）：建议下面单独一行放修法按钮（一个修法一个按钮，放不下就换行）；点了就改、关掉小卡 / 列表，能撤销。
 import 'dart:math' as math;
 
 import 'package:lopicode/blocks/block_canvas_layout.dart';
@@ -52,6 +54,17 @@ class BkIssueMarks {
     return level;
   }
 
+  /// 这一块上是不是只有“提醒”。
+  bool hintOnly(BkBlock b) {
+    var any = false;
+    for (final i in issues) {
+      if (i.path.isEmpty != b.isHat || !(b.isHat || bkSameBlockPath(i.path, b.path))) continue;
+      if (!i.isHint) return false;
+      any = true;
+    }
+    return any;
+  }
+
   /// 这一格有没有问题（`block`＝它所在积木的路径，帽子为空）。
   bool? slotLevel(LcBlockPath block, BkSlot s) {
     if (s.look == BkSlotLook.add) return null;
@@ -89,7 +102,7 @@ Offset bkIssueBadgeCenter(BkBlock b, BkMetrics m) => Offset(b.rect.right - 5, (b
 }
 
 /// 积木上的标记：有错误＝沿轮廓一圈细红线；再加右上角的角标。
-void bkPaintBlockMark(Canvas canvas, BkPalette palette, BkMetrics m, BkBlock b, Path outline, {required bool error}) {
+void bkPaintBlockMark(Canvas canvas, BkPalette palette, BkMetrics m, BkBlock b, Path outline, {required bool error, bool hint = false}) {
   if (error) {
     canvas.drawPath(
       outline,
@@ -100,11 +113,31 @@ void bkPaintBlockMark(Canvas canvas, BkPalette palette, BkMetrics m, BkBlock b, 
         ..color = palette.error,
     );
   }
-  bkPaintIssueBadge(canvas, bkIssueBadgeCenter(b, m), error: error, color: error ? palette.error : palette.warning, mark: error ? palette.onError : palette.onWarning, ring: palette.canvas);
+  bkPaintIssueBadge(
+    canvas,
+    bkIssueBadgeCenter(b, m),
+    error: error,
+    hint: hint,
+    color: error ? palette.error : (hint ? palette.hint : palette.warning),
+    mark: error ? palette.onError : (hint ? palette.onHint : palette.onWarning),
+    ring: palette.canvas,
+  );
 }
 
-/// 角标：错误是圆，警告是圆角三角，里面都是“!”。`ring`＝外面一圈底色（把角标和积木隔开）。
-void bkPaintIssueBadge(Canvas canvas, Offset c, {required bool error, required Color color, required Color mark, required Color ring, double size = 8}) {
+/// 角标：错误是圆，警告是圆角三角，里面都是“!”；提醒是圆角方块，里面是“i”。`ring`＝外面一圈底色（把角标和积木隔开）。
+void bkPaintIssueBadge(Canvas canvas, Offset c, {required bool error, required Color color, required Color mark, required Color ring, double size = 8, bool hint = false}) {
+  if (hint && !error) {
+    final box = RRect.fromRectAndRadius(Rect.fromCircle(center: c, radius: size * 0.92), Radius.circular(size * 0.42));
+    final i = Paint()
+      ..color = mark
+      ..strokeWidth = size * 0.26
+      ..strokeCap = StrokeCap.round;
+    canvas.drawRRect(box.inflate(1.6), Paint()..color = ring);
+    canvas.drawRRect(box, Paint()..color = color);
+    canvas.drawCircle(c + Offset(0, -size * 0.48), size * 0.15, i..style = PaintingStyle.fill);
+    canvas.drawLine(c + Offset(0, -size * 0.08), c + Offset(0, size * 0.5), i);
+    return;
+  }
   final markPaint = Paint()
     ..color = mark
     ..strokeWidth = size * 0.26
@@ -164,41 +197,49 @@ void bkPaintSlotMark(Canvas canvas, BkPalette palette, BkMetrics m, BkSlot s, {r
 
 /// 角标 / 列表里用的小图标（和画在积木上的是同一个画法）。
 class BkIssueIcon extends StatelessWidget {
-  const BkIssueIcon({super.key, required this.error, this.size = 18});
+  const BkIssueIcon({super.key, required this.error, this.size = 18, this.hint = false});
   final bool error;
   final double size;
+
+  /// 是“提醒”（[error] 得是 false）。
+  final bool hint;
 
   @override
   Widget build(BuildContext context) {
     // 和画布上的角标用同一套颜色：列表里看到的图标和积木上的是同一个东西。
     final p = BkPalette.fromTheme(context.themeSpec);
     return Semantics(
-      label: error ? '错误' : '警告',
+      label: error ? '错误' : (hint ? '提醒' : '警告'),
       child: CustomPaint(
         size: Size.square(size),
-        painter: _IconPainter(error: error, color: error ? p.error : p.warning, mark: error ? p.onError : p.onWarning),
+        painter: _IconPainter(error: error, hint: hint, color: error ? p.error : (hint ? p.hint : p.warning), mark: error ? p.onError : (hint ? p.onHint : p.onWarning)),
       ),
     );
   }
 }
 
 class _IconPainter extends CustomPainter {
-  _IconPainter({required this.error, required this.color, required this.mark});
+  _IconPainter({required this.error, required this.color, required this.mark, this.hint = false});
   final bool error;
+  final bool hint;
   final Color color;
   final Color mark;
 
   @override
-  void paint(Canvas canvas, Size size) => bkPaintIssueBadge(canvas, size.center(Offset.zero), error: error, color: color, mark: mark, ring: Colors.transparent, size: size.shortestSide * 0.42);
+  void paint(Canvas canvas, Size size) =>
+      bkPaintIssueBadge(canvas, size.center(Offset.zero), error: error, hint: hint, color: color, mark: mark, ring: Colors.transparent, size: size.shortestSide * 0.42);
 
   @override
-  bool shouldRepaint(_IconPainter old) => old.error != error || old.color != color;
+  bool shouldRepaint(_IconPainter old) => old.error != error || old.hint != hint || old.color != color;
 }
 
 /// 一条问题的两行：原因 + 建议（小卡和问题列表共用）。
 class BkIssueLines extends StatelessWidget {
-  const BkIssueLines({super.key, required this.issue, this.head = ''});
+  const BkIssueLines({super.key, required this.issue, this.head = '', this.onFixed});
   final BlockIssue issue;
+
+  /// 给了就把这条问题的修法按钮显示出来；点了、改成了以后调它（小卡 / 列表拿去把自己关掉）。
+  final VoidCallback? onFixed;
 
   /// 原因前面再加一句“在哪”（问题列表里用；小卡贴着积木，不用说）。
   final String head;
@@ -212,7 +253,7 @@ class BkIssueLines extends StatelessWidget {
       children: [
         Padding(
           padding: const EdgeInsets.only(top: 2),
-          child: BkIssueIcon(error: issue.isError),
+          child: BkIssueIcon(error: issue.isError, hint: issue.isHint),
         ),
         const SizedBox(width: Space.x2),
         Expanded(
@@ -231,6 +272,25 @@ class BkIssueLines extends StatelessWidget {
                 Padding(
                   padding: const EdgeInsets.only(top: 2),
                   child: Text('建议：${issue.fix}', style: t.bodySmall?.copyWith(color: c.textMuted)),
+                ),
+              if (onFixed != null && issue.actions.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: Space.x2),
+                  child: Wrap(
+                    spacing: Space.x2,
+                    runSpacing: Space.x1,
+                    children: [
+                      for (final (k, a) in issue.actions.indexed)
+                        FilledButton.tonal(
+                          key: ValueKey('bk-issue-fix-$k'),
+                          style: FilledButton.styleFrom(minimumSize: const Size(0, 36), padding: const EdgeInsets.symmetric(horizontal: 14), visualDensity: VisualDensity.compact),
+                          onPressed: () {
+                            if (a.run()) onFixed!();
+                          },
+                          child: Text(a.label),
+                        ),
+                    ],
+                  ),
                 ),
             ],
           ),
@@ -294,7 +354,7 @@ Future<void> showBlockIssueCard(BuildContext context, {required Rect anchor, req
                             padding: const EdgeInsets.symmetric(vertical: Space.x2),
                             child: Divider(height: 1, color: c.border),
                           ),
-                        BkIssueLines(key: ValueKey('bk-issue-card-$i'), issue: issues[i]),
+                        BkIssueLines(key: ValueKey('bk-issue-card-$i'), issue: issues[i], onFixed: () => Navigator.of(dialog).pop()),
                       ],
                     ],
                   ),

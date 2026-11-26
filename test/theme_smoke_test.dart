@@ -5,17 +5,24 @@
 //
 // 覆盖的页面：聊天页（确认卡、做完的步骤组展开、步骤详情里的命令与报错）、“＋”底部面板、侧边栏、
 // 项目列表、新建项目面板、文件页、代码编辑器（查找栏）、终端（16 色都打出来）、后端积木页、看代码面板、
-// 低代码编辑器（选中、属性面板）、设置首页、外观子页、主题列表页、对话框、提示条、
+// 低代码编辑器（底部工具条、选中、合一面板、组件盒、图层、长按菜单；第 5 版第 1、2 期）、严格规矩文档的类型标红、设置首页、外观子页、主题列表页、对话框、提示条、
 // 主题管理页、主题编辑器、背景图片设置页（2026-11-26 合并后加）。
 // 打包页单独在 test/theme_pack_smoke_test.dart（本地打包合进来后状态多了，这个文件放不下）。
+import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lopicode/appearance/theme_builtin.dart';
+import 'package:lopicode/backend/backend_model.dart';
+import 'package:lopicode/blocks/block_editor_view.dart';
+import 'package:lopicode/blocks/block_issue_view.dart';
 import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/core/templates.dart';
+import 'package:lopicode/lang/types.dart';
+import 'package:lopicode/lang/types_json.dart';
+import 'package:lopicode/lowcode/logic_model.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/state/themes_state.dart';
 import 'package:lopicode/templates/project_templates.dart';
@@ -36,6 +43,8 @@ import 'package:path/path.dart' as p;
 import 'package:re_editor/re_editor.dart';
 import 'package:xterm/xterm.dart';
 
+import 'support/backend_func_blocks.dart' as fb;
+import 'support/backend_lang_blocks.dart' as bk;
 import 'support/harness.dart';
 import 'support/runtime_fakes.dart';
 
@@ -332,24 +341,127 @@ void main() {
         await shot(tester, 'blocks-menu');
       });
 
-      testWidgets('低代码编辑器：画布、选中、属性面板、图层', (tester) async {
+      testWidgets('后端积木页 · 严格规矩的文档：类型问题标红、点角标出小卡和修法按钮', (tester) async {
+        final (env, project, session) = await open(
+          tester,
+          ProjectTemplate.backendBlocks,
+          language: 'node',
+          fakePty: true,
+          before: (project) {
+            // 一份带类型问题的文档（规矩版本 2）：参数要整数给了文字、要文字给了整数、条件位放了整数。
+            final file = File(p.join(project.dir, kBackendFileName));
+            final json = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
+            json['rules'] = 2;
+            json['functions'] = [
+              fb.fnDef(
+                'f1',
+                '加倍',
+                [
+                  {'name': 'x', 'type': lTypeToJson(LType.integer)},
+                ],
+                [fb.ret(bk.op2('*', fb.pm('x'), bk.nm(2)))],
+              ),
+              fb.fnDef(
+                'f2',
+                '喊',
+                [
+                  {'name': '话', 'type': lTypeToJson(LType.text)},
+                ],
+                [fb.ret(fb.pm('话'))],
+              ),
+            ];
+            json['routes'] = [
+              bk.route('r1', 'GET', '/a', [
+                bk.let('total', fb.call('f1', {'x': bk.tx('12')})),
+                bk.let('b', fb.call('f2', {'话': bk.nm(3)})),
+                bk.iff(bk.nm(1), [bk.json(bk.vr('total'))], noElse: true),
+                bk.json(bk.nm(1)),
+              ]),
+            ];
+            file.writeAsStringSync(jsonEncode(json));
+          },
+        );
+        await show(tester, env, ProjectShell(project: project, session: session, initial: ShellDest.builder));
+        final editor = tester.state<BlockEditorViewState>(find.byType(BlockEditorView));
+        await tester.drag(find.byKey(const ValueKey('bk-palette-grip')), const Offset(0, 300), warnIfMissed: false);
+        await tester.pumpAndSettle();
+        editor.jumpTo('r1', const []);
+        await tester.pumpAndSettle();
+        editor.select(null);
+        await tester.pumpAndSettle();
+        final host = tester.state<BackendScreenState>(find.byType(BackendScreen)).host!;
+        expect(host.issues.where((i) => i.rule.startsWith('T')), hasLength(3), reason: '三处类型问题都标出来了');
+        await shot(tester, 'blocks-type-marks');
+
+        // 点第 1 块的角标：小卡（提示语、编号、修法按钮）。
+        final placed = editor.layout.placed('r1')!;
+        final block = placed.layout.blockAt([lcStep(0)])!;
+        await tester.tapAt(editor.globalOf(editor.toView(placed.origin + bkIssueBadgeCenter(block, editor.kit.metrics))));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const ValueKey('bk-issue-card')), findsOneWidget);
+        await shot(tester, 'blocks-type-card');
+        await tester.binding.handlePopRoute();
+        await tester.pumpAndSettle();
+
+        // 问题列表（每条带修法按钮）。
+        await tester.tap(find.byKey(const ValueKey('bk-issues')));
+        await tester.pumpAndSettle();
+        await shot(tester, 'blocks-type-list');
+      });
+
+      testWidgets('低代码编辑器：画布与底部工具条、选中、合一面板、组件盒、图层、长按菜单', (tester) async {
         final (env, project, session) = await open(tester, ProjectTemplate.lowcode);
         await show(tester, env, ProjectShell(project: project, session: session, initial: ShellDest.builder));
+        Finder key(String k) => find.byKey(ValueKey(k));
+        Future<void> back() async {
+          await tester.binding.handlePopRoute();
+          await tester.pumpAndSettle();
+          await settle(tester, rounds: 2);
+        }
+
+        expect(key('lc-tool-add'), findsOneWidget, reason: '底部工具条在');
         await shot(tester, 'lowcode');
-        await tester.ensureVisible(find.text('提交').first);
-        await tester.pump(const Duration(milliseconds: 300));
-        await tester.tap(find.byKey(const ValueKey('lowcode-node-n5')));
+
+        // 选中“提交”按钮：选中框、尺寸标签、工具条换成选中后的那一排。
+        await tester.tap(key('lowcode-node-n5'), warnIfMissed: false);
         await settle(tester, rounds: 2);
         await shot(tester, 'lowcode-selected');
-        await tester.tap(find.widgetWithText(FilledButton, '属性'));
-        await settle(tester, rounds: 3);
-        expect(find.text('按钮属性'), findsOneWidget);
+
+        // 合一面板：常用页、样式页。
+        await tester.tap(find.text('常用').last);
+        await tester.pumpAndSettle();
+        expect(key('lc-inspector'), findsOneWidget);
         await shot(tester, 'lowcode-props');
-        await tester.tapAt(const Offset(195, 60));
-        await settle(tester, rounds: 2);
-        await tester.tap(find.byTooltip('图层'));
-        await settle(tester, rounds: 3);
+        await tester.tap(key('lc-page-style'));
+        await tester.pumpAndSettle();
+        await shot(tester, 'lowcode-style');
+        await back();
+        expect(key('lc-inspector'), findsNothing);
+
+        // 组件盒。
+        await tester.tap(key('lc-tool-add'));
+        await tester.pumpAndSettle();
+        expect(key('palette-search'), findsOneWidget);
+        await shot(tester, 'lowcode-palette');
+        await tester.tap(find.byTooltip('关闭组件盒').last);
+        await tester.pumpAndSettle();
+
+        // 图层面板。
+        await tester.tap(find.byTooltip('图层').last);
+        await tester.pumpAndSettle();
+        expect(key('lc-layer-n5'), findsOneWidget);
         await shot(tester, 'lowcode-layers');
+        await back();
+
+        // 长按菜单（按住不挪就松手）。
+        final g = await tester.startGesture(tester.getCenter(key('lowcode-node-n5')));
+        await tester.pump(const Duration(milliseconds: 340));
+        await tester.pump();
+        await g.up();
+        await tester.pumpAndSettle();
+        expect(find.text('复制'), findsWidgets);
+        await shot(tester, 'lowcode-node-menu');
+        await back();
       });
 
       // 打包页（本地表单、进行中、成功、失败、不适用、钥匙页、两种远程方式）在 test/theme_pack_smoke_test.dart。

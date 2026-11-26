@@ -138,8 +138,9 @@
     (do (rt log (call 试试 (fn () (do (call 只接我的 (fn () (throw "别的"))))))))
 
     ; 开始做 / 等
-    (let 慢 (spawn (do (native time.sleep 150)) (do (rt log "慢的做完")) (return "慢")))
-    (let 快 (spawn (do (native time.sleep 60)) (do (rt log "快的做完")) (return "快")))
+    ; 两个等的时间差得很开（原来是 150 和 60 毫秒）：机器很忙时线程晚起来近 100 毫秒，“快的”会落到“慢的”后面，输出顺序就变了（2026-11-26 收成回归测试时撞到）。
+    (let 慢 (spawn (do (native time.sleep 2000)) (do (rt log "慢的做完")) (return "慢")))
+    (let 快 (spawn (do (native time.sleep 50)) (do (rt log "快的做完")) (return "快")))
     (do (rt log "都开始了"))
     (do (rt log (rt join (await 慢) (await 快) (await 3))))
     (let 会错 (spawn (throw (new 我的错误 "里面错了" 9))))

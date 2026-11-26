@@ -52,8 +52,12 @@ List<BottomNavItem> shellNavItems() => [
 
 /// 外壳把“打开侧边栏”“去某一页”交给里面的页面用。
 class ShellScope extends InheritedWidget {
-  const ShellScope({super.key, required this.openDrawer, required this.go, required this.projectName, required super.child});
+  const ShellScope({super.key, required this.openDrawer, required this.go, required this.projectName, this.backClaims, required super.child});
   final VoidCallback openDrawer;
+
+  /// 页面里“返回键先收我”的东西（比如搭建页的合一面板）在这儿挂一个问话：返回 true＝这一下返回键它自己接了，
+  /// 外壳就不再“回聊天页”。同一页上的几个返回键拦截会一起被叫到，不这样问一声，面板收起的同时人也被带回聊天页了。
+  final List<bool Function()>? backClaims;
   final void Function(ShellDest dest) go;
   final String projectName;
 

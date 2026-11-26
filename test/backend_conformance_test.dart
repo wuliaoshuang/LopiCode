@@ -20,13 +20,14 @@ import 'package:lopicode/lowcode/logic_model.dart';
 import 'support/backend_conformance.dart';
 
 /// 语言 id → 本机要有的命令。
-const Map<String, String> _languages = {'node': 'node', 'python': 'python3', 'go': 'go', 'java': 'javac'};
+const Map<String, String> _languages = {'node': 'node', 'python': 'python3', 'go': 'go', 'java': 'javac', 'php': 'php'};
 
 /// 语法检查：语言 id → 对一个文件做语法检查的命令（文件路径接在最后）。
 /// Go 和 Java 要编译，编译不过一致性测试那一条就会失败，这里不重复；Go 另有一条查 gofmt / go vet。
 const Map<String, List<String>> _syntaxChecks = {
   'node': ['node', '--check'],
   'python': ['python3', '-m', 'py_compile'],
+  'php': ['php', '-l'],
 };
 
 void _collectFns(List<BeS> list, Set<String> out) {
@@ -193,7 +194,8 @@ void main() {
     test('$language：生成的文件语法检查通过', () async {
       final check = _syntaxChecks[language];
       if (check == null) return; // 要编译的语言：上面那条已经编译过了
-      if (await toolchainFor(language) == null) {
+      final tools = await toolchainFor(language);
+      if (tools == null) {
         // ignore: avoid_print 跳过的原因要让跑测试的人看见
         print('跳过 $language 的语法检查：本机找不到 ${entry.value} 命令');
         markTestSkipped('本机找不到 ${entry.value} 命令');
@@ -203,7 +205,8 @@ void main() {
       final dir = writeProject(generated.files, 'be_syntax_${language}_');
       try {
         for (final name in generated.files.keys.where((n) => !n.endsWith('.md'))) {
-          final r = await Process.run(check.first, [...check.sublist(1), name], workingDirectory: dir.path);
+          final command = tools.resolve([...check, name], dir);
+          final r = await Process.run(command.first, command.sublist(1), workingDirectory: dir.path);
           expect(r.exitCode, 0, reason: '$name：\n${r.stdout}\n${r.stderr}');
         }
       } finally {

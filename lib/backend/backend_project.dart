@@ -208,6 +208,7 @@ class BackendRegenResult {
     this.conflicts = const [],
     this.errorCount = 0,
     this.blocked = false,
+    this.strictPending = false,
     this.note,
   });
 
@@ -236,6 +237,9 @@ class BackendRegenResult {
 
   /// 文档里校验出的“错误”条数。大于 0 时一定是 [blocked]（有错误就不生成）。
   final int errorCount;
+
+  /// true＝这是严格规矩的文档、严格规矩的代码生成还没接上，所以没有生成（[error] 是 [kBeStrictGenPending]）。
+  final bool strictPending;
 
   /// 读文件时的说明（比如跳过了几条读不懂的内容）。
   final String? note;
@@ -342,6 +346,11 @@ Future<BackendRegenResult> _regenerate(PathGuard guard, {String? file, BeDocumen
   final errors = backendErrors(document).length;
   if (errors > 0) {
     return BackendRegenResult(error: '积木里有 $errors 个错误，代码没有更新（上一次生成的文件原样留着）。把错误修好以后会自动重新生成', blocked: true, errorCount: errors, file: rel, dir: dir, language: document.language, note: note);
+  }
+
+  // 3b. 严格规矩的文档：后端的严格生成还没接上，老的生成器会写出和严格规矩不符的代码（见 rules.dart 的 kLangStrictBackendGen）——不生成，明说。
+  if (beStrictGenPending(document)) {
+    return BackendRegenResult(error: kBeStrictGenPending, strictPending: true, file: rel, dir: dir, language: document.language, note: note);
   }
 
   // 4. 生成

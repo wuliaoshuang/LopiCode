@@ -15,6 +15,8 @@ tool/check.sh --fix    # 先自动排版
 ```
 
 - `flutter analyze` 必须**零问题**。规则在 `analysis_options.yaml`；要放过某一行用 `// ignore: 规则名` 并写原因，不要整条关掉。
+- 机器内存紧（同时还有别的任务在跑测试）时用 `LOPI_TEST_JOBS=1 tool/check.sh`：全量测试只开一路，慢但不会被系统因为内存不够杀掉。
+- 要调外部程序的测试（PHP / Go / Java 真跑、Vue / React 真编译、第 5 版原型回归）标了 `external`（`dart_test.yaml`），默认照样跑；缺哪个程序就跳过哪个并打印原因。开发机验证环境见 `docs/api-notes.md`。
 - 跑全量测试要把 `TMPDIR` 指到工程里（脚本已经做了）：有的机器 `/tmp` 只有 512MB，会写满。
 - 提交只在本地：`git -c user.name=LopiCode -c user.email=lopicode@local commit`。推不推、推到哪由霜霜定。
 - 发给霜霜的安装包一律是 `flutter build apk --release --target-platform android-arm64`（瘦身包），不发 debug 包。

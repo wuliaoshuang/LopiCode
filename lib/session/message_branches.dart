@@ -171,8 +171,14 @@ class MessageBranches {
   String? branchBlocked(String id) {
     final run = _run;
     final index = indexOfMessage(run.messages, id);
-    if (index < 0) return kMessageGone;
-    if (run.busy && index >= lastTurnStart(run.messages)) return kBranchRunningTurn;
+    // 刚发出去的那句话：聊天里已经看得到、也已经在忙了，但要等模型客户端和工具备好才写进记录（turn_runner.dart）。
+    // 这一小段时间里（2026-11-26 全量测试在机器很忙时撞到，原来两处都说错）：
+    // - 那句话“不在记录里”其实是“这一轮还没跑完”，原因要照实说；真不在了的消息（比如被删掉的）照旧说“不在记录里”。
+    // - 记录里最后那一轮是上一轮、早就跑完了，不能当成“正在跑的这一轮”拦下。
+    final sent = run.busy ? run.items.whereType<UserItem>().lastOrNull?.id : null;
+    final unrecorded = sent != null && indexOfMessage(run.messages, sent) < 0;
+    if (index < 0) return unrecorded && sent == id ? kBranchRunningTurn : kMessageGone;
+    if (run.busy && !unrecorded && index >= lastTurnStart(run.messages)) return kBranchRunningTurn;
     return null;
   }
 

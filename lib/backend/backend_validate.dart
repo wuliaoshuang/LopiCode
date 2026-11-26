@@ -14,6 +14,7 @@ import 'package:lopicode/backend/backend_model.dart';
 import 'package:lopicode/backend/backend_text.dart';
 import 'package:lopicode/backend/backend_validate_func.dart';
 import 'package:lopicode/backend/backend_validate_lang.dart';
+import 'package:lopicode/backend/backend_validate_types.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 import 'package:lopicode/lowcode/logic_rules.dart';
 import 'package:lopicode/lowcode/logic_validate.dart';
@@ -98,6 +99,14 @@ bool _alwaysResponds(List<LcBlock> list) => beAlwaysResponds(list);
 
 bool _samePath(LcBlockPath a, LcBlockPath b) {
   if (a.length != b.length) return false;
+  for (var i = 0; i < a.length; i++) {
+    if (a[i] != b[i]) return false;
+  }
+  return true;
+}
+
+bool _sameXp(List<Object>? a, List<Object> b) {
+  if (a == null || a.length != b.length) return false;
   for (var i = 0; i < a.length; i++) {
     if (a[i] != b[i]) return false;
   }
@@ -189,6 +198,8 @@ class _Validator {
       _known = beTreeParamNames(r);
       _blocks(r.body, const [], false);
       _lang(r, beLangFindings(doc, r, table: table, used: used));
+      // 严格规矩（规矩版本 2）的文档再过一遍类型检查；版本 1 的文档这里是空表。
+      _lang(r, beTypeFindings(doc, r, table: table));
       _path = const [];
       _block = null;
       // 一块“返回”都没有的接口是有意回 204（比如删除），不提示；有“返回”但不是每种走法都碰得到的，多半是漏了。
@@ -216,6 +227,7 @@ class _Validator {
       _known = beTreeParamNames(f);
       _blocks(f.body, const [], false);
       _lang(f, beFuncFindings(table, f, used));
+      _lang(f, beFuncTypeFindings(doc, table, f));
     }
     _fn = null;
   }
@@ -299,10 +311,15 @@ class _Validator {
   void _lang(LcBlockTree r, List<BeLangFinding> findings) {
     for (final f in findings) {
       final rule = lcRuleId(f.code);
-      if (issues.any((i) => i.handlerId == r.id && i.rule == rule && _samePath(i.path, f.path) && (f.arg == null || i.arg == f.arg))) continue;
+      final xp = f.exprPath;
+      // 带着“参数里的哪个位置”的（类型检查的问题）：位置也一样才算同一条。
+      bool sameSpot(LcLogicIssue i) => xp == null || _sameXp(i.exprPath, xp);
+      if (issues.any((i) => i.handlerId == r.id && i.rule == rule && _samePath(i.path, f.path) && (f.arg == null || i.arg == f.arg) && sameSpot(i))) continue;
+      // 同一格上类型检查已经说了“要什么、放进来的是什么”，老的那条“类型对不上”（G10）就不重复了。
+      if (f.code.startsWith('T')) issues.removeWhere((i) => i.handlerId == r.id && i.rule == 'G10' && _samePath(i.path, f.path) && i.arg == f.arg && sameSpot(i));
       _path = f.path;
       _block = r.blockAt(f.path);
-      _add(f.isError ? LcIssueLevel.error : LcIssueLevel.warning, f.code, f.problem, arg: f.arg, xp: const [], fix: f.fix);
+      _add(f.isError ? LcIssueLevel.error : LcIssueLevel.warning, f.code, f.problem, arg: f.arg, xp: xp ?? const [], fix: f.fix);
     }
     _path = const [];
     _block = null;

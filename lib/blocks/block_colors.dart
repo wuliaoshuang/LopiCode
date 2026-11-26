@@ -71,7 +71,9 @@ class BkPalette {
       onError = _color(t, BlockKey.onError),
       onWarning = _color(t, BlockKey.onWarning),
       gloss = _color(t, BlockKey.gloss),
-      shade = _color(t, BlockKey.shade);
+      shade = _color(t, BlockKey.shade),
+      hint = _ui(t, UiKey.info),
+      onHint = _ui(t, UiKey.infoSoft);
 
   final bool dark;
   final Map<String, BkTone> _tones;
@@ -99,6 +101,10 @@ class BkPalette {
   final Color gloss;
   final Color shade;
 
+  /// “提醒”级的标记（不是错也不是警告）和它上面的符号：不另设主题项，跟界面的“提示信息”色（`info` / `infoSoft`）走。
+  final Color hint;
+  final Color onHint;
+
   BkTone tone(String key) => _tones[key] ?? _tones[BlockColorKey.unknown]!;
 
   static final Expando<BkPalette> _cache = Expando();
@@ -113,6 +119,8 @@ class BkPalette {
   /// 默认主题的色表（测试、不在应用主题里的地方用；界面里用 [fromTheme]）。
   static BkPalette of({required bool dark}) => dark ? darkTheme : light;
 }
+
+Color _ui(ThemeSpec t, String key) => Color(t.ui[key] ?? defaultThemeFor(dark: t.dark).ui[key] ?? 0xFFFF00FF);
 
 Color _color(ThemeSpec t, String key) => Color(t.blocks[key] ?? defaultThemeFor(dark: t.dark).blocks[key] ?? 0xFFFF00FF);
 

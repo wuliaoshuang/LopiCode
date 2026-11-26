@@ -104,6 +104,7 @@ Future<LangRun?> runLang(String language, List<LModule> modules) async {
       'node' => ['node', 'main.js'],
       'python' => ['python3', 'main.py'],
       'go' => ['./prog'],
+      'php' => ['php', 'main.php'],
       _ => ['java', '-Dstderr.encoding=UTF-8', '-cp', 'out', 'Main'],
     };
     final r = await runTool(tools.resolve(start, dir), dir, env, const Duration(minutes: 2));
@@ -132,8 +133,8 @@ Map<String, List<String>> splitCases(String out) {
   return result;
 }
 
-/// 真跑的四种语言（PHP 本机没有，跑不了）。
-const List<String> kLangRunnable = ['node', 'python', 'go', 'java'];
+/// 真跑的五种语言（PHP 在 2026-11-26 装了开发机验证环境以后才第一次真跑；本机没有哪种就跳过哪种）。
+const List<String> kLangRunnable = ['node', 'python', 'go', 'java', 'php'];
 
 /// 一组用例的一致性测试：每种语言各跑一遍，逐个用例比对写死的预期；最后比对四种语言的输出逐字节相同。
 void langConformanceGroup(String title, List<LangCase> cases) {

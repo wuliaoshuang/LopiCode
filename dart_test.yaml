@@ -1,0 +1,5 @@
+# external：要调外部程序（node、python3、go、java、php、开发机验证环境）的测试。默认照样跑（tool/check.sh 会跑到）；
+# 想只跑它们：flutter test --tags external；想先不跑：flutter test --exclude-tags external。
+tags:
+  external:
+    timeout: 30m
