@@ -40,7 +40,7 @@ void main() {
       expect(shape(deriveChatRows(const [UserItem('你好'), AssistantItem('你好呀')], busy: false)), 'U A');
     });
 
-    test('一轮里连着的工具调用和中间的话收成一组；最后的回复、用量脚注留在外面', () {
+    test('连着的工具调用收成一组；模型说的话都是正文，各占一行、把组隔开；用量脚注留在外面', () {
       final items = <ChatItem>[
         const UserItem('加个深色模式'),
         const AssistantItem('我先看看项目。'),
@@ -51,7 +51,7 @@ void main() {
         const AssistantItem('加好了。'),
         UsageItem(TurnUsage()),
       ];
-      expect(shape(deriveChatRows(items, busy: false)), r'U G(attat) A $');
+      expect(shape(deriveChatRows(items, busy: false)), r'U A G(tt) A G(t) A $');
     });
 
     test('每条用户消息（包括中途插话）各开一段，各自成组', () {
@@ -76,12 +76,38 @@ void main() {
       expect(shape(deriveChatRows(thinking, busy: true)), 'U *G(tt)');
       // 模型开始说话（可能是正式回复）
       expect(shape(deriveChatRows([...thinking, const AssistantItem('做', streaming: true)], busy: true)), 'U G(tt) A');
-      // 说完又调了工具：刚才那句话收进组里
-      expect(shape(deriveChatRows([...thinking, const AssistantItem('再看一个'), tool('3', 'read_file', '{}', result: null)], busy: true)), 'U *G(ttat)');
+      // 说完又调了工具：刚才那句话留在原地，后面另起一组（排好的行不挪位置）
+      expect(shape(deriveChatRows([...thinking, const AssistantItem('再看一个'), tool('3', 'read_file', '{}', result: null)], busy: true)), 'U G(tt) A *G(t)');
       // 不忙：都不算进行中
       expect(shape(deriveChatRows(running, busy: false)), 'U G(tt)');
       // 前面段落的组永远不算进行中
       expect(shape(deriveChatRows([...thinking, const UserItem('二')], busy: true)), 'U G(tt) U');
+    });
+
+    test('思考：一轮开头、说话之前的单独一行；两步之间的在组里；一行行只往下加、不挪位置', () {
+      const k = ThinkingItem('想', ms: 1000);
+      const live = ThinkingItem('想', streaming: true);
+      final t1 = tool('1', 'read_file', '{}');
+      final t2 = tool('2', 'read_file', '{}');
+      // 做完的一轮：思考→说话→两步→思考→说话→一步→思考→回答
+      expect(
+        shape(deriveChatRows([const UserItem('一'), k, const AssistantItem('甲'), t1, t2, k, const AssistantItem('乙'), tool('3', 'read_file', '{}'), k, const AssistantItem('丙')], busy: false)),
+        'U K A G(tt) K A G(t) K A',
+      );
+      // 没说话、直接调工具：开头的思考也在外面；两步之间的在组里
+      expect(shape(deriveChatRows([const UserItem('一'), k, t1, k, t2, k, const AssistantItem('好')], busy: false)), 'U K G(tkt) K A');
+      // 进行中，一步步往下加：前面的行每一步都原样还在
+      final steps = <List<ChatItem>>[
+        [const UserItem('一'), live],
+        [const UserItem('一'), k, const AssistantItem('甲', streaming: true)],
+        [const UserItem('一'), k, const AssistantItem('甲'), tool('1', 'read_file', '{}', result: null)],
+        [const UserItem('一'), k, const AssistantItem('甲'), t1, live],
+        [const UserItem('一'), k, const AssistantItem('甲'), t1, k, const AssistantItem('乙', streaming: true)],
+        [const UserItem('一'), k, const AssistantItem('甲'), t1, k, const AssistantItem('乙'), tool('2', 'read_file', '{}', result: null)],
+      ];
+      expect([for (final s in steps) shape(deriveChatRows(s, busy: true))], ['U K', 'U K A', 'U K A *G(t)', 'U K A *G(tk)', 'U K A G(t) K A', 'U K A G(t) K A *G(t)']);
+      // 关掉“显示思考过程”：一行思考都没有
+      expect(shape(deriveChatRows([const UserItem('一'), k, t1, k, t2, k, const AssistantItem('好')], busy: false, showThinking: false)), 'U G(tt) A');
     });
 
     test('出错 / 停下：提示留在组外面，顺序不变', () {
@@ -124,8 +150,8 @@ void main() {
         {'role': 'assistant', 'content': '看完了。'},
       ];
       final rows = deriveChatRows(chatItemsFromMessages(messages, childConversationIds: const [], hostPathOf: (r) => r), busy: false);
-      expect(shape(rows), 'U G(att) A');
-      final g = rows[1] as StepGroupRow;
+      expect(shape(rows), 'U A G(tt) A');
+      final g = rows[2] as StepGroupRow;
       expect(g.id, 'c1');
       expect(summarizeSteps(g.tools).failed, 1);
     });

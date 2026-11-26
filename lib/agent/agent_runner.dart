@@ -8,6 +8,7 @@ import 'package:lopicode/agent/chat_client.dart';
 import 'package:lopicode/agent/context_relief.dart';
 import 'package:lopicode/agent/loop_guard.dart';
 import 'package:lopicode/agent/message_ids.dart';
+import 'package:lopicode/agent/think_tags.dart';
 import 'package:lopicode/agent/tool_images.dart';
 import 'package:lopicode/agent/tool_output_spill.dart';
 import 'package:lopicode/agent/usage.dart';
@@ -282,6 +283,7 @@ class AgentRunner {
       final clock = Stopwatch();
       int? thinkFrom; // 这一段思考从第几毫秒开始；null＝现在没在思考
       var thinkMs = 0;
+      var tagged = false; // 思考是从正文的 <think> 标签里剥出来的
       for (var attempt = 0; ; attempt++) {
         try {
           final request = await buildRequest();
@@ -290,7 +292,7 @@ class AgentRunner {
             ..reset()
             ..start();
           // 工具列表每一轮现取：权限、计划模式中途改了，下一轮就生效。
-          await for (final delta in client.streamChat(messages: request, tools: toolbox.specs)) {
+          await for (final delta in stripThinkTags(client.streamChat(messages: request, tools: toolbox.specs))) {
             started = true;
             if (delta.usage != null) usage = delta.usage;
             if (delta.finishReason != null) finishReason = delta.finishReason;
@@ -299,6 +301,7 @@ class AgentRunner {
             if (delta.reasoning != null && delta.reasoning!.isNotEmpty) {
               thinkFrom ??= clock.elapsedMilliseconds;
               reasoning.write(delta.reasoning);
+              if (delta.reasoningFromTag) tagged = true;
               yield ReasoningDelta(delta.reasoning!);
             }
             // 开始说话 / 调工具：这一段思考结束。
@@ -357,6 +360,7 @@ class AgentRunner {
             'content': text.toString(),
             if (reasoning.isNotEmpty) '_reasoning': reasoning.toString(),
             if (reasoning.isNotEmpty) '_reasoningMs': thinkMs,
+            if (tagged) '_reasoningTag': true,
             kMessageIdKey: id,
           });
         }
@@ -390,6 +394,7 @@ class AgentRunner {
         // 聊天页也拿它显示“思考了 N 秒”（`_reasoningMs` 是想了多久）。
         if (reasoning.isNotEmpty) '_reasoning': reasoning.toString(),
         if (reasoning.isNotEmpty) '_reasoningMs': thinkMs,
+        if (tagged) '_reasoningTag': true,
       });
       yield AssistantMessage(text.toString(), id: replyId);
 

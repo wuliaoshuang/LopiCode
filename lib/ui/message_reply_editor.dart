@@ -26,16 +26,8 @@ String? editReplyBlocked(MessageTarget t) => t.busy ? kEditReplyWhileBusy : null
 
 /// 点了 Agent 回复下面的“编辑”：打开整页编辑器，存好以后说一声。
 Future<void> runEditReply(BuildContext context, MessageTarget t) async {
-  var id = t.id;
-  if (t.parts.length > 1) {
-    final picked = await showModalBottomSheet<String>(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) => ReplyPartSheet(parts: t.parts),
-    );
-    if (picked == null || !context.mounted) return;
-    id = picked;
-  }
+  // 这一轮有几段时，操作栏已经先让她选过哪一段了（runMessageAction），到这里 t 就是那一段
+  final id = t.id;
   final info = t.session.messageOps.replyEditInfo(id);
   if (info == null) return showSnack(context, '这段回复已经不在记录里了。');
   final messenger = ScaffoldMessenger.of(context);
@@ -51,10 +43,20 @@ Future<void> runEditReply(BuildContext context, MessageTarget t) async {
     ..showSnackBar(SnackBar(content: Text(done.edited ? '已保存修改。这段回复标上了“已编辑”，Agent 之后看到的是改后的内容。' : '已恢复成原文，“已编辑”的记号去掉了。')));
 }
 
-/// 这一轮有几段正文：选改哪一段。选中那段的 id 作为返回值。
+/// 这一轮 Agent 说了几段话：选哪一段（改 / 收藏 / 分支 / 分享 / 删除都用它）。选中那段的 id 作为返回值。
 class ReplyPartSheet extends StatelessWidget {
-  const ReplyPartSheet({super.key, required this.parts});
+  const ReplyPartSheet({super.key, required this.parts, this.title = '改哪一段？', this.all, this.favorites = const {}, this.branched = const {}});
+
+  /// 能选的段。
   final List<ReplyPart> parts;
+  final String title;
+
+  /// 这一轮全部的段（“第 N 段”按它数）；不给就按 [parts] 数。
+  final List<ReplyPart>? all;
+
+  /// 收藏着的、分出过对话的段（在那一行标出来）。
+  final Set<String> favorites;
+  final Set<String> branched;
 
   @override
   Widget build(BuildContext context) {
@@ -70,20 +72,23 @@ class ReplyPartSheet extends StatelessWidget {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(Space.x6, 0, Space.x6, Space.x1),
-              child: Text('改哪一段？', style: t.titleMedium),
+              child: Text(title, style: t.titleMedium),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(Space.x6, 0, Space.x6, Space.x2),
-              child: Text('这一轮 Agent 说了 ${parts.length} 段话，中间隔着它做的步骤。', style: t.bodySmall?.copyWith(color: c.textMuted)),
+              child: Text('这一轮 Agent 说了 ${(all ?? parts).length} 段话，中间隔着它做的步骤。', style: t.bodySmall?.copyWith(color: c.textMuted)),
             ),
             Flexible(
               child: ListView(
                 shrinkWrap: true,
                 children: [
-                  for (final (i, p) in parts.indexed)
+                  for (final p in parts)
                     ListTile(
                       key: ValueKey('reply-part-${p.id}'),
-                      title: Text(p.edited ? '第 ${i + 1} 段 · 已编辑' : '第 ${i + 1} 段', style: t.labelMedium?.copyWith(color: c.textMuted)),
+                      title: Text(
+                        ['第 ${(all ?? parts).indexWhere((x) => x.id == p.id) + 1} 段', if (p.edited) '已编辑', if (favorites.contains(p.id)) '已收藏', if (branched.contains(p.id)) '分出过对话'].join(' · '),
+                        style: t.labelMedium?.copyWith(color: c.textMuted),
+                      ),
                       subtitle: Text(
                         p.text.trim(),
                         maxLines: 2,

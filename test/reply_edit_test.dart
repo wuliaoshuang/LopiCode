@@ -441,7 +441,7 @@ void main() {
     });
   });
 
-  test('turnRepliesOf：每一轮的正式回复段，键是最后一段；带工具调用的话、压缩的承接语、应用通知不算', () {
+  test('turnRepliesOf：每一轮 Agent 说的话（工具调用之间的说明也算），键是最后一段正式回复；压缩的承接语、应用通知不算', () {
     final m = <Map<String, dynamic>>[
       {'role': 'user', 'content': '摘要', '_compact': true},
       {'role': 'assistant', 'content': '好的。', '_compactAck': true, '_id': 'ack'},
@@ -465,8 +465,8 @@ void main() {
     final turns = turnRepliesOf(m);
     expect(turns.keys.toSet(), lastReplyIdsOf(m));
     expect(turns.keys, ['a2', 'a3']);
-    expect([for (final p in turns['a2']!) (p.id, p.text, p.edited)], [('a1', '第一段', true), ('a2', '第二段', false)]);
-    expect(joinReplyParts(turns['a2']!), '第一段\n\n第二段');
+    expect([for (final p in turns['a2']!) (p.id, p.text, p.edited, p.note)], [('a0', '我先看看。', false, true), ('a1', '第一段', true, false), ('a2', '第二段', false, false)]);
+    expect(joinReplyParts(turns['a2']!), '我先看看。\n\n第一段\n\n第二段');
     expect([for (final p in turns['a3']!) p.id], ['a3']);
   });
 }

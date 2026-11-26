@@ -109,6 +109,13 @@ void main() {
     Finder bar(String id) => find.byKey(ValueKey('message-actions-$id'));
     Finder icon(String kind, String id) => find.byKey(ValueKey('message-$kind-$id'));
 
+    /// 这一轮有几段话时，“针对某一段”的动作先问哪一段：选正文是 [text] 的那一段。
+    Future<void> pick(WidgetTester tester, String text) async {
+      expect(find.byKey(ValueKey('reply-part-${idOf(text)}')), findsOneWidget, reason: '应该先问哪一段');
+      await tester.tap(find.byKey(ValueKey('reply-part-${idOf(text)}')));
+      await steps(tester);
+    }
+
     Future<void> openMore(WidgetTester tester, String id) async {
       await tester.ensureVisible(icon('more', id));
       await tester.pump();
@@ -144,7 +151,7 @@ void main() {
 
       await tester.tap(icon('copy', last));
       await tester.pump();
-      expect(clipboard, ['首页看完了，结构没问题。']);
+      expect(clipboard, ['我先读一下。\n\n首页看完了，结构没问题。'], reason: '复制＝这一轮 Agent 说的话连起来');
       expect(find.text('已复制'), findsOneWidget);
       await tester.tap(icon('copy', mine));
       await tester.pump();
@@ -177,6 +184,9 @@ void main() {
       await shot(tester, 'ops-02-more-sheet-$suffix');
 
       await tester.tap(find.byKey(const ValueKey('more-favorite')));
+      await steps(tester);
+      expect(find.text('收藏 / 取消收藏哪一段？'), findsOneWidget);
+      await pick(tester, '首页看完了，结构没问题。');
       await settle(tester, rounds: 3);
       expect(find.byKey(const ValueKey('more-favorite')), findsNothing, reason: '面板关了');
       expect(find.textContaining('已收藏'), findsOneWidget);
@@ -191,6 +201,9 @@ void main() {
       await tester.tapAt(const Offset(195, 80));
       await tester.pumpAndSettle();
       await tester.tap(icon('favorite', id));
+      await steps(tester);
+      expect(find.text('第 2 段 · 已收藏'), findsOneWidget, reason: '选段面板里标出哪一段收藏着');
+      await pick(tester, '首页看完了，结构没问题。');
       await settle(tester, rounds: 3);
       expect(icon('favorite', id), findsNothing);
       expect(env.services.container.read(favoritesProvider(session)).items, isEmpty);
@@ -221,6 +234,8 @@ void main() {
       // Agent 的一段回复：默认“只删这段回复”
       await openMore(tester, idOf('首页看完了，结构没问题。'));
       await tester.tap(find.byKey(const ValueKey('more-delete')));
+      await steps(tester);
+      await pick(tester, '首页看完了，结构没问题。');
       await tester.pumpAndSettle();
       expect(find.text('只删这段回复'), findsOneWidget);
       expect(tester.widget<ListTile>(find.byKey(const ValueKey('delete-message'))).selected, isTrue);
@@ -252,6 +267,8 @@ void main() {
       Future<void> openShare() async {
         await openMore(tester, id);
         await tester.tap(find.byKey(const ValueKey('more-share')));
+        await steps(tester);
+        await pick(tester, '首页看完了，结构没问题。');
         await tester.pumpAndSettle();
       }
 

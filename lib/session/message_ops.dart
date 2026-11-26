@@ -49,20 +49,32 @@ bool _hasText(Map<String, dynamic> m) => m['content'] is String && (m['content']
   return (start: start, end: end);
 }
 
-/// 每一轮里“最后一段正式回复”的 id：整轮级别的操作（重试……）只挂在它下面。
-/// 正式回复＝有文字、后面没跟工具调用的那种；带工具调用的那句话在界面上收在步骤组里，没有操作栏，所以不算。
+/// 每一轮里操作栏挂在哪段话下面（它的 id）：整轮级别的操作（重试……）只在这里出现一次。
+/// 有“正式回复”（有文字、后面没跟工具调用）就挂在最后一段正式回复下面；
+/// 一段正式回复都没有（被停下、到步数上限，只留下工具调用之间说的话）就挂在最后一段说明下面，不让这一轮没有入口。
 Set<String> lastReplyIdsOf(List<Map<String, dynamic>> messages) {
   final out = <String>{};
-  String? last;
+  String? formal;
+  String? note;
+  void close() {
+    final at = formal ?? note;
+    if (at != null) out.add(at);
+    formal = null;
+    note = null;
+  }
+
   for (final m in messages) {
     if (isRealUserMessage(m)) {
-      if (last != null) out.add(last);
-      last = null;
-    } else if (m['role'] == 'assistant' && !isCompactPiece(m) && _hasText(m) && !_hasCalls(m)) {
-      last = messageIdOf(m);
+      close();
+    } else if (m['role'] == 'assistant' && !isCompactPiece(m) && _hasText(m)) {
+      if (_hasCalls(m)) {
+        note = messageIdOf(m) ?? note;
+      } else {
+        formal = messageIdOf(m) ?? formal;
+      }
     }
   }
-  if (last != null) out.add(last);
+  close();
   return out;
 }
 

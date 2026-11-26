@@ -296,6 +296,28 @@
 - 自动压缩那一次请求：只发一条 system + 一条 user 的纯文字，不带 `tools`，三种协议都是最普通的请求形状；用量照常从各自的用量字段读。
 - **都没有用真实接口验证过**（没有 Key，也不许花钱）。
 
+# 2026-11-26 补充（真机反馈第五轮）：正文里的 `<think>` 标签
+
+记录时间：2026-11-26（北京时间下午）。
+
+- 很多中转站 / 本机模型（Ollama、vLLM、各种 OpenAI 兼容网关转出来的 DeepSeek-R1、QwQ 等）不走单独的思考字段，
+  而是把思考写在回复正文最开头的 `<think>…</think>` 里。**这是模型输出的习惯写法，不是哪家接口的规定，没有官方文档可对——未核对**；
+  `<thinking>…</thinking>` 这种写法同样凭经验认，**未核对**。
+- 我们的做法（`lib/agent/think_tags.dart`，三种协议都过这一层）：
+  - 只认**回复最开头**的标签（前面只许有空白），不分大小写；标签里的字改走“思考增量”，不进正文；收尾标签后面紧跟的空行去掉。
+  - 正文中间出现的标签不动（模型可能正在讲这个标签）。
+  - 一直没等到收尾标签：后面全部算思考，正文为空。
+  - 流式时标签可能被切开：还分不清是不是标签的那一小截先按住，分清再放行，正文里不会闪半截标签。
+  - 存盘：正文存剥离后的文字；思考存 `_reasoning`，另加 `_reasoningTag: true`。
+  - **带回规则**：带 `_reasoningTag` 的思考不作为 `reasoning_content` 带回（接口从没单独给过它）；接口自己给的 `reasoning_content`
+    照旧带回，DeepSeek 官方地址“开着思考时缺的补空串”也照旧（上面「DeepSeek 思考模式与工具调用」那一节没动）。
+  - 旧存档里连标签一起存进正文的回复：显示时剥出来，存档不改（下次发给模型的还是原样带标签的正文）。
+- 判错的后果：回复开头恰好是字面的 `<think>` 且模型并不是在思考——那一段会被显示成思考。按上面的“只认最开头”已经把这种情况压到很低。
+- 这一轮**没有加**的思考字段：OpenRouter 的 `reasoning_details`（数组）等。没打开文档核对，所以没写代码——**未核对**。
+  现在认的仍是：`delta.reasoning_content`、`delta.reasoning`（字符串）、Anthropic `thinking_delta`、
+  Responses 的 `response.reasoning_summary_text.delta` / `response.reasoning_text.delta`，加上正文标签。
+- 没有用真实接口验证过。
+
 
 ## 语言工具的一键安装（`lib/runtime/runtime_sources.dart` 的 `runtimePacks`、`lib/runtime/pack_install.dart`）
 
