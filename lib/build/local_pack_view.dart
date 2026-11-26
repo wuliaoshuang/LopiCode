@@ -158,7 +158,9 @@ class _LocalPackViewState extends ConsumerState<LocalPackView> {
           children: [
             const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
             const SizedBox(width: Space.x3),
-            BackdropPlate(child: Text('正在看这个项目能不能本地打包…', style: t.bodyMedium?.copyWith(color: c.textMuted))),
+            BackdropPlate(
+              child: Text('正在看这个项目能不能本地打包…', style: t.bodyMedium?.copyWith(color: c.textMuted)),
+            ),
           ],
         ),
       );

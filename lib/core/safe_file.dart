@@ -18,6 +18,14 @@ Future<void> pendingWrites() async {
   }
 }
 
+/// 等 [file] 这一个文件排着队的写入做完（没有就马上返回）。队列里的记号永远不带错误，所以这里不会抛。
+Future<void> pendingWriteOf(File file) async {
+  final key = file.absolute.path;
+  for (var tail = _writeQueue[key]; tail != null; tail = _writeQueue[key]) {
+    await tail;
+  }
+}
+
 /// 原子写：临时文件 → flush → 改名。目录不存在会先建。
 Future<void> writeFileAtomic(File file, List<int> bytes) {
   final key = file.absolute.path;
@@ -80,7 +88,12 @@ const int kMaxBadBackups = 3;
 /// - 读不懂 / 形状不对 → 把原文件另存为 `名字.bad-时间戳`，记一条日志，返回 null（调用方回退默认值）。
 ///
 /// 绝不抛异常：存盘文件坏了不能让应用起不来。
+///
+/// 这个文件要是还有排着队没写完的写入，先等它写完再读：读到的一定不比本进程最后一次写的旧。
+/// （一轮对话收尾时是先把“生成中”放下、再等存盘；这时候马上重开同一段对话，不等的话会读到上一次中途存的那份，
+/// 少最后一条回复，之后再一存就把它盖没了。机器忙、写得慢时才撞得上。2026-11-26 修。）
 Future<Object?> readJsonFile(File file, {bool Function(Object? decoded)? accept, String? label}) async {
+  await pendingWriteOf(file);
   final String text;
   try {
     if (!await file.exists()) return null;

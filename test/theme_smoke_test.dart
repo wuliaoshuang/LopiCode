@@ -5,8 +5,9 @@
 //
 // 覆盖的页面：聊天页（确认卡、做完的步骤组展开、步骤详情里的命令与报错）、“＋”底部面板、侧边栏、
 // 项目列表、新建项目面板、文件页、代码编辑器（查找栏）、终端（16 色都打出来）、后端积木页、看代码面板、
-// 低代码编辑器（选中、属性面板）、打包页、设置首页、外观子页、主题列表页、对话框、提示条、
+// 低代码编辑器（选中、属性面板）、设置首页、外观子页、主题列表页、对话框、提示条、
 // 主题管理页、主题编辑器、背景图片设置页（2026-11-26 合并后加）。
+// 打包页单独在 test/theme_pack_smoke_test.dart（本地打包合进来后状态多了，这个文件放不下）。
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -351,15 +352,7 @@ void main() {
         await shot(tester, 'lowcode-layers');
       });
 
-      testWidgets('打包页', (tester) async {
-        final (env, project, session) = await open(tester, ProjectTemplate.web);
-        await show(tester, env, ProjectShell(project: project, session: session, initial: ShellDest.apk));
-        expect(find.textContaining('手机上跑不了 Android SDK 和 Gradle'), findsOneWidget);
-        await shot(tester, 'apk');
-        await tester.tap(find.text('SSH 构建机'));
-        await settle(tester, rounds: 3);
-        await shot(tester, 'apk-ssh');
-      });
+      // 打包页（本地表单、进行中、成功、失败、不适用、钥匙页、两种远程方式）在 test/theme_pack_smoke_test.dart。
 
       testWidgets('设置首页、外观子页、主题列表页', (tester) async {
         final env = await makeEnv(tester);

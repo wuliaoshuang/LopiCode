@@ -81,6 +81,8 @@ tool/check.sh --fix    # 先自动排版
   - `backdrop_state.dart`：`backdropProvider`——背景图片设置（独立于主题的全局外观设置；`BackdropNotifier`）。**新页面要接背景**：
     `AppBackdrop(area: BackdropArea.pages, builder: (context, on) => Scaffold(backgroundColor: on ? Colors.transparent : 原来的, …))`，
     页面里的卡片 / 整块底色写 `BackdropScope.surface(context, 颜色)`（没背景时原样返回）；接了要在 `test/backdrop_wiring_test.dart` 加“开 → 有、关 → 没有”。详见 `docs/backdrop-integration.md`。
+    直接写在页面底上的小字（说明、提示）包一层 `BackdropPlate`（有背景时在字后面垫一块半透明的页面底色，不参与排版；没背景时原样返回）；
+    `SettingsGroup` 的小标题 / 脚注只有上面罩着 `BackdropPlates` 时才垫——现在只有打包页开了（`test/pack_page_layout_test.dart`）。
   - `quota_state.dart`：`quotaProvider`——额度上限和余额。这是**标准样板**：状态是不可变对象，只有 `QuotaNotifier` 能改。
   - `presets_state.dart`：`presetsProvider`——Agent 预设与个人偏好（完整版：不可变快照 + `PresetsNotifier`）。
   - `skills_state.dart`：`skillsProvider(工作区目录)`——技能清单（完整版；异步扫描带代次，没人看就释放）。
@@ -142,6 +144,7 @@ tool/check.sh --fix    # 先自动排版
 
 - 写 JSON 存盘文件一律用 `writeJsonAtomic`（先写临时文件再改名），不许直接 `writeAsString(jsonEncode(...))`（守门测试会拦）。
 - 读一律用 `readJsonFile`：文件坏了它会把原件另存成 `名字.bad-时间戳`（最多留 3 份）、记一笔日志、返回 null，调用方回退默认值。
+  它读之前会先等同一个文件排着队的写入（`pendingWriteOf`）：写了不等马上读，读到的也是刚写的那份（`test/safe_file_read_after_write_test.dart`）。
   **读存盘文件不许抛异常让应用起不来。**
 - 从 JSON 里取字段先判断类型（`x is String ? x : 默认`），不要 `as String`：旧版本 / 坏数据的类型不对时，`as` 抛的是 `TypeError`，
   `on Exception` 接不住。
