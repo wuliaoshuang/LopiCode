@@ -35,6 +35,7 @@ import 'package:lopicode/lowcode/logic_screen.dart';
 import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/lowcode/multi_select_widgets.dart';
 import 'package:lopicode/lowcode/node_actions.dart';
+import 'package:lopicode/lowcode/pages_sheet.dart';
 import 'package:lopicode/lowcode/palette_catalog.dart';
 import 'package:lopicode/lowcode/palette_widgets.dart';
 import 'package:lopicode/lowcode/save_queue.dart';
@@ -78,7 +79,9 @@ class _BuilderScreenState extends State<BuilderScreen> with WidgetsBindingObserv
   String? _selected;
   int _presetWidth = 0;
   bool _showBoxModel = true;
-  final GlobalKey<EditorWorkbenchState> _bench = GlobalKey();
+  // 每一页一个工作台（各有各的缩放、滚到哪儿、开着的面板）：换页时整个换掉，不把上一页的状态带过来。
+  final Map<String, GlobalKey<EditorWorkbenchState>> _benches = {};
+  GlobalKey<EditorWorkbenchState> get _bench => _benches.putIfAbsent(_doc?.page.id ?? '', GlobalKey.new);
   late final PaletteRecents _recents = PaletteRecents(onChanged: _saveRecents);
   late final SaveQueue<LcDocument> _saver = SaveQueue<LcDocument>(
     snapshot: () => LcDocument.parse(_doc!.encode()),
@@ -185,6 +188,9 @@ class _BuilderScreenState extends State<BuilderScreen> with WidgetsBindingObserv
 
   void _restore(LcDocument? doc) {
     if (doc == null) return;
+    // 退掉 / 重做的那一步在别的页上：跟过去，并说一声（不然人看着当前页会以为没反应）。
+    final moved = doc.page.id != _doc!.page.id;
+    if (moved) showEditorHint(context, '已换到「${doc.title}」：刚才那一步是在这一页上做的。');
     setState(() {
       _doc = doc;
       if (_selected != null && doc.find(_selected!) == null) _selected = null;
@@ -292,6 +298,23 @@ class _BuilderScreenState extends State<BuilderScreen> with WidgetsBindingObserv
     final name = await promptDialog(context, title: '页面标题', initial: _doc!.title, confirmLabel: '保存');
     if (name == null || name.trim().isEmpty) return;
     _apply((d) => d.title = name.trim());
+  }
+
+  /// 换到另一页去编辑。不算修改：不记撤销、不存盘（“在看哪一页”不进页面文件）。
+  void _openPage(String id) {
+    final doc = _doc!;
+    if (doc.page.id == id || doc.pageById(id) == null) return;
+    if (multiOn) multiExit();
+    setState(() {
+      doc.openPage(id);
+      _selected = null;
+    });
+  }
+
+  Future<void> _openPages() async {
+    _bench.currentState?.closeInspector();
+    await showPagesSheet(context, doc: () => _doc!, onEdit: _apply, onOpen: _openPage);
+    _refresh();
   }
 
   /// 拖柄松手：把宽 / 高写进组件自己的样式。整次拖动只走这一次统一入口，所以只记一条撤销。
@@ -453,6 +476,8 @@ class _BuilderScreenState extends State<BuilderScreen> with WidgetsBindingObserv
         unawaited(_openLogic());
       case 'components':
         unawaited(_openComponents());
+      case 'pages':
+        unawaited(_openPages());
       case 'title':
         unawaited(_renamePage());
     }
@@ -475,8 +500,8 @@ class _BuilderScreenState extends State<BuilderScreen> with WidgetsBindingObserv
       appBar: ShellAppBar(
         background: context.colors.surfaceMuted,
         title: doc?.title ?? '低代码搭建',
-        subtitle: doc == null ? null : '${canvasWidthLabel(_presetWidth)} · $_saveLabel',
-        actions: doc == null ? null : [BuilderMoreMenu(onSelected: _onMenu)],
+        subtitle: doc == null ? null : '${doc.isMultiPage ? '第 ${doc.pageIndex + 1}/${doc.pages.length} 页 · ' : ''}${canvasWidthLabel(_presetWidth)} · $_saveLabel',
+        actions: doc == null ? null : [BuilderPagesButton(count: doc.pages.length, onTap: () => unawaited(_openPages())), BuilderMoreMenu(onSelected: _onMenu)],
       ),
       body: _loadError != null
           ? BelowBar(

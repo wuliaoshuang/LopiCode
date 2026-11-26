@@ -15,6 +15,7 @@ import 'package:lopicode/lowcode/model.dart';
 import 'lowcode_export_vue_test.dart' show nastyJson;
 import 'support/dev_tools.dart';
 import 'support/lowcode_samples.dart';
+import 'support/pages_sample.dart';
 import 'support/sample_doc.dart';
 import 'support/slot_sample.dart';
 import 'support/v3_components_sample.dart';
@@ -40,6 +41,8 @@ void main() {
     ...v3ComponentSamples(),
     // 第 3 期第 3 段：带插槽的自定义组件
     '带插槽的商品卡片': slotCardPage,
+    // 第 4 期：多页面（入口是外壳 LcApp，它把三页和共用的组件都引进来）
+    '三页的多页面样例': pagesSample,
   };
 
   for (final kind in ['vue', 'react']) {
@@ -80,6 +83,18 @@ void main() {
         expect('暂无介绍'.allMatches(r.html).length, 1, reason: '填了内容的那个实例里不该再有默认内容：${r.html}');
         expect('加入购物车'.allMatches(r.html).length, 1, reason: r.html);
         expect('草莓蛋糕'.allMatches(r.html).length, 1, reason: r.html);
+      }, skip: skipWithoutWebdev);
+
+      test('三页的多页面样例：入口是外壳；服务端渲染出来的是首页，别的页的字不在', () async {
+        final e = kind == 'vue' ? exportVue(pagesSample()) : exportReact(pagesSample());
+        expect(_entry(e, kind == 'vue' ? '.vue' : '.jsx'), kind == 'vue' ? 'LcApp.vue' : 'LcApp.jsx');
+        final r = await compileExport(kind == 'vue' ? 'compile_vue.mjs' : 'compile_react.mjs', _files(e), _entry(e, kind == 'vue' ? '.vue' : '.jsx'));
+        expect(r.ok, isTrue, reason: r.raw);
+        for (final t in ['欢迎', '今日推荐', '草莓蛋糕', '去看商品', '我的资料']) {
+          expect(r.html, contains(t), reason: '首页的“$t”没渲染出来：${r.html}');
+        }
+        expect(r.html, isNot(contains('回首页')), reason: '第二页不该出现：${r.html}');
+        expect(r.html, isNot(contains('昵称：小橘')), reason: '第三页不该出现：${r.html}');
       }, skip: skipWithoutWebdev);
 
       test('编译器真的在把关：故意写坏的文件会报错', () async {

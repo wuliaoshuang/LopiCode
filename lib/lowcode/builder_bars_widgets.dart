@@ -1,5 +1,6 @@
 // 设计约束（低代码搭建页自己的两处小部件 · 390×844）
-// - 顶栏右边只有一个“⋮”菜单：不常点的都收在里面，一行一项。
+// - 顶栏右边两样：“页面”按钮（一个纸张图标＋现在有几页；点开页面面板，换页、新建都在里面——第 4 期·多页面）和“⋮”菜单
+//   （不常点的都收在里面，一行一项；第一项也是“页面”，给先点开菜单找的人）。
 // - 选中条（高 48，外壳在 editor_selection_bar_widgets.dart）：左边“选上一层”＋名字，右边 常用（实心，唯一主操作）/
 //   样式（描边）/ 逻辑（文字，有逻辑带小圆点）/“更多操作”。三个带字的按钮打开的是同一张合一面板的三页。
 // - “更多操作”和长按菜单是同一份（lcNodeMenuItems）：复制、粘贴到它后面（剪贴板里有东西才亮）、重复一份、多选（从它开始）｜ 包成容器、
@@ -26,6 +27,7 @@ class BuilderMoreMenu extends StatelessWidget {
     tooltip: '更多',
     onSelected: onSelected,
     itemBuilder: (_) => const [
+      PopupMenuItem(value: 'pages', child: Text('页面（换页、新建）')),
       PopupMenuItem(value: 'view', child: Text('屏宽与缩放')),
       PopupMenuItem(value: 'logic', child: Text('积木逻辑')),
       PopupMenuItem(value: 'components', child: Text('自定义组件')),
@@ -33,6 +35,29 @@ class BuilderMoreMenu extends StatelessWidget {
       PopupMenuItem(value: 'framework', child: Text('导出 Vue / React')),
       PopupMenuItem(value: 'title', child: Text('修改页面标题')),
     ],
+  );
+}
+
+/// 顶栏的“页面”按钮：纸张图标＋现在有几页。
+class BuilderPagesButton extends StatelessWidget {
+  const BuilderPagesButton({super.key, required this.count, required this.onTap});
+  final int count;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Tooltip(
+    message: '页面',
+    child: TextButton.icon(
+      key: const Key('lc-pages-open'),
+      onPressed: onTap,
+      style: TextButton.styleFrom(
+        foregroundColor: context.colors.text,
+        padding: const EdgeInsets.symmetric(horizontal: Space.x2),
+        minimumSize: const Size(0, 40),
+      ),
+      icon: const Icon(Icons.description_outlined, size: 20),
+      label: Text('$count 页'),
+    ),
   );
 }
 

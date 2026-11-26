@@ -165,12 +165,31 @@ List<LcHtmlPageFiles> exportHtmlPages(LcDocument doc, {LcHtmlExport Function(LcH
       doc.openPageAt(i);
       final base = lcPageFileBase(doc, doc.page.id);
       final raw = base == 'index' ? exportHtml(doc) : exportHtml(doc, cssFile: '$base.css', jsFile: '$base.js');
-      out.add(LcHtmlPageFiles(doc.page.id, base, tidy == null ? raw : tidy(raw), lcLogicErrorCount(doc)));
+      var files = tidy == null ? raw : tidy(raw);
+      // 多页时首页的脚本多带一行“这是哪一页的”：换了首页以后，logic.js 可能还是上一个首页留下的（见 lcStaleHomeScript）。
+      if (doc.isMultiPage && base == 'index' && files.js.isNotEmpty) {
+        final cut = files.js.indexOf('\n') + 1;
+        files = LcHtmlExport(files.html, files.css, '${files.js.substring(0, cut)}${lcPageScriptTag(doc.page.id)}\n${files.js.substring(cut)}');
+      }
+      out.add(LcHtmlPageFiles(doc.page.id, base, files, lcLogicErrorCount(doc)));
     }
   } finally {
     doc.openPageAt(keep);
   }
   return out;
+}
+
+/// 首页脚本里“这是哪一页的”那一行。
+String lcPageScriptTag(String pageId) => '// 页面：$pageId';
+
+final RegExp _scriptTag = RegExp(r'^// 页面：(\S+)\s*$', multiLine: true);
+
+/// 手上这份 logic.js（只看开头 [head]）是不是“别的页”当首页时留下的。
+/// 首页的逻辑有错误时我们不更新脚本、留着上一次的；可要是上一次的其实是另一页的，留着就是让这一页跑别人的逻辑，得删。
+/// 没有那一行的（单页面时导出的）一律当成是这一页的。
+bool lcStaleHomeScript(String head, String homeId) {
+  final m = _scriptTag.firstMatch(head);
+  return m != null && m[1] != homeId;
 }
 
 final RegExp _pageFile = RegExp(r'^page-[A-Za-z0-9_]{1,24}\.(html|css|js)$');

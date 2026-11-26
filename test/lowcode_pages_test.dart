@@ -256,6 +256,28 @@ void main() {
       expect(back.encode(), first);
       expect(history.redo()!.pageById('p2'), isNull);
     });
+
+    test('撤销 / 重做拿回来的文档开在“那一步所在的页”上；只换页不算一步', () {
+      final doc = pagesSample();
+      final history = LcHistory(doc);
+      doc.openPage('p2');
+      history.record(doc);
+      expect(history.canUndo, isFalse, reason: '只是换了页');
+      doc.insert('root', doc.newNode('text')); // 在第二页上改
+      history.record(doc);
+      doc.openPage('p3');
+      final made = doc.addPage()!; // 在第三页时新建了一页，并换过去
+      doc.openPage(made);
+      history.record(doc);
+      // 退“新建页面”：那一页没了，开在上一步所在的页（第二页）。
+      expect(history.undo()!.page.id, 'p2');
+      // 再退：退的是第二页上的修改，开在第二页。
+      final back = history.undo()!;
+      expect(back.page.id, 'p2');
+      expect(back.encode(), pagesSample().encode());
+      expect(history.redo()!.page.id, 'p2');
+      expect(history.redo()!.page.id, made);
+    });
   });
 
   group('“去页面”积木', () {

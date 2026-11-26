@@ -172,7 +172,7 @@ Map<String, Object?> pagesSampleJson() => {
         'page',
         {'padding': 16, 'gap': 12, 'bg': '#FFFFFF'},
         [
-          _n('name', 'text', {'text': '霜霜', 'fontSize': 22, 'bold': true}),
+          _n('name', 'text', {'text': '昵称：小橘', 'fontSize': 22, 'bold': true}),
           _n('back', 'button', {'text': '回首页', 'radius': 8, 'padding': 12}),
           _nav(2),
         ],

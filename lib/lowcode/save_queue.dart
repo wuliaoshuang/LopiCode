@@ -41,6 +41,9 @@ class SaveQueue<T> {
 
   Timer? _timer;
   bool _dirty = false;
+
+  /// 已经排上队、还没开始写的有几次。
+  int _queued = 0;
   bool _disposed = false;
   Future<void> _tail = Future.value();
   SaveState _state = SaveState.saved;
@@ -74,17 +77,20 @@ class SaveQueue<T> {
     _timer = null;
     if (_dirty) {
       _dirty = false;
+      _queued++;
       _tail = _tail.then((_) => _writeOnce());
     }
     return _tail;
   }
 
   Future<void> _writeOnce() async {
+    _queued--;
     try {
       writes++;
       await write(snapshot());
       lastError = null;
-      if (!_dirty) _set(SaveState.saved);
+      // 后面还排着一次写（上一次写得慢、这期间又改了并且到点了）：那一次写完才算“已保存”。
+      if (!_dirty && _queued == 0) _set(SaveState.saved);
     } on Object catch (e) {
       // 什么错都接住：这条队列后面还排着下一次存盘，不能让一次失败把后面的都带断
       lastError = describeError(e);

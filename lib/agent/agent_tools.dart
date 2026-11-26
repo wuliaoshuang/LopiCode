@@ -537,6 +537,8 @@ Future<void> saveLowcodePage(PathGuard guard, LcDocument doc) async {
     final logic = File(guard.resolve(page.jsName));
     if (page.logicErrors > 0) {
       // 这一页的积木逻辑有“错误”：不导出新的脚本，上一次导出的原样留着（见 lib/lowcode/logic_gate.dart）。
+      // 例外：换过首页以后，logic.js 可能是上一个首页的——那就不是“这一页上一次的”，删掉。
+      if (page.base == 'index') await dropIfOurs(logic, (head) => head.startsWith(kLowcodeLogicMarker) && lcStaleHomeScript(head, page.pageId));
     } else if (page.files.js.isNotEmpty) {
       await writeStringAtomic(logic, page.files.js);
     } else {

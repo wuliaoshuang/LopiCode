@@ -286,6 +286,13 @@ class InspectorPanelState extends State<InspectorPanel> {
     if (scroll != null && scroll.hasClients && scroll.offset > 0) scroll.jumpTo(0);
   }
 
+  /// 改整份文档（快捷操作、同步导航栏）：先把面板里还没提交的改动交掉，改完重新读这个组件。
+  void _editDoc(void Function(LcDocument d) change) {
+    flush();
+    widget.onEdit((d) => change(_doc = d));
+    if (mounted) setState(_reload);
+  }
+
   @override
   Widget build(BuildContext context) {
     final node = _node;
@@ -368,7 +375,7 @@ class InspectorPanelState extends State<InspectorPanel> {
     final Widget content = switch (_page) {
       InspectorPage.common => InspectorCommonPage(
         key: ValueKey('common-${node.id}'),
-        ed: InspectorEdit(doc: _doc, node: preview, parent: parent, apply: _apply, pickImage: widget.pickImage),
+        ed: InspectorEdit(doc: _doc, node: preview, parent: parent, apply: _apply, pickImage: widget.pickImage, editDoc: _editDoc),
       ),
       InspectorPage.style => InspectorStylePage(
         key: ValueKey('style-${node.id}'),
@@ -399,11 +406,7 @@ class InspectorPanelState extends State<InspectorPanel> {
         key: ValueKey('events-${node.id}'),
         doc: _doc,
         node: node,
-        onEdit: (change) {
-          flush();
-          widget.onEdit((d) => change(_doc = d));
-          if (mounted) setState(_reload);
-        },
+        onEdit: _editDoc,
         onOpen: () {
           flush();
           widget.onOpenLogic?.call(node.id);
