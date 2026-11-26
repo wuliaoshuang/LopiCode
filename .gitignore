@@ -50,3 +50,4 @@ app.*.map.json
 
 # 壳模板的中间产物（shell_template/build.sh 生成）
 /shell_template/build/
+/docs/screenshots/
