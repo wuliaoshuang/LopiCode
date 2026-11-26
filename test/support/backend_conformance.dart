@@ -762,7 +762,9 @@ Future<BeResponse> sendRaw(int port, String method, String target, {List<int>? b
 /// 找得到这个命令吗（`node`、`python3`…）。找不到的语言跳过一致性测试。
 Future<bool> hasCommand(String exe, [List<String> versionArgs = const ['--version']]) async {
   try {
-    final r = await Process.run(exe, versionArgs).timeout(const Duration(seconds: 20));
+    // 等得久一点：机器很忙的时候 `javac --version` 光起来就可能要二十多秒，等不到会被错当成“没装”而跳过（2026-11-26 撞到过）。
+    // 真没装的话是立刻抛 ProcessException，不会白等。
+    final r = await Process.run(exe, versionArgs).timeout(const Duration(minutes: 3));
     return r.exitCode == 0;
   } on Exception {
     return false;
@@ -778,9 +780,17 @@ class BeToolchain {
 
   /// 把命令的第一项换成实际路径；`./server` 这种相对路径换成 `dir` 里的绝对路径。
   List<String> resolve(List<String> command, Directory dir) {
-    final exe = command.first;
+    // `env 名字=值 … 命令 …`（PHP 的启动命令）：要换的是 env 后面那个真正的命令。
+    var at = 0;
+    if (command.first == 'env') {
+      at = 1;
+      while (at < command.length - 1 && command[at].contains('=')) {
+        at++;
+      }
+    }
+    final exe = command[at];
     final resolved = executables[exe] ?? (exe.startsWith('./') ? '${dir.path}/${exe.substring(2)}' : exe);
-    return [resolved, ...command.sublist(1)];
+    return [...command.sublist(0, at), resolved, ...command.sublist(at + 1)];
   }
 }
 
@@ -789,6 +799,15 @@ Future<String?> findGo() async {
   final home = Platform.environment['HOME'] ?? '';
   for (final exe in ['go', ?Platform.environment['LOPI_GO'], if (home.isNotEmpty) '$home/workspace/tools/gosdk/go/bin/go']) {
     if (await hasCommand(exe, const ['version'])) return exe;
+  }
+  return null;
+}
+
+/// PHP 命令在哪：先看 PATH，再看环境变量 `LOPI_PHP`，再看这台机器上装的位置（`~/workspace/tools/php`）。都没有返回 null。
+Future<String?> findPhp() async {
+  final home = Platform.environment['HOME'] ?? '';
+  for (final exe in ['php', ?Platform.environment['LOPI_PHP'], if (home.isNotEmpty) '$home/workspace/tools/php/bin/php']) {
+    if (await hasCommand(exe)) return exe;
   }
   return null;
 }
@@ -813,6 +832,9 @@ Future<BeToolchain?> toolchainFor(String language) async {
       return BeToolchain({'go': go, 'gofmt': gofmt}, goEnvironment());
     case 'java':
       return await hasCommand('javac') && await hasCommand('java') ? const BeToolchain({}) : null;
+    case 'php':
+      final php = await findPhp();
+      return php == null ? null : BeToolchain({'php': php});
   }
   return null;
 }
@@ -850,7 +872,12 @@ class RunningBackend {
 }
 
 /// 在 `dir` 里用 `command` 起服务（随机端口、只绑 127.0.0.1），等它打印“已启动”那一行。
+///
+/// PHP 不一样（`php -S 地址:端口 server.php`）：端口写在命令里、启动后不打印“已启动”。所以这里先挑一个空着的端口换进命令，
+/// 再一直试着连它，连上了就算起来了。`php -S` 自己的日志都写在标准错误里，标准输出里只有“写到日志”积木写的。
 Future<RunningBackend> startBackend(Directory dir, List<String> command, {Map<String, String> environment = const {}}) async {
+  final phpAt = command.indexOf('-S');
+  if (phpAt > 0 && phpAt + 1 < command.length) return _startPhpBackend(dir, command, phpAt + 1, environment);
   final process = await Process.start(command.first, command.sublist(1), workingDirectory: dir.path, environment: {...environment, 'PORT': '0', 'HOST': '127.0.0.1'});
   final ready = Completer<int>();
   final lines = <String>[];
@@ -880,6 +907,46 @@ Future<RunningBackend> startBackend(Directory dir, List<String> command, {Map<St
       await s.cancel();
     }
     rethrow;
+  }
+}
+
+Future<RunningBackend> _startPhpBackend(Directory dir, List<String> command, int addressAt, Map<String, String> environment) async {
+  final probe = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+  final port = probe.port;
+  await probe.close();
+  final args = [...command.sublist(1)]..[addressAt - 1] = '127.0.0.1:$port';
+  final process = await Process.start(command.first, args, workingDirectory: dir.path, environment: environment);
+  final lines = <String>[];
+  final err = StringBuffer();
+  final subs = [
+    process.stdout.transform(const Utf8Decoder(allowMalformed: true)).transform(const LineSplitter()).listen(lines.add, onError: (_) {}), // 进程被杀时管道断开，不用管
+    process.stderr.transform(const Utf8Decoder(allowMalformed: true)).transform(const LineSplitter()).listen(err.writeln, onError: (_) {}), // 同上
+  ];
+  int? exited;
+  unawaited(process.exitCode.then((code) => exited = code));
+  final deadline = DateTime.now().add(const Duration(seconds: 60));
+  while (true) {
+    if (exited != null) {
+      for (final s in subs) {
+        await s.cancel();
+      }
+      throw StateError('服务没起来就退出了（$exited）：\n$err');
+    }
+    try {
+      final socket = await Socket.connect(InternetAddress.loopbackIPv4, port, timeout: const Duration(seconds: 2));
+      socket.destroy();
+      return RunningBackend(process, port, lines, err, subs);
+    } on Exception {
+      // 还没开始监听：等一下再试
+    }
+    if (DateTime.now().isAfter(deadline)) {
+      process.kill(ProcessSignal.sigkill);
+      for (final s in subs) {
+        await s.cancel();
+      }
+      throw StateError('等了 60 秒 php -S 还是连不上：\n$err');
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 100));
   }
 }
 

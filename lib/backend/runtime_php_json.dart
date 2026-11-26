@@ -1,13 +1,13 @@
 /// PHP 运行时小库的源码（JSON 解析；生成的工程里的 `lc_json.php`）。每份工程都一样。
 ///
-/// **没有在真机器上实际运行过**（本机没有 php）：只做了结构检查（test/backend_codegen_langs_test.dart）。凭记忆写的 PHP 函数清单见 docs/api-notes.md。
+/// 2026-11-26 起在开发机上用 PHP 8.3 真跑（test/backend_conformance_test.dart，和别的语言同一份样本）；手机上的 PHP 没验证过。用到的 PHP 函数清单见 docs/api-notes.md。
 /// 值的规矩见 backend_ir.dart 的 `kBeRuntimeFns`，改这里的行为要同时改别的语言的小库。
 library;
 
 const String kPhpRuntimeJsonSource = r'''
 <?php
 // LopiCode 后端运行时小库（PHP）：JSON 解析。每份生成的工程都一样，不用改。
-// 注意：这份 PHP 代码还没有在真机器上实际运行过。
+// 这份代码在电脑上用 PHP 8.3 跑通过一致性测试。
 
 // —— JSON 解析（自己写的：PHP 自带的 json_decode 分不清空列表和空对象、碰到半个表情符号的转义会整份报错）——
 

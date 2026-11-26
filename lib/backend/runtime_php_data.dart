@@ -1,13 +1,13 @@
 /// PHP 运行时小库的源码（数据集合：存在 `lc_data.json` 文件里、加文件锁；生成的工程里的 `lc_data.php`）。每份工程都一样。
 ///
-/// **没有在真机器上实际运行过**（本机没有 php）：只做了结构检查（test/backend_codegen_langs_test.dart）。凭记忆写的 PHP 函数清单见 docs/api-notes.md。
+/// 2026-11-26 起在开发机上用 PHP 8.3 真跑（test/backend_conformance_test.dart，和别的语言同一份样本）；手机上的 PHP 没验证过。用到的 PHP 函数清单见 docs/api-notes.md。
 /// 值的规矩见 backend_ir.dart 的 `kBeRuntimeFns`，改这里的行为要同时改别的语言的小库。
 library;
 
 const String kPhpRuntimeDataSource = r'''
 <?php
 // LopiCode 后端运行时小库（PHP）：数据集合。每份生成的工程都一样，不用改。
-// 注意：这份 PHP 代码还没有在真机器上实际运行过。
+// 这份代码在电脑上用 PHP 8.3 跑通过一致性测试。
 
 const LC_DATA_FILE = __DIR__ . '/lc_data.json'; // 数据集合存在这个文件里
 
@@ -62,7 +62,7 @@ function lc_db_close()
     if (LcDb::$dirty) {
         $all = new LcObj();
         foreach (LcDb::$data as $name => $c) {
-            $all->f[(string) $name] = lc_obj('next', $c['next'], 'rows', $c['rows']);
+            $all->f[(string) $name] = lc_obj('next', $c['next'], 'rows', new LcList($c['rows']));
         }
         rewind($h);
         ftruncate($h, 0);

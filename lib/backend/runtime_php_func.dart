@@ -1,5 +1,5 @@
 /// PHP 语言核心小库里“函数”那一部分（积木第 4 版·第 2 阶段）：函数值、调用、拿函数当参数的 8 个列表操作。
-/// 接在 `kPhpLangRuntimeSource` 后面，同一个文件（`lc_lang.php`）。**未实测**（本机没有 PHP），只做过文本级的检查。
+/// 接在 `kPhpLangRuntimeSource` 后面，同一个文件（`lc_lang.php`）。2026-11-26 起在开发机上用 PHP 8.3 真跑（语言核心一致性测试）。
 /// 规矩见 lib/lang/rt.dart；五种语言要一起改。
 library;
 

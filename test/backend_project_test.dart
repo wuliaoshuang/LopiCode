@@ -321,12 +321,13 @@ void main() {
       put(p.join('server', kBackendFileName), '${doc.encode()}\n');
       final b = (await detectBackendProject(ws))!;
       expect(b.port, 3210);
-      expect(b.startCommand, 'php -S 0.0.0.0:3210 server.php');
-      expect(b.terminalCommand, 'cd server && php -S 0.0.0.0:3210 server.php');
+      // 2026-11-26 改：命令前面多了 `env PHP_CLI_SERVER_WORKERS=4`（见 target_php.dart）。
+      expect(b.startCommand, 'env PHP_CLI_SERVER_WORKERS=4 php -S 0.0.0.0:3210 server.php');
+      expect(b.terminalCommand, 'cd server && env PHP_CLI_SERVER_WORKERS=4 php -S 0.0.0.0:3210 server.php');
       final result = await regenerateBackend(ws);
       expect(result.ok, isTrue);
       final readme = f('server/README.md').readAsStringSync();
-      expect(readme, contains('启动：`php -S 0.0.0.0:3210 server.php`'), reason: '“在 LopiCode 里启动”那一段');
+      expect(readme, contains('启动：`env PHP_CLI_SERVER_WORKERS=4 php -S 0.0.0.0:3210 server.php`'), reason: '“在 LopiCode 里启动”那一段');
       expect(readme, isNot(contains('0.0.0.0:8080')));
       // 别的语言端口不在命令里：改了端口命令不变。
       final nodeDoc = backendStarterDocument('样本')..port = 3210;

@@ -282,18 +282,19 @@ void main() {
     });
   });
 
-  group('PHP（本机没有 php，只做结构检查）', () {
+  group('PHP（结构检查；真跑在 backend_conformance_test.dart，本机没有 php 时那边会跳过）', () {
     const target = PhpBackendTarget();
 
-    test('标明没有实际运行过：verified 是 false，名字、说明、README 顶部、每个文件开头都写了', () {
-      expect(target.verified, isFalse);
-      expect(target.label, contains('未实际运行'));
-      expect(target.summary, contains('未实际运行'));
+    // 2026-11-26 改：PHP 在开发机上第一次真跑并通过一致性测试，原来断言的“verified 是 false、到处写着未实际运行”改成下面这样。
+    test('标明在电脑上真跑过、手机上没验证：verified 是 true，名字、说明、README、每个文件开头都如实写了', () {
+      expect(target.verified, isTrue);
+      expect(target.label, 'PHP');
+      expect(target.summary, allOf(contains('PHP 8.3 真跑验证'), isNot(contains('未实际运行'))));
       final files = target.generate(conformanceDocument());
-      expect(files['README.md'], contains('还没有在真机器上实际运行过'));
+      expect(files['README.md'], allOf(isNot(contains('还没有在真机器上实际运行过')), contains('手机上的 PHP 还没有验证过')));
       for (final f in files.entries.where((f) => f.key.endsWith('.php'))) {
         expect(f.value, startsWith('<?php\n'), reason: f.key);
-        expect(f.value.split('\n').take(6).join('\n'), contains('还没有'), reason: '${f.key} 开头要写明没运行过');
+        expect(f.value, isNot(contains('还没有在真机器上实际运行过')), reason: '${f.key}：已经真跑过了，不该再写没运行过');
         expect(f.value, isNot(contains('?>')), reason: '${f.key}：不写结束标记（后面多一个空行都会被当成响应内容发出去）');
       }
     });
@@ -378,12 +379,23 @@ void main() {
       }
     });
 
+    // 2026-11-26 PHP 第一次真跑撞到的两个 bug，钉在文本上（没有 php 的机器也拦得住）。
+    test('真跑撞到的：集合写回文件时行要包成 LcList；警告不许混进响应', () {
+      final files = target.generate(conformanceDocument());
+      expect(files['lc_data.php'], contains(r"new LcList($c['rows'])"), reason: 'PHP 数组直接交给 lc_to_json 会被当成对象，写回文件时崩');
+      expect(files.values.join('\n'), isNot(contains(r"'rows', $c['rows']")));
+      final all = files.entries.where((f) => f.key.endsWith('.php')).map((f) => f.value).join('\n');
+      expect(all, allOf(contains("ini_set('display_errors', '0');"), contains("ini_set('log_errors', '1');")), reason: 'php -S 默认把警告当网页内容发出去');
+    });
+
     test('集合存在文件里、加文件锁；端口写在启动命令里；README 写明这些和别的语言不一样', () {
       final doc = conformanceDocument()..port = 3210;
       final files = target.generate(doc);
       expect(target.dataInMemory, isFalse);
       expect(target.portFromEnv, isFalse);
-      expect(target.startCommandFor(3210), ['php', '-S', '0.0.0.0:3210', 'server.php']);
+      // 2026-11-26 改：原来是 ['php', '-S', …]；真跑发现单进程下“请求自己”会等到超时，前面加了开 4 个工作进程的环境变量。
+      expect(target.startCommandFor(3210), ['env', 'PHP_CLI_SERVER_WORKERS=4', 'php', '-S', '0.0.0.0:3210', 'server.php']);
+      expect(files['README.md'], contains('PHP_CLI_SERVER_WORKERS=4'));
       expect(files['lc_data.php'], allOf(contains("'/lc_data.json'"), contains('flock(\$h, LOCK_EX)'), contains('flock(\$h, LOCK_UN)'), contains('ftruncate(')));
       final readme = files['README.md']!;
       expect(readme, contains('php -S 0.0.0.0:3210 server.php'));

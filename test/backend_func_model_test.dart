@@ -459,7 +459,7 @@ void main() {
       expect(table.sentenceOf('call:f3'), '打招呼 {谁} {语气}');
     });
 
-    test('PHP（本机没有 php，未实测）：带函数的入口文件——引了语言核心的小库、函数在接口前、括号配对、变量带 \$', () {
+    test('PHP（文本检查）：带函数的入口文件——引了语言核心的小库、函数在接口前、括号配对、变量带 \$', () {
       final target = backendTargetFor('php')! as BeCodeTarget;
       final files = target.generate(doc);
       final entry = files[target.entryFile]!;

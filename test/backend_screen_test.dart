@@ -385,7 +385,8 @@ void main() {
       expect(k('be-lang-${t.id}'), findsOneWidget, reason: t.id);
       expect(k('be-lang-unverified-${t.id}'), t.verified ? findsNothing : findsOneWidget, reason: t.id);
     }
-    expect(k('be-lang-unverified-php'), findsOneWidget);
+    // 2026-11-26 改：PHP 真跑过了，不再标“未实测”（原来断言这里有标）。
+    expect(k('be-lang-unverified-php'), findsNothing);
     await shot(tester, 'be-language-light');
     await tapKey(tester, 'be-lang-python');
     expect(doc(tester).language, 'python');
@@ -396,14 +397,15 @@ void main() {
     expect(text('server.py'), be(tester).host!.codeText);
     expect(Directory(project.dir).listSync().whereType<File>().where((f) => f.path.endsWith('.js')), isEmpty, reason: 'Node 的生成文件都清掉了');
 
-    // 换到没实测的语言：菜单里、运行面板里都标出来。
+    // 换到 PHP：2026-11-26 起它也真跑过了，菜单里不再标“（未实测）”（原来断言有）。
     await more(tester, 'language');
     await tapKey(tester, 'be-lang-php');
     await flushed(tester);
     await until(tester, () => at('server.php').existsSync() && !at('server.py').existsSync(), '换成 PHP 的文件');
     await tester.tap(k('be-more'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('（未实测）'), findsOneWidget);
+    expect(find.textContaining('（未实测）'), findsNothing);
+    expect(find.textContaining('语言：PHP'), findsOneWidget);
     await tester.tapAt(const Offset(10, 400));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
@@ -556,15 +558,16 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('PHP：端口写在命令里，用的是文档里的端口；面板如实说“没实际运行过”，工具没装会自动装', (tester) async {
+  // 2026-11-26 改：命令前面多了 `env PHP_CLI_SERVER_WORKERS=4`；PHP 真跑过了，面板不再说“没实际运行过”（原来断言有这句）。
+  testWidgets('PHP：端口写在命令里，用的是文档里的端口；工具没装会自动装', (tester) async {
     await boot(tester, ProjectTemplate.backendBlocks, language: 'php');
     final host = be(tester).host!;
     host.edit(() => host.doc.port = 3210);
     await tester.pump();
     await tester.tap(k('be-run'));
     await tester.pumpAndSettle();
-    expect(find.descendant(of: k('be-run-command'), matching: find.text('php -S 0.0.0.0:3210 server.php')), findsOneWidget);
-    expect(find.textContaining('还没有实际运行过'), findsOneWidget);
+    expect(find.descendant(of: k('be-run-command'), matching: find.text('env PHP_CLI_SERVER_WORKERS=4 php -S 0.0.0.0:3210 server.php')), findsOneWidget);
+    expect(find.textContaining('还没有实际运行过'), findsNothing);
     expect(find.textContaining('会先自动装好 PHP 8.3 再启动'), findsOneWidget, reason: '真机反馈第三轮：不用她自己装了');
     expect(find.textContaining('自己在终端里装'), findsNothing);
     expect(k('be-run-runtime'), findsOneWidget, reason: '运行环境里现在有 PHP 的一键安装');
@@ -572,7 +575,7 @@ void main() {
     await tapKey(tester, 'be-run-start');
     await settle(tester, rounds: 6);
     await until(tester, () => ptys.any((x) => typed(x).isNotEmpty), '命令打进终端');
-    expect([for (final x in ptys) typed(x)].where((t) => t.isNotEmpty), ['php -S 0.0.0.0:3210 server.php\r']);
+    expect([for (final x in ptys) typed(x)].where((t) => t.isNotEmpty), ['env PHP_CLI_SERVER_WORKERS=4 php -S 0.0.0.0:3210 server.php\r']);
     expect(saved().port, 3210, reason: '启动前先把没存的改动存下去');
     expect(text('README.md'), contains('0.0.0.0:3210'));
     expect(tester.takeException(), isNull);

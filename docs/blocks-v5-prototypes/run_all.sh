@@ -1,6 +1,6 @@
 #!/bin/bash
 # 一键全跑：自测和探针 → 01 接口服务（两轮）→ 02 小框架（两轮）。输出同时存到 RESULT.txt。
-# 用法：bash run_all.sh     （要 node 和 python3；端口用 18101–18212；起的服务跑完都按 pid 关掉）
+# 用法：bash run_all.sh     （要 node 和 python3；端口默认用 18101–18212，可用环境变量 LC_PROTO_PORT_BASE 换；临时文件默认在 /tmp/v5-F1，可用 LC_PROTO_TMP 换；起的服务跑完都按 pid 关掉）
 cd "$(dirname "$0")" || exit 1
 [ -f ~/workspace/tools/env.sh ] && source ~/workspace/tools/env.sh
 {

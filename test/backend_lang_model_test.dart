@@ -1,6 +1,6 @@
 // 积木第 4 版·第 1 阶段：新积木在模型这一层——读写往返、坏数据不崩、旧文档字节不变、版本号规则；
 // 每块新积木刚拖出来的默认样子能过校验、五种语言都能生成；小库第 1 阶段的函数每个都有积木；
-// Go 的格式和 vet；PHP（本机没有 php，未实测）只查生成出来的文本。
+// Go 的格式和 vet；PHP 另查生成出来的文本（真跑在一致性测试里）。
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -426,7 +426,7 @@ void main() {
       }
     });
 
-    test('PHP（本机没有 php，未实测）：生成出来的文本——引了小库、括号配对、请求变量带 \$、没有别的语言的写法', () {
+    test('PHP（文本检查）：生成出来的文本——引了小库、括号配对、请求变量带 \$、没有别的语言的写法', () {
       final target = backendTargetFor('php')! as BeCodeTarget;
       final files = target.generate(doc);
       final entry = files[target.entryFile]!;

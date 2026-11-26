@@ -15,7 +15,8 @@
 /// 模型里来的字符串进 JSX 一律写成 `{"…"}`（`jsString` 出来的字符串字面量），只有不含 `{ } < > & / *`、引号、
 /// 反斜杠、换行的普通文字才直接写；属性值一律 `name={"…"}`；注释只通过 `jsComment`。
 ///
-/// 没有用真正的 React 编译器（Babel 等）编译过：本机没有，也不联网装。
+/// 2026-11-26 起在开发机上用 esbuild 真编译（JSX）、再用 react-dom/server 渲染（test/dev_webdev_compile_test.dart，环境不在时跳过）。
+/// 真浏览器里、点击之后的变化没有验证过。
 library;
 
 import 'package:lopicode/lowcode/component_model.dart';

@@ -1,5 +1,5 @@
 // 函数生成出来的代码长什么样（文本级检查）：五种语言各自的闭包写法、默认参数、剩下的全收、函数值。
-// Node / Python / Go / Java 另有真跑的测试（lang_conformance_func_test.dart）；PHP 本机没有，只有这里的文本检查，**未实测**。
+// Node / Python / Go / Java 另有真跑的测试（lang_conformance_func_test.dart）；PHP 也真跑（2026-11-26 起），这里是文本检查。
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lopicode/lang/lang.dart';
 
@@ -61,12 +61,22 @@ void main() {
     ], 'java');
   });
 
-  group('php（未实测，只查文本）', () {
+  group('php（只查文本；真跑在 lang_conformance_func_test.dart）', () {
     final s = _script('php');
 
     test('闭包：用到的外层变量按引用写进 use；模块级变量用 global', () {
       _has(s, [r'function () use (&$v_hits) {', r'global $g4_total;', r'global $g4_total, $g4_label;', r'function ($v_x) use (&$v_g, &$v_f) { return lc_call($v_f, lc_call($v_g, $v_x)); }'], 'php');
       expect(s, isNot(contains('=>')), reason: '不用箭头函数：它按值抓变量，改不了外面的');
+    });
+
+    // 2026-11-26 PHP 第一次真跑撞到的：短写法的匿名函数（一句 return）读模块级变量时没写 global，读到的是空。
+    test('短写法的匿名函数用到模块级变量也要先 global', () {
+      expect(RegExp(r'function \([^)]*\)(?: use \([^)]*\))? \{ global \$g4_[^;]*; return ').hasMatch(s), isTrue, reason: '短写法里少了 global');
+      // 每个一行写完的匿名函数：里面出现模块级变量（\$g数字_名字）就必须带 global。
+      for (final m in RegExp(r'function \([^)]*\)(?: use \([^)]*\))? \{ (.*?) \}').allMatches(s)) {
+        final body = m.group(1)!;
+        if (RegExp(r'\$g[0-9]+_').hasMatch(body)) expect(body, startsWith('global '), reason: m.group(0));
+      }
     });
 
     test('默认参数原生写；剩下的全收进来先转成列表', () {
