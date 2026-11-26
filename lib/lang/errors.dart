@@ -34,14 +34,7 @@ const List<String> kErrBuiltinNames = [kErrBase, ...kErrBuiltinKinds];
 
 /// 小库自己报的错归到哪一种：消息里**含有**左边这段字的，是右边这一种（从上往下第一条对得上的算）；都对不上＝“错误”。
 /// 五种语言的小库里各有一份一样的（`errKind` / `ErrKind`）；用户用“抛出 (一句话)”抛的不按这个归，一律是“错误”。
-const List<(String, String)> kErrKindOfMessage = [
-  ('除以 0', '数值不对'),
-  ('整数超出范围', '数值不对'),
-  ('变不成整数', '数值不对'),
-  ('超出了', '找不到'),
-  ('拿到的是', '类型不对'),
-  ('值是空', '类型不对'),
-];
+const List<(String, String)> kErrKindOfMessage = [('除以 0', '数值不对'), ('整数超出范围', '数值不对'), ('变不成整数', '数值不对'), ('超出了', '找不到'), ('拿到的是', '类型不对'), ('值是空', '类型不对')];
 
 bool langIsBuiltinError(String? name) => name != null && kErrBuiltinNames.contains(name);
 
@@ -64,9 +57,13 @@ List<LClassDecl> langErrorPrelude() {
         parent: kErrBase,
         isOpen: true,
         isPublic: true,
-        ctor: LFuncDecl('创建', [message()], [
-          LExprStmt(LSuperSend.ctor([name(kErrMessageField)])),
-        ]),
+        ctor: LFuncDecl(
+          '创建',
+          [message()],
+          [
+            LExprStmt(LSuperSend.ctor([name(kErrMessageField)])),
+          ],
+        ),
       ),
   ];
 }

@@ -1,25 +1,27 @@
 /// 给顶层的名字改名（核心 2·模块）：几个模块合成一个程序时，不同模块里重名的顶层东西要换成不撞的名字（link.dart 用）。
 ///
-/// 一张表（旧名 → 新名）管两种位置：
-/// - 值的位置（变量、函数的名字）：被这一层的参数、局部变量挡住的不改；
+/// 一个“这个名字现在叫什么”的函数管两种位置：
+/// - 值的位置（变量、函数的名字）：被这一层的参数、局部变量挡住的不改。局部变量从它出现的那一句开始挡（和类型检查一样，
+///   按先后来、一直挡到这个函数完）；
 /// - 类型的位置（标注、新建、是不是、继承、实现、只接哪种错误…）：被类型参数挡住的不改。
 /// 字段、方法、变体里“情况”的名字不是顶层名字，不动。整棵树重建，位置信息（src）原样带着。
 library;
 
 import 'package:lopicode/lang/ast.dart';
-import 'package:lopicode/lang/ast_util.dart';
 import 'package:lopicode/lang/types.dart';
 
 class LRenamer {
-  LRenamer(this.names);
-  final Map<String, String> names;
+  LRenamer(this.resolve);
+
+  /// 一个没被挡住的顶层名字 → 它在合并以后的程序里叫什么（不改就原样返回）。
+  final String Function(String name) resolve;
 
   /// 现在被挡住的名字：值的、类型的。
-  Set<String> _locals = const {};
+  Set<String> _locals = {};
   Set<String> _tvars = const {};
 
-  String _val(String n) => _locals.contains(n) ? n : names[n] ?? n;
-  String _typ(String n) => _tvars.contains(n) ? n : names[n] ?? n;
+  String _val(String n) => _locals.contains(n) ? n : resolve(n);
+  String _typ(String n) => _tvars.contains(n) ? n : resolve(n);
   String? _typQ(String? n) => n == null ? null : _typ(n);
 
   T _scoped<T>(Iterable<String> locals, Iterable<String> tvars, T Function() run) {
@@ -42,32 +44,30 @@ class LRenamer {
   LType? typeQ(LType? t) => t == null ? null : type(t);
 
   List<LParam> params(List<LParam> ps) => [for (final p in ps) LParam(p.name, defaultValue: p.defaultValue, type: typeQ(p.type), rest: p.rest)];
-  List<LTypeParam> _tps(List<LTypeParam> ps) => [
-    for (final p in ps) LTypeParam(p.name, bound: p.bound == null || p.bound == kBoundComparable || p.bound == kBoundKey ? p.bound : _typ(p.bound!)),
-  ];
+  List<LTypeParam> _tps(List<LTypeParam> ps) => [for (final p in ps) LTypeParam(p.name, bound: p.bound == null || p.bound == kBoundComparable || p.bound == kBoundKey ? p.bound : _typ(p.bound!))];
   List<LTypedField> _fields(List<LTypedField> fs) => [for (final f in fs) LTypedField(f.name, type(f.type))];
 
   /// 一个模块的顶层声明、启动语句。
   List<LDecl> decls(List<LDecl> ds) => [for (final d in ds) decl(d)];
-  List<LStmt> mainBody(List<LStmt> body) => _scoped(lDeclaredNames(body), const [], () => block(body));
+  List<LStmt> mainBody(List<LStmt> body) => _scoped(const [], const [], () => block(body));
 
-  LFuncDecl func(LFuncDecl d, {bool top = false}) {
+  LFuncDecl func(LFuncDecl d) {
     final tv = [for (final p in d.typeParams) p.name];
-    return _scoped([for (final p in d.params) p.name, ...lDeclaredNames(d.body)], tv, () {
-      return LFuncDecl(top ? _val(d.name) : d.name, params(d.params), block(d.body), isPublic: d.isPublic, typeParams: _tps(d.typeParams), codeName: d.codeName, src: d.src, type: typeQ(d.type));
+    return _scoped([for (final p in d.params) p.name], tv, () {
+      return LFuncDecl(d.name, params(d.params), block(d.body), isPublic: d.isPublic, typeParams: _tps(d.typeParams), codeName: d.codeName, src: d.src, type: typeQ(d.type));
     });
   }
 
   LDecl decl(LDecl d) {
     switch (d) {
       case LVarDecl():
-        return LVarDecl(_val(d.name), expr(d.init), isConst: d.isConst, isPublic: d.isPublic, src: d.src, type: typeQ(d.type));
+        return LVarDecl(resolve(d.name), expr(d.init), isConst: d.isConst, isPublic: d.isPublic, src: d.src, type: typeQ(d.type));
       case LFuncDecl():
-        final name = names[d.name] ?? d.name; // 函数自己的名字不会被自己的参数挡住
+        final name = resolve(d.name); // 函数自己的名字不会被自己的参数挡住
         final f = func(d);
         return LFuncDecl(name, f.params, f.body, isPublic: f.isPublic, typeParams: f.typeParams, codeName: f.codeName, src: f.src, type: f.type);
       case LClassDecl():
-        final name = names[d.name] ?? d.name;
+        final name = resolve(d.name);
         return _scoped(const [], [for (final p in d.typeParams) p.name], () {
           return LClassDecl(
             name,
@@ -84,20 +84,26 @@ class LRenamer {
           );
         });
       case LInterfaceDecl():
-        return LInterfaceDecl(names[d.name] ?? d.name, [for (final m in d.methods) LSignature(m.name, params(m.params), returns: typeQ(m.returns))], isPublic: d.isPublic, codeName: d.codeName, src: d.src);
+        return LInterfaceDecl(
+          resolve(d.name),
+          [for (final m in d.methods) LSignature(m.name, params(m.params), returns: typeQ(m.returns))],
+          isPublic: d.isPublic,
+          codeName: d.codeName,
+          src: d.src,
+        );
       case LNativeDecl():
         return LNativeDecl(d.name, params(d.params), src: d.src, type: typeQ(d.type));
       case LRecordDecl():
-        final name = names[d.name] ?? d.name;
+        final name = resolve(d.name);
         return _scoped(const [], [for (final p in d.typeParams) p.name], () {
           return LRecordDecl(name, _fields(d.fields), typeParams: _tps(d.typeParams), isPublic: d.isPublic, codeName: d.codeName, src: d.src);
         });
       case LEnumDecl():
-        return LEnumDecl(names[d.name] ?? d.name, d.cases, isPublic: d.isPublic, codeName: d.codeName, src: d.src);
+        return LEnumDecl(resolve(d.name), d.cases, isPublic: d.isPublic, codeName: d.codeName, src: d.src);
       case LVariantDecl():
-        return LVariantDecl(names[d.name] ?? d.name, [for (final c in d.cases) LVariantCase(c.name, _fields(c.fields))], isPublic: d.isPublic, codeName: d.codeName, src: d.src);
+        return LVariantDecl(resolve(d.name), [for (final c in d.cases) LVariantCase(c.name, _fields(c.fields))], isPublic: d.isPublic, codeName: d.codeName, src: d.src);
       case LAliasDecl():
-        return LAliasDecl(names[d.name] ?? d.name, type(d.target), isPublic: d.isPublic, codeName: d.codeName, src: d.src);
+        return LAliasDecl(resolve(d.name), type(d.target), isPublic: d.isPublic, codeName: d.codeName, src: d.src);
     }
   }
 
@@ -113,7 +119,9 @@ class LRenamer {
   LStmt stmt(LStmt s) {
     switch (s) {
       case LLet():
-        return LLet(s.name, expr(s.value), isConst: s.isConst, kind: s.kind, src: s.src, type: typeQ(s.type));
+        final value = expr(s.value);
+        _locals.add(s.name);
+        return LLet(s.name, value, isConst: s.isConst, kind: s.kind, src: s.src, type: typeQ(s.type));
       case LAssign():
         return LAssign(_target(s.target), expr(s.value), src: s.src);
       case LExprStmt():
@@ -123,11 +131,18 @@ class LRenamer {
       case LWhile():
         return LWhile(s.cond == null ? null : expr(s.cond!), block(s.body), src: s.src);
       case LForCount():
-        return LForCount(s.name, expr(s.from), expr(s.to), expr(s.step), block(s.body), src: s.src);
+        final from = expr(s.from), to = expr(s.to), step = expr(s.step);
+        _locals.add(s.name);
+        return LForCount(s.name, from, to, step, block(s.body), src: s.src);
       case LForEach():
-        return LForEach(expr(s.list), s.item, block(s.body), index: s.index, reuse: s.reuse, src: s.src);
+        final list = expr(s.list);
+        if (!s.reuse) _locals.add(s.item);
+        if (s.index != null) _locals.add(s.index!);
+        return LForEach(list, s.reuse ? _val(s.item) : s.item, block(s.body), index: s.index, reuse: s.reuse, src: s.src);
       case LForPairs():
-        return LForPairs(expr(s.dict), s.key, s.value, block(s.body), src: s.src);
+        final dict = expr(s.dict);
+        _locals.addAll([s.key, s.value]);
+        return LForPairs(dict, s.key, s.value, block(s.body), src: s.src);
       case LRepeat():
         return LRepeat(expr(s.times), block(s.body), src: s.src);
       case LReturn():
@@ -136,17 +151,25 @@ class LRenamer {
         return LThrow(expr(s.message), src: s.src);
       case LTry():
         final hs = s.handlers;
-        return LTry(
-          block(s.body),
-          errorName: s.errorName,
-          errorClass: _typQ(s.errorClass),
-          onError: block(s.onError),
-          handlers: hs == null ? null : [for (final c in hs) LCatch(block(c.body), kind: _typQ(c.kind), name: c.name)],
-          finallyBody: block(s.finallyBody),
-          src: s.src,
-        );
+        List<LStmt> caught(String? name, List<LStmt> body) {
+          if (name != null) _locals.add(name);
+          return block(body);
+        }
+
+        final body = block(s.body);
+        final onError = hs == null ? caught(s.errorName, s.onError) : block(s.onError);
+        final handlers = hs == null ? null : [for (final c in hs) LCatch(caught(c.name, c.body), kind: _typQ(c.kind), name: c.name)];
+        return LTry(body, errorName: s.errorName, errorClass: _typQ(s.errorClass), onError: onError, handlers: handlers, finallyBody: block(s.finallyBody), src: s.src);
       case LMatch():
-        return LMatch(expr(s.subject), [for (final a in s.arms) LMatchArm(a.caseName, a.binds, block(a.body))], orElse: s.orElse == null ? null : block(s.orElse!), src: s.src);
+        final subject = expr(s.subject);
+        final arms = [
+          for (final a in s.arms)
+            () {
+              _locals.addAll(a.binds);
+              return LMatchArm(a.caseName, a.binds, block(a.body));
+            }(),
+        ];
+        return LMatch(subject, arms, orElse: s.orElse == null ? null : block(s.orElse!), src: s.src);
       case LBreak() || LContinue() || LHost() || LNote():
         return s;
     }
@@ -189,7 +212,7 @@ class LRenamer {
       case LLambda():
         final ps = [for (final p in e.params) p.name];
         if (e.expr != null) return _scoped(ps, const [], () => LLambda.short(params(e.params), expr(e.expr!), src: e.src));
-        return _scoped([...ps, ...lDeclaredNames(e.body)], const [], () => LLambda(params(e.params), block(e.body), src: e.src));
+        return _scoped(ps, const [], () => LLambda(params(e.params), block(e.body), src: e.src));
       case LAwait():
         return LAwait(expr(e.x), src: e.src);
       case LSpawn():

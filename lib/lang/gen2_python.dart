@@ -101,7 +101,10 @@ class PythonGen2 extends Gen2Dyn {
   List<String> errSupport() => [
     'def lc_err_make(lcK, lcM):',
     ...suite([
-      for (final (k, make) in errMakers('lcM').skip(1)) ...['if lcK == ${textLit(k)}:', ...suite(['return $make'])],
+      for (final (k, make) in errMakers('lcM').skip(1)) ...[
+        'if lcK == ${textLit(k)}:',
+        ...suite(['return $make']),
+      ],
       'return ${errMakers('lcM').first.$2}',
     ]),
     '',

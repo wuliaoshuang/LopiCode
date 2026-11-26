@@ -28,14 +28,26 @@ mixin _Errs on _Core {
     }
     if (t.nullable && isErr(t.nonNull)) {
       final nm = s.value is LName ? '「${(s.value as LName).name}」' : '这个值';
-      err('T02', sc, '“抛出”后面要一个错误，$nm可能是空，要先判断“不是空”', node: s.value, fixes: [LFix(LFixKind.wrapMust, '一定不是空', target: s.value)]);
+      err(
+        'T02',
+        sc,
+        '“抛出”后面要一个错误，$nm可能是空，要先判断“不是空”',
+        node: s.value,
+        fixes: [LFix(LFixKind.wrapMust, '一定不是空', target: s.value)],
+      );
       return;
     }
     if (t == _txt || t.isAny || t.isNever) {
       want(s.value, _txt); // 一句话：自动包成内置的“错误”。任意：运行时查它是不是文字。
       return;
     }
-    err('T19', sc, '“抛出”后面要一句话或者一个错误，放进来的是${t.show()}', node: s.value, fixes: t.nullable || t.isNul ? const [] : [LFix(LFixKind.wrapToText, '变成文字', target: s.value)]);
+    err(
+      'T19',
+      sc,
+      '“抛出”后面要一句话或者一个错误，放进来的是${t.show()}',
+      node: s.value,
+      fixes: t.nullable || t.isNul ? const [] : [LFix(LFixKind.wrapToText, '变成文字', target: s.value)],
+    );
   }
 
   @override
@@ -50,7 +62,8 @@ mixin _Errs on _Core {
       final kind = c.kind;
       if (kind != null) {
         final t = LType(LKind.object, name: kind);
-        final known = w.classes.containsKey(kind) || w.records.containsKey(kind) || w.enums.containsKey(kind) || w.variants.containsKey(kind) || w.interfaces.containsKey(kind) || w.aliases.containsKey(kind);
+        final known =
+            w.classes.containsKey(kind) || w.records.containsKey(kind) || w.enums.containsKey(kind) || w.variants.containsKey(kind) || w.interfaces.containsKey(kind) || w.aliases.containsKey(kind);
         if (isErr(t)) {
           kt = t;
         } else if (known) {

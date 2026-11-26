@@ -72,7 +72,10 @@ class NodeGen2 extends Gen2Dyn {
     return [
       'try {',
       ...indent(gen(s.body)),
-      if (handler != null) ...['} catch ($e) {', ...indent(['if (!($e instanceof lc.LcError)) throw $e;', ...handler(e)])],
+      if (handler != null) ...[
+        '} catch ($e) {',
+        ...indent(['if (!($e instanceof lc.LcError)) throw $e;', ...handler(e)]),
+      ],
       if (s.finallyBody.isNotEmpty) ...['} finally {', ...indent(gen(s.finallyBody))],
       '}',
     ];

@@ -9,6 +9,7 @@ import 'package:lopicode/lang/gen2_node.dart';
 import 'package:lopicode/lang/gen2_php.dart';
 import 'package:lopicode/lang/gen2_python.dart';
 import 'package:lopicode/lang/gen_support.dart';
+import 'package:lopicode/lang/link.dart';
 import 'package:lopicode/lang/typecheck.dart';
 
 /// 版本 2 的独立程序能生成成哪些语言。
@@ -32,4 +33,13 @@ Map<String, String> gen2Files(String language, LModule module, [LTypeResult? che
   }
   final gen = gen2For(language, module, result);
   return {gen.mainFile: gen.program(), ...gen.runtimeFiles};
+}
+
+/// 一个程序（几个模块）生成整套文件：先查模块之间的事（link.dart），合成一个模块，再走 [gen2Files]。
+/// 模块之间有错就抛 [LangUnsupported]（第一条的说法）。五种语言现在都落成一个编译单位（见 docs/blocks-v5-parts/B-gen-notes.md 第 10 节）。
+Map<String, String> gen2ProgramFiles(String language, LProgram program) {
+  final linked = linkProgram(program);
+  final module = linked.module;
+  if (module == null) throw LangUnsupported('模块检查没过：${linked.issues.first.message}');
+  return gen2Files(language, module);
 }

@@ -13,6 +13,7 @@ import 'dart:collection';
 import 'package:lopicode/lang/ast.dart';
 import 'package:lopicode/lang/ast_util.dart';
 import 'package:lopicode/lang/errors.dart';
+import 'package:lopicode/lang/link.dart';
 import 'package:lopicode/lang/rt_v2.dart';
 import 'package:lopicode/lang/type_issue.dart';
 import 'package:lopicode/lang/type_world.dart';
@@ -28,6 +29,14 @@ part 'typecheck_stmt.dart';
 
 /// 检查一个模块：声明＋“启动时”的语句（记在“主”名下）。
 LTypeResult checkModuleTypes(LModule module) => checkTypes(decls: module.decls, main: module.body);
+
+/// 检查一个程序（几个模块）：先查模块之间的事（[linkProgram]），没问题再把合好的模块交给 [checkModuleTypes]。
+/// 模块之间有错＝类型检查不做（第二项是 null），问题都在第一项里。
+(LLinked, LTypeResult?) checkProgramTypes(LProgram program) {
+  final linked = linkProgram(program);
+  final module = linked.module;
+  return (linked, module == null ? null : checkModuleTypes(module));
+}
 
 /// 一段单独的脚本（比如后端的一个接口、前端的一个事件）：有自己的一层变量，看得见 [checkTypes] 的 `decls` 里的东西。
 class LTypeScript {

@@ -48,7 +48,23 @@ class LTypedSig {
 
 /// 检查的结果。所有类型都是收尾以后的：不含“待定”“永不”（没定下来的按“任意”）。
 class LTypeResult {
-  LTypeResult._(this.world, this.issues, this._types, this._wants, this._ops, this._typeArgs, this.checks, this.funcs, this.vars, this._lambdaKeys, this._lines, this.passes, this.shared, this.prelude, this.usesErrors);
+  LTypeResult._(
+    this.world,
+    this.issues,
+    this._types,
+    this._wants,
+    this._ops,
+    this._typeArgs,
+    this.checks,
+    this.funcs,
+    this.vars,
+    this._lambdaKeys,
+    this._lines,
+    this.passes,
+    this.shared,
+    this.prelude,
+    this.usesErrors,
+  );
 
   /// 声明表（记录、枚举、变体、接口、类、函数、别名），生成器要查字段顺序、情况列表时用。
   final LTypeWorld world;

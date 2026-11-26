@@ -253,3 +253,25 @@ LTypeResult checkTypes({decls, main, scripts: [LTypeScript(name, body, vars: {�
 
 9. **（2026-11-26 合并对接后）** 第 7、8 条已经落定：桥不再是临时的，`validateBackend` 用的就是它的结果，界面上不重复；
    生成那一层除了“有类型错误不生成”，严格规矩的文档现在整个不生成、菜单里的“升级到严格规矩…”默认不出现。详见 B-gen-notes.md 第 7 节。
+
+
+## 核心 2 第 1 段以后的说明（2026-11-26，分支 v5r2-core）：错误对象、模块
+
+语法树（`ast.dart`）：
+
+- 新：`LCatch(body, kind, name)`——“出错时”的一节；`LProgram(modules, entry)`——几个模块的程序。
+- 改：`LTry` 加 `handlers`（`List<LCatch>?`）和统一读法 `catches`：`handlers == null` 是老写法（`errorName / errorClass / onError` 当成一节兜底）；`[]` 是只有“最后”；有几项就是几节。`LThrow` 加 `value`（就是 `message`；版本 2 里可以是错误对象）。`LModule.uses / LVarDecl.isPublic` 等原来就有的字段现在真的有人看了。
+- 所有走树的地方（`ast_util.dart`、`type_fix.dart`、`gen2.dart`、Java 的 `_completes`）都改成读 `catches`。规矩版本 1 的 `analyze.dart`、`gen.dart` 没动（它们只认老写法的字段）。
+- 语法树还是没有存盘格式；新节点里没有带类型的部分，所以 `types_json.dart` 没有要加的。积木文档里“出错时”的各节、模块清单怎么存，是积木那一层（第 3 段）的事。
+
+检查（规则表 `kTypeRules` 加了 T19–T21；模块的 M01–M08 在 `kModuleRules`）：
+
+| 号 | 报什么 |
+|---|---|
+| T19 | 抛出的不是一句话也不是错误；“出错时”接的种类不存在或者不是错误；想改错误的“种类” |
+| T20 | 自己的声明叫了内置错误的名字（错误、找不到、类型不对、数值不对、超时、取消了、读写失败） |
+| T21 | 这一节“出错时”永远轮不到（前面有一节接得更粗或者一样） |
+
+- 错误变量 `LVarKind.error` 的类型从“文字”改成错误类；读错误对象上没有的字段报 T08；把错误当文字用报 T01（要读“消息”）；抛“可能是空的错误”报 T02。
+- `LTypeResult.prelude`（内置错误类的声明）、`LTypeResult.usesErrors`（生成器据此决定带不带它们）。
+- 给第 3 段（积木、一键修）：新规则都还没有一键修；T01“把错误当文字用”最自然的修法是“读它的消息”，可以加一种 `LFixKind`。积木翻语法树时每一节“出错时”的错误变量可以同名（检查器按节收窄）。

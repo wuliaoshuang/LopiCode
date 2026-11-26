@@ -32,7 +32,8 @@ mixin _Stmts on _Core {
     bool ends(List<LStmt> b) => _exits(b, jumps: false) || _allReturn(b);
     return switch (_last(body)) {
       LMatch(:final arms, :final orElse) => arms.every((a) => ends(a.body)) && (orElse == null || ends(orElse)),
-      LTry(:final body, :final handlers, :final onError, :final errorName) => ends(body) && (handlers == null ? errorName == null && onError.isEmpty || ends(onError) : handlers.every((c) => ends(c.body))),
+      LTry(:final body, :final handlers, :final onError, :final errorName) =>
+        ends(body) && (handlers == null ? errorName == null && onError.isEmpty || ends(onError) : handlers.every((c) => ends(c.body))),
       LIf(:final arms, :final orElse) => orElse.isNotEmpty && ends(orElse) && arms.every((a) => ends(a.body)),
       _ => false,
     };

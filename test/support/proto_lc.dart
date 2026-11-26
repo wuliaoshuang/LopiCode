@@ -30,6 +30,27 @@ List<Object> lcParse(String src) {
 
 typedef _L = List<Object>;
 
+/// 几个模块的程序：`(模块 名字 (用 甲 乙) 声明…)` 一个个排下去；声明外面包 `(公开 …)`＝勾了“公开”；`(变量 名 [类型] 初值)`＝模块顶上的变量；
+/// `(入口 名字)` 指明入口（没写＝最后一个模块）。只给核心 2 的测试用。
+LProgram lcProgram(String src) {
+  final mods = <LModule>[];
+  String? entry;
+  for (final d in lcParse(src).cast<_L>()) {
+    if (d[0] == '入口') {
+      entry = d[1] as String;
+      continue;
+    }
+    var rest = d.skip(2);
+    var uses = const <String>[];
+    if (rest.isNotEmpty && rest.first is _L && (rest.first as _L).isNotEmpty && (rest.first as _L)[0] == '用') {
+      uses = [...(rest.first as _L).skip(1).cast<String>()];
+      rest = rest.skip(1);
+    }
+    mods.add(_Reader([...rest]).module(name: d[1] as String, uses: uses));
+  }
+  return LProgram(mods, entry: entry ?? mods.last.name);
+}
+
 /// 原型的一个程序 → 模块。
 LModule lcModule(String src) => _Reader(lcParse(src)).module();
 
@@ -92,35 +113,45 @@ class _Reader {
     return LFuncDecl(d[1] as String, ps, stmts(d.skip(i)), typeParams: tps, type: ret);
   }
 
-  LModule module() {
+  LModule module({String name = '', List<String> uses = const []}) {
     final decls = <LDecl>[];
     var main = <LStmt>[];
-    for (final d in prog.cast<_L>()) {
+    void one(_L d, {required bool public}) {
       final name = d.length > 1 && d[1] is String ? d[1] as String : '';
       switch (d[0]) {
+        case '公开':
+          one(d[1] as _L, public: true);
+        case '变量':
+          decls.add(d.length == 4 ? LVarDecl(name, expr(d[3]), isPublic: public, type: ty(d[2])) : LVarDecl(name, expr(d[2]), isPublic: public));
         case '记录':
-          decls.add(LRecordDecl(name, [for (final f in d.skip(2).cast<_L>()) LTypedField(f[0] as String, ty(f[1]))]));
+          decls.add(LRecordDecl(name, [for (final f in d.skip(2).cast<_L>()) LTypedField(f[0] as String, ty(f[1]))], isPublic: public));
         case '枚举':
-          decls.add(LEnumDecl(name, [...d.skip(2).cast<String>()]));
+          decls.add(LEnumDecl(name, [...d.skip(2).cast<String>()], isPublic: public));
         case '变体':
           decls.add(
             LVariantDecl(name, [
               for (final c in d.skip(2).cast<_L>()) LVariantCase(c[0] as String, [for (final f in c.skip(1).cast<_L>()) LTypedField(f[0] as String, ty(f[1]))]),
-            ]),
+            ], isPublic: public),
           );
         case '接口':
-          decls.add(LInterfaceDecl(name, [for (final m in d.skip(2).cast<_L>()) LSignature(m[0] as String, params(m[1]), returns: ty(m[2]))]));
+          decls.add(LInterfaceDecl(name, [for (final m in d.skip(2).cast<_L>()) LSignature(m[0] as String, params(m[1]), returns: ty(m[2]))], isPublic: public));
         case '别名':
-          decls.add(LAliasDecl(name, ty(d[2])));
+          decls.add(LAliasDecl(name, ty(d[2]), isPublic: public));
         case '函数':
-          decls.add(func(d));
+          final f = func(d);
+          decls.add(LFuncDecl(f.name, f.params, f.body, isPublic: public, typeParams: f.typeParams, type: f.type));
         case '类':
-          decls.add(cls(d));
+          final c = cls(d);
+          decls.add(LClassDecl(c.name, parent: c.parent, interfaces: c.interfaces, fields: c.fields, ctor: c.ctor, methods: c.methods, typeParams: c.typeParams, isOpen: c.isOpen, isPublic: public));
         case '主':
           main = stmts(d.skip(1));
       }
     }
-    return LModule(decls: decls, body: main);
+
+    for (final d in prog.cast<_L>()) {
+      one(d, public: false);
+    }
+    return LModule(name: name, uses: uses, decls: decls, body: main);
   }
 
   LClassDecl cls(_L d) {
@@ -187,6 +218,10 @@ class _Reader {
       case '数':
         // 原型里“数 i a b”不含 b；语法树的“从…数到…”含两头，所以数到 b - 1。
         return LForCount(a[0] as String, expr(a[1]), LBinary('-', expr(a[2]), const LLit(1)), const LLit(1), stmts(a.skip(3)));
+      case '跳出':
+        return const LBreak();
+      case '继续':
+        return const LContinue();
       case '返回':
         return LReturn(a.isEmpty ? null : expr(a[0]));
       case '抛出':

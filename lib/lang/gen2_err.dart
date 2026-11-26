@@ -45,7 +45,11 @@ mixin Gen2Err on Gen2Base, Gen2Expr {
     }
     // 一句话：包成内置的“错误”。
     final m = tmpName('M');
-    return [tmpDecl(m, LType.text, x(s.value, LType.text)), tmpDecl(o, errType, newObject(w.classes[kErrBase]!, errType, [m])), ...throwObjLines(o, m)];
+    return [
+      tmpDecl(m, LType.text, x(s.value, LType.text)),
+      tmpDecl(o, errType, newObject(w.classes[kErrBase]!, errType, [m])),
+      ...throwObjLines(o, m),
+    ];
   }
 
   @override

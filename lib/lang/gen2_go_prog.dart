@@ -126,7 +126,10 @@ class GoGen2 extends GoGen2Types {
         ...indent([
           'lcM := lcE.Msg',
           'switch lc.ErrKind(lcM) {',
-          for (final (k, make) in errMakers('lcM').skip(1)) ...['case ${textLit(k)}:', ...indent(['lcE.Obj = $make'])],
+          for (final (k, make) in errMakers('lcM').skip(1)) ...[
+            'case ${textLit(k)}:',
+            ...indent(['lcE.Obj = $make']),
+          ],
           'default:',
           ...indent(['lcE.Obj = ${errMakers('lcM').first.$2}']),
           '}',
