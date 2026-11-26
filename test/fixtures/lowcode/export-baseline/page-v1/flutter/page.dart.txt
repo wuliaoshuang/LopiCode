@@ -1,0 +1,58 @@
+// 由 LopiCode 低代码搭建器生成，重新导出会覆盖本文件。
+import 'package:flutter/material.dart';
+
+class OldPage extends StatelessWidget {
+  const OldPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+        body: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: SizedBox(
+              width: double.infinity,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                spacing: 12,
+                children: [
+                  Text(
+                    '欢迎',
+                    style: const TextStyle(height: 1.5),
+                  ),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 3, offset: Offset(0, 1))]),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      spacing: 12,
+                      children: [
+                        SizedBox(
+                          width: double.infinity,
+                          child: TextField(
+                            decoration: InputDecoration(
+                              hintText: '请输入',
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(4)),
+                            ),
+                          ),
+                        ),
+                        FilledButton(
+                          onPressed: () {},
+                          style: FilledButton.styleFrom(),
+                          child: Text('提交'),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Divider(height: 1),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+  }
+}

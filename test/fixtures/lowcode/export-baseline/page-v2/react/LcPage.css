@@ -1,0 +1,22 @@
+/* 由 LopiCode 低代码搭建器生成，重新导出会覆盖本文件。 */
+.n-root {
+  padding: 16px;
+  background: #f6f7fb;
+  gap: 12px;
+}
+
+.n-n1 {
+  font-size: 1.5em;
+  font-weight: 700;
+}
+
+.n-n2 {
+  align-self: stretch;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.n-n6 {
+  align-self: stretch;
+  min-height: 48px;
+}
