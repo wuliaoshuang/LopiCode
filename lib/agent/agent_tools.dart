@@ -7,6 +7,7 @@ import 'package:lopicode/agent/edit_file_tool.dart';
 import 'package:lopicode/agent/line_diff.dart';
 import 'package:lopicode/core/path_guard.dart';
 import 'package:lopicode/core/project_store.dart';
+import 'package:lopicode/core/safe_file.dart';
 import 'package:lopicode/core/templates.dart';
 import 'package:lopicode/lowcode/export_html.dart';
 import 'package:lopicode/lowcode/export_tidy.dart';
@@ -494,16 +495,19 @@ class ToolArgError implements Exception {
 }
 
 /// 保存低代码页面并同步导出网页文件（搭建器和 Agent 共用）。
+///
+/// 每个文件都是“先写同目录的临时文件、写完再改名”（lib/core/safe_file.dart）：写到一半被杀 / 写不进去时，
+/// 原来的页面文件和网页还是完整的旧内容，不会剩半截——页面文件坏了整个页面就打不开了。
 Future<void> saveLowcodePage(PathGuard guard, LcDocument doc) async {
   final export = tidyHtmlExport(exportHtml(doc));
-  await File(guard.resolve(kLowcodePageFile)).writeAsString(doc.encode());
-  await File(guard.resolve('index.html')).writeAsString(export.html);
-  await File(guard.resolve('style.css')).writeAsString(export.css);
+  await writeStringAtomic(File(guard.resolve(kLowcodePageFile)), doc.encode());
+  await writeStringAtomic(File(guard.resolve('index.html')), export.html);
+  await writeStringAtomic(File(guard.resolve('style.css')), export.css);
   final logic = File(guard.resolve(kLowcodeLogicFile));
   if (lcLogicErrorCount(doc) > 0) {
     // 积木逻辑有“错误”：不导出新的 logic.js，上一次导出的原样留着（见 lib/lowcode/logic_gate.dart）。
   } else if (export.js.isNotEmpty) {
-    await logic.writeAsString(export.js);
+    await writeStringAtomic(logic, export.js);
   } else if (await logic.exists()) {
     // 逻辑删光了：把上次导出的 logic.js 也删掉。只删我们自己生成的（看开头那行标记），用户自己写的同名文件不碰。
     final head = await logic.openRead(0, 200).transform(const Utf8Decoder(allowMalformed: true)).join();
