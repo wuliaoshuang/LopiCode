@@ -27,6 +27,13 @@ LExpr beToLangExpr(BeX x, {required String request}) => switch (x) {
   BeXCall(:final fn, :final args) => LNative(fn, [for (final a in args) beToLangExpr(a, request: request)]),
 };
 
+/// “走库”的翻法（积木第 5 版·库 1，见 backend_to_service.dart）：旧式子、旧的“干活”语句不再包成 `LNative` / `LHost`，
+/// 而是换成内置库的积木展开出来的语法树。翻译器上挂了它（`BeLangLower.bridge`）才走；没挂一切照旧。
+abstract interface class BeLibBridge {
+  LExpr expr(BeX x);
+  List<LStmt> stmts(List<BeS> list);
+}
+
 /// 旧语句 → 可以放进新节点里的语句：新节点原样摊开，别的包成 `LHost`（生成时交回给后端照旧路写）。
 List<LStmt> beHostStmts(List<BeS> list) => [
   for (final s in list)

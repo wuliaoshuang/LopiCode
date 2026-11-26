@@ -152,7 +152,11 @@ class BeLangLower {
   /// 只出语言核心的东西（“看代码”走版本 2 的生成器时用）：小库调用写成 `LRt`，“写到日志”“加上”也翻成核心的节点。
   bool pure = false;
 
-  LExpr _toLang(BeX x) => bePureExpr(beToLangExpr(x, request: kBeRequestName), pure: pure);
+  /// 挂上了就“走库”（见 [BeLibBridge]）。
+  BeLibBridge? bridge;
+
+  LExpr _toLang(BeX x) => bridge?.expr(x) ?? bePureExpr(beToLangExpr(x, request: kBeRequestName), pure: pure);
+  List<LStmt> _host(List<BeS> list) => bridge?.stmts(list) ?? beHostStmts(list);
 
   /// 语法树里的式子 → 它是积木文档里的哪个值翻来的（文档里那个对象本身）。规矩版本 2 的类型检查靠它把问题、
   /// 一键修对回到具体哪一格上（backend_type_bridge.dart）；别处不用。
@@ -525,23 +529,23 @@ class BeLangLower {
         // 旧路翻出来是“存临时值 + 如果（没拿到）…否则…”；口里的积木换成这边翻的。
         final old = host.leaf(b.copyWith(body: const [], orElse: const []));
         final branch = old.whereType<BeSIf>().firstOrNull;
-        if (branch == null) return beHostStmts(old);
+        if (branch == null) return _host(old);
         return [
           if (shadow) ..._shadow(b),
-          ...beHostStmts([
+          ..._host([
             for (final s in old)
               if (s is! BeSIf) s,
           ]),
           LIf(
             [
-              LIfArm(_toLang(branch.cond), [...beHostStmts(branch.then), ...inner(b.orElse, inElse: true)]),
+              LIfArm(_toLang(branch.cond), [..._host(branch.then), ...inner(b.orElse, inElse: true)]),
             ],
-            orElse: [...beHostStmts(branch.orElse), ...inner(b.body)],
+            orElse: [..._host(branch.orElse), ...inner(b.body)],
             src: src(),
           ),
         ];
       default:
-        return [if (shadow) ..._shadow(b), ...beHostStmts(host.leaf(b))];
+        return [if (shadow) ..._shadow(b), ..._host(host.leaf(b))];
     }
   }
 
