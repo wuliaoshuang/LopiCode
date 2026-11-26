@@ -474,3 +474,31 @@ PHP 估计 7.4+（PHP 那份代码从没运行过）。下面选的版本都够�
 添加模型时自动标“可思考”的规则（`knownThinkingModel`，只标上表核对到的）：DeepSeek 官方地址的 `deepseek-*`；Anthropic 协议下认得出版本的 Opus 4 / 4.1 / 4.5、Sonnet 4 / 4.5、Haiku 4.5、4.6 及以后、Fable、Mythos；Gemini 官方地址的 `gemini-2.5 / 3 / 4`；智谱地址的 `glm-4.5 / 4.6 / 4.7 / 5*`；Kimi 地址的 `kimi-k3*`、`kimi-k2.7-code*`、`kimi-k2.6*`；OpenRouter 模型列表里带 `reasoning` 对象的。其余一律不自动标；思考参数核对过的服务商 / 模型，用户可以在选模型的面板里自己打开，没核对过的打不开。
 
 每个模型上次设的档位存在设置键 `ai.thinkingLevels`（`{"渠道 id/模型 id": 档位}`）；档位值有 `off / on / low / medium / high / max`。旧存盘里某个模型现在不支持的档位，按“先往高找最近的一档”落（例如 DeepSeek 的 `medium` → `high`，和官方的映射一致）。
+
+## 2026-11-26 应用内安装 APK（`android/…/ApkInstallChannel.kt`、`ApkFileProvider.kt`、`lib/build/apk_installer.dart`）
+
+核对日期 2026-11-26。能打开原文的写“已核对”，只看到搜索摘录的写“摘录”，没查到的写“未核对”。
+
+| 事实 | 来源 | 状态 | 我们怎么用 |
+|---|---|---|---|
+| Android 8（API 26）起没有全局的“未知来源”开关，改成按应用给“安装未知应用”；targetSdk ≥ 26 的应用要让用户装别的应用，清单里必须声明 `REQUEST_INSTALL_PACKAGES`，没声明的装不了 | Android Developers Blog《Making it safer to get apps on Android O》 https://android-developers.googleblog.com/2017/08/making-it-safer-to-get-apps-on-android-o.html?hl=bn | 摘录 | 清单加这一项（霜霜 2026-11-26 同意，只这一项） |
+| 可以用 `Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES` 把用户带到这个应用的“安装未知应用”设置页；可以用 `PackageManager.canRequestPackageInstalls()` 查现在让不让 | 同上 | 摘录 | 交给安装器之前先查；不让就回“还没允许”，界面给“去设置里允许” |
+| `canRequestPackageInstalls()`：返回 false 时安装请求会被系统安装器拦下并弹框带用户去设置；应用必须 target O 以上并声明 `REQUEST_INSTALL_PACKAGES` 才能用这个方法 | 微软对 Android Java 文档的转载 https://learn.microsoft.com/en-us/dotnet/api/android.content.pm.packagemanager.canrequestpackageinstalls?view=net-android-35.0 （developer.android.com 的 PackageManager 原页这次没打开） | 摘录（转载） | 只在 API ≥ 26 时调用；更低版本当作“允许” |
+| `Intent.ACTION_INSTALL_PACKAGE` 在 API 29 弃用（“use PackageInstaller instead”） | developer.android.com 的 Intent 常量表（经 LabeledIntent 页的继承常量表看到） https://developer.android.com/reference/android/content/pm/LabeledIntent?authuser=8 | 摘录 | **不用它**。用没被弃用的 `ACTION_VIEW` + 类型 `application/vnd.android.package-archive` |
+| `ACTION_VIEW` + APK 的 MIME 类型能拉起系统安装器 | 没找到 developer.android.com 上的明文说明；是多年通行做法 | **未核对** | 自己选的。真机没验证；拉不起来会回“没有找到系统安装器” |
+| `ACTION_MANAGE_UNKNOWN_APP_SOURCES` 带 `package:<包名>` 可以直达本应用那一页 | 同上（博客只说了这个动作，没说带不带包名） | **未核对** | 先带包名试，系统不认（`ActivityNotFoundException`）就退成不带包名的总列表 |
+| `FileProvider`：给文件生成 `content://` 地址；只能给事先在 `<paths>` 里登记过的目录；`<files-path>`＝`Context.getFilesDir()`，`<cache-path>`＝`getCacheDir()`，`<external-files-path>`＝`Context.getExternalFilesDir(null)` | https://developer.android.com/reference/androidx/core/content/FileProvider?authuser=002 | 摘录 | `res/xml/apk_install_paths.xml` 只登记三处，见下 |
+| `FileProvider` 必须 `exported=false`、`grantUriPermissions=true`，路径表用 meta-data `android.support.FILE_PROVIDER_PATHS` 指过去；登记目录时会把路径规范化（`getCanonicalFile`） | 直接看开发机上 androidx.core 1.18.0 的 `FileProvider` 类（字节码里的字符串 “Provider must not be exported”“Provider must grant uri permissions” 和 `addRoot` 里的 `getCanonicalFile` 调用） | 已核对（看的是实现，不是文档） | 清单照这个写；`../app_flutter/projects/` 这种写法靠的就是规范化 |
+| 给安装器读文件要在 Intent 上加 `FLAG_GRANT_READ_URI_PERMISSION` | FileProvider 参考页的“Granting Temporary Permissions to a URI”一节（只看到小标题） | 摘录 | 加了 |
+| 系统安装器装完会不会告诉发起的应用 | — | — | `ACTION_VIEW` 不带回结果。所以界面只说“已经交给系统安装器”，不说“装好了” |
+
+**登记给 FileProvider 的目录**（authorities 是 `${applicationId}.apkinstall`，跟着包名走）：
+
+1. `<external-files-path path="apk/">`：`Android/data/<包名>/files/apk/`，本地打包抄出来的那一份和远程打包下载的 APK 都在这。
+2. `<files-path path="../app_flutter/projects/">`：应用文档目录下的 `projects/`（应用目录里的工作区）。应用文档目录是 path_provider 的
+   `getApplicationDocumentsDirectory()`，在安卓上是 `<数据目录>/app_flutter`，不在 `files/` 下面，而 FileProvider 没有直接指它的写法，所以从 `files/` 退一层。
+   这是靠实现细节（规范化），真机没验证；所以原生那头做了兜底：`getUriForFile` 说“不在登记的目录里”时，改走第 3 条。
+3. `<cache-path path="apk_install/">`：上面两处都不包含的文件（Ubuntu 环境里的工作区在 `files/runtime/rootfs/…`，故意没登记，免得把整个 Linux 根目录都列进去），
+   先抄一份到缓存目录的 `apk_install/` 再交出去。每次安装前清空这个目录，只留当次的一份；缓存目录系统空间紧张时会自己清。
+
+自己定的数值：问系统一句话的超时 10 秒；交给安装器的超时 2 分钟（可能要先抄一份大文件）。

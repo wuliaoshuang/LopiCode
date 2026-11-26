@@ -36,7 +36,10 @@ void main() {
     sampleStatic(web);
     final key = fixtureKey();
     final out = p.join(tmp.path, 'out.apk');
-    final result = await LocalApkPacker(template: realShell(), signer: KeyApkSigner(key)).pack(requestFor(web, out, appName: '我的小站', packageName: 'com.example.site', versionName: '1.2.3', versionCode: 45));
+    final result = await LocalApkPacker(
+      template: realShell(),
+      signer: KeyApkSigner(key),
+    ).pack(requestFor(web, out, appName: '我的小站', packageName: 'com.example.site', versionName: '1.2.3', versionCode: 45));
     final info = await inspectApk(out);
     expect(info.appName, '我的小站');
     expect(info.packageName, 'com.example.site');

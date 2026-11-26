@@ -15,7 +15,7 @@ import java.io.IOException
 /**
  * 应用内安装 APK 的通道（Dart 那头是 lib/build/apk_installer.dart）。
  *
- * 只做三件事：问系统“现在让不让我们发起安装”、打开“允许安装未知应用”的设置页、把一个安装包交给系统安装器。
+ * 只做两件事：打开“允许安装未知应用”的设置页、把一个安装包交给系统安装器（交之前先问系统让不让，不让就如实回话）。
  * 装没装成是系统安装器的事，这里拿不到结果，也不假装知道。官方文档的核对记录见 docs/api-notes.md。
  */
 object ApkInstallChannel {
@@ -31,7 +31,6 @@ object ApkInstallChannel {
     fun attach(activity: Activity, messenger: BinaryMessenger) {
         MethodChannel(messenger, NAME).setMethodCallHandler { call, result ->
             when (call.method) {
-                "canInstall" -> result.success(canInstall(activity))
                 "openInstallSettings" -> result.success(openSettings(activity))
                 "install" -> {
                     val path = call.arguments as? String

@@ -3,11 +3,12 @@
 //         当前这一步是正文色加粗，下面跟一句细节；还没到的更淡。第一次打包前面多一步“生成签名钥匙”。
 // 失败：结论 + 卡在哪一步；真正的原因放在浅红底的块里；是哪个输入的问题就给一个“去改…”按钮（只有一个）。
 // 成功：① 结论；② 这是哪个应用（图标、应用名、包名）；③ 版本 / 大小 / 文件数（一行一项的小表）；
-//       ④ 安装包在哪（能在系统文件管理器里找到的那份排前面），每个位置一行、行尾复制；⑤ 一行“去文件页看”；⑥ 怎么装到手机上（三步）。
-// 没有“直接安装”按钮：那要新权限，见汇报的“待定”。
+//       ④ 主按钮“安装”（直接交给系统安装器，见 apk_install_view.dart；2026-11-26 霜霜要求加）；
+//       ⑤ 安装包在哪（能在系统文件管理器里找到的那份排前面），每个位置一行、行尾复制；⑥ 一行“去文件页看”；⑦ 点“安装”不行时怎么手动装（三步）。
 // 颜色：状态靠图标 + 颜色一起表达（勾 / 叉 / 圈），不只靠颜色。
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lopicode/apkpack/apk_pack_contract.dart';
+import 'package:lopicode/build/apk_install_view.dart';
 import 'package:lopicode/build/build_controller.dart';
 import 'package:lopicode/build/build_widgets.dart';
 import 'package:lopicode/project_session.dart';
@@ -239,9 +240,12 @@ class _Done extends StatelessWidget {
         fact('网页文件', '${r.fileCount} 个'),
         fact('签名指纹', '${r.certSha256Hex.length > 16 ? r.certSha256Hex.substring(0, 16) : r.certSha256Hex}…'),
         const SizedBox(height: Space.x3),
+        // 装外部目录的那一份（系统安装器读它不用绕路）；这台设备没有外部目录就装工作区里的那一份
+        ApkInstallButton(path: state.publicPath ?? r.path),
+        const SizedBox(height: Space.x4),
         Divider(height: 1, color: c.border),
         const SizedBox(height: Space.x3),
-        if (state.publicPath != null) ...[CopyLine(key: const Key('pack-result-public'), label: '手机存储里的位置（从这里安装）', value: state.publicPath!), const SizedBox(height: Space.x3)],
+        if (state.publicPath != null) ...[CopyLine(key: const Key('pack-result-public'), label: '手机存储里的位置', value: state.publicPath!), const SizedBox(height: Space.x3)],
         CopyLine(key: const Key('pack-result-path'), label: '工作区里的位置', value: r.path, note: state.publicNote ?? '在“文件”页的 build 文件夹里，名字是 $fileName。'),
         if (shell != null) ...[
           const SizedBox(height: Space.x2),
@@ -253,7 +257,7 @@ class _Done extends StatelessWidget {
           ),
         ],
         const SizedBox(height: Space.x4),
-        Text('怎么装到手机上', style: t.labelMedium),
+        Text('点“安装”不行的话，也可以手动装', style: t.labelMedium),
         const SizedBox(height: Space.x2),
         for (final (i, line) in [
           state.publicPath != null ? '打开手机自带的“文件管理”，按上面“手机存储里的位置”找到 $fileName。有的手机不让“文件管理”进 Android/data 这一层，进不去就把手机连上电脑去拿。' : '这台设备上安装包只在 LopiCode 自己的目录里，系统的文件管理器进不去；先在终端里把它拷到你找得到的地方。',

@@ -150,7 +150,7 @@ void main() {
     expect(find.text(state().publicPath!), findsOneWidget);
     expect(File(r.path).lengthSync(), r.sizeBytes);
     expect(r.sizeBytes, greaterThan(20 * 1024), reason: '至少有模板那么大');
-    expect(find.textContaining('直接安装'), findsNothing);
+    expect(find.widgetWithText(FilledButton, '安装'), findsOneWidget);
     await shot(tester, 'real-03-done-light');
     await tester.drag(find.byType(ListView).first, const Offset(0, -400));
     await settle(tester, rounds: 2);
