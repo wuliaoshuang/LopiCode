@@ -103,6 +103,9 @@ abstract class Gen2Dyn extends Gen2 {
   @override
   String textLit(String v) => langQuoted(v);
 
+  /// 这种类型的值装进“任意”要不要过一遍小库（列表、字典拍快照；整数和小数分开的语言里整数要变成小数）。
+  bool needsDyn(LType from) => from.kind == LKind.list || from.kind == LKind.dict;
+
   /// 整数变小数（JS 里是同一种数字，不用变）。
   String widen(String code) => code;
 
@@ -122,7 +125,7 @@ abstract class Gen2Dyn extends Gen2 {
 
   @override
   String convert(String code, LType from, LType to) {
-    if (to.isAny) return from.nonNull.kind == LKind.list || from.nonNull.kind == LKind.dict ? call('toDyn', [code]) : code;
+    if (to.isAny) return needsDyn(from.nonNull) ? call('toDyn', [code]) : code;
     if (from.isAny) {
       if (to.nullable) return call('asOpt', [code, _checker(to.nonNull)]);
       switch (to.kind) {

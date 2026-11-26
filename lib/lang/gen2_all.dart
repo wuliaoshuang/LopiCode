@@ -4,14 +4,16 @@ library;
 import 'package:lopicode/lang/ast.dart';
 import 'package:lopicode/lang/gen2_expr.dart';
 import 'package:lopicode/lang/gen2_node.dart';
+import 'package:lopicode/lang/gen2_python.dart';
 import 'package:lopicode/lang/gen_support.dart';
 import 'package:lopicode/lang/typecheck.dart';
 
 /// 版本 2 的独立程序能生成成哪些语言。
-const List<String> kGen2Languages = ['node'];
+const List<String> kGen2Languages = ['node', 'python'];
 
 Gen2 gen2For(String language, LModule module, LTypeResult result) => switch (language) {
   'node' => NodeGen2(module, result),
+  'python' => PythonGen2(module, result),
   _ => throw LangUnsupported('「$language」还没有带类型的生成器'),
 };
 
