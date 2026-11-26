@@ -423,7 +423,10 @@ void main() {
         appFor(
           env,
           Scaffold(
-            body: SingleChildScrollView(padding: const EdgeInsets.all(16), child: BuildJobCard(job: job)),
+            body: SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: BuildJobCard(job: job),
+            ),
           ),
           font: kTestFont,
         ),
@@ -442,7 +445,10 @@ void main() {
         appFor(
           env,
           Scaffold(
-            body: SingleChildScrollView(padding: const EdgeInsets.all(16), child: BuildJobCard(key: UniqueKey(), job: failed)),
+            body: SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: BuildJobCard(key: UniqueKey(), job: failed),
+            ),
           ),
           font: kTestFont,
         ),
