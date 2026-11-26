@@ -214,7 +214,20 @@ String? buttonAccent(LcNode n, LcNode? parent) {
   return buttonVariant(n, parent) == 'solid' ? r['background-color'] : r['color'];
 }
 
-const List<String> _borderNames = ['border-top-width', 'border-right-width', 'border-bottom-width', 'border-left-width', 'border-top-style', 'border-right-style', 'border-bottom-style', 'border-left-style', 'border-top-color', 'border-right-color', 'border-bottom-color', 'border-left-color'];
+const List<String> _borderNames = [
+  'border-top-width',
+  'border-right-width',
+  'border-bottom-width',
+  'border-left-width',
+  'border-top-style',
+  'border-right-style',
+  'border-bottom-style',
+  'border-left-style',
+  'border-top-color',
+  'border-right-color',
+  'border-bottom-color',
+  'border-left-color',
+];
 
 /// 换按钮的样子，主色不变。
 ///

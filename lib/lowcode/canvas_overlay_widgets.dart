@@ -3,7 +3,7 @@
 // - 拖柄：画出来是 9px 的小方块，能按住的范围是 44px（都按屏幕上的大小算，不随缩放变大变小）。
 //   能按的范围往组件外侧偏 14px：伸进组件里面的只有 8px，尽量不盖住组件本身（还要能点它、长按拖它）。
 // - 组件太小时只留四个角的拖柄：边上的要这条边够长（屏幕上 ≥ 60px：两个角各伸进来 8，中间还放得下 44）才放。
-// - 尺寸标签（“160 × 48”）放在选中框里面的右下角，不挡框外面别的组件；框太小放不下就放到框的上方（上方没地方放下方）。
+// - 尺寸标签（“160 × 48”）放在选中框里面的右下角，不挡框外面别的组件；框不够宽裕（不到两个标签宽、三个标签高）就放到框的上方（上方没地方放下方）。
 //   不管放哪都收在屏幕看得见的那一块里面，不会被屏幕边切掉。
 import 'dart:math' as math;
 
@@ -162,7 +162,9 @@ Offset sizeLabelOrigin(Rect rect, Rect visible, double scale, String text) {
   final k = 1 / scale;
   final w = _labelWidth(text) * k, h = _labelHeight * k, gap = 6 * k;
   double left, top;
-  if (rect.width >= w + gap * 2 && rect.height >= h + gap * 2) {
+  // “放得下”要宽裕：框至少有两个标签宽、三个标签高。刚好塞得进的小组件（一个按钮、一行标题）放进去会把它的字盖住
+  // （第 2 期出截图时看到 88×48 的按钮上的字被标签挡了）。
+  if (rect.width >= w * 2 + gap * 2 && rect.height >= h * 3 + gap * 2) {
     // 放得下：框里面的右下角
     left = rect.right - gap - w;
     top = rect.bottom - gap - h;

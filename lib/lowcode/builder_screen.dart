@@ -465,32 +465,32 @@ class _BuilderScreenState extends State<BuilderScreen> with WidgetsBindingObserv
           : LcImageScope(
               resolve: _images.resolve,
               child: EditorWorkbench(
-              key: _bench,
-              onEdit: _apply,
-              pickImage: (from) => _images.pick(context, from),
-              onOpenLogic: (id) => unawaited(_openLogic(id)),
-              onAddLogic: _addLogic,
-              onNodeMenu: (id, at) => unawaited(_nodeMenu(id, at)),
-              doc: doc,
-              selected: _selected,
-              onSelect: (id) => setState(() => _selected = id),
-              onAdd: _addByTap,
-              onDrop: _drop,
-              canDrop: _canDrop,
-              onDelete: (id) {
-                final n = doc.find(id);
-                if (n != null) unawaited(_delete(n));
-              },
-              onResize: _resize,
-              recents: _recents,
-              onLayers: () => unawaited(_openLayers()),
-              onUndo: history!.canUndo ? () => _restore(history.undo()) : null,
-              onRedo: history.canRedo ? () => _restore(history.redo()) : null,
-              onPreview: () => unawaited(_preview()),
-              presetWidth: _presetWidth,
-              showBoxModel: _showBoxModel,
-              selectionBar: node == null ? null : _selectionBar(node),
-            ),
+                key: _bench,
+                onEdit: _apply,
+                pickImage: (from) => _images.pick(context, from),
+                onOpenLogic: (id) => unawaited(_openLogic(id)),
+                onAddLogic: _addLogic,
+                onNodeMenu: (id, at) => unawaited(_nodeMenu(id, at)),
+                doc: doc,
+                selected: _selected,
+                onSelect: (id) => setState(() => _selected = id),
+                onAdd: _addByTap,
+                onDrop: _drop,
+                canDrop: _canDrop,
+                onDelete: (id) {
+                  final n = doc.find(id);
+                  if (n != null) unawaited(_delete(n));
+                },
+                onResize: _resize,
+                recents: _recents,
+                onLayers: () => unawaited(_openLayers()),
+                onUndo: history!.canUndo ? () => _restore(history.undo()) : null,
+                onRedo: history.canRedo ? () => _restore(history.redo()) : null,
+                onPreview: () => unawaited(_preview()),
+                presetWidth: _presetWidth,
+                showBoxModel: _showBoxModel,
+                selectionBar: node == null ? null : _selectionBar(node),
+              ),
             ),
     );
   }

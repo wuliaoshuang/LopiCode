@@ -135,7 +135,12 @@ class CanvasImage extends StatelessWidget {
       _ => BoxFit.cover,
     };
     final ratio = height == null ? ratioOf(style['aspect-ratio']) : null;
-    Widget sized(Widget child) => ratio == null ? child : SizedBox(width: width, child: AspectRatio(aspectRatio: ratio, child: child));
+    Widget sized(Widget child) => ratio == null
+        ? child
+        : SizedBox(
+            width: width,
+            child: AspectRatio(aspectRatio: ratio, child: child),
+          );
     Widget placeholder(IconData icon) => sized(
       Container(
         height: ratio == null ? height : null,

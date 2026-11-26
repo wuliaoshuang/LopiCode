@@ -159,7 +159,11 @@ class _LayerSheetState extends State<LayerSheet> {
                   customBorder: const CircleBorder(),
                   child: Tooltip(
                     message: r.collapsed ? '展开' : '折叠',
-                    child: SizedBox(width: 32, height: kLayerRowHeight, child: Icon(r.collapsed ? Icons.arrow_right : Icons.arrow_drop_down, size: 22, color: c.textMuted)),
+                    child: SizedBox(
+                      width: 32,
+                      height: kLayerRowHeight,
+                      child: Icon(r.collapsed ? Icons.arrow_right : Icons.arrow_drop_down, size: 22, color: c.textMuted),
+                    ),
                   ),
                 )
               else

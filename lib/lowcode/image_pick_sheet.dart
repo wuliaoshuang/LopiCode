@@ -85,7 +85,10 @@ class _ProjectImageSheetState extends State<_ProjectImageSheet> {
               ),
               if (list == null)
                 const SliverToBoxAdapter(
-                  child: Padding(padding: EdgeInsets.all(Space.x6), child: Center(child: CircularProgressIndicator())),
+                  child: Padding(
+                    padding: EdgeInsets.all(Space.x6),
+                    child: Center(child: CircularProgressIndicator()),
+                  ),
                 )
               else if (list.isEmpty)
                 const SliverToBoxAdapter(
@@ -128,7 +131,12 @@ class _ProjectImageSheetState extends State<_ProjectImageSheet> {
                                 ),
                               ),
                               const SizedBox(height: Space.x1),
-                              Text(rel.split('/').last, style: t.bodySmall?.copyWith(color: c.textMuted), maxLines: 1, overflow: TextOverflow.ellipsis),
+                              Text(
+                                rel.split('/').last,
+                                style: t.bodySmall?.copyWith(color: c.textMuted),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ],
                           ),
                         ),

@@ -108,10 +108,7 @@ class BuilderSelectionBar extends StatelessWidget {
       EditorSelectionBar.outlined('样式', onStyle),
       EditorSelectionBar.plain('逻辑', onLogic, dot: doc.logic.handlersFor(node.id).isNotEmpty),
       // 页面本身不能移动、复制、删除：剪贴板里有东西时才有“更多操作”（粘贴到页面里）。
-      if (node.type != 'page')
-        LcNodeMoreButton(node: node, onAction: onAction)
-      else if (lcClipboardHasContent)
-        LcNodeMoreButton(node: node, onAction: onAction, fixed: true),
+      if (node.type != 'page') LcNodeMoreButton(node: node, onAction: onAction) else if (lcClipboardHasContent) LcNodeMoreButton(node: node, onAction: onAction, fixed: true),
     ],
   );
 }

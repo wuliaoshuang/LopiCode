@@ -28,7 +28,6 @@ import 'package:lopicode/lowcode/palette_widgets.dart';
 import 'package:lopicode/lowcode/style_model.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/shell.dart';
-import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// “编辑组件”用的临时页面的根 id。带下划线：定义里的节点 id 只有字母数字，不会和它撞。
@@ -335,31 +334,31 @@ class _ComponentEditorState extends State<_ComponentEditor> {
       body: LcImageScope(
         resolve: (src) => widget.images?.resolve(src),
         child: EditorWorkbench(
-        key: _bench,
-        onEdit: _apply,
-        pickImage: widget.images == null ? null : (from) => widget.images!.pick(context, from),
-        onNodeMenu: (id, at) => unawaited(_nodeMenu(id, at)),
-        doc: _temp,
-        selected: _selected,
-        onSelect: _select,
-        onAdd: _addByTap,
-        onDrop: _drop,
-        canDrop: _canDrop,
-        // 最外层不能删（组件只能有一个最外层）。
-        canDelete: (id) => id != _top?.id,
-        onDelete: (id) {
-          _apply((d) => d.remove(id));
-          setState(() => _selected = null);
-        },
-        onResize: _resize,
-        recents: widget.recents,
-        onLayers: () => unawaited(_openLayers()),
-        onUndo: _history.canUndo ? () => _restore(_history.undo()) : null,
-        onRedo: _history.canRedo ? () => _restore(_history.redo()) : null,
-        presetWidth: _presetWidth,
-        showBoxModel: _showBoxModel,
-        selectionBar: node == null ? null : _selectionBar(context, node),
-      ),
+          key: _bench,
+          onEdit: _apply,
+          pickImage: widget.images == null ? null : (from) => widget.images!.pick(context, from),
+          onNodeMenu: (id, at) => unawaited(_nodeMenu(id, at)),
+          doc: _temp,
+          selected: _selected,
+          onSelect: _select,
+          onAdd: _addByTap,
+          onDrop: _drop,
+          canDrop: _canDrop,
+          // 最外层不能删（组件只能有一个最外层）。
+          canDelete: (id) => id != _top?.id,
+          onDelete: (id) {
+            _apply((d) => d.remove(id));
+            setState(() => _selected = null);
+          },
+          onResize: _resize,
+          recents: widget.recents,
+          onLayers: () => unawaited(_openLayers()),
+          onUndo: _history.canUndo ? () => _restore(_history.undo()) : null,
+          onRedo: _history.canRedo ? () => _restore(_history.redo()) : null,
+          presetWidth: _presetWidth,
+          showBoxModel: _showBoxModel,
+          selectionBar: node == null ? null : _selectionBar(context, node),
+        ),
       ),
     );
   }

@@ -36,7 +36,12 @@ class InspectorRow extends StatelessWidget {
               children: [
                 SizedBox(
                   width: 72,
-                  child: Text(label, style: t.bodyMedium?.copyWith(color: c.textMuted), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  child: Text(
+                    label,
+                    style: t.bodyMedium?.copyWith(color: c.textMuted),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
                 Expanded(
                   child: scroll ? SingleChildScrollView(scrollDirection: Axis.horizontal, child: child) : child,
@@ -77,10 +82,16 @@ class InspectorChip extends StatelessWidget {
             height: 36,
             constraints: const BoxConstraints(minWidth: 40),
             padding: const EdgeInsets.symmetric(horizontal: Space.x3),
-            alignment: Alignment.center,
-            child: icon != null
-                ? Icon(icon, size: 18, color: fg)
-                : Text(label, style: t.bodyMedium?.copyWith(color: fg, fontWeight: selected ? FontWeight.w600 : FontWeight.w400, height: 1.2)),
+            // 不用 alignment：放进会换行的一排里时它会把自己撑满整行（出截图时发现整条刻度一行只有一档）
+            child: Center(
+              widthFactor: 1,
+              child: icon != null
+                  ? Icon(icon, size: 18, color: fg)
+                  : Text(
+                      label,
+                      style: t.bodyMedium?.copyWith(color: fg, fontWeight: selected ? FontWeight.w600 : FontWeight.w400, height: 1.2),
+                    ),
+            ),
           ),
         ),
       ),
@@ -227,7 +238,12 @@ class _PresetRowState extends State<PresetRow> {
                           keyboardType: const TextInputType.numberWithOptions(decimal: true),
                           inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
                           style: t.bodyMedium,
-                          decoration: InputDecoration(isDense: true, hintText: '默认', contentPadding: const EdgeInsets.symmetric(horizontal: Space.x2, vertical: 10), suffixText: widget.unit.isEmpty ? null : widget.unit),
+                          decoration: InputDecoration(
+                            isDense: true,
+                            hintText: '默认',
+                            contentPadding: const EdgeInsets.symmetric(horizontal: Space.x2, vertical: 10),
+                            suffixText: widget.unit.isEmpty ? null : widget.unit,
+                          ),
                           onChanged: (s) {
                             final n = num.tryParse(s);
                             if (n != null) widget.onChanged(n, typing: true);

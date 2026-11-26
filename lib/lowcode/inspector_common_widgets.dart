@@ -79,17 +79,18 @@ class _InspectorCommonPageState extends State<InspectorCommonPage> {
     );
   }
 
-  Widget _preset(String prop, String label, String cssName, {List<int> quick = const [0, 8, 16, 24], List<int> scale = kSpacingScale, Map<int, String> names = _zeroNone, bool clearable = true}) => PresetRow(
-    key: Key('lc-common-$prop'),
-    id: prop,
-    label: label,
-    value: _px(cssName),
-    quick: quick,
-    scale: scale,
-    names: names,
-    clearable: clearable,
-    onChanged: (v, {typing = false}) => _set(prop, v, merge: typing),
-  );
+  Widget _preset(String prop, String label, String cssName, {List<int> quick = const [0, 8, 16, 24], List<int> scale = kSpacingScale, Map<int, String> names = _zeroNone, bool clearable = true}) =>
+      PresetRow(
+        key: Key('lc-common-$prop'),
+        id: prop,
+        label: label,
+        value: _px(cssName),
+        quick: quick,
+        scale: scale,
+        names: names,
+        clearable: clearable,
+        onChanged: (v, {typing = false}) => _set(prop, v, merge: typing),
+      );
 
   Widget _padding() => _preset('padding', '内边距', 'padding-top');
   Widget _margin() => _preset('margin', '外边距', 'margin-top');
@@ -140,7 +141,8 @@ class _InspectorCommonPageState extends State<InspectorCommonPage> {
     );
   }
 
-  Widget _textAlign() => InspectorChoiceRow(id: 'textAlign', label: '对齐', options: const {'left': '靠左', 'center': '居中', 'right': '靠右'}, selected: _css('text-align') ?? 'left', onChanged: (v) => _set('textAlign', v));
+  Widget _textAlign() =>
+      InspectorChoiceRow(id: 'textAlign', label: '对齐', options: const {'left': '靠左', 'center': '居中', 'right': '靠右'}, selected: _css('text-align') ?? 'left', onChanged: (v) => _set('textAlign', v));
 
   Widget _switch(String id, String label, bool value, ValueChanged<bool> onChanged) => InspectorRow(
     label: label,

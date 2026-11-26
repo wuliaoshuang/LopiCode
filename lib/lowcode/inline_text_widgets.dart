@@ -129,7 +129,15 @@ class _InlineTextEditorState extends State<InlineTextEditor> {
                             fontWeight: weight == 'bold' || (int.tryParse(weight ?? '') ?? 400) >= 600 ? FontWeight.w600 : FontWeight.w400,
                             height: n.type == 'text' ? 1.5 : null,
                           ),
-                          decoration: const InputDecoration.collapsed(hintText: null),
+                          // 各种状态的边框都关掉：只写 collapsed 的话，聚焦时主题里的圆角描边还会画出来（截图里按钮中间多了一圈）
+                          decoration: const InputDecoration(
+                            isCollapsed: true,
+                            filled: false,
+                            border: InputBorder.none,
+                            enabledBorder: InputBorder.none,
+                            focusedBorder: InputBorder.none,
+                            contentPadding: EdgeInsets.zero,
+                          ),
                           onSubmitted: (_) => _finish(),
                         ),
                       ),

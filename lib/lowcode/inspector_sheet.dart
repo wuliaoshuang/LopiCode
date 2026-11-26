@@ -267,7 +267,10 @@ class InspectorPanelState extends State<InspectorPanel> {
         // 面板怎么关的都算（下滑、点外面、返回键）：关之前把没提交的交出去。
         onPopInvokedWithResult: (_, _) => flush(),
         // 键盘的高度垫在面板外面：滚动区到键盘上沿为止，被编辑的那一行才会被滚到看得见的地方。
-        child: Padding(padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom), child: sheet),
+        child: Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+          child: sheet,
+        ),
       );
     }
     final c = context.colors;
@@ -459,7 +462,10 @@ class InspectorPanelState extends State<InspectorPanel> {
         child: SizedBox(
           height: 36,
           child: Center(
-            child: Text(p.label, style: t.bodyMedium?.copyWith(color: on ? c.accent : c.textMuted, fontWeight: on ? FontWeight.w600 : FontWeight.w400, height: 1.2)),
+            child: Text(
+              p.label,
+              style: t.bodyMedium?.copyWith(color: on ? c.accent : c.textMuted, fontWeight: on ? FontWeight.w600 : FontWeight.w400, height: 1.2),
+            ),
           ),
         ),
       ),

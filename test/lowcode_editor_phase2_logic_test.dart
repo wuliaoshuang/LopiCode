@@ -20,7 +20,10 @@ List<String> _ids(LcNode n) => [n.id, for (final c in n.children) ..._ids(c)];
 
 /// 页面 → [文字A, 容器(文字B, 按钮), 卡片()]
 (LcDocument, Map<String, String>) _page() {
-  final doc = LcDocument(title: 't', root: LcNode(id: 'root', type: 'page', props: Map.of(lcSpecs['page']!.defaults)));
+  final doc = LcDocument(
+    title: 't',
+    root: LcNode(id: 'root', type: 'page', props: Map.of(lcSpecs['page']!.defaults)),
+  );
   LcNode add(String parent, String type, [String? text]) {
     final n = doc.newNode(type);
     if (text != null) n.props['text'] = text;
@@ -310,7 +313,19 @@ void main() {
       await lcImportImage(guard, 'a.png', Uint8List.fromList([1]));
       expect(lcResolveImage(guard, 'images/a.png'), p.join(guard.root, 'images', 'a.png'));
       expect(lcResolveImage(guard, ' images/a.png?v=2 '), p.join(guard.root, 'images', 'a.png'));
-      for (final bad in ['https://x.com/a.png', 'data:image/png;base64,AAAA', '//x.com/a.png', '../a.png', 'images/../../a.png', '/etc/passwd', '/etc/a.png', 'file:///a.png', 'images/a.txt', '', '.lopicode/a.png']) {
+      for (final bad in [
+        'https://x.com/a.png',
+        'data:image/png;base64,AAAA',
+        '//x.com/a.png',
+        '../a.png',
+        'images/../../a.png',
+        '/etc/passwd',
+        '/etc/a.png',
+        'file:///a.png',
+        'images/a.txt',
+        '',
+        '.lopicode/a.png',
+      ]) {
         expect(lcResolveImage(guard, bad), isNull, reason: bad);
       }
       expect(lcIsRemoteSrc('HTTPS://x.com/a.png'), isTrue);
@@ -371,7 +386,10 @@ void main() {
     });
 
     test('“常用”和“图层折叠”各记各的，互不覆盖；同时存也不丢', () async {
-      await Future.wait([savePaletteRecent(guard, ['text', 'button']), saveLayersCollapsed(guard, {'n3', 'n1'})]);
+      await Future.wait([
+        savePaletteRecent(guard, ['text', 'button']),
+        saveLayersCollapsed(guard, {'n3', 'n1'}),
+      ]);
       expect(await loadPaletteRecent(guard), ['text', 'button']);
       expect(await loadLayersCollapsed(guard), {'n1', 'n3'});
       await savePaletteRecent(guard, ['image']);

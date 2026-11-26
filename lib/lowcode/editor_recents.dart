@@ -25,7 +25,12 @@ Future<Map<String, dynamic>> _read(PathGuard guard) async {
   } on PathGuardException {
     return {};
   }
-  return raw is Map ? {for (final e in raw.entries) if (e.key is String) e.key as String: e.value} : {};
+  return raw is Map
+      ? {
+          for (final e in raw.entries)
+            if (e.key is String) e.key as String: e.value,
+        }
+      : {};
 }
 
 List<String> _strings(Object? list) => [

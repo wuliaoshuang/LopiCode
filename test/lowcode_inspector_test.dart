@@ -383,7 +383,9 @@ void main() {
       }
       expect(find.text('上移'), findsNothing);
       expect(tester.widget<PopupMenuItem<String>>(find.widgetWithText(PopupMenuItem<String>, '粘贴到它后面')).enabled, isFalse);
-      final ys = [for (final l in ['复制', '重复一份', '包成容器', '删除']) tester.getCenter(find.text(l)).dy];
+      final ys = [
+        for (final l in ['复制', '重复一份', '包成容器', '删除']) tester.getCenter(find.text(l)).dy,
+      ];
       expect(ys, [...ys]..sort(), reason: '删除在最后');
       await tester.tapAt(const Offset(5, 5)); // 点外面关掉
       await tester.pumpAndSettle();
@@ -433,7 +435,11 @@ void main() {
       doc = await saved(tester, session);
       expect(doc.root.children.first.type, 'container');
       expect(doc.root.children.first.children.single.id, 'n1');
-      expect(find.descendant(of: k('lc-selection-bar'), matching: find.text('容器')), findsOneWidget, reason: '包完选中的是新容器');
+      expect(
+        find.descendant(of: k('lc-selection-bar'), matching: find.text('容器')),
+        findsOneWidget,
+        reason: '包完选中的是新容器',
+      );
       await longPress(tester, node('n2'));
       await tester.tap(find.widgetWithText(PopupMenuItem<String>, '删除'));
       await tester.pumpAndSettle();
@@ -561,7 +567,9 @@ void main() {
       var doc = await saved(tester, session);
       expect(doc.root.children.map((n) => n.id).toList(), ['n2', 'n1', 'n3']);
       expect(find.byType(LayerSheet), findsOneWidget);
-      final ys = [for (final id in ['n2', 'n1', 'n3']) tester.getCenter(k('lc-layer-$id')).dy];
+      final ys = [
+        for (final id in ['n2', 'n1', 'n3']) tester.getCenter(k('lc-layer-$id')).dy,
+      ];
       expect(ys, [...ys]..sort(), reason: '面板里的顺序跟着变了');
       // n1 拖到卡片那一行的右半边：放进卡片里
       g = await tester.startGesture(tester.getCenter(k('lc-layer-n1')));

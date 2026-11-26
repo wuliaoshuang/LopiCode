@@ -232,6 +232,7 @@ class EditorWorkbenchState extends State<EditorWorkbench> {
       if (prop != null) n!.props[prop] = text;
     });
   }
+
   bool get dragging => _drag != null;
 
   void togglePalette() => setState(() {
@@ -356,76 +357,76 @@ class EditorWorkbenchState extends State<EditorWorkbench> {
                 children: [
                   Column(
                     children: [
-            Expanded(
-              child: LayoutBuilder(
-                builder: (context, box) => Stack(
-                  children: [
-                    Positioned.fill(
-                      child: CanvasView(
-                        key: _canvasKey,
-                        doc: widget.doc,
-                        selected: widget.selected,
-                        onSelect: _tapNode,
-                        canDrop: widget.canDrop,
-                        onResize: widget.onResize,
-                        onLift: _lift,
-                        onLiftMove: _move,
-                        onLiftDrop: () => _end(cancelled: false),
-                        onLiftCancel: () => _end(cancelled: true),
-                        presetWidth: widget.presetWidth,
-                        showBoxModel: widget.showBoxModel,
-                        topInset: topInset,
-                        // 合一面板开着：它盖住的那一段不算画布的可见范围（选中的组件滚到它上方）。
-                        bottomInset: _inspector != null && selected != null
-                            ? ((box.maxHeight + kEditorSelectionBarHeight) * kInspectorInitialSize - kEditorSelectionBarHeight).clamp(0.0, box.maxHeight * 0.75).toDouble()
-                            : (_paletteOpen ? kPaletteHandleHeight : 0),
-                      ),
-                    ),
-                    if (_paletteOpen)
-                      Positioned(
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        child: PalettePanel(
-                          key: _paletteKey,
-                          entries: paletteEntries(widget.doc.components),
-                          recent: widget.recents.keys,
-                          maxHeight: (box.maxHeight - topInset).clamp(kPaletteHandleHeight, double.infinity).toDouble(),
-                          onTap: _tapAdd,
-                          onLift: (e, at) => _lift(e.ref == null ? LcDrag.fresh(e.type) : LcDrag.component(e.ref!), at),
-                          onLiftMove: _move,
-                          onLiftDrop: () => _end(cancelled: false),
-                          onLiftCancel: () => _end(cancelled: true),
-                          onClose: () => setState(() => _paletteOpen = false),
+                      Expanded(
+                        child: LayoutBuilder(
+                          builder: (context, box) => Stack(
+                            children: [
+                              Positioned.fill(
+                                child: CanvasView(
+                                  key: _canvasKey,
+                                  doc: widget.doc,
+                                  selected: widget.selected,
+                                  onSelect: _tapNode,
+                                  canDrop: widget.canDrop,
+                                  onResize: widget.onResize,
+                                  onLift: _lift,
+                                  onLiftMove: _move,
+                                  onLiftDrop: () => _end(cancelled: false),
+                                  onLiftCancel: () => _end(cancelled: true),
+                                  presetWidth: widget.presetWidth,
+                                  showBoxModel: widget.showBoxModel,
+                                  topInset: topInset,
+                                  // 合一面板开着：它盖住的那一段不算画布的可见范围（选中的组件滚到它上方）。
+                                  bottomInset: _inspector != null && selected != null
+                                      ? ((box.maxHeight + kEditorSelectionBarHeight) * kInspectorInitialSize - kEditorSelectionBarHeight).clamp(0.0, box.maxHeight * 0.75).toDouble()
+                                      : (_paletteOpen ? kPaletteHandleHeight : 0),
+                                ),
+                              ),
+                              if (_paletteOpen)
+                                Positioned(
+                                  left: 0,
+                                  right: 0,
+                                  bottom: 0,
+                                  child: PalettePanel(
+                                    key: _paletteKey,
+                                    entries: paletteEntries(widget.doc.components),
+                                    recent: widget.recents.keys,
+                                    maxHeight: (box.maxHeight - topInset).clamp(kPaletteHandleHeight, double.infinity).toDouble(),
+                                    onTap: _tapAdd,
+                                    onLift: (e, at) => _lift(e.ref == null ? LcDrag.fresh(e.type) : LcDrag.component(e.ref!), at),
+                                    onLiftMove: _move,
+                                    onLiftDrop: () => _end(cancelled: false),
+                                    onLiftCancel: () => _end(cancelled: true),
+                                    onClose: () => setState(() => _paletteOpen = false),
+                                  ),
+                                ),
+                            ],
+                          ),
                         ),
                       ),
-                  ],
-                ),
-              ),
-            ),
-            // 拖动时选中条留在原地（页面不跳），但变淡、点不了：手里拿着东西时它那几个按钮用不上
-            if (widget.selectionBar != null)
-              IgnorePointer(
-                ignoring: drag != null,
-                child: Opacity(key: const ValueKey('lc-selection-bar-wrap'), opacity: drag == null ? 1 : 0.4, child: widget.selectionBar),
-              ),
+                      // 拖动时选中条留在原地（页面不跳），但变淡、点不了：手里拿着东西时它那几个按钮用不上
+                      if (widget.selectionBar != null)
+                        IgnorePointer(
+                          ignoring: drag != null,
+                          child: Opacity(key: const ValueKey('lc-selection-bar-wrap'), opacity: drag == null ? 1 : 0.4, child: widget.selectionBar),
+                        ),
                     ],
                   ),
                   // 合一面板：盖住选中条和画布的下半截，最底下的工具条（撤销 / 重做 / 预览）一直露着。
                   if (_inspector != null && selected != null && widget.onEdit != null && drag == null)
-          Positioned.fill(
-            child: InspectorPanel(
-              key: _inspectorKey,
-              doc: widget.doc,
-              nodeId: selected,
-              onEdit: widget.onEdit!,
-              initialPage: _inspector!,
-              onClose: closeInspector,
-              pickImage: widget.pickImage,
-              onOpenLogic: widget.onOpenLogic,
-              onAddLogic: widget.onAddLogic,
-            ),
-          ),
+                    Positioned.fill(
+                      child: InspectorPanel(
+                        key: _inspectorKey,
+                        doc: widget.doc,
+                        nodeId: selected,
+                        onEdit: widget.onEdit!,
+                        initialPage: _inspector!,
+                        onClose: closeInspector,
+                        pickImage: widget.pickImage,
+                        onOpenLogic: widget.onOpenLogic,
+                        onAddLogic: widget.onAddLogic,
+                      ),
+                    ),
                 ],
               ),
             ),

@@ -23,11 +23,12 @@ export 'package:lopicode/lowcode/component_ops.dart' show componentLabel;
 
 /// 自定义组件：列出已有组件（可插入、改名、改 props、删除），并可把 [selectedNodeId] 那棵子树存成新组件。
 /// 返回新插入 / 新变成实例的节点 id（没有就是 null），搭建页拿去选中。
-Future<String?> showComponentSheet(BuildContext context, {required LcDocument doc, required LcEdit onEdit, String? selectedNodeId, PaletteRecents? recents, LcImages? images}) => showModalBottomSheet<String>(
-  context: context,
-  isScrollControlled: true,
-  builder: (_) => _ComponentSheet(doc: doc, onEdit: onEdit, selectedNodeId: selectedNodeId, recents: recents, images: images),
-);
+Future<String?> showComponentSheet(BuildContext context, {required LcDocument doc, required LcEdit onEdit, String? selectedNodeId, PaletteRecents? recents, LcImages? images}) =>
+    showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => _ComponentSheet(doc: doc, onEdit: onEdit, selectedNodeId: selectedNodeId, recents: recents, images: images),
+    );
 
 /// “存成组件”：问一个名字，把 [nodeId] 那棵子树存成新组件、原位置换成实例（一条撤销记录）。
 /// 返回实例的 id；取消或存不了返回 null（存不了时会弹一句原因）。
