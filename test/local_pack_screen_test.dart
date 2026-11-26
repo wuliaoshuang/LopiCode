@@ -251,8 +251,8 @@ void main() {
       expect(find.text(workspacePath), findsOneWidget);
       expect(find.text(publicPath), findsOneWidget);
       expect(File(workspacePath).existsSync() && File(publicPath).existsSync(), isTrue);
-      expect(find.text('怎么装到手机上'), findsOneWidget);
-      expect(find.textContaining('直接安装'), findsNothing, reason: '没有“直接安装”按钮（要新权限）');
+      expect(find.text('点“安装”不行的话，也可以手动装'), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, '安装'), findsOneWidget, reason: '结果卡上有“安装”主按钮（2026-11-26 霜霜同意加安装权限）');
       await tester.drag(find.byType(ListView).first, const Offset(0, -80));
       await settle(tester, rounds: 2);
       await shot(tester, 'pack-07-done-$suffix');
@@ -263,7 +263,7 @@ void main() {
       expect(copied.last, publicPath);
       await tapOn(tester, find.byKey(const Key('pack-open-files')));
       expect(went, [ShellDest.files]);
-      await reveal(tester, find.textContaining('怎么装到手机上'));
+      await reveal(tester, find.textContaining('也可以手动装'));
       await tester.drag(find.byType(ListView).first, const Offset(0, -400));
       await tester.pump(const Duration(seconds: 5)); // 等“已复制”的提示条收起来
       await settle(tester, rounds: 2);

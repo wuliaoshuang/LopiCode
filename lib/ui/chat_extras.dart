@@ -15,6 +15,7 @@ import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/app_backdrop.dart';
 import 'package:lopicode/ui/chrome.dart';
 import 'package:lopicode/ui/code_view.dart';
+import 'package:lopicode/ui/message_text.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// 聊天行里要用到、但行自己拿不到的几个动作。由聊天页在列表外面套一层提供；没套（比如只读的子对话页）就不出现对应按钮。
@@ -39,6 +40,46 @@ String formatThinkingSpan(int ms) {
   final s = (ms / 1000).round();
   if (ms < 1000) return '不到 1 秒';
   return s < 60 ? '$s 秒' : '${s ~/ 60} 分 ${s % 60} 秒';
+}
+
+/// 思考那一行写什么：还在想＝“正在思考… N 秒”，想完＝“思考了 N 秒”（旧记录没存用时就只写“思考过程”）。
+String thinkingLineOf(ThinkingItem item) {
+  if (item.streaming) {
+    final from = item.startedAt;
+    final secs = from == null ? 0 : DateTime.now().difference(from).inSeconds;
+    return secs < 1 ? '正在思考…' : '正在思考… $secs 秒';
+  }
+  return item.ms == null ? '思考过程' : (item.ms! < 1000 ? '思考了不到 1 秒' : '思考了 ${formatThinkingSpan(item.ms!)}');
+}
+
+/// 每秒重画一次里面的东西（给“已经想了几秒”这种自己会变的字用）。
+class SecondTick extends StatefulWidget {
+  const SecondTick({super.key, required this.builder});
+  final WidgetBuilder builder;
+
+  @override
+  State<SecondTick> createState() => _SecondTickState();
+}
+
+class _SecondTickState extends State<SecondTick> {
+  late final Timer _tick;
+
+  @override
+  void initState() {
+    super.initState();
+    _tick = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _tick.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.builder(context);
 }
 
 /// 一段思考：一行，点开看全文。
@@ -89,14 +130,7 @@ class _ThinkingRowState extends State<ThinkingRow> {
     final c = context.colors;
     final t = Theme.of(context).textTheme;
     final item = widget.item;
-    final String label;
-    if (item.streaming) {
-      final from = item.startedAt;
-      final secs = from == null ? 0 : DateTime.now().difference(from).inSeconds;
-      label = secs < 1 ? '正在思考…' : '正在思考… $secs 秒';
-    } else {
-      label = item.ms == null ? '思考过程' : (item.ms! < 1000 ? '思考了不到 1 秒' : '思考了 ${formatThinkingSpan(item.ms!)}');
-    }
+    final label = thinkingLineOf(item);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -148,7 +182,8 @@ class _ThinkingRowState extends State<ThinkingRow> {
               // 还在想：贴着底看最新的
               reverse: item.streaming,
               padding: const EdgeInsets.all(Space.x3),
-              child: SelectableText(item.text.trim(), style: t.bodySmall?.copyWith(color: c.textMuted, height: 1.6)),
+              // 和正文同一套 Markdown 排版，只是小字、灰色
+              child: MessageText(item.text.trim(), muted: true, streaming: false),
             ),
           ),
       ],

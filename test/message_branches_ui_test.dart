@@ -11,6 +11,7 @@ import 'package:lopicode/session/message_branches.dart';
 import 'package:lopicode/ui/chat_panels.dart';
 import 'package:lopicode/ui/keyboard_tap_dismiss.dart';
 import 'package:lopicode/ui/message_action_bar.dart';
+import 'package:lopicode/ui/message_text.dart';
 import 'package:lopicode/ui/project_shell.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -164,7 +165,7 @@ void main() {
       }
     }
 
-    Finder bubble(String text) => find.byWidgetPredicate((w) => w is SelectableText && w.data == text);
+    Finder bubble(String text) => find.byWidgetPredicate((w) => w is MessageText && w.text == text);
     Finder bar(String id) => find.byKey(ValueKey('message-actions-$id'));
     Finder icon(String kind, String id) => find.byKey(ValueKey('message-$kind-$id'));
     Finder more(String kind) => find.byKey(ValueKey('more-$kind'));
@@ -183,25 +184,25 @@ void main() {
       await settle(tester, rounds: 4);
     }
 
-    testWidgets('操作栏：我的消息是复制、编辑、更多；Agent 回复是复制、重试、更多；一排不超过 4 个，都够 44×44；分支在“更多”里 ($suffix)', (tester) async {
+    testWidgets('操作栏：常驻四个——我的消息是复制、编辑、重新发送、更多；Agent 回复是复制、编辑、重试、更多；都够 44×44；分支在“更多”里 ($suffix)', (tester) async {
       await boot(tester);
       await twoTurns(tester);
       await show(tester);
       final mine = idOf('看看首页'), last = idOf('首页看完了，结构没问题。'), bye = idOf('不客气 1。');
       for (final (id, kinds) in [
-        (mine, ['copy', 'edit', 'more']),
-        (last, ['copy', 'retry', 'more']),
-        (bye, ['copy', 'retry', 'more']),
+        (mine, ['copy', 'edit', 'retry', 'more']),
+        (last, ['copy', 'edit', 'retry', 'more']),
+        (bye, ['copy', 'edit', 'retry', 'more']),
       ]) {
         final xs = [for (final k in kinds) tester.getTopLeft(icon(k, id)).dx];
         expect(xs, orderedEquals([...xs]..sort()), reason: '$kinds 从左到右');
-        expect(find.descendant(of: bar(id), matching: find.byType(InkResponse)), findsNWidgets(3));
+        expect(find.descendant(of: bar(id), matching: find.byType(InkResponse)), findsNWidgets(4));
         for (final k in kinds) {
           expect(tester.getSize(icon(k, id)), const Size(44, 44));
         }
       }
-      expect(icon('retry', mine), findsNothing);
-      expect(icon('edit', last), findsNothing);
+      expect(find.byTooltip('重新发送'), findsNWidgets(2), reason: '我的两条消息上第三个按钮叫“重新发送”');
+      expect(find.byTooltip('重试'), findsNWidgets(2));
       await shot(tester, 'ops2-01-action-bar-$suffix');
 
       // Agent 回复的“更多”：从这里分支排第一
@@ -209,12 +210,13 @@ void main() {
       expect(find.text('从这里分支'), findsOneWidget);
       expect(find.text('另开一段对话：到这段回复为止。原对话不动'), findsOneWidget);
       expect(more('retry'), findsNothing, reason: '常驻的不重复');
+      expect(more('edit'), findsNothing, reason: '常驻的不重复');
       await shot(tester, 'ops2-02-more-reply-$suffix');
       await tester.tapAt(const Offset(195, 80));
       await steps(tester);
-      // 我的消息的“更多”：重新发送、从这里分支
+      // 我的消息的“更多”：从这里分支在；重新发送已经常驻，不在这里重复
       await tapIcon(tester, 'more', mine);
-      expect(find.text('重新发送'), findsOneWidget);
+      expect(more('retry'), findsNothing, reason: '常驻的不重复');
       expect(find.text('从这里分支'), findsOneWidget);
       expect(more('edit'), findsNothing);
       await shot(tester, 'ops2-03-more-mine-$suffix');
@@ -397,11 +399,12 @@ void main() {
       await waitReal(tester, () => session.activeConversationId == 'main', what: '回到原对话');
       await settle(tester, rounds: 6);
       expect(bubble('谢谢'), findsOneWidget);
-      // 原消息上多了一个“分出去的对话”图标（一排仍不超过 4 个）
+      // 原消息上多了一个“分出去的对话”记号：排在四个按钮的外侧（Agent 的回复在右边），四个按钮不动
       await tester.ensureVisible(bar(at));
       await tester.pump();
       expect(icon('branches', at), findsOneWidget);
-      expect(find.descendant(of: bar(at), matching: find.byType(InkResponse)).evaluate().length, lessThanOrEqualTo(4));
+      expect(find.descendant(of: bar(at), matching: find.byType(InkResponse)), findsNWidgets(5));
+      expect(tester.getTopLeft(icon('branches', at)).dx, greaterThan(tester.getTopLeft(icon('more', at)).dx));
       await shot(tester, 'ops2-14-origin-branches-icon-$suffix');
       await tapIcon(tester, 'branches', at);
       expect(find.text('这里分出去的对话'), findsOneWidget);
@@ -412,7 +415,7 @@ void main() {
       await waitReal(tester, () => session.activeConversationId == branchId, what: '从列表切到分支');
     });
 
-    testWidgets('从我的消息分支：这条消息放进新分支的输入框；一排图标在已收藏 + 有分支时仍不超过 4 个 ($suffix)', (tester) async {
+    testWidgets('从我的消息分支：这条消息放进新分支的输入框；已收藏 + 有分支时两个记号都在四个按钮外侧、一排放得下 ($suffix)', (tester) async {
       await boot(tester);
       await twoTurns(tester);
       await show(tester);
@@ -433,11 +436,19 @@ void main() {
       await settle(tester, rounds: 6);
       await tester.ensureVisible(bar(at));
       await tester.pump();
-      expect(find.descendant(of: bar(at), matching: find.byType(InkResponse)).evaluate().length, lessThanOrEqualTo(4));
+      // 四个按钮 + 收藏、分支两个记号；记号在我的消息上排在左边，一排没有超出屏幕
+      expect(find.descendant(of: bar(at), matching: find.byType(InkResponse)), findsNWidgets(6));
       expect(icon('favorite', at), findsOneWidget);
-      // 让位进“更多”的那个还找得到
+      expect(icon('branches', at), findsOneWidget);
+      for (final k in ['favorite', 'branches']) {
+        expect(tester.getTopLeft(icon(k, at)).dx, lessThan(tester.getTopLeft(icon('copy', at)).dx), reason: k);
+      }
+      expect(tester.getTopLeft(bar(at)).dx, greaterThanOrEqualTo(0));
+      expect(tester.getTopRight(bar(at)).dx, lessThanOrEqualTo(390));
+      expect(tester.takeException(), isNull);
+      // 两个记号都常驻了，“更多”里不重复
       await tapIcon(tester, 'more', at);
-      expect(find.textContaining('这里分出去的对话（1）'), findsOneWidget);
+      expect(find.textContaining('这里分出去的对话（1）'), findsNothing);
       await shot(tester, 'ops2-16-favorite-and-branches-$suffix');
     });
 
@@ -460,11 +471,15 @@ void main() {
       await tapIcon(tester, 'edit', first);
       expect(find.byKey(const ValueKey('edit-chip')), findsNothing);
       expect(session.conversations, hasLength(1));
+      // 正在跑的这一轮里我的那条：重新发送（现在常驻）也是灰的，点了说原因
+      await tester.pump(const Duration(seconds: 5));
+      await tapIcon(tester, 'retry', second);
+      expect(find.text(kRewindWhileBusy), findsOneWidget);
 
       await tapIcon(tester, 'more', second);
       expect(tester.widget<ListTile>(more('branch')).enabled, isFalse);
       expect(find.text(kBranchRunningTurn), findsOneWidget);
-      expect(tester.widget<ListTile>(more('retry')).enabled, isFalse);
+      expect(more('retry'), findsNothing, reason: '重新发送常驻了，不在“更多”里');
       await shot(tester, 'ops2-18-busy-more-$suffix');
       await tester.tapAt(const Offset(195, 80));
       await steps(tester);

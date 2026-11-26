@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/gestures.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lopicode/agent/chat_client.dart';
 import 'package:lopicode/agent/model_config.dart';
@@ -17,6 +18,7 @@ import 'package:lopicode/ui/files_tab.dart';
 import 'package:lopicode/ui/keyboard_dismiss.dart';
 import 'package:lopicode/ui/keyboard_tap_dismiss.dart';
 import 'package:lopicode/ui/mcp_edit_screen.dart';
+import 'package:lopicode/ui/message_text.dart';
 import 'package:lopicode/ui/project_shell.dart';
 import 'package:lopicode/ui/shell.dart';
 import 'package:lopicode/ui/widgets.dart';
@@ -343,19 +345,20 @@ void main() {
     testWidgets('长按消息文字选字：选得上，不被打断', (tester) async {
       await openChat(tester);
       await focusChat(tester);
-      final msg = find.descendant(of: find.byType(ChatScreen), matching: find.byType(SelectableText)).first;
+      // 正文现在是渲染过的 Markdown（MessageText 里一个 SelectionArea 包着若干段文字），不再是一个 SelectableText
+      final msg = find.descendant(of: find.byType(ChatScreen), matching: find.byType(MessageText)).first;
       // 聊天页打开就贴在底部，这条长回复的中心可能在屏幕外：按它露在列表里的那一段的中间
       final seen = tester.getRect(msg).intersect(tester.getRect(find.descendant(of: find.byType(ChatScreen), matching: find.byType(ListView)).first));
       expect(seen.height, greaterThan(40), reason: '这条消息有一段露在屏幕上');
+      List<TextSelection> selections() => [for (final r in tester.renderObjectList<RenderParagraph>(find.descendant(of: msg, matching: find.byType(RichText)))) ...r.selections];
       await tester.longPressAt(seen.center);
       await tester.pump(const Duration(milliseconds: 300));
-      final sel = tester.widget<EditableText>(find.descendant(of: msg, matching: find.byType(EditableText))).controller.selection;
-      expect(sel.isValid && !sel.isCollapsed, isTrue, reason: '长按选中了一个词');
+      final sel = selections();
+      expect(sel.any((s) => s.isValid && !s.isCollapsed), isTrue, reason: '长按选中了一个词');
       expect(tester.takeException(), isNull);
-      // 选中状态下再去拖动列表、等几帧：选区还在
+      // 选中状态下再等几帧：选区还在
       await tester.pump(const Duration(milliseconds: 300));
-      final sel2 = tester.widget<EditableText>(find.descendant(of: msg, matching: find.byType(EditableText))).controller.selection;
-      expect(sel2, sel);
+      expect(selections(), sel);
     });
 
     testWidgets('点顶栏按钮：按钮照常响应；点汉堡打开侧边栏照旧收键盘', (tester) async {

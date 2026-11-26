@@ -105,7 +105,7 @@ class ChatDisplayScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    for (final k in const [SettingKeys.chatSuggestions, SettingKeys.chatUsage, SettingKeys.chatThinking]) {
+    for (final k in const [SettingKeys.chatSuggestions, SettingKeys.chatUsage, SettingKeys.chatThinking, SettingKeys.chatAutoImages]) {
       ref.watch(settingRevProvider(k));
     }
     final s = appOf(context).settings;
@@ -144,6 +144,20 @@ class ChatDisplayScreen extends ConsumerWidget {
               switchKey: const Key('settings-thinking'),
               value: s.getBool(SettingKeys.chatThinking, true),
               onChanged: (v) => s.set(SettingKeys.chatThinking, v),
+            ),
+          ],
+        ),
+        SettingsGroup(
+          title: '消息里的图片',
+          footer: '关着时，消息里的网络图片先显示成一小块，点一下才去下载——这样模型写出来的图片地址不会悄悄联网。工作区里的图片不受影响，一直直接显示。',
+          children: [
+            SettingsSwitchRow(
+              icon: Icons.image_outlined,
+              title: '自动加载网络图片',
+              subtitle: '只加载 https 图片，单张不超过 5MB',
+              switchKey: const Key('settings-auto-images'),
+              value: s.getBool(SettingKeys.chatAutoImages, false),
+              onChanged: (v) => s.set(SettingKeys.chatAutoImages, v),
             ),
           ],
         ),

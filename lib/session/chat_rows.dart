@@ -1,9 +1,11 @@
 // 把一段对话的条目排成聊天页要画的“行”。纯计算：不读盘、不碰状态、不带界面。
 //
-// 规则（2026-11-24，霜霜嫌工具调用一条条刷屏）：
-// - 用户消息把对话切成一段一段；一段里从第一次工具调用到最后一次工具调用之间的东西
-//   （工具调用 + 模型在工具之间说的话）合成一个“步骤组”，只占一行；
-// - 最后一次工具调用之后模型说的话是正式回复，留在外面；用量脚注、提示也留在外面；
+// 规则（2026-11-24 霜霜嫌工具调用一条条刷屏；2026-11-26 真机反馈第五轮改成“一条连续的内容流”）：
+// - 用户消息把对话切成一轮一轮。Agent 的一轮按发生的先后一行行往下排，**排好的行不再挪位置**：
+//   · 模型说的话（不管后面还跟不跟工具）都是正文，单独一行；
+//   · 连着的工具调用合成一个“步骤组”，只占一行；模型一开口说话，这一组就收住，后面的工具另起一组；
+//   · 思考：出现在两次工具调用之间的，是组里的一行（组那一行会写“思考 N 段”）；其余的（一轮开头、说话之前）单独一行；
+// - 用量脚注、提示、改动清单照旧各占一行；
 // - 存盘格式不变：历史对话重新打开时，同样的条目经过这里得到同样的行。
 import 'dart:convert';
 
@@ -16,14 +18,13 @@ sealed class ChatRow {
   const ChatRow();
 }
 
-/// 原样显示的一项（用户消息、正式回复、用量脚注、提示）。
+/// 原样显示的一项（用户消息、Agent 说的话、单独一行的思考、用量脚注、提示）。
 class ItemRow extends ChatRow {
   const ItemRow(this.item);
   final ChatItem item;
 }
 
-/// 一组步骤：[steps] 里是 [ToolItem]（一次工具调用）、[AssistantItem]（工具之间模型说的话）、
-/// [ThinkingItem]（某一步之前的思考），按发生顺序。
+/// 一组步骤：[steps] 里是 [ToolItem]（一次工具调用）和 [ThinkingItem]（两步之间的思考），按发生顺序。第一项一定是工具调用。
 class StepGroupRow extends ChatRow {
   const StepGroupRow(this.steps, {required this.live});
   final List<ChatItem> steps;
@@ -52,40 +53,37 @@ List<ChatRow> deriveChatRows(List<ChatItem> all, {required bool busy, bool showT
 }
 
 void _segment(List<ChatItem> items, int from, int to, List<ChatRow> rows, {required bool live}) {
-  var lastTool = -1;
-  for (var i = from; i < to; i++) {
-    if (items[i] is ToolItem) lastTool = i;
-  }
-  final hasAfter = lastTool < to - 1;
   var group = <ChatItem>[];
-  void flush({required bool isLast}) {
-    if (group.isEmpty) return;
-    // 组里最后几句话后面没有工具调用了（被提示隔开）：它们不是步骤，放回外面。
-    final tail = <ChatItem>[];
-    while (group.isNotEmpty && group.last is! ToolItem) {
-      tail.insert(0, group.removeLast());
+  // 组里最后一步之后的思考：下一个要是工具就进组，要是正文 / 提示就留在外面单独一行。
+  var pending = <ChatItem>[];
+  void close({required bool end}) {
+    // 这一轮还在跑、组后面还什么都没有：下一步多半还是工具，思考先留在组里（那一行会写“正在思考…”），免得来回跳。
+    final open = end && live;
+    if (open) {
+      group.addAll(pending);
+      pending = <ChatItem>[];
     }
-    // 还在进行：组里有工具在跑，或者组后面还什么都没有（模型正在想下一步）。
-    final going = group.whereType<ToolItem>().any((t) => t.running) || (isLast && tail.isEmpty && !hasAfter);
-    if (group.isNotEmpty) rows.add(StepGroupRow(group, live: live && going));
-    rows.addAll(tail.map(ItemRow.new));
+    if (group.isNotEmpty) rows.add(StepGroupRow(group, live: live && (open || group.whereType<ToolItem>().any((t) => t.running))));
+    rows.addAll(pending.map(ItemRow.new));
     group = <ChatItem>[];
+    pending = <ChatItem>[];
   }
 
   for (var i = from; i < to; i++) {
     final item = items[i];
-    if (i > lastTool) {
-      flush(isLast: true);
-      rows.add(ItemRow(item));
-    } else if (item is ToolItem || item is AssistantItem || item is ThinkingItem) {
-      group.add(item);
+    if (item is ToolItem) {
+      group
+        ..addAll(pending)
+        ..add(item);
+      pending = <ChatItem>[];
+    } else if (item is ThinkingItem && group.isNotEmpty) {
+      pending.add(item);
     } else {
-      // 提示、用量脚注夹在中间：前面的先收成一组，顺序不动。
-      flush(isLast: false);
+      close(end: false);
       rows.add(ItemRow(item));
     }
   }
-  flush(isLast: true);
+  close(end: true);
 }
 
 /// 工具的种类（只管怎么显示、怎么计数；权限按 `ToolKind` 走，和这里无关）。

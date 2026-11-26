@@ -5,6 +5,7 @@ import 'package:lopicode/agent/message_ids.dart';
 import 'package:lopicode/session/chat_items.dart';
 import 'package:lopicode/session/chat_models.dart';
 import 'package:lopicode/session/message_ops.dart';
+import 'package:lopicode/session/reply_edit.dart';
 
 Map<String, dynamic> user(String id, String text) => {'role': 'user', 'content': text, '_id': id};
 Map<String, dynamic> bot(String id, String? text, {List<String> calls = const [], Map<String, dynamic> extra = const {}}) => {
@@ -120,7 +121,7 @@ void main() {
       expect(lastReplyIdsOf(m), {'a3', 'a4'});
     });
 
-    test('一轮停在带工具调用的那句话上（被打断）：那句收在步骤组里、没有操作栏，所以不算最后一段回复', () {
+    test('一轮停在带工具调用的那句话上（被打断）：那句现在是正文，这一轮没有正式回复，操作栏就挂在它下面', () {
       final m = [
         user('u1', '看看'),
         bot('a1', '好，先说结论。'),
@@ -128,7 +129,10 @@ void main() {
         bot('a2', '我读一下。', calls: ['c1']),
         result('c1'),
       ];
-      expect(lastReplyIdsOf(m), {'a1'});
+      expect(lastReplyIdsOf(m), {'a1', 'a2'});
+      expect(turnRepliesOf(m).keys.toSet(), {'a1', 'a2'});
+      // 有正式回复时还是挂在最后一段正式回复下面
+      expect(lastReplyIdsOf([...m, bot('a3', '读完了。')]), {'a1', 'a3'});
     });
 
     test('压缩摘要、应用通知不算“我的消息”，不会把一轮切开', () {

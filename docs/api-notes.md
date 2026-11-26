@@ -298,6 +298,28 @@
 - 自动压缩那一次请求：只发一条 system + 一条 user 的纯文字，不带 `tools`，三种协议都是最普通的请求形状；用量照常从各自的用量字段读。
 - **都没有用真实接口验证过**（没有 Key，也不许花钱）。
 
+# 2026-11-26 补充（真机反馈第五轮）：正文里的 `<think>` 标签
+
+记录时间：2026-11-26（北京时间下午）。
+
+- 很多中转站 / 本机模型（Ollama、vLLM、各种 OpenAI 兼容网关转出来的 DeepSeek-R1、QwQ 等）不走单独的思考字段，
+  而是把思考写在回复正文最开头的 `<think>…</think>` 里。**这是模型输出的习惯写法，不是哪家接口的规定，没有官方文档可对——未核对**；
+  `<thinking>…</thinking>` 这种写法同样凭经验认，**未核对**。
+- 我们的做法（`lib/agent/think_tags.dart`，三种协议都过这一层）：
+  - 只认**回复最开头**的标签（前面只许有空白），不分大小写；标签里的字改走“思考增量”，不进正文；收尾标签后面紧跟的空行去掉。
+  - 正文中间出现的标签不动（模型可能正在讲这个标签）。
+  - 一直没等到收尾标签：后面全部算思考，正文为空。
+  - 流式时标签可能被切开：还分不清是不是标签的那一小截先按住，分清再放行，正文里不会闪半截标签。
+  - 存盘：正文存剥离后的文字；思考存 `_reasoning`，另加 `_reasoningTag: true`。
+  - **带回规则**：带 `_reasoningTag` 的思考不作为 `reasoning_content` 带回（接口从没单独给过它）；接口自己给的 `reasoning_content`
+    照旧带回，DeepSeek 官方地址“开着思考时缺的补空串”也照旧（上面「DeepSeek 思考模式与工具调用」那一节没动）。
+  - 旧存档里连标签一起存进正文的回复：显示时剥出来，存档不改（下次发给模型的还是原样带标签的正文）。
+- 判错的后果：回复开头恰好是字面的 `<think>` 且模型并不是在思考——那一段会被显示成思考。按上面的“只认最开头”已经把这种情况压到很低。
+- 这一轮**没有加**的思考字段：OpenRouter 的 `reasoning_details`（数组）等。没打开文档核对，所以没写代码——**未核对**。
+  现在认的仍是：`delta.reasoning_content`、`delta.reasoning`（字符串）、Anthropic `thinking_delta`、
+  Responses 的 `response.reasoning_summary_text.delta` / `response.reasoning_text.delta`，加上正文标签。
+- 没有用真实接口验证过。
+
 
 ## 语言工具的一键安装（`lib/runtime/runtime_sources.dart` 的 `runtimePacks`、`lib/runtime/pack_install.dart`）
 
@@ -548,3 +570,75 @@ PHP 真跑撞到并修掉的 5 个问题，以及依据：
 - 工作进程数 4 是我们自己定的（`kPhpServerWorkers`）：一条“请求自己”的链最多同时占 2 个，留一倍余量。
 - 启动命令写成 `env PHP_CLI_SERVER_WORKERS=4 php -S …`：`env` 是 Ubuntu 自带的命令。**手机上的终端里这样写能不能用，没验证。**
 - 仍然成立的限制：用到集合的接口去请求这个服务自己、对方那个接口也要用集合时，两边抢同一把文件锁，会等到超时（和进程数无关）。
+
+## 2026-11-26 应用内安装 APK（`android/…/ApkInstallChannel.kt`、`ApkFileProvider.kt`、`lib/build/apk_installer.dart`）
+
+核对日期 2026-11-26（当天下午又对着 developer.android.com 补核了一遍，升级了几行的状态）。能打开原文的写“已核对”，只看到搜索摘录的写“摘录”，没查到的写“未核对”。
+
+| 事实 | 来源 | 状态 | 我们怎么用 |
+|---|---|---|---|
+| Android 8（API 26）起没有全局的“未知来源”开关，改成按应用给“安装未知应用”；targetSdk ≥ 26 的应用要让用户装别的应用，清单里必须声明 `REQUEST_INSTALL_PACKAGES`，没声明的装不了 | Android Developers Blog《Making it safer to get apps on Android O》 https://android-developers.googleblog.com/2017/08/making-it-safer-to-get-apps-on-android-o.html?hl=bn | 摘录 | 清单加这一项（霜霜 2026-11-26 同意，只这一项） |
+| 可以用 `Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES` 把用户带到这个应用的“安装未知应用”设置页；可以用 `PackageManager.canRequestPackageInstalls()` 查现在让不让 | 同上 | 摘录 | 交给安装器之前先查；不让就回“还没允许”，界面给“去设置里允许” |
+| `canRequestPackageInstalls()`：返回 false 时安装请求会被系统安装器拦下并弹框带用户去设置；应用必须 target O 以上并声明 `REQUEST_INSTALL_PACKAGES` 才能用这个方法 | developer.android.com 的 PackageManager 参考页 https://developer.android.com/reference/kotlin/android/content/pm/PackageManager?authuser=2 （搜索摘录里是官方原文；和微软转载 https://learn.microsoft.com/en-us/dotnet/api/android.content.pm.packagemanager.canrequestpackageinstalls?view=net-android-35.0 一字不差） | 摘录（官方页） | 只在 API ≥ 26 时调用；更低版本当作“允许” |
+| `Intent.ACTION_INSTALL_PACKAGE` 在 API 29 弃用（“use PackageInstaller instead”） | developer.android.com 的 Intent 参考页常量表 https://developer.android.com/reference/android/content/Intent.html?authuser=6 | 摘录（官方页） | **不用它**。用没被弃用的 `ACTION_VIEW` + 类型 `application/vnd.android.package-archive` |
+| `ACTION_VIEW` + APK 的 MIME 类型能拉起系统安装器 | 没找到 developer.android.com 上的明文说明；是多年通行做法 | **未核对** | 自己选的。真机没验证；拉不起来会回“没有找到系统安装器” |
+| `ACTION_MANAGE_UNKNOWN_APP_SOURCES` 带 `package:<包名>` 可以直达本应用那一页（原文：“Input: Optionally, the Intent's data URI can specify the application package name to directly invoke the management GUI specific to the package name. For example "package:com.my.app". Output: Nothing.”） | developer.android.com 的 Settings 参考页 https://developer.android.com/reference/kotlin/android/provider/Settings?authuser=166 | 摘录（官方页） | 先带包名试，系统不认（`ActivityNotFoundException`）就退成不带包名的总列表。“Output: Nothing”＝设置页不回结果，所以回到应用时自己再问一次 `canRequestPackageInstalls()` |
+| `FileProvider`：给文件生成 `content://` 地址；只能给事先在 `<paths>` 里登记过的目录；`<files-path>`＝`Context.getFilesDir()`，`<cache-path>`＝`getCacheDir()`，`<external-files-path>`＝`Context.getExternalFilesDir(null)` | https://developer.android.com/reference/androidx/core/content/FileProvider?authuser=002 | 已核对（打开了原文） | `res/xml/apk_install_paths.xml` 只登记三处，见下 |
+| `FileProvider` 必须 `exported=false`、`grantUriPermissions=true`，路径表用 meta-data `android.support.FILE_PROVIDER_PATHS` 指过去；登记目录时会把路径规范化（`getCanonicalFile`） | `exported=false`、`grantUriPermissions=true`、meta-data 名字：FileProvider 参考页“Defining a FileProvider”“Specifying Available Files”两节（同上网址）；规范化：直接看开发机上 androidx.core 1.18.0 的 `FileProvider` 类（`addRoot` 里的 `getCanonicalFile` 调用），文档没提 | 前三项已核对（原文）；规范化只对过实现 | 清单照这个写；`../app_flutter/projects/` 这种写法靠的就是规范化 |
+| 给安装器读文件要在 Intent 上加 `FLAG_GRANT_READ_URI_PERMISSION` | FileProvider 参考页的“Granting Temporary Permissions to a URI › Include the Permission in an Intent”一节（同上网址）：把 content 地址 `setData()` 进 Intent，再加 `FLAG_GRANT_READ_URI_PERMISSION`；这样给的权限在接收方那个界面栈还在时有效，栈结束自动收回 | 已核对（打开了原文） | 加了 |
+| 官方建议自己继承 `FileProvider` 而不是直接登记它（原文：直接用“is not reliable and will causes crashes on some devices”） | 同上，“Defining a FileProvider”一节 | 已核对（打开了原文） | 用的是自己的子类 `ApkFileProvider` |
+| 系统安装器装完会不会告诉发起的应用 | — | — | `ACTION_VIEW` 不带回结果。所以界面只说“已经交给系统安装器”，不说“装好了” |
+
+**登记给 FileProvider 的目录**（authorities 是 `${applicationId}.apkinstall`，跟着包名走）：
+
+1. `<external-files-path path="apk/">`：`Android/data/<包名>/files/apk/`，本地打包抄出来的那一份和远程打包下载的 APK 都在这。
+2. `<files-path path="../app_flutter/projects/">`：应用文档目录下的 `projects/`（应用目录里的工作区）。应用文档目录是 path_provider 的
+   `getApplicationDocumentsDirectory()`，在安卓上是 `<数据目录>/app_flutter`，不在 `files/` 下面，而 FileProvider 没有直接指它的写法，所以从 `files/` 退一层。
+   这是靠实现细节（规范化），真机没验证；所以原生那头做了兜底：`getUriForFile` 说“不在登记的目录里”时，改走第 3 条。
+3. `<cache-path path="apk_install/">`：上面两处都不包含的文件（Ubuntu 环境里的工作区在 `files/runtime/rootfs/…`，故意没登记，免得把整个 Linux 根目录都列进去），
+   先抄一份到缓存目录的 `apk_install/` 再交出去。每次安装前清空这个目录，只留当次的一份；缓存目录系统空间紧张时会自己清。
+
+自己定的数值：问系统一句话的超时 10 秒；交给安装器的超时 2 分钟（可能要先抄一份大文件）。
+
+## 2026-11-26 后端项目“构建与部署”（`lib/build/deploy_*.dart`、`lib/state/deploy_*.dart`）
+
+用的还是 `lib/build/github_client.dart` 现成的那几个接口（推送＝Git Data API 的 blob → tree → commit → 更新分支；触发＝workflow_dispatch；查运行），这次没有改客户端。核对日期 2026-11-26。
+
+| 事实 | 来源 | 状态 |
+| --- | --- | --- |
+| 触发工作流：`POST /repos/{owner}/{repo}/actions/workflows/{workflow_id}/dispatches`，body 里 `ref` 必填、`inputs` 可选（最多 25 项）；现在成功返回 200，带 `workflow_run_id`、`run_url`、`html_url`；经典令牌要 `repo` | https://docs.github.com/en/rest/actions/workflows （抓的是 docs.github.com/api/article/body?pathname=/en/rest/actions/workflows） | 直接核对 |
+| 同一页的示例请求头是 `X-GitHub-Api-Version: 2026-03-10`；我们的客户端发的是 `2022-11-28`，并且对“返回 204 / 不认识 `return_run_details`”有退路。这次没动它 | 同上 | 直接核对（只记一笔，没改代码） |
+| 更新分支：`PATCH /repos/{owner}/{repo}/git/refs/{ref}`，body `sha`、`force`（默认 false，我们不传＝不强推）；状态码 200 / 409 / 422 | https://docs.github.com/en/rest/git/refs （抓的是 docs.github.com/api/article?pathname=/en/rest/git/refs） | 直接核对 |
+| 推送里有 `.github/workflows/` 下的文件时：细粒度令牌除了 Contents 读写还要 **Workflows 读写**；经典令牌要勾 **workflow** | 官方的权限总表（docs.github.com 的 permissions-required-for-fine-grained-personal-access-tokens，3.10 企业版那页）抓到的正文丢了小标题，只看得出同一批接口列了两遍；“Workflows 权限 / workflow scope”这句话本身来自第三方对官方文档的转述（lesstep.com、ghtier.com、dev.to） | 间接 |
+| 细粒度令牌权限不够时，私有仓库可能回 404 而不是 403 | 第三方转述 | 间接。代码里 403 和（推送带工作流文件时的）404 都会带上“去哪开权限”的说明，404 另加一句“也请核对仓库名和分支名” |
+| 工作流模板里用的 Action 版本：`actions/checkout@v4`、`actions/setup-java@v4`、`actions/upload-artifact@v4`（和现有打 APK 的模板一样）；`actions/setup-go@v5`、`actions/setup-node@v4`、`actions/setup-python@v5` | 前三个沿用现有模板；后三个没有逐个核对官方仓库 | 没核对（后三个） |
+| `workflow_dispatch` 的 `inputs` 可以是 `type: boolean`；接口里传字符串 `"true"` / `"false"` | 没有单独核对 | 没核对 |
+
+没有对真实的 GitHub 发过任何请求（测试用假的 HTTP 层）；`deploy.yml` 六份模板（五种语言＋其它）没有在真实的 Actions 上跑过，只在开发机上检查过 YAML 能解析。SSH 那一路没有连过真实主机。
+
+## 消息里的 Markdown / HTML 渲染（2026-11-26）
+
+**`markdown` 包**（Dart 官方，pub.dev，BSD-3-Clause，纯 Dart）：版本 7.3.1。只用它的解析器（`Document.parse` / `parseInline` 拿语法树），不用它的 HTML 输出。
+下面几条是 2026-11-26 直接读包的源码（`~/.pub-cache` 里的 7.3.1）核对的：
+
+| 事实 | 来源 | 状态 | 我们怎么用 |
+|---|---|---|---|
+| `Document(withDefaultBlockSyntaxes: false, blockSyntaxes: […])` 可以只挑要的块语法；默认那一组里有“下一行 === 变标题”（`SetextHeaderSyntax`）、“缩进 4 格是代码”（`CodeBlockSyntax`）、原始 HTML 块（`HtmlBlockSyntax`） | 包源码 `lib/src/block_parser.dart`、`document.dart` | 已核对（读源码） | 这三样不要，其余照 GitHub 那一组（表格、任务列表、围栏） |
+| 自己加的行内语法排在内置的前面先试 | `lib/src/inline_parser.dart` 构造函数 | 已核对（读源码） | 整个 HTML 标签先被我们的规则吃掉，标签属性里的网址、星号不会被当成 Markdown |
+| 表格单元格的对齐写在 `th` / `td` 的 `align` 属性里；任务项是 `li` 里一个 `input`（`checked` 属性）；有序列表起始号在 `ol` 的 `start` | `block_syntaxes/table_syntax.dart`、`list_syntax.dart` | 已核对（读源码＋测试） | 转成我们自己的节点 |
+| 很长的一串不断开的字母数字（10 万字）会让行内解析慢到跑不完 | 自己测出来的（`test/md_parse_test.dart` 第一次跑卡死） | 实测 | 一块里有超过 2000 个连着的字母数字就不交给它，按纯文字显示；消息里的 `data:image/…;base64,…` 先换成短记号再解析 |
+
+**网页视图（HTML 预览）**：
+
+| 事实 | 来源 | 状态 | 我们怎么用 |
+|---|---|---|---|
+| `WebSettings.setAllowFileAccess`：开关 WebView 里读 `file://`；targetSdk ≥ 30 默认关、≤ 29 默认开，官方建议明确设成 false | developer.android.com 的 WebSettings 参考页 https://developer.android.com/reference/kotlin/android/webkit/WebSettings （2026-11-26 看的搜索摘录） | 摘录 | 预览视图里明确关掉 |
+| `WebSettings.setAllowContentAccess`：开关 WebView 里读 `content://`（内容提供者），**默认开** | 同上 | 摘录 | 预览视图里关掉 |
+| 这两个开关在 Flutter 这边只有安卓那一层有：`AndroidWebViewController.setAllowFileAccess` / `setAllowContentAccess`；另有 `setGeolocationEnabled`、`setMediaPlaybackRequiresUserGesture`、`setOnShowFileSelector`、`setOnPlatformPermissionRequest` | `webview_flutter_android` 4.14.1 源码 `lib/src/android_webview_controller.dart` | 已核对（读源码） | 所以 pubspec 里点名了 `webview_flutter_android`（原本就由 `webview_flutter` 带进来，版本没变） |
+| `WebViewController.loadHtmlString(html)` 在安卓上是 `loadDataWithBaseUrl(null, html, 'text/html', …)` | 同上源码 | 已核对（读源码） | 不传基准地址，页面不属于应用的任何地址 |
+| 不传基准地址时页面地址是 `about:blank`、没有自己的存储 | — | **未核对**（没翻到官方原文；真机也没验证） | 跳转拦截里只放行 `about:blank`。即使实际不是这个地址，也只是更严（都拦） |
+| `<meta http-equiv="Content-Security-Policy">` 可以给一份文档加内容安全策略；`default-src` 是其余取资源指令的后备；`'none'` 表示完全不许；多条策略只会越加越严，后加的放不宽先前的 | MDN https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Security-Policy （2026-11-26 看的搜索摘录） | 摘录 | 我们的那条放在文档最前面；页面自己再写也放不宽 |
+| meta 写法的策略从解析到这个标签起生效；`sandbox`、`frame-ancestors`、`report-uri` 在 meta 里无效 | 非官方文章摘录（jsonmind.com 的 CSP 指南），MDN 原文没逐字核对 | **未核对** | 所以放在最前面；不依赖 `sandbox` |
+| 系统 WebView 是否完整执行这条策略（拦外部图片 / 脚本 / fetch） | — | **没在真机验证** | 测试里只能证明“交给视图的文档开头带着这条策略” |
+
+自己定的数值见各文件开头：解析上限 20 万字、缓存 200 万字、代码块 30 行折叠、流式不上色 2 万字、单词串 2000、图片（网络 5MB / 15 秒 / 3 次跳转、本机 20MB、data: 2MB、内存缓存 24MB、最高 320）、表格一格最宽 240、预览高 120–360、同时 2 个预览、HTML 嵌套 12 层、解析嵌套 6 层。

@@ -9,7 +9,10 @@ import 'package:lopicode/agent/usage.dart';
 /// 流式回复里的一小块。字段名与 OpenAI Chat Completions 的
 /// `chat.completion.chunk` 对应，见 docs/api-notes.md。
 class ChatDelta {
-  ChatDelta({this.content, this.reasoning, this.toolCalls = const [], this.finishReason, this.raw, this.usage});
+  ChatDelta({this.content, this.reasoning, this.toolCalls = const [], this.finishReason, this.raw, this.usage, this.reasoningFromTag = false});
+
+  /// [reasoning] 是从正文开头的 `<think>` 标签里剥出来的（见 think_tags.dart），不是接口单独给的思考字段：只显示，不带回给接口。
+  final bool reasoningFromTag;
 
   /// 思考内容的增量（DeepSeek 等的 `reasoning_content`、Anthropic 的 thinking、Responses 的 reasoning summary）。
   /// 聊天页拿它显示“正在思考…”；DeepSeek 还要之后带回给接口。
@@ -236,7 +239,11 @@ List<Map<String, dynamic>> withReasoningContent(List<Map<String, dynamic>> messa
     {
       for (final e in m.entries)
         if (!e.key.startsWith('_')) e.key: e.value,
-      if (m['role'] == 'assistant' && m['_reasoning'] is String) 'reasoning_content': m['_reasoning'] else if (m['role'] == 'assistant' && fillMissing) 'reasoning_content': '',
+      // 从正文标签里剥出来的思考（`_reasoningTag`）接口没单独给过，不带回
+      if (m['role'] == 'assistant' && m['_reasoning'] is String && m['_reasoningTag'] != true)
+        'reasoning_content': m['_reasoning']
+      else if (m['role'] == 'assistant' && fillMissing)
+        'reasoning_content': '',
     },
 ];
 

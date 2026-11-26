@@ -1,8 +1,10 @@
-// 设计约束（聊天里的一行 · 390×844）
-// - 一行只放一样东西：我的消息（靠右浅蓝块）、Agent 的正式回复（靠左浅灰块）、一组步骤（一行摘要，见 chat_steps.dart）、
-//   这一轮的用量脚注、应用自己的提示、一段思考（一行）、“已压缩较早的对话”（一行）、“上一轮没正常结束”（一张卡）。
-// - 正式回复最重（16 号字、有底色）；步骤组和脚注是次要内容（小一号、灰色、无底）。
-// - 我的消息和正式回复下面各有一排很淡的小图标（复制、更多……），见 message_action_bar.dart；这里只负责把气泡交给它。
+// 设计约束（聊天里的一行 · 390×844）— 2026-11-26 改成“连续内容流”
+// - 只有我的消息是气泡（靠右浅蓝块）。Agent 这一边不套气泡：它的一整轮是一条从上往下的内容流，左对齐、通栏——
+//   思考（一行）、说的话（正文）、一组步骤（一行摘要，见 chat_steps.dart）按发生的先后排，排好的不再挪位置。
+// - 层级：正文最重（16 号字、主文字色，见 message_text.dart）；思考、步骤组、脚注是次要内容（小一号、灰色、无底）。
+// - 一行只放一样东西：我的消息、Agent 的一段话、一组步骤、一段思考、这一轮的用量脚注、应用自己的提示、
+//   “已压缩较早的对话”（一行）、“上一轮没正常结束”（一张卡）。
+// - 我的每条消息下面、Agent 每一轮的最后一段话下面各有一排很淡的小图标（复制、编辑……），见 message_action_bar.dart；这里只负责把内容交给它。
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lopicode/agent/quota.dart';
 import 'package:lopicode/agent/usage.dart';
@@ -16,6 +18,7 @@ import 'package:lopicode/ui/chat_extras.dart';
 import 'package:lopicode/ui/chat_panels.dart';
 import 'package:lopicode/ui/chat_steps.dart';
 import 'package:lopicode/ui/message_action_bar.dart';
+import 'package:lopicode/ui/message_text.dart';
 import 'package:lopicode/ui/usage_ui.dart';
 import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
@@ -57,7 +60,6 @@ class ChatItemView extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final showUsage = ref.watch(chatPrefsProvider).usage;
     final c = context.colors;
-    final t = Theme.of(context).textTheme;
     switch (item) {
       case UserItem(:final text, :final images):
         return MessageFrame(
@@ -90,30 +92,22 @@ class ChatItemView extends ConsumerWidget {
                         children: [for (final path in images) ImageThumb(path: path, size: 64)],
                       ),
                     ),
-                  SelectableText(text, style: t.bodyLarge?.copyWith(color: c.bubbleMineText)),
+                  MessageText(text, mine: true),
                 ],
               ),
             ),
           ),
         );
       case AssistantItem(:final text, :final streaming):
+        // 不套气泡：正文直接排在页面上，左对齐通栏
         return MessageFrame(
           item: item,
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: Container(
-              margin: const EdgeInsets.only(top: Space.x1, bottom: Space.x1, right: Space.x6),
-              padding: const EdgeInsets.symmetric(horizontal: Space.x4, vertical: Space.x3),
-              decoration: BoxDecoration(
-                color: BackdropScope.surface(context, c.bubbleAgentBg),
-                borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(c.radius(Radii.sm)),
-                  topRight: Radius.circular(c.radius(Radii.bubble)),
-                  bottomLeft: Radius.circular(c.radius(Radii.bubble)),
-                  bottomRight: Radius.circular(c.radius(Radii.bubble)),
-                ),
-              ),
-              child: SelectableText(streaming ? '$text▍' : text, style: t.bodyLarge?.copyWith(color: c.bubbleAgentText)),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: Space.x2),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              // 有背景图片时在正文后面垫一块半透明的页面底色，字不直接压在图上；没背景时原样
+              child: BackdropPlate(child: MessageText(text, streaming: streaming)),
             ),
           ),
         );

@@ -20,7 +20,7 @@
 | 能力 | 技能 | `SkillsScreen` | 〔这个工作区〕和〔全局〕分开两组；开关、看全文、新建、删除 |
 | 能力 | 记忆（2026-11-25 新增） | `MemorySettingsScreen` | 〔记忆〕让 Agent 使用记忆；〔自动整理〕每轮结束后自动整理（默认关，会多花一次模型调用）；〔全局记忆〕〔这个项目的记忆〕条目列表，点开看 / 改 / 删、新增一条；〔管理〕撤销最近一次改动、清空 |
 | 能力 | 自动化任务 | `AutomationListScreen` | 原样 |
-| 界面 | 对话显示 | `ChatDisplayScreen` | 〔新对话〕开场建议；〔回复里〕用量、思考过程 |
+| 界面 | 对话显示 | `ChatDisplayScreen` | 〔新对话〕开场建议；〔回复里〕用量、思考过程；〔消息里的图片〕自动加载网络图片（2026-11-26 加，默认关：https 图片点一下才下载） |
 | 界面 | 外观 | `AppearanceScreen` | 〔颜色模式〕跟随系统 / 浅色 / 深色；〔主题〕三行：浅色主题、深色主题（点开各是一页主题列表 `ThemePickScreen`，单选，点了立刻生效）、管理主题（`ThemesScreen`，2026-11-26 加：浅色 / 深色两段的主题卡片，点卡片选用；新建主题、导入主题（`ThemeImportScreen` → 导入预览 `ThemeImportPreviewScreen`）；每套的“⋯”里有编辑（`ThemeEditorScreen`：实时预览、191 个颜色 + 6 个数、取色面板、快捷生成、对比度提示、撤销重做）、改名、复制、导出（`ThemeExportSheet`：复制到剪贴板 / 存到工作区 exports/）、删除；内置主题只能看、复制一份来改、导出）；〔背景〕一行“背景图片”（2026-11-26 接上；右边是状态：未设置 / 已启用 / 已关闭；点了进 `BackdropSettingsScreen`：选图、裁剪、适配方式、遮罩、模糊、亮度、表面不透明度、深色外观单独设置、范围（聊天页 / 其它页面）、透出背景（终端 / 代码区 / 积木画布 / 低代码画布））；〔代码字号〕10–24、默认 14，可恢复默认（2026-11-25 加；代码区域里双指捏合改的是同一个值；聊天里的改动对比、步骤详情、完整输出、后台日志跟着它走、小一号） |
 | 运行与打包 | 运行环境 | `RuntimeScreen` | 原样（另一路在改，这里只是入口） |
 | 运行与打包 | SSH 构建机 | `SshConnectScreen` | 原样（和打包页里“构建机”是同一页、同一份配置） |
@@ -65,6 +65,11 @@
 | 打包方式（本地打包 / GitHub Actions / SSH 构建机） | 打包页最上面的三选一 | 只在打包时用。存在设置键 `apk.buildMode`，取值 `local` / `github` / `ssh`；没存过＝本地打包（2026-11-26 起，原来没存过是 GitHub），原来存了 `github` / `ssh` 的不变 |
 | GitHub 打包配置（仓库、分支、工作流文件名、令牌、推送开关） | 打包页 › GitHub Actions | 只在打包时用；设置键和以前一样 |
 | SSH 打包配置（远程目录、构建命令、APK 路径、上传开关） | 打包页 › SSH 构建机（构建机本身在 运行与打包 › SSH 构建机，同一份配置） | 只在打包时用；设置键和以前一样 |
+| 项目类型（自动识别 / 网页 / 后端 / 其它） | 后端项目：打包页最上面“项目类型”一行；网页 / 其它项目：打包页顶栏右上角的图标 | 决定打包页给哪一套做法，只在打包页用。每个工作区各记各的：设置键 `deploy.kind.<工作区 id>`，取值 `web` / `backend` / `other`；没存过＝自动识别（规则见 `docs/build-deploy-design.md`） |
+| 后端项目的方式（本地构建 / GitHub 部署 / SSH 部署） | 打包页（后端项目是“构建与部署”）最上面的三选一 | 每个工作区各记各的：`deploy.mode.<工作区 id>`，取值 `local` / `github` / `ssh`；没存过＝本地构建。和 `apk.buildMode` 互不影响 |
+| 后端 · 本地构建的选项（Go 给服务器用 linux/amd64、Node 把依赖装进包） | 打包页 › 本地构建 › ② 选项 | `deploy.goAmd64.<工作区 id>`、`deploy.npmInstall.<工作区 id>`，都默认关 |
+| 后端 · GitHub 部署（仓库、分支、令牌、工作流文件名、构建完部署到服务器） | 打包页 › GitHub 部署 | 仓库、分支、令牌和打 APK 的是同一份（`github.owner` / `github.repo` / `github.ref`、密钥键 `github_token`）；工作流文件名单独记 `github.deployWorkflow`（默认 `deploy.yml`）；“构建完部署到服务器”按工作区记 `deploy.githubRun.<工作区 id>`，默认关 |
+| 后端 · SSH 部署（远程目录、编译命令、部署完重启服务、重启命令） | 打包页 › SSH 部署（主机本身和终端、SSH 构建机是同一份 `ssh.*`） | 每个工作区各记各的：`deploy.sshDir.` / `deploy.sshBuild.` / `deploy.sshRestartOn.` / `deploy.sshRestart.` + `<工作区 id>`；远程目录没存过＝`~/lopicode-deploy/<名字>`，编译命令没存过＝按语言给的默认 |
 | 本地打包的表单（应用名、包名、版本名、版本号、权限、是否用自己的图标） | 打包页 › 本地打包 | 每个工作区各记各的，存在 `.lopicode/local-pack.json`；自己选的图标缩好的五张在 `.lopicode/local-pack-icon/`。不进全局设置 |
 | 签名钥匙（生成、导出备份、导入备份、重新生成） | 打包页 › 本地打包 › 签名钥匙（`SigningKeyScreen`，`lib/build/signing_key_screen.dart`） | 全应用一把，存在安全存储里（密钥键 `apk_signing_key`），不进普通设置文件。备份文件是 `build/lopicode-key-backup-日期-时间.txt`，用口令加密 |
 | 低余额提醒线 | 对话页用量弹层的余额卡 | 在 `lib/ui/usage_ui.dart`，不在这次能改的范围 |

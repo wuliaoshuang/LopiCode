@@ -75,8 +75,7 @@ class FavoritesNotifier extends Notifier<FavoritesState> {
           if (f.convId != convId || f.messageId != messageId) f,
       ]);
     } else {
-      final clipped = text.length > kFavoriteSnapshotChars ? '${text.substring(0, kFavoriteSnapshotChars)}…' : text;
-      _set([FavoriteMessage(convId: convId, messageId: messageId, role: role, text: clipped, convTitle: convTitle, savedAt: now ?? DateTime.now()), ..._snap.items]);
+      _set([FavoriteMessage(convId: convId, messageId: messageId, role: role, text: favoriteSnapshotOf(text), convTitle: convTitle, savedAt: now ?? DateTime.now()), ..._snap.items]);
     }
     await _save();
     return !had;
@@ -105,6 +104,16 @@ class FavoritesNotifier extends Notifier<FavoritesState> {
         else
           f,
     ]);
+    await _save();
+  }
+
+  /// 原消息的文字被用户改了（编辑 Agent 的回复）：收藏里留的文字跟着换成新的。只动这段对话里的这一条；
+  /// 分支 / 旧版本里同一个 id 的收藏各是各的，不动。
+  Future<void> retext(String convId, String messageId, String text) async {
+    if (!_snap.loaded) await load();
+    final next = favoriteSnapshotOf(text);
+    if (!_snap.items.any((f) => f.convId == convId && f.messageId == messageId && f.text != next)) return;
+    _set([for (final f in _snap.items) f.convId == convId && f.messageId == messageId ? f.copyWith(text: next) : f]);
     await _save();
   }
 

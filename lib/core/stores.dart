@@ -106,6 +106,20 @@ class SettingKeys {
   static const sshKnownHosts = 'ssh.knownHosts'; // {"host:port": "SHA256:..."}
   static const apkBuildMode = 'apk.buildMode'; // local / github / ssh；没存过＝local（2026-11-26 起，原来没存过是 github）
   static const lastProject = 'ui.lastProject';
+  // 后端项目的“构建与部署”（2026-11-26）。带 `.<工作区 id>` 的按工作区各记一份，用 [SettingKeys.perProject] 拼。
+  static const deployKind = 'deploy.kind'; // web / backend / other；没存过＝自动识别
+  static const deployMode = 'deploy.mode'; // local / github / ssh；没存过＝local
+  static const deployGoAmd64 = 'deploy.goAmd64'; // Go 本地编译给 linux/amd64，默认关（linux/arm64）
+  static const deployNpmInstall = 'deploy.npmInstall'; // Node 本地打包时把依赖装进包，默认关
+  static const deploySshDir = 'deploy.sshDir'; // SSH 部署到远端哪个目录；没存过＝~/lopicode-deploy/<名字>
+  static const deploySshBuild = 'deploy.sshBuild'; // SSH 上的编译命令；没存过＝按语言给的默认
+  static const deploySshRestartOn = 'deploy.sshRestartOn'; // SSH 部署完要不要跑“重启服务”，默认关
+  static const deploySshRestart = 'deploy.sshRestart'; // “重启服务”的命令，用户自己填
+  static const githubDeployWorkflow = 'github.deployWorkflow'; // 部署工作流的文件名，默认 deploy.yml（和打 APK 的 github.workflow 分开）
+  static const githubDeployRun = 'deploy.githubRun'; // 触发工作流时带 deploy=true（要仓库里配好 Secrets），默认关；按工作区记
+
+  /// 按工作区各记一份的键：`<键>.<工作区 id>`。
+  static String perProject(String key, String projectId) => '$key.$projectId';
   static const runtimeRootfsSource = 'runtime.rootfsSource'; // tuna / aliyun / official
   static const runtimeAptMirror = 'runtime.aptMirror';
   static const terminalChineseIme = 'terminal.chinese_ime'; // 终端软键盘：中文输入（默认是直接输入）
@@ -120,6 +134,7 @@ class SettingKeys {
   static const chatUsage = 'chat.usage'; // 在回复下方显示用量，默认开
   static const codeFontSize = 'ui.codeFontSize'; // 代码区域的字号（10–24，默认 14），全应用一个值
   static const chatThinking = 'chat.thinking'; // 在聊天里显示思考过程，默认开
+  static const chatAutoImages = 'chat.autoImages'; // 消息里的 https 图片自动加载，默认关（点一下才联网）
   static const agentAutoCompact = 'agent.autoCompact'; // 上下文快满时自动把较早的对话压成摘要，默认开
   static const agentMaxSteps = 'agent.maxSteps'; // 连着执行多少步后停下来问，10–100，默认 30
   static const agentKeepAlive = 'agent.keepAlive'; // Agent 干活时保持后台运行（前台服务 + 常驻通知），默认开

@@ -30,6 +30,7 @@ tool/check.sh --fix    # 先自动排版
 | `lib/theme/` | 把主题变成界面能用的东西：`AppColors`（`context.colors`）、`context.themeSpec`、`buildThemeData`、间距 / 圆角 / 字号常量、界面字号倍率 | `theme`、`appearance` |
 | `lib/agent/` | Agent：各协议的客户端、工具、模型与渠道配置、服务商预设、额度与用量、自动化、团队、技能、联网搜索 | `core`、`agent` |
 | `lib/preview/` | 本机预览服务器 | `core` |
+| `lib/markdown/` | 聊天正文的 Markdown / HTML：切块、解析成节点树（`markdown` 包只当解析器用）、HTML 安全清单、图片与链接规矩、预览文档怎么拼。纯 Dart，不碰界面；界面在 `lib/ui/md_*.dart`、`html_preview*.dart`，入口是 `message_text.dart` | `core`、`markdown` |
 | `lib/format/` | 代码格式化器（JSON / CSS / JS·JSX / HTML / Vue），纯 Dart，排完和原文对不上就原样返回 | 只依赖自己 |
 | `lib/apkpack/` | 本地打包 APK（模板套壳）：二进制清单读写、ZIP 读写与对齐、项目识别、输入校验、打包门面；`sign/` 是签名。纯 Dart，重活在后台 isolate 里跑。格式事实见 `docs/apk-format-notes.md` | `core`、`apkpack` |
 | `shell_template/`、`assets/apk_shell/` | 本地打包用的壳模板：源码和一键重编脚本在 `shell_template/`（不属于 Flutter 工程），编好的 `shell.apk` 随应用发。重编后要把它同步拷到 `test/fixtures/apkpack/real_shell.apk`（有测试守着两份一致）。界面经 `lib/build/local_pack_backend_real.dart` 接到打包器；签名钥匙的备份文件名以 `kKeyBackupPrefix` 开头，打包器和远程推送都靠这个开头把它挡在外面，别改名 | — |

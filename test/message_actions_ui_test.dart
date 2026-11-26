@@ -16,6 +16,7 @@ import 'package:lopicode/state/workspace_favorites.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/chat_row_view.dart';
 import 'package:lopicode/ui/message_action_bar.dart';
+import 'package:lopicode/ui/message_text.dart';
 import 'package:lopicode/ui/project_shell.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -105,9 +106,16 @@ void main() {
     }
 
     /// 聊天里的一个气泡（对话名、侧边栏里也可能有同样的字，所以只认气泡）。
-    Finder bubble(String text) => find.byWidgetPredicate((w) => w is SelectableText && w.data == text);
+    Finder bubble(String text) => find.byWidgetPredicate((w) => w is MessageText && w.text == text);
     Finder bar(String id) => find.byKey(ValueKey('message-actions-$id'));
     Finder icon(String kind, String id) => find.byKey(ValueKey('message-$kind-$id'));
+
+    /// 这一轮有几段话时，“针对某一段”的动作先问哪一段：选正文是 [text] 的那一段。
+    Future<void> pick(WidgetTester tester, String text) async {
+      expect(find.byKey(ValueKey('reply-part-${idOf(text)}')), findsOneWidget, reason: '应该先问哪一段');
+      await tester.tap(find.byKey(ValueKey('reply-part-${idOf(text)}')));
+      await steps(tester);
+    }
 
     Future<void> openMore(WidgetTester tester, String id) async {
       await tester.ensureVisible(icon('more', id));
@@ -126,11 +134,13 @@ void main() {
         expect(icon('copy', id), findsOneWidget);
         expect(icon('more', id), findsOneWidget);
       }
-      // 常驻的：Agent 回复是复制、重试、更多；我的消息是复制、编辑、更多。分支在“更多”里
-      expect(find.descendant(of: bar(last), matching: find.byType(InkResponse)), findsNWidgets(3));
-      expect(find.descendant(of: bar(mine), matching: find.byType(InkResponse)), findsNWidgets(3));
-      expect(icon('retry', last), findsOneWidget);
-      expect(icon('edit', mine), findsOneWidget);
+      // 常驻四个：Agent 回复是复制、编辑、重试、更多；我的消息是复制、编辑、重新发送、更多。分支在“更多”里
+      expect(find.descendant(of: bar(last), matching: find.byType(InkResponse)), findsNWidgets(4));
+      expect(find.descendant(of: bar(mine), matching: find.byType(InkResponse)), findsNWidgets(4));
+      for (final id in [mine, last, thanks, bye]) {
+        expect(icon('retry', id), findsOneWidget);
+        expect(icon('edit', id), findsOneWidget);
+      }
       // 一共 4 条看得见的消息 → 4 排；步骤组下面没有
       expect(find.byType(MessageActionBar), findsNWidgets(4));
       expect(tester.getSize(icon('copy', last)), const Size(44, 44));
@@ -142,13 +152,13 @@ void main() {
 
       await tester.tap(icon('copy', last));
       await tester.pump();
-      expect(clipboard, ['首页看完了，结构没问题。']);
+      expect(clipboard, ['我先读一下。\n\n首页看完了，结构没问题。'], reason: '复制＝这一轮 Agent 说的话连起来');
       expect(find.text('已复制'), findsOneWidget);
       await tester.tap(icon('copy', mine));
       await tester.pump();
       expect(clipboard.last, '看看首页');
       // 长按选字的老行为还在：正文仍然是可选择的文字
-      expect(find.widgetWithText(SelectableText, '首页看完了，结构没问题。'), findsOneWidget);
+      expect(find.widgetWithText(SelectionArea, '首页看完了，结构没问题。'), findsOneWidget);
     });
 
     testWidgets('“更多”面板：一行一个——收藏、分享、删除；收藏后图标变实心并常驻，再点取消 ($suffix)', (tester) async {
@@ -175,6 +185,9 @@ void main() {
       await shot(tester, 'ops-02-more-sheet-$suffix');
 
       await tester.tap(find.byKey(const ValueKey('more-favorite')));
+      await steps(tester);
+      expect(find.text('收藏 / 取消收藏哪一段？'), findsOneWidget);
+      await pick(tester, '首页看完了，结构没问题。');
       await settle(tester, rounds: 3);
       expect(find.byKey(const ValueKey('more-favorite')), findsNothing, reason: '面板关了');
       expect(find.textContaining('已收藏'), findsOneWidget);
@@ -189,6 +202,9 @@ void main() {
       await tester.tapAt(const Offset(195, 80));
       await tester.pumpAndSettle();
       await tester.tap(icon('favorite', id));
+      await steps(tester);
+      expect(find.text('第 2 段 · 已收藏'), findsOneWidget, reason: '选段面板里标出哪一段收藏着');
+      await pick(tester, '首页看完了，结构没问题。');
       await settle(tester, rounds: 3);
       expect(icon('favorite', id), findsNothing);
       expect(env.services.container.read(favoritesProvider(session)).items, isEmpty);
@@ -219,6 +235,8 @@ void main() {
       // Agent 的一段回复：默认“只删这段回复”
       await openMore(tester, idOf('首页看完了，结构没问题。'));
       await tester.tap(find.byKey(const ValueKey('more-delete')));
+      await steps(tester);
+      await pick(tester, '首页看完了，结构没问题。');
       await tester.pumpAndSettle();
       expect(find.text('只删这段回复'), findsOneWidget);
       expect(tester.widget<ListTile>(find.byKey(const ValueKey('delete-message'))).selected, isTrue);
@@ -250,6 +268,8 @@ void main() {
       Future<void> openShare() async {
         await openMore(tester, id);
         await tester.tap(find.byKey(const ValueKey('more-share')));
+        await steps(tester);
+        await pick(tester, '首页看完了，结构没问题。');
         await tester.pumpAndSettle();
       }
 
@@ -317,7 +337,7 @@ void main() {
       expect(tester.widget<ListTile>(find.byKey(const ValueKey('more-delete'))).enabled, isTrue);
     });
 
-    testWidgets('行级：还在往外冒的回复没有操作栏；没有 id 的没有；整轮级别的动作只在这一轮最后一段回复下面；没有聊天页环境（子代理对话页）不显示 ($suffix)', (tester) async {
+    testWidgets('行级：还在往外冒的回复没有操作栏；没有 id 的没有；编辑和重试每条消息下面都有；没有聊天页环境（子代理对话页）不显示 ($suffix)', (tester) async {
       await boot(tester);
       Future<void> noop(BuildContext context, MessageTarget t) async {}
       // 重试、编辑、分支现在是正式登记的动作；这里另外登记一个示例动作，守着“登记一条就多一个”的约定
@@ -357,18 +377,20 @@ void main() {
       expect(find.byType(MessageActionBar), findsNWidgets(3), reason: 'u1、a2、u2 各一排；往外冒的、没 id 的、步骤组都没有');
       expect(bar('a1'), findsNothing);
       expect(bar('a3'), findsNothing);
-      // 登记了以后：重试只在这一轮最后一段回复下面；编辑只在我的消息下面
-      expect(icon('retry', 'a2'), findsOneWidget);
-      expect(icon('retry', 'u1'), findsNothing);
-      expect(icon('edit', 'u1'), findsOneWidget);
-      expect(icon('edit', 'u2'), findsOneWidget);
-      expect(icon('edit', 'a2'), findsNothing);
-      // 从左到右按登记的位置排：复制、重试、更多
-      final xs = [
-        for (final k in ['copy', 'retry', 'more']) tester.getTopLeft(icon(k, 'a2')).dx,
-      ];
-      expect(xs, orderedEquals([...xs]..sort()));
+      // 编辑、重试（我的消息上叫“重新发送”）每条消息下面都有
+      for (final id in ['u1', 'a2', 'u2']) {
+        expect(icon('retry', id), findsOneWidget);
+        expect(icon('edit', id), findsOneWidget);
+        // 从左到右按登记的位置排：复制、编辑、重试、更多
+        final xs = [
+          for (final k in ['copy', 'edit', 'retry', 'more']) tester.getTopLeft(icon(k, id)).dx,
+        ];
+        expect(xs, orderedEquals([...xs]..sort()), reason: id);
+      }
+      // 收藏着的记号排在四个按钮的外侧（我的消息在左边），四个按钮的位置不跟着变
       expect(icon('favorite', 'u1'), findsOneWidget);
+      expect(tester.getTopLeft(icon('favorite', 'u1')).dx, lessThan(tester.getTopLeft(icon('copy', 'u1')).dx));
+      expect(tester.getTopLeft(icon('copy', 'u1')).dx, tester.getTopLeft(icon('copy', 'u2')).dx);
       await shot(tester, 'ops-07-registered-actions-$suffix');
       await tester.tap(icon('more', 'a2'));
       await tester.pumpAndSettle();

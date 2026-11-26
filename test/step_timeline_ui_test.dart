@@ -31,7 +31,6 @@ ToolItem tool(String id, String name, Map<String, dynamic> args, {String? result
 List<ChatItem> timelineItems({bool running = true}) => [
   const UserItem('跑一下测试，清掉旧文件'),
   tool('t1', 'read_file', {'path': 'package.json'}, result: '{\n  "name": "site"\n}', ms: 120),
-  const AssistantItem('先装依赖再跑测试。'),
   tool('t2', 'run_command', {'command': 'npm install'}, result: '退出码 0\nadded 212 packages in 12s\n\n31 packages are looking for funding\n  run `npm fund` for details', ms: 12400),
   tool('t3', 'run_command', {'command': 'npm test'}, result: '退出码 1\n  ok renders header\n  FAIL toggles dark mode\n1 failing', ok: false, ms: 2449),
   tool('t4', 'delete_file', {'path': 'old/notes.txt'}, result: '用户拒绝了这次删除，文件没有被改动。', ok: false, denied: true, ms: 8000),
