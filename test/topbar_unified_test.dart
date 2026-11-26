@@ -38,7 +38,8 @@ const double kInset = kStatus + PageBar.kHeight;
 Finder k(String key) => find.byKey(ValueKey(key));
 
 /// 现在看得见的那个顶栏（它自己透明、不接手指，靠“里面的左圆按钮点得到”来认）。
-Finder shownBar() => find.ancestor(of: find.byType(RoundIconButton).hitTestable(), matching: find.byType(PageBar));
+// 顶栏上有两个按钮时（打包页右上角多了“项目类型”），同一个顶栏会被找到两次，所以取第一个
+Finder shownBar() => find.ancestor(of: find.byType(RoundIconButton).hitTestable(), matching: find.byType(PageBar)).first;
 
 /// 假装有 30 高的状态栏（整个应用、包括推进来的页面都看得到）。
 void useStatusBar(WidgetTester tester) {
@@ -54,7 +55,7 @@ void expectFloatingBar(WidgetTester tester, String what, {double left = 0}) {
   final rect = tester.getRect(b);
   expect(rect, Rect.fromLTWH(left, 0, 390, kInset), reason: '$what：顶栏从屏幕最顶算起，高 = 状态栏 + ${PageBar.kHeight}');
   expect(
-    tester.getRect(find.descendant(of: b, matching: find.byType(RoundIconButton))),
+    tester.getRect(find.descendant(of: b, matching: find.byType(RoundIconButton)).first),
     Rect.fromLTWH(left + 16, kStatus + 10, 44, 44),
     reason: '$what：左圆按钮的位置',
   );

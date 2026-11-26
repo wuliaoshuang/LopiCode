@@ -17,7 +17,8 @@ import 'shell_test.dart' show openProject;
 import 'support/harness.dart';
 
 /// 现在看得见的那个顶栏。它自己是透明的、不接手指（正中间点不到东西），所以靠“里面的左圆按钮点得到”来认。
-Finder shownBar() => find.ancestor(of: find.byType(RoundIconButton).hitTestable(), matching: find.byType(PageBar));
+// 顶栏上有两个按钮时（打包页右上角多了“项目类型”），同一个顶栏会被找到两次，所以取第一个
+Finder shownBar() => find.ancestor(of: find.byType(RoundIconButton).hitTestable(), matching: find.byType(PageBar)).first;
 
 /// 截一张当前画面，取几个点的颜色（逻辑坐标）。
 Future<List<int>> pixelsAt(WidgetTester tester, List<Offset> points) async {
@@ -239,9 +240,13 @@ void main() {
         expect(block, findsOneWidget, reason: '“${d.label}”页的标题用的是统一的 BarTitle');
         final title = find.descendant(of: block, matching: find.byType(Text)).first;
         expect(decorationsAround(tester, title), isEmpty, reason: '“${d.label}”页');
-        final round = tester.getRect(find.descendant(of: bar, matching: find.byType(RoundIconButton)));
-        expect(round.size, const Size(44, 44));
-        expect(inkRect(tester, find.descendant(of: bar, matching: find.byType(RoundIconButton))), round);
+        // 顶栏上可以不止一个圆按钮（打包页右上角有“项目类型”）：个个都是 44 的圆；下面量位置用的是最左边那个
+        final rounds = find.descendant(of: bar, matching: find.byType(RoundIconButton));
+        for (var i = 0; i < rounds.evaluate().length; i++) {
+          expect(tester.getSize(rounds.at(i)), const Size(44, 44), reason: '“${d.label}”页第 ${i + 1} 个按钮');
+          expect(inkRect(tester, rounds.at(i)), tester.getRect(rounds.at(i)), reason: '“${d.label}”页第 ${i + 1} 个按钮');
+        }
+        final round = tester.getRect(rounds.first);
         left ??= tester.getRect(title).left;
         expect(tester.getRect(title).left, left, reason: '“${d.label}”页的标题和别的页左边对齐');
         expect(tester.getRect(title).left, round.right + Space.x3);

@@ -161,7 +161,7 @@ void main() {
       expect(state().phase, LocalPackPhase.done);
       expect(find.text('打包完成'), findsOneWidget);
       await shot(tester, '$tag-done');
-      await reveal(tester, find.textContaining('怎么装到手机上'));
+      await reveal(tester, find.textContaining('也可以手动装'));
       await shot(tester, '$tag-done-bottom');
       // 打包失败
       fake
