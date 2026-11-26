@@ -29,6 +29,7 @@ tool/check.sh --fix    # 先自动排版
 | `lib/preview/` | 本机预览服务器 | `core` |
 | `lib/format/` | 代码格式化器（JSON / CSS / JS·JSX / HTML / Vue），纯 Dart，排完和原文对不上就原样返回 | 只依赖自己 |
 | `lib/apkpack/` | 本地打包 APK（模板套壳）：二进制清单读写、ZIP 读写与对齐、项目识别、输入校验、打包门面；`sign/` 是签名。纯 Dart，重活在后台 isolate 里跑。格式事实见 `docs/apk-format-notes.md` | `core`、`apkpack` |
+| `shell_template/`、`assets/apk_shell/` | 本地打包用的壳模板：源码和一键重编脚本在 `shell_template/`（不属于 Flutter 工程），编好的 `shell.apk` 随应用发。重编后要把它同步拷到 `test/fixtures/apkpack/real_shell.apk`（有测试守着两份一致）。界面经 `lib/build/local_pack_backend_real.dart` 接到打包器；签名钥匙的备份文件名以 `kKeyBackupPrefix` 开头，打包器和远程推送都靠这个开头把它挡在外面，别改名 | — |
 | `lib/lang/` | 积木第 4 版的语言核心：语法树、名字与类型检查、小库函数表、五种语言的生成器（纯 Dart；小库的源码文本在 `lib/backend/runtime_*_lang.dart`） | `core`、`lang` |
 | `lib/terminal/` | 终端会话与后端接口、原生伪终端的封装 | `core`、`terminal` |
 | `lib/runtime/` | Ubuntu 运行环境：下载、解压、PRoot 启动、诊断 | 下面各层 |

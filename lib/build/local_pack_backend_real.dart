@@ -12,9 +12,6 @@ import 'package:lopicode/apkpack/sign/key_backup.dart';
 import 'package:lopicode/apkpack/sign/signing_key.dart';
 import 'package:lopicode/build/local_pack_backend.dart';
 
-/// 真实现接没接好。没接好时打包页的“本地打包”会明说，不让点了没反应。
-const bool kLocalPackWired = true;
-
 /// 壳模板在应用资源里的位置。
 const String kApkShellAsset = 'assets/apk_shell/shell.apk';
 

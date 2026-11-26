@@ -114,7 +114,7 @@ void main() {
           throwsA(isA<ApkPackException>().having((e) => e.field, 'field', 'template').having((e) => e.message, 'message', contains('模板'))),
         );
       }
-      expect(Directory(p.join(root, 'build')).existsSync() ? Directory(p.join(root, 'build')).listSync() : const [], isEmpty);
+      expect(Directory(p.join(root, 'build')).existsSync() ? Directory(p.join(root, 'build')).listSync() : const <FileSystemEntity>[], isEmpty);
     }, timeout: const Timeout(Duration(minutes: 15)));
   });
 
@@ -275,7 +275,7 @@ void main() {
       expect(s.failure!.message, allOf(contains('video.mp4'), contains('太大了')));
       expect(s.failure!.step, ApkPackStep.collect);
       final build = Directory(p.join(session.project.dir, 'build'));
-      expect(build.existsSync() ? build.listSync() : const [], isEmpty);
+      expect(build.existsSync() ? build.listSync() : const <FileSystemEntity>[], isEmpty);
     }, timeout: const Timeout(Duration(minutes: 15)));
 
     test('不适用的项目：说明原因并指向远程打包，开始打包不受理', () async {

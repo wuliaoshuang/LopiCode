@@ -52,19 +52,11 @@ void main() {
     expect(info.applicable, isTrue, reason: info.reason);
     final signer = KeyApkSigner(fixtureKey());
     final out = p.join(tmp.path, 'out', '$name.apk');
-    final result = await LocalApkPacker(template: shell, signer: signer, useIsolate: useIsolate).pack(
-      requestFor(
-        info.webRoot!,
-        out,
-        entry: info.entry!,
-        packageName: packageName,
-        appName: appName,
-        versionName: versionName,
-        versionCode: versionCode,
-        permissions: permissions,
-        icons: icons,
-      ),
-    );
+    final result = await LocalApkPacker(
+      template: shell,
+      signer: signer,
+      useIsolate: useIsolate,
+    ).pack(requestFor(info.webRoot!, out, entry: info.entry!, packageName: packageName, appName: appName, versionName: versionName, versionCode: versionCode, permissions: permissions, icons: icons));
     expect(result.certSha256Hex, signer.certSha256Hex);
     expect(File(out).lengthSync(), result.sizeBytes);
     return result;

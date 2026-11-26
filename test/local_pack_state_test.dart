@@ -1,5 +1,5 @@
 // 本地打包的状态层：表单默认值和文件名规则、钥匙（SigningKeyNotifier）、一次打包（LocalPackNotifier）。
-// 用的是假的打包后端（test/support/fake_local_pack.dart）；真打包器 / 签名在别的分支上各有测试。
+// 用的是假的打包后端（test/support/fake_local_pack.dart）；生产实现走真打包器的测试在 test/local_pack_real_backend_test.dart 和 test/local_pack_real_screen_test.dart。
 import 'dart:async';
 import 'dart:io';
 
@@ -113,7 +113,6 @@ void main() {
     });
 
     test('生产实现已接好：权限表是打包器那七项，校验走打包器的规则', () {
-      expect(kLocalPackWired, isTrue);
       const real = RealLocalPackBackend();
       expect(real.permissionOptions.length, 7);
       expect(real.permissionOptions.where((o) => o.defaultOn).map((o) => o.id), ['android.permission.INTERNET']);
