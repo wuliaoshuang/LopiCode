@@ -93,7 +93,7 @@ class _Bridge implements BeLibBridge {
           return LAscribe(LDictLit([for (var i = 0; i + 1 < args.length; i += 2) LDictEntry(expr(args[i]), LAscribe(expr(args[i + 1]), LType.any))]), const LType.dictOf(LType.any));
         }
         if (kLangCoreFns.containsKey(fn) || kLangRtFns.containsKey(fn)) return LRt(fn, [for (final a in args) expr(a)]);
-        return _bad(fn == 'fetch' ? '“请求别的网址”还没有接到库上' : '「$fn」还没有接到库上');
+        return _bad('「$fn」还没有接到库上');
     }
   }
 
@@ -107,6 +107,20 @@ class _Bridge implements BeLibBridge {
     final value = got.value;
     if (value == null) return got.stmts;
     return [into == null ? LExprStmt(value) : LAssign(LTName(into), LAscribe(value, LType.any))];
+  }
+
+  @override
+  List<LStmt>? mouthBlock(String legacyFn, List<LExpr> args, {Map<String, List<LStmt>> mouths = const {}, String? into}) {
+    final block = lib.legacy(legacyFn);
+    if (block == null) return null;
+    final target = block.slotKinds.entries.where((e) => e.value == LibSlotKind.assign).firstOrNull?.key;
+    final values = {
+      for (var i = 0; i < block.legacyArgs.length && i < args.length; i++)
+        if (!block.legacyArgs[i].startsWith('@')) block.legacyArgs[i]: args[i],
+    };
+    final got = libApply(lib, block, LibUse(values: values, mouths: mouths, targets: {if (into != null && target != null) target: into}), _cx);
+    if (got.problem != null) _bad(got.problem!);
+    return got.stmts;
   }
 
   @override

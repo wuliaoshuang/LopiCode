@@ -41,13 +41,13 @@ const String kBeServiceManifest = r'''
 }
 ''';
 
-/// 积木表 `blocks.json`。16 块（对照表里是 17 块：“请求别的网址”那一块等库里有了“请求别的网址”的适配再加，见库 1 下半）。
+/// 积木表 `blocks.json`。对照表里的 17 块都在（“请求别的网址”是库 1 下半加的，带两个口的展开型）。
 /// 另有两块“现在的时间”“字典的字段”：对照表把它们归在基础库，基础库还没有成库之前先放这里（旧名 now、field）。
 const String kBeServiceBlocks = r'''
 {"blocks": [
   {"id": "onRequest", "category": "接口", "how": "expand", "needs": ["路由表"], "provides": {"请求": "这次请求"},
    "slotKinds": {"method": "literal", "path": "literal", "body": "mouth"},
-   "expand": "(做 (调 加路由 (隐含 路由表) (槽 method) (槽 path) (λ块 ((这次请求 请求)) (口 body (收尾 (返回 (调 没有内容)))))))",
+   "expand": "(做 (调 加路由 (隐含 路由表) (槽 method) (槽 path) (要等λ块 ((这次请求 请求)) (口 body (收尾 (返回 (调 没有内容)))))))",
    "look": {"name": "当收到请求", "shape": "hat", "template": "当收到 {method} {path} {body}", "colorKey": "route",
             "hint": "走完没有“返回”就回 204（没有内容）",
             "slots": [{"name": "method", "kind": "choice", "options": ["GET", "POST", "PUT", "PATCH", "DELETE"], "defaultValue": "GET"}]}},
@@ -109,6 +109,14 @@ const String kBeServiceBlocks = r'''
    "slotKinds": {"collection": "literal"}, "legacy": {"fn": "dbDelete", "args": ["collection", "id"]},
    "expand": "(做 (调 删一条 (槽 collection) (标 任意 (槽 id))))",
    "look": {"name": "删集合里的一条", "shape": "statement", "template": "把 {collection} 里 id 是 {id} 的那条删掉", "colorKey": "data"}},
+
+  {"id": "fetch", "category": "网络", "how": "expand",
+   "slotKinds": {"method": "literal", "into": "assign", "body": "mouth", "orElse": "mouth"},
+   "legacy": {"fn": "fetch", "args": ["method", "url", "data"]},
+   "expand": "(设 拿到的 (调 请求网址 (槽 method) (标 任意 (槽 url)) (标 任意 (槽 data)))) (如果 (是空 拿到的) (那么 (口 orElse)) (否则 (放进 into (必有 拿到的)) (口 body)))",
+   "look": {"name": "请求别的网址", "shape": "statement", "template": "用 {method} 请求 {url} 带上 {data} 结果放进 {into} 成功后 {body} 失败后 {orElse}", "colorKey": "network",
+            "hint": "最多等 10 秒；只有 200 多的回应算成功；带用户名密码（@）的网址不请求",
+            "slots": [{"name": "method", "kind": "choice", "options": ["GET", "POST"], "defaultValue": "GET"}]}},
 
   {"id": "field", "category": "其他", "how": "expand", "slotKinds": {"key": "literal"}, "legacy": {"fn": "field", "args": ["of", "key"]},
    "expand": "(调 字段 (标 任意 (槽 of)) (槽 key))",

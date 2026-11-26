@@ -525,6 +525,14 @@ class BeLangLower {
         return [
           LExprStmt(LRt(b.op, [for (final a in _rtArgs[b.op]!) arg(a)]), src: src()),
         ];
+      case 'fetch' when bridge != null:
+        // 走库：库里“请求别的网址”是一块带两个口的展开型积木，口里的积木原样放进去（里面的“返回”就是从接口返回）。
+        final method = b.args['method'] == 'POST' ? 'POST' : 'GET';
+        final into = b.args['into'];
+        final url = arg('url');
+        final data = method == 'POST' && isExpr(b.args['data']) ? arg('data') : const LLit(null);
+        final okBody = inner(b.body), failBody = inner(b.orElse, inElse: true);
+        return bridge!.mouthBlock('fetch', [LLit(method), url, data], mouths: {'body': okBody, 'orElse': failBody}, into: knows(into) ? into as String : null) ?? _skip('“请求别的网址”还没有接到库上');
       case 'fetch':
         // 旧路翻出来是“存临时值 + 如果（没拿到）…否则…”；口里的积木换成这边翻的。
         final old = host.leaf(b.copyWith(body: const [], orElse: const []));

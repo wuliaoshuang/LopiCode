@@ -32,6 +32,10 @@ LExpr beToLangExpr(BeX x, {required String request}) => switch (x) {
 abstract interface class BeLibBridge {
   LExpr expr(BeX x);
   List<LStmt> stmts(List<BeS> list);
+
+  /// 带口的旧积木（现在只有“请求别的网址”）：按旧名找到库积木，[args] 照旧小库的参数顺序，口里的语句已经翻好。
+  /// 库里没有这块积木＝null。
+  List<LStmt>? mouthBlock(String legacyFn, List<LExpr> args, {Map<String, List<LStmt>> mouths = const {}, String? into});
 }
 
 /// 旧语句 → 可以放进新节点里的语句：新节点原样摊开，别的包成 `LHost`（生成时交回给后端照旧路写）。

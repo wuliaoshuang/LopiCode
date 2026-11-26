@@ -1,5 +1,6 @@
 // 接通后端文档生成的前置（核心 2·A5 段的第 2 步）：服务端的值和规矩怎么和严格规矩对齐。
-// “接口服务”这一层按现有后端小库的规矩用严格规矩的语言核心写了一遍（test/fixtures/framework/service_v1.lc），
+// “接口服务”这一层按现有后端小库的规矩用严格规矩的语言核心写了一遍——现在就是产品里的内置库模块（lib/backend/lib_service_module.dart，只有这一个来源）；
+// test/fixtures/framework/service_v1.lc 只剩手写的样本接口，和库的模块连成一个程序。
 // 这里拿现有一致性样本里“只考服务这一层”的那些请求（原样取自 test/support/backend_conformance.dart，期望一个字不改）对着它跑：
 // 五种语言真起服务，状态码、Content-Type、内容逐字节比。服务只开在本机回环地址的随机端口上，不联外网。
 @Tags(['external'])
@@ -10,6 +11,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lopicode/backend/lib_service.dart';
+import 'package:lopicode/lang/ast.dart';
 import 'package:lopicode/lang/gen2_all.dart';
 import 'package:lopicode/lang/link.dart';
 import 'package:lopicode/lang/typecheck.dart';
@@ -31,6 +34,7 @@ bool _covered(BeCase c) {
 
 void main() {
   final src = File('test/fixtures/framework/service_v1.lc').readAsStringSync();
+  LProgram program() => LProgram([...beServiceLibrary().modules, ...lcProgram(src).modules], entry: '样本');
   final cases = [
     for (final c in conformanceCases)
       if (_covered(c)) c,
@@ -44,7 +48,7 @@ void main() {
   });
 
   test('检查一条问题都没有', () {
-    final linked = linkProgram(lcProgram(src));
+    final linked = linkProgram(program());
     expect(linked.issues, isEmpty);
     expect([for (final e in checkModuleTypes(linked.module!).errors) '${e.code} ${e.where} ${e.message}'], isEmpty);
   });
@@ -56,7 +60,7 @@ void main() {
         markTestSkipped(skip);
         return;
       }
-      final server = await gen2Serve(language, gen2ProgramFiles(language, lcProgram(src)));
+      final server = await gen2Serve(language, gen2ProgramFiles(language, program()));
       final wrong = <String>[];
       try {
         for (var i = 0; i < cases.length; i++) {

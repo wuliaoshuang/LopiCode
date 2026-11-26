@@ -29,7 +29,7 @@ void main() {
     expect(kLangRulesForNewDocs, kLangRulesLoose);
   });
 
-  test('内置库读得进来、查不出问题：18 块积木、3 个类型、2 个设置项', () {
+  test('内置库读得进来、查不出问题：19 块积木、3 个类型、2 个设置项', () {
     final lib = beServiceLibrary();
     expect(lib.problems, isEmpty);
     expect(libCheck(lib), isEmpty);
@@ -39,17 +39,17 @@ void main() {
       [for (final b in lib.blocks) b.id],
       [
         'onRequest', 'respondJson', 'respondText', 'respond', 'pathParam', 'query', 'bodyField', 'body', 'header', //
-        'dbAll', 'dbGet', 'dbFind', 'dbCount', 'dbInsert', 'dbUpdate', 'dbDelete', 'field', 'nowText',
+        'dbAll', 'dbGet', 'dbFind', 'dbCount', 'dbInsert', 'dbUpdate', 'dbDelete', 'fetch', 'field', 'nowText',
       ],
     );
     expect([for (final t in lib.types) t.name], ['请求', '回应类型', '一条记录']);
     expect([for (final s in lib.settings) '${s.id}=${s.legacyKey}'], ['port=port', 'collections=collections']);
     // 旧小库的名字各对着一块积木。
-    for (final fn in ['sendJson', 'sendText', 'pathParam', 'query', 'bodyField', 'body', 'header', 'dbAll', 'dbGet', 'dbFind', 'dbCount', 'dbInsert', 'dbUpdate', 'dbDelete', 'field', 'now']) {
+    for (final fn in ['sendJson', 'sendText', 'pathParam', 'query', 'bodyField', 'body', 'header', 'dbAll', 'dbGet', 'dbFind', 'dbCount', 'dbInsert', 'dbUpdate', 'dbDelete', 'field', 'now', 'fetch']) {
       expect(lib.legacy(fn), isNotNull, reason: fn);
     }
-    // 宿主接口只碰这六个。
-    expect(lib.hosts.toSet(), {'http.serve', 'sys.env', 'sys.print', 'time.now', 'store.read', 'store.update'});
+    // 宿主接口只碰这七个。
+    expect(lib.hosts.toSet(), {'http.serve', 'sys.env', 'sys.print', 'time.now', 'store.read', 'store.update', 'net.fetch'});
   });
 
   test('取到的样本条数', () {
@@ -72,13 +72,10 @@ void main() {
     expect(beServiceGenerate(conformanceDocument(), 'node').files, isNull);
   });
 
-  test('还没接到库上的积木说得出来：请求别的网址', () {
-    // 整份样本（含 /relay 那几个接口）标成严格：翻译不抛异常，说清是哪一样没接。
-    final doc = conformanceDocument()..rules = kLangRulesStrict;
-    final out = beServiceProgram(doc);
-    expect(out.problems, contains('“请求别的网址”还没有接到库上'));
-    expect(beServiceGenerate(doc, 'node').files, isNull);
-    expect(beServiceGenerate(doc, 'node').problem, isNotNull);
+  test('“请求别的网址”接到库上了；不认识的语言说得出来', () {
+    final fetch = beServiceLibrary().legacy('fetch')!;
+    expect(fetch.look.name, '请求别的网址');
+    expect(fetch.isValue, isFalse);
     expect(beServiceGenerate(serviceStrictDocument(), 'cobol').problem, '这种语言还没有生成器');
   });
 
