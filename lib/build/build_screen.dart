@@ -11,10 +11,14 @@
 // 排版：和设置页同一套——浅灰底（canvas）上放白色分组卡片；页边 16，组与组相隔 24，组标题是弱色小字。
 //   分组标题里的 ①②③ 留着（小字），告诉人从上往下做；它们不再是和正文抢戏的大标题。
 // 颜色：强调色只给三样——选中的方式、主按钮、“完成”；红色只给失败和危险操作；其余是正文色和两档弱色。
-// 顶栏：全应用那一套（ShellAppBar → PageBar），内容从顶栏下面滚过去。
+// 顶栏：全应用那一套（ShellAppBar → PageBar），内容从顶栏下面滚过去。右上角一个“项目类型”图标：认错了类型在这里改。
+// 按项目类型分叉（2026-11-26）：后端项目不出这一页的正文，换成 deploy_panel_view.dart 的“构建与部署”。
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lopicode/build/build_controller.dart';
 import 'package:lopicode/build/build_widgets.dart';
+import 'package:lopicode/build/deploy_panel_view.dart';
+import 'package:lopicode/build/deploy_project.dart';
+import 'package:lopicode/build/deploy_widgets.dart';
 import 'package:lopicode/build/github_build_view.dart';
 import 'package:lopicode/build/local_pack_view.dart';
 import 'package:lopicode/build/ssh_build_controller.dart';
@@ -23,6 +27,8 @@ import 'package:lopicode/core/stores.dart';
 import 'package:lopicode/core/templates.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/ssh/ssh_config.dart';
+import 'package:lopicode/state/deploy_busy.dart';
+import 'package:lopicode/state/deploy_run.dart';
 import 'package:lopicode/state/local_pack.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/app_ref.dart';
@@ -88,6 +94,25 @@ class _BuildScreenState extends ConsumerState<BuildScreen> {
     final t = Theme.of(context).textTheme;
     final localBusy = ref.watch(localPackProvider(widget.session).select((s) => s.busy));
     final busy = localBusy || (_githubJob?.busy ?? false) || (_sshJob?.busy ?? false);
+    // 先认项目类型（2026-11-26）：后端项目换成“构建与部署”那一套；网页 / 其它类下面的 APK 流程一行不变，只在顶栏多一个改类型的入口。
+    // 哪边正在跑就留在哪边（类型中途变了也不切走，不然进度就看不到了）。
+    final detected = ref.watch(deployProjectProvider(widget.session));
+    final deployBusy = ref.watch(deployBusyProvider(widget.session));
+    final backend = widget.debugController == null && !busy && (deployBusy || detected.kind == ProjectKind.backend);
+    if (backend) {
+      final project = detected.kind == ProjectKind.backend
+          ? detected
+          : detectDeployProject(widget.session.project.dir, template: widget.session.project.template, templateLanguage: widget.session.project.language, override: ProjectKind.backend);
+      return Scaffold(
+        backgroundColor: c.canvas,
+        extendBodyBehindAppBar: true,
+        appBar: ShellAppBar(title: '构建与部署', background: c.canvas),
+        body: ListView(
+          padding: EdgeInsets.fromLTRB(Space.x4, PageBar.insetOf(context) + Space.x2, Space.x4, Space.x8),
+          children: [DeployPanel(session: widget.session, project: project)],
+        ),
+      );
+    }
     final about = switch (_mode) {
       BuildMode.local => '就在这台手机上打包，几秒出包，不用联网。只适合网页项目：把网页装进一个现成的应用壳里。',
       BuildMode.github => '手机上跑不了 Android SDK 和 Gradle，要编译的项目不能在手机里打包：LopiCode 把项目推到你的 GitHub 仓库，让 GitHub Actions 打包，再把 APK 下载回来。',
@@ -100,7 +125,19 @@ class _BuildScreenState extends ConsumerState<BuildScreen> {
     return Scaffold(
       backgroundColor: c.canvas,
       extendBodyBehindAppBar: true,
-      appBar: ShellAppBar(title: 'APK 打包', background: c.canvas),
+      appBar: ShellAppBar(
+        title: 'APK 打包',
+        background: c.canvas,
+        actions: [
+          if (widget.debugController == null)
+            RoundIconButton(
+              key: const Key('pack-project-kind'),
+              icon: Icons.category_outlined,
+              tooltip: '项目类型',
+              onPressed: busy ? null : () => showProjectKindSheet(context, widget.session, detected),
+            ),
+        ],
+      ),
       body: ListView(
         padding: EdgeInsets.fromLTRB(Space.x4, PageBar.insetOf(context) + Space.x2, Space.x4, Space.x8),
         children: [
