@@ -271,8 +271,13 @@ class LTypeWorld {
     } else if ((pat.kind == LKind.list || pat.kind == LKind.dict || pat.kind == LKind.future) && act.kind == pat.kind && !act.nullable) {
       unify(elem(pat), elem(act), b);
     } else if (pat.kind == LKind.fn && isFn(act) && pat.args.length == act.args.length) {
+      final last = pat.args.length - 1;
       for (var i = 0; i < pat.args.length; i++) {
-        unify(pat.args[i], act.args[i], b);
+        // 参数的位置是“反着”的：函数肯收更宽的东西（比如“任意”）不该把别的参数已经定下来的类型变量撑宽——
+        // 不然“映射(整数的列表, 收任意的函数)”会被说成“要任意的列表”。还没定下来的照旧从这里定。
+        final p = pat.args[i];
+        if (i < last && isVar(p) && b.containsKey(p.name) && !isNever(b[p.name]!)) continue;
+        unify(p, act.args[i], b);
       }
     } else if (pat.isNamed && isName(act) && pat.name == act.name) {
       for (var i = 0; i < pat.args.length && i < act.args.length; i++) {
