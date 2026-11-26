@@ -30,10 +30,10 @@ abstract class LocalPackBackend {
   ApkSigningKey parseKey(String serialized);
 
   /// 用口令把钥匙加密成一段可以存成文件的备份文本。
-  String exportKey(ApkSigningKey key, String passphrase);
+  Future<String> exportKey(ApkSigningKey key, String passphrase);
 
   /// 从备份文本 + 口令还原钥匙。口令不对 / 文本不对抛 [ApkPackException] 或 [FormatException]。
-  ApkSigningKey importKey(String text, String passphrase);
+  Future<ApkSigningKey> importKey(String text, String passphrase);
 
   /// 执行一次打包（在后台 isolate 里跑由实现保证）。失败抛 [ApkPackException]。
   Future<ApkPackResult> pack({required Uint8List template, required ApkSigningKey key, required ApkPackRequest request, void Function(ApkPackProgress progress)? onProgress});

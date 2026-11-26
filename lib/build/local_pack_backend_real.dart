@@ -1,72 +1,73 @@
-// 本地打包的生产实现：只做一层薄转接，把 [LocalPackBackend] 的每个方法接到 lib/apkpack/ 的真实现上。
-//
-// 【留给合并的人接的位置】这一轮打包器（la-packer）、签名（la-signer）、壳模板（la-shell）在别的分支上，
-// 还没合过来，所以下面每个方法先是“还没接好”的占位。合并时照每个方法上面注释里写的那一行换掉即可：
-//   import 'package:flutter/services.dart' show rootBundle;
-//   import 'package:lopicode/apkpack/apk_packer.dart';
-//   import 'package:lopicode/apkpack/sign/….dart';
-// 接好以后把 [kLocalPackWired] 改成 true（test/local_pack_state_test.dart 守着：没接好时界面如实说“还没接好”，不假装能用）。
+// 本地打包的生产实现：只做一层薄转接，把 [LocalPackBackend] 的每个方法接到 lib/apkpack/ 的真实现上
+// （打包器 apk_packer.dart、签名 sign/、随应用发的壳模板 assets/apk_shell/shell.apk）。
+// 费时的事（生成钥匙、导出 / 导入备份、打包）都在后台 isolate 里跑，不卡界面。
 import 'dart:typed_data';
 
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:lopicode/apkpack/apk_pack_contract.dart';
+import 'package:lopicode/apkpack/apk_packer.dart';
+import 'package:lopicode/apkpack/apk_packer.dart' as apk;
+import 'package:lopicode/apkpack/sign/apk_signer.dart';
+import 'package:lopicode/apkpack/sign/key_backup.dart';
+import 'package:lopicode/apkpack/sign/signing_key.dart';
 import 'package:lopicode/build/local_pack_backend.dart';
 
 /// 真实现接没接好。没接好时打包页的“本地打包”会明说，不让点了没反应。
-const bool kLocalPackWired = false;
+const bool kLocalPackWired = true;
 
-const String _notWired = '这个版本里本地打包的打包器还没接进来，先用 GitHub Actions 或 SSH 构建机。';
+/// 壳模板在应用资源里的位置。
+const String kApkShellAsset = 'assets/apk_shell/shell.apk';
 
 class RealLocalPackBackend implements LocalPackBackend {
   const RealLocalPackBackend();
 
-  /// 接：`detectWebProject(projectDir)`
   @override
-  Future<WebProjectInfo> detectProject(String projectDir) async => const WebProjectInfo(applicable: false, reason: _notWired);
+  Future<WebProjectInfo> detectProject(String projectDir) => detectWebProject(projectDir);
 
-  /// 接：`kApkPermissionOptions`
   @override
-  List<ApkPermissionOption> get permissionOptions => const [ApkPermissionOption(id: 'android.permission.INTERNET', label: '联网', hint: '网页要访问网络就得开', defaultOn: true)];
+  List<ApkPermissionOption> get permissionOptions => kApkPermissionOptions;
 
-  /// 接：`validateAppName(value)`
   @override
-  String? validateAppName(String value) => value.trim().isEmpty ? '应用名不能空着' : null;
+  String? validateAppName(String value) => apk.validateAppName(value);
 
-  /// 接：`validatePackageName(value)`
   @override
-  String? validatePackageName(String value) => value.trim().isEmpty ? '包名不能空着' : null;
+  String? validatePackageName(String value) => apk.validatePackageName(value);
 
-  /// 接：`validateVersionName(value)`
   @override
-  String? validateVersionName(String value) => value.trim().isEmpty ? '版本名不能空着' : null;
+  String? validateVersionName(String value) => apk.validateVersionName(value);
 
-  /// 接：打包器的 `validateVersionCode` 入参是 int——先 `int.tryParse(value.trim())`，解析不了就地返回“版本号要是一个整数”，解析得了再交给它。
+  /// 打包器收的是整数：先看是不是整数，再交给它查范围。
   @override
-  String? validateVersionCode(String value) => int.tryParse(value.trim()) == null ? '版本号要是一个整数' : null;
+  String? validateVersionCode(String value) {
+    final n = int.tryParse(value.trim());
+    if (n == null) return '版本号要是一个整数';
+    return apk.validateVersionCode(n);
+  }
 
-  /// 接：`(await rootBundle.load('assets/apk_shell/shell.apk')).buffer.asUint8List()`，读不到抛 ApkPackException(…, field: 'template')
   @override
-  Future<Uint8List> loadTemplate() async => throw const ApkPackException(_notWired, field: 'template');
+  Future<Uint8List> loadTemplate() async {
+    try {
+      final data = await rootBundle.load(kApkShellAsset);
+      return data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+    } catch (e) {
+      throw ApkPackException('应用里自带的打包模板读不出来（${e.runtimeType}），这个安装包可能不完整，重装一次 LopiCode 再试。', field: 'template');
+    }
+  }
 
-  /// 接：`generateSigningKey(commonName: commonName)`
   @override
-  Future<ApkSigningKey> generateKey({required String commonName}) async => throw const ApkPackException(_notWired, field: 'key');
+  Future<ApkSigningKey> generateKey({required String commonName}) => generateSigningKey(commonName: commonName);
 
-  /// 接：`parseSigningKey(serialized)`
   @override
-  ApkSigningKey parseKey(String serialized) => throw const ApkPackException(_notWired, field: 'key');
+  ApkSigningKey parseKey(String serialized) => parseSigningKey(serialized);
 
-  /// 接：`exportSigningKey(key, passphrase)`
   @override
-  String exportKey(ApkSigningKey key, String passphrase) => throw const ApkPackException(_notWired, field: 'key');
+  Future<String> exportKey(ApkSigningKey key, String passphrase) => exportSigningKeyAsync(key, passphrase);
 
-  /// 接：`importSigningKey(text, passphrase)`
   @override
-  ApkSigningKey importKey(String text, String passphrase) => throw const ApkPackException(_notWired, field: 'key');
+  Future<ApkSigningKey> importKey(String text, String passphrase) => importSigningKeyAsync(text, passphrase);
 
-  /// 失败抛的 [ApkPackException.field] 除约定文件里列的以外还可能是 `permissions`（界面有落点：权限那一行 + “去改权限”）。
-  /// 图标：界面已经缩成 48/72/96/144/192 五张 PNG 放在 `request.iconPngs`；打包器的 `validateIconPng(size, bytes)` 由它自己在 pack 里查，不过抛 field 为 `icon`。
-  /// 接：`LocalApkPacker(template: template, signer: <la-signer 里拿 key 做 v1+v2 签名的 ApkSigner 实现>(key)).pack(request, onProgress: onProgress)`
+  /// 失败抛的 [ApkPackException.field] 除约定文件里列的以外还可能是 `permissions`（界面有落点）。
   @override
-  Future<ApkPackResult> pack({required Uint8List template, required ApkSigningKey key, required ApkPackRequest request, void Function(ApkPackProgress progress)? onProgress}) async =>
-      throw const ApkPackException(_notWired, field: 'template');
+  Future<ApkPackResult> pack({required Uint8List template, required ApkSigningKey key, required ApkPackRequest request, void Function(ApkPackProgress progress)? onProgress}) =>
+      LocalApkPacker(template: template, signer: KeyApkSigner(key)).pack(request, onProgress: onProgress);
 }

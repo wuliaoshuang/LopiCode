@@ -106,10 +106,10 @@ class FakeLocalPackBackend implements LocalPackBackend {
   }
 
   @override
-  String exportKey(ApkSigningKey key, String passphrase) => 'LOPIKEY1:${base64Encode(utf8.encode('$passphrase\n${key.serialize()}'))}';
+  Future<String> exportKey(ApkSigningKey key, String passphrase) async => 'LOPIKEY1:${base64Encode(utf8.encode('$passphrase\n${key.serialize()}'))}';
 
   @override
-  ApkSigningKey importKey(String text, String passphrase) {
+  Future<ApkSigningKey> importKey(String text, String passphrase) async {
     if (!text.startsWith('LOPIKEY1:')) throw const FormatException('不是备份');
     final lines = utf8.decode(base64Decode(text.substring(9))).split('\n');
     if (lines.first != passphrase) throw const ApkPackException('口令不对。', field: 'key');

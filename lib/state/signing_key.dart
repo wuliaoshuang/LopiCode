@@ -144,7 +144,7 @@ class SigningKeyNotifier extends Notifier<SigningKeyState> {
     if (key == null) throw const SigningKeyException('还没有钥匙，没东西可备份。');
     if (passphrase.length < kKeyPassphraseMin) throw const SigningKeyException('口令至少 $kKeyPassphraseMin 位。');
     try {
-      return _backend.exportKey(key, passphrase);
+      return await _backend.exportKey(key, passphrase);
     } catch (e) {
       throw SigningKeyException('没能导出：${e is ApkPackException ? e.message : e.runtimeType}');
     }
@@ -157,7 +157,7 @@ class SigningKeyNotifier extends Notifier<SigningKeyState> {
     final gen = ++_gen;
     _put(SigningKeyState(loaded: true, fingerprint: _snap.fingerprint, createdAt: _snap.createdAt, busy: SigningKeyBusy.importing));
     try {
-      final key = _backend.importKey(text.trim(), passphrase);
+      final key = await _backend.importKey(text.trim(), passphrase);
       await _secrets.write(SecretKeys.apkSigningKey, key.serialize());
       if (gen == _gen) {
         _key = key;

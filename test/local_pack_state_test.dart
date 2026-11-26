@@ -112,14 +112,16 @@ void main() {
       expect(BuildMode.fromSetting('???'), BuildMode.local);
     });
 
-    test('生产实现没接好时：如实说“还没接好”，不假装能用', () async {
-      // 合并的人把真打包器接进来以后，把 kLocalPackWired 改成 true，这个用例就不再跑下面的断言。
-      if (kLocalPackWired) return;
+    test('生产实现已接好：权限表是打包器那七项，校验走打包器的规则', () {
+      expect(kLocalPackWired, isTrue);
       const real = RealLocalPackBackend();
-      final info = await real.detectProject(project.dir);
-      expect(info.applicable, isFalse);
-      expect(info.reason, contains('还没接进来'));
-      await expectLater(real.loadTemplate(), throwsA(isA<ApkPackException>()));
+      expect(real.permissionOptions.length, 7);
+      expect(real.permissionOptions.where((o) => o.defaultOn).map((o) => o.id), ['android.permission.INTERNET']);
+      expect(real.validatePackageName('com.shuang.demo'), isNull);
+      expect(real.validatePackageName('com.new.app'), isNotNull);
+      expect(real.validateVersionCode(' 12 '), isNull);
+      expect(real.validateVersionCode('1.5'), isNotNull);
+      expect(real.validateVersionCode('0'), isNotNull);
     });
   });
 
