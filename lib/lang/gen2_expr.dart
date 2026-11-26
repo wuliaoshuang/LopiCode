@@ -6,6 +6,7 @@ import 'package:lopicode/lang/ast.dart';
 import 'package:lopicode/lang/errors.dart';
 import 'package:lopicode/lang/gen2.dart';
 import 'package:lopicode/lang/gen2_err.dart';
+import 'package:lopicode/lang/host_v2.dart';
 import 'package:lopicode/lang/rt_v2.dart';
 import 'package:lopicode/lang/type_world.dart';
 import 'package:lopicode/lang/typecheck.dart';
@@ -92,6 +93,25 @@ mixin Gen2Expr on Gen2Base {
   String send(String obj, LType objType, String method, List<String> args, LSend e);
   String superCall(String method, List<String> args);
   String superCtor(List<String> args);
+
+  /// 调宿主接口（[fn] 是小库里的名字，见 host_v2.dart）。
+  String hostCall(String fn, List<String> args);
+
+  /// 实参的代码：给了的照 [types] 转；没给的补上参数的默认值（没有默认值的补“空”）。
+  List<String> argCodes(List<LExpr> args, List<LType> types, List<LParam>? ps) => [
+    for (var i = 0; i < args.length; i++) x(args[i], i < types.length ? types[i] : null),
+    if (ps != null)
+      for (var i = args.length; i < ps.length && i < types.length; i++) _defaultCode(ps[i].defaultValue?.value, types[i]),
+  ];
+
+  // 默认值没有经过类型检查（它不在哪个函数的身子里），所以这里按它字面上是什么来写，再转成参数的类型。
+  String _defaultCode(Object? v, LType want) => switch (v) {
+    null => nulOf(want),
+    bool() => conv(lit(v), _bool, want),
+    int() => conv(lit(v), _int, want),
+    double() => conv(lit(v), _flt, want),
+    _ => conv(lit(v), _txt, want),
+  };
   String isA(String code, LType type, String cls);
 
   /// 向下转型（父类 → 子类 / 接口 → 类），不对就抛错。
@@ -172,6 +192,11 @@ mixin Gen2Expr on Gen2Base {
       case LRt():
         return _rt(e);
       case LField(:final of, :final name):
+        final sk = staticKey(e);
+        if (sk != null) {
+          final v = mustVar(sk, e);
+          return conv(varCode(v), v.type, t(e));
+        }
         final ot = t(of).nonNull;
         if (!ot.isNamed) unsupported('取字段「$name」：前面的值是${ot.show()}，不是记录也不是对象', e);
         if (name == kErrKindField && r.opOf(e) == 'errKind') return conv(errKindCode(x(of, ot), ot), LType.text, t(e));
@@ -183,17 +208,17 @@ mixin Gen2Expr on Gen2Base {
         if (parent == null) unsupported('这里没有父类', e);
         if (e.isCtor) {
           final sig = r.funcs[w.classCtor(parent)?.key];
-          return superCtor([for (var i = 0; i < args.length; i++) x(args[i], sig != null && i < sig.params.length ? sig.params[i] : null)]);
+          return superCtor(argCodes(args, sig?.params ?? const [], sig?.info.params));
         }
         final got = w.classMethod(parent, method) ?? unsupported('父类没有「$method」这个方法', e);
         final sig = r.funcs[got.$1.key]!;
-        return conv(superCall(method, [for (var i = 0; i < args.length; i++) x(args[i], i < sig.params.length ? sig.params[i] : null)]), sig.returns, t(e));
+        return conv(superCall(method, argCodes(args, sig.params, sig.info.params)), sig.returns, t(e));
       case LNew(:final cls, :final args):
         final c = w.classes[cls] ?? unsupported('没有叫「$cls」的类', e);
         final ot = t(e).nonNull;
         final sig = r.funcs[w.classCtor(c)?.key];
         final b = typeArgsOfType(ot);
-        return newObject(c, ot, [for (var i = 0; i < args.length; i++) x(args[i], sig != null && i < sig.params.length ? w.subst(sig.params[i], b) : null)]);
+        return newObject(c, ot, argCodes(args, [for (final p in sig?.params ?? const <LType>[]) w.subst(p, b)], sig?.info.params));
       case LIsA(x: final v, :final cls):
         return isA(x(v), t(v), cls);
       case LThis():
@@ -227,8 +252,12 @@ mixin Gen2Expr on Gen2Base {
         return x(v, to);
       case LAscribe(x: final v):
         return x(v, t(e));
-      case LNative(:final name):
-        unsupported('宿主函数「$name」：带类型的独立模块里还不能调宿主函数', e);
+      case LNative(:final name, :final args):
+        final sig = kHostV2[name] ?? unsupported('宿主接口「$name」这里还没有（现在有：${kHostV2.keys.join('、')}）', e);
+        final d = module.decls.whereType<LNativeDecl>().where((d) => d.name == name).firstOrNull ?? unsupported('宿主接口「$name」用之前要先声明', e);
+        final same = d.params.length == sig.params.length && w.resolve(d.type) == sig.ret && [for (var i = 0; i < sig.params.length; i++) w.resolve(d.params[i].type) == sig.params[i]].every((ok) => ok);
+        if (!same || args.length != sig.params.length) unsupported('宿主接口「$name」的声明和宿主给的对不上：应该是 (${sig.params.map((p) => p.show()).join(', ')}) → ${sig.ret.show()}', e);
+        return conv(hostCall(kHostV2Code[name]!, argCodes(args, sig.params, null)), sig.ret, t(e));
       case LAwait() || LSpawn():
         unsupported('异步（核心 3 才有）', e);
     }
@@ -313,15 +342,7 @@ mixin Gen2Expr on Gen2Base {
         final ps = sig.info.params;
         if (ps.any((p) => p.rest)) unsupported('“剩下的全收”的参数（带类型的生成路径里还没有）', e);
         final args = <String>[];
-        for (var i = 0; i < ps.length; i++) {
-          final pt = w.subst(sig.params[i], b);
-          if (i < e.args.length) {
-            args.add(x(e.args[i], pt));
-          } else {
-            final d = ps[i].defaultValue;
-            args.add(d is LLit ? x(d, pt) : nulOf(pt));
-          }
-        }
+        args.addAll(argCodes(e.args, [for (final p in sig.params) w.subst(p, b)], ps));
         final code = callNamed(sig, args, [for (final v in sig.info.own) b[v] ?? _any]);
         return conv(code, w.subst(sig.returns, b), t(e));
       }
@@ -335,24 +356,32 @@ mixin Gen2Expr on Gen2Base {
   }
 
   String _send(LSend e) {
+    final sk = staticKey(e);
+    if (sk != null) {
+      // 类本身的方法＝模块级的函数。
+      final sig = r.funcs[sk] ?? unsupported('找不到「$sk」', e);
+      return conv(callNamed(sig, argCodes(e.args, sig.params, sig.info.params), const []), sig.returns, t(e));
+    }
     final ot = t(e.obj).nonNull;
     var params = const <LType>[];
+    List<LParam> ps;
     var ret = _any;
     if (ot.kind == LKind.interface) {
       final m = w.interfaces[ot.name]?.methods.where((m) => m.name == e.method).firstOrNull ?? unsupported('「${ot.name}」没有「${e.method}」这个方法', e);
       params = [for (final p in m.params) w.resolve(p.type)];
+      ps = m.params;
       ret = w.resolve(m.returns ?? LType.nul);
     } else if (ot.kind == LKind.object && w.classes.containsKey(ot.name)) {
       final got = w.classMethod(w.classes[ot.name], e.method) ?? unsupported('「${ot.name}」没有「${e.method}」这个方法', e);
       final sig = r.funcs[got.$1.key]!;
       final b = {...typeArgsOfType(ot), ...?r.typeArgsOf(e)};
       params = [for (final p in sig.params) w.subst(p, b)];
+      ps = sig.info.params;
       ret = w.subst(sig.returns, b);
     } else {
       unsupported('调方法「${e.method}」：前面的值是${ot.show()}，不是对象', e);
     }
-    final args = [for (var i = 0; i < e.args.length; i++) x(e.args[i], i < params.length ? params[i] : null)];
-    return conv(send(x(e.obj, ot), ot, e.method, args, e), ret, t(e));
+    return conv(send(x(e.obj, ot), ot, e.method, argCodes(e.args, params, ps), e), ret, t(e));
   }
 
   String _rt(LRt e) {

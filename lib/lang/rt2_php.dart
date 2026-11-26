@@ -362,6 +362,49 @@ final class Lc {
     if ($failed) exit(1);
   }
 
+  // —— 是不是数字、网址解码 ——
+  static function isNumeric(mixed $x): bool {
+    if (self::isNum($x)) return true;
+    if (!is_string($x)) return false;
+    $s = trim($x, " \t\n\r");
+    return preg_match('/^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)([eE][+-]?[0-9]+)?$/D', $s) === 1 && is_finite((float) $s);
+  }
+  static function urlDecode(string $s): string {
+    if (preg_match('/%(?![0-9A-Fa-f]{2})/', $s) === 1) self::fail("这段网址编码解不开");
+    $r = rawurldecode($s);
+    if (preg_match('//u', $r) !== 1) self::fail("这段网址编码解不开");
+    return $r;
+  }
+
+  // —— 宿主（清单见 host_v2.dart）——
+  private static array $store = [];
+  private static array $storeBusy = [];
+  static function hostPrint(string $s, string $ch): void {
+    if ($ch === "out") self::$out[] = $s;
+    elseif ($ch === "err") fwrite(STDERR, $s . "\n");
+    else self::fail("通道只能是 out 或 err");
+  }
+  static function hostNow(): int { return (int) floor(microtime(true) * 1000); }
+  static function copyVal(mixed $v): mixed {
+    if ($v instanceof LcList) return new LcList(array_map(fn($x) => self::copyVal($x), $v->a));
+    if ($v instanceof LcDict) {
+      $d = new LcDict();
+      foreach ($v->a as $k => $x) $d->a[$k] = self::copyVal($x);
+      return $d;
+    }
+    return $v;
+  }
+  static function storeRead(string $name): mixed { return array_key_exists($name, self::$store) ? self::copyVal(self::$store[$name]) : null; }
+  static function storeUpdate(string $name, Closure $f): mixed {
+    if (isset(self::$storeBusy[$name])) self::fail("「" . $name . "」这个格子正在改，不能在改它的函数里再改它");
+    self::$storeBusy[$name] = true;
+    try {
+      $v = self::copyVal($f(self::storeRead($name)));
+      self::$store[$name] = $v;
+      return self::copyVal($v);
+    } finally { unset(self::$storeBusy[$name]); }
+  }
+
   // —— 错误对象 ——
   private const ERR_KINDS = [["除以 0", "数值不对"], ["整数超出范围", "数值不对"], ["变不成整数", "数值不对"], ["超出了", "找不到"], ["拿到的是", "类型不对"], ["值是空", "类型不对"]];
   private static ?Closure $errMake = null;

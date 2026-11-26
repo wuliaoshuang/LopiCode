@@ -87,12 +87,14 @@ mixin _Exprs on _Core {
         return superSend(sc, e);
       case LNew():
         return newObject(sc, e);
-      case LIsA(:final x):
+      case LIsA(:final x, :final cls):
         ex(sc, x);
+        if (!w.classes.containsKey(cls) && !w.interfaces.containsKey(cls)) err('T08', sc, '没有叫「$cls」的类或接口', node: e);
         return _bool;
       case LLambda():
         return lam(sc, e, wantT);
       case LThis():
+        if (sc.thisType == null) err('T25', sc, '“我自己”只能用在类的方法和“创建时”里（类本身的方法里没有“我自己”）', node: e);
         return sc.thisType ?? _any;
       case LAwait(:final x):
         final t = w.res(ex(sc, x));
@@ -452,6 +454,8 @@ mixin _Exprs on _Core {
 
   @override
   LType field(_Scope sc, LExpr of, String name, LNode node) {
+    final cls = classRef(sc, of);
+    if (cls != null) return staticField(sc, cls, name, node);
     final t = nonnull(sc, of, (_) => '有字段的东西');
     if (w.isRecord(t) && w.records.containsKey(t.name)) {
       final d = w.records[t.name]!;
@@ -465,6 +469,7 @@ mixin _Exprs on _Core {
       final got = w.classField(w.classes[t.name], name);
       if (got != null) {
         final (ft, c) = got;
+        if (c.decl.fields.any((f) => f.name == name && f.isPrivate)) privateCheck(sc, c, name, node);
         final tv = c.typeVars;
         return w.res(w.subst(ft, {for (var i = 0; i < tv.length && i < t.args.length; i++) tv[i]: t.args[i]}));
       }

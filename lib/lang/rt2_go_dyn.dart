@@ -424,6 +424,127 @@ func TryE(f func()) (e Error, ok bool) {
 	f()
 	return Error{}, true
 }
+
+// —— 是不是数字、网址解码 ——
+func numShape(s string) bool {
+	i, n := 0, len(s)
+	digits := func() int {
+		k := 0
+		for i < n && s[i] >= '0' && s[i] <= '9' {
+			i++
+			k++
+		}
+		return k
+	}
+	if i < n && (s[i] == '+' || s[i] == '-') {
+		i++
+	}
+	whole, frac := digits(), 0
+	if i < n && s[i] == '.' {
+		i++
+		frac = digits()
+	}
+	if whole+frac == 0 {
+		return false
+	}
+	if i < n && (s[i] == 'e' || s[i] == 'E') {
+		i++
+		if i < n && (s[i] == '+' || s[i] == '-') {
+			i++
+		}
+		if digits() == 0 {
+			return false
+		}
+	}
+	return i == n
+}
+
+func IsNumeric(x any) bool {
+	switch v := x.(type) {
+	case float64, int64:
+		return true
+	case string:
+		s := strings.Trim(v, " \t\n\r")
+		if !numShape(s) {
+			return false
+		}
+		f, err := strconv.ParseFloat(s, 64)
+		return err == nil && !math.IsInf(f, 0)
+	}
+	return false
+}
+
+func UrlDecode(s string) string {
+	r, err := url.PathUnescape(s)
+	if err != nil || !utf8.ValidString(r) {
+		Fail("这段网址编码解不开")
+	}
+	return r
+}
+
+// —— 宿主（清单见 host_v2.dart）——
+func HostPrint(s string, ch string) {
+	switch ch {
+	case "out":
+		out = append(out, s)
+	case "err":
+		os.Stderr.WriteString(s + "\n")
+	default:
+		Fail("通道只能是 out 或 err")
+	}
+}
+
+func HostNow() int64 { return time.Now().UnixMilli() }
+
+var storeLock sync.Mutex
+var store = map[string]any{}
+var storeBusy = map[string]bool{}
+
+func copyVal(v any) any {
+	switch x := v.(type) {
+	case *List[any]:
+		c := &List[any]{}
+		for _, it := range x.Items {
+			c.Items = append(c.Items, copyVal(it))
+		}
+		return c
+	case Dict[any]:
+		c := Dict[any]{}
+		for k, it := range x {
+			c[k] = copyVal(it)
+		}
+		return c
+	}
+	return v
+}
+
+func StoreRead(name string) any {
+	storeLock.Lock()
+	defer storeLock.Unlock()
+	return copyVal(store[name])
+}
+
+func StoreUpdate(name string, f func(any) any) any {
+	storeLock.Lock()
+	if storeBusy[name] {
+		storeLock.Unlock()
+		Fail("「" + name + "」这个格子正在改，不能在改它的函数里再改它")
+	}
+	storeBusy[name] = true
+	old := copyVal(store[name])
+	storeLock.Unlock()
+	defer func() {
+		storeLock.Lock()
+		delete(storeBusy, name)
+		storeLock.Unlock()
+	}()
+	v := copyVal(f(old))
+	storeLock.Lock()
+	store[name] = v
+	storeLock.Unlock()
+	return copyVal(v)
+}
+
 func Run(main func()) {
 	msg, ok := Try(main)
 	if !ok {

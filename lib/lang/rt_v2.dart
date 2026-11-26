@@ -26,7 +26,7 @@ const LType _listT = LType.listOf(_t);
 const LType _texts = LType.listOf(LType.text);
 
 /// 版本 2 新加的小库名字。
-const Set<String> kLangRtV2New = {'orElse', 'must', 'toInt', 'parseInt', 'codePoints'};
+const Set<String> kLangRtV2New = {'orElse', 'must', 'toInt', 'parseInt', 'codePoints', 'isNumeric', 'urlDecode'};
 
 const Map<String, LRtSig> kLangRtV2 = {
   // —— 高阶 ——
@@ -130,4 +130,8 @@ const Map<String, LRtSig> kLangRtV2 = {
   'toJson': LRtSig('变成 JSON', [LType.any], LType.text),
   'fromJson': LRtSig('读 JSON', [LType.text], LType.any),
   'now': LRtSig('现在', [], LType.number),
+  // 是不是数字：整数、小数是；文字要整段（去掉两头的空白）是一个写得出来、不是无穷大的数（“1.0”“1e3”“ 7 ”都是）；别的都不是。
+  'isNumeric': LRtSig('是不是数字', [LType.any], LType.boolean),
+  // 把网址里的 %XX 换回原来的字（按 UTF-8）；“+”不动。写坏了的 %、换回来不是 UTF-8 的＝出错。
+  'urlDecode': LRtSig('网址解码', [LType.text], LType.text),
 };

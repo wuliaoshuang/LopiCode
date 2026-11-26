@@ -88,9 +88,15 @@ class _Reader {
 
   static LType _opt(LType t) => LType(t.kind, of: t.of, args: t.args, name: t.name, nullable: t.kind != LKind.any && t.kind != LKind.nul);
 
+  /// 参数：`名`、`(名 类型)`、`(名 类型 默认值)`、`(名 = 默认值)`（没标类型、有默认值）。默认值只能是直接写的值。
   List<LParam> params(Object ps) => [
     for (final p in ps as _L)
-      if (p is String) LParam(p) else LParam((p as _L)[0] as String, type: ty(p[1])),
+      if (p is String)
+        LParam(p)
+      else if ((p as _L).length == 3 && p[1] == '=')
+        LParam(p[0] as String, defaultValue: expr(p[2]) as LLit)
+      else
+        LParam(p[0] as String, type: ty(p[1]), defaultValue: p.length > 2 ? expr(p[2]) as LLit : null),
   ];
 
   static const Map<String, String?> _bounds = {'能比较': kBoundComparable};
@@ -143,6 +149,9 @@ class _Reader {
         case '类':
           final c = cls(d);
           decls.add(LClassDecl(c.name, parent: c.parent, interfaces: c.interfaces, fields: c.fields, ctor: c.ctor, methods: c.methods, typeParams: c.typeParams, isOpen: c.isOpen, isPublic: public));
+        case '宿主':
+          // (宿主 名字 (参数…) -> 返回类型)：宿主函数的签名。
+          decls.add(LNativeDecl(name, params(d[2]), type: d.length > 4 ? ty(d[4]) : LType.nul));
         case '主':
           main = stmts(d.skip(1));
       }
@@ -175,12 +184,16 @@ class _Reader {
           parent = l[1] as String;
         case '实现':
           impl = [...l.skip(1).cast<String>()];
-        case '字段':
-          fields.add(LFieldDecl(l[1] as String, l.length > 3 ? expr(l[3]) : null, type: ty(l[2])));
+        case '字段' || '内部字段' || '类字段' || '内部类字段':
+          // 内部＝只有这个类和子类能用；类字段＝属于类本身。
+          final kind = l[0] as String;
+          fields.add(LFieldDecl(l[1] as String, l.length > 3 ? expr(l[3]) : null, type: ty(l[2]), isPrivate: kind.startsWith('内部'), isStatic: kind.endsWith('类字段')));
         case '创建':
           ctor = LFuncDecl('创建', params(l[1]), stmts(l.skip(2)));
         case '方法':
           methods.add(LMethodDecl(func(l)));
+        case '类方法':
+          methods.add(LMethodDecl(func(l), isStatic: true));
       }
     }
     return LClassDecl(d[1] as String, parent: parent, interfaces: impl, fields: fields, ctor: ctor, methods: methods, typeParams: tps, isOpen: open);
@@ -291,6 +304,8 @@ class _Reader {
     '开头是': 'startsWith',
     '解析整数': 'parseInt',
     '码点们': 'codePoints',
+    '是数字': 'isNumeric',
+    '网址解码': 'urlDecode',
   };
 
   LExpr expr(Object e) {
@@ -375,6 +390,8 @@ class _Reader {
         return LSuperSend(a[0] as String, exprs(a.skip(1)));
       case '是':
         return LIsA(expr(a[1]), a[0] as String);
+      case '宿':
+        return LNative(a[0] as String, exprs(a.skip(1)));
     }
     throw StateError('原型的写法里不认识的式子：$h');
   }

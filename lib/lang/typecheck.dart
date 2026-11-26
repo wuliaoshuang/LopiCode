@@ -20,6 +20,7 @@ import 'package:lopicode/lang/type_world.dart';
 import 'package:lopicode/lang/types.dart';
 
 part 'typecheck_call.dart';
+part 'typecheck_class.dart';
 part 'typecheck_decl.dart';
 part 'typecheck_err.dart';
 part 'typecheck_expr.dart';
@@ -287,6 +288,7 @@ abstract class _Core {
     LTypedFunc? f,
     LNode? node,
     List<String> slots = const [],
+    int? least,
   });
   LType call(_Scope sc, LCall e);
   LType field(_Scope sc, LExpr of, String name, LNode node);
@@ -303,12 +305,23 @@ abstract class _Core {
   void tryStmt(_Scope sc, LTry s);
   LType? narrowed(_Scope sc, String name);
   bool isErr(LType t);
+
+  // 类那一块（typecheck_class.dart）。
+  LClassInfo? classRef(_Scope sc, LExpr of);
+  void privateCheck(_Scope sc, LClassInfo owner, String name, LNode node);
+  LTypedFunc? staticMethod(LClassInfo? c, String name);
+  LType staticField(_Scope sc, LClassInfo c, String name, LNode node);
+  LType staticSend(_Scope sc, LClassInfo c, LSend e);
+  void paramDefaults(LTypedFunc f, _Scope sc);
+  void implementsRules(LClassInfo c, String i, _Scope at);
+  void overrideRules(LClassInfo c, LClassInfo parent, _Scope at);
+  bool classRules(LClassInfo c, _Scope at);
 }
 
 /// 写起来短一点。
 typedef WL = LTypeWorld;
 
-class _Checker extends _Core with _Exprs, _Calls, _Rt, _Errs, _Stmts, _Decls {
+class _Checker extends _Core with _Classes, _Exprs, _Calls, _Rt, _Errs, _Stmts, _Decls {
   _Checker(super.decls, super.main, super.scripts, super.outer);
 
   LTypeResult run() {

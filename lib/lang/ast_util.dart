@@ -179,3 +179,22 @@ void lWalkExprs(List<LStmt> list, void Function(LExpr e) visit) {
 /// 调这个函数最少、最多给几个参数（最多是 -1＝不限：最后一个参数是“剩下的全收”）。
 int lMinArgs(List<LParam> params) => params.where((p) => !p.rest && p.defaultValue == null).length;
 int lMaxArgs(List<LParam> params) => params.any((p) => p.rest) ? -1 : params.length;
+
+/// 类里“每个对象自己的”和“类本身的”（勾了“属于类本身”的）成员分开看。
+extension LClassParts on LClassDecl {
+  Iterable<LFieldDecl> get ownFields => fields.where((f) => !f.isStatic);
+  Iterable<LMethodDecl> get ownMethods => methods.where((m) => !m.isStatic);
+}
+
+/// 类本身的成员在整个程序里的名字：`类名.成员名`。
+String lStaticName(String cls, String member) => '$cls.$member';
+
+/// 类本身的成员降成模块级的声明（核心 2）：字段 → 变量，方法 → 函数，名字是 [lStaticName]。检查器和五种语言的生成器
+/// 都照这个来（Go 没有“类本身的成员”，别的语言里它们的初始化时机各不相同——统一成模块级变量，初值按声明顺序算）。
+/// 函数体、初值是原来的节点（检查结果按节点对象记）。
+List<LDecl> lStaticDecls(LClassDecl d) => [
+  for (final f in d.fields)
+    if (f.isStatic) LVarDecl(lStaticName(d.name, f.name), f.init ?? const LLit(null), src: d.src, type: f.type),
+  for (final m in d.methods)
+    if (m.isStatic) LFuncDecl(lStaticName(d.name, m.fn.name), m.fn.params, m.fn.body, typeParams: m.fn.typeParams, src: m.fn.src ?? d.src, type: m.fn.type),
+];

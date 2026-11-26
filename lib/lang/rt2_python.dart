@@ -14,6 +14,7 @@ import math
 import re as _re
 import sys
 import time as _time
+import urllib.parse as _urlparse
 from decimal import Context, Decimal, ROUND_HALF_UP
 
 MAX = 9007199254740991

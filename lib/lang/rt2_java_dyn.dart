@@ -331,6 +331,76 @@ const String _tail = r'''
   // —— 出错、输出 ——
   private static final ArrayList<String> out = new ArrayList<>();
   static void log(String s) { out.add(s); }
+
+  // —— 是不是数字、网址解码 ——
+  private static final java.util.regex.Pattern NUM = java.util.regex.Pattern.compile("[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)([eE][+-]?[0-9]+)?");
+  static boolean isNumeric(Object x) {
+    if (x instanceof Double || x instanceof Long) return true;
+    if (!(x instanceof String s)) return false;
+    int a = 0, b = s.length();
+    while (a < b && " \t\n\r".indexOf(s.charAt(a)) >= 0) a++;
+    while (b > a && " \t\n\r".indexOf(s.charAt(b - 1)) >= 0) b--;
+    String t = s.substring(a, b);
+    return NUM.matcher(t).matches() && !Double.isInfinite(Double.parseDouble(t));
+  }
+  static String urlDecode(String s) {
+    byte[] in = s.getBytes(StandardCharsets.UTF_8);
+    java.io.ByteArrayOutputStream o = new java.io.ByteArrayOutputStream();
+    for (int i = 0; i < in.length; i++) {
+      if (in[i] != '%') { o.write(in[i]); continue; }
+      int hi = i + 2 < in.length ? Character.digit((int) in[i + 1], 16) : -1;
+      int lo = hi >= 0 ? Character.digit((int) in[i + 2], 16) : -1;
+      if (hi < 0 || lo < 0) return fail("这段网址编码解不开");
+      o.write(hi * 16 + lo);
+      i += 2;
+    }
+    try {
+      return StandardCharsets.UTF_8.newDecoder().decode(java.nio.ByteBuffer.wrap(o.toByteArray())).toString();
+    } catch (java.nio.charset.CharacterCodingException e) {
+      return fail("这段网址编码解不开");
+    }
+  }
+
+  // —— 宿主（清单见 host_v2.dart）——
+  static void hostPrint(String s, String ch) {
+    if (ch.equals("out")) { out.add(s); return; }
+    if (!ch.equals("err")) fail("通道只能是 out 或 err");
+    byte[] bytes = (s + "\n").getBytes(StandardCharsets.UTF_8);
+    System.err.write(bytes, 0, bytes.length);
+    System.err.flush();
+  }
+  static long hostNow() { return System.currentTimeMillis(); }
+  private static final TreeMap<String, Object> store = new TreeMap<>();
+  private static final java.util.HashSet<String> storeBusy = new java.util.HashSet<>();
+  static Object copyVal(Object v) {
+    if (v instanceof ArrayList<?> l) {
+      ArrayList<Object> c = new ArrayList<>();
+      for (Object x : l) c.add(copyVal(x));
+      return c;
+    }
+    if (v instanceof TreeMap<?, ?> m) {
+      TreeMap<String, Object> c = new TreeMap<>();
+      for (Map.Entry<?, ?> e : m.entrySet()) c.put((String) e.getKey(), copyVal(e.getValue()));
+      return c;
+    }
+    return v;
+  }
+  static Object storeRead(String name) {
+    synchronized (store) { return copyVal(store.get(name)); }
+  }
+  static Object storeUpdate(String name, Fn1<Object, Object> f) {
+    synchronized (store) {
+      if (!storeBusy.add(name)) fail("「" + name + "」这个格子正在改，不能在改它的函数里再改它");
+    }
+    try {
+      Object v = copyVal(f.call(storeRead(name)));
+      synchronized (store) { store.put(name, v); }
+      return copyVal(v);
+    } finally {
+      synchronized (store) { storeBusy.remove(name); }
+    }
+  }
+
   static void run(Act0 main) {
     boolean failed = false;
     try {

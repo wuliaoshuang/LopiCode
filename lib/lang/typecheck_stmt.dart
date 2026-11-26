@@ -97,6 +97,10 @@ mixin _Stmts on _Core {
           case LTIndex(:final of, :final key):
             store(sc, of, key, value, s);
           case LTField(:final of, :final name):
+            if (classRef(sc, of) != null) {
+              arg(sc, value, field(sc, of, name, target), '「$name」');
+              return;
+            }
             final t = w.res(ex(sc, of));
             if (name == kErrKindField && isErr(t)) {
               ex(sc, value);

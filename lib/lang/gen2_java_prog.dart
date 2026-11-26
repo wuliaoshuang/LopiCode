@@ -249,7 +249,7 @@ class JavaGen2 extends JavaGen2Types {
     final tp = _typeParams(c.typeVars, const {}), self = '${typeName(c.name)}${_typeArgs(c.typeVars)}';
     final impl = [if (parent == null) 'Lc.Obj', for (final i in d.interfaces) typeName(i)];
     final out = <String>[
-      for (final f in d.fields) '${jt(w.resolve(f.type, c.typeVars))} ${member(f.name)};',
+      for (final f in d.ownFields) '${jt(w.resolve(f.type, c.typeVars))} ${member(f.name)};',
       if (parent == null) 'public String lcName() { return this.lcLabel(); }',
       'String lcLabel() { return ${textLit(c.name)}; }',
     ];
@@ -261,7 +261,7 @@ class JavaGen2 extends JavaGen2Types {
         inFn(
           init,
           () => [
-            for (final f in d.fields)
+            for (final f in d.ownFields)
               if (f.init != null) 'this.${member(f.name)} = ${x(f.init!, w.resolve(f.type, c.typeVars))};',
           ],
         ),
@@ -306,7 +306,7 @@ class JavaGen2 extends JavaGen2Types {
       ...indent(['$self o = new ${typeName(c.name)}${c.typeVars.isEmpty ? '' : '<>'}();', 'o.lcInit_$id(${args.join(', ')});', 'return o;']),
       '}',
     ]);
-    for (final m in d.methods) {
+    for (final m in d.ownMethods) {
       final sig = r.funcs['${c.name}.${m.fn.name}']!;
       final f = V2Fn(sig.key, sig.returns, cls: c);
       final (ps, first) = _params(f, m.fn.params, sig.params);
@@ -345,15 +345,12 @@ class JavaGen2 extends JavaGen2Types {
           add(_class(w.classes[d.name]!));
         case LFuncDecl():
           add(_function(d));
-        case LAliasDecl() || LVarDecl():
+        case LAliasDecl() || LVarDecl() || LNativeDecl():
           break;
-        case LNativeDecl():
-          unsupported('宿主函数的声明', d);
       }
     }
     final main = V2Fn(Gen2Base.mainScope, LType.nul, isMain: true);
-    final inits = <LStmt>[for (final d in module.decls.whereType<LVarDecl>()) LAssign(LTName(d.name), d.init), ...module.body];
-    final body = funcBody(main, inits);
+    final body = funcBody(main, startup);
     return [
       '// 由 LopiCode 积木生成（Java，严格规矩、带原生类型）。',
       'import java.util.ArrayList;',

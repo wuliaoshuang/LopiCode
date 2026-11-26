@@ -305,8 +305,11 @@ abstract class JavaGen2Types extends Gen2 {
   static const Set<String> _rt = {
     'listMap', 'listFilter', 'listReduce', 'listFind', 'listEvery', 'listSome', 'listEach', 'toInt', 'parseInt', 'sqrt', 'floor', 'ceil', 'round', //
     'listJoin', 'split', 'substring', 'startsWith', 'endsWith', 'contains', 'indexOf', 'replace', 'trim', 'upper', 'lower', 'repeatText', 'charAt',
-    'codePoints', 'listReverse', 'listConcat', 'listSlice', 'listContains', 'listIndexOf', 'range', 'dictValues', 'dictHas', 'toJson', 'fromJson', 'now',
+    'codePoints', 'listReverse', 'listConcat', 'listSlice', 'listContains', 'listIndexOf', 'range', 'dictValues', 'dictHas', 'toJson', 'fromJson', 'now', 'isNumeric', 'urlDecode',
   };
+
+  @override
+  String hostCall(String fn, List<String> args) => 'Lc.$fn(${args.join(', ')})';
 
   @override
   String rtCall(String fn, List<String> args, List<LType> types, LType ret, LRt e) {

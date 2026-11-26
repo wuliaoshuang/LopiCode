@@ -47,8 +47,13 @@ mixin _Decls on _Core {
           w.funcs[d.name] = _info(d, d.name, const []);
         case LClassDecl():
           final c = LClassInfo(d);
-          for (final m in d.methods) {
+          for (final m in d.ownMethods) {
             c.methods[m.fn.name] = _info(m.fn, '${d.name}.${m.fn.name}', d.typeParams, owner: d.name);
+          }
+          // 类本身的成员：字段当模块级的变量，方法当模块级的函数（名字是“类名.成员名”）。
+          for (final s in lStaticDecls(d)) {
+            if (s is LVarDecl) globals.add(s);
+            if (s is LFuncDecl) w.funcs[s.name] = _info(s, s.name, const [], owner: d.name);
           }
           final ctor = d.ctor;
           if (ctor != null) {
@@ -79,6 +84,7 @@ mixin _Decls on _Core {
     sc.f = f;
     sc.bounds = f.bounds;
     sc.reassigned = _targets(f.body);
+    paramDefaults(f, sc);
     for (var i = 0; i < f.params.length; i++) {
       final p = f.params[i];
       sc.names.add(p.name);
@@ -176,7 +182,7 @@ mixin _Decls on _Core {
       args: [for (final v in tv) LType(LKind.typeVar, name: v)],
     );
     final at = _Scope('${c.name}.字段', c.name, parent: top, tv: tv, thisType: self);
-    for (final f in d.fields) {
+    for (final f in d.ownFields) {
       final init = f.init;
       if (init != null) arg(at, init, w.resolve(f.type, tv), '「${f.name}」的初始值');
     }
@@ -187,48 +193,17 @@ mixin _Decls on _Core {
       runFn(m, thisType: self, parent: top);
     }
     curSrc = d.src;
+    if (classRules(c, at)) return;
     for (final i in d.interfaces) {
-      final iface = w.interfaces[i];
-      if (iface == null) {
-        err('T08', at, '没有叫「$i」的接口', node: d);
-        continue;
-      }
-      for (final m in iface.methods) {
-        final got = w.classMethod(c, m.name);
-        if (got == null) {
-          err('T11', at, '「${c.name}」说自己是「$i」，但是没有「${m.name}」这个方法', node: d);
-          continue;
-        }
-        final f = got.$1;
-        final wantRet = w.resolve(m.returns ?? LType.nul);
-        if (f.params.length != m.params.length) {
-          err('T11', at, '「${c.name}」的「${m.name}」要收 ${m.params.length} 个参数，现在收 ${f.params.length} 个', node: f.decl ?? d);
-        } else if (!w.ok(rtype(f), wantRet)) {
-          err('T11', at, '「${c.name}」的「${m.name}」要返回${wantRet.show()}，现在返回的是${show(rtype(f))}', node: f.decl ?? d);
-        }
-      }
+      implementsRules(c, i, at);
     }
     final parent = w.classes[d.parent];
-    if (d.parent != null && parent == null) err('T08', at, '没有叫「${d.parent}」的类', node: d);
+    if (d.parent != null && parent == null) {
+      err(w.interfaces.containsKey(d.parent) ? 'T23' : 'T08', at, w.interfaces.containsKey(d.parent) ? '「${d.parent}」是接口，不能当父类：写在“实现了”里' : '没有叫「${d.parent}」的类', node: d);
+    }
     if (parent == null) return;
     if (!parent.decl.isOpen) err('T17', at, '「${c.name}」继承了「${parent.name}」，但「${parent.name}」没有勾“可以被继承”', node: d);
-    for (final m in c.methods.values) {
-      final up = w.classMethod(parent, m.name);
-      if (up == null) continue;
-      final p = up.$1;
-      String? why;
-      if (p.params.length != m.params.length) {
-        why = '父类的收 ${p.params.length} 个参数，这里收 ${m.params.length} 个';
-      } else {
-        for (var i = 0; i < m.params.length && why == null; i++) {
-          final a = w.res(ptype(m, i)), b = w.res(ptype(p, i));
-          if (m.params[i].type != null && p.params[i].type != null && a != b) why = '第 ${i + 1} 个参数父类的是${b.show()}，这里是${a.show()}';
-        }
-        final a = w.res(rtype(m)), b = w.res(rtype(p));
-        if (why == null && !a.isNever && !b.isNever && !w.ok(a, b)) why = '父类的返回${b.show()}，这里返回${a.show()}';
-      }
-      if (why != null) err('T18', at, '「${c.name}」的「${m.name}」和「${up.$2.name}」的对不上：$why', node: m.decl ?? d);
-    }
+    overrideRules(c, parent, at);
   }
 
   /// T13：给别人用的函数没标全。

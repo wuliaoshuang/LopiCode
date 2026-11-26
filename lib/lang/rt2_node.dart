@@ -255,6 +255,36 @@ function dtext(x) {
 // —— 输出：攒起来，最后一次写出 ——
 const out = [];
 const log = (s) => { out.push(s); };
+
+// —— 是不是数字、网址解码 ——
+const NUM = /^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)([eE][+-]?[0-9]+)?$/;
+const numTrim = (s) => s.replace(/^[ \t\n\r]+|[ \t\n\r]+$/g, "");
+const isNumeric = (x) => typeof x === "number" || (typeof x === "string" && NUM.test(numTrim(x)) && Number.isFinite(Number(numTrim(x))));
+function urlDecode(s) {
+  try { return decodeURIComponent(s); } catch (e) { return fail("这段网址编码解不开"); }
+}
+
+// —— 宿主（清单见 host_v2.dart）——
+function hostPrint(s, ch) {
+  if (ch === "out") out.push(s);
+  else if (ch === "err") process.stderr.write(s + "\n");
+  else fail("通道只能是 out 或 err");
+}
+const hostNow = () => Date.now();
+const copyVal = (v) => (Array.isArray(v) ? v.map(copyVal) : v instanceof Map ? new Map([...v].map(([k, x]) => [k, copyVal(x)])) : v);
+const store = new Map();
+const storeBusy = new Set();
+const storeRead = (name) => (store.has(name) ? copyVal(store.get(name)) : null);
+function storeUpdate(name, f) {
+  if (storeBusy.has(name)) fail("「" + name + "」这个格子正在改，不能在改它的函数里再改它");
+  storeBusy.add(name);
+  try {
+    const v = copyVal(f(storeRead(name)));
+    store.set(name, v);
+    return copyVal(v);
+  } finally { storeBusy.delete(name); }
+}
+
 function run(main) {
   try { main(); } catch (e) { if (e instanceof LcError) { out.push("出错：" + e.message); process.exitCode = 1; } else throw e; }
   process.stdout.write(out.join("\n") + "\n");
@@ -270,6 +300,6 @@ module.exports = {
   listMap, listFilter, listReduce, listFind, listEvery, listSome, listEach, listJoin, listReverse, listConcat, listSlice,
   listIndexOf, listContains, range, recCopy,
   dadd, dsub, dmul, ddiv, dpow, didiv, dmod, dynGet, dynSet, dynPush, dynPop, dynRemove, dynOrElse, dynSize,
-  toJson, fromJson, dtext, log, run,
+  toJson, fromJson, dtext, log, run, isNumeric, urlDecode, hostPrint, hostNow, storeRead, storeUpdate,
 };
 ''';

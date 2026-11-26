@@ -277,8 +277,11 @@ abstract class GoGen2Types extends Gen2 {
     'indexOf': 'IndexOf', 'replace': 'Replace', 'trim': 'Trim', 'upper': 'Upper', 'lower': 'Lower', 'repeatText': 'RepeatText',
     'charAt': 'CharAt', 'codePoints': 'CodePoints', 'listReverse': 'Reverse', 'listConcat': 'Concat', 'listSlice': 'Slice',
     'listContains': 'ListContains', 'listIndexOf': 'ListIndexOf', 'range': 'Range', 'dictKeys': 'DictKeys', 'dictValues': 'DictValues',
-    'dictHas': 'DictHas', 'toJson': 'ToJson', 'fromJson': 'FromJson', 'now': 'Now',
+    'dictHas': 'DictHas', 'toJson': 'ToJson', 'fromJson': 'FromJson', 'now': 'Now', 'isNumeric': 'IsNumeric', 'urlDecode': 'UrlDecode',
   };
+
+  @override
+  String hostCall(String fn, List<String> args) => 'lc.${fn[0].toUpperCase()}${fn.substring(1)}(${args.join(', ')})';
 
   @override
   String rtCall(String fn, List<String> args, List<LType> types, LType ret, LRt e) {

@@ -40,7 +40,7 @@ bool langIsBuiltinError(String? name) => name != null && kErrBuiltinNames.contai
 
 /// 内置错误类的语法树。每次调用都新建节点（检查结果按节点对象记，不能共用；所以下面故意不写成常量）。
 List<LClassDecl> langErrorPrelude() {
-  LParam message() => const LParam(kErrMessageField, type: LType.text);
+  LParam message() => const LParam(kErrMessageField, type: LType.text, defaultValue: LLit(''));
   LExpr name(String n) => LName(n);
   LExpr self(Object? _) => const LThis();
   return [

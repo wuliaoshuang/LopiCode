@@ -221,6 +221,8 @@ abstract class Gen2Dyn extends Gen2 {
   String dynCall(String f, List<String> args) => '${call('asFn', [f])}(${args.join(', ')})';
   @override
   String rtCall(String fn, List<String> args, List<LType> types, LType ret, LRt e) => call(fn, args);
+  @override
+  String hostCall(String fn, List<String> args) => call(fn, args);
 
   @override
   String text(String code, LType type) {
@@ -321,7 +323,7 @@ abstract class Gen2Dyn extends Gen2 {
     final fields = inFn(
       init,
       () => [
-        for (final f in d.fields)
+        for (final f in d.ownFields)
           () {
             final ft = w.resolve(f.type, c.typeVars);
             return (member(f.name), f.init == null ? nullLit() : x(f.init!, ft));
@@ -337,7 +339,7 @@ abstract class Gen2Dyn extends Gen2 {
       ctorBody = funcBody(f, ctor.body);
     }
     final methods = <(String, List<String>, List<String>)>[];
-    for (final m in d.methods) {
+    for (final m in d.ownMethods) {
       final sig = r.funcs['${c.name}.${m.fn.name}']!;
       final f = V2Fn(sig.key, sig.returns, cls: c);
       methods.add((member(m.fn.name), paramCodes(f, m.fn.params), funcBody(f, m.fn.body)));
@@ -379,16 +381,13 @@ abstract class Gen2Dyn extends Gen2 {
           add(classDecl(_class(w.classes[d.name]!)));
         case LFuncDecl():
           add(_function(d));
-        case LAliasDecl() || LInterfaceDecl() || LVarDecl():
+        case LAliasDecl() || LInterfaceDecl() || LVarDecl() || LNativeDecl():
           break;
-        case LNativeDecl():
-          unsupported('宿主函数的声明', d);
       }
     }
     final main = V2Fn(Gen2Base.mainScope, LType.nul, isMain: true);
-    final inits = <LStmt>[for (final d in module.decls.whereType<LVarDecl>()) LAssign(LTName(d.name), d.init), ...module.body];
     if (r.usesErrors) add(errSupport());
-    return programText(top, funcBody(main, inits));
+    return programText(top, funcBody(main, startup));
   }
 }
 

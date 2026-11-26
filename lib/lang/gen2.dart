@@ -162,7 +162,7 @@ abstract class Gen2Base {
       if (d is LClassDecl) {
         final c = d.ctor;
         if (c != null) _scan(c.body, ['${d.name}.创建'], const []);
-        for (final m in d.methods) {
+        for (final m in d.ownMethods) {
           _scan(m.fn.body, ['${d.name}.${m.fn.name}'], const []);
         }
       }
@@ -305,8 +305,19 @@ abstract class Gen2Base {
   List<String> throwStmt(LThrow s);
   List<String> tryStmt(LTry s, List<String> Function(List<LStmt>) gen);
 
-  /// 要生成的声明：用到错误的程序，前面带上内置的错误类。
-  List<LDecl> get decls => [if (r.usesErrors) ...r.prelude, ...module.decls];
+  /// 要生成的声明：用到错误的程序，前面带上内置的错误类；类本身的成员降成模块级的变量、函数，跟在它的类后面（[lStaticDecls]）。
+  late final List<LDecl> decls = [
+    for (final d in [if (r.usesErrors) ...r.prelude, ...module.decls]) ...[d, if (d is LClassDecl) ...lStaticDecls(d)],
+  ];
+
+  /// 程序开始时要做的：模块级变量（连类本身的字段）按声明的顺序放初值，然后是“启动时”的语句。
+  List<LStmt> get startup => [for (final d in decls.whereType<LVarDecl>()) LAssign(LTName(d.name), d.init), ...module.body];
+
+  /// 检查器认出来的“类本身的成员”（记号是“类名.成员名”）；不是＝null。
+  String? staticKey(LNode node) {
+    final op = r.opOf(node);
+    return op != null && op.startsWith('static:') ? op.substring(7) : null;
+  }
 
   /// 列表拍一份这种语言自己的数组（遍历时用）；它有几项、第 k 项。
   String snapshot(String list, LType elem);
@@ -402,6 +413,11 @@ abstract class Gen2Base {
           case LTIndex():
             return storeIndex(s, target);
           case LTField(:final of, :final name):
+            final sk = staticKey(target);
+            if (sk != null) {
+              final v = mustVar(sk, s);
+              return [assignLine(varCode(v), x(value, v.type))];
+            }
             final ot = t(of).nonNull;
             return [setFieldLine(x(of, ot), ot, name, x(value, fieldType(ot, name, s)), target)];
         }

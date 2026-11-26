@@ -282,6 +282,74 @@ def log(s):
     _out.append(s)
 
 
+# —— 是不是数字、网址解码 ——
+_NUM = _re.compile(r"[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)([eE][+-]?[0-9]+)?")
+_BAD_PCT = _re.compile(r"%(?![0-9A-Fa-f]{2})")
+
+
+def isNumeric(x):
+    if isinstance(x, bool):
+        return False
+    if isinstance(x, (int, float)):
+        return True
+    if not isinstance(x, str):
+        return False
+    s = x.strip(" \t\n\r")
+    return _NUM.fullmatch(s) is not None and math.isfinite(float(s))
+
+
+def urlDecode(s):
+    if _BAD_PCT.search(s):
+        fail("这段网址编码解不开")
+    try:
+        return _urlparse.unquote(s, encoding="utf-8", errors="strict")
+    except UnicodeDecodeError:
+        fail("这段网址编码解不开")
+
+
+# —— 宿主（清单见 host_v2.dart）——
+def hostPrint(s, ch):
+    if ch == "out":
+        _out.append(s)
+    elif ch == "err":
+        sys.stderr.buffer.write((s + "\n").encode("utf-8"))
+        sys.stderr.buffer.flush()
+    else:
+        fail("通道只能是 out 或 err")
+
+
+def hostNow():
+    return int(_time.time() * 1000)
+
+
+def _copy_val(v):
+    if isinstance(v, list):
+        return [_copy_val(x) for x in v]
+    if isinstance(v, dict):
+        return {k: _copy_val(x) for k, x in v.items()}
+    return v
+
+
+_store = {}
+_store_busy = set()
+
+
+def storeRead(name):
+    return _copy_val(_store.get(name))
+
+
+def storeUpdate(name, f):
+    if name in _store_busy:
+        fail("「" + name + "」这个格子正在改，不能在改它的函数里再改它")
+    _store_busy.add(name)
+    try:
+        v = _copy_val(f(storeRead(name)))
+        _store[name] = v
+        return _copy_val(v)
+    finally:
+        _store_busy.discard(name)
+
+
 def run(main):
     failed = False
     try:

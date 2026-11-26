@@ -47,7 +47,8 @@ const String _http = '(类 HTTP错误 可继承 (继承 错误) (字段 状态�
 void main() {
   final names = [
     for (final f in Directory(_dir).listSync().whereType<File>())
-      if (f.path.endsWith('.lc')) f.path.split('/').last.replaceAll('.lc', ''),
+      // c 开头的是第 2 段（类与接口）的样例，在 lang_gen2_classes_test.dart 里跑。
+      if (f.path.endsWith('.lc') && !f.path.split('/').last.startsWith('c')) f.path.split('/').last.replaceAll('.lc', ''),
   ]..sort();
 
   test('样例都在：10 个错误的、5 个模块的；每个都有 .expect', () {

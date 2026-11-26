@@ -67,8 +67,9 @@ mixin _Calls on _Core {
     LTypedFunc? f,
     LNode? node,
     List<String> slots = const [],
+    int? least,
   }) {
-    final least = f?.minArgs ?? pts.length;
+    least ??= f?.minArgs ?? pts.length;
     final rest = f?.hasRest ?? false;
     if (args.length < least || (!rest && args.length > pts.length)) {
       err('T07', sc, '「$name」要 ${pts.length} 个参数，给了 ${args.length} 个', node: node);
@@ -164,13 +165,17 @@ mixin _Calls on _Core {
 
   @override
   LType send(_Scope sc, LSend e) {
+    final cls = classRef(sc, e.obj);
+    if (cls != null) return staticSend(sc, cls, e);
     final t = nonnull(sc, e.obj, (_) => '对象');
     if (w.isClass(t)) {
       final m = _method(w.classes[t.name], e.method, t.args);
       if (m != null) return apply(sc, e.method, m.$1, m.$2, const [], const {}, e.args, f: m.$3, node: e);
     } else if (w.isInterface(t)) {
       final m = w.interfaces[t.name]?.methods.where((m) => m.name == e.method).firstOrNull;
-      if (m != null) return apply(sc, e.method, [for (final p in m.params) w.resolve(p.type)], w.resolve(m.returns ?? LType.nul), const [], const {}, e.args, node: e);
+      if (m != null) {
+        return apply(sc, e.method, [for (final p in m.params) w.resolve(p.type)], w.resolve(m.returns ?? LType.nul), const [], const {}, e.args, node: e, least: lMinArgs(m.params));
+      }
     } else if (t.isAny || t.isNever) {
       for (final x in e.args) {
         ex(sc, x);
@@ -180,7 +185,11 @@ mixin _Calls on _Core {
     for (final x in e.args) {
       ex(sc, x);
     }
-    err('T08', sc, '${t.show()}没有「${e.method}」这个方法', node: e);
+    if (w.isClass(t) && staticMethod(w.classes[t.name], e.method) != null) {
+      err('T25', sc, '「${e.method}」是「${t.name}」这个类本身的方法，不是每个对象自己的：要写成“${t.name} 的 ${e.method}”', node: e);
+    } else {
+      err('T08', sc, '${t.show()}没有「${e.method}」这个方法', node: e);
+    }
     return _never;
   }
 
@@ -225,7 +234,11 @@ mixin _Calls on _Core {
       for (final x in e.args) {
         ex(sc, x);
       }
-      err('T08', sc, '没有叫「${e.cls}」的类', node: e);
+      if (w.interfaces.containsKey(e.cls)) {
+        err('T23', sc, '「${e.cls}」是接口，不能新建：要新建一个实现了它的类', node: e);
+      } else {
+        err('T08', sc, '没有叫「${e.cls}」的类', node: e);
+      }
       return _never;
     }
     final tv = c.typeVars;

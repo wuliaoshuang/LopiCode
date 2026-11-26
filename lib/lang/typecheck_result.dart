@@ -190,7 +190,8 @@ extension _Finish on _Checker {
     }
     for (final key in sigOrder) {
       final dot = key.indexOf('.');
-      final f = dot < 0 ? w.funcs[key]! : w.classes[key.substring(0, dot)]!.methods[key.substring(dot + 1)]!;
+      // 类本身的方法也叫“类名.方法名”，但它记在函数表里。
+      final f = w.funcs[key] ?? w.classes[key.substring(0, dot)]!.methods[key.substring(dot + 1)]!;
       final ps = [for (var i = 0; i < f.params.length; i++) w.close(ptype(f, i))];
       final r = w.close(rtype(f));
       sigs[key] = LTypedSig(key, f, ps, r);
