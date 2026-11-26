@@ -11,6 +11,7 @@ import 'package:lopicode/core/path_guard.dart';
 import 'package:lopicode/lowcode/code_sheet.dart';
 import 'package:lopicode/lowcode/export_react.dart';
 import 'package:lopicode/lowcode/export_vue.dart';
+import 'package:lopicode/lowcode/image_assets.dart';
 import 'package:lopicode/lowcode/logic_gate.dart';
 import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/project_session.dart';
@@ -96,7 +97,10 @@ class _FrameworkExportSheetState extends State<FrameworkExportSheet> {
     var failed = false;
     try {
       final count = await writeFrameworkExport(widget.session, dir, _export);
-      message = '已导出 $count 个文件到 $dir/';
+      // 页面里用了项目里的图片：一起带过去，不然导出的代码里图片是断的。
+      final images = await lcCopyExportImages(widget.session.guard, dir, widget.doc);
+      if (images > 0) widget.session.filesChanged();
+      message = images == 0 ? '已导出 $count 个文件到 $dir/' : '已导出 $count 个文件到 $dir/；用到的 $images 张图片在 $dir/public/ 里，请一起放进工程的 public 目录';
     } on PathGuardException catch (e) {
       failed = true;
       message = '没有导出：${e.message}';

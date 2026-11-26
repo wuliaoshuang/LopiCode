@@ -1,9 +1,14 @@
-// 设计约束（低代码 · 组件栏 · 390×844）
-// - 固定在搭建页最底下：一行小字说明 + 一行可横向滑动的组件块。
-// - 点一下直接添加，长按拖到画布（拖动中携带的东西是 LcDrag，画布上的插入位认它）。
-// - 自定义组件排在内置组件后面，中间一道竖线隔开；图标统一用“组件”图标、名字用强调色，一眼能分清。交互和内置的一样。
-import 'package:lopicode/lowcode/component_model.dart';
-import 'package:lopicode/lowcode/model.dart';
+// 设计约束（低代码 · 组件盒 · 390×844）
+// - 一块贴着底部工具条上沿的面板，点工具条的“添加”打开。三档高矮：收起（只剩 28 高的手柄条）/ 默认（304）/ 顶到悬浮顶栏下沿；
+//   按住手柄上下拖能改高矮，点一下手柄在收起和默认之间切。（三档怎么停借用积木盒的规矩 BkDockStops。）
+// - 从上到下一行只做一件事：手柄 → 搜索框 → 分类（横着滑：常用 / 布局 / 基础 / 表单 / 展示 / 我的）→ 组件格子（一行 4 个，图标＋名字，72 高）。
+//   搜索时分类那一行换成“找到 N 个”，格子里是搜到的；搜不到写明没有。
+// - 点一个格子＝加进页面（加完面板收到最矮，画布滚到它那里）；长按 280 毫秒＝拿起来拖（面板同样收到最矮，把画布让出来）。
+// - 自定义组件在“我的”里，图标统一用“组件”图标、名字用强调色。
+// - 面板收起时里面的格子不销毁（只是被裁掉）：手指从格子上拿起东西以后面板才收，格子没了手势就断了。
+import 'package:lopicode/blocks/block_dock.dart';
+import 'package:lopicode/lowcode/lift_gesture_widgets.dart';
+import 'package:lopicode/lowcode/palette_catalog.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -37,90 +42,260 @@ IconData lcIcon(String type) => switch (type) {
   _ => Icons.widgets_outlined,
 };
 
-class PaletteBar extends StatelessWidget {
-  const PaletteBar({super.key, required this.onTap, required this.onDragging, this.components = const []});
+/// 组件盒手柄条多高（面板收到最矮时只剩它）。
+const double kPaletteHandleHeight = 28;
 
-  /// 点了一个组件块。内置组件 [ref] 是 null；自定义组件 type 是 `component`、[ref] 是它的 id。
-  final void Function(String type, String? ref) onTap;
-  final void Function(bool) onDragging;
+/// 组件盒默认多高。
+const double kPaletteNormalHeight = 304;
 
-  /// 自定义组件，排在内置组件后面。
-  final List<LcComponentDef> components;
+class PalettePanel extends StatefulWidget {
+  const PalettePanel({
+    super.key,
+    required this.entries,
+    required this.recent,
+    required this.maxHeight,
+    required this.onTap,
+    required this.onLift,
+    required this.onLiftMove,
+    required this.onLiftDrop,
+    required this.onLiftCancel,
+    required this.onClose,
+  });
+
+  /// 全部能加的组件（内置＋自定义）。
+  final List<PaletteEntry> entries;
+
+  /// 最近用过的（条目的 key，新的在前）。
+  final List<String> recent;
+
+  /// 最高能到多高（画布底边到悬浮顶栏下沿）。
+  final double maxHeight;
+
+  /// 点了一个格子。
+  final void Function(PaletteEntry entry) onTap;
+
+  /// 长按一个格子拿起来了 / 手指在动 / 松手 / 被打断（位置是屏幕坐标）。
+  final void Function(PaletteEntry entry, Offset global) onLift;
+  final void Function(Offset global) onLiftMove;
+  final VoidCallback onLiftDrop;
+  final VoidCallback onLiftCancel;
+
+  /// 点了右上角的“收起”（整块面板关掉）。
+  final VoidCallback onClose;
+
+  @override
+  State<PalettePanel> createState() => PalettePanelState();
+}
+
+class PalettePanelState extends State<PalettePanel> {
+  final TextEditingController _query = TextEditingController();
+  final FocusNode _focus = FocusNode();
+  PaletteGroup _group = PaletteGroup.recent;
+  double _height = kPaletteNormalHeight;
+  bool _dragging = false;
+
+  BkDockStops get _stops => BkDockStops.of(handle: kPaletteHandleHeight, normal: kPaletteNormalHeight, area: widget.maxHeight);
+
+  /// 现在多高（测试用）。
+  double get height => _stops.clamp(_height);
+  bool get collapsed => _stops.isCollapsed(height);
+
+  /// 收到最矮（只剩手柄），键盘也收起。
+  void collapse() {
+    _focus.unfocus();
+    if (!collapsed) setState(() => _height = _stops.collapsed);
+  }
+
+  /// 回到默认高度。
+  void expand() {
+    if (collapsed) setState(() => _height = _stops.normal);
+  }
+
+  @override
+  void dispose() {
+    _query.dispose();
+    _focus.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
     final t = Theme.of(context).textTheme;
-    return DecoratedBox(
+    final stops = _stops;
+    final height = stops.clamp(_height);
+    final query = _query.text.trim();
+    final groups = paletteGroups(widget.entries);
+    final group = groups.contains(_group) ? _group : PaletteGroup.recent;
+    final shown = query.isEmpty ? paletteInGroup(widget.entries, group, widget.recent) : paletteSearch(widget.entries, query);
+    // 里面的内容按“至少默认那么高”排好，外面只是裁掉露不出来的部分：收起时格子还在（见文件开头）。
+    final contentHeight = height < stops.normal ? stops.normal : height;
+    return AnimatedContainer(
+      key: const ValueKey('palette-panel'),
+      duration: _dragging ? Duration.zero : const Duration(milliseconds: 180),
+      curve: Curves.easeOutCubic,
+      height: height,
+      clipBehavior: Clip.hardEdge,
       decoration: BoxDecoration(
         color: c.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(Radii.md)),
         border: Border(top: BorderSide(color: c.border)),
+        boxShadow: const [BoxShadow(color: Color(0x1F000000), blurRadius: 12, offset: Offset(0, -2))],
       ),
-      child: SafeArea(
-        top: false,
+      child: OverflowBox(
+        alignment: Alignment.topCenter,
+        minHeight: contentHeight,
+        maxHeight: contentHeight,
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(Space.x4, Space.x2, Space.x4, Space.x1),
-              child: Text('组件 · 点一下添加，长按拖到画布', style: t.labelSmall),
-            ),
-            SizedBox(
-              height: 64,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x2),
-                itemCount: lcPaletteTypes.length + components.length,
-                // 内置和自定义之间隔一道竖线。
-                separatorBuilder: (_, i) => i == lcPaletteTypes.length - 1
-                    ? Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: Space.x2, vertical: Space.x2),
-                        child: VerticalDivider(width: 1, color: c.border),
-                      )
-                    : const SizedBox(width: Space.x2),
-                itemBuilder: (context, i) {
-                  final custom = i < lcPaletteTypes.length ? null : components[i - lcPaletteTypes.length];
-                  final type = custom == null ? lcPaletteTypes[i] : 'component';
-                  Widget chip({bool lifted = false}) => Container(
-                    key: custom == null || lifted ? null : ValueKey('palette-comp-${custom.id}'),
-                    width: custom == null ? 60 : 72,
-                    padding: const EdgeInsets.symmetric(horizontal: 2),
-                    decoration: BoxDecoration(
-                      color: lifted ? c.accentSoft : c.bg,
-                      borderRadius: BorderRadius.circular(Radii.md),
-                      border: Border.all(color: lifted ? c.accentFill : c.border),
+            // 手柄：上下拖改高矮，点一下收起 / 展开
+            Semantics(
+              button: true,
+              label: collapsed ? '展开组件盒' : '收起组件盒',
+              child: GestureDetector(
+                key: const ValueKey('palette-handle'),
+                behavior: HitTestBehavior.opaque,
+                onTap: () => setState(() {
+                  _focus.unfocus();
+                  _height = stops.toggled(height);
+                }),
+                onVerticalDragStart: (_) => setState(() => _dragging = true),
+                onVerticalDragUpdate: (d) => setState(() => _height = stops.clamp(height - d.delta.dy)),
+                onVerticalDragEnd: (d) => setState(() {
+                  _dragging = false;
+                  _height = stops.rest(height, d.primaryVelocity ?? 0);
+                }),
+                onVerticalDragCancel: () => setState(() => _dragging = false),
+                child: SizedBox(
+                  height: kPaletteHandleHeight,
+                  child: Center(
+                    child: Container(
+                      width: 36,
+                      height: 4,
+                      decoration: BoxDecoration(color: c.border, borderRadius: BorderRadius.circular(2)),
                     ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(lcIcon(type), size: 20, color: lifted ? c.accent : c.textMuted),
-                        const SizedBox(height: 2),
-                        Text(
-                          custom?.name ?? lcSpecs[type]!.label,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: t.labelSmall?.copyWith(color: lifted || custom != null ? c.accent : c.text),
-                        ),
-                      ],
-                    ),
-                  );
-                  return LongPressDraggable<LcDrag>(
-                    data: custom == null ? LcDrag.fresh(type) : LcDrag.component(custom.id),
-                    delay: const Duration(milliseconds: 250),
-                    onDragStarted: () => onDragging(true),
-                    onDragEnd: (_) => onDragging(false),
-                    onDraggableCanceled: (_, _) => onDragging(false),
-                    feedback: Material(
-                      color: Colors.transparent,
-                      child: SizedBox(height: 56, child: chip(lifted: true)),
-                    ),
-                    child: GestureDetector(onTap: () => onTap(type, custom?.id), child: chip()),
-                  );
-                },
+                  ),
+                ),
               ),
             ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(Space.x3, 0, Space.x1, Space.x2),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: SizedBox(
+                      height: 40,
+                      child: TextField(
+                        key: const ValueKey('palette-search'),
+                        controller: _query,
+                        focusNode: _focus,
+                        onChanged: (_) => setState(() {}),
+                        textInputAction: TextInputAction.search,
+                        style: t.bodyMedium,
+                        decoration: InputDecoration(
+                          hintText: '搜索组件（名字、别名都行）',
+                          prefixIcon: const Icon(Icons.search, size: 20),
+                          suffixIcon: query.isEmpty ? null : IconButton(tooltip: '清空', icon: const Icon(Icons.close, size: 18), onPressed: () => setState(_query.clear)),
+                          isDense: true,
+                          contentPadding: EdgeInsets.zero,
+                        ),
+                      ),
+                    ),
+                  ),
+                  IconButton(tooltip: '关闭组件盒', icon: const Icon(Icons.keyboard_arrow_down), onPressed: widget.onClose),
+                ],
+              ),
+            ),
+            SizedBox(
+              height: 36,
+              child: query.isNotEmpty
+                  ? Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: Space.x4),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(shown.isEmpty ? '没有名字或别名里带“$query”的组件' : '找到 ${shown.length} 个', style: t.bodySmall?.copyWith(color: c.textMuted)),
+                      ),
+                    )
+                  : ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: Space.x3),
+                      itemCount: groups.length,
+                      separatorBuilder: (_, _) => const SizedBox(width: Space.x1),
+                      itemBuilder: (context, i) {
+                        final g = groups[i], on = g == group;
+                        return Center(
+                          child: Material(
+                            color: on ? c.accentSoft : Colors.transparent,
+                            borderRadius: BorderRadius.circular(16),
+                            child: InkWell(
+                              key: ValueKey('palette-group-${g.name}'),
+                              borderRadius: BorderRadius.circular(16),
+                              onTap: () => setState(() => _group = g),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: Space.x3, vertical: 6),
+                                child: Text(
+                                  g.label,
+                                  style: t.labelLarge?.copyWith(color: on ? c.accent : c.textMuted, fontWeight: on ? FontWeight.w600 : FontWeight.w400),
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+            ),
+            Expanded(
+              child: shown.isEmpty && query.isEmpty
+                  ? Center(
+                      child: Text(group == PaletteGroup.mine ? '还没有自定义组件' : '这一类还没有组件', style: t.bodySmall?.copyWith(color: c.textFaint)),
+                    )
+                  : GridView.builder(
+                      key: const ValueKey('palette-grid'),
+                      padding: const EdgeInsets.fromLTRB(Space.x3, Space.x1, Space.x3, Space.x3),
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 4, mainAxisExtent: 72, crossAxisSpacing: Space.x2, mainAxisSpacing: Space.x2),
+                      itemCount: shown.length,
+                      itemBuilder: (context, i) => _cell(context, shown[i]),
+                    ),
+            ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _cell(BuildContext context, PaletteEntry e) {
+    final c = context.colors;
+    final t = Theme.of(context).textTheme;
+    final mine = e.ref != null;
+    return LcLiftDetector(
+      key: ValueKey('palette-item-${e.key}'),
+      onLift: (at) => widget.onLift(e, at),
+      onMove: widget.onLiftMove,
+      onDrop: widget.onLiftDrop,
+      onCancel: widget.onLiftCancel,
+      child: Material(
+        color: c.surfaceMuted,
+        borderRadius: BorderRadius.circular(Radii.md),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(Radii.md),
+          onTap: () => widget.onTap(e),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: Space.x1),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(lcIcon(e.type), size: 22, color: mine ? c.accent : c.text),
+                const SizedBox(height: 6),
+                Text(
+                  e.label,
+                  style: t.labelMedium?.copyWith(color: mine ? c.accent : c.text),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

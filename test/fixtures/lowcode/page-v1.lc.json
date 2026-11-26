@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "title": "旧页面",
+  "root": {
+    "id": "root",
+    "type": "page",
+    "props": {"padding": 16, "gap": 12, "background": "#ffffff"},
+    "children": [
+      {"id": "n1", "type": "text", "props": {"text": "欢迎", "size": 24, "weight": "bold"}},
+      {"id": "n2", "type": "card", "props": {"padding": 16, "gap": 12, "width": "fill"}, "children": [
+        {"id": "n3", "type": "input", "props": {"label": "名字", "placeholder": "请输入", "width": "fill"}},
+        {"id": "n4", "type": "button", "props": {"text": "提交", "variant": "filled"}}
+      ]},
+      {"id": "n5", "type": "divider"}
+    ]
+  }
+}

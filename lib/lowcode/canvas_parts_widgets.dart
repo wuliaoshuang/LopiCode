@@ -1,79 +1,30 @@
 // 设计约束（低代码 · 画布上的小零件）
-// - 插入位：平时不占地方（子项之间的间距由容器自己留）；拖动时才出现，悬停时变成加粗的色条。
+// - 空容器的提示：一块 48 高的浅色框，写着“空的 · 拖组件到这里”。拖动时页面里不再插任何占位（第 5 版第 1 期）。
 // - 角标：贴在组件左上角的一小块字（“已隐藏”“绝对定位”），不挡选中。
 // - 安静的 Flex：内容比盒子大时照样画出去（和网页里 overflow: visible 一样），不画黄黑警示条。
+import 'dart:io';
+
 import 'package:flutter/rendering.dart';
-import 'package:lopicode/lowcode/palette_widgets.dart';
+import 'package:lopicode/lowcode/image_assets.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:material_ui/material_ui.dart';
 
-/// 一个插入位。
-class CanvasSlot extends StatelessWidget {
-  const CanvasSlot({
-    super.key,
-    required this.parentId,
-    required this.index,
-    required this.vertical,
-    required this.idle,
-    required this.dragging,
-    required this.onDrop,
-    required this.canDrop,
-    this.emptyHint = false,
-  });
-
-  final String parentId;
-  final int index;
-
-  /// true = 竖条（在行里）。
-  final bool vertical;
-
-  /// 不拖动时占的尺寸（＝容器的间距）。
-  final double idle;
-  final bool dragging;
-  final bool emptyHint;
-  final void Function(LcDrag, String, int) onDrop;
-  final bool Function(LcDrag, String) canDrop;
+/// 空容器里的提示。拖东西到它上面时，整块高亮由画布叠在上面画（canvas_drag_widgets.dart），这里不变。
+class CanvasEmptyHint extends StatelessWidget {
+  const CanvasEmptyHint({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return DragTarget<LcDrag>(
-      onWillAcceptWithDetails: (d) => canDrop(d.data, parentId),
-      onAcceptWithDetails: (d) => onDrop(d.data, parentId, index),
-      builder: (context, candidates, _) {
-        final hover = candidates.isNotEmpty;
-        if (emptyHint) {
-          return Container(
-            height: 48,
-            constraints: const BoxConstraints(minWidth: 48),
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: hover ? Palette.primary200 : const Color(0x0F000000),
-              borderRadius: BorderRadius.circular(Radii.sm),
-              border: Border.all(color: hover ? Palette.primary500 : Palette.neutral300),
-            ),
-            child: Text(hover ? '松手放进来' : '空的 · 拖组件到这里', style: const TextStyle(fontSize: 12, color: Palette.neutral600)),
-          );
-        }
-        final size = dragging ? (idle < 20 ? 20.0 : idle) : idle;
-        final bar = AnimatedContainer(
-          duration: const Duration(milliseconds: 120),
-          width: vertical ? size : null,
-          height: vertical ? null : size,
-          constraints: vertical ? const BoxConstraints(minHeight: 24) : null,
-          alignment: Alignment.center,
-          child: dragging
-              ? Container(
-                  width: vertical ? (hover ? 6 : 2) : double.infinity,
-                  height: vertical ? double.infinity : (hover ? 6 : 2),
-                  constraints: vertical ? const BoxConstraints(minHeight: 24, maxHeight: 64) : null,
-                  decoration: BoxDecoration(color: hover ? Palette.primary500 : Palette.primary200, borderRadius: BorderRadius.circular(3)),
-                )
-              : null,
-        );
-        return bar;
-      },
-    );
-  }
+  Widget build(BuildContext context) => Container(
+    height: 48,
+    constraints: const BoxConstraints(minWidth: 48),
+    alignment: Alignment.center,
+    decoration: BoxDecoration(
+      color: const Color(0x0F000000),
+      borderRadius: BorderRadius.circular(Radii.sm),
+      border: Border.all(color: Palette.neutral300),
+    ),
+    child: const Text('空的 · 拖组件到这里', style: TextStyle(fontSize: 12, color: Palette.neutral600)),
+  );
 }
 
 /// 贴在组件左上角的小角标。
@@ -142,4 +93,70 @@ class _RenderQuietFlex extends RenderFlex {
   // 父类在这里发现溢出会画警示条并记一条错误；这里只管把子项画出来。
   @override
   void paint(PaintingContext context, Offset offset) => defaultPaint(context, offset);
+}
+
+/// 画布上认“项目里的图片”靠它：把图片组件写的相对地址换成真实文件路径（换不了返回 null＝坏图）。
+/// 搭建页把它套在搭建台外面；没套（比如只是看一眼的预览）时相对地址一律显示成坏图。
+class LcImageScope extends InheritedWidget {
+  const LcImageScope({super.key, required this.resolve, required super.child});
+  final String? Function(String src) resolve;
+
+  static String? Function(String src)? of(BuildContext context) => context.dependOnInheritedWidgetOfExactType<LcImageScope>()?.resolve;
+
+  @override
+  bool updateShouldNotify(LcImageScope old) => false;
+}
+
+/// 画布上的一张图片：网址走网络，相对地址走项目里的文件；没填是占位，读不出来是坏图。
+/// 填充方式（object-fit）和宽高比（aspect-ratio）照样式里写的画，和导出的网页一致。
+class CanvasImage extends StatelessWidget {
+  const CanvasImage({super.key, required this.src, required this.width, required this.height, required this.style, this.background});
+  final String? src;
+  final double? width;
+  final double? height;
+  final Map<String, String> style;
+  final Color? background;
+
+  /// `aspect-ratio: 16 / 9`、`1`、`1.5` → 宽 ÷ 高；写得不认识返回 null。
+  static double? ratioOf(String? css) {
+    final m = RegExp(r'^\s*([0-9.]+)\s*(?:/\s*([0-9.]+))?\s*$').firstMatch(css ?? '');
+    if (m == null) return null;
+    final a = double.tryParse(m[1]!), b = m[2] == null ? 1.0 : double.tryParse(m[2]!);
+    return a == null || b == null || a <= 0 || b <= 0 ? null : a / b;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final fit = switch (style['object-fit']?.trim()) {
+      'contain' => BoxFit.contain,
+      'fill' => BoxFit.fill,
+      'none' => BoxFit.none,
+      'scale-down' => BoxFit.scaleDown,
+      _ => BoxFit.cover,
+    };
+    final ratio = height == null ? ratioOf(style['aspect-ratio']) : null;
+    Widget sized(Widget child) => ratio == null
+        ? child
+        : SizedBox(
+            width: width,
+            child: AspectRatio(aspectRatio: ratio, child: child),
+          );
+    Widget placeholder(IconData icon) => sized(
+      Container(
+        height: ratio == null ? height : null,
+        width: width,
+        color: background ?? Palette.neutral200,
+        alignment: Alignment.center,
+        child: Icon(icon, color: Palette.neutral500),
+      ),
+    );
+    final s = src;
+    if (s == null) return placeholder(Icons.image_outlined);
+    Widget broken(BuildContext _, Object _, StackTrace? _) => placeholder(Icons.broken_image_outlined);
+    final h = ratio == null ? height : null;
+    if (lcIsRemoteSrc(s)) return sized(Image.network(s, height: h, width: width, fit: fit, errorBuilder: broken));
+    final path = LcImageScope.of(context)?.call(s);
+    if (path == null) return placeholder(Icons.broken_image_outlined);
+    return sized(Image.file(File(path), height: h, width: width, fit: fit, errorBuilder: broken));
+  }
 }

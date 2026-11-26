@@ -9,7 +9,7 @@ import 'package:lopicode/lowcode/style_model.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:material_ui/material_ui.dart';
 
-const String kInheritedHint = '继承自属性';
+const String kInheritedHint = '来自常用页';
 
 String? _hint(StyleEdit ed, String name) => ed.inherited(name) ? kInheritedHint : null;
 

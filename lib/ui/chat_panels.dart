@@ -209,12 +209,13 @@ class PickedImage {
 /// 测试用：换掉系统的相册 / 相机。
 Future<List<PickedImage>> Function({required bool camera})? pickImagesOverride;
 
-Future<List<PickedImage>> pickImages({required bool camera}) async {
+/// [single]：只要一张（相册里只能点一张；低代码给图片组件选图用）。
+Future<List<PickedImage>> pickImages({required bool camera, bool single = false}) async {
   final override = pickImagesOverride;
   if (override != null) return override(camera: camera);
   final picker = ImagePicker();
-  final files = camera
-      ? [await picker.pickImage(source: ImageSource.camera, maxWidth: 2048, maxHeight: 2048, imageQuality: 85)].nonNulls.toList()
+  final files = camera || single
+      ? [await picker.pickImage(source: camera ? ImageSource.camera : ImageSource.gallery, maxWidth: 2048, maxHeight: 2048, imageQuality: 85)].nonNulls.toList()
       : await picker.pickMultiImage(maxWidth: 2048, maxHeight: 2048, imageQuality: 85);
   return [for (final f in files) PickedImage(f.name, await f.readAsBytes())];
 }

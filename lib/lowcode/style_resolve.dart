@@ -82,6 +82,9 @@ Map<String, String> legacyStyle(LcNode n, LcNode? parent) {
   return r;
 }
 
+/// 测试用：[resolvedStyle] 一共被调了几次（画布要保证一个组件画一遍只算一次）。
+int debugResolvedStyleCalls = 0;
+
 /// 最终样式：[legacyStyle] 被 `n.style` 盖掉后的结果（规范写法）。
 ///
 /// 盖的规矩：
@@ -93,6 +96,7 @@ Map<String, String> legacyStyle(LcNode n, LcNode? parent) {
 /// 3. 间隔（spacer）同理：它靠 `flex: 0 0 Npx` 定大小，`style` 里写了主轴方向的尺寸
 ///    （行里是 `width`，否则是 `height`）时，`flex-basis` 改成 `auto`，让写的尺寸生效（照样不放大不缩小）。
 Map<String, String> resolvedStyle(LcNode n, LcNode? parent) {
+  debugResolvedStyleCalls++;
   final legacy = legacyStyle(n, parent);
   if (n.style.isEmpty) return legacy;
   final own = canonicalDeclarations(n.style);

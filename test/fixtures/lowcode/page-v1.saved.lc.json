@@ -1,0 +1,52 @@
+{
+  "version": 2,
+  "title": "旧页面",
+  "root": {
+    "id": "root",
+    "type": "page",
+    "props": {
+      "padding": 16,
+      "gap": 12
+    },
+    "children": [
+      {
+        "id": "n1",
+        "type": "text",
+        "props": {
+          "text": "欢迎",
+          "size": 24
+        }
+      },
+      {
+        "id": "n2",
+        "type": "card",
+        "props": {
+          "padding": 16,
+          "gap": 12,
+          "width": "fill"
+        },
+        "children": [
+          {
+            "id": "n3",
+            "type": "input",
+            "props": {
+              "placeholder": "请输入",
+              "width": "fill"
+            }
+          },
+          {
+            "id": "n4",
+            "type": "button",
+            "props": {
+              "text": "提交"
+            }
+          }
+        ]
+      },
+      {
+        "id": "n5",
+        "type": "divider"
+      }
+    ]
+  }
+}

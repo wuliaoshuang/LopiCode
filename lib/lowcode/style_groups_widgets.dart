@@ -66,7 +66,7 @@ class _SizeGroup extends StatelessWidget {
         initiallyOpen: more.any(ed.isOwn),
         children: [StyleLengthRow(ed, 'min-width', '最小宽度'), StyleLengthRow(ed, 'max-width', '最大宽度'), StyleLengthRow(ed, 'min-height', '最小高度'), StyleLengthRow(ed, 'max-height', '最大高度')],
       ),
-      if (n.type == 'spacer') Text('间隔的大小在“属性”里改更方便。', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: c.textFaint)),
+      if (n.type == 'spacer') Text('间隔的大小在“常用”页里改更方便。', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: c.textFaint)),
     ]);
   }
 }

@@ -96,6 +96,18 @@ Future<void> settle(WidgetTester tester, {int rounds = 4, int ms = 60}) async {
   }
 }
 
+/// 低代码搭建页“停手 0.4 秒才存盘”：把这段时间走完，再等真实的写盘做完（顶栏小字不再是“正在保存…”）才返回。
+/// 不靠“等固定的一小会儿”：机器忙的时候写盘可能很慢，读早了会读到写了一半的文件。最多等 10 秒（真实时间）。
+Future<void> waitLowcodeSaved(WidgetTester tester) async {
+  await tester.pump(const Duration(milliseconds: 500));
+  for (var i = 0; i < 500; i++) {
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
+    await tester.pump();
+    if (find.textContaining('正在保存', skipOffstage: false).evaluate().isEmpty) break;
+  }
+  await tester.pump();
+}
+
 /// 脚本化的模型客户端（不走网络）。
 class ScriptedChatClient implements ChatClient {
   ScriptedChatClient(this.turns);
