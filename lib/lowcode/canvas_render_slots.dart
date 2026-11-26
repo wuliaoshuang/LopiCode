@@ -55,7 +55,7 @@ bool _has(Map<String, String> s, String prefix) => s.keys.any((k) => k.startsWit
 bool _hasRadius(Map<String, String> s) => s.keys.any((k) => k.startsWith('border-') && k.endsWith('-radius'));
 
 /// 画布上的插槽（自定义组件的），两种情形：
-/// - 组件编辑页里（或者页面里误放的）占位节点：一个能选中、能拖、能往里放默认内容的框，左上角标着“插槽 · 名字”。
+/// - 组件编辑页里（或者页面里误放的）占位节点：一个能选中、能拖、能往里放默认内容的框，顶上一行角标“插槽 · 名字”（自己占一行，不盖内容）。
 ///   它里面的东西照它外面那个容器的排法排（横排 / 竖排、间距、对齐都跟容器走）。
 /// - 页面上一个实例展开以后留下的记号（`props.host` 是实例的 id）：填了内容的，内容交给活页面画（能选中、能改、能拖走）；
 ///   没填的画定义里的默认内容（只是样子）；连默认内容也没有，画一个空位提示。落点 id 是 `实例id#插槽名`。
@@ -73,15 +73,23 @@ extension _CanvasSlots on CanvasPage {
       body = _flex(context, container, s, inner, tightW: !row, tightH: false, only: slot.children);
       if (!inert) {
         final ui = context.themeSpec;
+        // 角标自己占一行（不叠在内容上：叠着会盖住默认内容的字，两个插槽挨着时角标还会互相压）。
+        // 所以编辑页里插槽框比真正用的时候高出一行角标——页面上用这个组件时没有这一行。
         body = DecoratedBox(
           position: DecorationPosition.foreground,
           decoration: BoxDecoration(
             border: Border.all(color: ui.lowcodeColor(LowcodeKey.dropIdleBorder)),
             borderRadius: BorderRadius.circular(Radii.sm),
           ),
-          child: body,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: inner.boundedW ? CrossAxisAlignment.stretch : CrossAxisAlignment.start,
+            children: [
+              Align(alignment: Alignment.centerLeft, widthFactor: 1, heightFactor: 1, child: CanvasBadge(doc.root.id == kComponentEditRootId ? '插槽 · $label' : '插槽（只在组件里有用）')),
+              body,
+            ],
+          ),
         );
-        body = canvasBadged(body, doc.root.id == kComponentEditRootId ? '插槽 · $label' : '插槽（只在组件里有用）');
         body = KeyedSubtree(key: boxKey(slot.id), child: body);
         body = GestureDetector(key: ValueKey('lowcode-node-${slot.id}'), behavior: HitTestBehavior.opaque, onTap: () => onSelect(slot.id), child: body);
         body = _liftable(slot, slot.id == movingId ? Opacity(opacity: 0.35, child: body) : body);

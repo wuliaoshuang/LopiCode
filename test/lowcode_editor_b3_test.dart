@@ -27,22 +27,37 @@ LcDocument plainDoc({List<Object?> extra = const []}) => LcDocument.parse(
   jsonEncode({
     'version': 3,
     'title': 'Box',
-    'root': n('root', 'page', {'padding': 16, 'gap': 12}, [
-      n('hi', 'text', {'text': '你好'}),
-      n('a', 'component', {'ref': 'c1'}),
-      n('b', 'component', {'ref': 'c1'}),
-      ...extra,
-    ]),
+    'root': n(
+      'root',
+      'page',
+      {'padding': 16, 'gap': 12},
+      [
+        n('hi', 'text', {'text': '你好'}),
+        n('a', 'component', {'ref': 'c1'}),
+        n('b', 'component', {'ref': 'c1'}),
+        ...extra,
+      ],
+    ),
     'components': [
       {
         'id': 'c1',
         'name': '盒子',
-        'root': n('k1', 'card', {'padding': 12, 'gap': 8, 'width': 'fill'}, [
-          n('k2', 'text', {'text': '标题', 'bold': true}),
-          n('k3', 'column', {'gap': 6, 'width': 'fill'}, [
-            n('k4', 'text', {'text': '默认的字'}),
-          ]),
-        ]),
+        'root': n(
+          'k1',
+          'card',
+          {'padding': 12, 'gap': 8, 'width': 'fill'},
+          [
+            n('k2', 'text', {'text': '标题', 'bold': true}),
+            n(
+              'k3',
+              'column',
+              {'gap': 6, 'width': 'fill'},
+              [
+                n('k4', 'text', {'text': '默认的字'}),
+              ],
+            ),
+          ],
+        ),
       },
     ],
   }),
@@ -319,6 +334,28 @@ void main() {
       await lbTap(tester, find.byTooltip('选上一层'));
       expect(find.text('插槽（只在组件里有用）'), findsNWidgets(2), reason: '角标和选中条');
       await shot(tester, '16-stray-slot-on-page');
+      // 点“常用”：不崩，只有一句说明（插槽没有可改的属性）。
+      await lbOpenCommon(tester);
+      expect(lbKey('lc-slot-common-note'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('拆开一个填了内容的实例：填的内容接在原来插槽的位置上，节点还是原来那几个', (tester) async {
+      final session = await lbOpen(tester, doc: slotCardPage());
+      await lbTap(tester, lbNode('a'));
+      await more(tester, '拆开成普通控件');
+      await lbTap(tester, find.text('拆开'));
+      await settle(tester, rounds: 3);
+      final doc = await lbSaved(tester, session);
+      expect(doc.find('a')?.type, isNot('component'));
+      for (final id in ['p1', 'p2', 'b1', 'b2']) {
+        expect(doc.find(id), isNotNull, reason: '$id 不能丢');
+        expect(doc.find(id)!.slot, isNull, reason: '拆开以后不再带插槽名');
+      }
+      bool anySlot(LcNode n) => n.type == 'slot' || n.children.any(anySlot);
+      expect(anySlot(doc.root), isFalse, reason: '页面里不留占位节点');
+      expect(doc.find('b')!.type, 'component', reason: '另一个实例不动');
+      expect(onCanvas('草莓蛋糕'), 1);
     });
   });
 
@@ -346,7 +383,15 @@ void main() {
     });
 
     testWidgets('“禁用”状态：文本这类不能禁用的组件，状态条下面多一句灰字；按钮没有这句', (tester) async {
-      await lbOpen(tester, doc: plainDoc(extra: [n('btn', 'button', {'text': '按钮'})]), selected: 'hi');
+      await lbOpen(
+        tester,
+        doc: plainDoc(
+          extra: [
+            n('btn', 'button', {'text': '按钮'}),
+          ],
+        ),
+        selected: 'hi',
+      );
       await lbOpenCommon(tester);
       await lbTap(tester, find.text('样式').last);
       expect(lbKey('lc-state-caveat'), findsNothing);
@@ -356,7 +401,15 @@ void main() {
       await shot(tester, '21-disabled-caveat');
       await lbTap(tester, lbKey('lc-state-pressed'));
       expect(lbKey('lc-state-caveat'), findsNothing);
-      await lbOpen(tester, doc: plainDoc(extra: [n('btn', 'button', {'text': '按钮'})]), selected: 'btn');
+      await lbOpen(
+        tester,
+        doc: plainDoc(
+          extra: [
+            n('btn', 'button', {'text': '按钮'}),
+          ],
+        ),
+        selected: 'btn',
+      );
       await lbOpenCommon(tester);
       await lbTap(tester, find.text('样式').last);
       await lbTap(tester, lbKey('lc-state-disabled'));
@@ -382,11 +435,16 @@ void main() {
         jsonEncode({
           'version': 3,
           'title': 'S',
-          'root': n('root', 'page', {'padding': 16, 'gap': 12}, [
-            n('t1', 'text', {'text': '甲'}),
-            n('b1', 'button', {'text': '乙'}),
-            n('b2', 'button', {'text': '丙'}),
-          ]),
+          'root': n(
+            'root',
+            'page',
+            {'padding': 16, 'gap': 12},
+            [
+              n('t1', 'text', {'text': '甲'}),
+              n('b1', 'button', {'text': '乙'}),
+              n('b2', 'button', {'text': '丙'}),
+            ],
+          ),
         }),
       );
       await check(small, 'b1', ['t1', 'b2'], '22-size-label-small-button');
@@ -394,24 +452,29 @@ void main() {
         jsonEncode({
           'version': 3,
           'title': 'G',
-          'root': n('root', 'page', {'padding': 16}, [
-            {
-              'id': 'g',
-              'type': 'container',
-              'style': {'display': 'grid', 'grid-template-columns': 'repeat(3, 1fr)', 'gap': '8px', 'width': '100%'},
-              'children': [
-                {
-                  'id': 'c1',
-                  'type': 'text',
-                  'props': {'text': '第 1 格'},
-                  'style': {'grid-column': 'span 2'},
-                },
-                n('c2', 'text', {'text': '第 2 格'}),
-                n('c3', 'text', {'text': '第 3 格'}),
-                n('c4', 'text', {'text': '第 4 格'}),
-              ],
-            },
-          ]),
+          'root': n(
+            'root',
+            'page',
+            {'padding': 16},
+            [
+              {
+                'id': 'g',
+                'type': 'container',
+                'style': {'display': 'grid', 'grid-template-columns': 'repeat(3, 1fr)', 'gap': '8px', 'width': '100%'},
+                'children': [
+                  {
+                    'id': 'c1',
+                    'type': 'text',
+                    'props': {'text': '第 1 格'},
+                    'style': {'grid-column': 'span 2'},
+                  },
+                  n('c2', 'text', {'text': '第 2 格'}),
+                  n('c3', 'text', {'text': '第 3 格'}),
+                  n('c4', 'text', {'text': '第 4 格'}),
+                ],
+              },
+            ],
+          ),
         }),
       );
       await check(grid, 'c1', ['c2', 'c3', 'c4'], '23-size-label-grid-span');

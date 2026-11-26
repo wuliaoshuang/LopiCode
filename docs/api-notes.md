@@ -665,3 +665,18 @@ PHP 真跑撞到并修掉的 5 个问题，以及依据：
 | `accent-color`、`appearance: none`、`inset: 0`、`[hidden]` 属性选择器 | 表单控件的颜色、去掉原生外观、弹窗遮罩铺满、页签面板 / 弹窗的隐藏 | **未核对** |
 
 真编译只说明“Vue 3 / React 能把导出的代码编过、能服务端渲染出 HTML”；上面这些 CSS **没在真浏览器里看过效果**。
+
+## 2026-11-26 低代码第 3 期 B3：自定义组件的插槽在 React 里怎么写（`lib/lowcode/export_react.dart`）
+
+导出的写法：默认插槽走 `children`，具名插槽当一个同名属性传一段 JSX；组件里“外面没传就用默认内容”写成 `{children ?? (<>默认内容</>)}`。
+
+| 说法 | 核对结果 | 来源 |
+|---|---|---|
+| 属性可以传任何 JavaScript 值，包括一段 JSX | **核对过**：原文 “you can pass any JavaScript value through them, including objects, arrays, functions, and even JSX!”，示例 `function Card({ children }) { return <div className="card">{children}</div>; }` | https://react.dev/learn/describing-the-ui （“Passing props to a component”一节） |
+| 把 JSX 嵌在组件标签里，组件从 `children` 属性拿到 | **核对过**：同上那段示例；另一页写明用小写的 `children` 属性是 “good and encouraged”，并有把 JSX 放进属性值里传的示例（`content: <p>…</p>`） | https://react.dev/reference/react/Children |
+| “Passing Props to a Component”整页（含 “How to pass some JSX to a component”一节） | **只看了同一份文档源码的预览站和仓库里的原文**，react.dev 上这一页本身没直接打开 | https://react-pm2dhqs66-react-foundation.vercel.app/learn/passing-props-to-a-component |
+| `??`（外面没传时用默认内容） | 这是 JavaScript 自己的写法，不是 React 的；**没对 MDN 核对**。真编译（esbuild）＋服务端渲染跑过：没传时渲染默认内容，传了渲染传的 | `test/dev_webdev_compile_test.dart`「带插槽的商品卡片」 |
+
+一处要知道的：React 里“传了一个空的东西”（比如 `footer={null}`）也算没传，会显示默认内容；导出器不会生成这种写法（没填就干脆不写这个属性）。
+
+Vue 那边（`<slot name>` 里写默认内容、用的地方 `<template #名字>`）第 2 期设计时已对官方文档核对过，这次只是真编译＋服务端渲染再验了一遍。

@@ -47,6 +47,7 @@ import 'support/backend_func_blocks.dart' as fb;
 import 'support/backend_lang_blocks.dart' as bk;
 import 'support/harness.dart';
 import 'support/runtime_fakes.dart';
+import 'support/slot_sample.dart';
 import 'support/v3_components_sample.dart';
 
 final bool writeShots = Platform.environment['LOPI_SHOTS'] == '1';
@@ -612,6 +613,70 @@ void main() {
         await shot(tester, 'lowcode-v3-overlay');
         await tap(key('lc-overlay-exit'));
         expect(key('lc-overlay-bar'), findsNothing);
+      });
+
+      testWidgets('低代码编辑器 · 自定义组件的插槽：页面上填了的 / 默认内容 / 空位 / 误放的占位、图层、组件编辑页的插槽框、起名对话框、取消确认、禁用说明', (tester) async {
+        // 样例页再加两样：一个“底部按钮”没有默认内容的空位看不出来，所以把默认内容去掉；页面最后误放一个占位。
+        final json = slotCardJson();
+        final defRoot = ((json['components']! as List).single as Map)['root'] as Map;
+        ((defRoot['children'] as List)[2]['children'] as List)[0].remove('children');
+        ((json['root']! as Map)['children'] as List).add({
+          'id': 'stray',
+          'type': 'slot',
+          'children': [
+            {
+              'id': 'in',
+              'type': 'text',
+              'props': {'text': '占位里的字'},
+            },
+          ],
+        });
+        final (env, project, session) = await open(tester, ProjectTemplate.lowcode, before: (project) => File(p.join(project.dir, kLowcodePageFile)).writeAsStringSync(jsonEncode(json)));
+        await show(tester, env, ProjectShell(project: project, session: session, initial: ShellDest.builder));
+        Finder key(String k) => find.byKey(ValueKey(k));
+        Future<void> tap(Finder f) async {
+          await tester.tap(f.first, warnIfMissed: false);
+          await tester.pumpAndSettle();
+          await settle(tester, rounds: 2);
+        }
+
+        expect(key('lc-slot-hint-b-footer'), findsOneWidget);
+        expect(find.text('插槽（只在组件里有用）'), findsOneWidget);
+        await shot(tester, 'lowcode-slots-page');
+        // 图层：写着在哪个插槽里。
+        await tap(find.byTooltip('图层'));
+        expect(find.textContaining('在「底部按钮」里'), findsWidgets);
+        await shot(tester, 'lowcode-slots-layers');
+        await tester.tapAt(const Offset(195, 60));
+        await settle(tester, rounds: 3);
+        // “禁用”设在文本上：一句灰字。
+        await tap(key('lowcode-node-head'));
+        await tap(find.text('样式'));
+        await tap(key('lc-state-disabled'));
+        expect(key('lc-state-caveat'), findsOneWidget);
+        await shot(tester, 'lowcode-state-caveat');
+        await tester.binding.handlePopRoute();
+        await tester.pumpAndSettle();
+        await settle(tester, rounds: 2);
+        // 组件编辑页：插槽框、选中插槽、起名对话框、取消确认。
+        await tap(key('lowcode-node-b'));
+        await tap(find.byTooltip('更多操作'));
+        await tap(find.text('编辑组件'));
+        expect(find.text('插槽 · 内容'), findsOneWidget);
+        await shot(tester, 'lowcode-slots-editor');
+        await tap(key('lowcode-node-k5'));
+        await tap(find.byTooltip('选上一层'));
+        await shot(tester, 'lowcode-slots-selected');
+        await tap(find.widgetWithText(FilledButton, '改名'));
+        expect(key('slot-name-field'), findsOneWidget);
+        await tester.enterText(key('slot-name-field'), '');
+        await tap(key('slot-name-ok'));
+        await shot(tester, 'lowcode-slots-name-dialog');
+        await tap(find.text('取消'));
+        await tap(find.widgetWithText(OutlinedButton, '取消插槽'));
+        expect(find.textContaining('不会删掉'), findsOneWidget);
+        await shot(tester, 'lowcode-slots-unwrap-confirm');
+        await tap(find.text('取消'));
       });
 
       // 打包页（本地表单、进行中、成功、失败、不适用、钥匙页、两种远程方式）在 test/theme_pack_smoke_test.dart。

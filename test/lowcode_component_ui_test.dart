@@ -516,6 +516,12 @@ void main() {
     // 里面的控件可以删。
     await select(tester, 'k2');
     expect(find.byTooltip('更多操作'), findsOneWidget);
+    // 最外层现在也有“更多操作”了（设成插槽的入口），所以点开看一眼：里面的控件的菜单里有“删除”。
+    await tester.tap(find.byTooltip('更多操作'));
+    await tester.pumpAndSettle();
+    expect(find.text('删除'), findsOneWidget);
+    await tester.tapAt(const Offset(195, 60));
+    await tester.pumpAndSettle();
 
     await tapKey(tester, 'comp-editor-done');
     await settle(tester, rounds: 2);
