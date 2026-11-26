@@ -56,7 +56,9 @@ class _HtmlPreviewWebViewState extends State<HtmlPreviewWebView> {
           onNavigationRequest: (nav) {
             // 第一次把文档塞进去时地址是 about:blank；其余的都是页面想去别处
             if (nav.url == 'about:blank') return NavigationDecision.navigate;
-            if (mounted && nav.isMainFrame) widget.request.onLink(nav.url);
+            // 只有看得懂的几种链接才拿去问她；别的（data:、javascript:、blob: 之类）直接不理
+            final scheme = Uri.tryParse(nav.url)?.scheme.toLowerCase() ?? '';
+            if (mounted && nav.isMainFrame && const {'http', 'https', 'mailto', 'tel'}.contains(scheme)) widget.request.onLink(nav.url);
             return NavigationDecision.prevent;
           },
         ),

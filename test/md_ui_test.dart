@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:lopicode/core/stores.dart';
 import 'package:lopicode/markdown/html_preview_doc.dart';
 import 'package:lopicode/markdown/md_document.dart';
 import 'package:lopicode/markdown/md_image_loader.dart';
@@ -247,6 +248,28 @@ void main() {
     await tester.pump();
     expect(hits, 2);
     expect(find.byKey(const Key('md-image')), findsNWidgets(2));
+  });
+
+  testWidgets('设置里开了“自动加载网络图片”：不用点就去下', (tester) async {
+    var hits = 0;
+    final old = MdImageLoader.instance;
+    addTearDown(() => MdImageLoader.instance = old);
+    MdImageLoader.instance = MdImageLoader(
+      clientFactory: () => MockClient((req) async {
+        hits++;
+        return http.Response.bytes(Uri.parse('data:image/png;base64,$kTinyPng').data!.contentAsBytes(), 200, headers: {'content-type': 'image/png'});
+      }),
+    );
+    await boot(tester, const _Stage(agent: '![猫](https://img.example/cat2.png)\n\n![旧图](http://img.example/old.png)'));
+    expect(hits, 0);
+    expect(find.byKey(const Key('md-image-load')), findsOneWidget);
+    await tester.runAsync(() => env.services.settings.set(SettingKeys.chatAutoImages, true));
+    await tester.pump();
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+    await tester.pump();
+    expect(hits, 1, reason: '开了以后自己去下；http 的那张还是不下');
+    expect(find.byKey(const Key('md-image')), findsOneWidget);
+    expect(find.byKey(const Key('md-image-load')), findsNothing);
   });
 
   testWidgets('内联 HTML：排版标签生效；脚本、事件属性、未知标签不执行，当文字显示；details 能展开', (tester) async {
