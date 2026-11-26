@@ -21,6 +21,14 @@ const Map<String, LcExprSpec> beStrictExprSpecs = {
 /// 积木上的话。
 const Map<String, String> beStrictExprSentences = {'parseInt': '把 {s} 变成整数', 'orElse': '{x} 是空就用 {d}', 'must': '一定不是空 {x}'};
 
+/// 积木盒里拖出来的新的一块：要包的那一格先空着，等人放东西进去。
+Map<String, dynamic>? newBeStrictExpr(String kind) => switch (kind) {
+  'parseInt' => {'e': kind, 's': exText('12')},
+  'orElse' => {'e': kind, 'x': null, 'd': exNum(0)},
+  'must' => {'e': kind, 'x': null},
+  _ => null,
+};
+
 /// 翻成小库调用时参数的顺序（小库名字就是积木的名字）。
 const Map<String, List<String>> kBeStrictRtArgs = {
   'parseInt': ['s'],

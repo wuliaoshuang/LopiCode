@@ -20,6 +20,7 @@ import 'package:lopicode/backend/backend_text.dart';
 import 'package:lopicode/lang/ast.dart';
 import 'package:lopicode/lang/ast_util.dart';
 import 'package:lopicode/lang/types.dart';
+import 'package:lopicode/lang/types_json.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 
 /// 语法树节点的来源：哪块积木（路径）、哪一格（参数名；段参数是 `@段号:名字`；null＝整块）。
@@ -36,6 +37,10 @@ class BeLangOrigin {
   final Object? holder;
   final Object? key;
 }
+
+/// “新建变量 / 常量”上标的类型（严格规矩才看；存在积木的 `type` 参数里，没标就没有这个键）。
+LType? beLetType(LcBlock b) => b.args[kBeLetTypeArg] is Map ? lTypeFromJson(b.args[kBeLetTypeArg]) : null;
+const String kBeLetTypeArg = 'type';
 
 /// 旧的翻译器（backend_ir.dart 的 `_Lowerer`）借给这边用的几样。
 abstract interface class BeLowerHost {
@@ -215,6 +220,13 @@ class BeLangLower {
         );
       case 'index':
         return lang(LIndex(sub('of'), sub('key')));
+      // 只在查类型的时候（[typed]）：老的“运算 / 比较”“不是”也翻成语言核心的式子，这样 `"12" * 2` 查得出来、结果的类型也推得出来。
+      case 'bin' when typed:
+        final op = exprString(e, 'op');
+        if (op == 'and' || op == 'or') return lang(LLogic(op!, sub('l'), sub('r')));
+        return kArithmeticOps.contains(op) || kCompareOps.contains(op) ? lang(LBinary(op!, sub('l'), sub('r'), src: _src())) : null;
+      case 'not' when typed:
+        return lang(LUnary('not', sub('x')));
     }
     final strict = kBeStrictRtArgs[kind];
     if (strict != null) return lang(LRt(kind, [for (final a in strict) sub(a)], src: _src()));
@@ -411,7 +423,7 @@ class BeLangLower {
       case 'let' || 'const':
         final name = _newName(b, 'name');
         if (name == null) return _skip('名字不合规矩');
-        return [LLet(name, arg('value'), isConst: b.op == 'const', src: src('name'))];
+        return [LLet(name, arg('value'), isConst: b.op == 'const', src: src('name'), type: typed ? beLetType(b) : null)];
       case 'setVar':
         final name = b.args['name'];
         if (!knows(name)) return _skip('变量没有声明');

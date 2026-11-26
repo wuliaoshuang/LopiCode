@@ -15,7 +15,6 @@ import 'package:lopicode/backend/backend_lower_func.dart';
 import 'package:lopicode/backend/backend_lower_lang.dart';
 import 'package:lopicode/backend/backend_model.dart';
 import 'package:lopicode/lang/lang.dart';
-import 'package:lopicode/lowcode/logic_expr.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 
 /// 积木文档里的一格：哪一串、哪一块、哪个参数、参数里的哪个位置（和积木编辑器的槽位路径同一种写法）。

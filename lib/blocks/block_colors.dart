@@ -77,6 +77,7 @@ class BkPalette {
     required this.canvasDot,
     required this.error,
     required this.warning,
+    required this.hint,
   });
 
   final bool dark;
@@ -99,6 +100,9 @@ class BkPalette {
   final Color error;
   final Color warning;
 
+  /// “提醒”级的标记（不是错也不是警告）：一种不抢眼的蓝灰。
+  final Color hint;
+
   BkTone tone(String key) => _tones[key] ?? _tones[BlockColorKey.unknown]!;
 
   static final BkPalette light = BkPalette._(
@@ -111,6 +115,7 @@ class BkPalette {
     canvasDot: const Color(0xFFD5D8DD),
     error: const Color(0xFFE03131),
     warning: const Color(0xFFF59F00),
+    hint: const Color(0xFF4C6EF5),
   );
 
   static final BkPalette darkTheme = BkPalette._(
@@ -123,6 +128,7 @@ class BkPalette {
     canvasDot: const Color(0xFF2B2C34),
     error: const Color(0xFFFF6B6B),
     warning: const Color(0xFFFFC53D),
+    hint: const Color(0xFF91A7FF),
   );
 
   static BkPalette of({required bool dark}) => dark ? darkTheme : light;
