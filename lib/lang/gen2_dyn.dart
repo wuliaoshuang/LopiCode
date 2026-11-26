@@ -69,6 +69,8 @@ abstract class Gen2Dyn extends Gen2 {
   // —— 名字 ——
 
   String typeName(String name) => 'T_${v2Ident(name)}';
+  /// 类型当值传给小库（PHP 要写 `T::class`）。
+  String typeRef(String name) => typeName(name);
   String caseType(String variant, String c) => 'T_${v2Ident(variant)}_${v2Ident(c)}';
   String member(String name) => 'm_${v2Ident(name)}';
   String funcName(String name) => 'f_${v2Ident(name)}';
@@ -144,7 +146,7 @@ abstract class Gen2Dyn extends Gen2 {
         case LKind.dict:
           return (to.of ?? LType.any).isAny ? call('asDict', [code]) : call('asDictOf', [code, _checker(to.of!)]);
         case LKind.record || LKind.object || LKind.enumeration || LKind.variant:
-          return call('asA', [code, typeName(to.name ?? ''), textLit(to.name ?? '')]);
+          return call('asA', [code, typeRef(to.name ?? ''), textLit(to.name ?? '')]);
         case LKind.interface:
           return call('asKind', [code, textLit(to.name ?? '')]);
         default:
@@ -278,7 +280,7 @@ abstract class Gen2Dyn extends Gen2 {
   String isA(String code, LType type, String cls) => w.interfaces.containsKey(cls) ? call('isKind', [code, textLit(cls)]) : instanceOf(code, typeName(cls));
   @override
   String downcast(String code, LType from, LType to) =>
-      to.kind == LKind.interface ? call('asKind', [code, textLit(to.name ?? '')]) : call('asA', [code, typeName(to.name ?? ''), textLit(to.name ?? '')]);
+      to.kind == LKind.interface ? call('asKind', [code, textLit(to.name ?? '')]) : call('asA', [code, typeRef(to.name ?? ''), textLit(to.name ?? '')]);
 
   // —— 语句 ——
 
