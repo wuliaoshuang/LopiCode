@@ -250,3 +250,6 @@ LTypeResult checkTypes({decls, main, scripts: [LTypeScript(name, body, vars: {�
 6. **变量名只能是英文**（现有规矩），所以设计里的例子 `总和：整数` 在后端积木里实际是 `total：整数`；“我的积木”的名字可以是中文。
 7. **临时的桥** `lib/backend/backend_type_bridge.dart`：对严格规矩的文档跑类型检查并把问题对回哪一块、哪一格。合并时换成接进 `validateBackend` 的正式版本；`lib/backend/backend_type_host.dart` 只用它的 `beTypeCheck`、`BeTypeCheck`、`BeTypeFinding`、`BeSlotRef` 四个名字。换的时候注意：正式版本如果自己把 T 规则放进 `validateBackend` 的结果，`withTypeIssues` 要去掉重复的。
 8. **有类型错误时不生成**：这一段只在界面宿主层算进了错误数（顶栏说“N 个错误，没更新”）；`backend_project.dart` 生成那一层的拦截归接 `validateBackend` 的那一位。
+
+9. **（2026-11-26 合并对接后）** 第 7、8 条已经落定：桥不再是临时的，`validateBackend` 用的就是它的结果，界面上不重复；
+   生成那一层除了“有类型错误不生成”，严格规矩的文档现在整个不生成、菜单里的“升级到严格规矩…”默认不出现。详见 B-gen-notes.md 第 7 节。

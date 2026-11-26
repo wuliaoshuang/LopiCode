@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lopicode/backend/backend_block_host.dart';
 import 'package:lopicode/backend/backend_model.dart';
 import 'package:lopicode/backend/backend_project.dart';
 import 'package:lopicode/backend/backend_targets.dart';
@@ -10,6 +11,7 @@ import 'package:lopicode/backend/backend_templates.dart';
 import 'package:lopicode/backend/backend_validate.dart';
 import 'package:lopicode/core/path_guard.dart';
 import 'package:lopicode/core/safe_file.dart';
+import 'package:lopicode/lang/rules.dart';
 import 'package:path/path.dart' as p;
 
 void main() {
@@ -362,5 +364,90 @@ void main() {
         expect(hasBackendMarker(e.value), isTrue, reason: '${t.id} 生成的 ${e.key} 开头没有生成标记——没登记过时会被当成用户自己的文件');
       }
     }
+  });
+
+  group('严格规矩的文档（规矩版本 2）：后端的严格生成还没接上，不拿老办法生成', () {
+    test('开关现在的值', () {
+      expect(kLangStrictBackendGen, isFalse);
+      expect(kStrictRulesUpgradeEnabled, isFalse);
+      expect(kLangRulesForNewDocs, kLangRulesLoose);
+    });
+
+    test('没有错误的严格文档：不生成、一个文件都不写，明说原因；老规矩的同一份照常生成', () async {
+      final strict = backendStarterDocument('样本', language: 'node')..rules = kLangRulesStrict;
+      expect(backendErrors(strict), isEmpty);
+      expect(beStrictGenPending(strict), isTrue);
+      put(kBackendFileName, '${strict.encode()}\n');
+      final before = snapshot();
+      final r = await regenerateBackend(ws);
+      expect(r.ok, isFalse);
+      expect(r.strictPending, isTrue);
+      expect(r.blocked, isFalse);
+      expect(r.error, kBeStrictGenPending);
+      expect(r.error, contains('严格规矩的代码生成还没有接上'));
+      expect(r.written, isEmpty);
+      expect(snapshot(), before);
+      expect(r.summary, startsWith('没有生成：'));
+
+      final loose = backendStarterDocument('样本', language: 'node');
+      expect(beStrictGenPending(loose), isFalse);
+      final ok = await regenerateBackend(ws, doc: loose);
+      expect(ok.error, isNull);
+      expect(ok.strictPending, isFalse);
+      expect(ok.written, isNotEmpty);
+    });
+
+    test('先按老规矩生成过，再变成严格文档：上一次生成的文件原样留着', () async {
+      putDoc('node');
+      expect((await regenerateBackend(ws)).error, isNull);
+      final before = snapshot();
+      final strict = backendStarterDocument('样本', language: 'node')
+        ..rules = kLangRulesStrict
+        ..addRoute('GET', '/ping');
+      final r = await regenerateBackend(ws, doc: strict);
+      expect(r.strictPending, isTrue);
+      expect(snapshot(), before);
+    });
+
+    test('有类型错误的严格文档：先说有几个错误（和以前一样拦在校验上）', () async {
+      final json = jsonDecode(backendStarterDocument('样本', language: 'node').encode()) as Map<String, dynamic>;
+      json['rules'] = kLangRulesStrict;
+      (json['routes'] as List).add({
+        'id': 'bad',
+        'method': 'GET',
+        'path': '/bad',
+        'body': [
+          {
+            'op': 'respondJson',
+            'args': {
+              'status': {'e': 'num', 'v': 200},
+              'value': {
+                'e': 'bin',
+                'op': '*',
+                'l': {'e': 'text', 'v': '12'},
+                'r': {'e': 'num', 'v': 2},
+              },
+            },
+          },
+        ],
+      });
+      final doc = BeDocument.fromJson(json).doc;
+      expect(backendErrors(doc).map((e) => e.code), contains('T06'));
+      final r = await regenerateBackend(ws, file: kBackendFileName, doc: doc);
+      expect(r.blocked, isTrue);
+      expect(r.strictPending, isFalse);
+      expect(r.errorCount, greaterThan(0));
+    });
+
+    test('“看代码”：严格文档不拿老办法翻出来的代码冒充', () {
+      final host = BeBlockHost(doc: backendStarterDocument('样本', language: 'node')..rules = kLangRulesStrict);
+      expect(host.codeText, startsWith(kBeStrictGenPending));
+      expect(host.codeText, isNot(contains('lc.sendJson')));
+      host.stopIssueTimer();
+      final loose = BeBlockHost(doc: backendStarterDocument('样本', language: 'node'));
+      expect(loose.codeText, isNot(contains(kBeStrictGenPending)));
+      expect(loose.codeText, isNotEmpty);
+      loose.stopIssueTimer();
+    });
   });
 }

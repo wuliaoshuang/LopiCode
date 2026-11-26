@@ -14,9 +14,11 @@ import 'package:lopicode/blocks/block_dock.dart';
 import 'package:lopicode/blocks/block_host.dart';
 import 'package:lopicode/blocks/block_issue_view.dart';
 import 'package:lopicode/core/templates.dart';
+import 'package:lopicode/lang/rules.dart';
 import 'package:lopicode/lang/types.dart';
 import 'package:lopicode/lang/types_json.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
+import 'package:lopicode/ui/backend_screen.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'backend_screen_test.dart' show at, be, boot, doc, ed, k, more, paletteTab, saved, text, until;
@@ -197,6 +199,10 @@ void main() {
     expect([for (final i in typeIssues(tester)) i.problem].where((p) => p.contains('「加倍」的第 1 个参数')), ['「加倍」的第 1 个参数要文字，放进来的是整数'], reason: '第 1 块放的文字现在对了，第 4 块放的整数现在不对了');
     await tester.tapAt(const Offset(40, 60));
     await tester.pumpAndSettle();
+    // 合并以后类型错误也拦在“生成”那一层：存盘时提示一次“有 N 个错误，代码没有更新”。提示条带按钮、不会自己消失，会盖住积木盒的页签，先收掉。
+    expect(find.descendant(of: find.byType(SnackBar), matching: find.textContaining('个错误，代码没有更新')), findsOneWidget);
+    ScaffoldMessenger.of(tester.element(find.byType(SnackBar))).hideCurrentSnackBar();
+    await tester.pumpAndSettle();
 
     // 积木盒“运算”页多了三块；菜单里说“已开启”，没有升级入口。
     await tester.drag(k('bk-palette-grip'), const Offset(0, -300), warnIfMissed: false);
@@ -217,6 +223,9 @@ void main() {
   for (final mode in [ThemeMode.light, ThemeMode.dark]) {
     final suffix = mode == ThemeMode.light ? 'light' : 'dark';
     testWidgets('老规矩：和以前一样（没有类型问题、没有类型一行、积木盒不多）；从菜单升级 → 清单 → 确认 → 标红；撤销回老规矩（$suffix）', (tester) async {
+      // “升级到严格规矩…”的入口现在默认藏着（kStrictRulesUpgradeEnabled）；这里把它打开，升级那条路照旧测。
+      beStrictUpgradeEntry = true;
+      addTearDown(() => beStrictUpgradeEntry = kStrictRulesUpgradeEnabled);
       await open(tester, 1, mode: mode);
       final host = be(tester).host!;
       // —— 版本 1 钉子 ——
@@ -283,4 +292,20 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   }
+
+  testWidgets('默认：老规矩的文档“⋯”菜单里没有“升级到严格规矩…”（等后端接上严格生成再打开）；别的菜单项都在', (tester) async {
+    expect(kStrictRulesUpgradeEnabled, isFalse);
+    expect(beStrictUpgradeEntry, isFalse);
+    await open(tester, 1);
+    await tester.tap(k('be-more'));
+    await tester.pumpAndSettle();
+    expect(k('be-menu-strict'), findsNothing);
+    expect(find.text('升级到严格规矩…'), findsNothing);
+    expect(k('be-menu-strict-on'), findsNothing);
+    for (final item in ['language', 'data', 'settings', 'regen']) {
+      expect(k('be-menu-$item'), findsOneWidget, reason: item);
+    }
+    expect(be(tester).host!.doc.rules, 1);
+    expect(tester.takeException(), isNull);
+  });
 }

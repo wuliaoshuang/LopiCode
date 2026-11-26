@@ -24,6 +24,19 @@ const String kLangRulesField = 'rules';
 /// 改完以后哪几条现有断言要跟着改，见 docs/blocks-v5-parts/B-impl-notes.md 第 6 节。
 const int kLangRulesForNewDocs = kLangRulesLoose;
 
+/// **后端文档的严格生成接上了没有。** 现在没有：版本 2 的生成器（gen2_*.dart）还不认后端的宿主语句（返回响应、数据集合…），
+/// 后端文档的代码还是版本 1 的生成器写的。它对严格规矩的文档会写出和严格规矩不符的代码（2026-11-26 用 Node 真跑过）：
+/// 放在旧积木里的“把…变成整数 / …是空就用… / 一定不是空…”整格变成空（null）、照样回 200；放在新积木语句里的那个接口整段不生成、回 500；
+/// 除以 0 还是得 0。所以是 false 的时候，严格规矩的后端文档**不生成、不启动**，并明说原因（backend_project.dart 的 `kBeStrictGenPending`）。
+/// “库 1”把后端接上版本 2 生成的那个提交里改成 true。
+const bool kLangStrictBackendGen = false;
+
+/// **开关：后端积木页“⋯”菜单里出不出现“升级到严格规矩…”。** 默认关：等后端接上版本 2 生成（库 1）再打开——
+/// 现在让用户升级，得到的是一份“按严格规矩查、但生成不了代码”的文档（见 [kLangStrictBackendGen]）。
+/// 已经是严格规矩的文档（现在只可能来自测试或手改文件）照常标红、一键修、显示类型。
+/// 界面读的是 backend_screen.dart 的 `beStrictUpgradeEntry`（测试里可以打开）。
+const bool kStrictRulesUpgradeEnabled = false;
+
 /// 从存盘的值读规矩版本：没有、不是整数、小于 1 → 1。比 [kLangRulesLatest] 大的原样留着（可能是新版本的应用写的）。
 int langRulesFromJson(Object? raw) => raw is int && raw >= 1 ? raw : kLangRulesLoose;
 

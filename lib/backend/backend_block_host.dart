@@ -377,6 +377,8 @@ class BeBlockHost extends BlockHost with BeFuncHost, BeTypeHost {
   String get codeText {
     final cached = _code;
     if (cached != null) return cached;
+    // 严格规矩的文档现在不生成（见 kBeStrictGenPending）：不拿老办法翻出来的代码冒充。
+    if (beStrictGenPending(_doc)) return _code = '$kBeStrictGenPending。\n\n没有代码可看。';
     final gen = generateBackend(_doc);
     return _code = gen == null ? '语言“${_doc.language}”还没有生成器，没有代码可看。' : (gen.files[gen.target.entryFile] ?? '');
   }
