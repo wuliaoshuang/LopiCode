@@ -456,6 +456,7 @@ void main() {
       await tester.binding.handlePopRoute();
       await settle(tester, rounds: 2);
       expect(find.byKey(const ValueKey('lc-inspector')), findsNothing);
+      expect(find.byKey(const ValueKey('lc-toolbar')), findsOneWidget, reason: '返回键只收面板，人还在搭建页（不被外壳带回聊天页）');
       await tester.tap(find.byTooltip('图层'));
       await settle(tester, rounds: 3);
       await shot(tester, '15-builder-layers-$suffix');

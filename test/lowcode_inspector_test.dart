@@ -403,7 +403,7 @@ void main() {
       expect(undoEnabled(tester), isFalse);
       // “已复制”那句提示浮在选中条上面，不盖工具条：撤销 / 重做 / 图层照样点得到
       expect(find.textContaining('已复制'), findsOneWidget);
-      expect(tester.getRect(find.byType(SnackBar)).bottom, lessThanOrEqualTo(tester.getRect(k('lc-toolbar')).top));
+      expect(tester.getRect(find.textContaining('已复制')).bottom, lessThanOrEqualTo(tester.getRect(k('lc-toolbar')).top));
       for (final tip in ['图层', '撤销', '重做', '预览']) {
         expect(find.byTooltip(tip).hitTestable(), findsOneWidget, reason: tip);
       }

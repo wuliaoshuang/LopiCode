@@ -26,6 +26,7 @@ import 'package:lopicode/lowcode/style_groups_widgets.dart';
 import 'package:lopicode/lowcode/style_model.dart';
 import 'package:lopicode/lowcode/style_resolve.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/shell.dart';
 import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -143,8 +144,12 @@ class InspectorPanelState extends State<InspectorPanel> {
     if (_pending.isEmpty) _reload();
   }
 
+  List<bool Function()>? _claims;
+  bool _claimBack() => mounted;
+
   @override
   void dispose() {
+    _claims?.remove(_claimBack);
     // 正常关闭走 flush()（弹层的 PopScope / 搭建页收起之前），这里只收定时器（销毁过程中不能再去动搭建页）。
     _timer?.cancel();
     _sheet.dispose();
@@ -154,6 +159,12 @@ class InspectorPanelState extends State<InspectorPanel> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    // 在外壳里：告诉外壳“返回键这一下我接了”（收面板），别同时把人带回聊天页。
+    final claims = widget.modal ? null : ShellScope.maybeOf(context)?.backClaims;
+    if (!identical(claims, _claims)) {
+      _claims?.remove(_claimBack);
+      _claims = claims?..add(_claimBack);
+    }
     // 键盘一弹出就把面板拉到最高：默认 60% 高时键盘会盖掉大半，剩下的地方连被编辑的那一行都放不下。
     final up = MediaQuery.viewInsetsOf(context).bottom > 0;
     if (up && !_keyboardUp) {
