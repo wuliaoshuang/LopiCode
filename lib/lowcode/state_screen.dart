@@ -5,7 +5,7 @@
 //     一句灰色小字：状态是页面记着的值；控件绑上它，它变了界面跟着变。
 //     检查出问题时（绑到了不存在的状态、派生值绕圈、重复没给标识…）：一条提示，最多列 5 条。没问题不出现。
 //     两节，节标题是小号灰字：
-//       “这一页（页名）”——只有这一页用得到，和积木编辑器里的“变量”是同一份。
+//       “这一页（页名）”——只有这一页用得到，积木编辑器里看到的也是这一份。
 //       “整个项目”——所有页面共用；换页不丢。这一页有同名的时候用这一页的（那一行小字会说“被这一页的同名状态盖住了”）。
 //     一个状态一行（行高 56）：名字（主，粗一点）／下面灰色小字“类型 · 初值 · 用了 3 处”；行尾“⋮”。
 //       点整行＝改它（名字、类型、初值；派生值改的是它的算法）。“⋮”里：看哪里在用、挪到项目 / 挪到这一页（没有重名时）、删除（红字）。
@@ -318,7 +318,7 @@ class _StateScreenState extends State<StateScreen> {
               children: [
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: Space.x4),
-                  child: Text('状态是页面记着的值。控件绑上它（面板里每一项行尾的链环），它一变界面跟着变；积木里用“设变量”改它。', style: t.bodySmall?.copyWith(color: c.textMuted)),
+                  child: Text('状态是页面记着的值。控件绑上它（面板里每一项行尾的链环），它一变界面跟着变；积木也能读它、改它。', style: t.bodySmall?.copyWith(color: c.textMuted)),
                 ),
                 if (issues.isNotEmpty)
                   InfoBanner(
@@ -327,7 +327,7 @@ class _StateScreenState extends State<StateScreen> {
                     tone: issues.any((i) => !i.warning) ? BannerTone.warning : BannerTone.info,
                     margin: const EdgeInsets.fromLTRB(Space.x4, Space.x3, Space.x4, 0),
                   ),
-                ...section('这一页（${doc.title.isEmpty ? '没起名' : doc.title}）', '只有这一页用得到。和积木编辑器里的“变量”是同一份。', own, false),
+                ...section('这一页（${doc.title.isEmpty ? '没起名' : doc.title}）', '只有这一页用得到。积木编辑器里看到的也是这一份。', own, false),
                 ...section('整个项目', '所有页面共用，换页不丢。这一页有同名的时候，用这一页的。', shared, true),
               ],
             ),

@@ -221,7 +221,7 @@ Agent 用 `lowcode_update_page` 写页面时没写 `version` 的，按第 3 版�
 设计和理由在 `docs/blocks-v5-parts/E-editor-components.md` §10.8。**没用状态和绑定的文件，存出来和以前逐字节一样。**
 
 - 最外层新增可选 `state`：项目级状态（所有页面共用）的数组，每项和 `logic.variables` 的一项同一个写法。读不懂的项原样留在后面；空了字段去掉。
-- 状态 / 变量的一项：`{"name", "type", "initial"}`，`type` 现在可以是 `text` / `number` / `bool` / `list` / `record`（后两种是这次放开的，`initial` 是 JSON 数组 / 对象）。
+- 状态的一项（界面上一律叫“状态”，字段名 `variables` 没改）：`{"name", "type", "initial"}`，`type` 现在可以是 `text` / `number` / `bool` / `list` / `record`（后两种是这次放开的，`initial` 是 JSON 数组 / 对象）。
   可选 `derived`：一个式子（值积木的存法）——有它就是派生值，`initial` 不用。名字规矩不变。
   页面级状态就是这一页的 `logic.variables`；页面里和项目级重名时，用页面自己的。
 - 节点上的绑定字段（全部可缺省；写坏了的当没写，原样留着）：
