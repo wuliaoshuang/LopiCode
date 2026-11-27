@@ -18,6 +18,7 @@ import 'package:lopicode/lowcode/css_codec.dart';
 import 'package:lopicode/lowcode/edit_types.dart';
 import 'package:lopicode/lowcode/grid_css.dart';
 import 'package:lopicode/lowcode/inspector_bp_widgets.dart';
+import 'package:lopicode/lowcode/inspector_bp_write.dart';
 import 'package:lopicode/lowcode/inspector_common_widgets.dart';
 import 'package:lopicode/lowcode/inspector_events_widgets.dart';
 import 'package:lopicode/lowcode/inspector_header_widgets.dart';
@@ -386,16 +387,30 @@ class InspectorPanelState extends State<InspectorPanel> {
             filled: bpOwn.isNotEmpty,
             stateLabel: state == null ? null : kLcStateLabels[state],
             onClear: () => _apply((n, _) => lcReplaceBp(n, bp, const {})),
-            onGoStyle: () => showPage(InspectorPage.style),
           );
     final Widget content = switch (_page) {
       InspectorPage.common => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           ?bpNote,
-          InspectorCommonPage(
-            key: ValueKey('common-${node.id}'),
-            ed: InspectorEdit(doc: _doc, node: preview, parent: parent, apply: _apply, pickImage: widget.pickImage, editDoc: _editDoc, canBind: _hasEvents),
+          LcBpRowScope(
+            bp: bp,
+            child: InspectorCommonPage(
+              key: ValueKey('common-${node.id}'),
+              // 平板 / 桌面档：看到的是这一档的样子，样子类的改动只记这一档（inspector_bp_write.dart）。
+              ed: bp == null
+                  ? InspectorEdit(doc: _doc, node: preview, parent: parent, apply: _apply, pickImage: widget.pickImage, editDoc: _editDoc, canBind: _hasEvents)
+                  : InspectorEdit(
+                      doc: _doc,
+                      node: seen,
+                      parent: parent,
+                      apply: (change, {merge = false}) => _apply((n, p) => lcApplyCommonAtBp(n, p, bp, change), merge: merge),
+                      pickImage: widget.pickImage,
+                      editDoc: _editDoc,
+                      canBind: _hasEvents,
+                      bp: bp,
+                    ),
+            ),
           ),
         ],
       ),

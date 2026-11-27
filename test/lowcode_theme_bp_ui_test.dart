@@ -98,10 +98,11 @@ void main() {
     buy = (await lbSaved(tester, session)).find('buy')!;
     expect(buy.more.containsKey('responsive'), isFalse, reason: '清空了整个字段都不留');
 
-    // “常用”页在平板档：提示说这里改的是所有屏宽，给一个去“样式”页的入口。
+    // “常用”页在平板档（第四轮 B1 起）：样子类的设置也只记这一档，不用再去“样式”页；内容类的行标着“不分屏宽”。
     await lbTap(tester, find.text('常用').last);
     expect(lbKey('lc-bp-note'), findsOneWidget);
-    expect(lbKey('lc-bp-go-style'), findsOneWidget);
+    expect(lbKey('lc-bp-go-style'), findsNothing);
+    expect(find.text('不分屏宽'), findsWidgets);
     await shot(tester, 'bp-05-tablet-common');
 
     await pickBp(tester, 'desktop');

@@ -9,6 +9,7 @@
 import 'dart:async';
 
 import 'package:flutter/services.dart';
+import 'package:lopicode/lowcode/inspector_bp_widgets.dart';
 import 'package:lopicode/lowcode/theme_scope_widgets.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/keyboard_tap_dismiss.dart';
@@ -38,11 +39,19 @@ class InspectorRow extends StatelessWidget {
               children: [
                 SizedBox(
                   width: 72,
-                  child: Text(
-                    label,
-                    style: t.bodyMedium?.copyWith(color: c.textMuted),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        label,
+                        style: t.bodyMedium?.copyWith(color: c.textMuted),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      // 画布切到平板 / 桌面档时：内容类的行标一句“不分屏宽”（样子类的行包在 LcPerBp 里，不标）。
+                      const LcNoBpTag(),
+                    ],
                   ),
                 ),
                 Expanded(

@@ -16,6 +16,7 @@
 // - 取用的 tokens：Space.x1/x2/x3、accent（选中圈）、textMuted / textFaint（小按钮、小标题）、danger（红字）。
 import 'package:lopicode/lowcode/editor_workbench_widgets.dart';
 import 'package:lopicode/lowcode/icon_set_widgets.dart';
+import 'package:lopicode/lowcode/inspector_bp_widgets.dart';
 import 'package:lopicode/lowcode/inspector_common_widgets.dart';
 import 'package:lopicode/lowcode/inspector_nav_shared_widgets.dart';
 import 'package:lopicode/lowcode/inspector_v3_rows_widgets.dart';
@@ -181,6 +182,7 @@ class _LcItemsEditorState extends State<LcItemsEditor> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          const LcNoBpTag(block: true),
           Row(
             children: [
               Text(kind.label, style: t.labelLarge?.copyWith(color: c.textMuted)),
