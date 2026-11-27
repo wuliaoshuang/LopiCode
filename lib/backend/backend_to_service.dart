@@ -28,6 +28,7 @@ import 'package:lopicode/lang/gen.dart' show LangUnsupported;
 import 'package:lopicode/lang/gen2_all.dart';
 import 'package:lopicode/lang/lib_apply.dart';
 import 'package:lopicode/lang/lib_model.dart';
+import 'package:lopicode/lang/lib_native.dart';
 import 'package:lopicode/lang/rt.dart';
 import 'package:lopicode/lang/rules.dart';
 import 'package:lopicode/lang/typecheck.dart';
@@ -149,8 +150,10 @@ LLambda? _firstLambda(List<LStmt> stmts) {
 BeServiceBuilt beServiceBuild(BeDocument doc, {bool shadow = false}) {
   final problems = <String>[], skipped = <String>[];
   if (!langRulesStrict(doc.rules)) return const BeServiceBuilt(problems: ['这份文档照的是规矩版本 1，不走库']);
-  final lib = beServiceLibrary();
-  if (lib.problems.isNotEmpty) return BeServiceBuilt(problems: ['内置库“接口服务”读不了：${lib.problems.first}']);
+  final base = beServiceLibrary();
+  if (base.problems.isNotEmpty) return BeServiceBuilt(problems: ['内置库“接口服务”读不了：${base.problems.first}']);
+  // 文档可以指定一个库顶替自带的“接口服务”（“复制一份来改”出来的）：接口、旧积木都走它。
+  final lib = beServiceLibOf(doc, problems);
   try {
     final core = doc.core;
     final fresh = _Fresh();
@@ -297,6 +300,12 @@ BeServiceBuilt beServiceBuild(BeDocument doc, {bool shadow = false}) {
     // 带不带“接口服务”：没碰库的文档照旧一定带；用了库的文档，有接口、用了它的积木、或者哪个库靠着它才带。
     if (doc.usesLibs && !flags.service) flags.service = _mentions(lib, [for (final d in decls) d.decl], [...routes, ...main]);
     final service = !doc.usesLibs || flags.service || userLibs.any((l) => l.requires.contains(kBeServiceLibId));
+    // 有库顶替了“接口服务”、别的库却还靠着自带的那个：两边的“请求”“一条记录”是两个模块里的两样东西，接不上——如实拦下。
+    if (service && !identical(lib, base)) {
+      for (final l in userLibs) {
+        if (l.requires.contains(kBeServiceLibId)) problems.add('库「${l.name}」靠的是自带的“接口服务”，这份文档却用「${lib.name}」顶替了它，两边接不上。要么关掉“用它顶替”，要么不用「${l.name}」');
+      }
+    }
     final libs = [if (service) lib, ...userLibs];
     final inits = <LStmt>[], starts = <LStmt>[];
     for (final l in libs) {
@@ -349,15 +358,22 @@ typedef BeServiceGen = ({Map<String, String>? files, String? problem});
 /// 严格规矩的后端文档 → 那种语言的整套文件。任何输入都不抛异常。
 BeServiceGen beServiceGenerate(BeDocument doc, String language) {
   if (!kGen2Languages.contains(language)) return (files: null, problem: '这种语言还没有生成器');
-  final out = beServiceProgram(doc);
+  final out = beServiceBuild(doc);
   final program = out.program;
   if (program == null || out.problems.isNotEmpty) return (files: null, problem: out.problems.firstOrNull ?? '积木翻不成语法树');
+  // 用上的库里带的手写函数：文件原样放进工程（和主文件放在一起）。哪个函数没有这种语言的文件，就不生成。
+  final native = <String, String>{};
+  for (final l in out.libs) {
+    final missing = <String>[];
+    native.addAll(libNativeProjectFiles(l.natives, l.files, language, missing: missing));
+    if (missing.isNotEmpty) return (files: null, problem: '库「${l.name}」的手写函数「${missing.join('、')}」没有这种语言（$language）的写法，换一种语言，或者先不用这个库');
+  }
   try {
     final (linked, checked) = checkProgramTypes(program);
     if (linked.issues.isNotEmpty) return (files: null, problem: linked.issues.first.message);
     final errors = checked?.errors ?? const [];
     if (errors.isNotEmpty) return (files: null, problem: '${errors.first.where}：${errors.first.message}');
-    return (files: gen2ProgramFiles(language, program), problem: null);
+    return (files: {...gen2ProgramFiles(language, program), ...native}, problem: null);
   } on LangUnsupported catch (e) {
     return (files: null, problem: e.what);
   } on Object catch (e) {

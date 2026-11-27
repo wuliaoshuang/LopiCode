@@ -26,6 +26,7 @@ import 'package:lopicode/backend/backend_model.dart';
 import 'package:lopicode/backend/backend_project.dart';
 import 'package:lopicode/backend/backend_type_bridge.dart';
 import 'package:lopicode/backend/backend_validate.dart';
+import 'package:lopicode/backend/lib_native_trust.dart';
 import 'package:lopicode/build/local_pack_form.dart';
 import 'package:lopicode/core/crash_log.dart';
 import 'package:lopicode/core/path_guard.dart';
@@ -1144,5 +1145,36 @@ void main() {
         expect((await beLibsRead(guard)).map((s) => s.id), contains('tata/fine'));
       });
     }
+  });
+
+  group('手写代码的确认记录（应用私有目录里的 lib_native_trust.json）', () {
+    for (final entry in corruptSamples.entries) {
+      test('坏内容（${entry.key}）：当开关关着、一个都没确认过，不抛异常；之后照常能开、能确认、能读回', () async {
+        final file = File('${tmp.path}/private/lib_native_trust.json')
+          ..createSync(recursive: true)
+          ..writeAsStringSync(entry.value);
+        final trust = LibNativeTrust();
+        await trust.attach(file);
+        expect(trust.enabled, isFalse);
+        expect(trust.allows('/p', 'shuang/hand', 'abc'), isFalse);
+        await trust.setEnabled(true);
+        expect(await trust.confirm('/p', 'shuang/hand', 'abc'), isTrue);
+        await pendingWrites();
+        final again = LibNativeTrust();
+        await again.attach(file);
+        expect(again.allows('/p', 'shuang/hand', 'abc'), isTrue);
+      });
+    }
+    test('形状对、字段类型不对：开关当关着，乱七八糟的确认项不算数，不算坏文件', () async {
+      final file = File('${tmp.path}/private/lib_native_trust.json')
+        ..createSync(recursive: true)
+        ..writeAsStringSync('{"enabled": "yes", "confirmed": {"a": 1, "b": null, "c": ["x"]}}');
+      final trust = LibNativeTrust();
+      await trust.attach(file);
+      expect(trust.enabled, isFalse);
+      await trust.setEnabled(true);
+      expect(trust.allows('', 'a', '1'), isFalse);
+      expect(badBackups(file), isEmpty);
+    });
   });
 }

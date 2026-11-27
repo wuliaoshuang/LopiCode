@@ -111,8 +111,8 @@ List<String> libCheck(LibLibrary lib) {
     }
     final fn = b.legacyFn;
     if (fn != null) {
-      if (!lib.builtin) {
-        bad('写了旧名对照（legacy）。只有应用自带的库可以写');
+      if (!lib.builtin && lib.replaces.isEmpty) {
+        bad('写了旧名对照（legacy）。只有应用自带的库可以写（清单里写明顶替自带库的库也可以）');
       } else if (!legacy.add(fn)) {
         bad('旧名「$fn」被两块积木同时认领了');
       }
@@ -138,7 +138,7 @@ List<String> libCheck(LibLibrary lib) {
     final m = lib.modules.where((m) => m.name == t.module).firstOrNull;
     if (m == null || !m.decls.any((d) => d.name == t.name)) out.add('清单里说公开了类型「${t.name}」，模块「${t.module}」里没有它');
   }
-  if (!lib.builtin) {
+  if (!lib.builtin && lib.replaces.isEmpty) {
     if (lib.settings.any((s) => s.legacyKey != null)) out.add('设置项里写了旧文档的键（legacyKey）。只有应用自带的库可以写');
   }
   return out;

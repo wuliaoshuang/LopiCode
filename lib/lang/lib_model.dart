@@ -13,7 +13,12 @@ import 'package:lopicode/lang/custom_block.dart';
 import 'package:lopicode/lang/host_v2.dart';
 import 'package:lopicode/lang/lc_text.dart';
 import 'package:lopicode/lang/lib_check.dart';
+import 'package:lopicode/lang/lib_native.dart';
 import 'package:lopicode/lang/types.dart';
+
+export 'package:lopicode/lang/lib_native.dart' show LibNative, LibSide;
+
+part 'lib_model_parse.dart';
 
 /// 清单的文件名、清单里 `kind` 的固定值、现在认识的格式版本。
 const String kLibManifestFile = 'lib.json';
@@ -197,6 +202,10 @@ class LibLibrary {
     this.author = '',
     this.requires = const [],
     this.nativeWaits = const [],
+    this.side = LibSide.backend,
+    this.replaces = '',
+    this.natives = const [],
+    this.files = const {},
   });
 
   final String id;
@@ -240,6 +249,18 @@ class LibLibrary {
   /// 现在手写代码整条路还没通（见格式文档第 8 节），这里只读进来给预览页如实显示。
   final List<String> nativeWaits;
 
+  /// 给谁用：后端的文档、前端的文档，还是都行（清单的 `for`；没写＝后端）。
+  final LibSide side;
+
+  /// 顶替哪个自带库（清单的 `replaces`；现在只认 `lopi/service`）：文档可以指定用它来代替那个自带库。空＝不顶替谁。
+  final String replaces;
+
+  /// 清单里声明的手写函数（见 lib_native.dart）。
+  final List<LibNative> natives;
+
+  /// 手写代码文件的内容（相对路径 → 内容；只有 `native/` 下面的）。生成工程时原样带进去。
+  final Map<String, String> files;
+
   /// 读的时候发现的问题（给人看的话）。有一条就不能用。
   final List<String> problems;
 
@@ -249,7 +270,10 @@ class LibLibrary {
   LibSetting? setting(String id) => settings.where((s) => s.id == id).firstOrNull;
 
   /// 旧小库的函数名 → 积木（只有内置库有）。
-  LibBlock? legacy(String fn) => builtin ? blocks.where((b) => b.legacyFn == fn).firstOrNull : null;
+  LibBlock? legacy(String fn) => builtin || replaces.isNotEmpty ? blocks.where((b) => b.legacyFn == fn).firstOrNull : null;
+
+  /// 能不能用在 [at] 这一边的文档里：能＝null，不能＝一句原因。
+  String? sideProblem(LibSide at) => libSideProblemOf(side, name, at);
 
   /// 模块的名字。
   List<String> get moduleNames => [for (final m in modules) m.name];
@@ -282,117 +306,9 @@ LType? libTypeFromText(Object? src) {
   }
 }
 
-LibArg? _arg(Object? raw, Set<String> slots) {
-  if (raw is String) return slots.contains(raw) ? LibArgSlot(raw) : null;
-  if (raw is! Map || raw.length != 1) return null;
-  final key = raw.keys.single, value = raw.values.single;
-  return switch (key) {
-    'context' when value is String && value.isNotEmpty => LibArgContext(value),
-    'setting' when value is String && value.isNotEmpty => LibArgSetting(value),
-    'preset' when _plain(value) => LibArgPreset(value),
-    _ => null,
-  };
-}
-
-LibBlock? _block(Object? raw, List<String> problems, Set<String> moduleNames) {
-  if (raw is! Map) {
-    problems.add('积木表里有一项不是积木，读不了');
-    return null;
-  }
-  final id = _text(raw['id'], max: 64);
-  if (id == null || !RegExp(r'^[A-Za-z][A-Za-z0-9_]*$').hasMatch(id)) {
-    problems.add('有一块积木没有编号，或者编号不是字母开头的字母数字');
-    return null;
-  }
-  void bad(String why) => problems.add('积木「$id」：$why');
-  final look = customBlockLookFromJson(raw['look']);
-  if (look == null) {
-    bad('没有外观（look）');
-    return null;
-  }
-  final slotNames = {
-    for (final p in parseLookTemplate(look.template))
-      if (p.isSlot) p.text,
-  };
-  final kinds = <String, LibSlotKind>{};
-  for (final e in _map(raw['slotKinds']).entries) {
-    final kind = LibSlotKind.values.where((k) => k.name == e.value).firstOrNull;
-    if (e.key is! String || kind == null) {
-      bad('槽的种类写得不对：${e.key}');
-    } else if (!slotNames.contains(e.key)) {
-      bad('槽的种类里写了外观上没有的槽「${e.key}」');
-    } else {
-      kinds[e.key as String] = kind;
-    }
-  }
-  final how = LibHow.values.where((h) => h.name == raw['how']).firstOrNull;
-  if (how == null) {
-    bad('没写清是哪种定义办法（how 要是 call / method / static / expand）');
-    return null;
-  }
-  final module = _text(raw['module'], max: 64) ?? (moduleNames.length == 1 ? moduleNames.single : '');
-  if (!moduleNames.contains(module)) bad('它说的模块「$module」库里没有');
-  final args = <LibArg>[];
-  for (final a in _list(raw['args'])) {
-    final arg = _arg(a, slotNames);
-    if (arg == null) {
-      bad('实参表里有一项读不懂（要是槽名，或者 {"context": 名} / {"setting": 编号} / {"preset": 值}）');
-    } else {
-      args.add(arg);
-    }
-  }
-  final into = raw['into'];
-  if (into != null && (into is! String || kinds[into] != LibSlotKind.assign)) bad('into 要指向一个“放进变量”的槽');
-  final provides = <String, String>{};
-  for (final e in _map(raw['provides']).entries) {
-    if (e.key is String && e.value is String) provides[e.key as String] = e.value as String;
-  }
-  final legacy = _map(raw['legacy']);
-  return LibBlock(
-    id: id,
-    module: module,
-    look: look,
-    how: how,
-    of: _text(raw['of'], max: 128) ?? '',
-    args: args,
-    expand: raw['expand'] is String ? raw['expand'] as String : '',
-    slotKinds: kinds,
-    into: into is String ? into : null,
-    needs: [for (final n in _list(raw['needs'])) ?_text(n, max: 64)],
-    provides: provides,
-    legacyFn: _text(legacy['fn'], max: 64),
-    legacyArgs: [for (final a in _list(legacy['args'])) ?_text(a, max: 64)],
-    category: _text(raw['category'], max: 64) ?? '',
-  );
-}
-
-LibSetting? _setting(Object? raw, List<String> problems) {
-  if (raw is! Map) return null;
-  final id = _text(raw['id'], max: 64);
-  final type = libTypeFromText(raw['type']);
-  if (id == null || type == null) {
-    problems.add('有一个设置项没有编号或类型写得不对');
-    return null;
-  }
-  final d = raw['default'];
-  if (!(_plain(d) || (d is List && d.every(_plain)))) {
-    problems.add('设置项「$id」的默认值只能是空、是否、数、文字，或者它们的列表');
-    return null;
-  }
-  return LibSetting(
-    id: id,
-    name: _text(raw['name'], max: 24) ?? id,
-    type: type,
-    defaultValue: d,
-    min: raw['min'] is num ? raw['min'] as num : null,
-    max: raw['max'] is num ? raw['max'] as num : null,
-    hint: _text(raw['hint'], max: 200) ?? '',
-    legacyKey: _text(raw['legacyKey'], max: 64),
-  );
-}
-
-/// 读一个库。[files]＝相对路径 → 内容；[builtin]＝是不是应用自带的。
-LibLibrary libRead(Map<String, String> files, {required bool builtin}) {
+/// [nativeOk]＝带手写代码的库许不许用。默认不许：谁要放行（全应用的开关开着、这个库的这份代码她确认过），谁传“是”
+/// （见 lib/backend/lib_native_trust.dart）。不许的时候库照样读出来，只是多一条问题、用不了。
+LibLibrary libRead(Map<String, String> files, {required bool builtin, bool nativeOk = false}) {
   final problems = <String>[];
   LibLibrary fail(String why, {String id = '', String name = ''}) => LibLibrary(id: id, name: name, version: '0.0.0', builtin: builtin, problems: [why, ...problems]);
   for (final e in files.entries) {
@@ -480,25 +396,44 @@ LibLibrary libRead(Map<String, String> files, {required bool builtin}) {
     if (e.key is String && e.value is String) provides[e.key as String] = e.value as String;
   }
 
-  // 原生绑定：模块里的“宿主”声明。只有内置库可以直接声明宿主接口；用户库只能经内置库去碰。
-  final hosts = <String>{
-    for (final m in modules)
-      for (final d in m.decls)
-        if (d is LNativeDecl) d.name,
-  };
-  for (final h in hosts) {
-    if (!kHostV2.containsKey(h)) problems.add('模块里声明了宿主接口「$h」，这一版的应用没有它');
-  }
-  if (!builtin && hosts.isNotEmpty) problems.add('这个库直接声明了宿主接口（${hosts.join('、')}）。只有应用自带的库可以；自己写的库请调自带库公开的函数');
+  // 手写函数：清单里声明、模块里用“宿主 手写.库标识.函数名”接进来。
   final native = _map(manifest['native']);
   final nativeAllowed = native['allowed'] == true;
   final nativeFiles = [
     for (final f in files.keys)
       if (f.startsWith('native/')) f,
-  ];
-  if (nativeFiles.isNotEmpty && !nativeAllowed) problems.add('库里带了手写代码（${nativeFiles.length} 个文件），这一版的应用不会启用手写代码');
-  if (nativeFiles.isNotEmpty && nativeAllowed) problems.add('库里带了手写代码。这一版的应用还不会把手写代码放进生成的工程里，所以这个库现在用不了');
+  ]..sort();
+  final nat = libNativeRead(libId: id, raw: native['functions'], allowed: nativeAllowed, files: files, modules: modules, problems: problems, typeOf: libTypeFromText);
+  final natives = builtin ? const <LibNative>[] : nat.natives;
+  if (builtin && (nat.natives.isNotEmpty || nativeFiles.isNotEmpty)) problems.add('应用自带的库不带手写代码');
+  modules
+    ..clear()
+    ..addAll(nat.modules);
+  if (!builtin && (natives.isNotEmpty || nativeFiles.isNotEmpty) && !nativeOk) {
+    problems.add('这个库带了手写代码（${nativeFiles.length} 个文件）。要先打开“允许库里的手写代码”，再看过并确认这个库的代码，才能用');
+  }
+
+  // 宿主接口：模块里的“宿主”声明（手写函数的不算）。应用自带的库可以直接声明；自己的库要在清单的 hosts 里一个不落地写明。
+  final hosts = <String>{
+    for (final m in modules)
+      for (final d in m.decls)
+        if (d is LNativeDecl && d.user == null && !d.name.startsWith(kLibNativePrefix)) d.name,
+  };
+  for (final h in hosts) {
+    if (!kHostV2.containsKey(h)) problems.add('模块里声明了宿主接口「$h」，这一版的应用没有它');
+  }
+  final declaredHosts = {for (final h in _list(manifest['hosts'])) ?_text(h, max: 64)};
+  if (!builtin && hosts.difference(declaredHosts).isNotEmpty) {
+    problems.add('这个库直接用了宿主接口（${hosts.difference(declaredHosts).join('、')}），可是清单的 hosts 里没有写明。自己写的库要碰宿主接口，必须在清单里一个不落地写出来（导入的人要看得见）');
+  }
   if (!builtin && (id.startsWith('lopi/') || id.startsWith('local/'))) problems.add('作者段 lopi、local 是应用自己留着用的，别的库不能用');
+  final side = LibSide.read(manifest['for']);
+  final replaces = _text(manifest['replaces'], max: 65) ?? '';
+  if (side == LibSide.both && hosts.isNotEmpty) problems.add('这个库写的是“后端和前端都行”，可是它用了宿主接口（${hosts.join('、')}）。两边都能用的库只能用语言核心，不能碰宿主接口');
+  if (side == LibSide.both && natives.isNotEmpty) problems.add('这个库写的是“后端和前端都行”，可是它带了手写代码。手写代码是照后端的五种语言写的，前端用不了');
+  if (side == LibSide.frontend && (hosts.isNotEmpty || natives.isNotEmpty)) problems.add('这个库写的是“只给前端”，可是它用了后端的宿主接口或手写代码');
+  if (side != LibSide.backend && _list(manifest['requires']).contains('lopi/service')) problems.add('这个库写的不是“只给后端”，可是它靠着“接口服务”（那是后端才有的）。要么改成只给后端，要么别用接口服务的积木');
+  if (replaces.isNotEmpty && (builtin || side != LibSide.backend)) problems.add('只有给后端用的、自己的库才能顶替自带库');
 
   final lib = LibLibrary(
     id: id,
@@ -527,7 +462,14 @@ LibLibrary libRead(Map<String, String> files, {required bool builtin}) {
       for (final r in _list(manifest['requires']).take(16))
         if (r is String && kLibIdPattern.hasMatch(r)) r,
     ],
-    nativeWaits: [for (final w in _list(native['waits']).take(64)) ?_text(w, max: 64)],
+    nativeWaits: [
+      for (final n in natives)
+        if (n.waits) n.name,
+    ],
+    side: side,
+    replaces: replaces,
+    natives: natives,
+    files: {for (final f in nativeFiles) f: files[f]!},
   );
   problems.addAll(libCheck(lib));
   return LibLibrary(
@@ -553,5 +495,9 @@ LibLibrary libRead(Map<String, String> files, {required bool builtin}) {
     author: lib.author,
     requires: lib.requires,
     nativeWaits: lib.nativeWaits,
+    side: side,
+    replaces: replaces,
+    natives: natives,
+    files: lib.files,
   );
 }

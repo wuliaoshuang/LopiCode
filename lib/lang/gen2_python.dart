@@ -14,6 +14,8 @@ class PythonGen2 extends Gen2Dyn {
   PythonGen2(super.module, super.r);
 
   @override
+  String nativeCall(String ident, List<String> args) => '__import__("$ident").run(${args.join(', ')})';
+  @override
   String get mainFile => 'main.py';
   @override
   Map<String, String> get runtimeFiles => const {'lc2.py': kRt2PythonSource};

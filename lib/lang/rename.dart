@@ -106,7 +106,7 @@ class LRenamer {
           src: d.src,
         );
       case LNativeDecl():
-        return LNativeDecl(d.name, params(d.params), src: d.src, type: typeQ(d.type));
+        return LNativeDecl(d.name, params(d.params), src: d.src, type: typeQ(d.type), user: d.user);
       case LRecordDecl():
         final name = resolve(d.name);
         return _scoped(const [], [for (final p in d.typeParams) p.name], () {

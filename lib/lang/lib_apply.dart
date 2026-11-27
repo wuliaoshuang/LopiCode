@@ -182,7 +182,15 @@ LibApplied libApply(LibLibrary lib, LibBlock b, LibUse use, LibCx cx) {
   if (template.trim().isEmpty) return (stmts: const [], problem: null);
   try {
     final r = _reader(lib, '库「${lib.name}」启动时', const LibUse(), cx)..freshName = null;
-    return (stmts: r.stmts(lcParse(template)), problem: null);
+    final stmts = r.stmts(lcParse(template));
+    if (lib.builtin) return (stmts: stmts, problem: null);
+    // 用户的库（含“复制自带库来改”的那种）：启动时模板里提到的库里的名字也指明是哪个模块的，和别的库重名不会认错。
+    String owner(String name) {
+      final m = lib.modules.where((m) => m.decls.any((d) => d.name == name)).firstOrNull;
+      return m == null ? name : lQualified(m.name, name);
+    }
+
+    return (stmts: LRenamer(owner, keep: Set<Object>.identity()).mainBody(stmts), problem: null);
   } on _Problem catch (e) {
     return (stmts: const [], problem: e.what);
   } on Object catch (e) {

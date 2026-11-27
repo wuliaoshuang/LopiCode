@@ -101,6 +101,8 @@ class NodeGen2 extends Gen2Dyn {
 
   // “等”：Node 里一件要等的事交回来的是 Promise，前面写 await；“稍后的结果”本身就是 Promise。
   @override
+  String nativeCall(String ident, List<String> args) => 'require("./$ident.js")(${args.join(', ')})';
+  @override
   String awaited(String code) => '(await $code)';
   @override
   String waitCode(String task, LType of) => 'lc.wait($task)';

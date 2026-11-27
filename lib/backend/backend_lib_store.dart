@@ -18,10 +18,12 @@ import 'package:lopicode/backend/backend_lib_doc.dart';
 import 'package:lopicode/backend/backend_lib_pack.dart';
 import 'package:lopicode/backend/backend_model.dart';
 import 'package:lopicode/backend/backend_validate.dart';
+import 'package:lopicode/backend/lib_native_trust.dart';
 import 'package:lopicode/core/path_guard.dart';
 import 'package:lopicode/core/safe_file.dart';
 import 'package:lopicode/lang/lib_model.dart';
 import 'package:lopicode/lang/rules.dart';
+import 'package:lopicode/lowcode/lib_blocks.dart';
 
 const String kBeLibsDir = 'blocks';
 const String kBeLibsIndexFile = 'blocks/libs.json';
@@ -105,7 +107,8 @@ Future<List<BeStoredLib>> beLibsRead(PathGuard guard) async {
         if (!kLibIdPattern.hasMatch(id)) continue;
         final files = await _readFolder(l);
         if (!files.containsKey(kLibManifestFile) && !files.containsKey(kBeLibSourceFile)) continue;
-        out.add(BeStoredLib(id, files, libRead(_forRead(files), builtin: false), from: from[id] ?? 'project'));
+        final nativeOk = LibNativeTrust.instance.allows(guard.root, id, libNativeSum(files));
+        out.add(BeStoredLib(id, files, libRead(_forRead(files), builtin: false, nativeOk: nativeOk), from: from[id] ?? 'project'));
       }
     }
   } on FileSystemException {
@@ -124,11 +127,11 @@ Map<String, String> _forRead(Map<String, String> files) => {
 };
 
 /// 把项目里的库交给文档（它“用上”的库从这里找）。库文档自己不算。
-Future<List<BeStoredLib>> beLibsAttach(PathGuard guard, BeDocument doc, {List<BeStoredLib>? stored}) async {
+Future<List<BeStoredLib>> beLibsAttach(PathGuard guard, LibUser doc, {List<BeStoredLib>? stored}) async {
   final all = stored ?? await beLibsRead(guard);
   doc.loaded = [
     for (final s in all)
-      if (s.id != doc.library?.id && s.lib.id == s.id) s.lib,
+      if (s.id != doc.libraryId && s.lib.id == s.id) s.lib,
   ];
   return all;
 }
@@ -195,7 +198,7 @@ String? beLibIdOfSource(String rel) {
 }
 
 /// 新建一个空的库：写好画布原件，返回它的路径（交给后端积木页打开）。不成返回原因。
-Future<({String? rel, String? problem})> beLibCreate(PathGuard guard, {required String id, required String name, String author = ''}) async {
+Future<({String? rel, String? problem})> beLibCreate(PathGuard guard, {required String id, required String name, String author = '', LibSide side = LibSide.backend}) async {
   if (!kLibIdPattern.hasMatch(id)) return (rel: null, problem: '标识要写成“作者段/库名”：小写字母、数字、连字符，字母开头，比如 shuang/todo');
   if (beLibAuthorReserved(id.split('/').first)) return (rel: null, problem: '作者段 lopi、local 是应用自己留着用的，换一个');
   final title = name.trim();
@@ -206,7 +209,7 @@ Future<({String? rel, String? problem})> beLibCreate(PathGuard guard, {required 
   final doc = BeDocument(
     name: title,
     rules: kLangRulesForNewDocs,
-    library: BeLibInfo(id: id, author: author.trim()),
+    library: BeLibInfo(id: id, author: author.trim(), side: side),
   );
   final rel = beLibSourceRel(id);
   final file = File(guard.resolve(rel));
@@ -361,20 +364,22 @@ Future<({BeLibPreview? preview, String? problem})> beLibOpenPack(PathGuard guard
 }
 
 /// 把预览过的库放进项目。项目里已经有同一个标识的库时，`replace` 是 true 才盖掉。
-Future<BeLibSaved> beLibInstall(PathGuard guard, BeLibPreview preview, {bool replace = false}) async {
+/// 带手写代码的库：`nativeConfirmed`＝她在预览页勾了“我看过这些代码了”。没勾、或者全应用的开关关着，一律不放进来。
+Future<BeLibSaved> beLibInstall(PathGuard guard, BeLibPreview preview, {bool replace = false, bool nativeConfirmed = false}) async {
   if (!preview.canImport) return BeLibSaved(problems: preview.problems);
+  if (preview.hasNative && !LibNativeTrust.instance.enabled) return const BeLibSaved(problems: ['这个库带了手写代码，而“允许库里的手写代码”是关着的']);
+  if (preview.hasNative && !nativeConfirmed) return const BeLibSaved(problems: ['这个库带了手写代码：要先看过代码、勾上“我看过这些代码了”才能导入']);
   final id = preview.id;
   final stored = await beLibsRead(guard);
   final old = stored.where((s) => s.id == id).firstOrNull;
   if (old != null && !replace) return BeLibSaved(problems: ['项目里已经有「${old.name}」（$id，版本 ${old.lib.version}）了']);
   if (old == null && stored.length >= kBeMaxProjectLibs) return const BeLibSaved(problems: ['一个项目最多放 $kBeMaxProjectLibs 个库']);
   final before = old == null ? const <String, Set<String>>{} : await beLibUserIssues(guard, id, stored);
-  final files = {
-    for (final e in preview.files.entries)
-      if (!e.key.startsWith('native/')) e.key: e.value,
-  };
+  final files = {...preview.files};
   final bad = await beLibWriteFolder(guard, id, files, from: 'file');
   if (bad != null) return BeLibSaved(problems: [bad]);
+  // 确认记的是“这一份”：以后库里的手写代码或清单变了一个字，就要重新看、重新确认。
+  if (preview.hasNative) await LibNativeTrust.instance.confirm(guard.root, id, libNativeSum(files));
   if (old == null) return const BeLibSaved(written: true);
   return BeLibSaved(written: true, fresh: _fresh(before, await beLibUserIssues(guard, id, await beLibsRead(guard))));
 }

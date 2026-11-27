@@ -40,6 +40,9 @@ void main() {
     await libTap(tester, 'be-lib-new');
     await libType(tester, '问好');
     await libType(tester, 'shuang/hello');
+    // 第四轮：新建库多一步“给谁用”。
+    expect(lk('be-lib-side'), findsOneWidget);
+    await libTap(tester, 'be-lib-side-backend');
     await libUntil(tester, () => find.textContaining('库 · 公开了').evaluate().isNotEmpty, what: '新建完进库的画布');
     expect(File(p.join(dir, 'blocks/shuang/hello/source/backend.lc.json')).existsSync(), isTrue);
 
@@ -183,7 +186,12 @@ void main() {
     await tester.tap(lk('be-lib-file-exports/带手写.lopilib'));
     await libUntil(tester, () => lk('be-lib-import-sheet').evaluate().isNotEmpty, what: '预览');
     expect(lk('be-lib-import-sheet'), findsOneWidget);
-    expect(find.textContaining('这一版的应用不会把手写代码放进生成的工程里'), findsOneWidget);
+    // 第四轮：手写代码有了能启用的路，但全应用的开关默认关着——关着时照旧不许导入，说明换成了“开关关着”。
+    await libSee(tester, 'be-lib-native-risk');
+    expect(lk('be-lib-native-risk'), findsOneWidget);
+    await libSee(tester, 'be-lib-native-off');
+    expect(lk('be-lib-native-off'), findsOneWidget);
+    expect(lk('be-lib-native-seen'), findsNothing, reason: '开关关着时连勾选都不给');
     expect(tester.widget<FilledButton>(lk('be-lib-import-go')).onPressed, isNull, reason: '带手写代码的不许导入');
     await libTap(tester, 'be-lib-native-native/hack.js');
     expect(find.textContaining('child_process'), findsOneWidget, reason: '代码给看');

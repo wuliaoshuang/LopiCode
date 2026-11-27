@@ -13,6 +13,7 @@ import 'package:lopicode/agent/skill_mirror.dart';
 import 'package:lopicode/agent/skills.dart';
 import 'package:lopicode/appearance/theme_store.dart';
 import 'package:lopicode/automation_scheduler.dart';
+import 'package:lopicode/backend/lib_native_trust.dart';
 import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/core/secure_secret_store.dart';
 import 'package:lopicode/core/stores.dart';
@@ -142,6 +143,7 @@ class AppServices {
     await secrets.probe();
     // 运行环境放在应用私有的 files 目录下（不进文档目录，免得被当成用户文件）。
     final support = await getApplicationSupportDirectory();
+    await LibNativeTrust.instance.attach(File(p.join(support.path, 'lib_native_trust.json')));
     final runtime = LinuxRuntime(settings: settings, baseDir: p.join(support.path, 'runtime'), host: ChannelRuntimeHost());
     await runtime.init();
     final app = AppServices(settings: settings, secrets: secrets, projects: ProjectStore(p.join(docs.path, 'projects')), runtime: runtime, keepAliveHost: ChannelKeepAliveHost());

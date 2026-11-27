@@ -102,6 +102,18 @@ Future<void> libUntil(WidgetTester tester, bool Function() done, {String what = 
 
 Finder lk(String key) => find.byKey(ValueKey(key));
 
+/// 把最上面那张面板滚到看得见 [key]（面板是按需搭的，滚不到的那几行还不存在）。
+Future<void> libSee(WidgetTester tester, String key) async {
+  final f = lk(key);
+  if (f.evaluate().isNotEmpty) return;
+  await tester.scrollUntilVisible(
+    f,
+    120,
+    scrollable: find.descendant(of: find.byType(BottomSheet).last, matching: find.byType(Scrollable)).first,
+  );
+  await tester.pumpAndSettle();
+}
+
 Future<void> libTap(WidgetTester tester, String key) async {
   final f = lk(key);
   if (f.hitTestable().evaluate().isEmpty) {

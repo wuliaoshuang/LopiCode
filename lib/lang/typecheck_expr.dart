@@ -125,7 +125,7 @@ mixin _Exprs on _Core {
           _all(sc, args);
           return _any;
         }
-        if (kHostV2Waits.contains(name)) waited(sc, e, '用了「${kHostV2[name]?.label ?? name}」');
+        if (kHostV2Waits.contains(name) || (d.user?.waits ?? false)) waited(sc, e, '用了「${kHostV2[name]?.label ?? name}」');
         // 参数里的函数“许不许等”听宿主的（声明里不用写）。
         final host = kHostV2[name]?.params;
         return apply(

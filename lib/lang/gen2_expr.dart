@@ -97,6 +97,9 @@ mixin Gen2Expr on Gen2Base {
   /// 调宿主接口（[fn] 是小库里的名字，见 host_v2.dart）。
   String hostCall(String fn, List<String> args);
 
+  /// 调库里带的手写函数：[ident] 是它在代码里的名字（那个文件也叫这个名字，和主文件放在一起）。
+  String nativeCall(String ident, List<String> args);
+
   /// 一件“要等”的事（调要等的函数、等一会儿…）在这种语言里要不要多写点什么。只有 Node 要（await）；别的语言直接停在那里等。
   String awaited(String code) => code;
 
@@ -271,6 +274,14 @@ mixin Gen2Expr on Gen2Base {
       case LAscribe(x: final v):
         return x(v, t(e));
       case LNative(:final name, :final args):
+        final user = module.decls.whereType<LNativeDecl>().where((d) => d.name == name && d.user != null).firstOrNull;
+        if (user != null) {
+          // 库里带的手写函数：参数、返回照声明的类型转好了再交过去（只许四种简单类型，读库时查过）。
+          final ps = [for (final p in user.params) w.resolve(p.type)];
+          if (args.length != ps.length) unsupported('手写函数「$name」要 ${ps.length} 个参数，这里给了 ${args.length} 个', e);
+          final code = nativeCall(user.user!.ident, argCodes(args, ps, null));
+          return conv(user.user!.waits ? _wait(code, e) : code, w.resolve(user.type), t(e));
+        }
         final sig = kHostV2[name] ?? unsupported('宿主接口「$name」这里还没有（现在有：${kHostV2.keys.join('、')}）', e);
         final d = module.decls.whereType<LNativeDecl>().where((d) => d.name == name).firstOrNull ?? unsupported('宿主接口「$name」用之前要先声明', e);
         final same =

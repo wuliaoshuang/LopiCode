@@ -13,7 +13,25 @@ const String kBeLibMouthMark = '@口';
 const String kBeLibPutMark = '@放进';
 
 /// 这份文档里某个库的设置项各是什么值：内置“接口服务”照旧从文档顶层拿；用户的库拿“用上”时填的。
-Map<String, Object?> beLibSettingsOf(BeDocument doc, LibLibrary lib) => lib.builtin ? beServiceSettings(doc) : (doc.use(lib.id)?.settings ?? const {});
+Map<String, Object?> beLibSettingsOf(BeDocument doc, LibLibrary lib) => lib.builtin || lib.id == doc.serviceLib ? beServiceSettings(doc) : (doc.use(lib.id)?.settings ?? const {});
+
+/// 这份文档的“接口服务”是哪个库：没指定＝应用自带的；指定了＝项目里那个顶替它的库。
+/// 指定了却用不了（不在项目里、有问题、清单里没写顶替“接口服务”）时把原因记进 [problems]，返回自带的。
+LibLibrary beServiceLibOf(BeDocument doc, [List<String>? problems]) {
+  final base = beServiceLibrary();
+  if (doc.serviceLib.isEmpty) return base;
+  final l = doc.lib(doc.serviceLib);
+  final why = l == null
+      ? '这份文档指定用库「${doc.serviceLib}」顶替“接口服务”，可是项目里找不到它'
+      : !l.ok
+      ? '顶替“接口服务”的库「${l.name}」有问题，用不了：${l.problems.first}'
+      : l.replaces != kBeServiceLibId
+      ? '库「${l.name}」的清单里没有写它顶替“接口服务”，不能这样用'
+      : null;
+  if (why == null) return l!;
+  problems?.add(why);
+  return base;
+}
 
 /// 这份文档用上的库（读好了的）；[problems] 里记“用了却不在项目里”“库本身有问题”“它靠的库没用上”。
 List<LibLibrary> beUsedLibs(BeDocument doc, [List<String>? problems]) {
@@ -24,6 +42,10 @@ List<LibLibrary> beUsedLibs(BeDocument doc, [List<String>? problems]) {
       problems?.add('这份文档用了库「${u.id}」，可是项目里找不到它');
     } else if (!l.ok) {
       problems?.add('库「${l.name}」有问题，用不了：${l.problems.first}');
+    } else if (l.sideProblem(doc.libSide) case final why?) {
+      problems?.add(why);
+    } else if (l.replaces.isNotEmpty) {
+      problems?.add('库「${l.name}」是用来顶替自带库的，不能当普通的库用上（在它的面板里选“用它顶替”）');
     } else {
       out.add(l);
     }

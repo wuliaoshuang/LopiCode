@@ -7,48 +7,23 @@ import 'package:lopicode/backend/backend_func_host.dart';
 import 'package:lopicode/backend/backend_lib_doc.dart';
 import 'package:lopicode/backend/backend_lib_table.dart';
 import 'package:lopicode/blocks/block_host.dart';
-import 'package:lopicode/lang/lib_model.dart';
+import 'package:lopicode/lowcode/lib_blocks.dart';
+import 'package:lopicode/lowcode/lib_blocks.dart' as lib_blocks show libCategories;
 import 'package:lopicode/lowcode/logic_blocks.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 
 /// 积木盒里库的帽子模板的 id：`libhat:` 加库积木的 op。
-const String kBeLibHatTemplate = 'libhat:';
+const String kBeLibHatTemplate = kLibHatTemplate;
 
 mixin BeLibHost on BlockHost, BeFuncHost {
   BeLibTable get libTable => funcTable.libs;
 
-  /// 接在积木盒后面的页：每个用上的库一页；库文档再多一页“做库积木”。
-  List<BlockCategory> get libCategories => [
-    for (final l in libTable.libs)
-      BlockCategory(
-        id: 'lib:${l.id}',
-        label: l.name,
-        colorKey: BlockColorKey.custom,
-        hats: [
-          for (final e in libTable.ofLib(l.id))
-            if (e.isHat) BlockHatTemplate('$kBeLibHatTemplate${e.op}', _hat(e, const {}), hint: e.block.look.hint),
-        ],
-        blocks: [
-          for (final e in libTable.ofLib(l.id))
-            if (!e.isHat && !e.isValue) e.op,
-        ],
-        exprs: [
-          for (final e in libTable.ofLib(l.id))
-            if (e.isValue) e.op,
-        ],
-      ),
-    if (doc.library != null) const BlockCategory(id: 'libdef', label: kBeLibDefCategory, colorKey: BlockColorKey.custom, blocks: [kBeLibMouthOp, kBeLibPutOp]),
-  ];
+  /// 接在积木盒后面的页：每个用上的库一页；库文档再多一页“做库积木”（怎么分是“文档无关”那一层定的）。
+  List<BlockCategory> get libCategories => lib_blocks.libCategories(libTable);
 
-  BlockHat _hat(BeLibEntry e, Map<String, dynamic> args) => BlockHat([
-    for (final part in parseLookTemplate(e.block.look.template))
-      if (!part.isSlot)
-        BlockHatPart.text(part.text)
-      else if (e.block.kindOf(part.text) != LibSlotKind.mouth)
-        BlockHatPart.slot(part.text, _show(args[part.text], part.text), empty: _show(args[part.text], '').isEmpty, kind: args[part.text] is num ? LcArgKind.literalNumber : LcArgKind.literalText),
-  ], colorKey: BlockColorKey.custom);
+  BlockHat _hat(BeLibEntry e, Map<String, dynamic> args) => libHatLook(e, args);
 
-  static String _show(Object? v, String fallback) => v is String && v.isNotEmpty ? v : (v is num || v is bool ? '$v' : fallback);
+  static String _show(Object? v, String fallback) => libHatShow(v, fallback);
 
   BlockHat? libHatOf(LcBlockTree tree) {
     if (tree is! BeLibHat) return null;

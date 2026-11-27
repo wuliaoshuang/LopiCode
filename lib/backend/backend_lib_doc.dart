@@ -14,57 +14,32 @@ import 'package:lopicode/backend/backend_function.dart';
 import 'package:lopicode/lang/custom_block.dart';
 import 'package:lopicode/lang/lc_write.dart';
 import 'package:lopicode/lang/lib_model.dart';
+import 'package:lopicode/lowcode/lib_blocks.dart';
 import 'package:lopicode/lowcode/logic_expr.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 
-/// 库积木的 op / e 的前缀。
-const String kBeLibOpPrefix = 'lib:';
+/// 库积木的写法、“用了一个库”都是“文档无关”那一层的（lib/lowcode/lib_blocks.dart）；这里留着后端这边一直在用的名字。
+const String kBeLibOpPrefix = kLibOpPrefix;
 
-String beLibOp(String libId, String blockId) => '$kBeLibOpPrefix$libId#$blockId';
+String beLibOp(String libId, String blockId) => libOp(libId, blockId);
 
 /// `lib:作者段/库名#编号` → 库标识和积木编号；不是库积木返回 null。
-({String lib, String block})? beLibOpOf(Object? op) {
-  if (op is! String || !op.startsWith(kBeLibOpPrefix)) return null;
-  final at = op.indexOf('#');
-  if (at <= kBeLibOpPrefix.length || at == op.length - 1) return null;
-  return (lib: op.substring(kBeLibOpPrefix.length, at), block: op.substring(at + 1));
-}
+({String lib, String block})? beLibOpOf(Object? op) => libOpOf(op);
 
 /// 库的定义画布上才有的两块积木（只在“原地展开”的定义里有意义）：做口里的积木、把结果放进用的人选的变量。
-const String kBeLibMouthOp = 'libMouth';
-const String kBeLibPutOp = 'libPut';
+const String kBeLibMouthOp = kLibMouthOp;
+const String kBeLibPutOp = kLibPutOp;
 
 /// 调用型积木加了“放进变量”槽时，那个槽叫什么。
 const String kBeLibIntoSlot = '结果';
 
 /// 一份文档最多用几个库、一个库最多公开几块积木、最多几串帽子（自定，防坏数据）。
-const int kBeMaxLibUses = 16;
+const int kBeMaxLibUses = kMaxLibUses;
 const int kBeMaxLibDefs = 200;
 const int kBeMaxLibHats = 64;
 
 /// 这份文档用了一个库。
-class BeLibUse {
-  BeLibUse(this.id, [Map<String, Object?>? settings]) : settings = settings ?? {};
-  final String id;
-
-  /// 设置项编号 → 这份文档里填的值（没填的用库里写的默认值）。
-  final Map<String, Object?> settings;
-
-  Map<String, dynamic> toJson() => {'id': id, if (settings.isNotEmpty) 'settings': settings};
-  BeLibUse clone() => BeLibUse(id, {...settings});
-
-  static BeLibUse? tryParse(Object? json) {
-    if (json is! Map) return null;
-    final id = json['id'];
-    if (id is! String || !kLibIdPattern.hasMatch(id)) return null;
-    final raw = json['settings'];
-    return BeLibUse(id, {
-      if (raw is Map)
-        for (final e in raw.entries)
-          if (e.key is String && _plainOrList(e.value)) e.key as String: e.value,
-    });
-  }
-}
+typedef BeLibUse = LibUse;
 
 bool _plain(Object? v) => v == null || v is bool || v is String || (v is num && v.isFinite);
 bool _plainOrList(Object? v) => _plain(v) || (v is List && v.every(_plain));
@@ -250,9 +225,18 @@ class BeLibDef {
 
 /// 这份文档是一个库：清单信息＋公开成积木的定义。库的名字就是文档的名字。
 class BeLibInfo {
-  BeLibInfo({required this.id, this.version = '1.0.0', this.author = '', this.summary = '', List<LibSetting>? settings, List<BeLibDef>? blocks, this.originId = '', this.originVersion = ''})
-    : settings = settings ?? [],
-      blocks = blocks ?? [];
+  BeLibInfo({
+    required this.id,
+    this.version = '1.0.0',
+    this.author = '',
+    this.summary = '',
+    List<LibSetting>? settings,
+    List<BeLibDef>? blocks,
+    this.originId = '',
+    this.originVersion = '',
+    this.side = LibSide.backend,
+  }) : settings = settings ?? [],
+       blocks = blocks ?? [];
 
   /// 库的标识 `作者段/库名`。
   String id;
@@ -261,6 +245,9 @@ class BeLibInfo {
   String summary;
   final List<LibSetting> settings;
   final List<BeLibDef> blocks;
+
+  /// 给谁用：后端的文档、前端的文档，还是都行（新建库时选；没写＝后端）。
+  LibSide side;
 
   /// “复制一份来改”来的：从哪个库的哪一版复制的（只告知）。
   String originId;
@@ -285,10 +272,20 @@ class BeLibInfo {
     if (settings.isNotEmpty) 'settings': [for (final s in settings) beLibSettingToJson(s)],
     if (blocks.isNotEmpty) 'blocks': [for (final b in blocks) b.toJson()],
     if (originId.isNotEmpty) 'origin': {'id': originId, 'version': originVersion},
+    if (side != LibSide.backend) 'for': side.name,
   };
 
-  BeLibInfo clone() =>
-      BeLibInfo(id: id, version: version, author: author, summary: summary, settings: [...settings], blocks: [for (final b in blocks) b.clone()], originId: originId, originVersion: originVersion);
+  BeLibInfo clone() => BeLibInfo(
+    id: id,
+    version: version,
+    author: author,
+    summary: summary,
+    settings: [...settings],
+    blocks: [for (final b in blocks) b.clone()],
+    originId: originId,
+    originVersion: originVersion,
+    side: side,
+  );
 
   static BeLibInfo? tryParse(Object? json) {
     if (json is! Map) return null;
@@ -320,6 +317,7 @@ class BeLibInfo {
       blocks: blocks,
       originId: origin is Map && origin['id'] is String ? origin['id'] as String : '',
       originVersion: origin is Map && origin['version'] is String ? origin['version'] as String : '',
+      side: LibSide.read(json['for']),
     );
   }
 }

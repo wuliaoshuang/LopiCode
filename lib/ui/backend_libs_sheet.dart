@@ -13,7 +13,9 @@ import 'package:lopicode/backend/backend_lib_pack.dart';
 import 'package:lopicode/backend/backend_lib_store.dart';
 import 'package:lopicode/backend/backend_lib_table.dart';
 import 'package:lopicode/backend/backend_model.dart';
+import 'package:lopicode/backend/lib_native_trust.dart';
 import 'package:lopicode/backend/lib_service.dart';
+import 'package:lopicode/backend/lib_service_fork.dart';
 import 'package:lopicode/core/path_guard.dart';
 import 'package:lopicode/lang/lib_model.dart';
 import 'package:lopicode/project_session.dart';
@@ -21,6 +23,7 @@ import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/backend_core_sheet.dart';
 import 'package:lopicode/ui/backend_lib_import_sheet.dart';
 import 'package:lopicode/ui/backend_lib_info_sheet.dart';
+import 'package:lopicode/ui/backend_lib_more_sheet.dart';
 import 'package:lopicode/ui/backend_screen.dart';
 import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
@@ -108,9 +111,11 @@ class _LibsSheetState extends State<_LibsSheet> {
   Future<void> _create() async {
     final got = await askBeLibName(context, title: '新建库');
     if (got == null || !mounted) return;
+    final side = await askBeLibSide(context, initial: host.doc.libSide);
+    if (side == null || !mounted) return;
     String? rel;
     await _guarded(() async {
-      final made = await beLibCreate(guard, id: got.id, name: got.name);
+      final made = await beLibCreate(guard, id: got.id, name: got.name, side: side);
       rel = made.rel;
       return made.problem;
     });
@@ -145,11 +150,27 @@ class _LibsSheetState extends State<_LibsSheet> {
     if (!go || !mounted) return;
     String? note;
     await _guarded(() async {
-      final saved = await beLibInstall(guard, preview, replace: existing != null);
+      // 带手写代码的库：预览页的主按钮只有勾了“我看过这些代码了”才点得动，所以走到这里就是勾过了。
+      final saved = await beLibInstall(guard, preview, replace: existing != null, nativeConfirmed: preview.hasNative);
       note = saved.freshNote;
       return saved.problems.firstOrNull;
     });
     if (note != null && mounted) setState(() => _problem = note);
+  }
+
+  /// 把自带的“接口服务”复制一份来改：问名字和标识，复制进项目，然后打开新库的面板。
+  Future<void> _forkService() async {
+    if (!mounted) return;
+    final got = await askBeLibName(context, title: '复制一份来改', name: '我的接口服务', id: '');
+    if (got == null || !mounted) return;
+    String? made;
+    await _guarded(() async {
+      final out = await beServiceFork(guard, id: got.id, name: got.name);
+      made = out.id;
+      return out.problem;
+    });
+    final s = _libs?.where((x) => x.id == made).firstOrNull;
+    if (s != null && mounted) await _openLib(s);
   }
 
   Future<void> _openLib(BeStoredLib s) async {
@@ -191,21 +212,7 @@ class _LibsSheetState extends State<_LibsSheet> {
           key: const ValueKey('be-lib-builtin'),
           label: service.name,
           value: '${service.blocks.length} 块积木 · 自带',
-          onTap: () => unawaited(
-            showModalBottomSheet<void>(
-              context: context,
-              isScrollControlled: true,
-              builder: (_) => BeSheetFrame(
-                key: const ValueKey('be-lib-builtin-sheet'),
-                title: service.name,
-                hint: '应用自带的库，只读。接口、请求、响应、数据集合这些积木都是它的；有接口的文档会自动用上它。\n它直接接着宿主的能力（开端口、读写集合），自己写的库不许这样，所以它不能“复制一份来改”。要改它的行为，请新建一个库叠在它上面：把它的积木包进你自己的函数，再公开成你的积木。',
-                children: [
-                  BeSheetSection('积木（${service.blocks.length} 块）'),
-                  for (final b in service.blocks) BeSheetRow(label: beLibBlockLine(b), muted: true),
-                ],
-              ),
-            ),
-          ),
+          onTap: () => unawaited(showBeServiceLib(context, fork: _forkService)),
         ),
       ],
     );
@@ -308,6 +315,17 @@ class _LibSheetState extends State<_LibSheet> {
     }
   }
 
+  /// 看手写代码并确认：确认了就关掉这一页（外面会重新读库，它就能用了）。
+  Future<void> _confirmNative() async {
+    final ok = await confirmBeLibNative(context, guard, s, others: host.doc.loaded);
+    if (ok && mounted) Navigator.pop(context);
+  }
+
+  Future<void> _editText() async {
+    final changed = await showBeLibText(context, widget.session, s);
+    if (changed && mounted) Navigator.pop(context);
+  }
+
   Future<void> _remove() async {
     final n = BeLibTable(host.doc).usesOfLib(s.id);
     final yes = await confirmDialog(
@@ -320,6 +338,8 @@ class _LibSheetState extends State<_LibSheet> {
     if (!yes || !mounted) return;
     try {
       await beLibDelete(guard, s.id);
+      await LibNativeTrust.instance.forget(guard.root, s.id);
+      if (host.doc.serviceLib == s.id) host.edit(() => host.doc.serviceLib = '');
       widget.session.filesChanged();
       if (mounted) Navigator.pop(context);
     } on Exception catch (e) {
@@ -332,6 +352,8 @@ class _LibSheetState extends State<_LibSheet> {
     final c = context.colors;
     final t = Theme.of(context).textTheme;
     final use = host.doc.use(s.id);
+    final sideWhy = lib.sideProblem(host.doc.libSide);
+    final hasNative = s.files.keys.any((f) => f.startsWith('native/'));
     final from = switch (s.from) {
       'file' => '从文件导入的',
       'copy' => '复制来改的',
@@ -340,7 +362,7 @@ class _LibSheetState extends State<_LibSheet> {
     return BeSheetFrame(
       key: ValueKey('be-lib-sheet-${s.id}'),
       title: s.name,
-      hint: '${s.id} · 版本 ${lib.version}${lib.author.isEmpty ? '' : ' · 作者 ${lib.author}'} · $from${lib.summary.isEmpty ? '' : '\n${lib.summary}'}',
+      hint: '${s.id} · 版本 ${lib.version}${lib.author.isEmpty ? '' : ' · 作者 ${lib.author}'} · $from · 给${lib.side.label}用${lib.summary.isEmpty ? '' : '\n${lib.summary}'}',
       problem: _problem ?? (s.ok ? null : '这个库现在用不了：${s.problem}'),
       children: [
         if (_note != null)
@@ -352,19 +374,40 @@ class _LibSheetState extends State<_LibSheet> {
               style: t.bodyMedium?.copyWith(color: c.textMuted),
             ),
           ),
-        if (s.ok && host.strictRules)
+        if (s.ok && host.strictRules && lib.replaces == kBeServiceLibId)
+          SwitchListTile(
+            key: const ValueKey('be-lib-replace'),
+            contentPadding: const EdgeInsets.symmetric(horizontal: Space.x4),
+            title: const Text('用它顶替自带的“接口服务”'),
+            subtitle: Text(host.doc.serviceLib == s.id ? '这份文档的接口、返回、数据集合这些积木现在都走它' : '打开以后，这份文档的接口、返回、数据集合这些积木都走它（积木的样子不变）'),
+            value: host.doc.serviceLib == s.id,
+            onChanged: (on) {
+              host.edit(() => host.doc.serviceLib = on ? s.id : '');
+              setState(() => _problem = null);
+            },
+          )
+        else if (s.ok && host.strictRules)
           SwitchListTile(
             key: const ValueKey('be-lib-use'),
             contentPadding: const EdgeInsets.symmetric(horizontal: Space.x4),
             title: const Text('在这份文档里用它'),
-            subtitle: Text(use != null ? '它的积木在积木盒的「${s.name}」那一页' : '打开以后，它的积木会出现在积木盒里'),
+            subtitle: Text(sideWhy ?? (use != null ? '它的积木在积木盒的「${s.name}」那一页' : '打开以后，它的积木会出现在积木盒里')),
             value: use != null,
-            onChanged: _toggle,
+            // 给谁用对不上：灰掉，原因写在下面那行小字里。已经用上的还许关。
+            onChanged: sideWhy != null && use == null ? null : _toggle,
           ),
+        // 没有画布原样的库（复制自带库得到的、别人给的文字写法的库）：改它就是改文字，入口放在最上面，不埋在积木清单底下。
+        if (!s.hasSource) BeSheetAdd(key: const ValueKey('be-lib-text-open'), label: '改库的文字（清单、模块、积木表）', onTap: () => unawaited(_editText())),
+        if (!s.ok && hasNative)
+          BeSheetAdd(key: const ValueKey('be-lib-native-confirm'), label: LibNativeTrust.instance.enabled ? '看手写代码并确认' : '看手写代码（“允许库里的手写代码”关着，确认不了）', onTap: () => unawaited(_confirmNative())),
         if (use != null && lib.settings.isNotEmpty) const BeSheetSection('设置项（只管这份文档）'),
         if (use != null)
           for (final st in lib.settings)
             BeSheetRow(key: ValueKey('be-lib-setting-${st.id}'), label: st.name, value: '${use.settings[st.id] ?? st.defaultValue ?? '空'}', onTap: () => unawaited(_setting(st))),
+        if (lib.hosts.isNotEmpty) const BeSheetSection('它直接用的宿主能力'),
+        for (final h in lib.hosts) BeSheetRow(label: beHostWord(h), muted: true),
+        if (lib.natives.isNotEmpty) BeSheetSection('手写函数（${lib.natives.length} 个，已经确认过）'),
+        for (final n in lib.natives) BeSheetRow(label: n.name, value: n.waits ? '要等' : '不用等', muted: true),
         if (lib.requires.isNotEmpty) const BeSheetSection('它要靠的库'),
         for (final r in lib.requires) BeSheetRow(label: r == kBeServiceLibId ? '接口服务（应用自带）' : r, muted: true),
         BeSheetSection('积木（${lib.blocks.length} 块）'),

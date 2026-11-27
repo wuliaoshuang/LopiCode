@@ -358,6 +358,8 @@ abstract class JavaGen2Types extends Gen2 {
   };
 
   @override
+  String nativeCall(String ident, List<String> args) => '$ident.run(${args.join(', ')})';
+  @override
   String hostCall(String fn, List<String> args) => 'LcHost.$fn(${args.join(', ')})';
   @override
   String spawnCode(String f, LType ft) => ft.returns.isNul ? 'LcTask.spawn(() -> { $f.call(); return null; })' : 'LcTask.spawn($f)';
