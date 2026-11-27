@@ -196,7 +196,8 @@ bool sizeLabelAvoids(LcDocument doc, String selectedId, Rect selected, String id
   if (id == selectedId || id.contains('#')) return false;
   if (doc.find(id)?.children.isNotEmpty ?? false) return false;
   final both = box.expandToInclude(selected);
-  return both != box && both != selected; // 谁也不包着谁
+  // 包着选中框的不避；在选中框里面的（比如顶栏右边放的按钮）也要避——标签收进框里面时别压在它上面（第四轮 B5）。
+  return both != box;
 }
 
 /// 尺寸标签的左上角放哪（页面坐标）。[rect]＝选中框，[visible]＝屏幕上看得见的那一块，都是页面坐标。
@@ -230,8 +231,17 @@ Offset sizeLabelOrigin(Rect rect, Rect visible, double scale, String text, {List
       if (c == 0) return spot;
       if (c < least) (best, least) = (spot, c);
     }
-    // 四周都有东西：框够宽（放得下两个标签）就收进框里面的右头——字一般靠左，右头多半是空的；不够宽才用盖得最少的那个。
-    if (rect.width >= w * 2 + gap * 2) return clamp(rect.right - gap - w, rect.center.dy - h / 2);
+    // 四周都有东西：框够宽（放得下两个标签）就收进框里面——先试右头（字一般靠左，右头多半是空的），
+    // 右头放着东西（顶栏右边的按钮）就试正中、再试左头；框里哪儿都压着东西、或者不够宽，才用外面盖得最少的那个。
+    if (rect.width >= w * 2 + gap * 2) {
+      final top = rect.center.dy - h / 2;
+      final inside = [clamp(rect.right - gap - w, top), clamp(rect.center.dx - w / 2, top), clamp(rect.left + gap, top)];
+      for (final spot in inside) {
+        final box = (spot & Size(w, h)).deflate(0.5 * k);
+        if (!avoid.any((r) => r.overlaps(box))) return spot;
+      }
+      if (best == null) return inside.first;
+    }
     if (best != null) return best;
   }
   // 旁边没东西要避（或者哪儿都露不全）：框的上方靠右；上方露不出来就放下方

@@ -29,6 +29,7 @@ import 'package:lopicode/lowcode/inspector_style_widgets.dart';
 import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/lowcode/responsive.dart';
 import 'package:lopicode/lowcode/states.dart';
+import 'package:lopicode/lowcode/states_bp.dart';
 import 'package:lopicode/lowcode/style_controls_widgets.dart';
 import 'package:lopicode/lowcode/style_css_sheet.dart';
 import 'package:lopicode/lowcode/style_groups_widgets.dart';
@@ -379,8 +380,10 @@ class InspectorPanelState extends State<InspectorPanel> {
     final state = _state;
     final parentStyle = parent == null ? null : resolvedStyle(lcViewNode(parent, LcViewEnv.of(_doc, widget.bp)), _doc.parentOf(parent.id));
     final parentColumns = parentStyle != null && lcIsGrid(parentStyle) ? lcGridColumns(parentStyle) : null;
-    final stateOwn = state == null ? const <String, String>{} : lcStateStyle(preview, state);
     final bp = widget.bp;
+    // 三种状态的样子能分屏宽设（states_bp.dart）：在平板 / 桌面档上改的只记成这一档的差别。
+    final stateBp = lcStateSplitsByBp(state) ? bp : null;
+    final stateOwn = state == null ? const <String, String>{} : (stateBp == null ? lcStateStyle(preview, state) : canonicalDeclarations(lcBpStateStyle(preview, stateBp, state)));
     // 这一档看到的样子（手机的 + 更窄各档的 + 这一档的差别）；变量不换成值，控件上才看得出“这是变量”。
     final seen = bp == null ? preview : lcViewNode(preview, LcViewEnv(bp: bp));
     final bpOwn = bp == null ? const <String, String>{} : canonicalDeclarations(lcBpStyle(preview, bp));
@@ -391,6 +394,7 @@ class InspectorPanelState extends State<InspectorPanel> {
             onStylePage: _page == InspectorPage.style,
             filled: bpOwn.isNotEmpty,
             stateLabel: state == null ? null : lcStateLabel(state),
+            stateSplit: stateBp != null,
             onClear: () => _apply((n, _) => lcReplaceBp(n, bp, const {})),
           );
     final Widget content = switch (_page) {
@@ -425,8 +429,10 @@ class InspectorPanelState extends State<InspectorPanel> {
             ? StyleEdit(
                 node: node,
                 own: stateOwn,
-                resolved: {...resolvedStyle(seen, parent), ...stateOwn},
-                apply: (change, {merge = false}) => _applyState(state, change, merge: merge),
+                resolved: {...resolvedStyle(seen, parent), ...lcStateStyleAt(preview, state, stateBp)},
+                apply: (change, {merge = false}) =>
+                    stateBp == null ? _applyState(state, change, merge: merge) : _apply((n, _) => lcEditStateAtBp(n, stateBp, state, (m) => change(LcStyle(m))), merge: merge),
+                inheritedHint: stateBp == null ? null : '跟手机一样',
                 parentColumns: parentColumns,
               )
             : bp != null
@@ -450,11 +456,11 @@ class InspectorPanelState extends State<InspectorPanel> {
               state: state,
               filled: {
                 for (final s in [...kLcStateNames, for (final k in lcClassIfOf(preview)) lcClassState(k.name)])
-                  if (lcStateStyle(preview, s).isNotEmpty) s,
+                  if (lcStateStyleAt(preview, s, bp).isNotEmpty) s,
               },
               classes: [for (final k in lcClassIfOf(preview)) k.name],
               onPick: (s) => setState(() => _pickState(s)),
-              onClear: () => _apply((n, _) => lcReplaceState(n, state!, const {})),
+              onClear: () => _apply((n, _) => stateBp == null ? lcReplaceState(n, state!, const {}) : lcReplaceBpState(n, stateBp, state!, const {})),
               caveat: lcStateCaveat(preview.type, state),
             ),
           ],

@@ -12,6 +12,7 @@ import 'package:lopicode/lowcode/logic_expr.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/lowcode/states.dart';
+import 'package:lopicode/lowcode/states_bp.dart';
 import 'package:lopicode/lowcode/theme_vars.dart';
 
 String _ind(int n) => '  ' * n;
@@ -243,6 +244,7 @@ class DartLiveGen implements DartLiveHook {
   static final RegExp _border = RegExp(r'( *)border: OutlineInputBorder\(borderRadius: (BorderRadius\.circular\([^\n]*\))\),\n');
 
   String _withStates(LcNode n, String code) {
+    if (lcHasBpStates(n)) notes.add('有些状态样式是分屏宽设的（平板 / 桌面上按下、禁用、聚焦时另一个样子）：Flutter 这边没有导出这一部分，各种屏宽上都用手机的那一份。');
     if (!lcHasStates(n)) return code;
     final pressed = canonicalDeclarations(lcStateStyle(n, 'pressed')), disabled = canonicalDeclarations(lcStateStyle(n, 'disabled')), focused = canonicalDeclarations(lcStateStyle(n, 'focused'));
     var handled = false;

@@ -462,6 +462,19 @@ void main() {
     // 第 3 期第 3 段：看图发现标签盖住了旁边的组件（网格里跨两列的格子下面那一格、小按钮上面那行字）。
     Rect box(Offset at, String text) => at & Size(text.length * 7.0 + 12, 19);
 
+    test('B5：选中贴着屏幕顶的顶栏，右边放着按钮：标签不压在按钮上', () {
+      const bar = Rect.fromLTWH(0, 0, 390, 56);
+      const t = '390 × 56';
+      const right = Rect.fromLTWH(318, 8, 64, 40), below = Rect.fromLTWH(0, 56, 390, 40);
+      final at = box(sizeLabelOrigin(bar, visible, 1, t, avoid: const [right, below]), t);
+      expect(at.overlaps(right), isFalse, reason: '$at');
+      expect(at.overlaps(below), isFalse, reason: '$at');
+      // 左右都放着按钮：放正中间
+      const left = Rect.fromLTWH(8, 8, 64, 40);
+      final mid = box(sizeLabelOrigin(bar, visible, 1, t, avoid: const [left, right, below]), t);
+      expect(mid.overlaps(left) || mid.overlaps(right) || mid.overlaps(below), isFalse, reason: '$mid');
+    });
+
     test('上方有别的组件：换到下方；上下都有：换到左右；都不盖住旁边的', () {
       const rect = Rect.fromLTWH(16, 116, 64, 48);
       const t = '64 × 48';
@@ -507,6 +520,8 @@ void main() {
       expect(sizeLabelAvoids(doc, a.id, ra, b.id, rb), isTrue);
       expect(sizeLabelAvoids(doc, a.id, ra, 'inst__k5', rb), isTrue, reason: '自定义组件里面画出来的东西也算');
       expect(sizeLabelAvoids(doc, a.id, ra, '${col.id}#left', rb), isFalse);
+      // 第四轮 B5：选中的是容器，它里面的叶子组件也要避（顶栏右边放的按钮）
+      expect(sizeLabelAvoids(doc, col.id, rc, b.id, rb), isTrue);
     });
 
     test('贴着屏幕边：整个标签都在看得见的那一块里', () {

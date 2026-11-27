@@ -313,7 +313,8 @@ void main() {
 
       final firsts = <LcNode>[];
       walk(v3AllPage().root, firsts);
-      expect(seen, lcV3Specs.keys.toSet(), reason: '样例页里 11 种都有');
+      // 第四轮 B5 加的滑块不在这张样例页里（样例页不动，免得别处的基线跟着变）；它在画布上选中的测试在 lowcode_slider_test。
+      expect(seen, lcV3Specs.keys.toSet()..remove('slider'), reason: '样例页里 11 种都有');
       for (final x in firsts) {
         lbCanvas(tester).revealNode(x.id);
         await settle(tester, rounds: 2);

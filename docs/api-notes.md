@@ -797,3 +797,15 @@ Flutter 导出在测试里真的跳了页（`test/lowcode_pages_export_test.dart
   **同一页官方提醒“渲染时不要读写 `ref.current`”**——导出的页面文件（第 5 期起）和组件文件都在渲染时读写 `lcVars`（靠 `lcRefresh()` 手动重画）。这是已知的出入：
   在并发渲染（一次渲染被打断重做）下可能读到中间值。**未核对**：React 18/19 的 StrictMode、并发特性下的实际表现；现有验证只有 jsdom 里的同步渲染。
 - **React 事件回调属性**：父组件把函数当属性传给子组件、子组件调用它，是 React 的常规写法（react.dev“Responding to Events”一节；**这一条没单独打开核对**）。
+
+## 第四轮 B5（2026-11-27/28）
+
+- **`<input type="range">`**：`min` / `max` / `step` / `value` 属性、拖动时发 `input` 事件——很常见的写法，**这次没有打开 MDN 核对**；
+  行为由 jsdom 真跑验证（`lowcode_slider_test`：改值并发 `input` 事件后状态跟着变、状态变了滑块的值跟着走、禁用）。jsdom 不是真浏览器，手指拖动没验证。
+- **Vue 3 具名插槽**（`<template #left>`、`<slot name="left" />`、`$slots.left` 判断有没有传）：**官方文档这次没有打开核对**；
+  用官方编译器 `@vue/compiler-sfc` 真编译 0 错 0 警告、jsdom 真跑验证（`lowcode_export_top_part_test`：没传插槽的页不出那一层、传了的页出）。
+- **Vue 3 带作用域的样式和子组件**：父组件的 scoped 规则只落到子组件的最外层元素上——所以顶栏 / 底部导航部件里面的小元素的样式写在部件文件自己的 `<style scoped>` 里。
+  **官方出处这次没有核对**；jsdom 不排版，样式的实际效果没验证。
+- **Flutter `Slider`**：`value` 必须在 `min`–`max` 之间，否则断言失败——所以导出时绑了状态的值先 `.clamp(min, max)`。**没有真编译导出的 Flutter 代码**，只核对了生成的文字。
+- **`@media (min-width: …)` 里写 `:active` / `:disabled` / `:focus` 规则**：常规 CSS 写法，没有核对文档，也没有在真浏览器里看效果。
+

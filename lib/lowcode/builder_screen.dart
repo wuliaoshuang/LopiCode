@@ -150,7 +150,7 @@ class _BuilderScreenState extends State<BuilderScreen> with WidgetsBindingObserv
   void _onSaveState(SaveState state) {
     if (!mounted) return;
     setState(() {});
-    if (state == SaveState.failed) showSnack(context, '保存失败：${_saver.lastError}');
+    if (state == SaveState.failed) showEditorHint(context, '保存失败：${_saver.lastError}');
   }
 
   Future<void> _load() async {
@@ -181,7 +181,7 @@ class _BuilderScreenState extends State<BuilderScreen> with WidgetsBindingObserv
     try {
       await saveLowcodePage(widget.session.guard, doc);
     } on FileSystemException catch (e) {
-      if (mounted) showSnack(context, '新建页面失败：${describeSaveError(e)}');
+      if (mounted) showEditorHint(context, '新建页面失败：${describeSaveError(e)}');
       return;
     }
     widget.session.filesChanged();

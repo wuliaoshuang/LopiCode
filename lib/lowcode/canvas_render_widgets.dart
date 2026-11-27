@@ -24,7 +24,7 @@ import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/lowcode/palette_widgets.dart';
 import 'package:lopicode/lowcode/responsive.dart';
 import 'package:lopicode/lowcode/slots.dart';
-import 'package:lopicode/lowcode/states.dart';
+import 'package:lopicode/lowcode/states_bp.dart';
 import 'package:lopicode/lowcode/style_resolve.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:material_ui/material_ui.dart';
@@ -296,7 +296,7 @@ class CanvasPage extends StatelessWidget {
     final n = canvasPreviewNode(
       lcViewNode(shown, ctx.env),
       resize: p != null && p.nodeId == node.id ? (p.width, p.height) : null,
-      state: statePreview?.nodeId == node.id ? lcSubstMap(lcStateStyle(node, statePreview!.state), ctx.env.vars) : const {},
+      state: statePreview?.nodeId == node.id ? lcSubstMap(lcStateStyleAt(node, statePreview!.state, ctx.env.bp), ctx.env.vars) : const {},
     );
     // 没被改过的组件用这一轮记着的那份（父容器数“要放大的子项”时已经算过了）；展开的实例、拖柄预览是临时造的，现算。
     final s = identical(n, node) ? ctx.styleOf(n, parent) : resolvedStyle(n, parent);

@@ -10,7 +10,7 @@ import 'package:lopicode/theme/tokens.dart';
 import 'package:material_ui/material_ui.dart';
 
 class LcBpNote extends StatelessWidget {
-  const LcBpNote({super.key, required this.bp, required this.onStylePage, required this.filled, this.onClear, this.stateLabel});
+  const LcBpNote({super.key, required this.bp, required this.onStylePage, required this.filled, this.onClear, this.stateLabel, this.stateSplit = false});
 
   /// 画布现在看的那一档（tablet / desktop）。
   final String bp;
@@ -25,6 +25,9 @@ class LcBpNote extends StatelessWidget {
   /// 正在改某个状态的样子时它叫什么（状态样式不分屏宽，要说一声）；平时是 null。
   final String? stateLabel;
 
+  /// 这个状态的样子能不能分屏宽设（按下 / 禁用 / 聚焦能；类名成立那种不能）。
+  final bool stateSplit;
+
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
@@ -32,6 +35,8 @@ class LcBpNote extends StatelessWidget {
     final name = lcBpLabel(bp);
     final text = !onStylePage
         ? '现在改的样子（间距、圆角、字号、对齐、颜色…）只在$name及更宽的屏上生效（≥${kLcBpMinWidth[bp]}）。标着“不分屏宽”的在哪儿改都一样。'
+        : stateLabel != null && stateSplit
+        ? '现在改的是“$stateLabel”时的样子，只在$name及更宽的屏上生效（≥${kLcBpMinWidth[bp]}）：只记和手机上不一样的地方。'
         : stateLabel != null
         ? '“$stateLabel”时的样子不分屏宽：现在改的在手机上也生效。'
         : '现在改的只在$name及更宽的屏上生效（≥${kLcBpMinWidth[bp]}）：只记和手机不一样的地方。';
