@@ -43,14 +43,15 @@ void main() {
     Future<void> tap(WidgetTester tester, Finder f) async {
       await until(tester, f, '要点的东西');
       await tester.tap(f.first, warnIfMissed: false);
-      await tester.pumpAndSettle();
-      await settle(tester, rounds: 2);
+      // 不用 pumpAndSettle：组件库面板读文件的时候转着圈，那个动画不会自己停。
+      await tester.pump();
+      await settle(tester, rounds: 4);
     }
 
     Future<void> back(WidgetTester tester) async {
       await tester.binding.handlePopRoute();
-      await tester.pumpAndSettle();
-      await settle(tester, rounds: 2);
+      await tester.pump();
+      await settle(tester, rounds: 4);
     }
 
     Future<void> menu(WidgetTester tester, String label) async {

@@ -1165,7 +1165,18 @@ void main() {
         expect(libs.where((s) => s.ok), isEmpty);
         File('${tmp.path}/bad.lopilib').writeAsStringSync(entry.value);
         expect((await compLibOpenPack(guard, 'bad.lopilib')).lib.ok, isFalse);
-        final good = CompLib(id: 'tata/fine', name: '好的', version: '1.0.0', defs: [LcComponentDef(id: 'c1', name: '组件', root: LcNode(id: 'r', type: 'column'))]);
+        final good = CompLib(
+          id: 'tata/fine',
+          name: '好的',
+          version: '1.0.0',
+          defs: [
+            LcComponentDef(
+              id: 'c1',
+              name: '组件',
+              root: LcNode(id: 'r', type: 'column'),
+            ),
+          ],
+        );
         expect(await compLibStore(guard, good), isNull);
         expect((await compLibsRead(guard)).where((s) => s.ok).map((s) => s.id), ['tata/fine']);
       });

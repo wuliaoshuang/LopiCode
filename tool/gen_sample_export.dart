@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:lopicode/lowcode/export_dart.dart';
 
 import '../test/support/bind_sample.dart';
+import '../test/support/comp_samples.dart';
 import '../test/support/dart_live_sample.dart';
 import '../test/support/pages_sample.dart';
 import '../test/support/sample_doc.dart';
@@ -31,5 +32,9 @@ void main() {
   // 第四轮 B1：带状态和 8 种绑定的两页样例（“会动的”导出；test/lowcode_dart_live_test.dart 会 import 它）。
   File('test/generated/bind_page.dart').writeAsStringSync(exportDart(bindSample(), className: 'BindHomePage'));
   File('test/generated/live_page.dart').writeAsStringSync(exportDart(dartLiveSample(), className: 'LivePage'));
+  // 第四轮 B2：三种形状的组件（带事件、变体、状态、绑定）用在页面上（test/lowcode_comp_dart_test.dart 会 import 它们）。
+  File('test/generated/comp_card_page.dart').writeAsStringSync(exportDart(compUserDoc([productCardDef()]), className: 'CompCardPage'));
+  File('test/generated/comp_login_page.dart').writeAsStringSync(exportDart(compUserDoc([loginFormDef()]), className: 'CompLoginPage'));
+  File('test/generated/comp_tags_page.dart').writeAsStringSync(exportDart(compUserDoc([tagBarDef()]), className: 'CompTagsPage'));
   stdout.writeln('ok');
 }

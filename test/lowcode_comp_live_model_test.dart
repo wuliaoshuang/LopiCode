@@ -2,7 +2,9 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lopicode/lowcode/component_expand.dart';
 import 'package:lopicode/lowcode/component_extras.dart';
+import 'package:lopicode/lowcode/component_ops.dart';
 import 'package:lopicode/lowcode/export_live_doc.dart';
+import 'package:lopicode/lowcode/model.dart';
 
 import 'support/bind_export_files.dart';
 import 'support/comp_samples.dart';
@@ -65,5 +67,24 @@ void main() {
     expect(js, allOf(contains('p1__liked'), contains('"p1__buy", "click"'), contains('"tags__clear", "click"')));
     expect(css, contains('#FFF3E0'));
     expect(dart, allOf(contains('s_p1__liked'), contains('s_tagList')));
+  });
+  test('拆开用了新东西的实例：它那一份状态落成页面状态、接的事件落成页面处理（指向拆出来的那个按钮），再导出不出错', () {
+    final doc = compUserDoc([productCardDef()]);
+    final before = doc.logic.handlers.length;
+    expect(detachInstance(doc, 'p1').error, isNull);
+    expect(doc.find('p1')!.type, isNot('component'));
+    expect(doc.logic.variables.map((v) => v.name), contains('p1__liked'));
+    expect(doc.logic.handlers.length, before + 1);
+    final h = doc.logic.handlers.last;
+    expect(h.event, 'click');
+    expect(doc.find(h.target!)?.type, 'button', reason: '处理要指向拆出来以后的新编号');
+    // 另一张卡片还是实例，照旧。
+    expect(doc.find('p2')!.type, 'component');
+    final files = allExportFiles(doc);
+    expect(files['html/index.html'], contains('加入购物车'));
+    expect(files['html/logic.js'], contains('p1__liked'));
+    // 存盘再读回来还是这样。
+    final again = LcDocument.parse(doc.encode());
+    expect(again.logic.handlers.length, before + 1);
   });
 }
