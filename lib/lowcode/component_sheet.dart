@@ -224,7 +224,7 @@ class _ComponentSheetState extends State<_ComponentSheet> {
                 ],
               ),
             ),
-          if (_doc.components.isEmpty)
+          if (_doc.components.every((d) => compLibOf(d) != null))
             Padding(
               padding: const EdgeInsets.fromLTRB(Space.x4, Space.x6, Space.x4, Space.x4),
               child: Column(
@@ -237,50 +237,65 @@ class _ComponentSheetState extends State<_ComponentSheet> {
                 ],
               ),
             ),
+          // 她自己做的排前面；从组件库来的（内置组件库、导入的库）一个库收成一组，放在后面（第四轮 B6）。
           for (final def in _doc.components)
-            ListTile(
-              key: ValueKey('comp-item-${def.id}'),
-              contentPadding: const EdgeInsets.only(left: Space.x4, right: Space.x1),
-              leading: Icon(Icons.widgets_outlined, color: c.accent),
-              title: Text(def.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-              subtitle: Text(
-                '${compLibOf(def) == null ? '' : '库「${compLibOf(def)!.name}」· '}用了 ${componentUseCount(_doc, def.id)} 次 · ${def.props.isEmpty ? '没有可配置属性' : '${def.props.length} 个可配置属性'}',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  OutlinedButton(
-                    key: ValueKey('comp-insert-${def.id}'),
-                    onPressed: () => _insert(def),
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: const Size(0, 36),
-                      padding: const EdgeInsets.symmetric(horizontal: Space.x3),
-                    ),
-                    child: const Text('插入'),
-                  ),
-                  PopupMenuButton<String>(
-                    tooltip: '${def.name} 的更多操作',
-                    onSelected: (v) => switch (v) {
-                      'rename' => _rename(def),
-                      'props' => _editProps(def),
-                      'content' => _editContent(def),
-                      'fork' => _run((d) => compLibFork(d, def.id) == null ? const LcOpResult.fail('没复制成') : const LcOpResult.ok()),
-                      _ => _delete(def),
-                    },
-                    itemBuilder: (_) => compLibOf(def) != null
-                        ? const [PopupMenuItem(value: 'fork', child: Text('复制一份来改'))]
-                        : const [
-                            PopupMenuItem(value: 'props', child: Text('编辑属性')),
-                            PopupMenuItem(value: 'content', child: Text('编辑内容')),
-                            PopupMenuItem(value: 'rename', child: Text('改名')),
-                            PopupMenuItem(value: 'delete', child: Text('删除')),
-                          ],
-                  ),
-                ],
-              ),
+            if (compLibOf(def) == null) _tile(context, def),
+          for (final name in {
+            for (final def in _doc.components)
+              if (compLibOf(def) case final from?) from.name,
+          }) ...[
+            Padding(
+              key: ValueKey('comp-group-$name'),
+              padding: const EdgeInsets.fromLTRB(Space.x4, Space.x4, Space.x4, Space.x1),
+              child: Text('来自库「$name」· 只读，可以“复制一份来改”', style: t.labelMedium?.copyWith(color: c.textMuted)),
             ),
+            for (final def in _doc.components)
+              if (compLibOf(def)?.name == name) _tile(context, def),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// 清单里的一行（一个组件）。
+  Widget _tile(BuildContext context, LcComponentDef def) {
+    final c = context.colors;
+    return ListTile(
+      key: ValueKey('comp-item-${def.id}'),
+      contentPadding: const EdgeInsets.only(left: Space.x4, right: Space.x1),
+      leading: Icon(Icons.widgets_outlined, color: c.accent),
+      title: Text(def.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+      subtitle: Text('用了 ${componentUseCount(_doc, def.id)} 次 · ${def.props.isEmpty ? '没有可配置属性' : '${def.props.length} 个可配置属性'}', maxLines: 1, overflow: TextOverflow.ellipsis),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          OutlinedButton(
+            key: ValueKey('comp-insert-${def.id}'),
+            onPressed: () => _insert(def),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size(0, 36),
+              padding: const EdgeInsets.symmetric(horizontal: Space.x3),
+            ),
+            child: const Text('插入'),
+          ),
+          PopupMenuButton<String>(
+            tooltip: '${def.name} 的更多操作',
+            onSelected: (v) => switch (v) {
+              'rename' => _rename(def),
+              'props' => _editProps(def),
+              'content' => _editContent(def),
+              'fork' => _run((d) => compLibFork(d, def.id) == null ? const LcOpResult.fail('没复制成') : const LcOpResult.ok()),
+              _ => _delete(def),
+            },
+            itemBuilder: (_) => compLibOf(def) != null
+                ? const [PopupMenuItem(value: 'fork', child: Text('复制一份来改'))]
+                : const [
+                    PopupMenuItem(value: 'props', child: Text('编辑属性')),
+                    PopupMenuItem(value: 'content', child: Text('编辑内容')),
+                    PopupMenuItem(value: 'rename', child: Text('改名')),
+                    PopupMenuItem(value: 'delete', child: Text('删除')),
+                  ],
+          ),
         ],
       ),
     );
