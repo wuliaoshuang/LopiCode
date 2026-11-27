@@ -216,7 +216,8 @@ class DartLiveGen implements DartLiveHook {
         if (prop == 'bg' || prop == 'color') {
           final fallback = subs.colorCode(old) ?? (old is String && cssColorToArgb(old) != null ? dartLiveColor(cssColorToArgb(old)!) : null);
           (props ??= {...n.props})[prop] = subs.color('_lcColor($on ? $value : null${fallback == null ? '' : ', $fallback'})');
-        } else if (prop == 'width' || prop == 'height') {
+        } else if (prop == 'width' || prop == 'height' || prop == 'fontSize') {
+          // 字号和宽高一样：原来没写就是“用默认的”，条件不成立时不能落成 0（字会看不见）。
           final fallback = subs.numberCode(old) ?? (old is num ? dartLiveNum(old) : null);
           (props ??= {...n.props})[prop] = subs.number(fallback == null ? '_lcPxOrNull($on ? $value : null)' : '_lcPx($on ? $value : null, $fallback)');
         } else {

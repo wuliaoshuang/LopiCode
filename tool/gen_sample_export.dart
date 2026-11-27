@@ -36,5 +36,6 @@ void main() {
   File('test/generated/comp_card_page.dart').writeAsStringSync(exportDart(compUserDoc([productCardDef()]), className: 'CompCardPage'));
   File('test/generated/comp_login_page.dart').writeAsStringSync(exportDart(compUserDoc([loginFormDef()]), className: 'CompLoginPage'));
   File('test/generated/comp_tags_page.dart').writeAsStringSync(exportDart(compUserDoc([tagBarDef()]), className: 'CompTagsPage'));
+  File('test/generated/class_style_page.dart').writeAsStringSync(exportDart(classStyleSample(), className: 'ClassStylePage'));
   stdout.writeln('ok');
 }
