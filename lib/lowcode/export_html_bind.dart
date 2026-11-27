@@ -11,6 +11,7 @@ import 'package:lopicode/lowcode/export_bind_plan.dart';
 import 'package:lopicode/lowcode/export_framework_common.dart';
 import 'package:lopicode/lowcode/export_html_bind_runtime.dart';
 import 'package:lopicode/lowcode/export_web_v3.dart';
+import 'package:lopicode/lowcode/logic_core_js.dart';
 import 'package:lopicode/lowcode/logic_expr.dart';
 import 'package:lopicode/lowcode/logic_js.dart';
 import 'package:lopicode/lowcode/logic_text.dart';
@@ -160,13 +161,15 @@ String exportBoundLogicJs(LcBindPlan plan, LcNode tree, {List<String>? notes}) {
   out.writeln('const state = lcMakeState();');
   out.writeln();
 
+  final core = lcCoreJsFor(doc, target, notes, lookup: plan.lookup, hash: false);
+  if (core != null) [...core.top, ...core.boot, 'const lcPage = lcBoot();', ''].forEach(out.writeln);
   final start = <String>[], load = <String>[];
   for (var i = 0; i < logic.handlers.length; i++) {
     final h = logic.handlers[i];
     final name = names[i];
     out.writeln('// ${jsComment(describeHandler(h, doc))}');
     out.writeln('function $name(${h.event == 'load' ? '' : 'event'}) {');
-    for (final line in writer.blocks(h.body, event: h.event)) {
+    for (final line in core?.body(i) ?? writer.blocks(h.body, event: h.event)) {
       out.writeln('  $line');
     }
     out.writeln('}');

@@ -219,13 +219,24 @@ class _Lower {
         case LibSlotKind.literal:
           values[slot] = v is String || v is num || v is bool ? LLit(v) : expr(v, event, depth).e;
         case LibSlotKind.value:
-          values[slot] = block.look.slotFor(slot).kind == CustomSlotKind.choice && v is String ? LLit(v) : _any(expr(v, event, depth).e);
+          values[slot] = block.look.slotFor(slot).kind == CustomSlotKind.choice && v is String ? LLit(v) : _typed(expr(v, event, depth));
       }
     }
     final got = libApply(l, block, LibUse(values: values, mouths: lowered, targets: targets, provided: provided), LibCx(context: context, settings: _settingsOf(l), fresh: fresh.call));
     if (got.problem != null) skipped.add(got.problem!);
     return got;
   }
+
+  /// 页面的值递给库积木：页面这边知道是数字 / 文字 / 是否的，按旧规矩转好再递（库里写“小数 / 文字 / 是否”就接得住）；
+  /// 不知道的（状态是列表、记录，别的库积木算出来的）按“任意”递，库里自己看是哪一类。
+  LExpr _typed(_V v) => v.e is LLit
+      ? v.e
+      : switch (v.type) {
+          LcType.number => _call('lcNum', {'value': _any(v.e)}),
+          LcType.text => _call('lcText', {'value': _any(v.e)}),
+          LcType.boolean => _call('lcBool', {'value': _any(v.e)}),
+          _ => _any(v.e),
+        };
 
   Map<String, Object?> _settingsOf(LibLibrary l) {
     for (final u in doc.logic.uses) {

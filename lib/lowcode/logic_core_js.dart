@@ -1,0 +1,181 @@
+/// 新路的页面逻辑在三种导出里共用的那几段 JS（积木第 5 版·前端 1）。
+///
+/// 一页的逻辑用了新功能（[lcDocUsesCore]）才走这里：页面逻辑 → 语言核心的程序（logic_to_core.dart）→ 浏览器目标生成一个
+/// `lcProgram(lc, lcHost)`。导出文件里放三段：
+///
+/// - [LcCoreJs.top]：浏览器小库 `lcRuntime`、页面宿主 `lcPageHost`、这一页的程序 `lcProgram`（和导出方式无关，放在最外层）。
+/// - [LcCoreJs.boot]：一个 `lcBoot()` 函数：照这种导出放状态、放控件属性的办法做一张读写表，开工，交回页面宿主。
+///   读写表里每一格怎么读怎么写，直接用这种导出原来的写法（[JsTarget]），所以“改了以后怎么让界面跟着变”和老路是同一套。
+/// - [LcCoreJs.body]：每个处理函数里那一句——把事件转给页面宿主（同一个控件同一个事件有好几个处理时，第一个函数转一次，全都会做）。
+///
+/// 没用新功能的页面不走这里，导出和以前逐字节一样。
+library;
+
+import 'package:lopicode/lang/gen2_browser.dart';
+import 'package:lopicode/lang/gen_support.dart';
+import 'package:lopicode/lang/rt2_browser.dart';
+import 'package:lopicode/lowcode/export_framework_common.dart' show lcInitialLiteral;
+import 'package:lopicode/lowcode/logic_expr.dart' show kWritableProps;
+import 'package:lopicode/lowcode/logic_js.dart';
+import 'package:lopicode/lowcode/logic_libs.dart';
+import 'package:lopicode/lowcode/logic_model.dart';
+import 'package:lopicode/lowcode/logic_to_core.dart';
+import 'package:lopicode/lowcode/model.dart';
+import 'package:lopicode/lowcode/page_host_js.dart';
+
+/// 新路的脚本开头那几句“怎么读”。
+const List<String> kLcCoreReadme = [
+  '// - 这一页的逻辑用了新积木（函数、类、库……），走的是“语言核心”这条路：整页逻辑是下面的 lcProgram；',
+  '//   它通过页面宿主 lcPageHost 读写状态和控件、接事件。状态和控件属性放在哪，看 lcBoot 里的那张读写表。',
+  '// - 旧积木的规矩没变：加减乘除按数字算，转不了的当 0；“等一会儿”“请求网址”只管它们里面的积木。',
+];
+
+class LcCoreJs {
+  LcCoreJs._(this.top, this.boot, this._bodies, this.problems);
+  final List<String> top;
+  final List<String> boot;
+  final List<List<String>> _bodies;
+
+  /// 这一页的逻辑导不出来的原因（库不在、类型检查没过……）。不空时 [top] 是空的，处理函数都是空的。
+  final List<String> problems;
+
+  /// 第 [i] 个处理函数里的语句。
+  List<String> body(int i) => i < _bodies.length ? _bodies[i] : const [];
+}
+
+/// 这一页走新路时交回那几段；不走交回 null。[hash]＝“去页面”改地址栏里 # 后面那段（Vue / React）；否则换到 `页名.html`。
+/// [listen]＝读写表里带“往控件上挂事件”（纯网页用：这时不需要一个个处理函数）。
+LcCoreJs? lcCoreJsFor(LcDocument doc, JsTarget target, List<String>? notes, {LcVariable? Function(String name)? lookup, required bool hash, bool listen = false}) {
+  if (!lcDocUsesCore(doc)) return null;
+  final built = lcLogicToCore(doc, lookup: lookup, pageUrl: (p) => hash ? '#/${p.id}' : '${lcPageFileBase(doc, p.id)}.html');
+  final problems = [...built.problems];
+  String? program;
+  if (problems.isEmpty) {
+    try {
+      program = gen2BrowserProgram(built.program!);
+    } on LangUnsupported catch (e) {
+      problems.add(e.message);
+    }
+  }
+  for (final s in built.skipped) {
+    notes?.add('页面逻辑：$s');
+  }
+  if (program == null) {
+    notes?.add('这一页的逻辑没有导出：${problems.join('；')}');
+    return LcCoreJs._(
+      const [],
+      ['// 这一页的逻辑没有导出：${jsComment(problems.join('；'))}', 'function lcBoot() {', '  return { emit() {}, emitLife() {} };', '}', ''],
+      [for (final _ in doc.logic.handlers) const []],
+      problems,
+    );
+  }
+
+  LcVariable? find(String name) => lookup == null ? doc.logic.variable(name) : lookup(name);
+  final boot = <String>['// 开工：做一张读写表（状态、控件属性各放在哪），把这一页的程序跑起来，交回页面宿主。', 'function lcBoot() {', '  const lcT = {', '    state(name) {', '      switch (name) {'];
+  for (final name in built.states) {
+    final v = find(name);
+    if (v == null) continue;
+    boot.add('        case ${jsString(name)}:');
+    if (v.isDerived) {
+      boot.add('          return [() => ${target.readVar(v)}, null];');
+    } else {
+      boot
+        ..add('          return [() => ${target.readVar(v)}, (lcV) => {')
+        ..addAll([for (final l in target.writeVar(v, 'lcV')) '            $l'])
+        ..add('          }];');
+    }
+  }
+  boot.addAll(['      }', '      return null;', '    },', '    prop(id, prop) {', '      switch (id + " " + prop) {']);
+  for (final (id, prop) in built.props) {
+    final node = doc.find(id);
+    if (node == null) continue;
+    boot.add('        case ${jsString('$id $prop')}:');
+    final read = '() => ${target.readProp(node, prop).code}';
+    if (kWritableProps.contains(prop)) {
+      boot
+        ..add('          return [$read, (lcV) => {')
+        ..addAll([for (final l in target.writeProp(node, prop, 'lcV')) '            $l'])
+        ..add('          }];');
+    } else {
+      boot.add('          return [$read, null];');
+    }
+  }
+  boot.addAll([
+    '      }',
+    '      return null;',
+    '    },',
+    if (listen) ...['    listen(id, type, f) {', '      lcOn(id, type, f);', '    },'],
+    '  };',
+    '  const lcRt = lcRuntime(globalThis);',
+    '  const lcHost = lcPageHost(lcRt, lcT);',
+    '  lcProgram(lcRt, lcHost);',
+    '  return lcHost;',
+    '}',
+    '',
+  ]);
+
+  // 每个处理函数：同一个控件同一个事件，第一个函数转一次（宿主那边登记过的全都会做）；“页面打开时”也一样。
+  final seen = <String>{};
+  final bodies = <List<String>>[];
+  for (final h in doc.logic.handlers) {
+    final node = h.target == null ? null : doc.find(h.target!);
+    final String key, call;
+    if (h.event == 'load') {
+      key = 'load';
+      call = 'lcPage.emitLife("mounted");';
+    } else if ((h.event == 'click' || h.event == 'input') && node != null && isSafeNodeId(node.id)) {
+      key = '${node.id} ${h.event}';
+      call = 'lcPage.emit(${jsString(node.id)}, "${h.event}", event);';
+    } else {
+      bodies.add(const ['// 没有挂上（触发它的控件不在页面里，或者不认识的事件）']);
+      continue;
+    }
+    bodies.add(seen.add(key) ? [call] : const ['// 和前面同一个事件的处理一起做了（都登记在页面宿主里）']);
+  }
+  return LcCoreJs._(
+    ['// —— 语言核心的浏览器小库（每份导出都一样）——', ...kRt2BrowserSource.trim().split('\n'), '', ...kLcPageHostJs.trim().split('\n'), '', '// —— 这一页的逻辑 ——', ...program.trim().split('\n'), ''],
+    boot,
+    bodies,
+    const [],
+  );
+}
+
+/// 没用绑定的纯网页，新路的整份 logic.js。
+String exportCoreLogicJs(LcDocument doc, {List<String>? notes}) {
+  const target = DomJsTarget();
+  final core = lcCoreJsFor(doc, target, notes, hash: false, listen: true)!;
+  final out = StringBuffer()
+    ..writeln('// 由 LopiCode 低代码搭建器生成，重新导出会覆盖本文件。')
+    ..writeln('//')
+    ..writeln('// 怎么读这份脚本：')
+    ..writeln('// - 状态都在 state 里。状态改了以后，界面上不会自动跟着变（这一页没有用数据绑定）；要让界面变，用“改控件”积木。');
+  kLcCoreReadme.forEach(out.writeln);
+  out
+    ..writeln('"use strict";')
+    ..writeln()
+    ..writeln('// 状态')
+    ..writeln('const state = {');
+  final seen = <String>{};
+  for (final v in doc.logic.variables) {
+    if (!seen.add(v.name)) continue;
+    out.writeln('  ${isJsIdentifier(v.name) ? v.name : '[${jsString(v.name)}]'}: ${lcInitialLiteral(v)},');
+  }
+  out
+    ..writeln('};')
+    ..writeln()
+    ..writeln(lcJsDomRuntime.trim())
+    ..writeln();
+  [...core.top, ...core.boot].forEach(out.writeln);
+  out
+    ..writeln('// 页面准备好以后：开工（处理都挂到控件上），再做“当页面放上以后”。')
+    ..writeln('function lcStart() {')
+    ..writeln('  lcBoot().emitLife("mounted");')
+    ..writeln('}')
+    ..writeln()
+    ..writeln('if (document.readyState === "loading") {')
+    ..writeln('  document.addEventListener("DOMContentLoaded", lcStart);')
+    ..writeln('} else {')
+    ..writeln('  lcStart();')
+    ..writeln('}');
+  return out.toString();
+}

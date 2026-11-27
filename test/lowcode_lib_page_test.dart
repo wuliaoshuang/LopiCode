@@ -9,6 +9,7 @@ import 'package:lopicode/lowcode/lib_page.dart';
 import 'package:lopicode/lowcode/logic_to_core.dart';
 
 import 'support/lowcode_samples.dart';
+import 'support/page_core_samples.dart';
 
 void main() {
   test('“页面”库读得进来，没有问题，只给前端用', () {
@@ -36,5 +37,16 @@ void main() {
     expect(js, contains('function lcProgram(lc, lcHost)'));
     expect(built.states, isNotEmpty);
     expect(built.props, isNotEmpty);
+  });
+
+  test('用了库积木的页面（函数＋闭包、类、试着做；列表和记录状态）：库没有问题，翻得出来，生成得了', () {
+    expect(pageKit().problems, isEmpty);
+    final doc = coreSampleLib();
+    final built = lcLogicToCore(doc, pageUrl: (p) => '${p.id}.html');
+    expect(built.problems, isEmpty);
+    expect(built.skipped, isEmpty);
+    expect(built.libs.map((l) => l.id), [kLcPageLibId, 'test/page-kit']);
+    expect(gen2BrowserProgram(built.program!), contains('function lcProgram(lc, lcHost)'));
+    expect(built.states, {'n', 'items', 'who'});
   });
 }

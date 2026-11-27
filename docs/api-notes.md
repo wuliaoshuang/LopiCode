@@ -786,3 +786,22 @@ Flutter 导出在测试里真的跳了页（`test/lowcode_pages_export_test.dart
   （没有用 `sync.Cond`，它没有带超时的 Wait）。关闭的 channel 读起来立刻返回是语言规范里写的（go.dev/ref/spec#Receive_operator）。
 - **PHP `flock` / `hrtime` / `usleep`**：`flock(LOCK_EX)` 进程之间互斥、进程结束自动放；`hrtime(true)` 是纳秒的单调时钟（php.net/manual/zh/function.hrtime.php）。
   **未核对**：`flock` 在网络文件系统（NFS）上的行为；生成的工程放在本机磁盘上才保证“一次只让一个做”跨工作进程有效。
+
+## 浏览器目标用到的浏览器接口（积木第 5 版·前端 1·A2，2026-11-27）
+
+浏览器小库 `lib/lang/rt2_browser.dart` 靠下面这些事实。标“已核对”的是对着官方文档原文看过的；标“未核对”的是这一段没能打开官方原文、只凭已有认识和 jsdom 里的表现写的，下一段要补核。
+
+- **`fetch()`（已核对，developer.mozilla.org/en-US/docs/Web/API/Window/fetch）**：只有请求本身失败（网址不对、网络错误）才拒绝；服务器回了 404、504 这类状态**不拒绝**，
+  要自己看 `Response.ok` / `Response.status`；被 `AbortController.abort()` 中止时以 `AbortError` 拒绝。
+  所以原生绑定“发请求”只在连不上、超时、被中止时出错，状态码原样交回；旧积木“请求网址”的“不是 200 多算失败”是在“页面”库里补的。
+- **`AbortController` / `signal`（未核对原文）**：把 `signal` 递给 `fetch`，调 `abort()` 中止。超时是自己用定时器加 `abort()` 做的。
+- **`history.pushState / replaceState / go`、`popstate`（未核对 MDN 原文，只见到第三方转述）**：`pushState`、`replaceState` 不会触发 `popstate`；
+  前进后退（含 `history.go()`）才触发，事件的 `state` 是当时存的那份。存的东西要能被浏览器复制（普通数据），所以递进去前先转成普通 JSON 值。
+- **`localStorage` / `sessionStorage`（未核对原文）**：`setItem` 在放不下或浏览器不让存时抛错（小库接住，报“存不进去”）；有的环境读 `window.localStorage` 本身就抛错（报“这里用不了本地存储”）。
+- **`requestAnimationFrame` / `cancelAnimationFrame`（未核对原文）**：回调收到一个时间戳；没有这个函数的环境退回 16 毫秒的定时器。
+- **`setTimeout` 负数当 0（未核对原文）**：小库自己先 `Math.max(0, ms)`，不靠浏览器。
+- **Vue 3 `ref` / `onMounted`、React `useRef` / `useEffect` / `useSyncExternalStore`（这一段没有新用法）**：新路没有新加任何框架接口，用的还是第 5 期导出里已有的那些（见上文各节）；
+  React 里“开工只做一次”用的是 `useRef` 存一个值、第一次画的时候填上。**未核对**：React 开着 StrictMode 时组件函数会多跑一遍，开工那段是否因此做两遍——
+  `useRef` 的值在同一次挂载里是同一个，按理只做一次，这一段没有在 StrictMode 下验证。
+- **验证环境**：Node＋jsdom 31.0.1（`~/workspace/tools/webdev-dom/`）。jsdom 不排版、不真的换页、没有 `alert` 和 `fetch`——页面逻辑的真跑用假网络和假对话框
+  （`tool/verify/run_dom.mjs` 的 `fake` 步骤）。没覆盖：真浏览器、真手机。

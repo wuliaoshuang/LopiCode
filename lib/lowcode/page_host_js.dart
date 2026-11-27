@@ -28,7 +28,14 @@ function lcPageHost(lc, t) {
   }
   // 这一轮代码做完以后：把“当…变了”都看一遍，值变了的叫它的回调；回调里又改了状态就再看一轮，最多 100 轮。
   function flush() {
-    queued = false;
+    // 看的这段时间里 queued 一直是真的：回调里再改状态不另排一次，由下面这一轮接一轮地看（不然超过 100 轮以后还会没完没了地排下去）。
+    try {
+      flushRounds();
+    } finally {
+      queued = false;
+    }
+  }
+  function flushRounds() {
     for (let round = 0; round < 100; round++) {
       let any = false;
       for (const w of watchers.slice()) {
