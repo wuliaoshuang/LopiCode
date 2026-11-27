@@ -114,6 +114,7 @@ extension _ValidatorArgs on _Validator {
       final why = beHostCallProblem(doc, expr['name']);
       if (why != null) _error(BeIssueCode.badLibrary, why, arg: arg, fix: '长按这个值换成别的；要碰宿主的事，等这条路放开以后再做。');
     }
+    if (kind == kBeRawExpr) _raw(expr['src'], isExpr: true, arg: arg);
     if ((kind == kBeCast || kind == kBeAscribe) && beTypeOfKey(expr['to']) == null) {
       _error(LcIssueCode.unknownExpr, '还没选好类型（${expr['to'] ?? ''} 读不出来）', arg: arg, fix: '点这块积木上的类型，重新挑一个。');
     }
@@ -134,6 +135,21 @@ extension _ValidatorArgs on _Validator {
       if (name is String && name.isNotEmpty && !_params.contains(name)) {
         final have = _params.isEmpty ? '这个接口的路径里没有参数' : '路径里有的是 ${_params.join('、')}';
         _error(BeIssueCode.unknownPathParam, '路径里没有叫 $name 的参数（$have）；读到的会是空的', arg: arg);
+      }
+    }
+  }
+
+  /// “文字原样”：读不出来要说；里面直接调了宿主接口的，和“调宿主接口”积木一个规矩。
+  void _raw(Object? src, {required bool isExpr, String? arg}) {
+    if ((isExpr ? beRawReadExpr(src) : beRawReadStmt(src)) == null) {
+      _error(LcIssueCode.badArg, '这一处的文字写法读不出来', arg: arg, fix: '删掉这一块，用积木重新搭。');
+      return;
+    }
+    for (final n in beRawHosts(src, isExpr: isExpr)) {
+      final why = beHostCallProblem(doc, n);
+      if (why != null) {
+        _error(BeIssueCode.badLibrary, why, arg: arg, fix: '删掉这一块，换成语言核心的积木来做；要碰宿主的事，等这条路放开以后再做。');
+        return;
       }
     }
   }

@@ -110,6 +110,10 @@ const Map<String, (List<String>, List<String>)> _families = {
   'dictPart': (['dictKeys', 'dictValues', 'dictPairs'], ['d']),
 };
 
+/// 这两张表反过来也用（文字写法 → 积木，backend_from_text.dart）。
+const Map<String, List<String>> kBeRtArgs = _rtArgs;
+const Map<String, (List<String>, List<String>)> kBeRtFamilies = _families;
+
 class BeLangLower {
   BeLangLower(this.host, this.route, {this.shadow = false}) : locals = beLocalNames(route.body, beNamePattern);
 

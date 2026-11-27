@@ -9,6 +9,7 @@
 library;
 
 import 'package:lopicode/backend/backend_blocks_core.dart';
+import 'package:lopicode/backend/backend_blocks_raw.dart';
 import 'package:lopicode/backend/backend_core.dart';
 import 'package:lopicode/backend/backend_lower_core.dart';
 import 'package:lopicode/backend/backend_model.dart';
@@ -122,6 +123,13 @@ List<String> beHostsUsed(BeDocument doc) {
   final out = <String>[];
   void walk(Object? v) {
     if (v is Map) {
+      // “文字原样”里直接写了“宿”的，和“调宿主接口”积木一样算。
+      if (v['e'] == kBeRawExpr || v['op'] == kBeRawStmt) {
+        final src = v['e'] != null ? v['src'] : (v['args'] is Map ? (v['args'] as Map)['src'] : null);
+        for (final n in beRawHosts(src, isExpr: v['e'] != null)) {
+          if (!out.contains(n)) out.add(n);
+        }
+      }
       if (beIsHostCall(v['e']) || beIsHostCall(v['op'])) {
         final args = v['e'] != null ? v : v['args'];
         final n = args is Map ? args['name'] : null;

@@ -8,6 +8,7 @@ library;
 
 import 'package:lopicode/backend/backend_blocks_core.dart';
 import 'package:lopicode/backend/backend_blocks_func.dart';
+import 'package:lopicode/backend/backend_blocks_raw.dart';
 import 'package:lopicode/backend/backend_blocks_strict.dart';
 import 'package:lopicode/backend/backend_function.dart';
 import 'package:lopicode/lowcode/logic_blocks.dart';
@@ -347,6 +348,11 @@ Map<String, bool> beLocalNames(List<LcBlock> list, RegExp pattern) {
           add(b.args['name'], true);
         case 'forEach':
           add(b.args['index']);
+        case kBeForIn:
+          add(b.args['name']);
+          add(b.args['index']);
+        case kBeRawStmt:
+          beRawDeclares(b.args['src']).forEach(add);
         case 'forPairs':
           add(b.args['key']);
           add(b.args['value']);

@@ -4,6 +4,7 @@
 // - 改库的文字：先一页列出能改的文件（一行一个），点开是一整页的编辑框（等宽字、应用统一的代码字号）；
 //   主操作是“存”，旁边一个“检查”（只查不存）；有问题时原因（带第几行）写在编辑框上面，文字不丢。
 // - 确认手写代码：用公用的预览页（lib/ui/lib_import_sheet.dart），换了标题和按钮上的字。
+// - 两个自带库的面板最上面都有一行“在画布上看（只读）”：这份文档用不了它时也能看（lib/ui/backend_lib_view_screen.dart）。
 // - 颜色全取主题值；读写磁盘的事都交给 lib/backend。
 import 'dart:async';
 
@@ -14,14 +15,17 @@ import 'package:lopicode/backend/backend_lib_store.dart';
 import 'package:lopicode/backend/lib_native_trust.dart';
 import 'package:lopicode/backend/lib_service.dart';
 import 'package:lopicode/backend/lib_service_fork.dart';
+import 'package:lopicode/backend/lib_service_module.dart';
 import 'package:lopicode/core/path_guard.dart';
 import 'package:lopicode/lang/lib_model.dart';
 import 'package:lopicode/lang/rules.dart';
+import 'package:lopicode/lowcode/lib_page_module.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/state/code_font.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/backend_core_sheet.dart';
 import 'package:lopicode/ui/backend_lib_import_sheet.dart';
+import 'package:lopicode/ui/backend_lib_view_screen.dart';
 import 'package:lopicode/ui/lib_import_sheet.dart';
 import 'package:lopicode/ui/top_bar.dart';
 import 'package:material_ui/material_ui.dart';
@@ -65,6 +69,14 @@ Future<void> showBeServiceLib(BuildContext context, {required Future<void> Funct
           '${userLibHostEntry && why == null ? '“复制一份来改”会得到同样的一份文字写法的库：可以改它的文字，再让文档用它顶替自带的这个。' : ''}',
       problem: why,
       children: [
+        BeSheetAdd(
+          key: const ValueKey('be-lib-builtin-view'),
+          label: '在画布上看（只读）',
+          onTap: () {
+            Navigator.pop(sheet);
+            unawaited(showBeLibView(context, title: service.name, moduleText: kBeServiceModuleLc, side: LibSide.backend));
+          },
+        ),
         // 复制件直接用宿主接口；那条路关着时（rules.dart 的 userLibHostEntry）复制出来必然用不了，所以只放一行灰字说明。
         if (why != null)
           const SizedBox.shrink()
@@ -96,6 +108,14 @@ Future<void> showBePageLib(BuildContext context, LibLibrary page, {String? why})
     hint: '应用自带的库，只读。事件、状态、控件、去别的页面这些积木都是它的；页面逻辑会自动用上它。',
     problem: why,
     children: [
+      BeSheetAdd(
+        key: const ValueKey('be-lib-builtin-page-view'),
+        label: '在画布上看（只读）',
+        onTap: () {
+          Navigator.pop(sheet);
+          unawaited(showBeLibView(context, title: page.name, moduleText: kLcPageModuleLc, side: LibSide.frontend));
+        },
+      ),
       BeSheetSection('积木（${page.blocks.length} 块）'),
       for (final b in page.blocks) BeSheetRow(label: beLibBlockLine(b), muted: true),
     ],
@@ -218,6 +238,7 @@ class _TextPageState extends ConsumerState<_TextPage> {
     return Scaffold(
       key: const ValueKey('be-lib-text-page'),
       backgroundColor: c.canvas,
+      extendBodyBehindAppBar: true,
       appBar: PageBar(
         background: c.canvas,
         titleText: widget.rel,
@@ -226,43 +247,45 @@ class _TextPageState extends ConsumerState<_TextPage> {
           TextButton(key: const ValueKey('be-lib-text-save'), onPressed: _busy ? null : () => unawaited(_save()), child: const Text('存')),
         ],
       ),
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (_problem != null)
-            Container(
-              key: const ValueKey('be-lib-text-problem'),
-              constraints: const BoxConstraints(maxHeight: 160),
-              color: c.surfaceMuted,
-              padding: const EdgeInsets.all(Space.x3),
-              child: SingleChildScrollView(
-                child: Text('$_problem', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: c.danger)),
+      body: BelowBar(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (_problem != null)
+              Container(
+                key: const ValueKey('be-lib-text-problem'),
+                constraints: const BoxConstraints(maxHeight: 160),
+                color: c.surfaceMuted,
+                padding: const EdgeInsets.all(Space.x3),
+                child: SingleChildScrollView(
+                  child: Text('$_problem', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: c.danger)),
+                ),
+              ),
+            if (_fine && _problem == null)
+              Container(
+                key: const ValueKey('be-lib-text-fine'),
+                color: c.surfaceMuted,
+                padding: const EdgeInsets.all(Space.x3),
+                child: Text('查过了，没有问题（还没存）。', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: c.textMuted)),
+              ),
+            Expanded(
+              child: TextField(
+                key: const ValueKey('be-lib-text-field'),
+                onChanged: (_) {
+                  if (_fine) setState(() => _fine = false);
+                },
+                controller: _text,
+                maxLines: null,
+                expands: true,
+                textAlignVertical: TextAlignVertical.top,
+                autocorrect: false,
+                enableSuggestions: false,
+                style: TextStyle(fontFamily: kMonoFont, fontFamilyFallback: kMonoFallback, fontSize: ref.watch(compactCodeFontProvider), color: c.text, height: 1.4),
+                decoration: const InputDecoration(border: InputBorder.none, enabledBorder: InputBorder.none, focusedBorder: InputBorder.none, filled: false, contentPadding: EdgeInsets.all(Space.x3)),
               ),
             ),
-          if (_fine && _problem == null)
-            Container(
-              key: const ValueKey('be-lib-text-fine'),
-              color: c.surfaceMuted,
-              padding: const EdgeInsets.all(Space.x3),
-              child: Text('查过了，没有问题（还没存）。', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: c.textMuted)),
-            ),
-          Expanded(
-            child: TextField(
-              key: const ValueKey('be-lib-text-field'),
-              onChanged: (_) {
-                if (_fine) setState(() => _fine = false);
-              },
-              controller: _text,
-              maxLines: null,
-              expands: true,
-              textAlignVertical: TextAlignVertical.top,
-              autocorrect: false,
-              enableSuggestions: false,
-              style: TextStyle(fontFamily: kMonoFont, fontFamilyFallback: kMonoFallback, fontSize: ref.watch(compactCodeFontProvider), color: c.text, height: 1.4),
-              decoration: const InputDecoration(border: InputBorder.none, enabledBorder: InputBorder.none, focusedBorder: InputBorder.none, filled: false, contentPadding: EdgeInsets.all(Space.x3)),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
