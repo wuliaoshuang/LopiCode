@@ -26,6 +26,7 @@ import 'package:lopicode/lowcode/component_model.dart';
 import 'package:lopicode/lowcode/component_ops.dart';
 import 'package:lopicode/lowcode/export_bind_plan.dart';
 import 'package:lopicode/lowcode/export_live_doc.dart';
+import 'package:lopicode/lowcode/front_emit_bridge.dart';
 import 'package:lopicode/lowcode/logic_expr.dart';
 import 'package:lopicode/lowcode/logic_js_core.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
@@ -161,6 +162,9 @@ LcDocument lcFrameworkDoc(LcDocument doc) {
 }
 
 void _markEvents(LcDocument doc) {
+  // 新的页面逻辑（中途包·组件事件对接）：实例上的 `on` 不作数，接了帽子“当〔实例〕发出〔事件〕”的事件各落一条转发记号。
+  final front = doc.logic.front != null;
+  final hats = lcFrontEmitHats(doc.logic);
   void walk(LcNode n, int depth) {
     if (depth > LcNode.maxDepth * 2) return;
     // 先走子节点（填进插槽的东西里也可能有实例），再给自己加记号：免得走到刚加的记号节点上。
@@ -171,6 +175,16 @@ void _markEvents(LcDocument doc) {
     final ref = n.props['ref'];
     final def = ref is String ? doc.component(ref) : null;
     if (def == null) return;
+    if (front) {
+      for (final event in hats[n.id] ?? const <String>{}) {
+        final e = lcCompEvent(def, event);
+        final h = e == null ? null : doc.logic.addHandler(e.params.isEmpty ? 'click' : 'input', target: '${n.id}__on_$event');
+        if (e == null || h == null) continue;
+        h.body.add(lcEmitBridgeBlock(n.id, event));
+        n.children.add(LcNode(id: '${n.id}__on_$event', type: 'spacer', name: '${def.name}·${e.label}', more: {kLcEvtMark: event}));
+      }
+      return;
+    }
     lcOnOf(n).forEach((event, body) {
       final e = lcCompEvent(def, event);
       if (e == null) return;

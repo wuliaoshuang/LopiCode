@@ -17,7 +17,9 @@ import 'package:lopicode/lang/gen2_browser.dart';
 import 'package:lopicode/lang/gen_support.dart';
 import 'package:lopicode/lang/rt2_browser.dart';
 import 'package:lopicode/lowcode/export_framework_common.dart' show lcInitialLiteral;
+import 'package:lopicode/lowcode/export_live_doc.dart';
 import 'package:lopicode/lowcode/front_check.dart';
+import 'package:lopicode/lowcode/front_emit_bridge.dart';
 import 'package:lopicode/lowcode/logic_expr.dart' show kWritableProps;
 import 'package:lopicode/lowcode/logic_js.dart';
 import 'package:lopicode/lowcode/logic_libs.dart';
@@ -57,10 +59,12 @@ LcCoreJs? lcCoreJsFor(LcDocument doc, JsTarget target, List<String>? notes, {LcV
   final Set<(String, String)> props;
   String? program;
   if (front != null) {
+    // 组件实例摊开过的文档（纯网页）：对着页面的检查要对着摊开以前的页面查（实例还是实例）。
+    final source = lcExportSource(doc);
     final out = lcFrontProgram(front);
     final touch = lcFrontTouch(front);
     // 对着页面才查得出的错（帽子挂的控件没了、“这一项”用在重复外面、去页面少带参数……）也拦。
-    problems = [...out.problems, for (final i in lcFrontPageIssues(doc, doc.page, front)) '${i.where}：${i.problem}'];
+    problems = [...out.problems, for (final i in lcFrontPageIssues(source, source.pages.where((p) => p.id == doc.page.id).firstOrNull ?? doc.page, front)) '${i.where}：${i.problem}'];
     skipped = out.skipped;
     program = problems.isEmpty ? out.code : null;
     // 库里的函数可以按名字读写状态，所以页面声明过的状态全都进读写表。
@@ -159,6 +163,16 @@ LcCoreJs? lcCoreJsFor(LcDocument doc, JsTarget target, List<String>? notes, {LcV
   for (final h in doc.logic.handlers) {
     final node = h.target == null ? null : doc.find(h.target!);
     final String key, call;
+    final bridge = lcEmitBridgeOf(h);
+    if (bridge != null) {
+      // 组件实例发出来的事件（front_emit_bridge.dart）：转给页面宿主，帽子“当〔实例〕发出〔事件〕”登记在 (实例, "emit:事件名") 上。
+      // 组件文件发的：数据在事件对象的 detail 里；摊开的实例：数据是一个个式子，当场算。
+      final data = bridge.data;
+      final writer = JsLogicWriter(doc, target, lookup: lookup);
+      final lcData = data == null ? '(event && event.detail) || {}' : '{ ${[for (final d in data.entries) '${jsString(d.key)}: ${writer.expr(d.value).code}'].join(', ')} }';
+      bodies.add(['lcPage.emit(${jsString(bridge.instance)}, ${jsString('emit:${bridge.event}')}, { lcData: $lcData });']);
+      continue;
+    }
     if (h.event == 'load') {
       key = 'load';
       call = 'lcPage.emitLife("mounted");';
@@ -209,7 +223,19 @@ String exportCoreLogicJs(LcDocument doc, {List<String>? notes}) {
     ..writeln('// 页面准备好以后：开工（处理都挂到控件上），再做“当页面放上以后”。')
     ..writeln('let lcPage = null;')
     ..writeln('function lcStart() {')
-    ..writeln('  lcPage = lcBoot();')
+    ..writeln('  lcPage = lcBoot();');
+  // 摊开的组件实例往外发事件：页面宿主自己不会去挂（它只挂帽子点名的控件），这里替它把“组件里的那个控件”接上。
+  for (var i = 0; i < doc.logic.handlers.length; i++) {
+    final h = doc.logic.handlers[i];
+    final node = h.target == null ? null : doc.find(h.target!);
+    if (lcEmitBridgeOf(h) == null || core.body(i).isEmpty || node == null || !isSafeNodeId(node.id) || (h.event != 'click' && h.event != 'input')) continue;
+    out.writeln('  lcOn(${jsString(node.id)}, "${h.event}", (event) => {');
+    for (final line in core.body(i)) {
+      out.writeln('    $line');
+    }
+    out.writeln('  });');
+  }
+  out
     ..writeln('  lcPage.emitLife("mounted");')
     ..writeln('}')
     ..writeln()
