@@ -53,6 +53,7 @@ class BeServiceBuilt {
     this.split = false,
     this.libs = const [],
     this.service = true,
+    this.holes = const [],
   });
   final LProgram? program;
   final List<String> problems;
@@ -77,6 +78,9 @@ class BeServiceBuilt {
 
   /// 程序里带上的库（带了“接口服务”的话它排第一个）。
   final List<LibLibrary> libs;
+
+  /// 翻的时候“当成空的”那些地方（没填好的格子、没声明的集合这种），每条前面带着是哪一串。
+  final List<String> holes;
 
   /// 带没带“接口服务”库（没带＝一个跑完就结束的程序，不开服务）。
   final bool service;
@@ -291,6 +295,36 @@ class _Bridge implements BeLibBridge {
   }
 }
 
+/// 这些定义和语句里有没有提到 [lib] 的模块里的名字（“等一会儿”这种不经积木表、直接调库里函数的）。
+bool _mentions(LibLibrary lib, List<LDecl> decls, List<LStmt> body) {
+  final names = {
+    for (final m in lib.modules)
+      for (final d in m.decls) d.name,
+  };
+  var hit = false;
+  void expr(LExpr e) {
+    if (e is LName && names.contains(e.name)) hit = true;
+    if (!hit) lExprChildren(e).forEach(expr);
+  }
+
+  void stmts(List<LStmt> list) => lWalkExprs(list, expr);
+  stmts(body);
+  for (final d in decls) {
+    switch (d) {
+      case LFuncDecl():
+        stmts(d.body);
+      case LClassDecl():
+        stmts(d.ctor?.body ?? const []);
+        for (final m in d.methods) {
+          stmts(m.fn.body);
+        }
+      default:
+        break;
+    }
+  }
+  return hit;
+}
+
 /// 库的定义画布上那两块积木翻出来的记号（只在翻库的时候出现，写出器把它们写成模板里的洞；见 backend_lib_build.dart）。
 const String kBeLibMouthMark = '@口';
 const String kBeLibPutMark = '@放进';
@@ -487,6 +521,7 @@ BeServiceBuilt beServiceBuild(BeDocument doc, {bool shadow = false}) {
     }
 
     // 带不带“接口服务”：没碰库的文档照旧一定带；用了库的文档，有接口、用了它的积木、或者哪个库靠着它才带。
+    if (doc.usesLibs && !flags.service) flags.service = _mentions(lib, [for (final d in decls) d.decl], [...routes, ...main]);
     final service = !doc.usesLibs || flags.service || userLibs.any((l) => l.requires.contains(kBeServiceLibId));
     final libs = [if (service) lib, ...userLibs];
     final inits = <LStmt>[], starts = <LStmt>[];
@@ -511,7 +546,10 @@ BeServiceBuilt beServiceBuild(BeDocument doc, {bool shadow = false}) {
               if (m.name != own.entry) m,
             linked.modules.last,
           ], entry: own.entry);
-    return BeServiceBuilt(program: program, problems: problems, skipped: skipped, decls: decls, body: body, trees: trees, lowers: lowers, names: names, lambdas: lambdas, split: own != null, libs: libs, service: service);
+    return BeServiceBuilt(program: program, problems: problems, skipped: skipped, decls: decls, body: body, trees: trees, lowers: lowers, names: names, lambdas: lambdas, split: own != null, libs: libs, service: service, holes: [
+      for (final e in lowers.entries)
+        for (final n in e.value.host.swapNotes([])) '${names[e.key] ?? e.key}：$n',
+    ]);
   } on Object catch (e) {
     return BeServiceBuilt(problems: [...problems, '积木翻不成语法树（$e）'], skipped: skipped);
   }

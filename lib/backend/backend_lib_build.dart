@@ -69,6 +69,51 @@ CustomBlockLook _look(CustomBlockLook base, List<String> params, bool Function(S
   );
 }
 
+/// 原地展开的积木，定义里用到的库里的函数、类、模块级变量都算公开：展开以后那几句是在用的人的程序里跑的，得看得见它们。
+void _publishUsed(BeDocument doc, BeFunction f) {
+  final core = doc.core;
+  void value(Object? v, int depth) {
+    if (depth > 64) return;
+    if (v is List) {
+      for (final x in v) {
+        value(x, depth + 1);
+      }
+      return;
+    }
+    if (v is! Map) return;
+    final e = v['e'];
+    if (e is String) {
+      final callee = beCallId(e);
+      if (callee != null) core.publics.add(callee);
+      if (e == 'funcRef' && v['fn'] is String) core.publics.add(v['fn'] as String);
+      if (e == 'var' && v['name'] is String) {
+        final g = core.global(v['name'] as String);
+        if (g != null) core.publics.add(g.key);
+      }
+    }
+    for (final key in const ['type', 'kind']) {
+      final name = v[key];
+      final t = name is String ? core.types.where((t) => t.name == name).firstOrNull : null;
+      if (t != null) core.publics.add(t.id);
+    }
+    for (final x in v.values) {
+      value(x, depth + 1);
+    }
+  }
+
+  f.visitBlocks((b, _) {
+    final callee = beCallId(b.op);
+    if (callee != null) core.publics.add(callee);
+    final name = b.args['name'];
+    final g = name is String ? core.global(name) : null;
+    if (g != null) core.publics.add(g.key);
+    value(b.args, 0);
+    for (final a in b.arms) {
+      value(a.args, 0);
+    }
+  });
+}
+
 /// 有没有哪里把这个函数当普通函数调了（`call:<id>`）；返回那几处所在的串的名字。
 List<String> _callers(BeDocument doc, String fnId) {
   final op = beCallOp(fnId);
@@ -135,6 +180,7 @@ BeLibBuilt _build(BeDocument source, BeLibInfo info, List<String> problems) {
         core.publics.add(f.id);
       } else {
         core.publics.remove(f.id);
+        _publishUsed(doc, f);
         final callers = _callers(doc, f.id);
         if (callers.contains(f.name)) {
           problems.add('积木「${f.name}」是原地展开的，它的定义里又用了它自己（递归展开）：这样永远展不完。改成“调函数”的办法，或者把重复的部分换成循环');
@@ -162,6 +208,7 @@ BeLibBuilt _build(BeDocument source, BeLibInfo info, List<String> problems) {
   final built = beServiceBuild(doc);
   final program = built.program;
   if (program == null || built.problems.isNotEmpty) return _fail([...problems, ...built.problems, if (program == null && built.problems.isEmpty) '积木翻不成语法树']);
+  if (built.holes.isNotEmpty) return _fail([for (final h in built.holes.toSet()) '有没填好的地方（$h）']);
   final theirs = {for (final l in built.libs) ...l.moduleNames};
   final own = [
     for (final m in program.modules)

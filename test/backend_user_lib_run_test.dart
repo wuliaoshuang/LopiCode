@@ -13,12 +13,13 @@ import 'package:lopicode/lang/gen2_all.dart';
 
 import 'support/backend_lang_blocks.dart';
 import 'support/gen2_run.dart';
+import 'support/gen2_serve.dart';
 import 'support/user_libs.dart';
 
 void main() {
   final cases = <(String, J Function(), List<J Function()>, String)>[
     ('校验器（类与接口）', checkUserDoc, [checkLibDoc], kCheckWant),
-    ('流程（帽子、隐含的东西、带口）', flowUserDoc, [flowLibDoc], kFlowWant.substring(1)),
+    ('流程（帽子、隐含的东西、带口）', flowUserDoc, [flowLibDoc], kFlowWant),
   ];
   for (final (name, user, libs, want) in cases) {
     for (final language in kGen2Languages) {
@@ -36,6 +37,38 @@ void main() {
         final run = await gen2RunFiles(language, gen.files!);
         expect(run.problem, isNull, reason: language);
         expect(utf8.decode(run.stdout), want, reason: language);
+      });
+    }
+  }
+
+  // 开着服务的两个库：对着真起来的服务逐条发请求，状态码和内容逐字节比。
+  final served = <(String, J Function(), List<J Function()>, List<(String, String, int, String)>)>[
+    ('待办（叠在接口服务上）', todoUserDoc, [todoLibDoc], kTodoCases),
+    ('批量任务（要等的事）', batchUserDoc, [batchLibDoc], const [('GET', '/go', 200, kBatchWant), ('GET', '/go', 200, kBatchWant)]),
+  ];
+  for (final (name, user, libs, wants) in served) {
+    for (final language in kGen2Languages) {
+      test('$name · $language', () async {
+        final doc = userDocument({...user(), 'language': language}, [for (final l in libs) buildUserLib(l()).lib]);
+        final gen = beServiceGenerate(doc, language);
+        expect(gen.problem, isNull);
+        final skip = gen2SkipReason(language);
+        if (skip != null) {
+          // ignore: avoid_print — 跳过的原因要让跑测试的人看见
+          print('跳过：$skip');
+          markTestSkipped(skip);
+          return;
+        }
+        final server = await gen2Serve(language, gen.files!);
+        try {
+          for (final (method, target, status, want) in wants) {
+            final reply = await server.send(method, target);
+            expect(utf8.decode(reply.body), want, reason: '$method $target\n${server.stderrText}');
+            expect(reply.status, status, reason: '$method $target');
+          }
+        } finally {
+          await server.stop();
+        }
       });
     }
   }

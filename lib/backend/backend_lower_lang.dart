@@ -178,7 +178,7 @@ class BeLangLower {
   bool knows(Object? name) {
     if (name is! String || !beNamePattern.hasMatch(name)) return false;
     if (host.useDocVar(name)) return true;
-    return shadow || locals.containsKey(name);
+    return shadow || locals.containsKey(name) || core?.global(name) != null;
   }
 
   // —— 式子 ——
@@ -198,7 +198,7 @@ class BeLangLower {
       case 'var':
         final name = exprField(e, 'name');
         if (name is! String || !beNamePattern.hasMatch(name) || host.useDocVar(name)) return null;
-        return shadow || locals.containsKey(name) ? lang(LName(name, src: _src())) : null;
+        return shadow || locals.containsKey(name) || core?.global(name) != null ? lang(LName(name, src: _src())) : null;
       case 'pow':
         return lang(LBinary('**', sub('a'), sub('b'), src: _src()));
       case 'obj':

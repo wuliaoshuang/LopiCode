@@ -6,13 +6,14 @@ import 'package:lopicode/backend/backend_lib_doc.dart';
 import 'package:lopicode/backend/backend_model.dart';
 import 'package:lopicode/lang/lib_model.dart';
 import 'package:lopicode/lang/types.dart';
+import 'package:lopicode/lang/types_json.dart';
 
 import 'backend_core_samples.dart';
 import 'backend_func_blocks.dart';
 import 'backend_lang_blocks.dart';
 
 /// 库文档：在核心文档上多一节 `library`；库里没有“程序开始时”。
-J libDoc(String name, String id, {List<J> types = const [], List<J> functions = const [], List<J> globals = const [], List<String> public = const [], required List<J> blocks, List<J> settings = const [], List<J> uses = const [], String author = '霜霜'}) => {
+J libDoc(String name, String id, {List<String> collections = const [], List<J> types = const [], List<J> functions = const [], List<J> globals = const [], List<String> public = const [], required List<J> blocks, List<J> settings = const [], List<J> uses = const [], String author = '霜霜'}) => {
   'version': 5,
   'kind': 'backend',
   'name': name,
@@ -25,6 +26,7 @@ J libDoc(String name, String id, {List<J> types = const [], List<J> functions = 
     if (globals.isNotEmpty) 'globals': globals,
     if (public.isNotEmpty) 'public': public,
   },
+  if (collections.isNotEmpty) 'collections': [for (final c in collections) {'name': c}],
   'library': {'id': id, 'version': '1.0.0', 'author': author, if (settings.isNotEmpty) 'settings': settings, 'blocks': blocks},
   if (uses.isNotEmpty) 'uses': uses,
 };
@@ -257,3 +259,152 @@ const String kFlowWant = '''
 收工 「乙」
 一共记了 6 笔
 ''';
+
+// ———————————————————— (a) 带接口的小服务用的库：待办（叠在内置“接口服务”库上） ————————————————————
+// 待办放在“接口服务”的数据集合 todos 里（PHP 每次请求都从头跑一遍程序，放在模块级变量里的东西留不到下一次请求）。
+const String kLibTodo = 'shuang/todo';
+final J _tAny = lTypeToJson(LType.any);
+J _get(J id) => ex('dbGet', {'collection': 'todos', 'id': id});
+J todoLibDoc() => libDoc(
+  '待办',
+  kLibTodo,
+  collections: ['todos'],
+  functions: [
+    tfn('f1', '加待办', [tpar('标题', tText)], [
+      blk('let', {'name': 'saved', 'value': ex('null'), 'type': _tAny}),
+      blk('dbInsert', {'collection': 'todos', 'value': dc({'title': pm('标题'), 'done': no()}), 'into': 'saved'}),
+      ret(vr('saved')),
+    ], returns: _tAny),
+    tfn('f2', '全部待办', [], [ret(ex('dbAll', {'collection': 'todos'}))], returns: lTypeToJson(const LType.listOf(LType.any))),
+    tfn('f4', '标成做完', [tpar('号', tText)], [
+      konst('it', _get(pm('号'))),
+      iff(op2('==', vr('it'), ex('null')), [ret(no())], noElse: true),
+      blk('dbUpdate', {'collection': 'todos', 'id': pm('号'), 'value': dc({'title': ex('field', {'of': vr('it'), 'key': 'title'}), 'done': yes()})}),
+      ret(yes()),
+    ], returns: tBool),
+    tfn('f5', '删待办', [tpar('号', tText)], [
+      iff(op2('==', _get(pm('号')), ex('null')), [ret(no())], noElse: true),
+      blk('dbDelete', {'collection': 'todos', 'id': pm('号')}),
+      ret(yes()),
+    ], returns: tBool),
+    tfn('f6', '请求里的标题', [tpar('r', tRef('请求'))], [
+      ret(ex('orElse', {'x': q('title'), 'd': tx('')})),
+    ], returns: tText),
+    tfn('f7', '回清单', [], [json(call('f2'))]),
+    tfn('f8', '要有标题', [tpar('r', tRef('请求'))], [
+      iff(op2('==', call('f6', {'r': pm('r')}), tx('')), [text(tx('要写标题'), 400)], noElse: true),
+    ]),
+    tfn('f9', '回一条', [tpar('号', tText)], [
+      konst('it', _get(pm('号'))),
+      iff(op2('==', vr('it'), ex('null')), [text(tx('没有这一条'), 404)], noElse: true),
+      json(vr('it')),
+    ]),
+  ],
+  blocks: [
+    def('add', 'call', fn: 'f1', look: look('加一条待办', '加一条待办 {标题}')),
+    def('title', 'call', fn: 'f6', look: look('请求里的标题', '这次请求里的标题'), params: {'r': fromContext('请求')}),
+    def('done', 'call', fn: 'f4', look: look('标成做完', '把 {号} 标成做完')),
+    def('remove', 'call', fn: 'f5', look: look('删待办', '删掉 {号}')),
+    def('respondAll', 'expand', fn: 'f7', look: look('回清单', '返回全部待办'), shape: 'cap'),
+    def('needTitle', 'expand', fn: 'f8', look: look('要有标题', '没写标题就回 400'), params: {'r': fromContext('请求')}),
+    def('respondOne', 'expand', fn: 'f9', look: look('回一条', '返回 {号} 这一条'), shape: 'cap'),
+  ],
+);
+
+J _id() => ex('orElse', {'x': ex('pathParam', {'name': 'id'}), 'd': tx('')});
+J todoUserDoc() => {
+  ...coreDoc('用待办', main: [blk('sleep', {'ms': nm(1)})]),
+  'version': 5,
+  'uses': [use(kLibTodo)],
+  'routes': [
+    route('r1', 'POST', '/todos', [
+      lb(kLibTodo, 'needTitle'),
+      json(lx(kLibTodo, 'add', {'标题': lx(kLibTodo, 'title')}), 201),
+    ]),
+    route('r2', 'GET', '/todos', [lb(kLibTodo, 'respondAll')]),
+    route('r3', 'GET', '/todos/:id', [
+      lb(kLibTodo, 'respondOne', {'号': _id()}),
+    ]),
+    route('r4', 'POST', '/todos/:id/done', [
+      iff(lx(kLibTodo, 'done', {'号': _id()}), [text(tx('好'))], orElse: [text(tx('没有这一条'), 404)]),
+    ]),
+    route('r5', 'DELETE', '/todos/:id', [
+      iff(lx(kLibTodo, 'remove', {'号': _id()}), [text(tx('删了'))], orElse: [text(tx('没有这一条'), 404)]),
+    ]),
+  ],
+};
+
+/// 待办服务的请求和预期：方式、路径、状态码、内容。
+const List<(String, String, int, String)> kTodoCases = [
+  ('POST', '/todos', 400, '要写标题'),
+  ('POST', '/todos?title=%E4%B9%B0%E8%8F%9C', 201, '{"done":false,"id":1,"title":"买菜"}'),
+  ('POST', '/todos?title=write%20%22lib%22', 201, '{"done":false,"id":2,"title":"write \\"lib\\""}'),
+  ('GET', '/todos', 200, '[{"done":false,"id":1,"title":"买菜"},{"done":false,"id":2,"title":"write \\"lib\\""}]'),
+  ('POST', '/todos/1/done', 200, '好'),
+  ('POST', '/todos/9/done', 404, '没有这一条'),
+  ('GET', '/todos/1', 200, '{"done":true,"id":1,"title":"买菜"}'),
+  ('GET', '/todos/9', 404, '没有这一条'),
+  ('DELETE', '/todos/2', 200, '删了'),
+  ('DELETE', '/todos/2', 404, '没有这一条'),
+  ('GET', '/todos', 200, '[{"done":true,"id":1,"title":"买菜"}]'),
+];
+
+// ———————————————————— (d) 用到“要等的事”的库：批量任务 ————————————————————
+const String kLibBatch = 'shuang/batch';
+J batchLibDoc() => libDoc(
+  '批量任务',
+  kLibBatch,
+  functions: [
+    tfn('f1', '慢慢平方', [tpar('n', tInt), tpar('ms', tInt)], [
+      blk('sleep', {'ms': pm('ms')}),
+      ret(op2('*', pm('n'), pm('n'))),
+    ], returns: tInt),
+    tfn('f2', '一起平方', [tpar('数们', tList(LType.integer)), tpar('ms', tInt)], [
+      ret(ex('awaitAll', {'list': hof('listMap', pm('数们'), arrow(['n'], ex('spawnOf', {'x': call('f1', {'n': pm('n'), 'ms': pm('ms')})})))})),
+    ], returns: tList(LType.integer)),
+    tfn('f3', '限时平方', [tpar('n', tInt), tpar('ms', tInt), tpar('最多', tInt)], [
+      tryB([
+        konst('v', ex('awaitMax', {'x': ex('spawnOf', {'x': call('f1', {'n': pm('n'), 'ms': pm('ms')})}), 'ms': pm('最多')})),
+        ret(cat([tx('算出 '), vr('v')])),
+      ], [
+        catchArm('超时', 'e', [ret(tx('超时了'))]),
+      ]),
+      ret(tx('')),
+    ], returns: tText),
+    tfn('f4', '限时做', [tpar('毫秒', tInt)], [
+      blk('spawn', {'name': 'job'}, [mouth('做')]),
+      tryB([
+        blk('do', {'value': ex('awaitMax', {'x': vr('job'), 'ms': pm('毫秒')})}),
+      ], [
+        catchArm('超时', 'e', [
+          blk('cancel', {'x': vr('job')}),
+          mouth('超时了'),
+        ]),
+      ]),
+    ]),
+  ],
+  blocks: [
+    def('together', 'call', fn: 'f2', look: look('一起平方', '一起算 {数们} 的平方，每个花 {ms} 毫秒')),
+    def('timed', 'call', fn: 'f3', look: look('限时平方', '算 {n} 的平方（要 {ms} 毫秒），最多等 {最多} 毫秒')),
+    def('within', 'expand', fn: 'f4', look: look('限时做', '最多花 {毫秒} 毫秒做'), mouths: ['做', '超时了']),
+  ],
+);
+
+J batchUserDoc() => {
+  ...coreDoc('用批量任务', main: [blk('sleep', {'ms': nm(1)})]),
+  'version': 5,
+  'uses': [use(kLibBatch)],
+  'routes': [
+    route('r1', 'GET', '/go', [
+      konst('all', lx(kLibBatch, 'together', {'数们': ls([nm(3), nm(1), nm(2)]), 'ms': nm(40)})),
+      konst('fast', lx(kLibBatch, 'timed', {'n': nm(4), 'ms': nm(20), '最多': nm(800)})),
+      konst('slow', lx(kLibBatch, 'timed', {'n': nm(4), 'ms': nm(900), '最多': nm(60)})),
+      let('a', tx('没动')),
+      lb(kLibBatch, 'within', {'毫秒': nm(800)}, [blk('sleep', {'ms': nm(10)}), setv('a', tx('做完'))], [setv('a', tx('超时'))]),
+      let('b', tx('没动')),
+      lb(kLibBatch, 'within', {'毫秒': nm(50)}, [blk('sleep', {'ms': nm(900)}), setv('b', tx('做完'))], [setv('b', tx('超时'))]),
+      text(cat([vr('all'), tx('｜'), vr('fast'), tx('｜'), vr('slow'), tx('｜'), vr('a'), tx('｜'), vr('b')])),
+    ]),
+  ],
+};
+const String kBatchWant = '[9,1,4]｜算出 16｜超时了｜做完｜超时';
