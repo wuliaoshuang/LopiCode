@@ -42,12 +42,16 @@ class DartPageJumps {
 DartPageJumps? dartPageJumps;
 
 /// 多页面导出的文件末尾带的两个小函数：叠一页上去（能返回）、换成另一页（底部导航用）。
-const String kDartPageHelpers = '''
+/// 用到哪个带哪个（没用到的不写，免得导出的文件里有“写了没用上”的警告）。
+const String _kDartGoTo = '''
 
 /// 去另一页（叠在当前页上面，系统的返回能回来）。
 void _lcGoTo(BuildContext context, Widget page) {
   Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => page));
 }
+''';
+
+const String _kDartSwitchTo = '''
 
 /// 换成另一页（底部导航用：不往上叠）。page 是 null＝这一项没设去哪页，什么都不做。
 void _lcSwitchTo(BuildContext context, Widget? page) {
@@ -55,6 +59,9 @@ void _lcSwitchTo(BuildContext context, Widget? page) {
   Navigator.of(context).pushReplacement(MaterialPageRoute<void>(builder: (_) => page));
 }
 ''';
+
+/// [code]（各页的类）里用到的跳页小函数。
+String dartPageHelpersFor(String code) => '${code.contains('_lcGoTo(') ? _kDartGoTo : ''}${code.contains('_lcSwitchTo(') ? _kDartSwitchTo : ''}';
 
 /// 当“在一行里”的父节点用（插槽里的子组件横着排：撑满的用 Expanded，输入框给固定宽度）。
 final LcNode _rowParent = LcNode(id: '_slot', type: 'row');

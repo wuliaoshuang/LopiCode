@@ -64,7 +64,7 @@ class CompTagsPageState extends State<CompTagsPage> {
                       spacing: 6,
                       children: [
                         if (_lcList(s_tagList).isEmpty) Text('还没有标签'),
-                        for (final (v_i, v_it) in _lcList(s_tagList).indexed) Flexible(
+                        for (final v_it in _lcList(s_tagList)) Flexible(
                           child: Text(
                             _lcText(v_it),
                             style: TextStyle(color: _lcColor(_lcBool(_lcEq(v_it, s_cur)) ? '#1565C0' : null), height: 1.5),

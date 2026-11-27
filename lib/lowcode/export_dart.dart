@@ -59,7 +59,7 @@ String exportDart(LcDocument source, {String? className}) {
     dartPageJumps = null;
     doc.openPageAt(keep);
   }
-  return file(classes, kDartPageHelpers);
+  return file(classes, dartPageHelpersFor(classes.join()));
 }
 
 /// 项目里有哪一页用了新的页面逻辑时，导出文件开头的那句话。

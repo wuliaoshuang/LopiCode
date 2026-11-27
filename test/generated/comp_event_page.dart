@@ -49,7 +49,7 @@ class CompEventPageState extends State<CompEventPage> {
                       crossAxisAlignment: CrossAxisAlignment.center,
                       spacing: 6,
                       children: [
-                        for (final (v_i, v_it) in _lcList(s_tagList).indexed) FilledButton(
+                        for (final v_it in _lcList(s_tagList)) FilledButton(
                           onPressed: () { update(() => s_cur = _lcText(v_it)); },
                           style: FilledButton.styleFrom(),
                           child: Text(_lcText(v_it)),

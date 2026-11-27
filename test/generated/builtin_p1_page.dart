@@ -241,12 +241,6 @@ void _lcGoTo(BuildContext context, Widget page) {
   Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => page));
 }
 
-/// 换成另一页（底部导航用：不往上叠）。page 是 null＝这一项没设去哪页，什么都不做。
-void _lcSwitchTo(BuildContext context, Widget? page) {
-  if (page == null) return;
-  Navigator.of(context).pushReplacement(MaterialPageRoute<void>(builder: (_) => page));
-}
-
 /// 当成数字（转不了的当 0）。
 num _lcNum(Object? v) {
   final n = switch (v) {
