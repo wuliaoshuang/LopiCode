@@ -97,6 +97,7 @@ class _ComponentEditorState extends State<_ComponentEditor> with LcMultiSelectHo
   /// 正在改哪个变体的样子（`组/名字`）；null＝改的是平时的样子。[_base]：进去时每个控件平时的样式。
   String? _variant;
   Map<String, Map<String, String>> _base = const {};
+  Map<String, Map<String, dynamic>> _baseLook = const {};
 
   /// 现在看的是哪一档屏宽（null＝手机）。和搭建页一样：不是手机时，“样式”页改的只记成这一档的差别。
   String? _bp;
@@ -130,18 +131,19 @@ class _ComponentEditorState extends State<_ComponentEditor> with LcMultiSelectHo
       if (v.key != key) continue;
       setState(() {
         _base = lcSnapshotStyles(top);
+        _baseLook = lcSnapshotLookProps(top);
         lcOverlayVariant(top, v);
         _variant = key;
         _history = LcHistory(_temp);
       });
-      showEditorHint(context, '现在改的是变体「${v.label}」：在“样式”页里改，只记和平时不一样的地方');
+      showEditorHint(context, '现在改的是变体「${v.label}」：在“常用”“样式”页里改，只记和平时不一样的地方');
       return;
     }
   }
 
   void _leaveVariant() => setState(() {
     final top = _top;
-    if (top != null) lcRestoreStyles(top, _base);
+    if (top != null) lcRestoreStyles(top, _base, _baseLook);
     _variant = null;
     _history = LcHistory(_temp);
   });
@@ -187,9 +189,9 @@ class _ComponentEditorState extends State<_ComponentEditor> with LcMultiSelectHo
         return;
       }
       // 正在改变体：定义本身按平时的样式写回，和平时不一样的那几条记成这个变体。
-      final diff = lcVariantDiff(top, _base);
+      final diff = lcVariantDiff(top, _base, _baseLook);
       final plain = LcDocument.parse(_temp.encode());
-      if (plain.root.children.length == 1) lcRestoreStyles(plain.root.children.single, _base);
+      if (plain.root.children.length == 1) lcRestoreStyles(plain.root.children.single, _base, _baseLook);
       result = applyComponentEditing(d, widget.componentId, plain);
       if (result?.error == null) lcSaveVariantStyles(d, widget.componentId, key, diff);
     });
