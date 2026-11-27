@@ -7,7 +7,7 @@ class V3HomePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-        backgroundColor: const Color(0xFFFFFFFF),
+        backgroundColor: Color(0xFFFFFFFF),
         appBar: AppBar(
           primary: true,
           automaticallyImplyLeading: false,
@@ -15,18 +15,18 @@ class V3HomePage extends StatelessWidget {
             spacing: 8,
             children: [
               Expanded(child: Text('首页')),
-              Icon(Icons.search, size: 24, color: const Color(0xFFFFFFFF)),
+              Icon(Icons.search, size: 24, color: Color(0xFFFFFFFF)),
             ],
           ),
           centerTitle: false,
-          backgroundColor: const Color(0xFF058654),
-          foregroundColor: const Color(0xFFFFFFFF),
+          backgroundColor: Color(0xFF058654),
+          foregroundColor: Color(0xFFFFFFFF),
         ),
         bottomNavigationBar: NavigationBar(
           selectedIndex: 0,
           onDestinationSelected: (index) {},
-          backgroundColor: const Color(0xFFFFFFFF),
-          indicatorColor: const Color(0x33058654),
+          backgroundColor: Color(0xFFFFFFFF),
+          indicatorColor: Color(0x33058654),
           destinations: [
             NavigationDestination(icon: Icon(Icons.home), label: '首页'),
             NavigationDestination(icon: Icon(Icons.search), label: '发现'),
@@ -35,7 +35,7 @@ class V3HomePage extends StatelessWidget {
         ),
         body: SafeArea(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
+            padding: EdgeInsets.all(16),
             child: SizedBox(
               width: double.infinity,
               child: Column(
@@ -45,71 +45,77 @@ class V3HomePage extends StatelessWidget {
                 children: [
                   Container(
                     width: double.infinity,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            spacing: 4,
-                            children: [
-                              Icon(Icons.edit, size: 28, color: const Color(0xFF058654)),
-                              Text(
-                                '订单',
-                                style: const TextStyle(fontSize: 13, height: 1.5),
+                    child: LayoutBuilder(
+                      builder: (context, box) {
+                        // 网格：4 列等宽。lcGridW 是一格的宽度。
+                        final lcGridW = ((box.maxWidth.isFinite ? box.maxWidth : MediaQuery.sizeOf(context).width) - 8 * 3) / 4;
+                        return Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            SizedBox(width: _lcCell(lcGridW, 1, 8), child: Container(
+                              padding: EdgeInsets.all(8),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                spacing: 4,
+                                children: [
+                                  Icon(Icons.edit, size: 28, color: Color(0xFF058654)),
+                                  Text(
+                                    '订单',
+                                    style: TextStyle(fontSize: 13, height: 1.5),
+                                  ),
+                                ],
                               ),
-                            ],
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            spacing: 4,
-                            children: [
-                              Icon(Icons.favorite, size: 28, color: const Color(0xFF058654)),
-                              Text(
-                                '收藏',
-                                style: const TextStyle(fontSize: 13, height: 1.5),
+                            )),
+                            SizedBox(width: _lcCell(lcGridW, 1, 8), child: Container(
+                              padding: EdgeInsets.all(8),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                spacing: 4,
+                                children: [
+                                  Icon(Icons.favorite, size: 28, color: Color(0xFF058654)),
+                                  Text(
+                                    '收藏',
+                                    style: TextStyle(fontSize: 13, height: 1.5),
+                                  ),
+                                ],
                               ),
-                            ],
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            spacing: 4,
-                            children: [
-                              Icon(Icons.download, size: 28, color: const Color(0xFF058654)),
-                              Text(
-                                '下载',
-                                style: const TextStyle(fontSize: 13, height: 1.5),
+                            )),
+                            SizedBox(width: _lcCell(lcGridW, 1, 8), child: Container(
+                              padding: EdgeInsets.all(8),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                spacing: 4,
+                                children: [
+                                  Icon(Icons.download, size: 28, color: Color(0xFF058654)),
+                                  Text(
+                                    '下载',
+                                    style: TextStyle(fontSize: 13, height: 1.5),
+                                  ),
+                                ],
                               ),
-                            ],
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            spacing: 4,
-                            children: [
-                              Icon(Icons.mail, size: 28, color: const Color(0xFF058654)),
-                              Text(
-                                '邮件',
-                                style: const TextStyle(fontSize: 13, height: 1.5),
+                            )),
+                            SizedBox(width: _lcCell(lcGridW, 1, 8), child: Container(
+                              padding: EdgeInsets.all(8),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                spacing: 4,
+                                children: [
+                                  Icon(Icons.mail, size: 28, color: Color(0xFF058654)),
+                                  Text(
+                                    '邮件',
+                                    style: TextStyle(fontSize: 13, height: 1.5),
+                                  ),
+                                ],
                               ),
-                            ],
-                          ),
-                        ),
-                      ],
+                            )),
+                          ],
+                        );
+                      },
                     ),
                   ),
                   SizedBox(
@@ -122,14 +128,14 @@ class V3HomePage extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           TabBar(
-                            labelColor: const Color(0xFF058654),
-                            indicatorColor: const Color(0xFF058654),
+                            labelColor: Color(0xFF058654),
+                            indicatorColor: Color(0xFF058654),
                             tabs: [
                               Tab(text: '热门'),
                               Tab(text: '最新'),
                             ],
                           ),
-                          const SizedBox(height: 12),
+                          SizedBox(height: 12),
                           Builder(
                             builder: (context) {
                               final tabs = DefaultTabController.of(context);
@@ -143,8 +149,8 @@ class V3HomePage extends StatelessWidget {
                                       SizedBox(
                                         width: double.infinity,
                                         child: Container(
-                                          constraints: const BoxConstraints(minHeight: 48),
-                                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                          constraints: BoxConstraints(minHeight: 48),
+                                          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                                           child: Row(
                                             spacing: 12,
                                             children: [
@@ -154,11 +160,11 @@ class V3HomePage extends StatelessWidget {
                                                   crossAxisAlignment: CrossAxisAlignment.start,
                                                   children: [
                                                     Text('第一条热门'),
-                                                    Text('刚刚', style: const TextStyle(fontSize: 13, color: Color(0xFF5C6479))),
+                                                    Text('刚刚', style: TextStyle(fontSize: 13, color: Color(0xFF5C6479))),
                                                   ],
                                                 ),
                                               ),
-                                              const Icon(Icons.chevron_right, size: 20, color: Color(0xFF8B93A7)),
+                                              Icon(Icons.chevron_right, size: 20, color: Color(0xFF8B93A7)),
                                             ],
                                           ),
                                         ),
@@ -166,8 +172,8 @@ class V3HomePage extends StatelessWidget {
                                       SizedBox(
                                         width: double.infinity,
                                         child: Container(
-                                          constraints: const BoxConstraints(minHeight: 48),
-                                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                          constraints: BoxConstraints(minHeight: 48),
+                                          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                                           child: Row(
                                             spacing: 12,
                                             children: [
@@ -177,11 +183,11 @@ class V3HomePage extends StatelessWidget {
                                                   crossAxisAlignment: CrossAxisAlignment.start,
                                                   children: [
                                                     Text('第二条热门'),
-                                                    Text('一小时前', style: const TextStyle(fontSize: 13, color: Color(0xFF5C6479))),
+                                                    Text('一小时前', style: TextStyle(fontSize: 13, color: Color(0xFF5C6479))),
                                                   ],
                                                 ),
                                               ),
-                                              const Icon(Icons.chevron_right, size: 20, color: Color(0xFF8B93A7)),
+                                              Icon(Icons.chevron_right, size: 20, color: Color(0xFF8B93A7)),
                                             ],
                                           ),
                                         ),
@@ -194,7 +200,7 @@ class V3HomePage extends StatelessWidget {
                                     children: [
                                       Text(
                                         '最新的内容在这里',
-                                        style: const TextStyle(height: 1.5),
+                                        style: TextStyle(height: 1.5),
                                       ),
                                     ],
                                   ),
@@ -213,4 +219,10 @@ class V3HomePage extends StatelessWidget {
         ),
       );
   }
+}
+
+/// 网格里跨 span 列的格子有多宽。
+double _lcCell(double column, int span, double gap) {
+  final w = column * span + gap * (span - 1);
+  return w.isFinite && w > 0 ? w : 0;
 }

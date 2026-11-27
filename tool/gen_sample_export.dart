@@ -4,6 +4,8 @@ import 'dart:io';
 
 import 'package:lopicode/lowcode/export_dart.dart';
 
+import '../test/support/bind_sample.dart';
+import '../test/support/dart_live_sample.dart';
 import '../test/support/pages_sample.dart';
 import '../test/support/sample_doc.dart';
 import '../test/support/slot_sample.dart';
@@ -26,5 +28,8 @@ void main() {
   File('test/generated/pages_page.dart').writeAsStringSync(exportDart(pagesSample(), className: 'PagesHomePage'));
   // 第 4 期 B2：带主题变量和断点的两页样例（test/lowcode_theme_bp_export_test.dart 会 import 它）。
   File('test/generated/theme_bp_page.dart').writeAsStringSync(exportDart(themeBpSample(), className: 'ThemeBpHomePage'));
+  // 第四轮 B1：带状态和 8 种绑定的两页样例（“会动的”导出；test/lowcode_dart_live_test.dart 会 import 它）。
+  File('test/generated/bind_page.dart').writeAsStringSync(exportDart(bindSample(), className: 'BindHomePage'));
+  File('test/generated/live_page.dart').writeAsStringSync(exportDart(dartLiveSample(), className: 'LivePage'));
   stdout.writeln('ok');
 }

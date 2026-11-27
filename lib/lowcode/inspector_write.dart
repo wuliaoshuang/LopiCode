@@ -80,7 +80,7 @@ String writeCommon(LcNode n, String prop, Object? value) {
   }
   if (value is String && value.startsWith('var(')) {
     // 用主题变量：变量只能写在 style 里（简写属性放不了）。简写属性留着不动——反正被 style 盖着，
-    // 以后不用变量了它还在；Flutter 导出时会把变量现在的值放回简写属性（见 export_dart_theme.dart）。
+    // 以后不用变量了它还在；Flutter 导出时按最终样式把它折回简写属性、指到集中的变量表上（见 export_dart_live_tree.dart）。
     final own = canonicalDeclarations(n.style);
     for (final name in names) {
       if (prop == 'width' && name != 'width') {

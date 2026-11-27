@@ -1,4 +1,4 @@
-/// 主题变量和断点怎么写进导出的 CSS（普通网页、Vue 3、React 三种共用；Flutter 的在 export_dart_theme.dart）。
+/// 主题变量和断点怎么写进导出的 CSS（普通网页、Vue 3、React 三种共用；Flutter 的在 export_dart_live_tree.dart）。
 ///
 /// - 主题变量：一段 `:root { --名字: 值; … }`（CSS 自定义属性）。**项目里有变量、而且真的有地方用到了才写**——
 ///   没用主题变量的页面导出来一个字节都不多。

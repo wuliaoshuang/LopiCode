@@ -1,5 +1,6 @@
 // 第 4 期·主题变量＋断点的导出：带变量和断点的两页样例（support/theme_bp_sample.dart）四种导出各是什么样，
-// 纯网页 / Vue 3 / React 用官方编译器真的编译一遍（环境只在开发机上有，找不到就明确跳过），Flutter 那份检入并且真的能装进界面。
+// 纯网页 / Vue 3 / React 用官方编译器真的编译一遍（环境只在开发机上有，找不到就明确跳过），Flutter 那份检入并且真的能装进界面
+// （第四轮 B1 起 Flutter 那份是“会动的”：变量集中、断点按屏宽，细的在 lowcode_dart_live_test.dart）。
 import 'dart:io';
 
 // 导出的页面用的是 Flutter 自带的那套 Material（别人的工程里没有我们的 material_ui）：这里也得用它来装。
@@ -93,13 +94,14 @@ void main() {
   }
 
   group('Flutter', () {
-    test('检入的样本和导出器当前的输出一致；变量写成当时的值，文件头说明了局限', () {
+    test('检入的样本和导出器当前的输出一致；变量集中在 LcVars 里，文件头说明了变量和断点怎么用', () {
       final code = exportDart(themeBpSample(), className: 'ThemeBpHomePage');
       expect(File('test/generated/theme_bp_page.dart').readAsStringSync(), code, reason: '导出器改了：运行 dart run tool/gen_sample_export.dart 重新生成');
       expect(code, isNot(contains('var(--')));
       expect(code, contains('主题变量'));
       expect(code, contains('断点'));
-      expect(code, contains('0xFF058654'), reason: '按钮底色＝变量 color-primary 当时的值');
+      expect(code, contains('static const Color colorPrimary = Color(0xFF058654);'), reason: '变量 color-primary 在变量表里');
+      expect(code, contains('backgroundColor: LcVars.colorPrimary'), reason: '按钮底色指到变量上，不再写死');
     });
 
     testWidgets('真的装得进界面（手机宽度）：没有异常、没有溢出', (tester) async {
@@ -112,7 +114,7 @@ void main() {
       expect(find.text('欢迎来到小站'), findsOneWidget);
       expect(find.text('新品'), findsOneWidget);
       final title = tester.widget<m.Text>(find.text('欢迎来到小站'));
-      expect(title.style?.fontSize, 20, reason: '字号变量 font-lg 当时的值；平板的 30 不导出');
+      expect(title.style?.fontSize, 20, reason: '字号变量 font-lg 的值；平板的 30 在 lowcode_dart_live_test.dart 里按 800 宽验');
     });
   });
 

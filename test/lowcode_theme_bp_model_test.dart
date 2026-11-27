@@ -255,16 +255,22 @@ void main() {
       expect(pages[1].files.css.contains(':root'), isFalse, reason: '第二页没用变量');
     });
 
-    test('Flutter：变量换成现在的值，开头写明局限；断点不导出', () {
+    // 第四轮 B1 起：变量集中在 LcVars 里（不再写死在用到的地方），断点按屏宽取样子。
+    test('Flutter：变量集中在 LcVars 里，用到的地方指过去；断点按屏宽分开出', () {
       final code = exportDart(sample());
-      expect(code, contains('// 主题变量：这里写的是导出那一刻的值'));
-      expect(code, contains('// 断点：屏幕更宽时'));
-      expect(code, contains('backgroundColor: const Color(0xFF058654)'));
-      expect(code, contains('EdgeInsets.all(16)'));
+      expect(code, contains('// 主题变量：集中在文件末尾的 LcVars 里'));
+      expect(code, contains('// 断点：按屏幕宽度取样子'));
+      expect(code, contains('static const Color colorPrimary = Color(0xFF058654);'));
+      expect(code, contains('backgroundColor: LcVars.colorPrimary'));
+      expect(code, contains('EdgeInsets.all(LcVars.spaceMd)'));
+      expect(code, contains('static const double spaceMd = 16;'));
+      expect(code, contains('if (width >= 768) return _buildTablet(context);'));
       expect(code.contains('var('), isFalse);
       final doc = sample();
       lcSetVar(doc, 'color-primary', '#aa0000');
-      expect(exportDart(doc), contains('Color(0xFFAA0000)'));
+      final changed = exportDart(doc);
+      expect(changed, contains('static const Color colorPrimary = Color(0xFFAA0000);'));
+      expect('0xFFAA0000'.allMatches(changed).length, 1, reason: '值只在变量表里出现一次：改一处全变');
     });
   });
 }
