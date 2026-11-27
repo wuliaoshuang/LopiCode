@@ -8,6 +8,7 @@ library;
 import 'package:lopicode/backend/backend_blocks.dart';
 import 'package:lopicode/backend/backend_blocks_core.dart';
 import 'package:lopicode/backend/backend_core.dart';
+import 'package:lopicode/backend/backend_func_edit.dart';
 import 'package:lopicode/backend/backend_func_table.dart';
 import 'package:lopicode/backend/backend_function.dart';
 import 'package:lopicode/backend/backend_ir.dart' show kBeRepeatLimit;
@@ -175,6 +176,9 @@ class _Validator {
       }
     }
     _route = null;
+    for (final f in doc.functions) {
+      if (beFunctionUsedInCore(doc, f.id)) used.add(f.ident);
+    }
     _functions(used);
     for (final m in doc.core.trees) {
       _core = m; // 核心 2 的串（方法、“创建时”、“程序开始时”）：这里只看格子填没填好，类型由类型检查说

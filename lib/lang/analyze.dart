@@ -574,7 +574,11 @@ class _Analyzer {
         return LType.boolean;
       case LLambda():
         return _lambda(e);
-      case LThis() || LSpawn():
+      case LSpawn():
+        // “开始做”里面的几句话照匿名函数查（名字看不看得见、用到了哪些函数）；原来整个跳过，里面用到的函数会被说成没人用。
+        _lambda(lSpawnLambda(e));
+        return LType.any;
+      case LThis():
         return LType.any;
       case LExprV5(:final childExprs):
         // 第 5 版的式子（记录、枚举、变体、当成〈类型〉）：这里只管名字，类型归 typecheck.dart。

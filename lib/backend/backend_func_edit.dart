@@ -85,6 +85,20 @@ BeFunction beAddFunction(BeDocument doc, CustomBlockLook look, List<String> para
 
 bool _isUse(Map<String, dynamic> e, String id) => e['e'] == beCallOp(id) || (e['e'] == 'funcRef' && e['fn'] == id);
 
+/// 核心 2 的串（方法、“创建时”、“程序开始时”）里用没用到这块积木。“没人用的积木”那条提醒要看它
+///（原来只看接口和别的积木：只在“程序开始时”或方法里用到的积木会被说成没人用）。
+bool beFunctionUsedInCore(BeDocument doc, String id) {
+  var hit = false;
+  for (final t in doc.core.trees) {
+    beVisitBlocks(t.body, (b) {
+      if (b.op == beCallOp(id)) hit = true;
+      beVisitExprs(b, (e) => hit = hit || _isUse(e, id));
+    });
+    if (hit) return true;
+  }
+  return false;
+}
+
 /// 这块积木在别处用了几次（调用、当值、“这块积木本身”都算；它自己的定义里自己调自己不算）。
 int beFunctionUses(BeDocument doc, String id) {
   var n = 0;

@@ -188,7 +188,7 @@ mixin _Waits on _Core {
       // 它要等只是因为调了外面函数的参数：记下来，带着“那个参数只收不用等的函数”重查一遍（checkTypes）。
       if (key != null && !_hard.contains(key)) demand.addAll(_soft[key] ?? const {});
       final why = key != null && _why.containsKey(key) ? '它${_whyText(key)}' : '它是要等的';
-      err('T30', sc, '$where只收不用等的函数，放进来的函数要等（$why）。要等的事挪到外面先做完，或者在里面放一块“开始做”', node: e, argIndex: argIndex, fixes: fixes);
+      err('T30', sc, '$where只收不用等的函数，放进来的函数要等：$why。要等的事挪到外面先做完，或者在里面放一块“开始做”', node: e, argIndex: argIndex, fixes: fixes);
     } else if (src.waits == null && w.waitEscaped && e is! LLambda && !(e is LName && w.funcs.containsKey(e.name) && find(sc, e.name) == null)) {
       err('T30', sc, '$where只收不用等的函数，放进来的这个函数说不准要不要等（程序里有要等的函数被当成值传来传去）。换成直接写在这里的匿名函数', node: e, argIndex: argIndex);
     }

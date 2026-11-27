@@ -9,6 +9,7 @@ library;
 
 import 'package:lopicode/backend/backend_blocks.dart';
 import 'package:lopicode/backend/backend_blocks_core.dart';
+import 'package:lopicode/backend/backend_blocks_wait.dart';
 import 'package:lopicode/backend/backend_core.dart';
 import 'package:lopicode/backend/backend_core_edit.dart';
 import 'package:lopicode/backend/backend_core_gen.dart';
@@ -130,6 +131,17 @@ mixin BeCoreHost on BlockHost {
             ],
           ),
       const BlockCategory(id: kBeCatError, label: kBeCatError, colorKey: BlockColorKey.error, blocks: ['try', 'throw'], exprs: ['errNew']),
+      const BlockCategory(
+        id: kBeCatWait,
+        label: kBeCatWait,
+        colorKey: BlockColorKey.async,
+        groups: [
+          BlockGroup('同时做', blocks: ['spawn', 'sleep'], exprs: ['spawnOf']),
+          BlockGroup('等结果', exprs: ['await', 'awaitMax', 'awaitAll', 'awaitAny']),
+          BlockGroup('取消', blocks: ['cancel'], exprs: ['cancelled']),
+          BlockGroup('排队', blocks: ['critical']),
+        ],
+      ),
       BlockCategory(
         id: kBeCatType,
         label: kBeCatType,
@@ -153,6 +165,7 @@ mixin BeCoreHost on BlockHost {
 
   String? coreColorKey(String id) => switch (id) {
     'try' || 'throw' || 'errNew' => BlockColorKey.error,
+    _ when beWaitBlockSpecs.containsKey(id) || beWaitExprSpecs.containsKey(id) => BlockColorKey.async,
     _ => beIsCoreOp(id) || beIsCoreExpr(id) ? BlockColorKey.classes : null,
   };
 
