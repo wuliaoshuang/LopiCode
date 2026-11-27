@@ -287,8 +287,7 @@ void main() {
     }
 
     walk(saved.root);
-    // 第四轮 B5 加的滑块不在这张样例页里（样例页不动）；工具说明里点了它的名，上面那一圈已经核对。
-    expect(types, containsAll(lcV3Specs.keys.where((t) => t != 'slider')));
+    expect(types, containsAll(lcV3Specs.keys));
     expect(saved.find('barR')!.slot, 'right');
     expect(saved.find('dlgOk')!.slot, 'footer');
     final html = File(p.join(guard.root, 'index.html')).readAsStringSync();

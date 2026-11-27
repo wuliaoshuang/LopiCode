@@ -296,6 +296,16 @@ class V3AllPage extends StatelessWidget {
                     style: FilledButton.styleFrom(),
                     child: Text('打开弹窗'),
                   ),
+                  SizedBox(
+                    width: double.infinity,
+                    child: Slider(
+                      value: 30,
+                      min: 0,
+                      max: 200,
+                      divisions: 40,
+                      onChanged: (value) {},
+                    ),
+                  ),
                 ],
               ),
             ),

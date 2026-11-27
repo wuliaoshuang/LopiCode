@@ -322,6 +322,8 @@ LcDocument v3AllPage() => _doc(
       ],
     ),
     _n('open', 'button', {'text': '打开弹窗'}),
+    // 第四轮 B5 加的滑块（B6 补进样例页；放在按钮后面，前面各项的位置不变）。
+    _n('sld', 'slider', {'value': 30, 'min': 0, 'max': 200, 'step': 5, 'width': 'fill'}),
     _n(
       'dlg',
       'dialog',
