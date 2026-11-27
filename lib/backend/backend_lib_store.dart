@@ -367,7 +367,7 @@ Future<({BeLibPreview? preview, String? problem})> beLibOpenPack(PathGuard guard
 /// 带手写代码的库：`nativeConfirmed`＝她在预览页勾了“我看过这些代码了”。没勾、或者全应用的开关关着，一律不放进来。
 Future<BeLibSaved> beLibInstall(PathGuard guard, BeLibPreview preview, {bool replace = false, bool nativeConfirmed = false}) async {
   if (!preview.canImport) return BeLibSaved(problems: preview.problems);
-  if (preview.hasNative && !LibNativeTrust.instance.enabled) return const BeLibSaved(problems: ['这个库带了手写代码，而“允许库里的手写代码”是关着的']);
+  if (preview.hasNative && !LibNativeTrust.instance.enabled) return BeLibSaved(problems: [libNativeCodeEntry ? '这个库带了手写代码，而“允许库里的手写代码”是关着的' : '这个库带了手写代码。$kLibNativeOffNote']);
   if (preview.hasNative && !nativeConfirmed) return const BeLibSaved(problems: ['这个库带了手写代码：要先看过代码、勾上“我看过这些代码了”才能导入']);
   final id = preview.id;
   final stored = await beLibsRead(guard);

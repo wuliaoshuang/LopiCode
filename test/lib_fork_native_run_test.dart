@@ -22,11 +22,14 @@ import 'package:lopicode/lang/gen2_all.dart';
 
 import 'support/gen2_run.dart';
 import 'support/gen2_serve.dart';
+import 'support/lib_switches.dart';
 import 'support/native_lib.dart';
 import 'support/service_strict_doc.dart';
 import 'support/user_libs.dart';
 
 void main() {
+  // 中途包：带手写代码的库的启用、自己的库直接用宿主接口默认都关着（rules.dart）；这里测的是开着时的样子，每条先打开、测完改回默认。
+  libSwitchesOn();
   late Directory dir;
   late PathGuard guard;
   setUp(() async {

@@ -7,6 +7,7 @@
 //   勾上主按钮才亮。警告的字用危险色，而且写的是实话（没有隔开、和工程同权限）。
 // - 一行只做一件事；颜色全取主题值；代码用应用统一的代码字号。
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lopicode/lang/rules.dart';
 import 'package:lopicode/state/code_font.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/backend_core_sheet.dart';
@@ -120,7 +121,8 @@ class _ImportSheetState extends State<_ImportSheet> {
         if (!p.hasSource) const _Line('没有带画布原件：能用，但是不能回到画布上改它'),
         if (p.hasNative) ...[
           _Line('带了手写代码（${p.nativeFiles.length} 个文件）。$kLibNativeRisk', key: const ValueKey('be-lib-native-risk'), color: c.danger),
-          if (!p.nativeEnabled) _Line('“允许库里的手写代码”现在是关着的，所以这个库不能导入。下面的代码可以点开看。', key: const ValueKey('be-lib-native-off'), color: c.danger),
+          if (!p.nativeEnabled)
+            _Line(libNativeCodeEntry ? '“允许库里的手写代码”现在是关着的，所以这个库不能导入。下面的代码可以点开看。' : '$kLibNativeOffNote，所以这个库不能导入。下面的代码可以点开看。', key: const ValueKey('be-lib-native-off'), color: c.danger),
           for (final n in p.nativeNotes) _Line(n),
           for (final f in p.nativeFiles.keys)
             BeSheetRow(

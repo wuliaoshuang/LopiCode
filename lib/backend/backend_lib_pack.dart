@@ -20,6 +20,7 @@ import 'package:lopicode/backend/lib_native_trust.dart';
 import 'package:lopicode/backend/lib_service.dart';
 import 'package:lopicode/lang/host_v2.dart';
 import 'package:lopicode/lang/lib_model.dart';
+import 'package:lopicode/lang/rules.dart';
 
 /// 导出文件的扩展名。
 const String kBeLibFileSuffix = '.lopilib';
@@ -155,7 +156,9 @@ BeLibPreview beLibPreview(Map<String, String> files, {List<LibLibrary> others = 
   ]..sort();
   final problems = <String>[...lib.problems];
   final blocked = native.isNotEmpty && !(nativeEnabled ?? LibNativeTrust.instance.enabled);
-  if (blocked) problems.add('这个库带了手写代码，而“允许库里的手写代码”是关着的（设置 › 能力 › 积木库的手写代码）。关着的时候带手写代码的库一律不能导入');
+  if (blocked) {
+    problems.add(libNativeCodeEntry ? '这个库带了手写代码，而“允许库里的手写代码”是关着的（设置 › 能力 › 积木库的手写代码）。关着的时候带手写代码的库一律不能导入' : '这个库带了手写代码。$kLibNativeOffNote，所以不能导入');
+  }
   final service = beServiceLibrary();
   final needs = <String>[];
   for (final r in lib.requires) {

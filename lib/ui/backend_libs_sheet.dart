@@ -18,6 +18,7 @@ import 'package:lopicode/backend/lib_service.dart';
 import 'package:lopicode/backend/lib_service_fork.dart';
 import 'package:lopicode/core/path_guard.dart';
 import 'package:lopicode/lang/lib_model.dart';
+import 'package:lopicode/lang/rules.dart';
 import 'package:lopicode/lowcode/lib_page.dart' show kLcPageLibId;
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/theme/tokens.dart';
@@ -400,7 +401,11 @@ class _LibSheetState extends State<_LibSheet> {
         // 没有画布原样的库（复制自带库得到的、别人给的文字写法的库）：改它就是改文字，入口放在最上面，不埋在积木清单底下。
         if (!s.hasSource) BeSheetAdd(key: const ValueKey('be-lib-text-open'), label: '改库的文字（清单、模块、积木表）', onTap: () => unawaited(_editText())),
         if (!s.ok && hasNative)
-          BeSheetAdd(key: const ValueKey('be-lib-native-confirm'), label: LibNativeTrust.instance.enabled ? '看手写代码并确认' : '看手写代码（“允许库里的手写代码”关着，确认不了）', onTap: () => unawaited(_confirmNative())),
+          BeSheetAdd(
+            key: const ValueKey('be-lib-native-confirm'),
+            label: LibNativeTrust.instance.enabled ? '看手写代码并确认' : (libNativeCodeEntry ? '看手写代码（“允许库里的手写代码”关着，确认不了）' : '看手写代码'),
+            onTap: () => unawaited(_confirmNative()),
+          ),
         if (use != null && lib.settings.isNotEmpty) const BeSheetSection('设置项（只管这份文档）'),
         if (use != null)
           for (final st in lib.settings)

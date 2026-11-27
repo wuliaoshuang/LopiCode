@@ -17,6 +17,7 @@ import 'support/backend_core_samples.dart';
 import 'support/backend_func_blocks.dart';
 import 'support/backend_lang_blocks.dart';
 import 'support/harness.dart' hide say;
+import 'support/lib_switches.dart';
 import 'support/lib_ui.dart';
 import 'support/native_lib.dart';
 import 'support/user_libs.dart';
@@ -43,6 +44,8 @@ Future<void> closeSheet(WidgetTester tester) async {
 }
 
 void main() {
+  // 中途包：带手写代码的库的启用、自己的库直接用宿主接口默认都关着（rules.dart）；这里测的是开着时的样子，每条先打开、测完改回默认。
+  libSwitchesOn();
   setUp(() => LibNativeTrust.instance = LibNativeTrust());
   tearDown(() => LibNativeTrust.instance = LibNativeTrust());
 

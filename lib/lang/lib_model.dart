@@ -15,6 +15,7 @@ import 'package:lopicode/lang/host_v2.dart';
 import 'package:lopicode/lang/lc_text.dart';
 import 'package:lopicode/lang/lib_check.dart';
 import 'package:lopicode/lang/lib_native.dart';
+import 'package:lopicode/lang/rules.dart';
 import 'package:lopicode/lang/types.dart';
 
 export 'package:lopicode/lang/lib_native.dart' show LibNative, LibSide;
@@ -411,7 +412,7 @@ LibLibrary libRead(Map<String, String> files, {required bool builtin, bool nativ
     ..clear()
     ..addAll(nat.modules);
   if (!builtin && (natives.isNotEmpty || nativeFiles.isNotEmpty) && !nativeOk) {
-    problems.add('这个库带了手写代码（${nativeFiles.length} 个文件）。要先打开“允许库里的手写代码”，再看过并确认这个库的代码，才能用');
+    problems.add(libNativeCodeEntry ? '这个库带了手写代码（${nativeFiles.length} 个文件）。要先打开“允许库里的手写代码”，再看过并确认这个库的代码，才能用' : '这个库带了手写代码（${nativeFiles.length} 个文件）。$kLibNativeOffNote');
   }
 
   // 宿主接口：模块里的“宿主”声明（手写函数的不算）。应用自带的库可以直接声明；自己的库要在清单的 hosts 里一个不落地写明。
@@ -425,7 +426,10 @@ LibLibrary libRead(Map<String, String> files, {required bool builtin, bool nativ
     if (!builtin && kHostFrontBuiltinOnly.contains(h)) problems.add('宿主接口「$h」是给旧页面积木留的，只有应用自带的库能用');
   }
   final declaredHosts = {for (final h in _list(manifest['hosts'])) ?_text(h, max: 64)};
-  if (!builtin && hosts.difference(declaredHosts).isNotEmpty) {
+  if (!builtin && !userLibHostEntry && hosts.isNotEmpty) {
+    // 中途包：自己的库直接碰宿主接口这条路先关着（rules.dart 的 userLibHostEntry）。清单里写没写明都一样。
+    problems.add('这个库直接用了宿主接口（${(hosts.toList()..sort()).join('、')}）。这一版自己的库还不能直接碰宿主接口，只有应用自带的库可以');
+  } else if (!builtin && hosts.difference(declaredHosts).isNotEmpty) {
     problems.add('这个库直接用了宿主接口（${hosts.difference(declaredHosts).join('、')}），可是清单的 hosts 里没有写明。自己写的库要碰宿主接口，必须在清单里一个不落地写出来（导入的人要看得见）');
   }
   if (!builtin && (id.startsWith('lopi/') || id.startsWith('local/'))) problems.add('作者段 lopi、local 是应用自己留着用的，别的库不能用');

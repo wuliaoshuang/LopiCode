@@ -18,6 +18,7 @@ import 'package:lopicode/lang/types.dart';
 
 import 'support/gen2_run.dart';
 import 'support/lib_files.dart';
+import 'support/lib_switches.dart';
 
 const String _expect = '''
 8
@@ -118,6 +119,8 @@ LProgram _program(LibLibrary lib) {
 }
 
 void main() {
+  // 中途包：带手写代码的库的启用、自己的库直接用宿主接口默认都关着（rules.dart）；这里测的是开着时的样子，每条先打开、测完改回默认。
+  libSwitchesOn();
   final files = libFilesFromDir('test/fixtures/libs/demo-kit');
   final lib = libRead(files, builtin: false);
 
