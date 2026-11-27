@@ -89,9 +89,7 @@ extension _CanvasSlots on CanvasPage {
     final scopes = bind == null || c.type == 'slot' ? null : lcRepeatScopes(c, bind);
     if (scopes == null) return [_item(context, container, s, inner, c)];
     if (scopes.isEmpty) return [_node(context, c, inner, badge: '重复 · 列表是空的')];
-    return [
-      for (final (i, scope) in scopes.indexed) (i == 0 ? this : _inertCopy())._node(context, c, inner.inScope(scope), copy: i, badge: i == 0 ? '重复' : null),
-    ];
+    return [for (final (i, scope) in scopes.indexed) (i == 0 ? this : _inertCopy())._node(context, c, inner.inScope(scope), copy: i, badge: i == 0 ? '重复' : null)];
   }
 
   Widget _slotBox(BuildContext context, LcNode container, Map<String, String> s, _Ctx inner, LcNode slot) {

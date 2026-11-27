@@ -113,7 +113,14 @@ class LcBindableRow extends StatelessWidget {
         SizedBox(
           width: 36,
           height: 52,
-          child: IconButton(key: Key('lc-bind-$prop'), onPressed: open, icon: const Icon(Icons.link, size: 18), tooltip: '让“${spec.label}”跟着状态变', padding: EdgeInsets.zero, color: context.colors.textMuted),
+          child: IconButton(
+            key: Key('lc-bind-$prop'),
+            onPressed: open,
+            icon: const Icon(Icons.link, size: 18),
+            tooltip: '让“${spec.label}”跟着状态变',
+            padding: EdgeInsets.zero,
+            color: context.colors.textMuted,
+          ),
         ),
       ],
     );
@@ -153,7 +160,14 @@ class InspectorDataSection extends StatelessWidget {
     ed.apply((n, _) => r.remove ? lcSetRepeat(n, listSrc: null) : lcSetRepeat(n, listSrc: r.list, item: r.item, index: r.index, keySrc: r.key, empty: r.empty, preview: r.preview));
   }
 
-  Future<void> _addNamed(BuildContext context, {required String title, required String hint, required RegExp ok, required String want, required void Function(LcNode n, String name, Map<String, dynamic>? src) set}) async {
+  Future<void> _addNamed(
+    BuildContext context, {
+    required String title,
+    required String hint,
+    required RegExp ok,
+    required String want,
+    required void Function(LcNode n, String name, Map<String, dynamic>? src) set,
+  }) async {
     final name = await promptDialog(context, title: title, hint: hint);
     if (name == null || !context.mounted) return;
     final key = name.trim();
@@ -180,7 +194,14 @@ class InspectorDataSection extends StatelessWidget {
 
     Future<void> pickModel() async {
       // 双向只能绑到一个能写的状态：派生值、“重复”带出来的名字不行（面板里只列状态，派生的由检查拦）。
-      final r = await lcPickBinding(context, ed, title: modelProp == 'checked' ? '开没开' : '里面填的内容', want: modelProp == 'checked' ? 'bool' : 'any', current: model == null ? null : lcSrcVar(model), locals: const []);
+      final r = await lcPickBinding(
+        context,
+        ed,
+        title: modelProp == 'checked' ? '开没开' : '里面填的内容',
+        want: modelProp == 'checked' ? 'bool' : 'any',
+        current: model == null ? null : lcSrcVar(model),
+        locals: const [],
+      );
       if (r == null) return;
       final src = r.source;
       final name = src != null && src['from'] == 'var' && lcPathOf(src['path']).isEmpty ? src['name'] : null;

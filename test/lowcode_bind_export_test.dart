@@ -14,16 +14,21 @@ import 'support/bind_export_files.dart';
 import 'support/bind_sample.dart';
 
 void main() {
-  test('只建了状态、哪儿都没绑：四种导出和没建状态时逐字节一样', () {
-    final plain = LcDocument.starter('我的小站');
-    final before = allExportFiles(plain);
-    final withState = LcDocument.parse(plain.encode());
-    lcEditProjectStates(withState, (list) => list.add(LcVariable(name: 'user', type: 'text', initial: '小塔塔')));
-    final after = allExportFiles(withState);
-    expect(after.keys.toList(), before.keys.toList());
-    for (final k in before.keys) {
-      expect(after[k], before[k], reason: '$k 变了');
+  test('只有页面级的普通变量、哪儿都没绑：走老路，不多出状态文件和绑定运行代码', () {
+    final doc = LcDocument.starter('我的小站');
+    doc.logic.variables.add(LcVariable(name: 'n', type: 'number', initial: 0));
+    final files = allExportFiles(LcDocument.parse(doc.encode()));
+    expect(files.keys.where((k) => k.contains('lc-state')), isEmpty);
+    for (final e in files.entries) {
+      expect(e.value, isNot(contains('lcShared')), reason: e.key);
     }
+  });
+
+  test('建了项目级状态（还没绑）：Vue / React 多出 lc-state.js——积木随时可能读写它', () {
+    final doc = LcDocument.starter('我的小站');
+    lcEditProjectStates(doc, (list) => list.add(LcVariable(name: 'user', type: 'text', initial: '小塔塔')));
+    final files = allExportFiles(doc);
+    expect(files.keys, containsAll(['vue/lc-state.js', 'react/lc-state.js']));
   });
 
   test('没用状态和绑定的页面：导出里没有任何绑定运行代码、没有 lc-state.js', () {
@@ -73,27 +78,39 @@ void main() {
     expect(dart, isNot(contains('货200 ')));
   });
 
-  test('自定义组件定义里的绑定这一版不导出：四种导出和定义里没绑时一样', () {
+  test('自定义组件定义里的绑定：普通网页和 Flutter 把实例摊开，所以起作用；Vue / React 的组件文件照没绑的出', () {
     LcDocument make(bool bound) {
       final doc = LcDocument.starter('我的小站');
       doc.logic.variables.add(LcVariable(name: 'who', type: 'text', initial: '小塔塔'));
       final inner = LcNode(id: 'ct', type: 'text', props: {'text': '组件里的字'});
       if (bound) lcSetData(inner, 'text', lcSrcVar('who'));
-      doc.components.add(LcComponentDef(id: 'c1', name: '卡片', root: LcNode(id: 'cr', type: 'column', children: [inner])));
+      doc.components.add(
+        LcComponentDef(
+          id: 'c1',
+          name: '卡片',
+          root: LcNode(id: 'cr', type: 'column', children: [inner]),
+        ),
+      );
       doc.root.children.add(LcNode(id: 'inst', type: 'component', props: {'ref': 'c1'}));
       return doc;
     }
 
     final plain = allExportFiles(make(false)), bound = allExportFiles(make(true));
-    expect(bound.keys.toList(), plain.keys.toList());
-    for (final k in plain.keys) {
-      expect(bound[k], plain[k], reason: '$k 变了');
-    }
+    final changed = [
+      for (final k in bound.keys)
+        if (bound[k] != plain[k]) k,
+    ];
+    expect(changed, ['html/index.html', 'html/logic.js', 'flutter/page.dart'], reason: '变了的文件');
+    expect(bound['html/index.html'], contains('小塔塔'));
+    expect(bound['flutter/page.dart'], contains("'小塔塔'"));
   });
 
   test('绑定字段写坏了：导出不崩，照没绑的出', () {
     final doc = LcDocument.starter('我的小站');
-    doc.find('n1')!.more[kLcData] = {'text': 7, 'nope': {'from': 'var'}};
+    doc.find('n1')!.more[kLcData] = {
+      'text': 7,
+      'nope': {'from': 'var'},
+    };
     doc.find('n2')!.more[kLcRepeat] = 'x';
     doc.find('n3')!.more[kLcShowIf] = [1, 2];
     final files = allExportFiles(doc);

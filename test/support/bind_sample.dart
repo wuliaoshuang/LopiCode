@@ -51,69 +51,144 @@ Map<String, Object?> bindSampleJson() => {
     'page',
     {'padding': 16, 'gap': 12, 'bg': '#FFFFFF'},
     [
-      _n('hello', 'text', {'text': '你好', 'fontSize': 22, 'bold': true}, const [], {
-        'data': {
-          'text': _expr(_join([_text('你好，'), _var('user')])),
+      _n(
+        'hello',
+        'text',
+        {'text': '你好', 'fontSize': 22, 'bold': true},
+        const [],
+        {
+          'data': {
+            'text': _expr(_join([_text('你好，'), _var('user')])),
+          },
         },
-      }),
-      _n('tipText', 'text', {'text': '提示'}, const [], {
-        'data': {'text': _from('tip')},
-      }),
+      ),
+      _n(
+        'tipText',
+        'text',
+        {'text': '提示'},
+        const [],
+        {
+          'data': {'text': _from('tip')},
+        },
+      ),
       _n('add', 'button', {'text': '加一', 'radius': 8, 'padding': 12}),
-      _n('kw', 'input', {'placeholder': '搜点什么', 'width': 'fill'}, const [], {
-        'model': {'state': 'keyword'},
-      }),
-      _n('echo', 'text', {'text': '你输入的'}, const [], {
-        'data': {
-          'text': _expr(_join([_text('在搜：'), _var('keyword')])),
+      _n(
+        'kw',
+        'input',
+        {'placeholder': '搜点什么', 'width': 'fill'},
+        const [],
+        {
+          'model': {'state': 'keyword'},
         },
-        'showIf': _expr(_bin('!=', _var('keyword'), _text(''))),
-      }),
-      _n('agreeBox', 'checkbox', {'text': '我同意'}, const [], {
-        'model': {'state': 'agree'},
-      }),
-      _n('submit', 'button', {'text': '提交', 'radius': 8, 'padding': 12}, const [], {
-        'data': {
-          'disabled': _expr({'e': 'not', 'x': _var('agree')}),
+      ),
+      _n(
+        'echo',
+        'text',
+        {'text': '你输入的'},
+        const [],
+        {
+          'data': {
+            'text': _expr(_join([_text('在搜：'), _var('keyword')])),
+          },
+          'showIf': _expr(_bin('!=', _var('keyword'), _text(''))),
         },
-        'classIf': [
-          {'name': 'ready', 'when': _from('agree')},
-        ],
-        'styles': {
-          'width': _expr(_join([_bin('+', _bin('*', _var('count'), _num(10)), _num(120)), _text('px')])),
+      ),
+      _n(
+        'agreeBox',
+        'checkbox',
+        {'text': '我同意'},
+        const [],
+        {
+          'model': {'state': 'agree'},
         },
-      }),
+      ),
+      _n(
+        'submit',
+        'button',
+        {'text': '提交', 'radius': 8, 'padding': 12},
+        const [],
+        {
+          'data': {
+            'disabled': _expr({'e': 'not', 'x': _var('agree')}),
+          },
+          'classIf': [
+            {'name': 'ready', 'when': _from('agree')},
+          ],
+          'styles': {
+            'width': _expr(_join([_bin('+', _bin('*', _var('count'), _num(10)), _num(120)), _text('px')])),
+          },
+        },
+      ),
       _n('enough', 'text', {'text': '点够三次了'}, const [], {'renderIf': _expr(_bin('>=', _var('count'), _num(3)))}),
       _n(
         'rowItem',
         'row',
         {'gap': 8, 'width': 'fill'},
         [
-          _n('itemName', 'text', {'text': '商品'}, const [], {
-            'data': {
-              'text': _expr(_join([_bin('+', _var('i'), _num(1)), _text('. '), _var('it', ['name']), _text(' ¥'), _var('it', ['price'])])),
+          _n(
+            'itemName',
+            'text',
+            {'text': '商品'},
+            const [],
+            {
+              'data': {
+                'text': _expr(
+                  _join([
+                    _bin('+', _var('i'), _num(1)),
+                    _text('. '),
+                    _var('it', ['name']),
+                    _text(' ¥'),
+                    _var('it', ['price']),
+                  ]),
+                ),
+              },
             },
-          }),
+          ),
         ],
         {
-          'repeat': {'list': _from('cart'), 'item': 'it', 'index': 'i', 'key': _from('it', ['id']), 'empty': '购物车是空的', 'preview': 3},
+          'repeat': {
+            'list': _from('cart'),
+            'item': 'it',
+            'index': 'i',
+            'key': _from('it', ['id']),
+            'empty': '购物车是空的',
+            'preview': 3,
+          },
         },
       ),
-      _n('nameList', 'list', {
-        'items': ['一', '二'],
-      }, const [], {
-        'data': {'items': _from('names')},
-      }),
-      _n('total', 'text', {'text': '共几件'}, const [], {
-        'data': {
-          'text': _expr(_join([_text('共 '), _var('cartCount'), _text(' 件')])),
+      _n(
+        'nameList',
+        'list',
+        {
+          'items': ['一', '二'],
         },
-      }),
-      _n('homeVisits', 'text', {'text': '来过几次'}, const [], {
-        'data': {
-          'text': _expr(_join([_text('来过 '), _var('visits'), _text(' 次')])),
+        const [],
+        {
+          'data': {'items': _from('names')},
         },
-      }),
+      ),
+      _n(
+        'total',
+        'text',
+        {'text': '共几件'},
+        const [],
+        {
+          'data': {
+            'text': _expr(_join([_text('共 '), _var('cartCount'), _text(' 件')])),
+          },
+        },
+      ),
+      _n(
+        'homeVisits',
+        'text',
+        {'text': '来过几次'},
+        const [],
+        {
+          'data': {
+            'text': _expr(_join([_text('来过 '), _var('visits'), _text(' 次')])),
+          },
+        },
+      ),
       _n('toCart', 'button', {'text': '去购物车', 'radius': 8, 'padding': 12}),
     ],
   ),
@@ -169,19 +244,37 @@ Map<String, Object?> bindSampleJson() => {
         'page',
         {'padding': 16, 'gap': 12, 'bg': '#FFFFFF'},
         [
-          _n('who', 'text', {'text': '谁'}, const [], {
-            'data': {'text': _from('user')},
-          }),
-          _n('sum', 'text', {'text': '共几件'}, const [], {
-            'data': {
-              'text': _expr(_join([_text('共 '), _var('cartCount'), _text(' 件')])),
+          _n(
+            'who',
+            'text',
+            {'text': '谁'},
+            const [],
+            {
+              'data': {'text': _from('user')},
             },
-          }),
-          _n('cartVisits', 'text', {'text': '来过几次'}, const [], {
-            'data': {
-              'text': _expr(_join([_text('来过 '), _var('visits'), _text(' 次')])),
+          ),
+          _n(
+            'sum',
+            'text',
+            {'text': '共几件'},
+            const [],
+            {
+              'data': {
+                'text': _expr(_join([_text('共 '), _var('cartCount'), _text(' 件')])),
+              },
             },
-          }),
+          ),
+          _n(
+            'cartVisits',
+            'text',
+            {'text': '来过几次'},
+            const [],
+            {
+              'data': {
+                'text': _expr(_join([_text('来过 '), _var('visits'), _text(' 次')])),
+              },
+            },
+          ),
           _n('bump', 'button', {'text': '记一次', 'radius': 8, 'padding': 12}),
           _n('back', 'button', {'text': '回首页', 'radius': 8, 'padding': 12}),
         ],

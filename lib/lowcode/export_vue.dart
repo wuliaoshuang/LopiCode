@@ -134,7 +134,11 @@ LcFrameworkExport _exportSite(LcDocument doc) {
   }
   final shared = LcBindPlan.of(doc, doc.root);
   return LcFrameworkExport(
-    files: [...files, ...components, if (shared != null && shared.hasProject) LcExportFile(path: kLcStateFile, content: lcVueStateFile(shared))],
+    files: [
+      ...files,
+      ...components,
+      if (shared != null && shared.hasProject) LcExportFile(path: kLcStateFile, content: lcVueStateFile(shared)),
+    ],
     notes: {...notes}.toList(),
   );
 }

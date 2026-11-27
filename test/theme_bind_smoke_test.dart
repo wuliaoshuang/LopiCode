@@ -20,7 +20,6 @@ import 'support/bind_sample.dart';
 import 'support/harness.dart';
 import 'support/lowcode_builder.dart';
 
-
 final String shotDir = Platform.environment['LOPI_SHOT_DIR'] ?? '.tmp/theme-shots';
 
 void main() {

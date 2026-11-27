@@ -83,7 +83,13 @@ class _StateScreenState extends State<StateScreen> {
   }
 
   Future<void> _pickDerived(bool project, String name, LcVariable? editing) async {
-    final r = await showLcBindPicker(context, title: name, want: 'any', doc: project ? _projectOnly : widget.doc, current: editing?.derived == null ? null : lcSrcExpr(Map<String, dynamic>.from(editing!.derived! as Map)));
+    final r = await showLcBindPicker(
+      context,
+      title: name,
+      want: 'any',
+      doc: project ? _projectOnly : widget.doc,
+      current: editing?.derived == null ? null : lcSrcExpr(Map<String, dynamic>.from(editing!.derived! as Map)),
+    );
     final expr = lcSrcExprOf(r?.source);
     if (r == null || r.clear || expr == null) return;
     final type = lcExprType(expr, (n) => lcStateOf(widget.doc(), n)?.variable.type);
@@ -112,7 +118,17 @@ class _StateScreenState extends State<StateScreen> {
     if (v.isDerived) return _pickDerived(project, v.name, v);
     final doc = widget.doc();
     final uses = lcStateUses(doc, v.name, project: project).length;
-    final draft = await showLcVariableDialog(context, taken: {for (final o in _list(doc, project)) if (o.name != v.name) o.name}, editing: v, refCount: uses, wide: true, noun: '状态');
+    final draft = await showLcVariableDialog(
+      context,
+      taken: {
+        for (final o in _list(doc, project))
+          if (o.name != v.name) o.name,
+      },
+      editing: v,
+      refCount: uses,
+      wide: true,
+      noun: '状态',
+    );
     if (draft == null || !mounted) return;
     if (draft.delete) return _delete(v, project);
     _edit((d) {
@@ -271,7 +287,13 @@ class _StateScreenState extends State<StateScreen> {
           child: Wrap(
             children: [
               TextButton.icon(key: Key('lc-state-add-$id'), onPressed: full ? null : () => _create(project), icon: const Icon(Icons.add, size: 18), label: Text(full ? '最多 $kLcMaxStates 个' : '新建状态')),
-              if (!full) TextButton.icon(key: Key('lc-state-derive-$id'), onPressed: list.isEmpty && (project || shared.isEmpty) ? null : () => _createDerived(project), icon: const Icon(Icons.functions, size: 18), label: const Text('新建派生值')),
+              if (!full)
+                TextButton.icon(
+                  key: Key('lc-state-derive-$id'),
+                  onPressed: list.isEmpty && (project || shared.isEmpty) ? null : () => _createDerived(project),
+                  icon: const Icon(Icons.functions, size: 18),
+                  label: const Text('新建派生值'),
+                ),
             ],
           ),
         ),

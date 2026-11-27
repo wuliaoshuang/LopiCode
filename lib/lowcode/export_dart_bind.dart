@@ -14,20 +14,9 @@ import 'package:lopicode/lowcode/bind_model.dart';
 import 'package:lopicode/lowcode/bind_preview.dart';
 import 'package:lopicode/lowcode/model.dart';
 
-LcNode _with(LcNode n, List<LcNode> kids) => LcNode(
-  id: n.id,
-  type: n.type,
-  props: n.props,
-  children: kids,
-  style: n.style,
-  bind: n.bind,
-  name: n.name,
-  locked: n.locked,
-  hidden: n.hidden,
-  keptProps: n.keptProps,
-  more: n.more,
-  raw: n.raw,
-)..instSlots = n.instSlots;
+LcNode _with(LcNode n, List<LcNode> kids) =>
+    LcNode(id: n.id, type: n.type, props: n.props, children: kids, style: n.style, bind: n.bind, name: n.name, locked: n.locked, hidden: n.hidden, keptProps: n.keptProps, more: n.more, raw: n.raw)
+      ..instSlots = n.instSlots;
 
 /// 导出 Flutter 用的树：绑定按初值定下来。这棵树上没有绑定就返回 [root] 本身。[doc] 要停在这一页上。
 LcNode dartBoundTree(LcNode root, LcDocument doc) {

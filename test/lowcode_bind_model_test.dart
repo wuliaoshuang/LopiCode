@@ -167,7 +167,11 @@ void main() {
     test('项目级改名：扫所有页面和组件定义；自己有同名状态的那一页不动；重复里同名的这一项不动', () {
       final d = bindSample();
       // 组件定义里也用一处
-      final def = LcComponentDef(id: 'c1', name: '卡片', root: LcNode(id: 'r', type: 'text', props: {'text': 'x'}));
+      final def = LcComponentDef(
+        id: 'c1',
+        name: '卡片',
+        root: LcNode(id: 'r', type: 'text', props: {'text': 'x'}),
+      );
       lcSetData(def.root, 'text', lcSrcVar('user'));
       d.components.add(def);
       final uses = lcStateUses(d, 'user', project: true);
@@ -184,7 +188,10 @@ void main() {
       final rep = lcRepeatOf(d.find('rowItem')!)!;
       expect(lcDescribeExpr(rep.list), 'it', reason: '列表来源在重复外面，跟着改');
       expect(lcDescribeExpr(rep.key), 'it.id', reason: '标识里的 it 是这一项');
-      expect(lcProjectStates(d).last.derived, {'e': 'len', 'x': {'e': 'var', 'name': 'it'}});
+      expect(lcProjectStates(d).last.derived, {
+        'e': 'len',
+        'x': {'e': 'var', 'name': 'it'},
+      });
     });
 
     test('删除：状态没了，用到的地方不动，检查把它们标出来', () {

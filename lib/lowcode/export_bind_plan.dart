@@ -82,8 +82,19 @@ LcNode lcSentinelNode(LcNode n) {
       if (lcBindable(n.type, p)?.type == 'text') p,
   ];
   if (props.isEmpty) return n;
-  return LcNode(id: n.id, type: n.type, props: {...n.props, for (final p in props) p: '$_mark$p$_mark'}, children: n.children, style: n.style, bind: n.bind, name: n.name, locked: n.locked, hidden: n.hidden, keptProps: n.keptProps, more: n.more)
-    ..instSlots = n.instSlots;
+  return LcNode(
+    id: n.id,
+    type: n.type,
+    props: {...n.props, for (final p in props) p: '$_mark$p$_mark'},
+    children: n.children,
+    style: n.style,
+    bind: n.bind,
+    name: n.name,
+    locked: n.locked,
+    hidden: n.hidden,
+    keptProps: n.keptProps,
+    more: n.more,
+  )..instSlots = n.instSlots;
 }
 
 /// 这段文字是不是记号；是的话返回属性名。

@@ -253,11 +253,7 @@ class _View {
     // 一个元素：直接用（key 已经写在它上面了）；不是元素（三元式、注释）：包一层带 key 的 Fragment。
     final one = inner.kind == _Kind.element ? inner.lines : [rep == null ? '<>' : '<React.Fragment key={$key}>', ..._indent(inner.asChild), rep == null ? '</>' : '</React.Fragment>'];
     if (rep == null) return _Jsx(['$cond && (', ..._indent(one), ')'], _Kind.expression);
-    final each = [
-      '${rep.list}.map((${rep.item}, ${rep.index}) =>${cond == null ? '' : ' $cond ?'} (',
-      ..._indent(one),
-      cond == null ? '))' : ') : null)',
-    ];
+    final each = ['${rep.list}.map((${rep.item}, ${rep.index}) =>${cond == null ? '' : ' $cond ?'} (', ..._indent(one), cond == null ? '))' : ') : null)'];
     if (rep.empty == null) return _Jsx(each, _Kind.expression);
     return _Jsx(['${rep.list}.length === 0 ? (', '  <p className="lc-text lc-empty">${jsxText(rep.empty!)}</p>', ') : (', ..._indent(each), ')'], _Kind.expression);
   }
@@ -472,10 +468,10 @@ String _objectLiteral(Iterable<(String, String)> entries) =>
   if (hasLogic) {
     out
       ..writeln(plan == null ? '  // 页面变量' : '  // 页面级状态')
-      ..writeln('  const lcVars = ${_objectLiteral([
-        for (final v in logic.variables)
-          if (!v.isDerived || plan == null) (v.name, lcInitialLiteral(v)),
-      ])}');
+      ..writeln(
+        '  const lcVars = ${_objectLiteral([for (final v in logic.variables)
+          if (!v.isDerived || plan == null) (v.name, lcInitialLiteral(v))])}',
+      );
     if (plan != null && bind != null) {
       if (plan.hasProject) {
         out

@@ -143,7 +143,11 @@ void main() {
     expect(lbKey('lc-state-row-p-keyword'), findsOneWidget);
 
     // 删除：先问，取消就不删；确认才删
-    await tester.scrollUntilVisible(lbKey('lc-state-menu-p-visits'), 200, scrollable: find.descendant(of: lbKey('lc-state-list'), matching: find.byType(Scrollable)).first);
+    await tester.scrollUntilVisible(
+      lbKey('lc-state-menu-p-visits'),
+      200,
+      scrollable: find.descendant(of: lbKey('lc-state-list'), matching: find.byType(Scrollable)).first,
+    );
     await lbTap(tester, lbKey('lc-state-menu-p-visits'));
     await tester.pumpAndSettle();
     await lbTap(tester, find.text('删除').last);

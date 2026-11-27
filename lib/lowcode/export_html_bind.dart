@@ -138,7 +138,10 @@ String exportBoundLogicJs(LcBindPlan plan, LcNode tree, {List<String>? notes}) {
   out.writeln('};');
   out.writeln();
   out.writeln('// 项目级状态的名字（跨页共用）');
-  out.writeln('const lcSharedNames = [${[for (final s in plan.plain) if (s.project) jsString(s.name)].join(', ')}];');
+  out.writeln(
+    'const lcSharedNames = [${[for (final s in plan.plain)
+      if (s.project) jsString(s.name)].join(', ')}];',
+  );
   out.writeln();
   out.writeln('// 派生值：不存，读的时候按别的状态现算');
   out.writeln('const lcDerived = {');

@@ -550,8 +550,5 @@ class LcLogic {
     return v;
   }
 
-  LcLogic clone() => LcLogic(
-    variables: [for (final v in variables) v.clone()],
-    handlers: [for (final h in handlers) h.clone()],
-  );
+  LcLogic clone() => LcLogic(variables: [for (final v in variables) v.clone()], handlers: [for (final h in handlers) h.clone()]);
 }

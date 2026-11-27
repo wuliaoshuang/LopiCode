@@ -129,15 +129,28 @@ class _RepeatSheetState extends State<_RepeatSheet> {
               InspectorRow(
                 label: '空的时候',
                 scroll: false,
-                child: TextField(key: const Key('lc-repeat-empty'), controller: _empty, decoration: const InputDecoration(isDense: true, hintText: '列表是空的时候显示的一句话（可不填）')),
+                child: TextField(
+                  key: const Key('lc-repeat-empty'),
+                  controller: _empty,
+                  decoration: const InputDecoration(isDense: true, hintText: '列表是空的时候显示的一句话（可不填）'),
+                ),
               ),
               InspectorRow(
                 label: '画布先画',
                 child: Row(
-                  children: [for (var i = 1; i <= kLcRepeatPreviewMax; i++) InspectorChip(key: Key('lc-repeat-preview-$i'), label: '$i 份', selected: _preview == i, onTap: () => setState(() => _preview = i))],
+                  children: [
+                    for (var i = 1; i <= kLcRepeatPreviewMax; i++) InspectorChip(key: Key('lc-repeat-preview-$i'), label: '$i 份', selected: _preview == i, onTap: () => setState(() => _preview = i)),
+                  ],
                 ),
               ),
-              if (problem != null && (_list != null || widget.current != null)) ...[const SizedBox(height: Space.x2), Text(problem, key: const Key('lc-repeat-problem'), style: t.bodySmall?.copyWith(color: c.danger))],
+              if (problem != null && (_list != null || widget.current != null)) ...[
+                const SizedBox(height: Space.x2),
+                Text(
+                  problem,
+                  key: const Key('lc-repeat-problem'),
+                  style: t.bodySmall?.copyWith(color: c.danger),
+                ),
+              ],
               const SizedBox(height: Space.x3),
               Row(
                 children: [
@@ -155,7 +168,10 @@ class _RepeatSheetState extends State<_RepeatSheet> {
                     key: const Key('lc-repeat-save'),
                     onPressed: problem != null
                         ? null
-                        : () => Navigator.pop(context, LcRepeatDraft(list: _list, item: _item.text.trim(), index: _index.text.trim(), key: _key, empty: _empty.text.trim().isEmpty ? null : _empty.text.trim(), preview: _preview)),
+                        : () => Navigator.pop(
+                            context,
+                            LcRepeatDraft(list: _list, item: _item.text.trim(), index: _index.text.trim(), key: _key, empty: _empty.text.trim().isEmpty ? null : _empty.text.trim(), preview: _preview),
+                          ),
                     child: const Text('保存'),
                   ),
                 ],

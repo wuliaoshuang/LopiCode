@@ -11,6 +11,7 @@
 //     最下面一行：左“＋ 新建状态”（文字按钮），右“解除绑定”（红字；本来没绑就没有）。
 // - 一个状态都没有：空状态，唯一的实心按钮“新建状态”。
 // - 取用的 tokens：Space.x1/x2/x3/x4/x6、Radii.sm/md、textMuted / textFaint、accent / accentSoft、danger。
+import 'package:lopicode/lowcode/bind_eval.dart';
 import 'package:lopicode/lowcode/bind_model.dart';
 import 'package:lopicode/lowcode/bind_simple.dart';
 import 'package:lopicode/lowcode/inspector_presets_widgets.dart';
@@ -47,8 +48,7 @@ Future<LcBindPick?> showLcBindPicker(
 );
 
 /// 新建一个状态的对话框（页面级）。存进去由调用方做。
-Future<LcVarDraft?> showLcNewStateDialog(BuildContext context, LcDocument doc) =>
-    showLcVariableDialog(context, taken: {for (final v in doc.logic.variables) v.name}, wide: true, noun: '状态');
+Future<LcVarDraft?> showLcNewStateDialog(BuildContext context, LcDocument doc) => showLcVariableDialog(context, taken: {for (final v in doc.logic.variables) v.name}, wide: true, noun: '状态');
 
 class _BindPicker extends StatefulWidget {
   const _BindPicker({required this.title, required this.want, required this.doc, required this.locals, this.current, this.onNewState});
@@ -102,8 +102,7 @@ class _BindPickerState extends State<_BindPicker> {
     super.dispose();
   }
 
-  void _pick(String name, [List<String> path = const [], bool len = false]) =>
-      Navigator.pop(context, LcBindPick(len ? lcSrcExpr(exLen(exRead(name, path))) : lcSrcVar(name, path)));
+  void _pick(String name, [List<String> path = const [], bool len = false]) => Navigator.pop(context, LcBindPick(len ? lcSrcExpr(exLen(exRead(name, path))) : lcSrcVar(name, path)));
 
   /// 这个类型的值能不能直接用在这儿；不能返回原因。
   String? _unfit(String type) => switch (widget.want) {
@@ -117,7 +116,10 @@ class _BindPickerState extends State<_BindPicker> {
     final sel = c.selection;
     final at = sel.isValid ? sel.start : c.text.length;
     final end = sel.isValid ? sel.end : c.text.length;
-    c.value = TextEditingValue(text: c.text.replaceRange(at, end, text), selection: TextSelection.collapsed(offset: at + text.length));
+    c.value = TextEditingValue(
+      text: c.text.replaceRange(at, end, text),
+      selection: TextSelection.collapsed(offset: at + text.length),
+    );
     setState(() => _error = null);
   }
 
@@ -128,7 +130,20 @@ class _BindPickerState extends State<_BindPicker> {
       setState(() => _error = bad != null ? '$bad 写得不对：花括号里写状态的名字，例如 {user}' : '里面还没有用到状态：点下面的名字插进去');
       return;
     }
+    if (_unknown(src)) return;
     Navigator.pop(context, LcBindPick(src));
+  }
+
+  /// 式子里用到了不存在的名字：说出来，不收。
+  bool _unknown(Map<String, dynamic> src) {
+    final known = {for (final l in widget.locals) l.name, for (final s in lcStatesInScope(widget.doc())) s.name};
+    final missing = [
+      for (final n in lcExprNames(lcSrcExprOf(src) ?? const {}))
+        if (!known.contains(n)) n,
+    ];
+    if (missing.isEmpty) return false;
+    setState(() => _error = '没有叫 ${missing.join('、')} 的状态：点下面的名字插进去，或者先新建一个');
+    return true;
   }
 
   void _useCompare() {
@@ -137,12 +152,17 @@ class _BindPickerState extends State<_BindPicker> {
       setState(() => _error = '左边写状态的名字（点下面的名字填进去）；右边写一个数、一段文字，或者 {名字}');
       return;
     }
+    if (_unknown(src)) return;
     Navigator.pop(context, LcBindPick(src));
   }
 
   /// 能直接写进式子里的名字（拼文字、比较用）。
   List<String> _names(LcDocument doc) => [
-    for (final l in widget.locals) ...[l.name, if (l.sample is Map) for (final k in (l.sample! as Map).keys) '${l.name}.$k'],
+    for (final l in widget.locals) ...[
+      l.name,
+      if (l.sample is Map)
+        for (final k in (l.sample! as Map).keys) '${l.name}.$k',
+    ],
     for (final s in lcStatesInScope(doc)) ...[
       if (s.variable.type == 'list') '${s.name}.$kLcLenWord' else if (s.variable.type != 'record') s.name,
       if (s.variable.type == 'record')
@@ -182,8 +202,18 @@ class _BindPickerState extends State<_BindPicker> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(name, style: t.titleSmall?.copyWith(color: unfit == null ? c.text : c.textMuted), maxLines: 1, overflow: TextOverflow.ellipsis),
-                        Text(unfit ?? sub, style: t.bodySmall?.copyWith(color: c.textMuted), maxLines: 2, overflow: TextOverflow.ellipsis),
+                        Text(
+                          name,
+                          style: t.titleSmall?.copyWith(color: unfit == null ? c.text : c.textMuted),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Text(
+                          unfit ?? sub,
+                          style: t.bodySmall?.copyWith(color: c.textMuted),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ],
                     ),
                   ),
@@ -342,7 +372,14 @@ class _BindPickerState extends State<_BindPicker> {
                     ),
                   ),
                 ),
-                if (_error != null) ...[const SizedBox(height: Space.x2), Text(_error!, key: const Key('lc-bind-error'), style: t.bodySmall?.copyWith(color: c.danger))],
+                if (_error != null) ...[
+                  const SizedBox(height: Space.x2),
+                  Text(
+                    _error!,
+                    key: const Key('lc-bind-error'),
+                    style: t.bodySmall?.copyWith(color: c.danger),
+                  ),
+                ],
                 if (_mode != 'value') ...[
                   const SizedBox(height: Space.x3),
                   FilledButton(key: const Key('lc-bind-use'), onPressed: _mode == 'template' ? _useTemplate : _useCompare, child: Text(_mode == 'template' ? '用这段文字' : '用这个条件')),

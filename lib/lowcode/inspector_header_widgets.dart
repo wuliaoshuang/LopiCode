@@ -4,7 +4,6 @@
 import 'package:lopicode/theme/tokens.dart';
 import 'package:material_ui/material_ui.dart';
 
-
 enum InspectorPage {
   common('常用'),
   style('样式'),
@@ -15,7 +14,18 @@ enum InspectorPage {
 }
 
 class InspectorHeader extends StatelessWidget {
-  const InspectorHeader({super.key, required this.title, required this.modal, required this.page, required this.pages, required this.onPage, this.onCss, this.onReset, required this.onClose, this.strip});
+  const InspectorHeader({
+    super.key,
+    required this.title,
+    required this.modal,
+    required this.page,
+    required this.pages,
+    required this.onPage,
+    this.onCss,
+    this.onReset,
+    required this.onClose,
+    this.strip,
+  });
 
   /// 单独弹出来的那种（只为改样式开的）标题带“样式”两个字；搭建页里的合一面板只写名字，页签已经说了是哪一页。
   final String title;

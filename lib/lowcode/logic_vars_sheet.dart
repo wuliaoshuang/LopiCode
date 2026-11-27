@@ -61,7 +61,8 @@ Object? lcParseJsonInitial(String type, String text) {
 Future<LcVarDraft?> showLcVariableDialog(BuildContext context, {required Set<String> taken, LcVariable? editing, String? suggestType, int refCount = 0, bool wide = false, String noun = '变量'}) =>
     showDialog<LcVarDraft>(
       context: context,
-      builder: (_) => _VariableDialog(taken: taken, editing: editing, suggestType: suggestType, refCount: refCount, wide: wide || (editing != null && !LcVariable.types.contains(editing.type)), noun: noun),
+      builder: (_) =>
+          _VariableDialog(taken: taken, editing: editing, suggestType: suggestType, refCount: refCount, wide: wide || (editing != null && !LcVariable.types.contains(editing.type)), noun: noun),
     );
 
 class _VariableDialog extends StatefulWidget {

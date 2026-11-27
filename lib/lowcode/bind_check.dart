@@ -142,7 +142,7 @@ List<LcBindIssue> lcCheckBindings(LcDocument doc) {
   walk(doc.root, const {});
 
   for (final def in doc.components) {
-    if (lcTreeHasBindings(def.root)) out.add(LcBindIssue('组件「${def.name}」的定义里有绑定：这一版不起作用，导出时照没绑的出（组件自己的状态留给下一期）', warning: true));
+    if (lcTreeHasBindings(def.root)) out.add(LcBindIssue('组件「${def.name}」的定义里有绑定：导出成普通网页、Flutter 时照页面上的控件一样处理；导出成 Vue / React 时不起作用（组件自己的状态留给下一期）', warning: true));
   }
   return out;
 }

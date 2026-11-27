@@ -42,8 +42,19 @@ LcNode lcBoundNode(LcNode n, LcBindEnv env, {bool placeholder = true}) {
     if (t.isNotEmpty) (style ??= {...n.style})[e.key] = t;
   }
   if (props == null && style == null) return n;
-  return LcNode(id: n.id, type: n.type, props: props ?? n.props, children: n.children, style: style ?? n.style, bind: n.bind, name: n.name, locked: n.locked, hidden: n.hidden, keptProps: n.keptProps, more: n.more)
-    ..instSlots = n.instSlots;
+  return LcNode(
+    id: n.id,
+    type: n.type,
+    props: props ?? n.props,
+    children: n.children,
+    style: style ?? n.style,
+    bind: n.bind,
+    name: n.name,
+    locked: n.locked,
+    hidden: n.hidden,
+    keptProps: n.keptProps,
+    more: n.more,
+  )..instSlots = n.instSlots;
 }
 
 /// 显示条件、存在条件按初值成不成立（没设条件＝成立）。

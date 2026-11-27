@@ -241,8 +241,7 @@ Map<String, Map<String, dynamic>> lcStyleBinds(LcNode n) {
   return {
     if (raw is Map)
       for (final e in raw.entries)
-        if (e.key is String && kLcCssProp.hasMatch(e.key as String))
-          e.key as String: ?lcSrcExprOf(e.value),
+        if (e.key is String && kLcCssProp.hasMatch(e.key as String)) e.key as String: ?lcSrcExprOf(e.value),
   };
 }
 
@@ -273,7 +272,9 @@ String? lcModelProp(String type) => switch (type) {
 };
 
 /// 这个节点上有没有任何绑定。
-bool lcHasBindings(LcNode n) => kLcBindFields.any(n.more.containsKey) && (lcBoundProps(n).isNotEmpty || lcShowIfExpr(n) != null || lcRenderIfExpr(n) != null || lcRepeatOf(n) != null || lcClassIfOf(n).isNotEmpty || lcStyleBinds(n).isNotEmpty || lcModelOf(n) != null);
+bool lcHasBindings(LcNode n) =>
+    kLcBindFields.any(n.more.containsKey) &&
+    (lcBoundProps(n).isNotEmpty || lcShowIfExpr(n) != null || lcRenderIfExpr(n) != null || lcRepeatOf(n) != null || lcClassIfOf(n).isNotEmpty || lcStyleBinds(n).isNotEmpty || lcModelOf(n) != null);
 
 /// 这棵树里有没有任何绑定。
 bool lcTreeHasBindings(LcNode root) {
