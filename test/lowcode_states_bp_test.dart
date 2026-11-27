@@ -99,7 +99,8 @@ void main() {
     test('网页类三种：各档的 @media 里多出带伪类的规则，排在这一档普通规则后面', () {
       final all = allExportFiles(_doc(_both));
       for (final path in ['html/style.css', 'vue/Bp.vue', 'react/Bp.css']) {
-        final css = all[path]!;
+        // Vue 的样式是一条声明一行，这里把空白压成一个空格再比（规则本身一个字不差）
+        final css = all[path]!.replaceAll(RegExp(r'\s+'), ' ');
         final sel = path.startsWith('html') ? RegExp(r'[#.][\w-]*buy') : RegExp(r'\.n-buy');
         expect(css, contains(':active { background: #111111; color: #ffffff; }'), reason: path);
         final tablet = css.substring(css.indexOf('@media (min-width: 768px)'), css.indexOf('@media (min-width: 1024px)'));
