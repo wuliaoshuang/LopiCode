@@ -232,7 +232,7 @@ function eventRec(ev) {
   const t = ev && ev.target ? ev.target : null;
   const num = (v) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
   return new Map([
-    ["value", t && typeof t.value === "string" ? t.value : ""],
+    ["value", t && t.value !== null && t.value !== undefined ? String(t.value) : ""],
     ["checked", !!(t && t.checked === true)],
     ["key", ev && typeof ev.key === "string" ? ev.key : ""],
     ["x", num(ev && ev.clientX)],
@@ -251,15 +251,18 @@ function winOn(target, type, f, opts) {
   return () => { on.removeEventListener(type, h, o); return null; };
 }
 
-// —— 旧页面积木的旧规矩（和旧生成器里的 lcNum / lcText / lcEq 一个字不差的算法）——
-function oldNum(v) { var n = typeof v === "number" ? v : parseFloat(v); return isFinite(n) ? n : 0; }
-function oldText(v) { return v === null || v === undefined ? "" : String(v); }
+// —— 旧页面积木的旧规矩（和旧生成器里的 lcNum / lcText / lcEq 同一个算法（logic_js_core.dart 的 lcJsRuntime））——
+function oldNum(v) {
+  const n = typeof v === "string" ? Number(v.trim()) : Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
+function oldText(v) {
+  if (v === null || v === undefined) return "";
+  if (typeof v === "number") return String(Number(v.toPrecision(12)));
+  return String(v);
+}
 function oldEq(a, b) {
-  if (typeof a === "number" || typeof b === "number") {
-    var x = typeof a === "number" ? a : parseFloat(a), y = typeof b === "number" ? b : parseFloat(b);
-    if (!isNaN(x) && !isNaN(y)) return x === y;
-  }
-  return oldText(a) === oldText(b);
+  return typeof a === typeof b ? a === b : oldText(a) === oldText(b);
 }
 const oldTruthy = (v) => !!v;
 function oldOp(op, a, b) {
@@ -275,6 +278,7 @@ function oldOp(op, a, b) {
     case ">=": return a >= b;
     case "===": return a === b;
     case "!==": return a !== b;
+    case "min": return Math.min(a, b);
     default: return fail("不认识的运算「" + op + "」");
   }
 }

@@ -5,6 +5,7 @@
 /// JSON 结构的完整约定见 docs/lowcode-v2-design.md。
 library;
 
+import 'package:lopicode/lang/lib_model.dart';
 import 'package:lopicode/lowcode/logic_variable.dart';
 
 export 'package:lopicode/lowcode/logic_variable.dart';
@@ -459,18 +460,25 @@ class LcHandler with LcBlockTree {
 }
 
 class LcLogic {
-  LcLogic({List<LcVariable>? variables, List<LcHandler>? handlers}) : variables = variables ?? [], handlers = handlers ?? [] {
+  LcLogic({List<LcVariable>? variables, List<LcHandler>? handlers, List<Map<String, dynamic>>? uses}) : variables = variables ?? [], handlers = handlers ?? [], uses = uses ?? [] {
     _normalize();
   }
 
   final List<LcVariable> variables;
   final List<LcHandler> handlers;
 
+  /// 用上的积木库（每条 `{id, settings?}`，原样存着；怎么读见 logic_libs.dart）。没用库的页面存盘不写这一项。
+  final List<Map<String, dynamic>> uses;
+
+  /// [uses] 里的库读进来的样子（不存盘：打开页面的人从项目的 `blocks/` 里读好了放进来）。
+  List<LibLibrary> loaded = const [];
+
   bool get isEmpty => variables.isEmpty && handlers.isEmpty;
 
   Map<String, dynamic> toJson() => {
     'variables': [for (final v in variables) v.toJson()],
     'handlers': [for (final h in handlers) h.toJson()],
+    if (uses.isNotEmpty) 'uses': uses,
   };
 
   /// 容错读取：不是对象就当没有逻辑；坏的变量 / 处理 / 积木逐条跳过。
@@ -486,6 +494,11 @@ class LcLogic {
       handlers: [
         if (hs is List)
           for (final h in hs) ?LcHandler.tryParse(h),
+      ],
+      uses: [
+        if (json['uses'] case final List<Object?> us)
+          for (final u in us.take(16))
+            if (u is Map && u['id'] is String) {for (final e in u.entries) '${e.key}': e.value},
       ],
     );
   }
@@ -550,5 +563,11 @@ class LcLogic {
     return v;
   }
 
-  LcLogic clone() => LcLogic(variables: [for (final v in variables) v.clone()], handlers: [for (final h in handlers) h.clone()]);
+  LcLogic clone() => LcLogic(
+    variables: [for (final v in variables) v.clone()],
+    handlers: [for (final h in handlers) h.clone()],
+    uses: [
+      for (final u in uses) {...u},
+    ],
+  )..loaded = loaded;
 }
