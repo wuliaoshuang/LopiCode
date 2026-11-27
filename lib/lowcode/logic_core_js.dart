@@ -48,6 +48,37 @@ class LcCoreJs {
   List<String> body(int i) => i < _bodies.length ? _bodies[i] : const [];
 }
 
+/// 多页面的 Vue / React 导出里，小库和页面宿主抽出来的那个共用文件（和页面文件放在一起）。
+const String kLcCoreSharedFile = 'lcCore.js';
+
+/// 哪几页的小库和页面宿主改成从 [kLcCoreSharedFile] 引进来（多页面导出时由 `_exportSite` 标上；没标的和以前逐字节一样）。
+final Expando<bool> lcCoreSharedOf = Expando<bool>('lcCoreShared');
+
+/// 走新路的页面有两页以上才抽：给这几页标上，交回要不要出共用文件。
+bool lcMarkCoreShared(Iterable<LcDocument> views) {
+  final core = [
+    for (final v in views)
+      if (lcDocUsesCore(v)) v,
+  ];
+  if (core.length < 2) return false;
+  for (final v in core) {
+    lcCoreSharedOf[v] = true;
+  }
+  return true;
+}
+
+/// 共用文件的内容：小库 `lcRuntime` 和页面宿主 `lcPageHost`，一字不改，最后导出这两个名字。
+String lcCoreSharedSource() => [
+  '// 由 LopiCode 低代码搭建器生成，重新导出会覆盖本文件。',
+  '// 语言核心的浏览器小库（lcRuntime）和页面宿主（lcPageHost）：这个项目里所有页面共用这一份。',
+  kRt2BrowserSource.trim(),
+  '',
+  kLcPageHostJs.trim(),
+  '',
+  'export { lcRuntime, lcPageHost };',
+  '',
+].join('\n');
+
 /// 这一页走新路时交回那几段；不走交回 null。[hash]＝“去页面”改地址栏里 # 后面那段（Vue / React）；否则换到 `页名.html`。
 /// [listen]＝读写表里带“往控件上挂事件”（纯网页用：这时不需要一个个处理函数）。
 LcCoreJs? lcCoreJsFor(LcDocument doc, JsTarget target, List<String>? notes, {LcVariable? Function(String name)? lookup, required bool hash, bool listen = false}) {
@@ -186,7 +217,21 @@ LcCoreJs? lcCoreJsFor(LcDocument doc, JsTarget target, List<String>? notes, {LcV
     bodies.add(seen.add(key) ? [call] : const ['// 和前面同一个事件的处理一起做了（都登记在页面宿主里）']);
   }
   return LcCoreJs._(
-    ['// —— 语言核心的浏览器小库（每份导出都一样）——', ...kRt2BrowserSource.trim().split('\n'), '', ...kLcPageHostJs.trim().split('\n'), '', '// —— 这一页的逻辑 ——', ...program.trim().split('\n'), ''],
+    [
+      if (lcCoreSharedOf[doc] == true) ...[
+        '// —— 语言核心的浏览器小库和页面宿主：所有页面共用，在 $kLcCoreSharedFile 里 ——',
+        "import { lcRuntime, lcPageHost } from './$kLcCoreSharedFile';",
+      ] else ...[
+        '// —— 语言核心的浏览器小库（每份导出都一样）——',
+        ...kRt2BrowserSource.trim().split('\n'),
+        '',
+        ...kLcPageHostJs.trim().split('\n'),
+      ],
+      '',
+      '// —— 这一页的逻辑 ——',
+      ...program.trim().split('\n'),
+      '',
+    ],
     boot,
     bodies,
     const [],
