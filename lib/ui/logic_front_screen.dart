@@ -74,11 +74,32 @@ class _PageCx implements BePageCx {
   }
 
   @override
+  List<BlockOption> get instances {
+    final out = <BlockOption>[];
+    void walk(LcNode n) {
+      final ref = n.props['ref'];
+      if (n.type == 'component' && ref is String && doc().component(ref) != null) out.add(BlockOption(n.id, _name(n.id), hint: '组件「${doc().component(ref)!.name}」'));
+      n.children.forEach(walk);
+    }
+
+    walk(doc().root);
+    return out;
+  }
+
+  @override
+  List<BlockOption> events(String? node) {
+    final n = node == null ? null : doc().find(node);
+    final ref = n?.props['ref'];
+    final def = n?.type == 'component' && ref is String ? doc().component(ref) : null;
+    return def == null ? const [] : [for (final e in lcComponentEvents(def)) BlockOption(e, e)];
+  }
+
+  @override
   List<BlockOption> get pages => [for (final p in doc().pages) BlockOption(p.id, p.title, hint: identical(p, doc().pages.first) ? '首页' : '')];
 
   @override
   String? label(String pick, String value) => switch (pick) {
-    'node' => doc().find(value) == null ? null : _name(value),
+    'node' || 'instance' => doc().find(value) == null ? null : _name(value),
     'page' => doc().pageTitle(value),
     'prop' => _propNames[value],
     _ => value,

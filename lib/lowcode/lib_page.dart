@@ -194,8 +194,11 @@ LibLibrary? _cached;
 LibLibrary lcPageLibrary() => _cached ??= libRead(kLcPageLibFiles, builtin: true);
 
 /// “页面”库积木上哪些槽是“从页面里挑一个”（积木页在页面逻辑里把它们画成下拉）：
-/// `node`＝控件，`state`＝状态，`prop`＝控件的属性，`page`＝项目里的页面。别的槽不是。
+/// `node`＝控件，`state`＝状态，`prop`＝控件的属性，`page`＝项目里的页面；“当组件发出事件”上 `instance`＝组件实例、
+/// `event`＝这个实例真有的事件。别的槽不是。
 String? lcPagePickOf(String blockId, String slot) => switch (slot) {
+  'node' when blockId == 'onEmit' => 'instance',
+  'event' when blockId == 'onEmit' => 'event',
   'node' => 'node',
   'prop' => 'prop',
   'page' => 'page',
