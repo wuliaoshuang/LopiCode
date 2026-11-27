@@ -33,7 +33,7 @@ class LTypeRule {
 const Map<String, LTypeRule> kTypeRules = {
   'T01': LTypeRule('T01', '这里要一种东西，放进来的是另一种', LTypeLevel.error, '换成要的那种，或者用“变成文字”“取整”这类积木转一下'),
   'T02': LTypeRule('T02', '可能是空，没判断就用了', LTypeLevel.error, '先用“如果 … 不是空”判断，或者包一层“是空就用 …”'),
-  'T03': LTypeRule('T03', '“看是哪种情况”没写全', LTypeLevel.error, '把少的情况补上，或者加一个“其余”'),
+  'T03': LTypeRule('T03', '“看是哪种情况”没写全', LTypeLevel.error, '把少的情况补上，或者加一个“其他情况”'),
   'T04': LTypeRule('T04', '新建记录缺了字段，或者多了没有的字段', LTypeLevel.error, '把缺的字段补上；多出来的删掉'),
   'T05': LTypeRule('T05', '泛型要求的条件不满足（比如要能比大小）', LTypeLevel.error, '换成满足条件的东西，或者在类型变量上说明“能比大小”'),
   'T06': LTypeRule('T06', '运算的两边不对（要数字，或者两边要同一种）', LTypeLevel.error, '把两边换成数字；数字和文字不能混着算、混着比'),

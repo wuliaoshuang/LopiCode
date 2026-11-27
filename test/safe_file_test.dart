@@ -21,6 +21,7 @@ import 'package:lopicode/backdrop/backdrop_store.dart';
 import 'package:lopicode/backdrop/crop_math.dart';
 import 'package:lopicode/backend/backend_block_host.dart';
 import 'package:lopicode/backend/backend_core_gen.dart';
+import 'package:lopicode/backend/backend_lib_store.dart';
 import 'package:lopicode/backend/backend_model.dart';
 import 'package:lopicode/backend/backend_project.dart';
 import 'package:lopicode/backend/backend_type_bridge.dart';
@@ -1124,5 +1125,24 @@ void main() {
       expect(await loadLayersCollapsed(PathGuard(tmp.path)), {'n3'});
       expect(badBackups(file()), isEmpty);
     });
+  });
+
+  group('项目里的库 blocks/libs.json 和库的文件夹', () {
+    for (final entry in corruptSamples.entries) {
+      test('坏内容（${entry.key}）：清单坏了当没有登记、库文件坏了那个库标成用不了，不抛异常；之后照常能新建', () async {
+        final guard = PathGuard(tmp.path);
+        File('${tmp.path}/blocks/libs.json')
+          ..createSync(recursive: true)
+          ..writeAsStringSync(entry.value);
+        File('${tmp.path}/blocks/tata/bad/lib.json')
+          ..createSync(recursive: true)
+          ..writeAsStringSync(entry.value);
+        final libs = await beLibsRead(guard);
+        expect(libs.where((s) => s.ok), isEmpty);
+        final made = await beLibCreate(guard, id: 'tata/fine', name: '好的');
+        expect(made.problem, isNull);
+        expect((await beLibsRead(guard)).map((s) => s.id), contains('tata/fine'));
+      });
+    }
   });
 }

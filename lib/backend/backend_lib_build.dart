@@ -44,7 +44,15 @@ BeLibBuilt _fail(List<String> problems) => (files: null, lib: null, problems: pr
 String _escapeLook(String text) => text.replaceAll('{', '{{').replaceAll('}', '}}');
 
 /// 积木的外观：从函数 / 方法的外观出发，去掉“不在积木上”的参数的槽，补上“放进变量”槽和口。
-CustomBlockLook _look(CustomBlockLook base, List<String> params, bool Function(String param) onBlock, {required CustomBlockShape shape, bool into = false, List<String> mouths = const [], List<String> literal = const []}) {
+CustomBlockLook _look(
+  CustomBlockLook base,
+  List<String> params,
+  bool Function(String param) onBlock, {
+  required CustomBlockShape shape,
+  bool into = false,
+  List<String> mouths = const [],
+  List<String> literal = const [],
+}) {
   final out = StringBuffer();
   for (final part in parseLookTemplate(base.templateFor(params))) {
     if (!part.isSlot) {
@@ -272,7 +280,11 @@ BeLibBuilt _build(BeDocument source, BeLibInfo info, List<String> problems) {
   }
   if (problems.isNotEmpty) return _fail(problems);
 
-  final requires = [if (built.service) kBeServiceLibId, for (final l in built.libs) if (!l.builtin) l.id];
+  final requires = [
+    if (built.service) kBeServiceLibId,
+    for (final l in built.libs)
+      if (!l.builtin) l.id,
+  ];
   files[kLibManifestFile] = const JsonEncoder.withIndent('  ').convert({
     'kind': kLibKind,
     'format': kLibFormat,
@@ -347,7 +359,9 @@ Map<String, Object?>? _block(BeDocument doc, BeLibInfo info, BeLibDef d, BeFuncT
     final m = t.methods.firstWhere((m) => m.id == d.method);
     params = m.params;
     self = d.how == LibHow.method;
-    base = d.look ?? CustomBlockLook('${t.name}.${m.name}', template: '${self ? '{$kBeLibSelfSlot} ' : '${_escapeLook(t.name)} '}${_escapeLook(m.name)}${[for (final p in m.params) ' {${p.name}}'].join()}');
+    base =
+        d.look ??
+        CustomBlockLook('${t.name}.${m.name}', template: '${self ? '{$kBeLibSelfSlot} ' : '${_escapeLook(t.name)} '}${_escapeLook(m.name)}${[for (final p in m.params) ' {${p.name}}'].join()}');
     of = self ? m.name : '${t.name}.${m.name}';
     module = moduleOf[t.name] ?? info.id;
     shape = d.shape ?? (m.returns == null || m.returns!.isNul ? CustomBlockShape.statement : CustomBlockShape.value);
@@ -388,7 +402,15 @@ Map<String, Object?>? _block(BeDocument doc, BeLibInfo info, BeLibDef d, BeFuncT
     for (final p in names)
       if (d.params[p]?.from == BeLibFrom.literal) p,
   ];
-  final look = _look(base, [if (self) kBeLibSelfSlot, ...names], (p) => p == kBeLibSelfSlot || onBlock(p), shape: shape, into: d.into, mouths: d.how == LibHow.expand ? d.mouths : const [], literal: literal);
+  final look = _look(
+    base,
+    [if (self) kBeLibSelfSlot, ...names],
+    (p) => p == kBeLibSelfSlot || onBlock(p),
+    shape: shape,
+    into: d.into,
+    mouths: d.how == LibHow.expand ? d.mouths : const [],
+    literal: literal,
+  );
   // 外观上要有每一个“在积木上”的参数的槽。
   final slots = {
     for (final p in parseLookTemplate(look.template))

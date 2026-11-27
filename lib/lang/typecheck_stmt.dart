@@ -248,11 +248,11 @@ mixin _Stmts on _Core {
         err(
           'T03',
           sc,
-          '“分情况”还少了：${miss.join('、')}（或者加一个“其余”）',
+          '“看是哪种情况”还少了：${miss.join('、')}（或者加一个“其他情况”）',
           node: s,
           fixes: [
             LFix(LFixKind.addMatchCases, '补上少的情况', target: s, params: {'cases': miss}),
-            LFix(LFixKind.addMatchElse, '加一个“其余”', target: s),
+            LFix(LFixKind.addMatchElse, '加一个“其他情况”', target: s),
           ],
         );
       }

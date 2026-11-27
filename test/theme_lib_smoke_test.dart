@@ -58,7 +58,13 @@ void main() {
     group('${theme.name}（${theme.id}）', () {
       testWidgets('用库的文档：画布、积木盒那一页、菜单、积木库、一个库、导入预览、看代码', (tester) async {
         final built = beLibFiles(parseLangBlocksDocument(checkLibDoc()));
-        final ui = await open(tester, flowUserDoc(), files: {'带手写.lopilib': beLibPack({...built.files!, 'native/hack.js': 'const cp = require("child_process");\nmodule.exports = () => cp.execSync("ls").toString();\n'})});
+        final ui = await open(
+          tester,
+          flowUserDoc(),
+          files: {
+            '带手写.lopilib': beLibPack({...built.files!, 'native/hack.js': 'const cp = require("child_process");\nmodule.exports = () => cp.execSync("ls").toString();\n'}),
+          },
+        );
         expect(ui.screen.host!.issues.where((i) => i.isError), isEmpty);
         await shot(tester, 'user-canvas');
 

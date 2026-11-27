@@ -151,8 +151,7 @@ class LcWriter {
           if (d.typeParams.isNotEmpty) _typeParams(d.typeParams, bounds: false).trim(),
           if (d.parent != null) '(继承 ${name(d.parent!)})',
           if (d.interfaces.isNotEmpty) '(实现 ${d.interfaces.map(name).join(' ')})',
-          for (final f in d.fields)
-            '(${f.isPrivate ? '内部' : ''}${f.isStatic ? '类字段' : '字段'} ${name(f.name)} ${type(f.type ?? LType.any)}${f.init == null ? '' : ' ${expr(f.init!)}'})',
+          for (final f in d.fields) '(${f.isPrivate ? '内部' : ''}${f.isStatic ? '类字段' : '字段'} ${name(f.name)} ${type(f.type ?? LType.any)}${f.init == null ? '' : ' ${expr(f.init!)}'})',
           if (d.ctor != null) '(创建 ${params(d.ctor!.params)}${block(d.ctor!.body, '$inner  ')})',
           for (final m in d.methods)
             if (m.isAbstract)
@@ -165,8 +164,7 @@ class LcWriter {
         text = '(类 ${name(d.name)}${parts.map((p) => '\n$inner$p').join()})';
       case LInterfaceDecl():
         public = d.isPublic;
-        text =
-            '(接口 ${name(d.name)}${[for (final m in d.methods) '\n$inner(${name(m.name)} ${params(m.params)} ${type(m.returns ?? LType.nul)}${m.waits ? ' 要等' : (m.noWait ? ' 不等' : '')})'].join()})';
+        text = '(接口 ${name(d.name)}${[for (final m in d.methods) '\n$inner(${name(m.name)} ${params(m.params)} ${type(m.returns ?? LType.nul)}${m.waits ? ' 要等' : (m.noWait ? ' 不等' : '')})'].join()})';
       case LNativeDecl():
         public = false;
         text = '(宿主 ${name(d.name)} ${params(d.params)} -> ${type(d.type ?? LType.nul)})';
@@ -179,7 +177,10 @@ class LcWriter {
         text = '(枚举 ${name(d.name)} ${d.cases.map(name).join(' ')})';
       case LVariantDecl():
         public = d.isPublic;
-        text = '(变体 ${name(d.name)}${[for (final c in d.cases) ' (${name(c.name)}${[for (final f in c.fields) ' (${name(f.name)} ${type(f.type)})'].join()})'].join()})';
+        text =
+            '(变体 ${name(d.name)}${[
+              for (final c in d.cases) ' (${name(c.name)}${[for (final f in c.fields) ' (${name(f.name)} ${type(f.type)})'].join()})',
+            ].join()})';
       case LAliasDecl():
         public = d.isPublic;
         text = '(别名 ${name(d.name)} ${type(d.target)})';

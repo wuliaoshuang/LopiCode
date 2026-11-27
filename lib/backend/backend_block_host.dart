@@ -208,7 +208,8 @@ class BeBlockHost extends BlockHost with BeFuncHost, BeCoreHost, BeTypeHost, BeL
 
   /// `pair` 不在积木盒里（只能出现在“对象”里），颜色跟着“对象”。
   @override
-  String exprColorKey(String kind) => kind == 'pair' ? BlockColorKey.dict : (funcColorKey(kind) ?? libColorKey(kind) ?? coreColorKey(kind) ?? (kind == 'param' ? BlockColorKey.function : super.exprColorKey(kind)));
+  String exprColorKey(String kind) =>
+      kind == 'pair' ? BlockColorKey.dict : (funcColorKey(kind) ?? libColorKey(kind) ?? coreColorKey(kind) ?? (kind == 'param' ? BlockColorKey.function : super.exprColorKey(kind)));
 
   @override
   String blockColorKey(String op) => funcColorKey(op) ?? libColorKey(op) ?? coreColorKey(op) ?? super.blockColorKey(op);

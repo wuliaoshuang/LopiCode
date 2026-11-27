@@ -327,7 +327,8 @@ abstract class JavaGen2Types extends Gen2 {
   }
 
   @override
-  String callNamed(LTypedSig f, List<String> args, List<LType> typeArgs) => '${typeArgs.isEmpty ? from(f.info.name) : '${holderOf(split?.of(f.info.name) ?? '')}.${targs(typeArgs)}'}${funcName(f.info.name)}(${args.join(', ')})';
+  String callNamed(LTypedSig f, List<String> args, List<LType> typeArgs) =>
+      '${typeArgs.isEmpty ? from(f.info.name) : '${holderOf(split?.of(f.info.name) ?? '')}.${targs(typeArgs)}'}${funcName(f.info.name)}(${args.join(', ')})';
   @override
   String callValue(String f, List<String> args, LType ft) => '$f.call(${args.join(', ')})';
   @override

@@ -465,7 +465,7 @@ class BackendScreenState extends ConsumerState<BackendScreen> {
     final errors = host.errorCount;
     final regen = _regen;
     if (errors > 0) return blockErrorsBrief(errors);
-    if (host.canvasType case final inside?) return '在类「${inside.name}」里面';
+    if (host.canvasType case final inside?) return '「${inside.name}」';
     if (host.doc.library case final lib?) return regen != null && !regen.ok ? '库文件没有更新' : '库 · 公开了 ${lib.blocks.length} 块积木';
     if (regen != null && !regen.ok) return '代码没有重新生成';
     if (regen != null && regen.conflicts.isNotEmpty) return '${regen.conflicts.length} 个文件没覆盖';
@@ -509,7 +509,7 @@ class BackendScreenState extends ConsumerState<BackendScreen> {
     return BlockEditorView(
       key: _editor,
       host: host,
-      title: '后端积木',
+      title: host.canvasType == null ? '后端积木' : '类的画布', // 类的画布里多一颗“回主画布”，标题那一格更窄：只写类名
       subtitle: _status(host),
       dockMemoryKey: 'backend',
       stars: _stars,

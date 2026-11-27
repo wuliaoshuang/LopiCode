@@ -203,7 +203,11 @@ Future<({String? rel, String? problem})> beLibCreate(PathGuard guard, {required 
   final all = await beLibsRead(guard);
   if (all.any((s) => s.id == id) || await Directory(guard.resolve('$kBeLibsDir/$id')).exists()) return (rel: null, problem: '项目里已经有标识是 $id 的库了');
   if (all.length >= kBeMaxProjectLibs) return (rel: null, problem: '一个项目最多放 $kBeMaxProjectLibs 个库');
-  final doc = BeDocument(name: title, rules: kLangRulesForNewDocs, library: BeLibInfo(id: id, author: author.trim()));
+  final doc = BeDocument(
+    name: title,
+    rules: kLangRulesForNewDocs,
+    library: BeLibInfo(id: id, author: author.trim()),
+  );
   final rel = beLibSourceRel(id);
   final file = File(guard.resolve(rel));
   await file.parent.create(recursive: true);
@@ -248,7 +252,12 @@ Future<BeDocument?> _readDoc(PathGuard guard, String rel) async {
 }
 
 /// 项目里用了库 [libId] 的文档，各有哪些“错误”级的问题。[docs]＝要看哪些后端文档（相对路径）。
-Future<Map<String, Set<String>>> beLibUserIssues(PathGuard guard, String libId, List<BeStoredLib> stored, {List<String> docs = const ['backend.lc.json', 'server/backend.lc.json', 'backend/backend.lc.json', 'api/backend.lc.json']}) async {
+Future<Map<String, Set<String>>> beLibUserIssues(
+  PathGuard guard,
+  String libId,
+  List<BeStoredLib> stored, {
+  List<String> docs = const ['backend.lc.json', 'server/backend.lc.json', 'backend/backend.lc.json', 'api/backend.lc.json'],
+}) async {
   final out = <String, Set<String>>{};
   final rels = [
     ...docs,

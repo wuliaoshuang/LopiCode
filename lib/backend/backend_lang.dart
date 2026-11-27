@@ -9,10 +9,10 @@ library;
 
 import 'package:lopicode/backend/backend_ir.dart';
 import 'package:lopicode/lang/ast.dart';
-import 'package:lopicode/lowcode/logic_model.dart';
 import 'package:lopicode/lang/ast_util.dart';
 import 'package:lopicode/lang/gen_scope.dart';
 import 'package:lopicode/lang/names.dart';
+import 'package:lopicode/lowcode/logic_model.dart';
 
 /// “这次请求”在生成的代码里叫什么。五种语言的 `BeCodeTarget.request` 都是它（有测试守着）；翻译这一层和语言无关，所以写死在这里。
 const String kBeRequestName = 'req';

@@ -221,7 +221,11 @@ class BeDocument {
   bool get usesFunctions => functions.isNotEmpty || routes.any((r) => beBlocksUseFunc(r.body));
 
   Map<String, dynamic> toJson() => {
-    'version': usesLibs ? 5 : usesCore ? 4 : (usesFunctions ? 3 : (usesLang ? 2 : 1)),
+    'version': usesLibs
+        ? 5
+        : usesCore
+        ? 4
+        : (usesFunctions ? 3 : (usesLang ? 2 : 1)),
     'kind': 'backend',
     if (rules != kLangRulesLoose) kLangRulesField: rules,
     'name': name,
@@ -335,7 +339,11 @@ class BeDocument {
     uses.removeWhere((u) => !libIds.add(u.id));
     if (uses.length > kBeMaxLibUses) uses.removeRange(kBeMaxLibUses, uses.length);
     if (hats.length > kBeMaxLibHats) hats.removeRange(kBeMaxLibHats, hats.length);
-    final all = {...ids, kBeMainId, for (final t in core.types) ...[t.id, for (final m in t.trees) m.id]};
+    final all = {
+      ...ids,
+      kBeMainId,
+      for (final t in core.types) ...[t.id, for (final m in t.trees) m.id],
+    };
     for (final h in hats) {
       if (!_idPattern.hasMatch(h.id) || !all.add(h.id)) {
         var n = 1;

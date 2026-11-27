@@ -10,9 +10,9 @@ import 'dart:async';
 import 'package:lopicode/backend/backend_block_host.dart';
 import 'package:lopicode/backend/backend_lib_doc.dart';
 import 'package:lopicode/backend/backend_lib_pack.dart';
-import 'package:lopicode/backend/backend_model.dart';
 import 'package:lopicode/backend/backend_lib_store.dart';
 import 'package:lopicode/backend/backend_lib_table.dart';
+import 'package:lopicode/backend/backend_model.dart';
 import 'package:lopicode/backend/lib_service.dart';
 import 'package:lopicode/core/path_guard.dart';
 import 'package:lopicode/lang/lib_model.dart';
@@ -177,20 +177,13 @@ class _LibsSheetState extends State<_LibsSheet> {
     return BeSheetFrame(
       key: const ValueKey('be-libs'),
       title: '积木库',
-      hint: !host.strictRules
-          ? '库要“严格规矩”的文档才能用。先在“更多”里升级到严格规矩。'
-          : (mine.isEmpty ? '库＝别人（或你自己）用积木写好的一组积木。用上以后，它的积木会出现在积木盒里。可以新建一个自己写，也可以把别人导出的文件导进来。' : null),
+      hint: !host.strictRules ? '库要“严格规矩”的文档才能用。先在“更多”里升级到严格规矩。' : (mine.isEmpty ? '库＝别人（或你自己）用积木写好的一组积木。用上以后，它的积木会出现在积木盒里。可以新建一个自己写，也可以把别人导出的文件导进来。' : null),
       problem: _problem,
       children: [
         if (libs == null) const BeSheetRow(label: '正在读项目里的库…', muted: true),
         if (mine.isNotEmpty) const BeSheetSection('项目里的库'),
         for (final s in mine)
-          BeSheetRow(
-            key: ValueKey('be-lib-${s.id}'),
-            label: s.name,
-            value: !s.ok ? '有问题' : '${s.lib.blocks.length} 块积木${doc.use(s.id) != null ? ' · 用上了' : ''}',
-            onTap: () => unawaited(_openLib(s)),
-          ),
+          BeSheetRow(key: ValueKey('be-lib-${s.id}'), label: s.name, value: !s.ok ? '有问题' : '${s.lib.blocks.length} 块积木${doc.use(s.id) != null ? ' · 用上了' : ''}', onTap: () => unawaited(_openLib(s))),
         if (host.strictRules) BeSheetAdd(key: const ValueKey('be-lib-new'), label: '新建库', onTap: () => unawaited(_create())),
         if (host.strictRules) BeSheetAdd(key: const ValueKey('be-lib-import'), label: '从文件导入', onTap: () => unawaited(_import())),
         const BeSheetSection('应用自带'),
@@ -353,7 +346,11 @@ class _LibSheetState extends State<_LibSheet> {
         if (_note != null)
           Padding(
             padding: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x2),
-            child: Text(_note!, key: const ValueKey('be-lib-note'), style: t.bodyMedium?.copyWith(color: c.textMuted)),
+            child: Text(
+              _note!,
+              key: const ValueKey('be-lib-note'),
+              style: t.bodyMedium?.copyWith(color: c.textMuted),
+            ),
           ),
         if (s.ok && host.strictRules)
           SwitchListTile(
@@ -366,7 +363,8 @@ class _LibSheetState extends State<_LibSheet> {
           ),
         if (use != null && lib.settings.isNotEmpty) const BeSheetSection('设置项（只管这份文档）'),
         if (use != null)
-          for (final st in lib.settings) BeSheetRow(key: ValueKey('be-lib-setting-${st.id}'), label: st.name, value: '${use.settings[st.id] ?? st.defaultValue ?? '空'}', onTap: () => unawaited(_setting(st))),
+          for (final st in lib.settings)
+            BeSheetRow(key: ValueKey('be-lib-setting-${st.id}'), label: st.name, value: '${use.settings[st.id] ?? st.defaultValue ?? '空'}', onTap: () => unawaited(_setting(st))),
         if (lib.requires.isNotEmpty) const BeSheetSection('它要靠的库'),
         for (final r in lib.requires) BeSheetRow(label: r == kBeServiceLibId ? '接口服务（应用自带）' : r, muted: true),
         BeSheetSection('积木（${lib.blocks.length} 块）'),

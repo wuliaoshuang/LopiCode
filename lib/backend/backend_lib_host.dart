@@ -115,9 +115,6 @@ mixin BeLibHost on BlockHost, BeFuncHost {
     if (block?.op != kBeLibMouthOp || arg.name != 'name') return null;
     final names = tree == null ? const <String>[] : libTable.mouthsOfFunction(tree.id);
     final current = block!.args['name'];
-    return [
-      for (final n in names) BlockOption(n, n),
-      if (current is String && current.isNotEmpty && !names.contains(current)) BlockOption(current, '$current（已经没有这个口了）'),
-    ];
+    return [for (final n in names) BlockOption(n, n), if (current is String && current.isNotEmpty && !names.contains(current)) BlockOption(current, '$current（已经没有这个口了）')];
   }
 }

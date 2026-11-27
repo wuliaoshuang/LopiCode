@@ -330,7 +330,7 @@ bool beEnsureSuperInit(BeCore core, BeTypeDef t) {
   final mode = beMatchMode(b);
   if (mode == 'case') return null;
   final addElse = beCoreFixOf(const LFix(LFixKind.addMatchElse, ''), block: at)!;
-  if (mode == 'any') return ('“看是哪种情况”看的是“任意”的值，列不全：要有一段“其他情况”', [addElse]);
+  if (mode == 'any') return ('“看是哪种情况”看的是“任意”的值，列不全：要有一个“其他情况”', [addElse]);
   final have = {for (final a in b.arms) a.args['case']};
   final miss = [
     for (final c in const [kBeCaseNull, kBeCaseSome])
@@ -338,7 +338,7 @@ bool beEnsureSuperInit(BeCore core, BeTypeDef t) {
   ];
   if (miss.isEmpty) return null;
   return (
-    '“看是哪种情况”还少了：${[for (final c in miss) kBeCaseLabels[c]].join('、')}（或者加一段“其他情况”）',
+    '“看是哪种情况”还少了：${[for (final c in miss) kBeCaseLabels[c]].join('、')}（或者加一个“其他情况”）',
     [
       BeCoreFix('补上少的情况', (doc) {
         final blk = _block(doc, at);

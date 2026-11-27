@@ -122,8 +122,7 @@ class _InfoSheetState extends State<_InfoSheet> {
       problem: _problem ?? (problems.isEmpty ? null : '库文件现在出不来：${problems.first}${problems.length > 1 ? '（还有 ${problems.length - 1} 个问题，见问题列表）' : ''}'),
       children: [
         const BeSheetSection('公开成积木'),
-        if (doc.functions.isEmpty && classes.every((t) => t.methods.isEmpty))
-          const BeSheetRow(label: '还没有函数。先在画布上从积木盒“我的积木”里新建一块。', muted: true),
+        if (doc.functions.isEmpty && classes.every((t) => t.methods.isEmpty)) const BeSheetRow(label: '还没有函数。先在画布上从积木盒“我的积木”里新建一块。', muted: true),
         for (final f in doc.functions)
           BeSheetRow(
             key: ValueKey('be-lib-def-${f.id}'),
@@ -215,7 +214,9 @@ class _DefSheetState extends State<_DefSheet> {
     final m = widget.method;
     _do(
       () => info.blocks.add(
-        fn != null ? BeLibDef(id: info.freeDefId(), how: LibHow.call, fn: fn!.id) : BeLibDef(id: info.freeDefId(), how: m!.isStatic ? LibHow.static : LibHow.method, typeId: widget.type!.id, method: m.id),
+        fn != null
+            ? BeLibDef(id: info.freeDefId(), how: LibHow.call, fn: fn!.id)
+            : BeLibDef(id: info.freeDefId(), how: m!.isStatic ? LibHow.static : LibHow.method, typeId: widget.type!.id, method: m.id),
       ),
     );
   }
@@ -237,10 +238,7 @@ class _DefSheetState extends State<_DefSheet> {
 
   Future<void> _how() async {
     final d = def!;
-    final v = await _pick<LibHow>(context, '用的时候怎么办', const [
-      (LibHow.call, '调用它', '最常见。用的地方调一次这个函数；可以是一个值'),
-      (LibHow.expand, '原地展开', '把函数里的积木照样铺到用的地方。带口的、当帽子的积木要选这个；不能是一个值'),
-    ]);
+    final v = await _pick<LibHow>(context, '用的时候怎么办', const [(LibHow.call, '调用它', '最常见。用的地方调一次这个函数；可以是一个值'), (LibHow.expand, '原地展开', '把函数里的积木照样铺到用的地方。带口的、当帽子的积木要选这个；不能是一个值')]);
     if (v == null || !mounted) return;
     _do(() {
       d.how = v;

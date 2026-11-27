@@ -5,7 +5,6 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lopicode/backend/backend_lib_store.dart';
 import 'package:lopicode/backend/backend_model.dart';
-import 'package:lopicode/backend/backend_project.dart';
 import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/core/templates.dart';
 import 'package:lopicode/project_session.dart';
@@ -69,7 +68,14 @@ Future<LibUi> openLibUi(
       await env.dispose();
     });
   });
-  await tester.pumpWidget(appFor(env, ProjectShell(project: project, session: session, initial: ShellDest.builder), mode: mode, font: font));
+  await tester.pumpWidget(
+    appFor(
+      env,
+      ProjectShell(project: project, session: session, initial: ShellDest.builder),
+      mode: mode,
+      font: font,
+    ),
+  );
   await libSettle(tester);
   return (screen: tester.state<BackendScreenState>(find.byType(BackendScreen).last), session: session, project: project);
 }
@@ -99,7 +105,11 @@ Finder lk(String key) => find.byKey(ValueKey(key));
 Future<void> libTap(WidgetTester tester, String key) async {
   final f = lk(key);
   if (f.hitTestable().evaluate().isEmpty) {
-    await tester.scrollUntilVisible(f, 120, scrollable: find.descendant(of: find.byType(BottomSheet).last, matching: find.byType(Scrollable)).first);
+    await tester.scrollUntilVisible(
+      f,
+      120,
+      scrollable: find.descendant(of: find.byType(BottomSheet).last, matching: find.byType(Scrollable)).first,
+    );
     await tester.ensureVisible(f);
     await tester.pumpAndSettle();
   }

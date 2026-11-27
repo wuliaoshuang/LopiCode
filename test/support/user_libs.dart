@@ -13,7 +13,19 @@ import 'backend_func_blocks.dart';
 import 'backend_lang_blocks.dart';
 
 /// 库文档：在核心文档上多一节 `library`；库里没有“程序开始时”。
-J libDoc(String name, String id, {List<String> collections = const [], List<J> types = const [], List<J> functions = const [], List<J> globals = const [], List<String> public = const [], required List<J> blocks, List<J> settings = const [], List<J> uses = const [], String author = '霜霜'}) => {
+J libDoc(
+  String name,
+  String id, {
+  List<String> collections = const [],
+  List<J> types = const [],
+  List<J> functions = const [],
+  List<J> globals = const [],
+  List<String> public = const [],
+  required List<J> blocks,
+  List<J> settings = const [],
+  List<J> uses = const [],
+  String author = '霜霜',
+}) => {
   'version': 5,
   'kind': 'backend',
   'name': name,
@@ -21,18 +33,29 @@ J libDoc(String name, String id, {List<String> collections = const [], List<J> t
   'language': 'node',
   'rules': 2,
   if (functions.isNotEmpty) 'functions': functions,
-  'core': {
-    if (types.isNotEmpty) 'types': types,
-    if (globals.isNotEmpty) 'globals': globals,
-    if (public.isNotEmpty) 'public': public,
-  },
-  if (collections.isNotEmpty) 'collections': [for (final c in collections) {'name': c}],
+  'core': {if (types.isNotEmpty) 'types': types, if (globals.isNotEmpty) 'globals': globals, if (public.isNotEmpty) 'public': public},
+  if (collections.isNotEmpty)
+    'collections': [
+      for (final c in collections) {'name': c},
+    ],
   'library': {'id': id, 'version': '1.0.0', 'author': author, if (settings.isNotEmpty) 'settings': settings, 'blocks': blocks},
   if (uses.isNotEmpty) 'uses': uses,
 };
 
 /// 公开成的一块积木。
-J def(String id, String how, {String? fn, String? type, String? method, J? look, Map<String, J> params = const {}, bool into = false, List<String> mouths = const [], Map<String, String> provides = const {}, String? shape}) => {
+J def(
+  String id,
+  String how, {
+  String? fn,
+  String? type,
+  String? method,
+  J? look,
+  Map<String, J> params = const {},
+  bool into = false,
+  List<String> mouths = const [],
+  Map<String, String> provides = const {},
+  String? shape,
+}) => {
   'id': id,
   'how': how,
   'fn': ?fn,
@@ -80,43 +103,118 @@ J checkLibDoc() => libDoc(
   '校验器',
   kLibCheck,
   types: [
-    typeDef('t1', 'interface', '规则', methods: [method('m1', '检查', [tpar('值', tText)], [], returns: tText)]),
-    typeDef('t2', 'class', '不为空', interfaces: ['规则'], methods: [
-      method('m2', '检查', [tpar('值', tText)], [
-        iff(op2('==', pm('值'), tx('')), [ret(tx('不能空着'))], noElse: true),
-        ret(tx('')),
-      ], returns: tText),
-    ]),
-    typeDef('t3', 'class', '最短', interfaces: ['规则'], fields: [field('几个', tInt)], ctor: method('m3', '创建时', [tpar('n', tInt)], [setF(me(), '几个', pm('n'))]), methods: [
-      method('m4', '检查', [tpar('值', tText)], [
-        iff(op2('<', ex('len', {'x': pm('值')}), getF(me(), '几个')), [
-          ret(cat([tx('至少要 '), getF(me(), '几个'), tx(' 个字')])),
-        ], noElse: true),
-        ret(tx('')),
-      ], returns: tText),
-    ]),
-    typeDef('t4', 'class', '校验器', fields: [field('规则们', tList(LType.ref('规则')), init: ls([])), field('查过', tInt, init: nm(0))], methods: [
-      method('m5', '加', [tpar('r', tRef('规则'))], [blk('listPush', {'xs': getF(me(), '规则们'), 'v': pm('r')})]),
-      method('m6', '查', [tpar('值', tText)], [
-        setF(me(), '查过', op2('+', getF(me(), '查过'), nm(1))),
-        blk('let', {'name': 'out', 'value': ls([]), 'type': tList(LType.text)}),
-        blk('listEach', {'xs': getF(me(), '规则们'), 'fn': lam(['r'], [
-          konst('m', send(pm('r'), '检查', [pm('值')])),
-          iff(op2('!=', vr('m'), tx('')), [push('out', vr('m'))], noElse: true),
-        ])}),
-        ret(vr('out')),
-      ], returns: tList(LType.text)),
-      method('m7', '查过几次', [], [ret(getF(me(), '查过'))], returns: tInt),
-      method('m8', '新的', [], [ret(newObj('校验器'))], returns: tRef('校验器'), static_: true),
-    ]),
+    typeDef(
+      't1',
+      'interface',
+      '规则',
+      methods: [
+        method('m1', '检查', [tpar('值', tText)], [], returns: tText),
+      ],
+    ),
+    typeDef(
+      't2',
+      'class',
+      '不为空',
+      interfaces: ['规则'],
+      methods: [
+        method(
+          'm2',
+          '检查',
+          [tpar('值', tText)],
+          [
+            iff(op2('==', pm('值'), tx('')), [ret(tx('不能空着'))], noElse: true),
+            ret(tx('')),
+          ],
+          returns: tText,
+        ),
+      ],
+    ),
+    typeDef(
+      't3',
+      'class',
+      '最短',
+      interfaces: ['规则'],
+      fields: [field('几个', tInt)],
+      ctor: method('m3', '创建时', [tpar('n', tInt)], [setF(me(), '几个', pm('n'))]),
+      methods: [
+        method(
+          'm4',
+          '检查',
+          [tpar('值', tText)],
+          [
+            iff(op2('<', ex('len', {'x': pm('值')}), getF(me(), '几个')), [
+              ret(cat([tx('至少要 '), getF(me(), '几个'), tx(' 个字')])),
+            ], noElse: true),
+            ret(tx('')),
+          ],
+          returns: tText,
+        ),
+      ],
+    ),
+    typeDef(
+      't4',
+      'class',
+      '校验器',
+      fields: [
+        field('规则们', tList(const LType.ref('规则')), init: ls([])),
+        field('查过', tInt, init: nm(0)),
+      ],
+      methods: [
+        method(
+          'm5',
+          '加',
+          [tpar('r', tRef('规则'))],
+          [
+            blk('listPush', {'xs': getF(me(), '规则们'), 'v': pm('r')}),
+          ],
+        ),
+        method(
+          'm6',
+          '查',
+          [tpar('值', tText)],
+          [
+            setF(me(), '查过', op2('+', getF(me(), '查过'), nm(1))),
+            blk('let', {'name': 'out', 'value': ls([]), 'type': tList(LType.text)}),
+            blk('listEach', {
+              'xs': getF(me(), '规则们'),
+              'fn': lam(
+                ['r'],
+                [
+                  konst('m', send(pm('r'), '检查', [pm('值')])),
+                  iff(op2('!=', vr('m'), tx('')), [push('out', vr('m'))], noElse: true),
+                ],
+              ),
+            }),
+            ret(vr('out')),
+          ],
+          returns: tList(LType.text),
+        ),
+        method('m7', '查过几次', [], [ret(getF(me(), '查过'))], returns: tInt),
+        method('m8', '新的', [], [ret(newObj('校验器'))], returns: tRef('校验器'), static_: true),
+      ],
+    ),
   ],
   functions: [
     tfn('f1', '不为空的规则', [], [ret(newObj('不为空'))], returns: tRef('规则')),
-    tfn('f2', '最短的规则', [tpar('n', tInt)], [ret(newObj('最短', [pm('n')]))], returns: tRef('规则')),
-    tfn('f3', '拼问题', [tpar('问题', tList(LType.text))], [
-      iff(op2('==', ex('len', {'x': pm('问题')}), nm(0)), [ret(tx('没问题'))], noElse: true),
-      ret(ex('listJoin', {'xs': pm('问题'), 'sep': tx('；')})),
-    ], returns: tText),
+    tfn(
+      'f2',
+      '最短的规则',
+      [tpar('n', tInt)],
+      [
+        ret(newObj('最短', [pm('n')])),
+      ],
+      returns: tRef('规则'),
+    ),
+    tfn(
+      'f3',
+      '拼问题',
+      [tpar('问题', tList(LType.text))],
+      [
+        iff(op2('==', ex('len', {'x': pm('问题')}), nm(0)), [ret(tx('没问题'))], noElse: true),
+        ret(ex('listJoin', {'xs': pm('问题'), 'sep': tx('；')})),
+      ],
+      returns: tText,
+    ),
   ],
   blocks: [
     def('newChecker', 'static', type: 't4', method: 'm8', look: look('新的校验器', '新的校验器')),
@@ -132,21 +230,49 @@ J checkLibDoc() => libDoc(
 );
 
 J checkUserDoc() => {
-  ...coreDoc('用校验器', main: [
-    konst('c', lx(kLibCheck, 'newChecker')),
-    lb(kLibCheck, 'add', {'对象': vr('c'), 'r': lx(kLibCheck, 'notEmpty')}),
-    lb(kLibCheck, 'add', {'对象': vr('c'), 'r': lx(kLibCheck, 'minLen', {'n': nm(5)})}),
-    log(lx(kLibCheck, 'joinAll', {'问题': lx(kLibCheck, 'check', {'对象': vr('c'), '值': tx('')})})),
-    log(lx(kLibCheck, 'joinAll', {'问题': lx(kLibCheck, 'check', {'对象': vr('c'), '值': tx('霜霜')})})),
-    blk('let', {'name': 'got', 'value': ls([]), 'type': tList(LType.text)}),
-    lb(kLibCheck, 'checkInto', {'对象': vr('c'), '值': tx('小塔塔和霜霜'), '结果': 'got'}),
-    log(lx(kLibCheck, 'joinAll', {'问题': vr('got')})),
-    konst('d', lx(kLibCheck, 'newChecker')),
-    lb(kLibCheck, 'add', {'对象': vr('d'), 'r': lx(kLibCheck, 'min3')}),
-    log(lx(kLibCheck, 'joinAll', {'问题': lx(kLibCheck, 'check', {'对象': vr('d'), '值': tx('"引号"\n换行')})})),
-    log(lx(kLibCheck, 'joinAll', {'问题': lx(kLibCheck, 'check', {'对象': vr('d'), '值': tx('好')})})),
-    say([tx('查过 '), lx(kLibCheck, 'count', {'对象': vr('c')}), tx(' 次和 '), lx(kLibCheck, 'count', {'对象': vr('d')}), tx(' 次')]),
-  ]),
+  ...coreDoc(
+    '用校验器',
+    main: [
+      konst('c', lx(kLibCheck, 'newChecker')),
+      lb(kLibCheck, 'add', {'对象': vr('c'), 'r': lx(kLibCheck, 'notEmpty')}),
+      lb(kLibCheck, 'add', {
+        '对象': vr('c'),
+        'r': lx(kLibCheck, 'minLen', {'n': nm(5)}),
+      }),
+      log(
+        lx(kLibCheck, 'joinAll', {
+          '问题': lx(kLibCheck, 'check', {'对象': vr('c'), '值': tx('')}),
+        }),
+      ),
+      log(
+        lx(kLibCheck, 'joinAll', {
+          '问题': lx(kLibCheck, 'check', {'对象': vr('c'), '值': tx('霜霜')}),
+        }),
+      ),
+      blk('let', {'name': 'got', 'value': ls([]), 'type': tList(LType.text)}),
+      lb(kLibCheck, 'checkInto', {'对象': vr('c'), '值': tx('小塔塔和霜霜'), '结果': 'got'}),
+      log(lx(kLibCheck, 'joinAll', {'问题': vr('got')})),
+      konst('d', lx(kLibCheck, 'newChecker')),
+      lb(kLibCheck, 'add', {'对象': vr('d'), 'r': lx(kLibCheck, 'min3')}),
+      log(
+        lx(kLibCheck, 'joinAll', {
+          '问题': lx(kLibCheck, 'check', {'对象': vr('d'), '值': tx('"引号"\n换行')}),
+        }),
+      ),
+      log(
+        lx(kLibCheck, 'joinAll', {
+          '问题': lx(kLibCheck, 'check', {'对象': vr('d'), '值': tx('好')}),
+        }),
+      ),
+      say([
+        tx('查过 '),
+        lx(kLibCheck, 'count', {'对象': vr('c')}),
+        tx(' 次和 '),
+        lx(kLibCheck, 'count', {'对象': vr('d')}),
+        tx(' 次'),
+      ]),
+    ],
+  ),
   'version': 5,
   'uses': [use(kLibCheck)],
 };
@@ -165,37 +291,64 @@ J flowLibDoc() => libDoc(
     {'name': 'noted', 'init': nm(0), 'type': tInt},
   ],
   functions: [
-    tfn('f1', '记一笔', [tpar('前缀', tText), tpar('话', tText)], [
-      setv('noted', op2('+', vr('noted'), nm(1))),
-      say([pm('前缀'), pm('话')]),
-    ]),
-    tfn('f2', '当开工', [tpar('名字', tText)], [
-      konst('round', cat([tx('「'), pm('名字'), tx('」')])),
-      say([tx('开工 '), vr('round')]),
-      mouth('里面'),
-      say([tx('收工 '), vr('round')]),
-    ]),
+    tfn(
+      'f1',
+      '记一笔',
+      [tpar('前缀', tText), tpar('话', tText)],
+      [
+        setv('noted', op2('+', vr('noted'), nm(1))),
+        say([pm('前缀'), pm('话')]),
+      ],
+    ),
+    tfn(
+      'f2',
+      '当开工',
+      [tpar('名字', tText)],
+      [
+        konst('round', cat([tx('「'), pm('名字'), tx('」')])),
+        say([tx('开工 '), vr('round')]),
+        mouth('里面'),
+        say([tx('收工 '), vr('round')]),
+      ],
+    ),
     tfn('f3', '这一轮的名字', [tpar('轮', tText)], [ret(pm('轮'))], returns: tText),
-    tfn('f4', '多试几次', [tpar('次数', tInt)], [
-      let('tries', nm(0)),
-      let('ok', no()),
-      whileB(op2('<', vr('tries'), pm('次数')), [
-        setv('tries', op2('+', vr('tries'), nm(1))),
-        tryB([
-          mouth('做'),
-          setv('ok', yes()),
-          blk('break'),
-        ], [
-          catchArm('错误', 'e', [say([tx('第 '), vr('tries'), tx(' 次没成：'), getF(vr('e'), '消息')])]),
+    tfn(
+      'f4',
+      '多试几次',
+      [tpar('次数', tInt)],
+      [
+        let('tries', nm(0)),
+        let('ok', no()),
+        whileB(op2('<', vr('tries'), pm('次数')), [
+          setv('tries', op2('+', vr('tries'), nm(1))),
+          tryB(
+            [mouth('做'), setv('ok', yes()), blk('break')],
+            [
+              catchArm('错误', 'e', [
+                say([tx('第 '), vr('tries'), tx(' 次没成：'), getF(vr('e'), '消息')]),
+              ]),
+            ],
+          ),
         ]),
-      ]),
-      iff(vr('ok'), [mouth('成了以后')], orElse: [thro(cat([tx('试了 '), pm('次数'), tx(' 次都没成')]))]),
-    ]),
-    tfn('f5', '加到', [tpar('n', tInt)], [
-      let('sum', nm(0)),
-      blk('forCount', {'name': 'i', 'from': nm(1), 'to': pm('n'), 'step': nm(1)}, [setv('sum', op2('+', vr('sum'), vr('i')))]),
-      put(vr('sum')),
-    ]),
+        iff(
+          vr('ok'),
+          [mouth('成了以后')],
+          orElse: [
+            thro(cat([tx('试了 '), pm('次数'), tx(' 次都没成')])),
+          ],
+        ),
+      ],
+    ),
+    tfn(
+      'f5',
+      '加到',
+      [tpar('n', tInt)],
+      [
+        let('sum', nm(0)),
+        blk('forCount', {'name': 'i', 'from': nm(1), 'to': pm('n'), 'step': nm(1)}, [setv('sum', op2('+', vr('sum'), vr('i')))]),
+        put(vr('sum')),
+      ],
+    ),
     tfn('f6', '记了几笔了', [], [ret(vr('noted'))], returns: tInt),
   ],
   blocks: [
@@ -210,36 +363,70 @@ J flowLibDoc() => libDoc(
 );
 
 J flowUserDoc({String prefix = '→ '}) => {
-  ...coreDoc('用流程', main: [
-    say([tx('一共记了 '), lx(kLibFlow, 'noted'), tx(' 笔')]),
-  ]),
+  ...coreDoc(
+    '用流程',
+    main: [
+      say([tx('一共记了 '), lx(kLibFlow, 'noted'), tx(' 笔')]),
+    ],
+  ),
   'version': 5,
   'uses': [
     use(kLibFlow, {'prefix': prefix}),
   ],
   'hats': [
-    hat('h1', kLibFlow, 'onStart', {'名字': '甲'}, [
-      lb(kLibFlow, 'note', {'话': lx(kLibFlow, 'roundName')}),
-      let('n', nm(0)),
-      lb(kLibFlow, 'retry', {'次数': nm(3)}, [
-        setv('n', op2('+', vr('n'), nm(1))),
-        iff(op2('<', vr('n'), nm(3)), [thro(cat([tx('才 '), vr('n')]))], noElse: true),
-        lb(kLibFlow, 'note', {'话': tx('做成了')}),
-      ], [
-        lb(kLibFlow, 'note', {'话': cat([tx('一共试了 '), vr('n'), tx(' 次')])}),
-      ]),
-      let('t', nm(0)),
-      lb(kLibFlow, 'sumTo', {'n': nm(4), '结果': 't'}),
-      lb(kLibFlow, 'note', {'话': cat([tx('1 加到 4 是 '), vr('t')])}),
-      tryB([
-        lb(kLibFlow, 'retryDefault', const {}, [thro(tx('就是不行'))]),
-      ], [
-        catchArm('错误', 'e', [lb(kLibFlow, 'note', {'话': getF(vr('e'), '消息')})]),
-      ]),
-    ]),
-    hat('h2', kLibFlow, 'onStart', {'名字': '乙'}, [
-      lb(kLibFlow, 'note', {'话': cat([lx(kLibFlow, 'roundName'), tx('没什么事')])}),
-    ]),
+    hat(
+      'h1',
+      kLibFlow,
+      'onStart',
+      {'名字': '甲'},
+      [
+        lb(kLibFlow, 'note', {'话': lx(kLibFlow, 'roundName')}),
+        let('n', nm(0)),
+        lb(
+          kLibFlow,
+          'retry',
+          {'次数': nm(3)},
+          [
+            setv('n', op2('+', vr('n'), nm(1))),
+            iff(op2('<', vr('n'), nm(3)), [
+              thro(cat([tx('才 '), vr('n')])),
+            ], noElse: true),
+            lb(kLibFlow, 'note', {'话': tx('做成了')}),
+          ],
+          [
+            lb(kLibFlow, 'note', {
+              '话': cat([tx('一共试了 '), vr('n'), tx(' 次')]),
+            }),
+          ],
+        ),
+        let('t', nm(0)),
+        lb(kLibFlow, 'sumTo', {'n': nm(4), '结果': 't'}),
+        lb(kLibFlow, 'note', {
+          '话': cat([tx('1 加到 4 是 '), vr('t')]),
+        }),
+        tryB(
+          [
+            lb(kLibFlow, 'retryDefault', const {}, [thro(tx('就是不行'))]),
+          ],
+          [
+            catchArm('错误', 'e', [
+              lb(kLibFlow, 'note', {'话': getF(vr('e'), '消息')}),
+            ]),
+          ],
+        ),
+      ],
+    ),
+    hat(
+      'h2',
+      kLibFlow,
+      'onStart',
+      {'名字': '乙'},
+      [
+        lb(kLibFlow, 'note', {
+          '话': cat([lx(kLibFlow, 'roundName'), tx('没什么事')]),
+        }),
+      ],
+    ),
   ],
 };
 const String kFlowWant = '''
@@ -270,35 +457,82 @@ J todoLibDoc() => libDoc(
   kLibTodo,
   collections: ['todos'],
   functions: [
-    tfn('f1', '加待办', [tpar('标题', tText)], [
-      blk('let', {'name': 'saved', 'value': ex('null'), 'type': _tAny}),
-      blk('dbInsert', {'collection': 'todos', 'value': dc({'title': pm('标题'), 'done': no()}), 'into': 'saved'}),
-      ret(vr('saved')),
-    ], returns: _tAny),
-    tfn('f2', '全部待办', [], [ret(ex('dbAll', {'collection': 'todos'}))], returns: lTypeToJson(const LType.listOf(LType.any))),
-    tfn('f4', '标成做完', [tpar('号', tText)], [
-      konst('it', _get(pm('号'))),
-      iff(op2('==', vr('it'), ex('null')), [ret(no())], noElse: true),
-      blk('dbUpdate', {'collection': 'todos', 'id': pm('号'), 'value': dc({'title': ex('field', {'of': vr('it'), 'key': 'title'}), 'done': yes()})}),
-      ret(yes()),
-    ], returns: tBool),
-    tfn('f5', '删待办', [tpar('号', tText)], [
-      iff(op2('==', _get(pm('号')), ex('null')), [ret(no())], noElse: true),
-      blk('dbDelete', {'collection': 'todos', 'id': pm('号')}),
-      ret(yes()),
-    ], returns: tBool),
-    tfn('f6', '请求里的标题', [tpar('r', tRef('请求'))], [
-      ret(ex('orElse', {'x': q('title'), 'd': tx('')})),
-    ], returns: tText),
+    tfn(
+      'f1',
+      '加待办',
+      [tpar('标题', tText)],
+      [
+        blk('let', {'name': 'saved', 'value': ex('null'), 'type': _tAny}),
+        blk('dbInsert', {
+          'collection': 'todos',
+          'value': dc({'title': pm('标题'), 'done': no()}),
+          'into': 'saved',
+        }),
+        ret(vr('saved')),
+      ],
+      returns: _tAny,
+    ),
+    tfn('f2', '全部待办', [], [
+      ret(ex('dbAll', {'collection': 'todos'})),
+    ], returns: lTypeToJson(const LType.listOf(LType.any))),
+    tfn(
+      'f4',
+      '标成做完',
+      [tpar('号', tText)],
+      [
+        konst('it', _get(pm('号'))),
+        iff(op2('==', vr('it'), ex('null')), [ret(no())], noElse: true),
+        blk('dbUpdate', {
+          'collection': 'todos',
+          'id': pm('号'),
+          'value': dc({
+            'title': ex('field', {'of': vr('it'), 'key': 'title'}),
+            'done': yes(),
+          }),
+        }),
+        ret(yes()),
+      ],
+      returns: tBool,
+    ),
+    tfn(
+      'f5',
+      '删待办',
+      [tpar('号', tText)],
+      [
+        iff(op2('==', _get(pm('号')), ex('null')), [ret(no())], noElse: true),
+        blk('dbDelete', {'collection': 'todos', 'id': pm('号')}),
+        ret(yes()),
+      ],
+      returns: tBool,
+    ),
+    tfn(
+      'f6',
+      '请求里的标题',
+      [tpar('r', tRef('请求'))],
+      [
+        ret(ex('orElse', {'x': q('title'), 'd': tx('')})),
+      ],
+      returns: tText,
+    ),
     tfn('f7', '回清单', [], [json(call('f2'))]),
-    tfn('f8', '要有标题', [tpar('r', tRef('请求'))], [
-      iff(op2('==', call('f6', {'r': pm('r')}), tx('')), [text(tx('要写标题'), 400)], noElse: true),
-    ]),
-    tfn('f9', '回一条', [tpar('号', tText)], [
-      konst('it', _get(pm('号'))),
-      iff(op2('==', vr('it'), ex('null')), [text(tx('没有这一条'), 404)], noElse: true),
-      json(vr('it')),
-    ]),
+    tfn(
+      'f8',
+      '要有标题',
+      [tpar('r', tRef('请求'))],
+      [
+        iff(op2('==', call('f6', {'r': pm('r')}), tx('')), [text(tx('要写标题'), 400)], noElse: true),
+      ],
+    ),
+    tfn(
+      'f9',
+      '回一条',
+      [tpar('号', tText)],
+      [
+        konst('it', _get(pm('号'))),
+        iff(op2('==', vr('it'), ex('null')), [text(tx('没有这一条'), 404)], noElse: true),
+        json(vr('it')),
+      ],
+    ),
   ],
   blocks: [
     def('add', 'call', fn: 'f1', look: look('加一条待办', '加一条待办 {标题}')),
@@ -311,9 +545,17 @@ J todoLibDoc() => libDoc(
   ],
 );
 
-J _id() => ex('orElse', {'x': ex('pathParam', {'name': 'id'}), 'd': tx('')});
+J _id() => ex('orElse', {
+  'x': ex('pathParam', {'name': 'id'}),
+  'd': tx(''),
+});
 J todoUserDoc() => {
-  ...coreDoc('用待办', main: [blk('sleep', {'ms': nm(1)})]),
+  ...coreDoc(
+    '用待办',
+    main: [
+      blk('sleep', {'ms': nm(1)}),
+    ],
+  ),
   'version': 5,
   'uses': [use(kLibTodo)],
   'routes': [
@@ -355,33 +597,85 @@ J batchLibDoc() => libDoc(
   '批量任务',
   kLibBatch,
   functions: [
-    tfn('f1', '慢慢平方', [tpar('n', tInt), tpar('ms', tInt)], [
-      blk('sleep', {'ms': pm('ms')}),
-      ret(op2('*', pm('n'), pm('n'))),
-    ], returns: tInt),
-    tfn('f2', '一起平方', [tpar('数们', tList(LType.integer)), tpar('ms', tInt)], [
-      ret(ex('awaitAll', {'list': hof('listMap', pm('数们'), arrow(['n'], ex('spawnOf', {'x': call('f1', {'n': pm('n'), 'ms': pm('ms')})})))})),
-    ], returns: tList(LType.integer)),
-    tfn('f3', '限时平方', [tpar('n', tInt), tpar('ms', tInt), tpar('最多', tInt)], [
-      tryB([
-        konst('v', ex('awaitMax', {'x': ex('spawnOf', {'x': call('f1', {'n': pm('n'), 'ms': pm('ms')})}), 'ms': pm('最多')})),
-        ret(cat([tx('算出 '), vr('v')])),
-      ], [
-        catchArm('超时', 'e', [ret(tx('超时了'))]),
-      ]),
-      ret(tx('')),
-    ], returns: tText),
-    tfn('f4', '限时做', [tpar('毫秒', tInt)], [
-      blk('spawn', {'name': 'job'}, [mouth('做')]),
-      tryB([
-        blk('do', {'value': ex('awaitMax', {'x': vr('job'), 'ms': pm('毫秒')})}),
-      ], [
-        catchArm('超时', 'e', [
-          blk('cancel', {'x': vr('job')}),
-          mouth('超时了'),
-        ]),
-      ]),
-    ]),
+    tfn(
+      'f1',
+      '慢慢平方',
+      [tpar('n', tInt), tpar('ms', tInt)],
+      [
+        blk('sleep', {'ms': pm('ms')}),
+        ret(op2('*', pm('n'), pm('n'))),
+      ],
+      returns: tInt,
+    ),
+    tfn(
+      'f2',
+      '一起平方',
+      [tpar('数们', tList(LType.integer)), tpar('ms', tInt)],
+      [
+        ret(
+          ex('awaitAll', {
+            'list': hof(
+              'listMap',
+              pm('数们'),
+              arrow(
+                ['n'],
+                ex('spawnOf', {
+                  'x': call('f1', {'n': pm('n'), 'ms': pm('ms')}),
+                }),
+              ),
+            ),
+          }),
+        ),
+      ],
+      returns: tList(LType.integer),
+    ),
+    tfn(
+      'f3',
+      '限时平方',
+      [tpar('n', tInt), tpar('ms', tInt), tpar('最多', tInt)],
+      [
+        tryB(
+          [
+            konst(
+              'v',
+              ex('awaitMax', {
+                'x': ex('spawnOf', {
+                  'x': call('f1', {'n': pm('n'), 'ms': pm('ms')}),
+                }),
+                'ms': pm('最多'),
+              }),
+            ),
+            ret(cat([tx('算出 '), vr('v')])),
+          ],
+          [
+            catchArm('超时', 'e', [ret(tx('超时了'))]),
+          ],
+        ),
+        ret(tx('')),
+      ],
+      returns: tText,
+    ),
+    tfn(
+      'f4',
+      '限时做',
+      [tpar('毫秒', tInt)],
+      [
+        blk('spawn', {'name': 'job'}, [mouth('做')]),
+        tryB(
+          [
+            blk('do', {
+              'value': ex('awaitMax', {'x': vr('job'), 'ms': pm('毫秒')}),
+            }),
+          ],
+          [
+            catchArm('超时', 'e', [
+              blk('cancel', {'x': vr('job')}),
+              mouth('超时了'),
+            ]),
+          ],
+        ),
+      ],
+    ),
   ],
   blocks: [
     def('together', 'call', fn: 'f2', look: look('一起平方', '一起算 {数们} 的平方，每个花 {ms} 毫秒')),
@@ -391,18 +685,47 @@ J batchLibDoc() => libDoc(
 );
 
 J batchUserDoc() => {
-  ...coreDoc('用批量任务', main: [blk('sleep', {'ms': nm(1)})]),
+  ...coreDoc(
+    '用批量任务',
+    main: [
+      blk('sleep', {'ms': nm(1)}),
+    ],
+  ),
   'version': 5,
   'uses': [use(kLibBatch)],
   'routes': [
     route('r1', 'GET', '/go', [
-      konst('all', lx(kLibBatch, 'together', {'数们': ls([nm(3), nm(1), nm(2)]), 'ms': nm(40)})),
+      konst(
+        'all',
+        lx(kLibBatch, 'together', {
+          '数们': ls([nm(3), nm(1), nm(2)]),
+          'ms': nm(40),
+        }),
+      ),
       konst('fast', lx(kLibBatch, 'timed', {'n': nm(4), 'ms': nm(20), '最多': nm(800)})),
       konst('slow', lx(kLibBatch, 'timed', {'n': nm(4), 'ms': nm(900), '最多': nm(60)})),
       let('a', tx('没动')),
-      lb(kLibBatch, 'within', {'毫秒': nm(800)}, [blk('sleep', {'ms': nm(10)}), setv('a', tx('做完'))], [setv('a', tx('超时'))]),
+      lb(
+        kLibBatch,
+        'within',
+        {'毫秒': nm(800)},
+        [
+          blk('sleep', {'ms': nm(10)}),
+          setv('a', tx('做完')),
+        ],
+        [setv('a', tx('超时'))],
+      ),
       let('b', tx('没动')),
-      lb(kLibBatch, 'within', {'毫秒': nm(50)}, [blk('sleep', {'ms': nm(900)}), setv('b', tx('做完'))], [setv('b', tx('超时'))]),
+      lb(
+        kLibBatch,
+        'within',
+        {'毫秒': nm(50)},
+        [
+          blk('sleep', {'ms': nm(900)}),
+          setv('b', tx('做完')),
+        ],
+        [setv('b', tx('超时'))],
+      ),
       text(cat([vr('all'), tx('｜'), vr('fast'), tx('｜'), vr('slow'), tx('｜'), vr('a'), tx('｜'), vr('b')])),
     ]),
   ],
@@ -420,16 +743,26 @@ J notesLibDoc() => libDoc(
     {'name': 'noted', 'init': nm(0), 'type': tInt},
   ],
   functions: [
-    tfn('f1', '记一笔', [tpar('话', tText)], [
-      setv('noted', op2('+', vr('noted'), nm(10))),
-      say([tx('〔记事〕'), pm('话')]),
-    ]),
+    tfn(
+      'f1',
+      '记一笔',
+      [tpar('话', tText)],
+      [
+        setv('noted', op2('+', vr('noted'), nm(10))),
+        say([tx('〔记事〕'), pm('话')]),
+      ],
+    ),
     tfn('f2', '记了几笔了', [], [ret(vr('noted'))], returns: tInt),
     tfn('f3', '不为空的规则', [], [ret(tx('记事的规则'))], returns: tText),
-    tfn('f4', '记两笔', [tpar('话', tText)], [
-      callS('f1', {'话': pm('话')}),
-      callS('f1', {'话': pm('话')}),
-    ]),
+    tfn(
+      'f4',
+      '记两笔',
+      [tpar('话', tText)],
+      [
+        callS('f1', {'话': pm('话')}),
+        callS('f1', {'话': pm('话')}),
+      ],
+    ),
   ],
   blocks: [
     def('note', 'call', fn: 'f1', look: look('记一笔', '记事：{话}')),
@@ -440,21 +773,36 @@ J notesLibDoc() => libDoc(
 );
 
 J manyUserDoc() => {
-  ...coreDoc('三个库一起用', functions: [
-    tfn('f1', '记一笔', [tpar('话', tText)], [say([tx('自己的 '), pm('话')])]),
-  ], main: [
-    callS('f1', {'话': tx('甲')}),
-    lb(kLibFlow, 'note', {'话': tx('乙')}),
-    lb(kLibNotes, 'note', {'话': tx('丙')}),
-    lb(kLibNotes, 'twice', {'话': tx('丁')}),
-    log(lx(kLibNotes, 'rule')),
-    konst('c', lx(kLibCheck, 'newChecker')),
-    lb(kLibCheck, 'add', {'对象': vr('c'), 'r': lx(kLibCheck, 'notEmpty')}),
-    log(lx(kLibCheck, 'joinAll', {'问题': lx(kLibCheck, 'check', {'对象': vr('c'), '值': tx('')})})),
-    let('noted', nm(0)),
-    lb(kLibFlow, 'sumTo', {'n': nm(3), '结果': 'noted'}),
-    say([lx(kLibFlow, 'noted'), tx('/'), lx(kLibNotes, 'noted'), tx('/'), vr('noted')]),
-  ]),
+  ...coreDoc(
+    '三个库一起用',
+    functions: [
+      tfn(
+        'f1',
+        '记一笔',
+        [tpar('话', tText)],
+        [
+          say([tx('自己的 '), pm('话')]),
+        ],
+      ),
+    ],
+    main: [
+      callS('f1', {'话': tx('甲')}),
+      lb(kLibFlow, 'note', {'话': tx('乙')}),
+      lb(kLibNotes, 'note', {'话': tx('丙')}),
+      lb(kLibNotes, 'twice', {'话': tx('丁')}),
+      log(lx(kLibNotes, 'rule')),
+      konst('c', lx(kLibCheck, 'newChecker')),
+      lb(kLibCheck, 'add', {'对象': vr('c'), 'r': lx(kLibCheck, 'notEmpty')}),
+      log(
+        lx(kLibCheck, 'joinAll', {
+          '问题': lx(kLibCheck, 'check', {'对象': vr('c'), '值': tx('')}),
+        }),
+      ),
+      let('noted', nm(0)),
+      lb(kLibFlow, 'sumTo', {'n': nm(3), '结果': 'noted'}),
+      say([lx(kLibFlow, 'noted'), tx('/'), lx(kLibNotes, 'noted'), tx('/'), vr('noted')]),
+    ],
+  ),
   'version': 5,
   'uses': [use(kLibFlow), use(kLibNotes), use(kLibCheck)],
 };

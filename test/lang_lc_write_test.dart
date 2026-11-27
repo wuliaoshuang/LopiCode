@@ -39,7 +39,10 @@ void main() {
   for (final f in Directory('test/fixtures/libs/demo-kit/modules').listSync().whereType<File>()) {
     sources[f.path] = () {
       final p = lcProgram(f.readAsStringSync());
-      return LProgram([...p.modules, LModule(name: 'main', uses: [for (final m in p.modules) m.name])], entry: 'main');
+      return LProgram([
+        ...p.modules,
+        LModule(name: 'main', uses: [for (final m in p.modules) m.name]),
+      ], entry: 'main');
     };
   }
   sources['内置库 接口服务'] = () {
@@ -96,7 +99,17 @@ void main() {
   test('写不了的给一句人话', () {
     expect(lcTryWriteModule(const LModule(name: '有 空格')).problem, contains('名字'));
     expect(lcTryWriteModule(const LModule(name: 'm', decls: [LVarDecl('x', LLit(double.nan))])).problem, contains('数'));
-    expect(lcTryWriteModule(const LModule(name: 'm', decls: [LFuncDecl('f', [], [LHost('x')])])).problem, contains('接口服务'));
+    expect(
+      lcTryWriteModule(
+        const LModule(
+          name: 'm',
+          decls: [
+            LFuncDecl('f', [], [LHost('x')]),
+          ],
+        ),
+      ).problem,
+      contains('接口服务'),
+    );
     expect(lcTryWriteModule(const LModule(name: 'm', decls: [LVarDecl('空', LLit(1))])).problem, contains('名字'));
   });
 }

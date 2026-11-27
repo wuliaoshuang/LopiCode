@@ -101,7 +101,12 @@ class BeLibHat with LcBlockTree {
     return BeLibHat(
       id: id is String ? id : '',
       op: op as String,
-      args: args is Map ? {for (final e in args.entries) if (e.key is String) e.key as String: deepCopyJson(e.value)} : null,
+      args: args is Map
+          ? {
+              for (final e in args.entries)
+                if (e.key is String) e.key as String: deepCopyJson(e.value),
+            }
+          : null,
       body: LcBlock.parseList(json['body'], 0),
       x: x is num && x.isFinite ? x.toDouble() : null,
       y: y is num && y.isFinite ? y.toDouble() : null,
@@ -150,10 +155,21 @@ class BeLibParam {
 /// - [LibHow.call] / [LibHow.expand]：[fn]＝函数（“我的积木”）的 id；
 /// - [LibHow.method] / [LibHow.static]：[typeId]＝类的 id，[method]＝方法的 id。
 class BeLibDef {
-  BeLibDef({required this.id, required this.how, this.fn = '', this.typeId = '', this.method = '', this.look, Map<String, BeLibParam>? params, this.into = false, List<String>? mouths, Map<String, String>? provides, this.shape})
-    : params = params ?? {},
-      mouths = mouths ?? [],
-      provides = provides ?? {};
+  BeLibDef({
+    required this.id,
+    required this.how,
+    this.fn = '',
+    this.typeId = '',
+    this.method = '',
+    this.look,
+    Map<String, BeLibParam>? params,
+    this.into = false,
+    List<String>? mouths,
+    Map<String, String>? provides,
+    this.shape,
+  }) : params = params ?? {},
+       mouths = mouths ?? [],
+       provides = provides ?? {};
 
   /// 积木编号（库里唯一，字母开头的字母数字；用它的文档里存的就是它，所以定了就不改）。
   final String id;
@@ -234,7 +250,9 @@ class BeLibDef {
 
 /// 这份文档是一个库：清单信息＋公开成积木的定义。库的名字就是文档的名字。
 class BeLibInfo {
-  BeLibInfo({required this.id, this.version = '1.0.0', this.author = '', this.summary = '', List<LibSetting>? settings, List<BeLibDef>? blocks, this.originId = '', this.originVersion = ''}) : settings = settings ?? [], blocks = blocks ?? [];
+  BeLibInfo({required this.id, this.version = '1.0.0', this.author = '', this.summary = '', List<LibSetting>? settings, List<BeLibDef>? blocks, this.originId = '', this.originVersion = ''})
+    : settings = settings ?? [],
+      blocks = blocks ?? [];
 
   /// 库的标识 `作者段/库名`。
   String id;
@@ -269,7 +287,8 @@ class BeLibInfo {
     if (originId.isNotEmpty) 'origin': {'id': originId, 'version': originVersion},
   };
 
-  BeLibInfo clone() => BeLibInfo(id: id, version: version, author: author, summary: summary, settings: [...settings], blocks: [for (final b in blocks) b.clone()], originId: originId, originVersion: originVersion);
+  BeLibInfo clone() =>
+      BeLibInfo(id: id, version: version, author: author, summary: summary, settings: [...settings], blocks: [for (final b in blocks) b.clone()], originId: originId, originVersion: originVersion);
 
   static BeLibInfo? tryParse(Object? json) {
     if (json is! Map) return null;
@@ -321,7 +340,15 @@ LibSetting? beLibSettingFromJson(Object? raw) {
   final id = raw['id'], name = raw['name'], hint = raw['hint'], d = raw['default'];
   final type = libTypeFromText(raw['type']);
   if (id is! String || !BeLibDef.idPattern.hasMatch(id) || type == null || !_plainOrList(d)) return null;
-  return LibSetting(id: id, name: name is String && name.trim().isNotEmpty ? name : id, type: type, defaultValue: d, min: raw['min'] is num ? raw['min'] as num : null, max: raw['max'] is num ? raw['max'] as num : null, hint: hint is String ? hint : '');
+  return LibSetting(
+    id: id,
+    name: name is String && name.trim().isNotEmpty ? name : id,
+    type: type,
+    defaultValue: d,
+    min: raw['min'] is num ? raw['min'] as num : null,
+    max: raw['max'] is num ? raw['max'] as num : null,
+    hint: hint is String ? hint : '',
+  );
 }
 
 /// 作者段 / 库名那一段合不合规矩（小写字母开头，小写字母、数字、连字符，最多 32 个）。

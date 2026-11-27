@@ -28,11 +28,38 @@ List<String> problemsOf(J doc, [List<LibLibrary> loaded = const []]) => beLibFil
 J tiny({List<J>? functions, List<J>? blocks, String id = 'tata/tiny'}) => libDoc(
   '小库',
   id,
-  functions: functions ?? [
-    tfn('f1', '公开的', [tpar('话', tText)], [ret(cat([tx('公'), pm('话')]))], returns: tText),
-    tfn('f2', '私下的', [tpar('话', tText)], [ret(cat([tx('私'), pm('话')]))], returns: tText),
-  ],
-  blocks: blocks ?? [def('pub', 'call', fn: 'f1', look: look('公开的', '公开 {话}', shape: 'value'))],
+  functions:
+      functions ??
+      [
+        tfn(
+          'f1',
+          '公开的',
+          [tpar('话', tText)],
+          [
+            ret(cat([tx('公'), pm('话')])),
+          ],
+          returns: tText,
+        ),
+        tfn(
+          'f2',
+          '私下的',
+          [tpar('话', tText)],
+          [
+            ret(cat([tx('私'), pm('话')])),
+          ],
+          returns: tText,
+        ),
+      ],
+  blocks:
+      blocks ??
+      [
+        def(
+          'pub',
+          'call',
+          fn: 'f1',
+          look: look('公开的', '公开 {话}', shape: 'value'),
+        ),
+      ],
 );
 
 Future<Directory> _project() => Directory.systemTemp.createTemp('lopi_libs_');
@@ -52,10 +79,14 @@ void main() {
     test('好的库没有问题', () => expect(problemsOf(tiny()), isEmpty));
 
     test('函数重名', () {
-      final p = problemsOf(tiny(functions: [
-        tfn('f1', '公开的', [tpar('话', tText)], [ret(pm('话'))], returns: tText),
-        tfn('f2', '公开的', [tpar('话', tText)], [ret(pm('话'))], returns: tText),
-      ]));
+      final p = problemsOf(
+        tiny(
+          functions: [
+            tfn('f1', '公开的', [tpar('话', tText)], [ret(pm('话'))], returns: tText),
+            tfn('f2', '公开的', [tpar('话', tText)], [ret(pm('话'))], returns: tText),
+          ],
+        ),
+      );
       expect(p.join('\n'), contains('公开的'));
       expect(p, isNotEmpty);
     });
@@ -67,14 +98,21 @@ void main() {
     });
 
     test('展开型自己展开自己（递归展开）', () {
-      final p = problemsOf(tiny(
-        functions: [
-          tfn('f1', '转圈', [tpar('话', tText)], [
-            callS('f1', {'话': pm('话')}),
-          ]),
-        ],
-        blocks: [def('loop', 'expand', fn: 'f1', look: look('转圈', '转圈 {话}'))],
-      ));
+      final p = problemsOf(
+        tiny(
+          functions: [
+            tfn(
+              'f1',
+              '转圈',
+              [tpar('话', tText)],
+              [
+                callS('f1', {'话': pm('话')}),
+              ],
+            ),
+          ],
+          blocks: [def('loop', 'expand', fn: 'f1', look: look('转圈', '转圈 {话}'))],
+        ),
+      );
       expect(p, isNotEmpty);
       expect(p.join('\n'), anyOf(contains('展开'), contains('自己')));
     });
@@ -89,7 +127,18 @@ void main() {
     });
 
     test('同一个槽在样子里写了两次', () {
-      final p = problemsOf(tiny(blocks: [def('pub', 'call', fn: 'f1', look: look('公开的', '公开 {话} 再来 {话}', shape: 'value'))]));
+      final p = problemsOf(
+        tiny(
+          blocks: [
+            def(
+              'pub',
+              'call',
+              fn: 'f1',
+              look: look('公开的', '公开 {话} 再来 {话}', shape: 'value'),
+            ),
+          ],
+        ),
+      );
       expect(p, isNotEmpty);
       expect(p.join('\n'), contains('话'));
     });
@@ -97,9 +146,30 @@ void main() {
     test('没公开的名字，别的库用不到', () {
       final a = buildUserLib(tiny());
       final b = buildUserLib(
-        libDoc('借用', 'tata/borrow', functions: [
-          tfn('f1', '借', [tpar('话', tText)], [ret(lx('tata/tiny', 'pub', {'话': pm('话')}))], returns: tText),
-        ], blocks: [def('borrow', 'call', fn: 'f1', look: look('借', '借 {话}', shape: 'value'))], uses: [use('tata/tiny')]),
+        libDoc(
+          '借用',
+          'tata/borrow',
+          functions: [
+            tfn(
+              'f1',
+              '借',
+              [tpar('话', tText)],
+              [
+                ret(lx('tata/tiny', 'pub', {'话': pm('话')})),
+              ],
+              returns: tText,
+            ),
+          ],
+          blocks: [
+            def(
+              'borrow',
+              'call',
+              fn: 'f1',
+              look: look('借', '借 {话}', shape: 'value'),
+            ),
+          ],
+          uses: [use('tata/tiny')],
+        ),
         [a.lib],
       );
       expect(beLibCheckWith(b.lib, [a.lib]), isEmpty);
@@ -107,13 +177,22 @@ void main() {
       final hacked = {for (final e in b.files.entries) e.key: e.value.replaceAll('公开的', '私下的')};
       expect(hacked.toString(), isNot(b.files.toString()));
       final lib = libRead(hacked, builtin: false);
-      final problems = [...lib.problems, if (lib.ok) ...beLibCheckWith(lib, [a.lib])];
+      final problems = [
+        ...lib.problems,
+        if (lib.ok) ...beLibCheckWith(lib, [a.lib]),
+      ];
       expect(problems, isNotEmpty);
       expect(problems.join('\n'), contains('私下的'));
     });
 
     test('库里不能有接口、“程序开始时”；作者段 lopi / local 不许用', () {
-      expect(problemsOf({...tiny(), 'routes': [route('r1', 'GET', '/x', [])]}).join(), contains('接口'));
+      expect(
+        problemsOf({
+          ...tiny(),
+          'routes': [route('r1', 'GET', '/x', [])],
+        }).join(),
+        contains('接口'),
+      );
       expect(problemsOf(tiny(id: 'lopi/tiny')).join(), contains('lopi'));
       expect(problemsOf(tiny(id: 'local/tiny')).join(), contains('local'));
     });
@@ -137,15 +216,27 @@ void main() {
       test('$name：没有错误，也没有“不认识的积木”', () {
         final doc = userDocument(user(), [for (final l in libs) buildUserLib(l()).lib]);
         final issues = validateBackend(doc);
-        expect([for (final i in issues) if (i.isError) '${i.where}：${i.problem}'], isEmpty);
-        expect([for (final i in issues) if (i.problem.contains('不认识')) i.problem], isEmpty);
+        expect([
+          for (final i in issues)
+            if (i.isError) '${i.where}：${i.problem}',
+        ], isEmpty);
+        expect([
+          for (final i in issues)
+            if (i.problem.contains('不认识')) i.problem,
+        ], isEmpty);
       });
     }
     for (final (name, lib) in [('校验器', checkLibDoc), ('流程', flowLibDoc), ('待办', todoLibDoc), ('批量任务', batchLibDoc), ('记事', notesLibDoc)]) {
       test('库文档「$name」：没有错误，也没有“不认识的积木”', () {
         final issues = validateBackend(parseLangBlocksDocument(lib()));
-        expect([for (final i in issues) if (i.isError) '${i.where}：${i.problem}'], isEmpty);
-        expect([for (final i in issues) if (i.problem.contains('不认识')) i.problem], isEmpty);
+        expect([
+          for (final i in issues)
+            if (i.isError) '${i.where}：${i.problem}',
+        ], isEmpty);
+        expect([
+          for (final i in issues)
+            if (i.problem.contains('不认识')) i.problem,
+        ], isEmpty);
       });
     }
 
@@ -216,7 +307,19 @@ void main() {
       final index = jsonDecode(await File(guard.resolve(kBeLibsIndexFile)).readAsString()) as Map;
       expect((index['libs'] as List).single['id'], 'tata/tiny');
       final before = all.single.files[kLibManifestFile];
-      final bad = await putLib(guard, tiny(blocks: [def('pub', 'call', fn: 'f1', look: look('公开的', '公开 {话} 再来 {话}', shape: 'value'))]));
+      final bad = await putLib(
+        guard,
+        tiny(
+          blocks: [
+            def(
+              'pub',
+              'call',
+              fn: 'f1',
+              look: look('公开的', '公开 {话} 再来 {话}', shape: 'value'),
+            ),
+          ],
+        ),
+      );
       expect(bad.problems, isNotEmpty);
       expect((await beLibsRead(guard)).single.files[kLibManifestFile], before);
     });
@@ -280,11 +383,25 @@ void main() {
       expect(await beLibsRead(guard), isEmpty);
       // 清单里自称“允许手写代码”也一样不许。
       final manifest = jsonDecode(files[kLibManifestFile]!) as Map;
-      final allowed = beLibPreview({...files, kLibManifestFile: jsonEncode({...manifest, 'native': {'allowed': true, 'files': ['native/hack.js'], 'waits': ['慢慢来']}}), 'native/hack.js': 'x'});
+      final allowed = beLibPreview({
+        ...files,
+        kLibManifestFile: jsonEncode({
+          ...manifest,
+          'native': {
+            'allowed': true,
+            'files': ['native/hack.js'],
+            'waits': ['慢慢来'],
+          },
+        }),
+        'native/hack.js': 'x',
+      });
       expect(allowed.canImport, isFalse);
       expect(allowed.lib.nativeWaits, ['慢慢来']);
       // 冒充应用自带的库。
-      final fake = beLibPreview({...files, kLibManifestFile: jsonEncode({...manifest, 'id': 'lopi/service'})});
+      final fake = beLibPreview({
+        ...files,
+        kLibManifestFile: jsonEncode({...manifest, 'id': 'lopi/service'}),
+      });
       expect(fake.canImport, isFalse);
       // 它靠的库项目里没有：预览里说出来。
       final needs = beLibPreview(buildUserLib(todoLibDoc()).files);
@@ -306,7 +423,16 @@ void main() {
       expect(copy.from, 'copy');
       expect(jsonDecode(copy.files[kLibManifestFile]!)['origin'], {'id': kLibNotes, 'version': '1.0.0'});
       expect(all.firstWhere((s) => s.id == kLibNotes).name, '记事');
-      final doc = parseLangBlocksDocument({...coreDoc('用记事', main: [lb(kLibNotes, 'note', {'话': tx('好')})]), 'version': 5, 'uses': [use(kLibNotes)]});
+      final doc = parseLangBlocksDocument({
+        ...coreDoc(
+          '用记事',
+          main: [
+            lb(kLibNotes, 'note', {'话': tx('好')}),
+          ],
+        ),
+        'version': 5,
+        'uses': [use(kLibNotes)],
+      });
       await beLibsAttach(guard, doc);
       final switched = beLibSwitchUses(doc, kLibNotes, 'tata/notes2')!;
       expect(switched.count, 1);
@@ -322,7 +448,16 @@ void main() {
 
     test('库改了以后，用它的文档重查：新冒出来的问题交回来；生成代码的入口也认', () async {
       expect((await putLib(guard, notesLibDoc())).problems, isEmpty);
-      final user = parseLangBlocksDocument({...coreDoc('用记事', main: [lb(kLibNotes, 'note', {'话': tx('好')})]), 'version': 5, 'uses': [use(kLibNotes)]});
+      final user = parseLangBlocksDocument({
+        ...coreDoc(
+          '用记事',
+          main: [
+            lb(kLibNotes, 'note', {'话': tx('好')}),
+          ],
+        ),
+        'version': 5,
+        'uses': [use(kLibNotes)],
+      });
       await saveBackendFile(File(guard.resolve(kBackendFileName)), user);
       final first = await regenerateBackend(dir.path);
       expect(first.error, isNull);
@@ -355,7 +490,11 @@ void main() {
       await File('${dir.path}/blocks/libs.json').writeAsString('[1, 2');
       final all = await beLibsRead(guard);
       expect(all.single.ok, isFalse);
-      final doc = parseLangBlocksDocument({...coreDoc('用坏库', main: []), 'version': 5, 'uses': [use('tata/broken')]});
+      final doc = parseLangBlocksDocument({
+        ...coreDoc('用坏库', main: []),
+        'version': 5,
+        'uses': [use('tata/broken')],
+      });
       await beLibsAttach(guard, doc);
       expect(backendErrors(doc), isNotEmpty);
     });

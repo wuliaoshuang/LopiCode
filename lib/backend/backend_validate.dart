@@ -15,9 +15,9 @@ import 'package:lopicode/backend/backend_ir.dart' show kBeRepeatLimit;
 import 'package:lopicode/backend/backend_issue_codes.dart';
 import 'package:lopicode/backend/backend_lib_build.dart';
 import 'package:lopicode/backend/backend_lib_doc.dart';
-import 'package:lopicode/backend/backend_to_service.dart' show beUsedLibs;
 import 'package:lopicode/backend/backend_model.dart';
 import 'package:lopicode/backend/backend_text.dart';
+import 'package:lopicode/backend/backend_to_service.dart' show beUsedLibs;
 import 'package:lopicode/backend/backend_validate_func.dart';
 import 'package:lopicode/backend/backend_validate_lang.dart';
 import 'package:lopicode/backend/backend_validate_types.dart';
@@ -29,7 +29,7 @@ import 'package:lopicode/lowcode/logic_validate_types.dart';
 
 export 'package:lopicode/backend/backend_issue_codes.dart';
 export 'package:lopicode/backend/backend_validate_func.dart' show BeFuncIssueCode;
-export 'package:lopicode/backend/backend_validate_lang.dart' show BeLangIssueCode;
+export 'package:lopicode/backend/backend_validate_lang.dart' show BeLangIssueCode, beExprType;
 export 'package:lopicode/lowcode/logic_validate.dart' show LcIssueCode, LcIssueLevel, LcLogicIssue;
 
 /// 检查整份后端文档，返回所有问题（按 服务设置、变量、集合、接口、积木 的顺序）。没有问题返回空表。
@@ -47,19 +47,6 @@ List<LcLogicIssue> backendErrors(BeDocument doc) => [
 ];
 
 const Set<String> _respondOps = {'respondJson', 'respondText'};
-
-/// 静态推断一个后端表达式的类型（“类型对不上”的检查用）。后端的变量什么都能装（记录、列表…），请求里读来的也说不准，
-/// 所以只有直接填的值、运算、拼接、计数这些“一定是什么”的才给出类型，其余一律 [LcType.any]（不报）。
-String beExprType(Object? expr) {
-  if (beExprIsBool(expr)) return LcType.boolean;
-  if (beLangExprSpecs.containsKey(exprKind(expr))) return beLangExprType(expr);
-  return switch (exprKind(expr)) {
-    'text' || 'join' || 'now' => LcType.text,
-    'num' || 'len' || 'dbCount' => LcType.number,
-    'bin' => kArithmeticOps.contains(exprString(expr, 'op')) ? LcType.number : LcType.any,
-    _ => LcType.any,
-  };
-}
 
 bool _alwaysResponds(List<LcBlock> list) => beAlwaysResponds(list);
 
@@ -129,7 +116,13 @@ class _Validator {
   void _add(LcIssueLevel level, String code, String problem, {String? arg, String? where, List<Object>? xp, String? fix}) {
     final r = _tree;
     final b = _block;
-    final scope = where ?? (r == null ? '后端' : (r is BeFunction ? '积木「${r.name}」' : (r is BeMethod ? doc.core.labelOf(r) : (r is BeLibHat ? '库的帽子「${table.libs.of(r.op)?.block.look.name ?? '找不到'}」' : '接口「${describeBeRoute(r as BeRoute)}」'))));
+    final scope =
+        where ??
+        (r == null
+            ? '后端'
+            : (r is BeFunction
+                  ? '积木「${r.name}」'
+                  : (r is BeMethod ? doc.core.labelOf(r) : (r is BeLibHat ? '库的帽子「${table.libs.of(r.op)?.block.look.name ?? '找不到'}」' : '接口「${describeBeRoute(r as BeRoute)}」'))));
     final spot = where != null || r == null || b == null ? '' : '${describeBeBlockPath(r, _path)}（${describeBeBlock(b, _fnName)}）';
     final at = _top ?? arg;
     issues.add(

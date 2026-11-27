@@ -5,9 +5,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lopicode/backend/backend_lib_build.dart';
-import 'package:lopicode/backend/backend_lib_doc.dart';
 import 'package:lopicode/backend/backend_lib_pack.dart';
-import 'package:lopicode/backend/backend_lib_store.dart';
 import 'package:lopicode/backend/backend_lib_table.dart';
 import 'package:lopicode/ui/backend_screen.dart';
 import 'package:material_ui/material_ui.dart';
@@ -55,7 +53,15 @@ void main() {
     final fn = parseLangBlocksDocument({
       ...emptyStrict(),
       'functions': [
-        tfn('f1', '问好', [tpar('谁', tText)], [ret(cat([tx('你好，'), pm('谁')]))], returns: tText),
+        tfn(
+          'f1',
+          '问好',
+          [tpar('谁', tText)],
+          [
+            ret(cat([tx('你好，'), pm('谁')])),
+          ],
+          returns: tText,
+        ),
       ],
     }).functions.single;
     libHost.edit(() => libHost.doc.functions.add(fn));

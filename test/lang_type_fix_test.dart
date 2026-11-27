@@ -223,7 +223,7 @@ void main() {
     expect(lApplyFix(m, const LFix(LFixKind.wrapToText, '变成文字')), isNull);
     // 种类和目标对不上。
     final let = m.body.single;
-    expect(lApplyFix(m, LFix(LFixKind.addMatchElse, '加一个“其余”', target: let)), isNull);
+    expect(lApplyFix(m, LFix(LFixKind.addMatchElse, '加一个“其他情况”', target: let)), isNull);
     expect(lApplyFix(m, LFix(LFixKind.useRecordCopy, '换成“复制并改”', target: let)), isNull);
     expect(lApplyFix(m, LFix(LFixKind.wrapToText, '变成文字', target: let)), isNull);
   });
