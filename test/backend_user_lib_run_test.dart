@@ -6,9 +6,14 @@
 library;
 
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lopicode/backend/backend_lib_store.dart';
+import 'package:lopicode/backend/backend_model.dart';
 import 'package:lopicode/backend/backend_to_service.dart';
+import 'package:lopicode/core/path_guard.dart';
+import 'package:lopicode/core/safe_file.dart';
 import 'package:lopicode/lang/gen2_all.dart';
 
 import 'support/backend_lang_blocks.dart';
@@ -40,6 +45,44 @@ void main() {
         expect(utf8.decode(run.stdout), want, reason: language);
       });
     }
+  }
+
+  // 导出再导入：三个库存进一个项目 → 各导出成一个文件 → 导入到另一个项目 → 在那边用它们，真跑的结果和上面一样。
+  for (final language in kGen2Languages) {
+    test('导出再导入以后再用（三个库） · $language', () async {
+      final from = await Directory.systemTemp.createTemp('lopi_lib_a_'), to = await Directory.systemTemp.createTemp('lopi_lib_b_');
+      addTearDown(() async {
+        await pendingWrites();
+        await from.delete(recursive: true);
+        await to.delete(recursive: true);
+      });
+      final a = PathGuard(from.path), b = PathGuard(to.path);
+      for (final l in [flowLibDoc, notesLibDoc, checkLibDoc]) {
+        final doc = parseLangBlocksDocument(l());
+        final rel = beLibSourceRel(doc.library!.id);
+        await File(a.resolve(rel)).parent.create(recursive: true);
+        await saveBackendFile(File(a.resolve(rel)), doc);
+        expect((await beLibSaveSource(a, rel, doc)).problems, isEmpty);
+        final out = await beLibExport(a, doc.library!.id);
+        await File(a.resolve(out.rel!)).copy('${to.path}/in.lopilib');
+        final opened = await beLibOpenPack(b, 'in.lopilib');
+        expect((await beLibInstall(b, opened.preview!)).problems, isEmpty);
+      }
+      final doc = parseLangBlocksDocument(manyUserDoc());
+      await beLibsAttach(b, doc);
+      final gen = beServiceGenerate(doc, language);
+      expect(gen.problem, isNull);
+      final skip = gen2SkipReason(language);
+      if (skip != null) {
+        // ignore: avoid_print — 跳过的原因要让跑测试的人看见
+        print('跳过：$skip');
+        markTestSkipped(skip);
+        return;
+      }
+      final run = await gen2RunFiles(language, gen.files!);
+      expect(run.problem, isNull, reason: language);
+      expect(utf8.decode(run.stdout), kManyWant, reason: language);
+    });
   }
 
   // 开着服务的两个库：对着真起来的服务逐条发请求，状态码和内容逐字节比。

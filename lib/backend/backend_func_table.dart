@@ -9,6 +9,7 @@ import 'package:lopicode/backend/backend_blocks_core.dart';
 import 'package:lopicode/backend/backend_blocks_strict.dart';
 import 'package:lopicode/backend/backend_function.dart';
 import 'package:lopicode/backend/backend_lang.dart';
+import 'package:lopicode/backend/backend_lib_table.dart';
 import 'package:lopicode/backend/backend_lower_func.dart';
 import 'package:lopicode/backend/backend_model.dart';
 import 'package:lopicode/blocks/block_look.dart';
@@ -21,6 +22,9 @@ class BeFuncTable {
   final BeDocument doc;
 
   bool get isEmpty => doc.functions.isEmpty;
+
+  /// 这份文档用上的库积木。
+  late final BeLibTable libs = BeLibTable(doc);
 
   /// 所有函数按“影子模式”翻成的语法树（校验用；带来源表）。
   late final List<BeLoweredFunction> lowered = _guard(() => beLowerFunctionsWithSpots(doc, shadow: true), const []);
@@ -36,6 +40,8 @@ class BeFuncTable {
           if (g.isConst) g.name,
       },
       inspect: beHostInspect,
+      // 库文档里的函数可以公开成拿着“这次请求”的积木；用得对不对由库的类型检查说。
+      hostAllowed: doc.library != null,
     ),
     const LangFunctionsAnalysis([], {}),
   );
@@ -104,12 +110,12 @@ class BeFuncTable {
   /// 内置的加上自定义的。调用积木不看形状：值型的也能单独当一句用（结果不要），语句型的当值用得到空（校验给警告）。
   LcBlockSpec? blockSpec(String op) {
     final c = callOf(op);
-    return c != null ? bkLookBlockSpec(c) : beBlockSpecs[op] ?? (langRulesStrict(doc.rules) ? beCoreBlockSpecs[op] : null);
+    return c != null ? bkLookBlockSpec(c) : beBlockSpecs[op] ?? (langRulesStrict(doc.rules) ? beCoreBlockSpecs[op] ?? libs.blockSpec(op) : null);
   }
 
   LcExprSpec? exprSpec(String? kind) {
     final c = callOf(kind);
-    return c != null ? bkLookExprSpec(c) : beExprSpecs[kind] ?? beStrictExprSpecs[kind] ?? (langRulesStrict(doc.rules) ? beCoreExprSpecs[kind] : null);
+    return c != null ? bkLookExprSpec(c) : beExprSpecs[kind] ?? beStrictExprSpecs[kind] ?? (langRulesStrict(doc.rules) ? beCoreExprSpecs[kind] ?? libs.exprSpec(kind) : null);
   }
 
   /// 调用时这个参数没给也行：它有默认值，或者是“剩下的全收”（没给＝一个都不多带）。不是调用返回 false。
@@ -121,12 +127,12 @@ class BeFuncTable {
 
   String? sentenceOf(String op) {
     final c = callOf(op);
-    return c == null ? null : bkLookSentence(c.look, c.params);
+    return c == null ? libs.sentenceOf(op) : bkLookSentence(c.look, c.params);
   }
 
   /// 这个值算出来是不是“是 / 否”。
   bool isBool(Object? expr) {
     final c = callOf(exprKind(expr));
-    return c != null ? c.look.shape == CustomBlockShape.boolean : beExprIsBool(expr);
+    return c != null ? c.look.shape == CustomBlockShape.boolean : (libs.isBool(expr) || beExprIsBool(expr));
   }
 }

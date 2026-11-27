@@ -397,6 +397,10 @@ Map<String, Object?>? _block(BeDocument doc, BeLibInfo info, BeLibDef d, BeFuncT
   for (final p in [if (self) kBeLibSelfSlot, ...names.where(onBlock)]) {
     if (!slots.contains(p)) bad('积木的文字里没有参数「$p」的槽（写成 {$p}）');
   }
+  final seen = <String>{};
+  for (final p in parseLookTemplate(look.template)) {
+    if (p.isSlot && !seen.add(p.text)) bad('积木的文字里「${p.text}」这个槽写了两次，只留一个');
+  }
   final out = <String, Object?>{
     'id': d.id,
     'module': module,

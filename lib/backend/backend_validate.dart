@@ -13,6 +13,9 @@ import 'package:lopicode/backend/backend_func_table.dart';
 import 'package:lopicode/backend/backend_function.dart';
 import 'package:lopicode/backend/backend_ir.dart' show kBeRepeatLimit;
 import 'package:lopicode/backend/backend_issue_codes.dart';
+import 'package:lopicode/backend/backend_lib_build.dart';
+import 'package:lopicode/backend/backend_lib_doc.dart';
+import 'package:lopicode/backend/backend_to_service.dart' show beUsedLibs;
 import 'package:lopicode/backend/backend_model.dart';
 import 'package:lopicode/backend/backend_text.dart';
 import 'package:lopicode/backend/backend_validate_func.dart';
@@ -98,8 +101,9 @@ class _Validator {
   BeFunction? _fn;
   int _lambdas = 0;
   BeMethod? _core;
-  bool get _inFn => _fn != null || _core != null;
-  LcBlockTree? get _tree => _fn ?? _core ?? _route;
+  BeLibHat? _hat;
+  bool get _inFn => _fn != null || _core != null || _hat != null;
+  LcBlockTree? get _tree => _fn ?? _core ?? _hat ?? _route;
   Map<String, bool> _withGlobals(Map<String, bool> m) => {...m, for (final g in doc.core.globals) g.name: g.isConst, for (final p in _core?.params ?? const <BeParam>[]) p.name: false};
   String? _fnName(String id) => doc.function(id)?.name;
 
@@ -125,7 +129,7 @@ class _Validator {
   void _add(LcIssueLevel level, String code, String problem, {String? arg, String? where, List<Object>? xp, String? fix}) {
     final r = _tree;
     final b = _block;
-    final scope = where ?? (r == null ? '后端' : (r is BeFunction ? '积木「${r.name}」' : (r is BeMethod ? doc.core.labelOf(r) : '接口「${describeBeRoute(r as BeRoute)}」')));
+    final scope = where ?? (r == null ? '后端' : (r is BeFunction ? '积木「${r.name}」' : (r is BeMethod ? doc.core.labelOf(r) : (r is BeLibHat ? '库的帽子「${table.libs.of(r.op)?.block.look.name ?? '找不到'}」' : '接口「${describeBeRoute(r as BeRoute)}」'))));
     final spot = where != null || r == null || b == null ? '' : '${describeBeBlockPath(r, _path)}（${describeBeBlock(b, _fnName)}）';
     final at = _top ?? arg;
     issues.add(
@@ -187,6 +191,23 @@ class _Validator {
       _blocks(m.body, const [], false);
     }
     _core = null;
+    for (final h in doc.hats) {
+      _hat = h; // 库的帽子积木开头的串
+      _path = const [];
+      _block = null;
+      if (table.libs.of(h.op) == null) _error(BeIssueCode.badLibrary, _libGone(h.op));
+      _locals = _withGlobals(beLocalNames(h.body, beNamePattern));
+      _known = beTreeParamNames(h);
+      _blocks(h.body, const [], false);
+    }
+    _hat = null;
+    // 库：用上的库在不在、读不读得懂；这份文档自己是库的话，它出不出得了库文件。
+    final libProblems = <String>[];
+    if (doc.usesLibs) beUsedLibs(doc, libProblems);
+    if (doc.library != null) libProblems.addAll(beLibFiles(doc).problems);
+    for (final p in libProblems.toSet()) {
+      _error(BeIssueCode.badLibrary, p, where: '库');
+    }
   }
 
   /// “我的积木”的定义：外观、参数表、函数体里的每一块，再加语言核心的检查器对这一批函数说的。
@@ -335,10 +356,20 @@ class _Validator {
     _block = null;
   }
 
+  String _libGone(String op) {
+    final ref = beLibOpOf(op)!;
+    final l = doc.use(ref.lib) == null ? null : doc.lib(ref.lib);
+    return l == null ? '这块积木是库「${ref.lib}」的，可是这份文档没有用上这个库（或者库不在项目里）' : '库「${l.name}」里已经没有这块积木了（库改过了？）';
+  }
+
   void _oneBlock(LcBlock b) {
     final spec = table.blockSpec(b.op);
     if (spec == null && beCallId(b.op) != null) {
       _error(BeFuncIssueCode.unknownFunction, '这块自定义积木的定义已经不在了', fix: '删掉这一块；想留着就到“我的积木”里重新做一块，再换上。');
+      return;
+    }
+    if (spec == null && beLibOpOf(b.op) != null) {
+      _error(BeIssueCode.badLibrary, _libGone(b.op), fix: '到“积木库”里把这个库用上（或者重新导入）；不要了就删掉这一块。');
       return;
     }
     if (spec == null) {
@@ -356,7 +387,8 @@ class _Validator {
     _values.block(b, spec);
     _newNames(b);
     if (b.op == 'fetch') _url(b);
-    final misplaced = beHostOnlyProblem(b.op, inFunction: _inFn, inLambda: _lambdas > 0);
+    // 库文档里的函数可以公开成拿着“这次请求”的积木，能不能回响应由库的类型检查说。
+    final misplaced = doc.library != null && b.op != 'fetch' ? null : beHostOnlyProblem(b.op, inFunction: _inFn, inLambda: _lambdas > 0);
     if (misplaced != null) _error(BeFuncIssueCode.hostInFunction, misplaced.$1, fix: misplaced.$2);
     if (!spec.hasBody && b.body.isNotEmpty) {
       _warn(LcIssueCode.strayBody, '“${spec.label}”里面不能放积木，里面的 ${b.body.length} 块生成代码时会被忽略');
@@ -534,6 +566,10 @@ class _Validator {
     final spec = table.exprSpec(kind);
     if (spec == null && beCallId(kind) != null) {
       _error(BeFuncIssueCode.unknownFunction, '这里用的自定义积木，定义已经不在了；生成代码时会当成空的', arg: arg, fix: '长按这个值换成别的；想留着就到“我的积木”里重新做一块，再换上。');
+      return;
+    }
+    if (spec == null && beLibOpOf(kind) != null) {
+      _error(BeIssueCode.badLibrary, _libGone(kind!), arg: arg, fix: '到“积木库”里把这个库用上（或者重新导入）；不要了就长按这个值换成别的。');
       return;
     }
     if (kind == null || spec == null || expr is! Map) {

@@ -3,6 +3,9 @@ library;
 
 /// 后端特有的问题种类（通用的——缺参数、没声明的变量、不认识的积木等——用 [LcIssueCode] 里现成的）。
 abstract final class BeIssueCode {
+  /// 库的问题：用上的库找不到 / 读不懂；这份库文档出不了库文件。
+  static const String badLibrary = 'badLibrary';
+
   /// 集合本身有问题（名字不合规矩、重名）。
   static const String badCollection = 'badCollection';
 
