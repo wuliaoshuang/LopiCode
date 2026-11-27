@@ -12,6 +12,7 @@ library;
 
 import 'package:lopicode/backend/backend_ir.dart';
 import 'package:lopicode/backend/backend_lang.dart';
+import 'package:lopicode/backend/backend_lib_doc.dart';
 import 'package:lopicode/backend/backend_lower_core.dart';
 import 'package:lopicode/backend/backend_lower_func.dart';
 import 'package:lopicode/backend/backend_lower_lang.dart';
@@ -20,6 +21,8 @@ import 'package:lopicode/backend/backend_text.dart';
 import 'package:lopicode/backend/lib_service.dart';
 import 'package:lopicode/lang/ast.dart';
 import 'package:lopicode/lang/ast_util.dart';
+import 'package:lopicode/backend/backend_function.dart';
+import 'package:lopicode/lang/custom_block.dart';
 import 'package:lopicode/lang/gen.dart' show LangUnsupported;
 import 'package:lopicode/lang/gen2_all.dart';
 import 'package:lopicode/lang/lib_apply.dart';
@@ -48,6 +51,8 @@ class BeServiceBuilt {
     this.names = const {},
     this.lambdas = const {},
     this.split = false,
+    this.libs = const [],
+    this.service = true,
   });
   final LProgram? program;
   final List<String> problems;
@@ -69,6 +74,12 @@ class BeServiceBuilt {
 
   /// 文档自己分了模块没有。
   final bool split;
+
+  /// 程序里带上的库（带了“接口服务”的话它排第一个）。
+  final List<LibLibrary> libs;
+
+  /// 带没带“接口服务”库（没带＝一个跑完就结束的程序，不开服务）。
+  final bool service;
 }
 
 /// 库里“这次请求”“路由表”这两样隐含的东西叫什么。
@@ -80,8 +91,16 @@ class _Fresh {
   String call(String name) => '${name}_${++_n}';
 }
 
+/// 一次翻译里记的事。
+class _Flags {
+  /// 有没有用到“接口服务”库的积木。
+  bool service = false;
+}
+
 class _Bridge implements BeLibBridge {
-  _Bridge(this.lib, this.settings, this.fresh, this.problems, Map<String, String> base) : context = {...base};
+  _Bridge(this.doc, this.flags, this.lib, this.settings, this.fresh, this.problems, Map<String, String> base) : context = {...base};
+  final BeDocument doc;
+  final _Flags flags;
   final LibLibrary lib;
   final Map<String, Object?> settings;
   final _Fresh fresh;
@@ -122,6 +141,7 @@ class _Bridge implements BeLibBridge {
       case BeXCall(:final fn, :final args):
         final block = lib.legacy(fn);
         if (block != null) {
+          flags.service = true;
           if (!block.isValue) return _bad('「${block.look.name}」不是一个值');
           final got = libApply(lib, block, LibUse(values: _values(block, args)), _cx);
           final value = got.value;
@@ -137,6 +157,7 @@ class _Bridge implements BeLibBridge {
   }
 
   List<LStmt> _use(LibBlock block, BeXCall call, {String? into}) {
+    flags.service = true;
     final target = block.slotKinds.entries.where((e) => e.value == LibSlotKind.assign).firstOrNull?.key;
     final got = libApply(lib, block, LibUse(values: _values(block, call.args), targets: {if (into != null && target != null) target: into}), _cx);
     if (got.problem != null) {
@@ -152,6 +173,7 @@ class _Bridge implements BeLibBridge {
   List<LStmt>? mouthBlock(String legacyFn, List<LExpr> args, {Map<String, List<LStmt>> mouths = const {}, String? into}) {
     final block = lib.legacy(legacyFn);
     if (block == null) return null;
+    flags.service = true;
     final target = block.slotKinds.entries.where((e) => e.value == LibSlotKind.assign).firstOrNull?.key;
     final values = {
       for (var i = 0; i < block.legacyArgs.length && i < args.length; i++)
@@ -164,6 +186,76 @@ class _Bridge implements BeLibBridge {
 
   @override
   List<LStmt> stmts(List<BeS> list) => [for (final s in list) ..._one(s)];
+
+  // —— 用户库的积木 ——
+
+  ({LibLibrary lib, LibBlock block})? _libBlockOf(String op) {
+    final ref = beLibOpOf(op);
+    if (ref == null) return null;
+    final l = doc.use(ref.lib) == null ? null : doc.lib(ref.lib);
+    if (l == null) {
+      _bad('用到了库「${ref.lib}」的积木，可是这份文档没有用上这个库（或者库不在项目里）');
+      return null;
+    }
+    final block = l.block(ref.block);
+    if (block == null) _bad('库「${l.name}」里没有积木「${ref.block}」（库换过版本了？）');
+    return block == null ? null : (lib: l, block: block);
+  }
+
+  LibApplied _applyLib(LibLibrary l, LibBlock block, LExpr Function(String slot) value, Object? Function(String slot) raw, {List<List<LcBlock>> mouths = const [], List<LStmt> Function(List<LcBlock> list, {bool inElse})? inner}) {
+    final values = <String, LExpr>{}, targets = <String, String>{}, lowered = <String, List<LStmt>>{};
+    final provided = libProvided(block, fresh.call);
+    var mouth = 0;
+    for (final part in parseLookTemplate(block.look.template)) {
+      if (!part.isSlot || values.containsKey(part.text) || targets.containsKey(part.text) || lowered.containsKey(part.text)) continue;
+      final slot = part.text, v = raw(slot);
+      switch (block.kindOf(slot)) {
+        case LibSlotKind.mouth:
+          final k = mouth++;
+          final saved = {...context};
+          for (final e in provided.entries) {
+            context[e.key] = e.value;
+          }
+          lowered[slot] = k < mouths.length && inner != null ? inner(mouths[k], inElse: k == 1) : const [];
+          context
+            ..clear()
+            ..addAll(saved);
+        case LibSlotKind.assign:
+          if (v is String && v.isNotEmpty) targets[slot] = v;
+        case LibSlotKind.literal:
+          values[slot] = v is String || v is num || v is bool ? LLit(v) : value(slot);
+        case LibSlotKind.value:
+          values[slot] = block.look.slotFor(slot).kind == CustomSlotKind.choice && v is String ? LLit(v) : value(slot);
+      }
+    }
+    final got = libApply(l, block, LibUse(values: values, mouths: lowered, targets: targets, provided: provided), LibCx(context: context, settings: beLibSettingsOf(doc, l), fresh: fresh.call));
+    if (got.problem != null) _bad(got.problem!);
+    return got;
+  }
+
+  @override
+  List<LStmt>? libBlock(LcBlock b, LExpr Function(String slot) value, List<LStmt> Function(List<LcBlock> list, {bool inElse}) inner, {required bool shadow}) {
+    if (b.op == kBeLibMouthOp) {
+      final name = b.args['name'];
+      return shadow ? const [] : [LExprStmt(LNative(kBeLibMouthMark, [LLit(name is String ? name : '')]))];
+    }
+    if (b.op == kBeLibPutOp) return [LExprStmt(shadow ? value('value') : LNative(kBeLibPutMark, [value('value')]))];
+    if (beLibOpOf(b.op) == null) return null;
+    final hit = _libBlockOf(b.op);
+    if (hit == null) return const [];
+    final got = _applyLib(hit.lib, hit.block, value, (s) => b.args[s], mouths: [b.body, b.orElse], inner: inner);
+    final v = got.value;
+    return v != null ? [LExprStmt(v)] : got.stmts;
+  }
+
+  @override
+  LExpr? libExpr(String kind, LExpr Function(String slot) value, Object? Function(String slot) raw) {
+    if (beLibOpOf(kind) == null) return null;
+    final hit = _libBlockOf(kind);
+    if (hit == null) return const LLit(null);
+    if (!hit.block.isValue) return _bad('「${hit.block.look.name}」不是一个值');
+    return _applyLib(hit.lib, hit.block, value, raw).value ?? const LLit(null);
+  }
 
   List<LStmt> _one(BeS s) {
     switch (s) {
@@ -197,6 +289,34 @@ class _Bridge implements BeLibBridge {
         return const [];
     }
   }
+}
+
+/// 库的定义画布上那两块积木翻出来的记号（只在翻库的时候出现，写出器把它们写成模板里的洞；见 backend_lib_build.dart）。
+const String kBeLibMouthMark = '@口';
+const String kBeLibPutMark = '@放进';
+
+/// 这份文档里某个库的设置项各是什么值：内置“接口服务”照旧从文档顶层拿；用户的库拿“用上”时填的。
+Map<String, Object?> beLibSettingsOf(BeDocument doc, LibLibrary lib) => lib.builtin ? beServiceSettings(doc) : (doc.use(lib.id)?.settings ?? const {});
+
+/// 这份文档用上的库（读好了的）；[problems] 里记“用了却不在项目里”“库本身有问题”“它靠的库没用上”。
+List<LibLibrary> beUsedLibs(BeDocument doc, [List<String>? problems]) {
+  final out = <LibLibrary>[];
+  for (final u in doc.uses) {
+    final l = doc.lib(u.id);
+    if (l == null) {
+      problems?.add('这份文档用了库「${u.id}」，可是项目里找不到它');
+    } else if (!l.ok) {
+      problems?.add('库「${l.name}」有问题，用不了：${l.problems.first}');
+    } else {
+      out.add(l);
+    }
+  }
+  for (final l in out) {
+    for (final r in l.requires) {
+      if (r != kBeServiceLibId && !out.any((x) => x.id == r)) problems?.add('库「${l.name}」要靠库「$r」，请把「$r」也用上');
+    }
+  }
+  return out;
 }
 
 /// 这份文档里库的设置项各是什么值（旧文档顶层的键 → 设置项，照库里写的 `legacyKey`）。
@@ -236,8 +356,11 @@ BeServiceBuilt beServiceBuild(BeDocument doc, {bool shadow = false}) {
   try {
     final core = doc.core;
     final fresh = _Fresh();
+    final flags = _Flags();
     final settings = beServiceSettings(doc);
-    final cx = LibCx(context: lib.provides, settings: settings, fresh: fresh.call);
+    final userLibs = beUsedLibs(doc, problems);
+    final allProvides = {...lib.provides, for (final l in userLibs) ...l.provides};
+    final cx = LibCx(context: allProvides, settings: settings, fresh: fresh.call);
     final trees = <String, LcBlockTree>{};
     final lowers = <String, BeLangLower>{};
     final names = <String, String>{};
@@ -249,7 +372,7 @@ BeServiceBuilt beServiceBuild(BeDocument doc, {bool shadow = false}) {
         ..typed = true
         ..pure = true
         ..core = core
-        ..bridge = _Bridge(lib, settings, fresh, problems, {...lib.provides, ...more});
+        ..bridge = _Bridge(doc, flags, lib, settings, fresh, problems, {...allProvides, ...more});
       if (tree != null) {
         trees[tree.id] = tree;
         lowers[tree.id] = lower;
@@ -259,7 +382,14 @@ BeServiceBuilt beServiceBuild(BeDocument doc, {bool shadow = false}) {
 
     final decls = <({String key, LDecl decl})>[];
     for (final f in doc.functions) {
-      final lower = lowerOf(f, BeRoute(id: f.id, method: 'GET', path: '/', body: f.body), inFunction: true);
+      // 库里公开成积木的函数：来源是“隐含的东西”的参数，在这个函数里就是那样东西。
+      final def = beLibDefOfFunction(doc.library, f);
+      final more = {
+        if (def != null)
+          for (final e in def.params.entries)
+            if (e.value.from == BeLibFrom.context && e.value.key.isNotEmpty) e.value.key: beIdent(e.key),
+      };
+      final lower = lowerOf(f, BeRoute(id: f.id, method: 'GET', path: '/', body: f.body), inFunction: true, more: more);
       if (lower == null) continue;
       names[f.id] = f.ident;
       decls.add((
@@ -291,6 +421,7 @@ BeServiceBuilt beServiceBuild(BeDocument doc, {bool shadow = false}) {
 
     final hat = lib.block('onRequest');
     if (hat == null) return const BeServiceBuilt(problems: ['内置库里没有“当收到请求”']);
+    if (doc.routes.isNotEmpty) flags.service = true;
     final routes = <LStmt>[];
     for (final r in doc.routes) {
       final title = describeBeRoute(r);
@@ -317,23 +448,70 @@ BeServiceBuilt beServiceBuild(BeDocument doc, {bool shadow = false}) {
       routes.addAll(got.stmts);
     }
 
-    final init = libMoment(lib, lib.init, cx), start = libMoment(lib, lib.start, cx);
-    for (final p in [init.problem, start.problem]) {
-      if (p != null) problems.add(p);
+    // 以库的帽子积木开头的那些串：帽子展开出来的语句排在接口后面、“程序开始时”前面。
+    for (final h in doc.hats) {
+      final ref = beLibOpOf(h.op);
+      final l = ref == null || doc.use(ref.lib) == null ? null : userLibs.where((x) => x.id == ref.lib).firstOrNull;
+      final block = l?.block(ref!.block);
+      if (l == null || block == null) {
+        problems.add('有一串积木的帽子是库「${ref?.lib ?? ''}」的，可是这个库（或这块积木）找不到');
+        continue;
+      }
+      final provided = libProvided(block, fresh.call);
+      final lower = lowerOf(h, BeRoute(id: h.id, method: 'GET', path: '/', body: h.body), inFunction: true, more: provided);
+      if (lower == null) continue;
+      names[h.id] = block.look.name;
+      final body = lower.stmts(h.body, const [], 0);
+      final values = <String, LExpr>{};
+      String? mouth;
+      for (final part in parseLookTemplate(block.look.template)) {
+        if (!part.isSlot) continue;
+        final v = h.args[part.text];
+        switch (block.kindOf(part.text)) {
+          case LibSlotKind.mouth:
+            mouth ??= part.text;
+          case LibSlotKind.assign:
+            break;
+          case LibSlotKind.literal || LibSlotKind.value:
+            values[part.text] = v is String || v is num || v is bool ? LLit(v) : lower.value(v);
+        }
+      }
+      final got = libApply(l, block, LibUse(values: values, mouths: {?mouth: body}, provided: provided), LibCx(context: allProvides, settings: beLibSettingsOf(doc, l), fresh: fresh.call));
+      if (got.problem != null) {
+        problems.add('${block.look.name}：${got.problem}');
+        continue;
+      }
+      final lambda = _firstLambda(got.stmts);
+      if (lambda != null) lambdas[h.id] = lambda;
+      routes.addAll(got.stmts);
     }
-    final body = [...init.stmts, ...routes, ...main, ...start.stmts];
+
+    // 带不带“接口服务”：没碰库的文档照旧一定带；用了库的文档，有接口、用了它的积木、或者哪个库靠着它才带。
+    final service = !doc.usesLibs || flags.service || userLibs.any((l) => l.requires.contains(kBeServiceLibId));
+    final libs = [if (service) lib, ...userLibs];
+    final inits = <LStmt>[], starts = <LStmt>[];
+    for (final l in libs) {
+      final lcx = LibCx(context: allProvides, settings: beLibSettingsOf(doc, l), fresh: fresh.call);
+      final init = libMoment(l, l.init, lcx), start = libMoment(l, l.start, lcx);
+      for (final p in [init.problem, start.problem]) {
+        if (p != null) problems.add(p);
+      }
+      inits.addAll(init.stmts);
+      starts.addAll(start.stmts);
+    }
+    final body = [...inits, ...routes, ...main, ...starts];
     final own = beCoreProgram(core, decls, body);
     final entry = own?.modules.where((m) => m.name == own.entry).firstOrNull ?? LModule(name: 'main', decls: [for (final d in decls) d.decl], body: body);
-    final linked = libProgram([lib], entry);
+    final linked = libProgram(libs, entry);
     final program = own == null
         ? linked
         : LProgram([
-            ...lib.modules,
+            for (final l in libs) ...l.modules,
             for (final m in own.modules)
               if (m.name != own.entry) m,
             linked.modules.last,
           ], entry: own.entry);
-    return BeServiceBuilt(program: program, problems: problems, skipped: skipped, decls: decls, body: body, trees: trees, lowers: lowers, names: names, lambdas: lambdas, split: own != null);
+    return BeServiceBuilt(program: program, problems: problems, skipped: skipped, decls: decls, body: body, trees: trees, lowers: lowers, names: names, lambdas: lambdas, split: own != null, libs: libs, service: service);
   } on Object catch (e) {
     return BeServiceBuilt(problems: [...problems, '积木翻不成语法树（$e）'], skipped: skipped);
   }
@@ -342,12 +520,17 @@ BeServiceBuilt beServiceBuild(BeDocument doc, {bool shadow = false}) {
 List<LDecl>? _libDecls;
 
 /// 内置库合好以后的全部声明（类型检查把它们和文档自己的声明放在一起查）。只算一次。
-List<LDecl> beServiceLibDecls() {
-  final cached = _libDecls;
-  if (cached != null) return cached;
-  final lib = beServiceLibrary();
-  final linked = linkProgram(LProgram([...lib.modules, LModule(name: 'main', uses: lib.moduleNames)], entry: 'main'));
-  return _libDecls = linked.module?.decls ?? const [];
+List<LDecl> beServiceLibDecls() => _libDecls ??= beLibDecls([beServiceLibrary()]);
+
+/// 几个库合好以后的全部声明。
+List<LDecl> beLibDecls(List<LibLibrary> libs) {
+  final linked = linkProgram(
+    LProgram([
+      for (final l in libs) ...l.modules,
+      LModule(name: 'main', uses: [for (final l in libs) ...l.moduleNames]),
+    ], entry: 'main'),
+  );
+  return linked.module?.decls ?? const [];
 }
 
 /// 出工程的结果：成了是文件表（第一个是主文件），不成是一句原因。

@@ -40,7 +40,8 @@ List<String> libCheck(LibLibrary lib) {
         if (p.isSlot) p.text,
     };
     for (final n in b.needs) {
-      if (!provided.contains(n)) bad('它要用“$n”，可是库里没有哪块积木（或启动时）给“$n”');
+      // 靠着别的库的：那样东西可能是那个库给的，这里查不了，用的时候再查。
+      if (!provided.contains(n) && lib.requires.isEmpty) bad('它要用“$n”，可是库里没有哪块积木（或启动时）给“$n”');
     }
     if (b.shape == CustomBlockShape.hat && b.how != LibHow.expand) bad('帽子型的积木要用模板展开来定义（口里的积木要放进模板里）');
     if (b.how != LibHow.expand && b.slotKinds.values.contains(LibSlotKind.mouth)) bad('带口的积木要用模板展开来定义');

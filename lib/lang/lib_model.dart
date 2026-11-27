@@ -194,6 +194,9 @@ class LibLibrary {
     this.nativeAllowed = false,
     this.nativeFiles = const [],
     this.problems = const [],
+    this.author = '',
+    this.requires = const [],
+    this.nativeWaits = const [],
   });
 
   final String id;
@@ -226,6 +229,16 @@ class LibLibrary {
   /// “允许手写代码”的开关，和库里带的手写代码文件（现在只读进来、不生成，见格式文档第 8 节）。
   final bool nativeAllowed;
   final List<String> nativeFiles;
+
+  /// 作者（给人看的；清单的 `author`）。
+  final String author;
+
+  /// 要靠哪些别的库（清单的 `requires`，库的标识）：它的模块里用了那些库公开的名字。用它的文档也得带上那些库。
+  final List<String> requires;
+
+  /// 手写代码里“要等”的函数名（清单 `native.waits`）。没列到的手写函数一律当“不用等”。
+  /// 现在手写代码整条路还没通（见格式文档第 8 节），这里只读进来给预览页如实显示。
+  final List<String> nativeWaits;
 
   /// 读的时候发现的问题（给人看的话）。有一条就不能用。
   final List<String> problems;
@@ -485,6 +498,7 @@ LibLibrary libRead(Map<String, String> files, {required bool builtin}) {
   ];
   if (nativeFiles.isNotEmpty && !nativeAllowed) problems.add('库里带了手写代码（${nativeFiles.length} 个文件），可是“允许手写代码”没打开');
   if (nativeFiles.isNotEmpty && nativeAllowed) problems.add('库里带了手写代码。这一版的应用还不会把手写代码放进生成的工程里，所以这个库现在用不了');
+  if (!builtin && (id.startsWith('lopi/') || id.startsWith('local/'))) problems.add('作者段 lopi、local 是应用自己留着用的，别的库不能用');
 
   final lib = LibLibrary(
     id: id,
@@ -508,6 +522,12 @@ LibLibrary libRead(Map<String, String> files, {required bool builtin}) {
     hosts: hosts.toList()..sort(),
     nativeAllowed: nativeAllowed,
     nativeFiles: nativeFiles,
+    author: _text(manifest['author'], max: 64) ?? '',
+    requires: [
+      for (final r in _list(manifest['requires']).take(16))
+        if (r is String && kLibIdPattern.hasMatch(r)) r,
+    ],
+    nativeWaits: [for (final w in _list(native['waits']).take(64)) ?_text(w, max: 64)],
   );
   problems.addAll(libCheck(lib));
   return LibLibrary(
@@ -530,5 +550,8 @@ LibLibrary libRead(Map<String, String> files, {required bool builtin}) {
     nativeAllowed: nativeAllowed,
     nativeFiles: nativeFiles,
     problems: problems,
+    author: lib.author,
+    requires: lib.requires,
+    nativeWaits: lib.nativeWaits,
   );
 }

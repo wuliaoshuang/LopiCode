@@ -9,6 +9,7 @@ library;
 
 import 'package:lopicode/backend/backend_ir.dart';
 import 'package:lopicode/lang/ast.dart';
+import 'package:lopicode/lowcode/logic_model.dart';
 import 'package:lopicode/lang/ast_util.dart';
 import 'package:lopicode/lang/gen_scope.dart';
 import 'package:lopicode/lang/names.dart';
@@ -36,6 +37,13 @@ abstract interface class BeLibBridge {
   /// 带口的旧积木（现在只有“请求别的网址”）：按旧名找到库积木，[args] 照旧小库的参数顺序，口里的语句已经翻好。
   /// 库里没有这块积木＝null。
   List<LStmt>? mouthBlock(String legacyFn, List<LExpr> args, {Map<String, List<LStmt>> mouths = const {}, String? into});
+
+  /// 用户库的积木（op 是 `lib:库标识#编号`），和库的定义画布上那两块“做口里的积木”“交给用的人选的变量”。不是这些＝null。
+  /// [value]＝把这块积木的某个槽翻成式子；[inner]＝把它的口（第一个口 / [inElse]＝第二个口）里的积木翻成语句。
+  List<LStmt>? libBlock(LcBlock b, LExpr Function(String slot) value, List<LStmt> Function(List<LcBlock> list, {bool inElse}) inner, {required bool shadow});
+
+  /// 用户库的值型积木（`{"e": "lib:…#…"}`）。[raw]＝槽里原样存的东西。不是库积木＝null。
+  LExpr? libExpr(String kind, LExpr Function(String slot) value, Object? Function(String slot) raw);
 }
 
 /// 旧语句 → 可以放进新节点里的语句：新节点原样摊开，别的包成 `LHost`（生成时交回给后端照旧路写）。

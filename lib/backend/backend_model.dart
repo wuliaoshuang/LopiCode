@@ -13,7 +13,9 @@ import 'package:lopicode/backend/backend_blocks_func.dart';
 import 'package:lopicode/backend/backend_blocks_lang.dart';
 import 'package:lopicode/backend/backend_core.dart';
 import 'package:lopicode/backend/backend_function.dart';
+import 'package:lopicode/backend/backend_lib_doc.dart';
 import 'package:lopicode/core/safe_file.dart';
+import 'package:lopicode/lang/lib_model.dart';
 import 'package:lopicode/lang/rules.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 
@@ -149,6 +151,10 @@ class BeDocument {
     List<BeFunction>? functions,
     BeCore? core,
     int rules = kLangRulesLoose,
+    this.library,
+    List<BeLibUse>? uses,
+    List<BeLibHat>? hats,
+    this.loaded = const [],
   }) : port = _validPort(port) ? port : kBeDefaultPort,
        rules = rules < kLangRulesLoose ? kLangRulesLoose : rules,
        language = _idPattern.hasMatch(language) ? language : kBeDefaultLanguage,
@@ -156,6 +162,8 @@ class BeDocument {
        collections = collections ?? [],
        routes = routes ?? [],
        functions = functions ?? [],
+       uses = uses ?? [],
+       hats = hats ?? [],
        core = core ?? BeCore() {
     _normalize();
   }
@@ -180,6 +188,26 @@ class BeDocument {
   /// 有没有用到核心 2 才有的东西（类型、模块、“程序开始时”，或者哪一串里用了核心 2 的积木）。用到了版本号写 4。
   bool get usesCore => !core.isEmpty || routes.any((r) => beBlocksUseCore(r.body)) || functions.any((f) => beBlocksUseCore(f.body));
 
+  /// 这份文档本身是一个库（见 backend_lib_doc.dart）；null＝普通的后端文档。
+  BeLibInfo? library;
+
+  /// 用了哪些库（应用自带的“接口服务”不在这里，它是自动带上的）。
+  final List<BeLibUse> uses;
+
+  /// 画布上以库的帽子积木开头的那些串。
+  final List<BeLibHat> hats;
+
+  /// [uses] 里的库读进来的样子（不存盘：打开文档的人从项目的 `blocks/` 里读好了放进来，见 backend_lib_store.dart）。
+  /// 翻译、检查、生成都从这里找库；[uses] 里写了、这里没有的＝“库不在项目里”。
+  List<LibLibrary> loaded;
+
+  LibLibrary? lib(String id) => loaded.where((l) => l.id == id).firstOrNull;
+  BeLibUse? use(String id) => uses.where((u) => u.id == id).firstOrNull;
+  BeLibHat? hat(String id) => hats.where((h) => h.id == id).firstOrNull;
+
+  /// 有没有用到“用户自己写库”才有的东西。用到了版本号写 5。
+  bool get usesLibs => library != null || uses.isNotEmpty || hats.isNotEmpty;
+
   /// 规矩版本（见 lang/rules.dart）：1＝老规矩（旧文档，行为不变）；2＝严格规矩。是 1 时存盘不写这个字段。
   int rules;
 
@@ -193,7 +221,7 @@ class BeDocument {
   bool get usesFunctions => functions.isNotEmpty || routes.any((r) => beBlocksUseFunc(r.body));
 
   Map<String, dynamic> toJson() => {
-    'version': usesCore ? 4 : (usesFunctions ? 3 : (usesLang ? 2 : 1)),
+    'version': usesLibs ? 5 : usesCore ? 4 : (usesFunctions ? 3 : (usesLang ? 2 : 1)),
     'kind': 'backend',
     if (rules != kLangRulesLoose) kLangRulesField: rules,
     'name': name,
@@ -204,6 +232,9 @@ class BeDocument {
     'routes': [for (final r in routes) r.toJson()],
     if (functions.isNotEmpty) 'functions': [for (final f in functions) f.toJson()],
     if (!core.isEmpty) 'core': core.toJson(),
+    if (library != null) 'library': library!.toJson(),
+    if (uses.isNotEmpty) 'uses': [for (final u in uses) u.toJson()],
+    if (hats.isNotEmpty) 'hats': [for (final h in hats) h.toJson()],
   };
 
   /// 存盘用的文字（带缩进，方便人看和版本对比）。
@@ -219,6 +250,10 @@ class BeDocument {
     functions: [for (final f in functions) f.clone()],
     core: core.clone(),
     rules: rules,
+    library: library?.clone(),
+    uses: [for (final u in uses) u.clone()],
+    hats: [for (final h in hats) h.clone()],
+    loaded: loaded,
   );
 
   /// 从文件内容读。读不懂（不是 JSON、不是对象、不是后端文档）→ 空白文档 + 说明；坏的条目逐条跳过并在说明里报数。绝不抛异常。
@@ -261,6 +296,9 @@ class BeDocument {
       functions: list(json['functions'], BeFunction.tryParse),
       core: BeCore.fromJson(json['core'], beNamePattern),
       rules: langRulesFromJson(json[kLangRulesField]),
+      library: BeLibInfo.tryParse(json['library']),
+      uses: list(json['uses'], BeLibUse.tryParse),
+      hats: list(json['hats'], BeLibHat.tryParse),
     );
     return (doc: doc, note: skipped == 0 ? null : '后端文件里有 $skipped 条读不懂的内容，已跳过');
   }
@@ -293,6 +331,20 @@ class BeDocument {
       }
     }
     core.normalize(ids);
+    final libIds = <String>{};
+    uses.removeWhere((u) => !libIds.add(u.id));
+    if (uses.length > kBeMaxLibUses) uses.removeRange(kBeMaxLibUses, uses.length);
+    if (hats.length > kBeMaxLibHats) hats.removeRange(kBeMaxLibHats, hats.length);
+    final all = {...ids, kBeMainId, for (final t in core.types) ...[t.id, for (final m in t.trees) m.id]};
+    for (final h in hats) {
+      if (!_idPattern.hasMatch(h.id) || !all.add(h.id)) {
+        var n = 1;
+        while (all.contains('h$n')) {
+          n++;
+        }
+        all.add(h.id = 'h$n');
+      }
+    }
   }
 
   static String _freeRouteId(Set<String> used) {
