@@ -37,7 +37,7 @@ class InspectorEdit {
   /// 不给＝这个地方不能选图（只能填网址）。
   final Future<String?> Function(String from)? pickImage;
 
-  /// 改整份文档（不只是这个组件；现在只有“把导航栏同步到其它页面”用）。不给＝这类操作不出现。
+  /// 改整份文档（不只是这个组件；比如把导航栏改成各页共用）。不给＝这类操作不出现。
   final LcEdit? editDoc;
 
   /// 这里的设置能不能绑到状态（页面里的控件能；自定义组件里面的这一期不能）。

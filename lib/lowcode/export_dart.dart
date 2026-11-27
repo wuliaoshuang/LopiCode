@@ -5,6 +5,7 @@ import 'package:lopicode/lowcode/export_dart_v3.dart';
 import 'package:lopicode/lowcode/icon_set.dart';
 import 'package:lopicode/lowcode/image_assets.dart';
 import 'package:lopicode/lowcode/model.dart';
+import 'package:lopicode/lowcode/nav_shared.dart';
 import 'package:lopicode/lowcode/quick_actions.dart';
 
 /// 把页面导出成一个可直接放进 Flutter 项目的 Dart 文件（一个 StatelessWidget）。
@@ -13,6 +14,7 @@ import 'package:lopicode/lowcode/quick_actions.dart';
 /// “点击时去页面”的快捷操作用 Navigator 跳过去。别的积木逻辑这一份一直不导出（按钮的 `onPressed` 是空的）。
 /// 只有一页时和以前逐字节一样。
 String exportDart(LcDocument doc, {String? className}) {
+  lcSettleSharedNav(doc); // 共用的底部导航：各页都取“刚改过的那一份”（编辑器里每次修改后已经做过，这里是给直接调导出的人兜底）
   if (!doc.isMultiPage) return _file([_pageClass(doc, className ?? dartClassName(doc.title))], '', dartThemeHeader(doc) + dartBindHeader(doc));
   final names = <String>[];
   for (final p in doc.pages) {

@@ -3,7 +3,7 @@
 //   LOPI_SHOTS=1 LOPI_SHOT_DIR=../preview flutter test --no-pub test/theme_pages_smoke_test.dart   # 同时出 pages-<主题>-*.png
 //
 // 覆盖的状态：顶栏的“N 页”按钮、页面面板、一页的 ⋮ 菜单、改名对话框、删除确认、
-// 导航项的“点了去”、选页面的单子、“同步到其它页面”确认、事件页的“点击时去页面”和它的选页单子、跨页撤销的提示。
+// 导航项的“点了去”、选页面的单子、“改成各页共用”确认（原来是“同步到其它页面”）、事件页的“点击时去页面”和它的选页单子、跨页撤销的提示。
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -96,7 +96,7 @@ void main() {
       expect(lbKey('lc-items-page-pick-p1'), findsOneWidget);
       await shot(tester, 'nav-pick');
       await back(tester);
-      await lbTapShown(tester, lbKey('lc-items-sync-nav'));
+      await lbTapShown(tester, lbKey('lc-nav-share'));
       await shot(tester, 'nav-sync-confirm');
       await tap(tester, find.widgetWithText(TextButton, '取消'));
       await back(tester);

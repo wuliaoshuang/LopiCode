@@ -34,6 +34,7 @@ import 'package:lopicode/lowcode/logic_edit.dart';
 import 'package:lopicode/lowcode/logic_screen.dart';
 import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/lowcode/multi_select_widgets.dart';
+import 'package:lopicode/lowcode/nav_shared.dart';
 import 'package:lopicode/lowcode/node_actions.dart';
 import 'package:lopicode/lowcode/pages_sheet.dart';
 import 'package:lopicode/lowcode/palette_catalog.dart';
@@ -217,6 +218,7 @@ class _BuilderScreenState extends State<BuilderScreen> with WidgetsBindingObserv
     final node = doc.newNode(type);
     if (ref != null) node.props['ref'] = ref; // 自定义组件的实例
     _apply((d) {
+      lcAdoptNewNav(d, node);
       if (sel != null && sel.isContainer && type != 'dialog') {
         d.insert(sel.id, node);
       } else if (sel != null && sel.id != d.root.id && type != 'dialog') {
@@ -236,7 +238,10 @@ class _BuilderScreenState extends State<BuilderScreen> with WidgetsBindingObserv
     if (drag.type != null) {
       final node = _doc!.newNode(drag.type!);
       if (drag.ref != null) node.props['ref'] = drag.ref;
-      _apply((d) => lcInsertAt(d, parentId, node, index));
+      _apply((d) {
+        lcAdoptNewNav(d, node);
+        lcInsertAt(d, parentId, node, index);
+      });
       setState(() => _selected = node.id);
     } else {
       _apply((d) => lcMoveTo(d, drag.nodeId!, parentId, index));

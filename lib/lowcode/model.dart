@@ -5,6 +5,7 @@ import 'package:lopicode/lowcode/logic_model.dart';
 import 'package:lopicode/lowcode/model_pages.dart';
 import 'package:lopicode/lowcode/model_props.dart';
 import 'package:lopicode/lowcode/model_specs.dart';
+import 'package:lopicode/lowcode/nav_shared.dart';
 import 'package:lopicode/lowcode/slots.dart';
 
 export 'package:lopicode/lowcode/model_history.dart';
@@ -25,6 +26,7 @@ class LcDocument {
     String? pageId,
     List<LcPage>? pages,
     List<Object?>? keptPages,
+    this.sharedNav,
   }) : pages = [LcPage(id: pageId ?? kLcFirstPageId, title: title, root: root, logic: logic), ...?pages],
        components = components ?? [],
        more = more ?? {},
@@ -34,7 +36,11 @@ class LcDocument {
     _normalizeIds();
     _normalizeComponents();
     lcLinkInstances(this);
+    lcMaterializeSharedNav(this);
   }
+
+  /// 跨页共用的那一条底部导航栏的内容（文件最外层的 `shared.bottomNav`；没有共用是 null）。规矩见 nav_shared.dart。
+  Map<String, dynamic>? sharedNav;
 
   /// 1＝只有组件树；2＝加了 style / logic / components（都可省略，所以第 1 版的文件照样能读）。
   /// 3＝节点多了名字 / 锁定 / 编辑器内隐藏和一批新属性，并且给后面几期留好了字段；看不懂的东西一律原样留着。
@@ -121,6 +127,10 @@ class LcDocument {
       throw const FormatException('根组件必须是 page');
     }
     final rawComponents = json['components'];
+    // 共用的底部导航：`shared.bottomNav` 是个带 props 对象的对象才认；`shared` 里别的键原样留着。
+    final rawShared = json['shared'];
+    final rawNav = rawShared is Map<String, dynamic> ? rawShared['bottomNav'] : null;
+    final sharedNav = rawNav is Map<String, dynamic> && (rawNav['props'] == null || rawNav['props'] is Map) ? rawNav : null;
     final rawPages = json['pages'];
     final pages = <LcPage>[], keptPages = <Object?>[];
     for (final p in rawPages is List ? rawPages : const <Object?>[]) {
@@ -135,6 +145,7 @@ class LcDocument {
       pageId: json['id'] is String ? json['id'] as String : null,
       pages: pages,
       keptPages: keptPages,
+      sharedNav: sharedNav == null ? null : jsonDecode(jsonEncode(sharedNav)) as Map<String, dynamic>,
       components: [
         if (rawComponents is List)
           for (final c in rawComponents) ?LcComponentDef.tryParse(c, version: version),
@@ -146,7 +157,14 @@ class LcDocument {
       ],
       more: {
         for (final e in json.entries)
-          if (!knownKeys.contains(e.key) && e.value != null) e.key: e.value,
+          if (!knownKeys.contains(e.key) && e.value != null)
+            if (e.key != 'shared' || sharedNav == null)
+              e.key: e.value
+            else if ((e.value as Map<String, dynamic>).length > 1)
+              e.key: {
+                for (final s in (e.value as Map<String, dynamic>).entries)
+                  if (s.key != 'bottomNav') s.key: s.value,
+              },
       },
     );
   }
@@ -165,19 +183,29 @@ class LcDocument {
   }
 
   /// 首页写在最外层，别的页写在 `pages` 里。只有一页、首页的 id 又是默认的那个时不写 `id` 和 `pages`——和以前逐字节一样。
+  /// 用了共用底部导航的：最外层多一个 `shared`，各页里用它的节点只写自己的记号（见 nav_shared.dart）。
   Map<String, dynamic> toJson() {
+    lcSettleSharedNav(this);
     final home = pages.first, rest = pages.skip(1);
-    return {
+    final nav = sharedNav, keptShared = more['shared'];
+    Map<String, dynamic> tree(Map<String, dynamic> json) {
+      if (nav != null) lcStripSharedNavJson(json['root'] as Map<String, dynamic>);
+      return json;
+    }
+
+    return tree({
       'version': fileVersion > currentVersion ? fileVersion : currentVersion,
       if (rest.isNotEmpty || home.id != kLcFirstPageId) 'id': home.id,
       'title': home.title,
       'root': home.root.toJson(),
       if (!home.logic.isEmpty) 'logic': home.logic.toJson(),
       if (components.isNotEmpty || keptComponents.isNotEmpty) 'components': [for (final c in components) c.toJson(), ...keptComponents],
-      if (rest.isNotEmpty || keptPages.isNotEmpty) 'pages': [for (final p in rest) p.toJson(), ...keptPages],
+      if (rest.isNotEmpty || keptPages.isNotEmpty) 'pages': [for (final p in rest) nav == null ? p.toJson() : tree(p.toJson()), ...keptPages],
+      if (nav != null) 'shared': {'bottomNav': nav, if (keptShared is Map<String, dynamic>) ...keptShared},
       ...home.more,
-      ...more,
-    };
+      for (final e in more.entries)
+        if (e.key != 'shared' || nav == null) e.key: e.value,
+    });
   }
 
   LcComponentDef? component(String id) {

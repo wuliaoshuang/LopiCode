@@ -6,7 +6,7 @@
 //     一页一行（行高 56）：[图标：首页是小房子，别的是纸] [页名（主，titleSmall）／下面一行灰色小字“首页 · 5 个组件 · 2 串逻辑”] [⋮]
 //       正在编辑的那一行整行浅强调色，小字最前面多“正在编辑”。
 //       行尾 ⋮ 一个菜单装下这一页能做的所有事（一行只做“去这一页”一件事，别的都收进去）：
-//         改名 / 复制一页 / 设为首页（首页没有这项）/ 上移 / 下移 / 删除（红字；只剩一页时变灰）。
+//         改名 / 复制一页 / 设为首页（首页没有这项）/ 上移 / 下移 / 这一页（不）显示底部导航（项目里有共用的导航栏时才有）/ 删除（红字；只剩一页时变灰）。
 //       上移 / 下移只在“不是首页的那几页”之间排——换首页只能点“设为首页”，免得排个序不小心把首页换了。
 //     最下面一个整宽的描边按钮“＋ 新建页面”（次要操作：描边不实心）。满 30 页变灰并写明“最多 30 页”。
 // - 新建：先问名字（预填“页面 N”），建好就换过去、关面板。改名：弹输入框。复制：紧跟在原页后面，名字加“ 副本”，不换页。
@@ -16,6 +16,7 @@
 // - 取用的 tokens：Space.x1/x2/x3/x4/x6、accentSoft（正在编辑的行）、textMuted / textFaint（图标、小字）、danger（删除）。
 import 'package:lopicode/lowcode/edit_types.dart';
 import 'package:lopicode/lowcode/model.dart';
+import 'package:lopicode/lowcode/nav_shared.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
@@ -91,6 +92,8 @@ class _PagesSheetState extends State<PagesSheet> {
         _edit((d) => d.movePage(page.id, at - 1));
       case 'down':
         _edit((d) => d.movePage(page.id, at + 1));
+      case 'nav':
+        _edit((d) => lcSetPageShowsSharedNav(d, page.id, !lcPageShowsSharedNav(page)));
       case 'delete':
         _remove(page);
     }
@@ -140,7 +143,8 @@ class _PagesSheetState extends State<PagesSheet> {
   Widget _row(LcPage page, int i, LcDocument doc, AppColors c, TextTheme t) {
     final current = doc.page.id == page.id, home = i == 0;
     final nodes = _nodeCount(page.root), chains = page.logic.handlers.length;
-    final facts = [if (current) '正在编辑', if (home) '首页', '$nodes 个组件', if (chains > 0) '$chains 串逻辑'].join(' · ');
+    final hasShared = doc.sharedNav != null, showsNav = lcPageShowsSharedNav(page);
+    final facts = [if (current) '正在编辑', if (home) '首页', '$nodes 个组件', if (chains > 0) '$chains 串逻辑', if (hasShared && !showsNav) '不显示底部导航'].join(' · ');
     return Material(
       color: current ? c.accentSoft : Colors.transparent,
       child: InkWell(
@@ -183,6 +187,8 @@ class _PagesSheetState extends State<PagesSheet> {
                   // 排序只在“不是首页的那几页”之间：第 2 页不能再上移（那等于换首页）。
                   PopupMenuItem(value: 'up', enabled: i > 1, child: const Text('上移')),
                   PopupMenuItem(value: 'down', enabled: !home && i < doc.pages.length - 1, child: const Text('下移')),
+                  // 项目里有共用的底部导航时：这一页显不显示它。
+                  if (hasShared) PopupMenuItem(value: 'nav', child: Text(showsNav ? '这一页不显示底部导航' : '这一页显示底部导航')),
                   PopupMenuItem(
                     value: 'delete',
                     enabled: doc.pages.length > 1,

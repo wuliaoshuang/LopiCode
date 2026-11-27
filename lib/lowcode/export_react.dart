@@ -33,6 +33,7 @@ import 'package:lopicode/lowcode/export_web_v3.dart';
 import 'package:lopicode/lowcode/logic_js_core.dart';
 import 'package:lopicode/lowcode/logic_text.dart';
 import 'package:lopicode/lowcode/model.dart';
+import 'package:lopicode/lowcode/nav_shared.dart';
 import 'package:lopicode/lowcode/slots.dart';
 
 export 'package:lopicode/lowcode/export_framework_common.dart' show LcExportFile, LcFrameworkExport;
@@ -61,6 +62,7 @@ String jsxAttr(String name, String value) => ' $name={${jsString(value)}}';
 /// 多页面的项目：每页一个 `<页名>.jsx` / `.css`，外加一个外壳 `LcApp.jsx`（看地址栏决定显示哪一页，见 export_pages.dart）；
 /// 自定义组件所有页面共用一份。只有一页时和以前逐字节一样。
 LcFrameworkExport exportReact(LcDocument doc) {
+  lcSettleSharedNav(doc); // 共用的底部导航：各页都取“刚改过的那一份”（编辑器里每次修改后已经做过，这里是给直接调导出的人兜底）
   if (doc.isMultiPage) return _exportSite(doc);
   final notes = <String>[kNoteBody];
   final pageName = lcPageName(doc);
