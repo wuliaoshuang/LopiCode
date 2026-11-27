@@ -91,6 +91,7 @@ def hostFetch(method, url, headers, body, timeout_ms):
     import urllib.error
     import urllib.request
 
+    _line_check()  # 被取消了的事，到了要等的地方就停
     if not _re.match(r"https?://", url, _re.IGNORECASE):
         fail("请求不了：网址要以 http:// 或 https:// 开头")
     if method not in _FETCH_METHODS:

@@ -131,7 +131,16 @@ BeSlotRef? _slotOf(LcBlockTree tree, BeLangLower lower, LNode? node) {
 }
 
 /// 把那一格里的东西包一层就行的修法（backend_type_fix.dart）；别的五种（补情况、补字段…）在 backend_core_fix.dart。
-const Set<LFixKind> kBeBlockFixKinds = {LFixKind.wrapToText, LFixKind.wrapToInt, LFixKind.wrapParseInt, LFixKind.wrapOrElse, LFixKind.wrapMust, LFixKind.compareNotZero};
+const Set<LFixKind> kBeBlockFixKinds = {
+  LFixKind.wrapToText,
+  LFixKind.wrapToInt,
+  LFixKind.wrapParseInt,
+  LFixKind.wrapOrElse,
+  LFixKind.wrapMust,
+  LFixKind.compareNotZero,
+  LFixKind.dropAwait,
+  LFixKind.wrapSpawn,
+};
 
 BeSpot _spot(BeSlotRef r) => (treeId: r.treeId, path: r.path, arg: r.arg, exprPath: r.exprPath);
 
@@ -316,7 +325,8 @@ BeTypeCheck? _viaLibrary(BeDocument doc) {
   final program = built.program;
   if (program == null) return null;
   final own = [for (final d in built.decls) d.decl];
-  final result = checkTypes(decls: [...beServiceLibDecls(), ...own], main: built.body);
+  final onlyService = built.libs.length == 1 && built.libs.single.builtin;
+  final result = checkTypes(decls: [...(onlyService ? beServiceLibDecls() : beLibDecls(built.libs)), ...own], main: built.body);
   final scopes = {...built.names};
   for (final e in built.lambdas.entries) {
     final scope = result.lambdaScope(e.value);
@@ -324,7 +334,7 @@ BeTypeCheck? _viaLibrary(BeDocument doc) {
   }
   final links = [
     for (final i in linkProgram(program).issues)
-      if (built.split || i.code == 'M08') i,
+      if (built.split || i.code == 'M08' || !onlyService) i,
   ];
   return BeTypeCheck(
     result,

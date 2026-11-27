@@ -209,7 +209,7 @@ void main() {
     });
 
     test('手写代码：开关没开不收；开了这一版也还用不了（如实说）', () {
-      says({...files, 'native/x.node.js': 'return 1;'}, '没打开');
+      says({...files, 'native/x.node.js': 'return 1;'}, '不会启用手写代码');
       says({...edit('lib.json', '"rules": 2,', '"rules": 2, "native": {"allowed": true},'), 'native/x.node.js': 'return 1;'}, '还不会把手写代码放进生成的工程');
     });
 

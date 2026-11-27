@@ -66,8 +66,8 @@ void main() {
     ]) {
       expect(lib.legacy(fn), isNotNull, reason: fn);
     }
-    // 宿主接口只碰这七个。
-    expect(lib.hosts.toSet(), {'http.serve', 'sys.env', 'sys.print', 'time.now', 'store.read', 'store.update', 'net.fetch'});
+    // 宿主接口只碰这八个（核心 3 多了 time.sleep：“等 ▢ 毫秒”积木调库里的“等一会儿”）。
+    expect(lib.hosts.toSet(), {'http.serve', 'sys.env', 'sys.print', 'time.now', 'time.sleep', 'store.read', 'store.update', 'net.fetch'});
   });
 
   test('取到的样本条数', () {

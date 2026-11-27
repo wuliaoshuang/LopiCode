@@ -5,7 +5,9 @@ library;
 import 'package:lopicode/lang/ast.dart';
 import 'package:lopicode/lang/gen2.dart';
 import 'package:lopicode/lang/gen2_expr.dart';
+import 'package:lopicode/lang/gen2_split.dart';
 import 'package:lopicode/lang/gen_support.dart';
+import 'package:lopicode/lang/rt_v2.dart';
 import 'package:lopicode/lang/type_world.dart';
 import 'package:lopicode/lang/typecheck.dart';
 import 'package:lopicode/lang/types.dart';
@@ -25,15 +27,30 @@ abstract class JavaGen2Types extends Gen2 {
     return out.toString();
   }
 
-  String typeName(String name) => 'T_${ascii(name)}';
-  String caseType(String variant, String c) => 'T_${ascii(variant)}__${ascii(c)}';
+  /// 分文件时，顶层的东西放在哪个类里：内置错误种类 `LcKinds`、入口 `Main`、别的模块 `M_模块名`。不分文件都在 `Main` 里。
+  String holderOf(String part) {
+    final s = split;
+    if (s == null || part == s.entry) return 'Main';
+    return part == Gen2Split.kinds ? 'LcKinds' : 'M_${ascii(s.ident[part]!)}';
+  }
+
+  /// 顶层名字 [name] 前面要不要带类名：别的模块的东西要带（`M_甲.f_x`），自己这一份里的不带。
+  String from(String name) {
+    final s = split;
+    if (s == null) return '';
+    final part = s.of(name);
+    return part == curModule ? '' : '${holderOf(part)}.';
+  }
+
+  String typeName(String name) => '${from(name)}T_${ascii(name)}';
+  String caseType(String variant, String c) => '${from(variant)}T_${ascii(variant)}__${ascii(c)}';
   String member(String name) => 'm_${v2Ident(name)}';
   String funcName(String name) => 'f_${v2Ident(name)}';
   String typeVar(String name) => 'P_${ascii(name)}';
 
   /// 变量在 Java 里叫什么（不管它是不是装在盒子里）。
   String varBase(V2Var v) {
-    if (v.global) return 'g_${v2Ident(v.name)}';
+    if (v.global) return '${from(v.name)}g_${v2Ident(v.name)}';
     if (v.info.kind == LVarKind.temp) return 'lcT${v.depth}_${v2Ident(v.name)}';
     return v.depth == 0 ? 'v_${v2Ident(v.name)}' : 'v${v.depth}_${v2Ident(v.name)}';
   }
@@ -72,7 +89,7 @@ abstract class JavaGen2Types extends Gen2 {
       case LKind.dict:
         return 'TreeMap<String, ${jb(t.of ?? LType.any)}>';
       case LKind.future:
-        return 'LcHost.Task<${t.of == null || t.of!.isNul ? 'Object' : jb(t.of!)}>';
+        return 'LcTask.Task<${t.of == null || t.of!.isNul ? 'Object' : jb(t.of!)}>';
       case LKind.fn:
         return t.hasShape ? fnType(t.params, t.returns) : 'Object';
       case LKind.record || LKind.enumeration || LKind.variant || LKind.interface:
@@ -306,11 +323,12 @@ abstract class JavaGen2Types extends Gen2 {
   @override
   String funcValue(LTypedSig f) {
     if (f.info.own.isNotEmpty) unsupported('带类型变量的函数「${f.info.name}」不能直接当值用（Java 里要先定下类型）');
-    return '((${fnType(f.params, f.returns)}) Main::${funcName(f.info.name)})';
+    return '((${fnType(f.params, f.returns)}) ${holderOf(split?.of(f.info.name) ?? '')}::${funcName(f.info.name)})';
   }
 
   @override
-  String callNamed(LTypedSig f, List<String> args, List<LType> typeArgs) => '${typeArgs.isEmpty ? '' : 'Main.${targs(typeArgs)}'}${funcName(f.info.name)}(${args.join(', ')})';
+  String callNamed(LTypedSig f, List<String> args, List<LType> typeArgs) =>
+      '${typeArgs.isEmpty ? from(f.info.name) : '${holderOf(split?.of(f.info.name) ?? '')}.${targs(typeArgs)}'}${funcName(f.info.name)}(${args.join(', ')})';
   @override
   String callValue(String f, List<String> args, LType ft) => '$f.call(${args.join(', ')})';
   @override
@@ -342,13 +360,14 @@ abstract class JavaGen2Types extends Gen2 {
   @override
   String hostCall(String fn, List<String> args) => 'LcHost.$fn(${args.join(', ')})';
   @override
-  String spawnCode(String f, LType ft) => ft.returns.isNul ? 'LcHost.spawn(() -> { $f.call(); return null; })' : 'LcHost.spawn($f)';
+  String spawnCode(String f, LType ft) => ft.returns.isNul ? 'LcTask.spawn(() -> { $f.call(); return null; })' : 'LcTask.spawn($f)';
   @override
-  String waitCode(String task, LType of) => 'LcHost.await($task)';
+  String waitCode(String task, LType of) => 'LcTask.await($task)';
 
   @override
   String rtCall(String fn, List<String> args, List<LType> types, LType ret, LRt e) {
     if (fn == 'dictKeys') return 'Lc.keys(${args.join(', ')})';
+    if (kLangRtV2Tasks.contains(fn)) return 'LcTask.$fn(${args.join(', ')})';
     if (!_rt.contains(fn)) unsupported('小库函数「$fn」在 Java 的带类型生成路径里还没有', e);
     return 'Lc.$fn(${args.join(', ')})';
   }

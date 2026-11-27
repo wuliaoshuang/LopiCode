@@ -17,6 +17,7 @@ import 'package:lopicode/backend/backend_edit.dart';
 import 'package:lopicode/backend/backend_func_edit.dart';
 import 'package:lopicode/backend/backend_func_host.dart';
 import 'package:lopicode/backend/backend_function.dart';
+import 'package:lopicode/backend/backend_lib_host.dart';
 import 'package:lopicode/backend/backend_model.dart';
 import 'package:lopicode/backend/backend_palette.dart';
 import 'package:lopicode/backend/backend_strict_target.dart';
@@ -110,7 +111,7 @@ String bePathProblem(String path) {
   return '路径格式不对';
 }
 
-class BeBlockHost extends BlockHost with BeFuncHost, BeCoreHost, BeTypeHost {
+class BeBlockHost extends BlockHost with BeFuncHost, BeCoreHost, BeTypeHost, BeLibHost {
   /// `doc`＝要编辑的文档（宿主拿走以后外面别再直接改它，要改走 [edit]）。
   /// `onEdited`＝内容真的变了以后调（改动、撤销、重做；外面拿去落盘、重新生成）。
   /// `onNotice`＝有一句话要告诉用户（比如路径格式不对、为什么没改）。
@@ -180,6 +181,7 @@ class BeBlockHost extends BlockHost with BeFuncHost, BeCoreHost, BeTypeHost {
     ),
     // 严格规矩才有的三块（处理“空”、文字变整数）接在“运算”页最后；老规矩的文档积木盒和以前一样。
     if (!strictRules) ...bePaletteCategories else for (final c in bePaletteCategories) c.id == '运算' ? beStrictOperatorCategory(c) : c,
+    if (strictRules && canvasType == null) ...libCategories,
   ]);
 
   @override
@@ -206,10 +208,11 @@ class BeBlockHost extends BlockHost with BeFuncHost, BeCoreHost, BeTypeHost {
 
   /// `pair` 不在积木盒里（只能出现在“对象”里），颜色跟着“对象”。
   @override
-  String exprColorKey(String kind) => kind == 'pair' ? BlockColorKey.dict : (funcColorKey(kind) ?? coreColorKey(kind) ?? (kind == 'param' ? BlockColorKey.function : super.exprColorKey(kind)));
+  String exprColorKey(String kind) =>
+      kind == 'pair' ? BlockColorKey.dict : (funcColorKey(kind) ?? libColorKey(kind) ?? coreColorKey(kind) ?? (kind == 'param' ? BlockColorKey.function : super.exprColorKey(kind)));
 
   @override
-  String blockColorKey(String op) => funcColorKey(op) ?? coreColorKey(op) ?? super.blockColorKey(op);
+  String blockColorKey(String op) => funcColorKey(op) ?? libColorKey(op) ?? coreColorKey(op) ?? super.blockColorKey(op);
 
   @override
   String? blockSentence(String op) => funcTable.sentenceOf(op) ?? beBlockSentences[op] ?? coreBlockSentence(op);
@@ -223,20 +226,20 @@ class BeBlockHost extends BlockHost with BeFuncHost, BeCoreHost, BeTypeHost {
   // —— 脚本 ——
 
   @override
-  List<LcBlockTree> get scripts => coreScripts(beTrees(_doc));
+  List<LcBlockTree> get scripts => coreScripts([...beTrees(_doc), ..._doc.hats]);
 
   @override
   BlockHat hatOf(LcBlockTree tree) => tree is BeFunction
       ? beDefineHat(tree.name)
       : tree is BeRoute
       ? _hat(tree.method, tree.path)
-      : coreHatOf(tree) ?? const BlockHat([BlockHatPart.text('不认识的接口')], colorKey: BlockColorKey.unknown);
+      : libHatOf(tree) ?? coreHatOf(tree) ?? const BlockHat([BlockHatPart.text('不认识的接口')], colorKey: BlockColorKey.unknown);
 
   @override
   String hatSlotValue(LcBlockTree tree, String slotId) => tree is BeFunction
       ? (slotId == 'name' ? tree.name : '')
       : tree is! BeRoute
-      ? (tree is BeMethod && slotId == 'name' ? tree.name : '')
+      ? (tree is BeMethod && slotId == 'name' ? tree.name : (libHatSlotValue(tree, slotId) ?? ''))
       : switch (slotId) {
           'method' => tree.method,
           'path' => tree.path,
@@ -251,7 +254,7 @@ class BeBlockHost extends BlockHost with BeFuncHost, BeCoreHost, BeTypeHost {
   @override
   bool setHatSlot(LcBlockTree tree, String slotId, String value) {
     if (tree is BeFunction) return slotId == 'name' && renameFunction(tree, value);
-    if (tree is! BeRoute) return coreSetHatSlot(tree, slotId, value) ?? false;
+    if (tree is! BeRoute) return libSetHatSlot(tree, slotId, value) ?? coreSetHatSlot(tree, slotId, value) ?? false;
     if (slotId == 'method') return _doc.setRouteMethod(tree.id, value);
     if (slotId != 'path') return false;
     final path = value.trim();
@@ -266,26 +269,27 @@ class BeBlockHost extends BlockHost with BeFuncHost, BeCoreHost, BeTypeHost {
   LcBlockTree? addScript(String templateId, {double? x, double? y}) {
     if (templateId == kBeDefineTemplate) return addDefinition(x: x, y: y);
     if (isCoreTemplate(templateId)) return coreAddScript(templateId, x: x, y: y);
+    if (isLibTemplate(templateId)) return libAddScript(templateId, x: x, y: y);
     final method = templateId.toUpperCase();
     if (!kBeMethods.contains(method)) return null;
     return _doc.addRoute(method, freePath(method), x: x, y: y);
   }
 
   @override
-  bool removeScript(String id) => _doc.function(id) != null ? removeFunctionScript(id) : (beRemoveCoreTree(_doc, id) || _doc.removeRoute(id));
+  bool removeScript(String id) => _doc.function(id) != null ? removeFunctionScript(id) : (beRemoveCoreTree(_doc, id) || libRemoveScript(id) || _doc.removeRoute(id));
 
   // —— 造新的 ——
 
   @override
   LcBlock newBlock(String op) {
     final f = _doc.function(beCallId(op) ?? '');
-    return f != null ? beNewCallBlock(f) : (coreNewBlock(op) ?? newBeBlock(op, _doc));
+    return f != null ? beNewCallBlock(f) : (libNewBlock(op) ?? coreNewBlock(op) ?? newBeBlock(op, _doc));
   }
 
   @override
   Map<String, dynamic> newExpr(String kind) {
     final f = _doc.function(beCallId(kind) ?? '');
-    return f != null ? beNewCallExpr(f) : (newBeStrictExpr(kind) ?? coreNewExpr(kind) ?? newBeExpr(kind, _doc));
+    return f != null ? beNewCallExpr(f) : (libNewExpr(kind) ?? newBeStrictExpr(kind) ?? coreNewExpr(kind) ?? newBeExpr(kind, _doc));
   }
 
   /// “对象”的字段里加一项＝加一个“名字 : 值”；别的“一串值”加一段空文字。
@@ -296,7 +300,7 @@ class BeBlockHost extends BlockHost with BeFuncHost, BeCoreHost, BeTypeHost {
 
   @override
   List<BlockOption> options(LcArgSpec arg, {LcBlockTree? tree, LcBlock? block, Map<String, dynamic>? expr}) {
-    final own = funcOptions(arg, tree: tree, expr: expr) ?? coreOptions(arg, block: block, expr: expr);
+    final own = funcOptions(arg, tree: tree, expr: expr) ?? libOptions(arg, tree: tree, block: block) ?? coreOptions(arg, block: block, expr: expr);
     if (own != null) return own;
     switch (arg.kind) {
       case LcArgKind.variable:

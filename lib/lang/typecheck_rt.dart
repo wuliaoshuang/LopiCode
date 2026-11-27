@@ -57,6 +57,7 @@ mixin _Rt on _Core {
       return _any;
     }
     if (const {'toInt', 'floor', 'ceil', 'round'}.contains(e.fn)) check(LCheckKind.floatToInt, e, sc);
+    if (kLangRtV2Waits.contains(e.fn)) waited(sc, e, '用了“${sig.label}”');
     return apply(sc, sig.label, sig.params, sig.ret, sig.typeVars, sig.bounds, a, node: e, slots: sig.slots);
   }
 

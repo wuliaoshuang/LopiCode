@@ -33,7 +33,7 @@ class LTypeRule {
 const Map<String, LTypeRule> kTypeRules = {
   'T01': LTypeRule('T01', '这里要一种东西，放进来的是另一种', LTypeLevel.error, '换成要的那种，或者用“变成文字”“取整”这类积木转一下'),
   'T02': LTypeRule('T02', '可能是空，没判断就用了', LTypeLevel.error, '先用“如果 … 不是空”判断，或者包一层“是空就用 …”'),
-  'T03': LTypeRule('T03', '“看是哪种情况”没写全', LTypeLevel.error, '把少的情况补上，或者加一个“其余”'),
+  'T03': LTypeRule('T03', '“看是哪种情况”没写全', LTypeLevel.error, '把少的情况补上，或者加一个“其他情况”'),
   'T04': LTypeRule('T04', '新建记录缺了字段，或者多了没有的字段', LTypeLevel.error, '把缺的字段补上；多出来的删掉'),
   'T05': LTypeRule('T05', '泛型要求的条件不满足（比如要能比大小）', LTypeLevel.error, '换成满足条件的东西，或者在类型变量上说明“能比大小”'),
   'T06': LTypeRule('T06', '运算的两边不对（要数字，或者两边要同一种）', LTypeLevel.error, '把两边换成数字；数字和文字不能混着算、混着比'),
@@ -60,6 +60,10 @@ const Map<String, LTypeRule> kTypeRules = {
   'T26': LTypeRule('T26', '参数的默认值写得不对', LTypeLevel.error, '有默认值的参数排在后面；默认值要放得进这个参数的类型'),
   'T27': LTypeRule('T27', '“调父类的创建时”放的地方不对，或者该调没调', LTypeLevel.error, '它只能是子类“创建时”的第一句；父类的“创建时”要参数的，子类的“创建时”必须先调它'),
   'T28': LTypeRule('T28', '类里有重名的东西', LTypeLevel.error, '字段、方法、类本身的成员互相不能重名，也不能和父类的字段重名：换一个名字'),
+  // —— 核心 3：要不要等 ——
+  'T29': LTypeRule('T29', '这里不能有要等的事', LTypeLevel.error, '“创建时”、字段的初始值、规定了不许等的函数和方法里不能等：把要等的事挪出去，或者放进“开始做”里'),
+  'T30': LTypeRule('T30', '要等的函数放进了只收不用等的函数的地方', LTypeLevel.error, '排序、映射、筛选、“改格子”这些地方的函数不能等：要等的事先在外面做完，或者在里面放一块“开始做”'),
+  'T31': LTypeRule('T31', '“等”后面不是“稍后的结果”', LTypeLevel.error, '“等”只能等“开始做”给出来的东西；别的值直接用就行，去掉“等”'),
 };
 
 /// 模块规则表（M 开头，核心 2）：一个程序里几个模块之间的事。link.dart 的 `linkProgram` 报。
@@ -108,6 +112,12 @@ enum LFixKind {
 
   /// 改记录的字段 → 换成“复制并改”。参数 `field`。
   useRecordCopy,
+
+  /// 去掉“等”，只留里面的东西。
+  dropAwait,
+
+  /// 把这件单独成句的要等的事包进“开始做”（不等它做完）。
+  wrapSpawn,
 }
 
 class LFix {

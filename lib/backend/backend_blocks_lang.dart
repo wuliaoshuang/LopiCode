@@ -342,6 +342,9 @@ Map<String, bool> beLocalNames(List<LcBlock> list, RegExp pattern) {
           add(b.args['name'], true);
         case 'forCount':
           add(b.args['name']);
+        case 'spawn':
+          // 核心 3：“开始做”记成的名字（一个“稍后的结果”）。
+          add(b.args['name'], true);
         case 'forEach':
           add(b.args['index']);
         case 'forPairs':

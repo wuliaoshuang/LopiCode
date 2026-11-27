@@ -5,7 +5,7 @@
 /// 再按语法树节点上的来源下标查回积木路径。只读不改、不抛异常（翻不出来就当没有问题，别的检查照常）。
 library;
 
-import 'package:lopicode/backend/backend_blocks_func.dart';
+import 'package:lopicode/backend/backend_blocks.dart';
 import 'package:lopicode/backend/backend_func_table.dart';
 import 'package:lopicode/backend/backend_ir.dart' show beLangLowerOf;
 import 'package:lopicode/backend/backend_lang.dart';
@@ -160,4 +160,17 @@ List<BeLangFinding> beLangFindings(BeDocument doc, BeRoute route, {BeFuncTable? 
   } on Object {
     return const [];
   }
+}
+
+/// 静态推断一个后端表达式的类型（“类型对不上”的检查用）。后端的变量什么都能装（记录、列表…），请求里读来的也说不准，
+/// 所以只有直接填的值、运算、拼接、计数这些“一定是什么”的才给出类型，其余一律 [LcType.any]（不报）。
+String beExprType(Object? expr) {
+  if (beExprIsBool(expr)) return LcType.boolean;
+  if (beLangExprSpecs.containsKey(exprKind(expr))) return beLangExprType(expr);
+  return switch (exprKind(expr)) {
+    'text' || 'join' || 'now' => LcType.text,
+    'num' || 'len' || 'dbCount' => LcType.number,
+    'bin' => kArithmeticOps.contains(exprString(expr, 'op')) ? LcType.number : LcType.any,
+    _ => LcType.any,
+  };
 }

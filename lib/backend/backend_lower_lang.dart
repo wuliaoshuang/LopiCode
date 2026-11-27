@@ -178,7 +178,7 @@ class BeLangLower {
   bool knows(Object? name) {
     if (name is! String || !beNamePattern.hasMatch(name)) return false;
     if (host.useDocVar(name)) return true;
-    return shadow || locals.containsKey(name);
+    return shadow || locals.containsKey(name) || core?.global(name) != null;
   }
 
   // —— 式子 ——
@@ -198,7 +198,7 @@ class BeLangLower {
       case 'var':
         final name = exprField(e, 'name');
         if (name is! String || !beNamePattern.hasMatch(name) || host.useDocVar(name)) return null;
-        return shadow || locals.containsKey(name) ? lang(LName(name, src: _src())) : null;
+        return shadow || locals.containsKey(name) || core?.global(name) != null ? lang(LName(name, src: _src())) : null;
       case 'pow':
         return lang(LBinary('**', sub('a'), sub('b'), src: _src()));
       case 'obj':
@@ -317,6 +317,8 @@ class BeLangLower {
       final f = host.function(callee);
       return f == null ? gone() : LCall(LName(f.ident), _callArgs(f, (n) => exprField(e, n), depth, e), src: _src());
     }
+    final lib = kind.startsWith('lib:') ? bridge?.libExpr(kind, sub, (n) => exprField(e, n)) : null;
+    if (lib != null) return lib;
     switch (kind) {
       case 'param':
         final name = exprString(e, 'name');
@@ -437,6 +439,8 @@ class BeLangLower {
     if (func != null) return func;
 
     List<LStmt> inner(List<LcBlock> list, {bool inElse = false, int arm = -1}) => stmts(list, path, depth + 1, inElse: inElse, arm: arm);
+    final lib = b.op.startsWith('lib') ? bridge?.libBlock(b, arg, inner, shadow: shadow) : null;
+    if (lib != null) return lStampSrc(lib, src());
 
     LExpr coreLx(Object? v, Object? holder, Object? key, {String? arg}) {
       _path = path;

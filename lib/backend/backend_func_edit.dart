@@ -15,6 +15,10 @@ import 'package:lopicode/lowcode/logic_model.dart';
 /// 文档里所有的串：接口在前，函数的定义在后。
 List<LcBlockTree> beTrees(BeDocument doc) => [...doc.routes, ...doc.functions];
 
+/// 可能用到“我的积木”的所有串：接口、别的积木，加上类的方法、“创建时”、“程序开始时”、库积木当帽子的串。
+/// “用了几处”和“删积木时把调用一起拿掉”都要数全（原来只数前两样）。
+List<LcBlockTree> beUseTrees(BeDocument doc) => [...doc.routes, ...doc.functions, ...doc.core.trees, ...doc.hats];
+
 /// 把一串积木（含各个口、匿名函数的口）里每个值过一遍 `f`，返回什么就换成什么（先里后外）。
 void beRewriteExprs(List<LcBlock> blocks, Object? Function(Map<String, dynamic> e) f) {
   Object? rewrite(Object? v, int depth) {
@@ -85,10 +89,24 @@ BeFunction beAddFunction(BeDocument doc, CustomBlockLook look, List<String> para
 
 bool _isUse(Map<String, dynamic> e, String id) => e['e'] == beCallOp(id) || (e['e'] == 'funcRef' && e['fn'] == id);
 
+/// 核心 2 的串（方法、“创建时”、“程序开始时”）里用没用到这块积木。“没人用的积木”那条提醒要看它
+///（原来只看接口和别的积木：只在“程序开始时”或方法里用到的积木会被说成没人用）。
+bool beFunctionUsedInCore(BeDocument doc, String id) {
+  var hit = false;
+  for (final t in [...doc.core.trees, ...doc.hats]) {
+    beVisitBlocks(t.body, (b) {
+      if (b.op == beCallOp(id)) hit = true;
+      beVisitExprs(b, (e) => hit = hit || _isUse(e, id));
+    });
+    if (hit) return true;
+  }
+  return false;
+}
+
 /// 这块积木在别处用了几次（调用、当值、“这块积木本身”都算；它自己的定义里自己调自己不算）。
 int beFunctionUses(BeDocument doc, String id) {
   var n = 0;
-  for (final t in beTrees(doc)) {
+  for (final t in beUseTrees(doc)) {
     if (t.id == id) continue;
     beVisitBlocks(t.body, (b) {
       if (b.op == beCallOp(id)) n++;
@@ -113,7 +131,7 @@ bool beRemoveFunction(BeDocument doc, String id) {
   final at = doc.functions.indexWhere((f) => f.id == id);
   if (at < 0) return false;
   doc.functions.removeAt(at);
-  for (final t in beTrees(doc)) {
+  for (final t in beUseTrees(doc)) {
     _dropCalls(t.body, beCallOp(id));
     beRewriteExprs(t.body, (e) => _isUse(e, id) ? exText('') : e);
   }

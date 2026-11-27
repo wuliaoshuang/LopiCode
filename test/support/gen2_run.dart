@@ -2,6 +2,8 @@
 // 找不到哪个程序就交回跳过的原因（测试里明确跳过并打印）。都不联网。
 import 'dart:io';
 
+import 'proc_bounded.dart';
+
 String? _which(List<String> candidates, List<String> probe) {
   for (final exe in candidates) {
     if (exe.isEmpty) continue;
@@ -57,8 +59,16 @@ Map<String, String> _env(String work) => {
   'GOCACHE': '${Directory.systemTemp.path}/lopi_gen2_gocache',
 };
 
-Future<ProcessResult> _run(String exe, List<String> args, String dir, {int seconds = 240}) =>
-    Process.run(exe, args, workingDirectory: dir, environment: _env(dir), includeParentEnvironment: false, stdoutEncoding: null).timeout(Duration(seconds: seconds));
+/// 跑一条命令；到时间没跑完就按进程号杀掉再报超时（见 proc_bounded.dart）。
+Future<ProcessResult> _run(String exe, List<String> args, String dir, {int seconds = 240}) => runBounded(
+  exe,
+  args,
+  workingDirectory: dir,
+  environment: _env(dir),
+  includeParentEnvironment: false,
+  limit: Duration(seconds: seconds),
+  binaryOut: true,
+);
 
 /// 把 [files]（相对路径 → 内容）写进临时目录，按 [language] 编译并运行。用完目录就删。
 /// [extra]：另外要放进目录的文件（相对路径 → 原始字节），给“读文件”的测试准备不是文字的文件用。

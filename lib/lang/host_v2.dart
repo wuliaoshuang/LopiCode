@@ -20,10 +20,10 @@ const Map<String, LRtSig> kHostV2 = {
   // 读格子：没有就是空。读出来的是复制的一份。
   'store.read': LRtSig('读格子', [LType.text], LType.any),
   // 改格子：把旧值（复制的一份）交给函数，把函数返回的新值存回去（存的也是复制的一份），返回新值。
-  // 别人同时改同一个格子＝排队；函数里再改这个格子＝出错。
+  // 别人同时改同一个格子＝排队；函数里再改这个格子＝出错。改法是“一口气改完”的：里面不许等（T30）。
   'store.update': LRtSig('改格子', [
     LType.text,
-    LType.func([LType.any, LType.any]),
+    LType.func([LType.any, LType.any], waits: false),
   ], LType.any),
   // 开服务：一直服务，不返回（要等）。端口 0＝随便挑一个空的。处理函数收请求
   // {method, path, query, headers, body}，返回 {status, headers, body}；处理函数是“要等”的。

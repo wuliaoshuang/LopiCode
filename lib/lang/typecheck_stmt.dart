@@ -123,6 +123,7 @@ mixin _Stmts on _Core {
             arg(sc, value, field(sc, of, name, target), '「$name」');
         }
       case LExprStmt(:final expr):
+        noteAlone(expr);
         ex(sc, expr);
       case LIf():
         if (s.arms.isEmpty) {
@@ -177,6 +178,7 @@ mixin _Stmts on _Core {
             err('T01', sc, '「${sc.fn}」说好返回${wt.show()}，这里返回的是${t.show()}', node: value ?? s, fixes: value == null ? const [] : fixesFor(value, t, wt));
           }
         }
+        if (wt != null && value != null && w.ok(t, wt)) waitFit(sc, value, t, wt, '「${sc.fn}」返回的东西');
         sc.rets.add(t);
         if (finalPass && value != null && wt == null && f != null) _returned.add((value, f));
       case LThrow():
@@ -246,11 +248,11 @@ mixin _Stmts on _Core {
         err(
           'T03',
           sc,
-          '“分情况”还少了：${miss.join('、')}（或者加一个“其余”）',
+          '“分情况”还少了：${miss.join('、')}（或者加一个“其余”）', // 这句和类型系统原型逐字对照（lang_typecheck_proto_test），不改；积木上看到的是 backend_core_fix.dart 里那句“其他情况”
           node: s,
           fixes: [
             LFix(LFixKind.addMatchCases, '补上少的情况', target: s, params: {'cases': miss}),
-            LFix(LFixKind.addMatchElse, '加一个“其余”', target: s),
+            LFix(LFixKind.addMatchElse, '加一个“其他情况”', target: s),
           ],
         );
       }

@@ -8,8 +8,11 @@ import 'package:lopicode/backend/backend_blocks.dart';
 import 'package:lopicode/backend/backend_blocks_core.dart';
 import 'package:lopicode/backend/backend_core.dart';
 import 'package:lopicode/backend/backend_core_fix.dart';
+import 'package:lopicode/backend/backend_func_edit.dart';
+import 'package:lopicode/backend/backend_func_table.dart';
 import 'package:lopicode/backend/backend_function.dart';
 import 'package:lopicode/backend/backend_model.dart';
+import 'package:lopicode/backend/backend_rename_follow.dart';
 import 'package:lopicode/lang/errors.dart';
 import 'package:lopicode/lang/types.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
@@ -53,8 +56,8 @@ BeTypeDef? beAddType(BeDocument doc, BeTypeKind kind) {
   return t;
 }
 
-/// 所有积木串（接口、“我的积木”、类的方法、“程序开始时”）。
-List<LcBlockTree> beAllTrees(BeDocument doc) => [...doc.routes, ...doc.functions, ...doc.core.trees];
+/// 所有积木串（接口、“我的积木”、类的方法、“程序开始时”、库积木当帽子的串）。
+List<LcBlockTree> beAllTrees(BeDocument doc) => [...doc.routes, ...doc.functions, ...doc.core.trees, ...doc.hats];
 
 /// 把文档里每一个值（积木的参数、段的参数、值里面套的值）走一遍；[blocks] 另外看每一块积木。
 void _visit(BeDocument doc, void Function(Map<dynamic, dynamic> expr) expr, [void Function(LcBlock b)? blocks]) {
@@ -179,7 +182,8 @@ String? beAddField(BeDocument doc, String typeId, {String? toCase}) {
 /// 这个名字在所有类型里是不是只有 [t] 有（改名时才敢顺手改积木里按名字选的地方）。
 bool _onlyIn(BeDocument doc, BeTypeDef t, String member) => !doc.core.types.any((o) => o != t && (beMemberNames(o).contains(member) || o.cases.any((c) => c.fields.any((f) => f.name == member))));
 
-/// 改字段的名字。新建记录 / 错误里写着这个类型的那些字段跟着改；“读字段”“改字段”里按名字选的，只有这个名字是这个类型独有的才跟着改。
+/// 改字段的名字。新建记录 / 错误里写着这个类型的那些字段跟着改；“读字段”“改字段”“照抄一份”里按名字选的：这个名字是这个类型独有的
+/// 就都跟着改；别的类型也有同名字段时，只改类型检查器认出“对象是这个类型（或继承它的）”的那几处（backend_rename_follow.dart）。
 String? beRenameField(BeDocument doc, String typeId, String from, String name, {String? inCase}) {
   final t = doc.core.type(typeId);
   final list = inCase == null ? t?.fields : t?.cases.where((c) => c.name == inCase).firstOrNull?.fields;
@@ -190,13 +194,15 @@ String? beRenameField(BeDocument doc, String typeId, String from, String name, {
   final bad = beCoreNameProblem(to, inCase == null ? beMemberNames(t) : {for (final x in list) x.name});
   if (bad != null) return bad;
   final unique = _onlyIn(doc, t, from);
+  final sites = unique || inCase != null ? const <Object>{} : beMemberSites(doc, beTypeFamily(doc.core, t));
+  bool mine(Object holder) => unique || sites.contains(holder);
   f.name = to;
   if (inCase != null) return null;
   _visit(
     doc,
     (e) {
       final own = (e['e'] == 'recNew' && e['type'] == t.name) || (e['e'] == 'errNew' && e['kind'] == t.name);
-      if (own || (unique && e['e'] == 'recCopy')) {
+      if (own || (e['e'] == 'recCopy' && mine(e))) {
         final fields = e['fields'];
         if (fields is List) {
           for (final p in fields) {
@@ -204,10 +210,10 @@ String? beRenameField(BeDocument doc, String typeId, String from, String name, {
           }
         }
       }
-      if (unique && e['e'] == 'getField' && e['name'] == from) e['name'] = to;
+      if (e['e'] == 'getField' && e['name'] == from && mine(e)) e['name'] = to;
     },
     (b) {
-      if (unique && b.op == 'setField' && b.args['name'] == from) b.args['name'] = to;
+      if (b.op == 'setField' && b.args['name'] == from && mine(b)) b.args['name'] = to;
     },
   );
   return null;
@@ -303,7 +309,9 @@ BeMethod? beAddCtor(BeDocument doc, String typeId, {double? x, double? y}) {
   return m;
 }
 
-/// 改方法的名字（“对象的方法”“让对象做”里按名字选的，只有这个名字是这个类型独有的才跟着改）。
+/// 改方法的名字。继承它的类里改写的同名方法（接口的话：实现它的类里的那个方法）一起改名，不然就对不上了；
+/// “对象的方法”“让对象做”“让上一层做”里按名字选的：名字是这一家独有的就都跟着改，别的类型也有同名方法时只改
+/// 类型检查器认出“对象是这一家的”那几处（backend_rename_follow.dart）。
 String? beRenameMethod(BeDocument doc, String treeId, String name) {
   final t = doc.core.types.where((t) => t.methods.any((m) => m.id == treeId)).firstOrNull;
   final m = t?.methods.where((m) => m.id == treeId).firstOrNull;
@@ -313,18 +321,42 @@ String? beRenameMethod(BeDocument doc, String treeId, String name) {
   final bad = beCoreNameProblem(to, beMemberNames(t));
   if (bad != null) return bad;
   final from = m.name;
-  final unique = _onlyIn(doc, t, from) && !doc.core.types.any((o) => o != t && o.parent == t.name);
-  m.name = to;
-  if (!unique) return null;
+  final family = beTypeFamily(doc.core, t);
+  final kin = [
+    for (final o in doc.core.types)
+      if (family.contains(o.name)) o,
+  ];
+  // 这一家里别人已经有叫新名字的成员：改过去会撞，不许。
+  if (kin.any((o) => o != t && beMemberNames(o).contains(to))) return '继承它（或实现它）的类型里已经有一个叫「$to」的了';
+  final unique = !doc.core.types.any((o) => !family.contains(o.name) && (beMemberNames(o).contains(from) || o.cases.any((c) => c.fields.any((f) => f.name == from))));
+  final sites = unique ? const <Object>{} : beMemberSites(doc, family);
+  bool mine(Object holder) => unique || sites.contains(holder);
+  final own = <String>{};
+  for (final o in kin) {
+    for (final x in o.methods.where((x) => x.name == from)) {
+      x.name = to;
+    }
+    own.addAll([for (final x in o.trees) x.id]);
+  }
   _visit(
     doc,
     (e) {
-      if (e['e'] == 'callMethod' && e['name'] == from) e['name'] = to;
+      if (e['e'] == 'callMethod' && e['name'] == from && mine(e)) e['name'] = to;
     },
     (b) {
-      if (b.op == 'callMethodStmt' && b.args['name'] == from) b.args['name'] = to;
+      if (b.op == 'callMethodStmt' && b.args['name'] == from && mine(b)) b.args['name'] = to;
     },
   );
+  // “让上一层做”只会出现在这一家的方法里。
+  for (final tree in doc.core.trees.where((x) => own.contains(x.id))) {
+    tree.visitBlocks((b, _) {
+      if (b.op == 'superCallStmt' && b.args['name'] == from) b.args['name'] = to;
+    });
+    beRewriteExprs(tree.body, (e) {
+      if (e['e'] == 'superCall' && e['name'] == from) e['name'] = to;
+      return e;
+    });
+  }
   return null;
 }
 
@@ -432,8 +464,8 @@ void _rekey(BeCore core, String from, String to) {
   }
 }
 
-/// 改模块顶上变量的名字（要能当变量名：英文字母、数字、下划线）。积木里读、写这个名字的地方不跟着改——
-/// 分不清那是它还是哪一串里同名的局部变量；改完会标红，人自己换。
+/// 改模块顶上变量的名字（要能当变量名：英文字母、数字、下划线）。各串里读、写这个名字的地方跟着改；
+/// 哪一串自己起了同名的东西（参数、新建的变量…），那一串里的名字指的是它自己的，整串不动（backend_rename_follow.dart）。
 String? beRenameGlobal(BeDocument doc, String from, String name) {
   final core = doc.core;
   final g = core.global(from);
@@ -445,6 +477,8 @@ String? beRenameGlobal(BeDocument doc, String from, String name) {
   final was = g.key;
   g.name = to;
   _rekey(core, was, g.key);
+  final table = BeFuncTable(doc);
+  beRenameGlobalUses(beAllTrees(doc), from, to, (b, arg) => table.blockSpec(b.op)?.args.any((a) => a.name == arg && a.kind == LcArgKind.variable) ?? false);
   return null;
 }
 

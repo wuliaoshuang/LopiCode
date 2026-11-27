@@ -78,6 +78,7 @@ mixin _Classes on _Core {
       return _never;
     }
     op(e, 'static:${f.key}');
+    if (fnWaits(f.key)) waited(sc, e, '调了要等的「${c.name} 的 ${e.method}」');
     return apply(sc, f.name, [for (var i = 0; i < f.params.length; i++) ptype(f, i)], rtype(f), f.typeVars, f.bounds, e.args, f: f, node: e);
   }
 

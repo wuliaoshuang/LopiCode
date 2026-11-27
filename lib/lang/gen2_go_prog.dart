@@ -11,6 +11,7 @@ import 'package:lopicode/lang/rt2_go_dyn.dart';
 import 'package:lopicode/lang/rt2_go_host.dart';
 import 'package:lopicode/lang/rt2_go_io.dart';
 import 'package:lopicode/lang/rt2_go_more.dart';
+import 'package:lopicode/lang/rt2_go_task.dart';
 import 'package:lopicode/lang/type_world.dart';
 import 'package:lopicode/lang/types.dart';
 
@@ -26,7 +27,14 @@ class GoGen2 extends GoGen2Types {
   @override
   String get mainFile => 'main.go';
   @override
-  Map<String, String> get runtimeFiles => const {'go.mod': 'module lcprog\n\ngo 1.18\n', 'lc/lc.go': kRt2GoSource, 'lc/host.go': kRt2GoHost, 'lc/more.go': kRt2GoMore, 'lc/io.go': kRt2GoIo};
+  Map<String, String> get runtimeFiles => const {
+    'go.mod': 'module lcprog\n\ngo 1.18\n',
+    'lc/lc.go': kRt2GoSource,
+    'lc/host.go': kRt2GoHost,
+    'lc/more.go': kRt2GoMore,
+    'lc/io.go': kRt2GoIo,
+    'lc/task.go': kRt2GoTask,
+  };
 
   final Map<V2Fn, _TryState> _states = Map.identity();
   _TryState get _st => _states[fn] ??= _TryState();
@@ -118,7 +126,7 @@ class GoGen2 extends GoGen2Types {
   @override
   List<String> throwObjLines(String obj, String message) => ['panic(lc.Error{Msg: $message, Obj: $obj})'];
   @override
-  String errObjCode(String e) => 'lcErrObj(&$e)';
+  String errObjCode(String e) => 'lcErrObj($line, &$e)';
   @override
   List<String> rethrowLines(String e) => ['panic($e)'];
   @override
@@ -127,7 +135,7 @@ class GoGen2 extends GoGen2Types {
   List<String> errSupport() {
     final et = gt(Gen2Err.errType);
     return [
-      'func lcErrObj(lcE *lc.Error) $et {',
+      'func lcErrObj(lt *lc.Line, lcE *lc.Error) $et {',
       ...indent([
         'if lcE.Obj == nil {',
         ...indent([
@@ -210,7 +218,7 @@ class GoGen2 extends GoGen2Types {
   String lambdaCode(LLambda e, LType ft, V2Fn inner) {
     final (params, first) = _params(inner, e.params, ft.hasShape ? ft.params : const []);
     final body = funcBody(inner, e.stmts, first: () => first);
-    return 'func($params)${_retOf(inner.ret)} {\n${indent(body).join('\n')}\n}';
+    return 'func(${lineParams(params)})${_retOf(inner.ret)} {\n${indent(body).join('\n')}\n}';
   }
 
   String _typeParams(List<String> vars, Map<String, String> bounds) {
@@ -227,9 +235,9 @@ class GoGen2 extends GoGen2Types {
 
   List<String> _function(LFuncDecl d) {
     final sig = r.funcs[d.name]!;
-    final f = V2Fn(d.name, sig.returns, waits: d.waits);
+    final f = V2Fn(d.name, sig.returns, waits: sig.waits);
     final (params, first) = _params(f, d.params, sig.params);
-    return ['func ${funcName(d.name)}${_typeParams(sig.info.own, sig.info.bounds)}($params)${_retOf(sig.returns)} {', ...indent(funcBody(f, d.body, first: () => first)), '}'];
+    return ['func ${funcName(d.name)}${_typeParams(sig.info.own, sig.info.bounds)}(${lineParams(params)})${_retOf(sig.returns)} {', ...indent(funcBody(f, d.body, first: () => first)), '}'];
   }
 
   // —— 类型的声明 ——
@@ -299,7 +307,7 @@ class GoGen2 extends GoGen2Types {
   List<String> _interface(LInterfaceDecl d) => [
     'type ${typeName(d.name)} interface {',
     ...indent([
-      for (final m in d.methods) '${member(m.name)}(${[for (final p in m.params) gt(w.resolve(p.type))].join(', ')})${_retOf(w.resolve(m.returns ?? LType.nul))}',
+      for (final m in d.methods) '${member(m.name)}(${['*lc.Line', for (final p in m.params) gt(w.resolve(p.type))].join(', ')})${_retOf(w.resolve(m.returns ?? LType.nul))}',
       'lcIs_${v2Ident(d.name)}()',
     ]),
     '}',
@@ -324,7 +332,7 @@ class GoGen2 extends GoGen2Types {
           // 实现了的接口也嵌进来：拿着“可以被继承的类”这个类型的值，才能直接当那个接口用。
           for (final i in d.interfaces)
             if (w.interfaces.containsKey(i)) typeName(i),
-          for (final m in d.ownMethods) '${member(m.fn.name)}(${sigs[m.fn.name]!.params.map(gt).join(', ')})${_retOf(sigs[m.fn.name]!.returns)}',
+          for (final m in d.ownMethods) '${member(m.fn.name)}(${['*lc.Line', ...sigs[m.fn.name]!.params.map(gt)].join(', ')})${_retOf(sigs[m.fn.name]!.returns)}',
           'lcAs_$id() *$s',
           'LcName() string',
           'LcObj()',
@@ -354,7 +362,7 @@ class GoGen2 extends GoGen2Types {
     // 字段的初始值。
     final init = V2Fn('${c.name}.字段', LType.nul, cls: c);
     out.addAll([
-      'func $recv lcF_$id() {',
+      'func $recv lcF_$id($line *lc.Line) {',
       ...indent(
         inFn(
           init,
@@ -380,9 +388,9 @@ class GoGen2 extends GoGen2Types {
           if (e is LSuperSend && e.isCtor) explicit = true;
         }
       });
-      final head = [if (!explicit && parent != null) 'o.${bodyName(parent.name)}.lcInit()', if (!explicit) 'o.lcF_$id()'];
+      final head = [if (!explicit && parent != null) 'o.${bodyName(parent.name)}.lcInit($line)', if (!explicit) 'o.lcF_$id($line)'];
       out.addAll([
-        'func $recv lcInit($ps) {',
+        'func $recv lcInit(${lineParams(ps)}) {',
         ...indent(funcBody(f, ctor.body, first: () => [...head, ...first])),
         '}',
       ]);
@@ -394,21 +402,21 @@ class GoGen2 extends GoGen2Types {
       params = [for (var i = 0; i < types.length; i++) 'a$i ${gt(types[i])}'].join(', ');
       args = [for (var i = 0; i < types.length; i++) 'a$i'];
       out.addAll([
-        'func $recv lcInit($params) {',
-        ...indent([if (parent != null) 'o.${bodyName(parent.name)}.lcInit(${args.join(', ')})', 'o.lcF_$id()']),
+        'func $recv lcInit(${lineParams(params)}) {',
+        ...indent([if (parent != null) 'o.${bodyName(parent.name)}.lcInit(${lineArgs(args)})', 'o.lcF_$id($line)']),
         '}',
       ]);
     }
     out.addAll([
-      'func New_$id$tp($params) *$s {',
-      ...indent(['o := &$s{}', if (hasSelf) 'o.self = o', 'o.lcInit(${args.join(', ')})', 'return o']),
+      'func New_$id$tp(${lineParams(params)}) *$s {',
+      ...indent(['o := &$s{}', if (hasSelf) 'o.self = o', 'o.lcInit(${lineArgs(args)})', 'return o']),
       '}',
     ]);
     for (final m in d.ownMethods) {
       final sig = sigs[m.fn.name]!;
-      final f = V2Fn(sig.key, sig.returns, cls: c, waits: m.fn.waits);
+      final f = V2Fn(sig.key, sig.returns, cls: c, waits: sig.waits);
       final (ps, first) = _params(f, m.fn.params, sig.params);
-      out.addAll(['func $recv ${member(m.fn.name)}($ps)${_retOf(sig.returns)} {', ...indent(funcBody(f, m.fn.body, first: () => first)), '}']);
+      out.addAll(['func $recv ${member(m.fn.name)}(${lineParams(ps)})${_retOf(sig.returns)} {', ...indent(funcBody(f, m.fn.body, first: () => first)), '}']);
     }
     return out;
   }
@@ -457,7 +465,7 @@ class GoGen2 extends GoGen2Types {
     ...top,
     '',
     'func main() {',
-    ...indent(['lc.Run(func() {', ...indent(body), '})']),
+    ...indent(['lc.Run(func($line *lc.Line) {', ...indent(body), '})']),
     '}',
     '',
   ].join('\n');

@@ -12,6 +12,8 @@ import 'package:lopicode/lang/ast_util.dart';
 import 'package:lopicode/lang/custom_block.dart';
 import 'package:lopicode/lang/lc_text.dart';
 import 'package:lopicode/lang/lib_model.dart';
+import 'package:lopicode/lang/link.dart';
+import 'package:lopicode/lang/rename.dart';
 
 /// 一次使用里，各个槽放了什么。
 class LibUse {
@@ -63,17 +65,22 @@ class _Problem implements Exception {
 }
 
 /// 读模板用的读入器：把五种“洞”接上。
-LcReader _reader(LibLibrary lib, String where, LibUse use, LibCx cx) {
+LcReader _reader(LibLibrary lib, String where, LibUse use, LibCx cx, [Set<Object>? keep]) {
+  T kept<T extends Object>(T node) {
+    keep?.add(node);
+    return node;
+  }
+
   final r = LcReader(const [])..freshName = cx.fresh;
   String name(List<Object> a) => a.isNotEmpty && a[0] is String ? a[0] as String : throw _Problem('$where的模板里有一个洞没写名字');
   r.exprHole = (head, a) {
     switch (head) {
       case '槽':
-        return use.values[name(a)] ?? const LLit(null);
+        return kept(use.values[name(a)] ?? const LLit(null));
       case '隐含':
         final v = cx.context[name(a)];
         if (v == null) throw _Problem('$where要用“${name(a)}”，可是它不在给“${name(a)}”的积木下面');
-        return LName(v);
+        return kept(LName(v));
       case '设置':
         final s = lib.setting(name(a));
         if (s == null) throw _Problem('$where的模板里用了库里没有的设置项「${name(a)}」');
@@ -85,6 +92,7 @@ LcReader _reader(LibLibrary lib, String where, LibUse use, LibCx cx) {
     switch (head) {
       case '口':
         final body = use.mouths[name(a)] ?? const <LStmt>[];
+        body.forEach(kept);
         // (口 名 (收尾 语句…))：口里的积木走到头还没返回，就接着做“收尾”里的；一定会返回的就不接（免得出现执行不到的代码）。
         final tail = a.length > 1 && a[1] is List && (a[1] as List).isNotEmpty && (a[1] as List)[0] == '收尾' ? (a[1] as List).skip(1).cast<Object>() : null;
         return [...body, if (tail != null && !lAlwaysReturns(body)) ...r.stmts(tail)];
@@ -92,7 +100,7 @@ LcReader _reader(LibLibrary lib, String where, LibUse use, LibCx cx) {
         if (a.length != 2) throw _Problem('$where的模板里“放进”要写成 (放进 槽名 式子)');
         final value = r.expr(a[1]);
         final target = use.targets[name(a)];
-        return [target == null ? LExprStmt(value) : LAssign(LTName(target), value)];
+        return [target == null ? LExprStmt(value) : LAssign(kept(LTName(target)), value)];
     }
     return null;
   };
@@ -116,21 +124,36 @@ LExpr _argExpr(LibLibrary lib, LibBlock b, LibArg a, LibUse use, LibCx cx) {
   }
 }
 
+/// 库里的一个顶层名字 → 指明了模块的名字（先看这块积木自己的模块，再看库里别的模块公开的）；不是库里的名字原样返回。
+String _owner(LibLibrary lib, LibBlock b, String name) {
+  bool has(LModule m) => m.decls.any((d) => d.name == name);
+  final own = lib.modules.where((m) => m.name == b.module).firstOrNull;
+  if (own != null && has(own)) return lQualified(own.name, name);
+  final other = lib.modules.where(has).firstOrNull;
+  return other == null ? name : lQualified(other.name, name);
+}
+
 /// 把一块库积木用一次。
 LibApplied libApply(LibLibrary lib, LibBlock b, LibUse use, LibCx cx) {
   try {
     if (b.how == LibHow.expand) {
       final forms = lcParse(b.expand);
-      final r = _reader(lib, '积木「${b.look.name}」', use, cx);
+      final keep = Set<Object>.identity();
+      final r = _reader(lib, '积木「${b.look.name}」', use, cx, keep);
       for (final e in b.provides.entries) {
         r.renames[e.value] = use.provided[e.key] ?? e.value;
       }
+      // 用户的库：模板里提到的库里的名字都指明是哪个模块的（用的人自己有同名的函数、两个库有同名的东西，都不会认错）。
+      final q = lib.builtin ? null : LRenamer((n) => _owner(lib, b, n), keep: keep);
       if (b.isValue) {
         if (forms.length != 1) return LibApplied(problem: '积木「${b.look.name}」是值型的，模板要正好是一个式子');
-        return LibApplied(value: r.expr(forms.single));
+        final value = r.expr(forms.single);
+        return LibApplied(value: q == null ? value : q.expr(value));
       }
-      return LibApplied(stmts: r.stmts(forms));
+      final stmts = r.stmts(forms);
+      return LibApplied(stmts: q == null ? stmts : q.mainBody(stmts));
     }
+    String of(String name) => lib.builtin ? name : _owner(lib, b, name);
     final args = [for (final a in b.args) _argExpr(lib, b, a, use, cx)];
     final LExpr call;
     switch (b.how) {
@@ -140,9 +163,9 @@ LibApplied libApply(LibLibrary lib, LibBlock b, LibUse use, LibCx cx) {
       case LibHow.static:
         final parts = b.of.split('.');
         if (parts.length != 2) return LibApplied(problem: '积木「${b.look.name}」要调的「${b.of}」要写成 类名.方法名');
-        call = LSend(LName(parts[0]), parts[1], args);
+        call = LSend(LName(of(parts[0])), parts[1], args);
       case LibHow.call || LibHow.expand:
-        call = LCall(LName(b.of), args);
+        call = LCall(LName(of(b.of)), args);
     }
     if (b.isValue) return LibApplied(value: call);
     final target = b.into == null ? null : use.targets[b.into];

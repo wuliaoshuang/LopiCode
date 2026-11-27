@@ -2,7 +2,7 @@
 /// 里面走的是“接口服务”库那条路（backend_to_service.dart 的 `beServiceGenerate`）。
 ///
 /// 和宽松规矩的生成器不一样的地方：入口文件叫 main.*（宽松的叫 server.*，Go / Java 两边都叫 main.go / Main.java），
-/// 小库叫 lc2.*（Go 在 lc/ 目录里，Java 是 Lc.java、LcHost.java）。启动命令照旧一行。
+/// 小库叫 lc2.*（Go 在 lc/ 目录里，Java 是 Lc.java、LcHost.java、LcTask.java）。启动命令照旧一行。
 library;
 
 import 'package:lopicode/backend/backend_core_gen.dart';
@@ -16,8 +16,8 @@ const Map<String, List<String>> kBeStrictFiles = {
   'node': ['main.js', 'lc2.js'],
   'python': ['main.py', 'lc2.py'],
   'php': ['main.php', 'lc2.php'],
-  'go': ['main.go', 'go.mod', 'lc/lc.go', 'lc/host.go', 'lc/more.go', 'lc/io.go'],
-  'java': ['Main.java', 'Lc.java', 'LcHost.java'],
+  'go': ['main.go', 'go.mod', 'lc/lc.go', 'lc/host.go', 'lc/more.go', 'lc/io.go', 'lc/task.go'],
+  'java': ['Main.java', 'Lc.java', 'LcHost.java', 'LcTask.java'],
 };
 
 /// 运行时出了错（除以 0、类型不对这些）回给对方的内容。

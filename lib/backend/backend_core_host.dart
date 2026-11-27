@@ -9,6 +9,7 @@ library;
 
 import 'package:lopicode/backend/backend_blocks.dart';
 import 'package:lopicode/backend/backend_blocks_core.dart';
+import 'package:lopicode/backend/backend_blocks_wait.dart';
 import 'package:lopicode/backend/backend_core.dart';
 import 'package:lopicode/backend/backend_core_edit.dart';
 import 'package:lopicode/backend/backend_core_gen.dart';
@@ -142,6 +143,18 @@ mixin BeCoreHost on BlockHost {
           if (t != null && (t.parent != null)) const BlockGroup('父类', blocks: ['superInit', 'superCallStmt'], exprs: ['superCall']),
         ],
       ),
+      // “要等的事”排在最后（核心 3）：前面几页的位置不动。
+      const BlockCategory(
+        id: kBeCatWait,
+        label: kBeCatWait,
+        colorKey: BlockColorKey.async,
+        groups: [
+          BlockGroup('同时做', blocks: ['spawn', 'sleep'], exprs: ['spawnOf']),
+          BlockGroup('等结果', exprs: ['await', 'awaitMax', 'awaitAll', 'awaitAny']),
+          BlockGroup('取消', blocks: ['cancel'], exprs: ['cancelled']),
+          BlockGroup('排队', blocks: ['critical']),
+        ],
+      ),
     ];
   }
 
@@ -153,6 +166,7 @@ mixin BeCoreHost on BlockHost {
 
   String? coreColorKey(String id) => switch (id) {
     'try' || 'throw' || 'errNew' => BlockColorKey.error,
+    _ when beWaitBlockSpecs.containsKey(id) || beWaitExprSpecs.containsKey(id) => BlockColorKey.async,
     _ => beIsCoreOp(id) || beIsCoreExpr(id) ? BlockColorKey.classes : null,
   };
 

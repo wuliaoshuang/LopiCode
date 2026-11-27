@@ -16,6 +16,12 @@ abstract class GoGen2Types extends Gen2 {
   // —— 名字 ——
 
   String typeName(String name) => 'T_${v2Ident(name)}';
+
+  // “这条线”（lt）：Go 里没有现成的办法知道“我是哪件事”，所以生成的每个函数、方法、匿名函数第一个参数都是 lt，一路传下去。
+  // 取消、“一次只让一个做”、格子“正在改”都靠它认（见 rt2_go_host.dart 的 Line）。
+  String get line => 'lt';
+  String lineParams(String params) => params.isEmpty ? '$line *lc.Line' : '$line *lc.Line, $params';
+  String lineArgs(List<String> args) => [line, ...args].join(', ');
   String bodyName(String name) => 'B_${v2Ident(name)}';
   String caseType(String variant, String c) => 'T_${v2Ident(variant)}_${v2Ident(c)}';
   String member(String name) => 'm_${v2Ident(name)}';
@@ -63,7 +69,7 @@ abstract class GoGen2Types extends Gen2 {
         return '*lc.Task[${_taskOf(t.of)}]';
       case LKind.fn:
         if (!t.hasShape) return 'any';
-        return 'func(${t.params.map(gt).join(', ')})${t.returns.isNul ? '' : ' ${gt(t.returns)}'}';
+        return 'func(${['*lc.Line', ...t.params.map(gt)].join(', ')})${t.returns.isNul ? '' : ' ${gt(t.returns)}'}';
       case LKind.record || LKind.enumeration || LKind.variant || LKind.interface:
         return '${typeName(t.name ?? '')}${targs(t.args)}';
       case LKind.object:
@@ -180,14 +186,14 @@ abstract class GoGen2Types extends Gen2 {
     if (_fnMismatch(from, to)) {
       // 函数当另一种样子的函数用（比如返回“列表”的当返回“任意”的）：Go 里函数类型要一模一样，包一层。
       final f = tmpName('F'), qs = [for (final _ in to.params) tmpName('Q')];
-      final call = '$f(${[for (var i = 0; i < qs.length; i++) conv(qs[i], to.params[i], from.params[i])].join(', ')})';
+      final call = '$f(${lineArgs([for (var i = 0; i < qs.length; i++) conv(qs[i], to.params[i], from.params[i])])})';
       // 不返回东西的当“返回任意”的用：做完交回空。
       final body = to.returns.isNul
           ? call
           : from.returns.isNul
           ? '$call; return nil'
           : 'return ${conv(call, from.returns, to.returns)}';
-      return 'func($f ${gt(from)}) ${gt(to)} { return func(${[for (var i = 0; i < qs.length; i++) '${qs[i]} ${gt(to.params[i])}'].join(', ')})${to.returns.isNul ? '' : ' ${gt(to.returns)}'} { $body } }($code)';
+      return 'func($f ${gt(from)}) ${gt(to)} { return func(${lineParams([for (var i = 0; i < qs.length; i++) '${qs[i]} ${gt(to.params[i])}'].join(', '))})${to.returns.isNul ? '' : ' ${gt(to.returns)}'} { $body } }($code)';
     }
     final fb = from.nonNull, tb = to.nonNull;
     if (from.isNul) return nulOf(to);
@@ -290,11 +296,11 @@ abstract class GoGen2Types extends Gen2 {
   }
 
   @override
-  String callNamed(LTypedSig f, List<String> args, List<LType> typeArgs) => '${funcName(f.info.name)}${targs(typeArgs)}(${args.join(', ')})';
+  String callNamed(LTypedSig f, List<String> args, List<LType> typeArgs) => '${funcName(f.info.name)}${targs(typeArgs)}(${lineArgs(args)})';
   @override
-  String callValue(String f, List<String> args, LType ft) => '$f(${args.join(', ')})';
+  String callValue(String f, List<String> args, LType ft) => '$f(${lineArgs(args)})';
   @override
-  String dynCall(String f, List<String> args) => 'lc.DynCall(${[f, ...args].join(', ')})';
+  String dynCall(String f, List<String> args) => 'lc.DynCall(${lineArgs([f, ...args])})';
 
   static const Map<String, String> _rt = {
     'listMap': 'Map', 'listFilter': 'Filter', 'listReduce': 'Reduce', 'listEvery': 'Every', 'listSome': 'Any', 'listEach': 'Each', //
@@ -306,18 +312,25 @@ abstract class GoGen2Types extends Gen2 {
     'dictHas': 'DictHas', 'toJson': 'ToJson', 'fromJson': 'FromJson', 'now': 'Now', 'isNumeric': 'IsNumeric', 'urlDecode': 'UrlDecode',
     'isType': 'IsType', 'toNumber': 'ToNumber', 'dictMerge': 'DictMerge', 'abs': 'Abs', 'max': 'MaxOf', 'min': 'MinOf', 'random': 'Random',
     'copy': 'Copy', 'template': 'Template', 'toBool': 'ToBool', 'listInsert': 'Insert', 'listRemove': 'RemoveAt', 'listSort': 'Sort',
-    'dictPairs': 'DictPairs',
+    'dictPairs': 'DictPairs', 'awaitMax': 'WaitMax', 'awaitAll': 'WaitAll', 'awaitAny': 'WaitAny', 'cancel': 'Cancel', 'cancelled': 'Cancelled',
+    'lockEnter': 'LockEnter', 'lockLeave': 'LockLeave',
   };
 
+  // 这些小库函数要知道“这条线”：收函数的（要把 lt 接着传给那个函数）和“稍后的结果”那几个。
+  static const Set<String> _rtLine = {'listMap', 'listFilter', 'listReduce', 'listEvery', 'listSome', 'listEach', 'awaitMax', 'awaitAll', 'awaitAny', 'cancelled', 'lockEnter', 'lockLeave'};
+
   @override
-  String hostCall(String fn, List<String> args) => 'lc.${fn[0].toUpperCase()}${fn.substring(1)}(${args.join(', ')})';
+  String hostCall(String fn, List<String> args) => 'lc.${fn[0].toUpperCase()}${fn.substring(1)}(${_hostLine.contains(fn) ? lineArgs(args) : args.join(', ')})';
+
+  // 这几个宿主接口要知道“这条线”：会等的（被取消了要叫得醒）、收函数的、认“谁正在改”的。
+  static const Set<String> _hostLine = {'hostSleep', 'hostServe', 'hostFetch', 'storeUpdate'};
 
   // “稍后的结果”里放什么：不返回东西的函数放 any（里面是 nil）。
   String _taskOf(LType? of) => of == null || of.isNul ? 'any' : gt(of);
   @override
-  String spawnCode(String f, LType ft) => ft.returns.isNul ? 'lc.Spawn(func() any { $f(); return nil })' : 'lc.Spawn($f)';
+  String spawnCode(String f, LType ft) => ft.returns.isNul ? 'lc.Spawn($line, func($line *lc.Line) any { $f($line); return nil })' : 'lc.Spawn($line, $f)';
   @override
-  String waitCode(String task, LType of) => 'lc.Wait($task)';
+  String waitCode(String task, LType of) => 'lc.Wait($line, $task)';
 
   @override
   String rtCall(String fn, List<String> args, List<LType> types, LType ret, LRt e) {
@@ -325,9 +338,9 @@ abstract class GoGen2Types extends Gen2 {
     if (const {'abs', 'max', 'min'}.contains(fn) && ret.isAny) return 'lc.Dyn${_rt[fn]!.replaceAll('Of', '')}(${args.join(', ')})';
     if (fn == 'listSort' && (ret.of?.isAny ?? true)) return 'lc.DynSort(${args.join(', ')})';
     if (fn == 'copy') return 'lc.Copy[${gt(types[0])}](${args.join(', ')})'; // 放进来的是“空”的时候 Go 自己推不出类型
-    if (fn == 'listFind') return 'lc.${_boxResult(ret.nonNull) ? 'Find' : 'FindNil'}(${args.join(', ')})';
+    if (fn == 'listFind') return 'lc.${_boxResult(ret.nonNull) ? 'Find' : 'FindNil'}(${lineArgs(args)})';
     final name = _rt[fn] ?? unsupported('小库函数「$fn」在 Go 的带类型生成路径里还没有', e);
-    return 'lc.$name(${args.join(', ')})';
+    return 'lc.$name(${_rtLine.contains(fn) ? lineArgs(args) : args.join(', ')})';
   }
 
   @override
@@ -405,7 +418,7 @@ abstract class GoGen2Types extends Gen2 {
 
   @override
   String newObject(LClassInfo c, LType type, List<String> args) {
-    final made = 'New_${v2Ident(c.name)}${targs(type.args)}(${args.join(', ')})';
+    final made = 'New_${v2Ident(c.name)}${targs(type.args)}(${lineArgs(args)})';
     return isOpen(c.name) ? '${gt(type)}($made)' : made;
   }
 
@@ -417,7 +430,7 @@ abstract class GoGen2Types extends Gen2 {
   }
 
   @override
-  String send(String obj, LType objType, String method, List<String> args, LSend e) => '$obj.${member(method)}(${args.join(', ')})';
+  String send(String obj, LType objType, String method, List<String> args, LSend e) => '$obj.${member(method)}(${lineArgs(args)})';
 
   String _parentBody() {
     final c = fn.owner!;
@@ -425,9 +438,9 @@ abstract class GoGen2Types extends Gen2 {
   }
 
   @override
-  String superCall(String method, List<String> args) => 'o.${_parentBody()}.${member(method)}(${args.join(', ')})';
+  String superCall(String method, List<String> args) => 'o.${_parentBody()}.${member(method)}(${lineArgs(args)})';
   @override
-  String superCtor(List<String> args) => 'func() { o.${_parentBody()}.lcInit(${args.join(', ')}); o.lcF_${v2Ident(fn.owner!.name)}() }()';
+  String superCtor(List<String> args) => 'func() { o.${_parentBody()}.lcInit(${lineArgs(args)}); o.lcF_${v2Ident(fn.owner!.name)}($line) }()';
 
   String _classType(String cls, LType like, LNode? node) {
     if (w.interfaces.containsKey(cls)) return typeName(cls);

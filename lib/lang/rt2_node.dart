@@ -4,14 +4,17 @@
 /// 遍历按码点从小到大）；记录 / 变体 / 枚举 / 对象＝生成的 class（分别继承 Rec / Variant / Enum / Obj）；函数＝function。
 library;
 
-const String kRt2NodeSource = r'''
+import 'package:lopicode/lang/rt2_node_task.dart';
+
+const String kRt2NodeSource =
+    r'''
 // LopiCode 积木的小库（Node.js，严格规矩）。由 LopiCode 生成，别手改。
 "use strict";
 // 抛出去的错：外面这层带着那句话；obj 是错误对象（小库自己报的错没有，接住的时候才按种类造）。
 class LcError extends Error {
   constructor(m, obj) { super(m); this.obj = obj === undefined ? null : obj; }
 }
-const ERR_KINDS = [["除以 0", "数值不对"], ["整数超出范围", "数值不对"], ["变不成整数", "数值不对"], ["超出了", "找不到"], ["拿到的是", "类型不对"], ["值是空", "类型不对"]];
+const ERR_KINDS = [["除以 0", "数值不对"], ["整数超出范围", "数值不对"], ["变不成整数", "数值不对"], ["超出了", "找不到"], ["拿到的是", "类型不对"], ["值是空", "类型不对"], ["还没做完", "超时"], ["被取消了", "取消了"]];
 const errKind = (m) => { for (const [part, k] of ERR_KINDS) if (m.includes(part)) return k; return "错误"; };
 let errMake = null;
 const errSetup = (f) => { errMake = f; };
@@ -378,6 +381,7 @@ function encodeUrl(s) {
 const FETCH_METHODS = ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"];
 const FETCH_SKIP = ["host", "content-length", "connection", "expect", "upgrade"];
 async function hostFetch(method, url, headers, body, timeoutMs) {
+  if (lineNow().cancelled) throw cancelErr(); // 被取消了的事，到了要等的地方就停
   if (!/^https?:\/\//i.test(url)) fail("请求不了：网址要以 http:// 或 https:// 开头");
   if (!FETCH_METHODS.includes(method)) fail("请求不了：不认识的方式「" + method + "」");
   if (timeoutMs <= 0) fail("请求不了：超时毫秒要大于 0");
@@ -408,15 +412,9 @@ async function hostFetch(method, url, headers, body, timeoutMs) {
   return new Map([["status", res.status], ["headers", back], ["body", new TextDecoder("utf-8", { ignoreBOM: true }).decode(bytes)]]);
 }
 
-// —— 要等的事 ——
-const hostSleep = (ms) => new Promise((done) => setTimeout(() => done(null), Math.max(0, ms)));
-// 开始做一件事：马上开始，拿到“稍后的结果”；出了错先记着，等它的时候再抛。
-function spawn(f) {
-  const p = f();
-  p.catch(() => {});
-  return p;
-}
-
+''' +
+    kRt2NodeTask +
+    r'''
 // —— 开服务（细则见 docs/blocks-v5-parts/C-library-system.md 9.1 和 B-gen-notes.md 第 12 节）——
 const BODY_LIMIT = 1048576;
 const errText = (e) => (e instanceof LcError ? "出错：" + e.message : String((e && e.stack) || e));
@@ -451,7 +449,7 @@ async function serveOne(req, res, handler) {
   const q = url.indexOf("?");
   const request = new Map([["method", req.method], ["path", q < 0 ? url : url.slice(0, q)], ["query", q < 0 ? "" : url.slice(q + 1)], ["headers", headers], ["body", body]]);
   let out;
-  try { out = await handler(request); } catch (e) {
+  try { out = await inLine(() => handler(request)); } catch (e) {
     process.stderr.write(errText(e) + "\n");
     return hostError(req, res, 500, "服务器内部出错");
   }
@@ -485,7 +483,8 @@ function fatal(e) {
   process.exitCode = 1;
 }
 // 跑主程序。什么都没写过的，最后补一个空行（和原来“攒到最后一次写”的样子一样）。
-const finish = () => { if (!wrote) process.stdout.write("\n"); };
+// 主程序做完＝整个程序结束：“开始做”了还没做完的事不再等（别的语言也是这样）；先等写出去的字都落了地再退。
+const finish = () => { process.stdout.write(wrote ? "" : "\n", () => process.exit()); };
 function run(main) {
   let r;
   try { r = main(); } catch (e) {
@@ -508,7 +507,8 @@ module.exports = {
   abs, max, min, random, copy, template, toBool, listInsert, listRemove, listSort, dictPairs,
   dadd, dsub, dmul, ddiv, dpow, didiv, dmod, dynGet, dynSet, dynPush, dynPop, dynRemove, dynOrElse, dynSize,
   toJson, fromJson, dtext, log, run, isNumeric, isType, dictMerge, toNumber, urlDecode,
-  hostPrint, hostNow, hostEnv, hostSleep, hostServe, spawn, storeRead, storeUpdate,
+  hostPrint, hostNow, hostEnv, hostSleep, hostServe, spawn, wait, awaitMax, awaitAll, awaitAny, cancel, cancelled, lockEnter, lockLeave,
+  storeRead, storeUpdate,
   hostRandomBytes, hostFetch, fileRead, fileWrite, fileExists, fileList, fileRemove,
 };
 ''';

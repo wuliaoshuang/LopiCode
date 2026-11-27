@@ -8,6 +8,7 @@ import 'package:lopicode/lang/gen2.dart';
 import 'package:lopicode/lang/gen2_expr.dart';
 import 'package:lopicode/lang/gen2_split.dart';
 import 'package:lopicode/lang/gen_support.dart';
+import 'package:lopicode/lang/rt_v2.dart';
 import 'package:lopicode/lang/type_world.dart';
 import 'package:lopicode/lang/typecheck.dart';
 import 'package:lopicode/lang/types.dart';
@@ -244,7 +245,7 @@ abstract class Gen2Dyn extends Gen2 {
   @override
   String dynCall(String f, List<String> args) => '${call('asFn', [f])}(${args.join(', ')})';
   @override
-  String rtCall(String fn, List<String> args, List<LType> types, LType ret, LRt e) => call(fn, args);
+  String rtCall(String fn, List<String> args, List<LType> types, LType ret, LRt e) => kLangRtV2Tasks.contains(fn) ? hostCall(fn, args) : call(fn, args);
   @override
   String hostCall(String fn, List<String> args) => call(fn, args);
   @override
@@ -345,8 +346,8 @@ abstract class Gen2Dyn extends Gen2 {
 
   List<String> _function(LFuncDecl d) {
     final sig = r.funcs[d.name]!;
-    final f = V2Fn(d.name, sig.returns, waits: d.waits);
-    if (d.waits) waitDecls.add(funcName(d.name));
+    final f = V2Fn(d.name, sig.returns, waits: sig.waits);
+    if (sig.waits) waitDecls.add(funcName(d.name));
     return funcDecl(funcName(d.name), paramCodes(f, d.params), funcBody(f, d.body));
   }
 
@@ -374,8 +375,8 @@ abstract class Gen2Dyn extends Gen2 {
     final methods = <(String, List<String>, List<String>)>[];
     for (final m in d.ownMethods) {
       final sig = r.funcs['${c.name}.${m.fn.name}']!;
-      final f = V2Fn(sig.key, sig.returns, cls: c, waits: m.fn.waits);
-      if (m.fn.waits) waitDecls.add('${typeName(c.name)}.${member(m.fn.name)}');
+      final f = V2Fn(sig.key, sig.returns, cls: c, waits: sig.waits);
+      if (sig.waits) waitDecls.add('${typeName(c.name)}.${member(m.fn.name)}');
       methods.add((member(m.fn.name), paramCodes(f, m.fn.params), funcBody(f, m.fn.body)));
     }
     return DynClass(c, typeName(c.name), d.parent == null ? null : typeName(d.parent!), w.supers(c.name), fields, ctorParams, ctorBody, methods);

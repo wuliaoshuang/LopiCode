@@ -1,6 +1,6 @@
 /// 类型问题的“一键修”落到积木文档上：把那一格里的东西外面包一层积木（或换成“… ≠ 0”）。纯数据，不碰界面。
 ///
-/// 设计：docs/blocks-v5-parts/B-type-system.md 6.2。语法树上十一种修法都能做（lib/lang/type_fix.dart）；积木上现在能表达的是这六种：
+/// 设计：docs/blocks-v5-parts/B-type-system.md 6.2。语法树上十三种修法都能做（lib/lang/type_fix.dart）；积木上直接换一格的是这八种：
 ///
 /// | 修法 | 积木上变成什么 |
 /// |---|---|
@@ -10,6 +10,8 @@
 /// | 是空就用 … | “▢ 是空就用 ▢”，后一格照类型先放一个最平常的值（0、空文字、否、空列表、空字典） |
 /// | 一定不是空 | “一定不是空 ▢” |
 /// | 换成“… ≠ 0” | “运算 / 比较”积木，选 ≠，右边放 0 |
+/// | 去掉“等”（核心 3） | “等 ▢”积木拿掉，留下里面那个值 |
+/// | 改成“开始做”（核心 3） | 外面包一层“开始算 ▢”（不等它做完） |
 ///
 /// 另外五种（补情况、加“其余”、补字段、删字段、换成“复制并改”）要靠“看是哪种情况”和记录的积木，这些积木还没有，[beTypeFixWrap] 返回 null。
 /// 调用方（宿主）负责把这一步放进撤销栈。
@@ -68,6 +70,8 @@ Map<String, dynamic>? beTypeFixWrap(LFix fix, Object? inner, {LType? got}) => sw
   LFixKind.wrapOrElse => {'e': 'orElse', 'x': inner, 'd': beFixDefaultValue(got?.nonNull)},
   LFixKind.wrapMust => {'e': 'must', 'x': inner},
   LFixKind.compareNotZero => {'e': 'bin', 'op': '!=', 'l': inner, 'r': exNum(0)},
+  LFixKind.dropAwait => inner is Map && inner['e'] == 'await' && inner['x'] is Map ? Map<String, dynamic>.from(inner['x'] as Map) : null,
+  LFixKind.wrapSpawn => {'e': 'spawnOf', 'x': inner},
   LFixKind.addMatchCases || LFixKind.addMatchElse || LFixKind.addRecordFields || LFixKind.removeRecordField || LFixKind.useRecordCopy => null,
 };
 

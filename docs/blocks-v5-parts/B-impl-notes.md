@@ -109,7 +109,7 @@ LTypeResult checkTypes({decls, main, scripts: [LTypeScript(name, body, vars: {�
 | `wrapMust` | 外面包一层“一定不是空” | |
 | `compareNotZero` | 换成“▢ ≠ 0” | |
 | `addMatchCases` | “看是哪种情况”补上缺的情况 | `cases`：名字的列表 |
-| `addMatchElse` | 加一个“其余” | |
+| `addMatchElse` | 加一个“其他情况” | |
 | `addRecordFields` | 新建记录补上缺的字段 | `fields`：名字的列表 |
 | `removeRecordField` | 删掉记录里没有的字段 | `field` |
 | `useRecordCopy` | 改字段 → 换成“复制并改” | `field` |

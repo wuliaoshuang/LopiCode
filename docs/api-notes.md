@@ -769,3 +769,20 @@ Flutter 导出在测试里真的跳了页（`test/lowcode_pages_export_test.dart
 - Node CommonJS：`module.exports` 里写 `get 名字() {}`、`set 名字(v) {}`，别的文件 `模块.名字` 读写的就是原文件里的变量。实测。
 - Python：`from 模块 import 变量` 拿到的是当时的值；`import 模块` 以后 `模块.变量` 读写的是模块里的变量。实测。
 - PHP 自带的开发服务器：环境变量 `PHP_CLI_SERVER_WORKERS=数字` 开多个工作进程（“请求别的网址”请求自己时要靠它）；工作进程是主进程的子进程。未核对；本机 PHP 8.3 实测。
+
+## 积木第 5 版·核心 3“要等的事”用到的各语言标准库（2026-11-27）
+
+都是各语言自带的东西，不联网、不加依赖。核对办法：对着官方文档的说法写，再由 `test/lang_gen2_waits_test.dart` 真跑验证行为（12 个样例 × 5 种语言）。
+
+- **Node `AsyncLocalStorage`**（`node:async_hooks`）：`run(store, fn)` 里开始的异步操作（含 `await` 之后的续接）里 `getStore()` 拿到同一个 store。
+  官方文档 nodejs.org/api/async_context.html 标为稳定。本机 Node v24.22.1 真跑验证。用它记“这条线”。
+- **Node `process.exit()`**：主程序做完、输出写完以后调，不等没做完的定时器和 Promise。官方文档 nodejs.org/api/process.html 提醒：
+  标准输出是管道时写操作可能是异步的，直接 exit 会丢输出——所以是在 `process.stdout.write('', 回调)` 的回调里才退。真跑验证输出不丢（管道）。
+- **Python `threading.Condition` / `threading.local`**：`wait(timeout)` 会放开锁、被 `notify_all` 或到时叫醒后重新拿锁；docs.python.org/3/library/threading.html。
+  时间用 `time.monotonic()`。线程是 daemon 的，主线程结束进程就退。
+- **Java `ReentrantLock` / `Condition.awaitNanos` / `Thread.ofVirtual()`**：虚拟线程 JDK 21 起正式（JEP 444）；`awaitNanos` 返回剩余纳秒、可能假醒，所以放在循环里。
+  虚拟线程是守护的，`main` 返回进程就退。本机 JDK 真跑验证。
+- **Go：关掉一个 channel 当“全体叫醒”**：所有在等的都在 `select` 同一个 channel，有事发生就 `close` 它再换个新的；带期限的等用 `time.NewTimer` 一起 `select`
+  （没有用 `sync.Cond`，它没有带超时的 Wait）。关闭的 channel 读起来立刻返回是语言规范里写的（go.dev/ref/spec#Receive_operator）。
+- **PHP `flock` / `hrtime` / `usleep`**：`flock(LOCK_EX)` 进程之间互斥、进程结束自动放；`hrtime(true)` 是纳秒的单调时钟（php.net/manual/zh/function.hrtime.php）。
+  **未核对**：`flock` 在网络文件系统（NFS）上的行为；生成的工程放在本机磁盘上才保证“一次只让一个做”跨工作进程有效。

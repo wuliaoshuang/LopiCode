@@ -136,9 +136,12 @@ Future<bool> showBeUpgradeStrict(BuildContext context, BeBlockHost host) async {
                       ),
                     const SizedBox(height: Space.x2),
                     Text('升级并存盘以后不能降回老规矩；刚升完后悔，可以马上点“撤销”。', style: t.bodySmall?.copyWith(color: c.textMuted)),
+                    const SizedBox(height: Space.x3),
                   ],
                 ),
               ),
+              // 内容比一屏长时能滚：这条线说清“上面是滚动区的边”，不然最后一行字像是被按钮截掉了半行。
+              Divider(key: const ValueKey('be-strict-edge'), height: 1, thickness: 1, color: c.border),
               Padding(
                 padding: const EdgeInsets.fromLTRB(Space.x4, Space.x3, Space.x4, Space.x3),
                 child: Column(

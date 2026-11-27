@@ -13,6 +13,7 @@ import 'dart:collection';
 import 'package:lopicode/lang/ast.dart';
 import 'package:lopicode/lang/ast_util.dart';
 import 'package:lopicode/lang/errors.dart';
+import 'package:lopicode/lang/host_v2.dart';
 import 'package:lopicode/lang/link.dart';
 import 'package:lopicode/lang/rt_v2.dart';
 import 'package:lopicode/lang/type_issue.dart';
@@ -27,6 +28,7 @@ part 'typecheck_expr.dart';
 part 'typecheck_result.dart';
 part 'typecheck_rt.dart';
 part 'typecheck_stmt.dart';
+part 'typecheck_wait.dart';
 
 /// 检查一个模块：声明＋“启动时”的语句（记在“主”名下）。
 LTypeResult checkModuleTypes(LModule module) => checkTypes(decls: module.decls, main: module.body);
@@ -53,8 +55,17 @@ class LTypeScript {
 
 /// 检查一批声明＋主程序＋若干段脚本。[outer] 是宿主给的、到处看得见的变量。
 LTypeResult checkTypes({List<LDecl> decls = const [], List<LStmt> main = const [], List<LTypeScript> scripts = const [], Map<String, LType> outer = const {}}) {
-  final c = _Checker(decls, main, scripts, outer);
-  return c.run();
+  // “这个参数只收不用等的函数”有一种要回头重来才推得出：把参数包在匿名函数里调、再把匿名函数放进只收不用等的函数的地方
+  // （比如 改库(名, 改法) 里面写 改格子(名, (旧) => 改法(旧))）。第一遍把“改法”当成可能要等；查到这种地方就记下来，
+  // 带着“改法只收不用等的函数”从头再查一遍。规定只会变多，所以几遍就停。
+  final seed = <String>{};
+  for (var n = 0; ; n++) {
+    final c = _Checker(decls, main, scripts, outer)..noWaitParams.addAll(seed);
+    final r = c.run();
+    final before = seed.length;
+    seed.addAll(c.demand);
+    if (seed.length == before || n >= 8) return r;
+  }
 }
 
 const LType _int = LType.integer;
@@ -68,7 +79,10 @@ const LType _never = LType.never;
 const String _mainKey = '主';
 
 class _Var {
-  _Var(this.t, {this.fixed = false, this.hidden = false, this.kind = LVarKind.local});
+  _Var(this.t, {this.fixed = false, this.hidden = false, this.kind = LVarKind.local, this.slot});
+
+  /// 它是哪个函数的第几个参数（“函数记号#位置”）；不是有名字的函数 / 方法的参数＝null。
+  final String? slot;
   LType t;
   bool fixed;
   bool hidden;
@@ -131,6 +145,16 @@ abstract class _Core {
   /// 没标类型的参数从调用处反推出来的类型、没标的返回类型。
   final Map<String, LType> pt = {};
   final Map<String, LType> rt = {};
+
+  /// “要等”的函数 / 方法 / 匿名函数（记号）和接口里的方法（“接口.方法”）：只会变多。见 typecheck_wait.dart。
+  final Set<String> waitKeys = {};
+
+  /// 推出来“只收不用等的函数”的参数（“函数记号#位置”）。只会变多。
+  final Set<String> noWaitParams = {};
+
+  /// 最后一遍里查到的“要是这几个参数只收不用等的函数就没事了”（见 [checkTypes]）。
+  final Set<String> demand = {};
+  final Set<String> waitIface = {};
 
   bool finalPass = false;
   int passes = 0;
@@ -217,6 +241,8 @@ abstract class _Core {
       if (!w.ok(t, v.t)) {
         final have = w.res(v.t), got = w.res(t);
         err('T01', sc, '「$name」是${have.show()}，放进来的是${got.show()}', node: node, fixes: node is LExpr ? fixesFor(node, got, have) : const []);
+      } else if (node is LExpr) {
+        waitFit(sc, node, t, v.t, '「$name」');
       }
       w.unify(v.t, t, {});
       if (v.t.isAny && node != null) {
@@ -261,15 +287,22 @@ abstract class _Core {
 
   LType ptype(LTypedFunc f, int i) {
     final p = f.params[i];
-    if (p.type != null) return w.resolve(p.type, f.typeVars);
-    return pt['${f.key}#$i'] ?? _never;
+    final t = p.type != null ? w.resolve(p.type, f.typeVars) : (pt['${f.key}#$i'] ?? _never);
+    // 推出来“这个参数只收不用等的函数”的（见 typecheck_wait.dart 的 noWaitParams）：类型上带着。
+    if (noWaitParams.contains('${f.key}#$i') && t.kind == LKind.fn && t.waits == null) return LType(LKind.fn, args: t.args, nullable: t.nullable, waits: false);
+    return t;
   }
 
   LType rtype(LTypedFunc f) => f.ret != null ? w.resolve(f.ret, f.typeVars) : (rt[f.key] ?? _never);
 
-  LType fnType(LTypedFunc f) => LType(LKind.fn, args: [for (var i = 0; i < f.params.length; i++) ptype(f, i), rtype(f)], waits: f.decl?.waits == true ? true : null);
+  LType fnType(LTypedFunc f) => LType(LKind.fn, args: [for (var i = 0; i < f.params.length; i++) ptype(f, i), rtype(f)], waits: waitKeys.contains(f.key) ? true : null);
 
   // —— 各部分互相要用的 ——
+  bool fnWaits(String key);
+  void waited(_Scope sc, LNode at, String what, {String? slot});
+  bool valueWaits(LType ft);
+  void waitFit(_Scope sc, LExpr e, LType src, LType dst, String where, {int? argIndex});
+  void noteAlone(LExpr e);
   LType ex(_Scope sc, LExpr e, [LType? wantT]);
   LType arg(_Scope sc, LExpr e, LType wantT, String where, {int? argIndex});
   void cond(_Scope sc, LExpr e);
@@ -321,19 +354,22 @@ abstract class _Core {
 /// 写起来短一点。
 typedef WL = LTypeWorld;
 
-class _Checker extends _Core with _Classes, _Exprs, _Calls, _Rt, _Errs, _Stmts, _Decls {
+class _Checker extends _Core with _Classes, _Exprs, _Calls, _Rt, _Errs, _Stmts, _Waits, _Decls {
   _Checker(super.decls, super.main, super.scripts, super.outer);
 
   LTypeResult run() {
     collect();
+    seedWaits();
     for (var n = 0; n < 12; n++) {
       w.changed = false;
       onePass();
+      spreadWaits();
       passes = n + 1;
       if (!w.changed) break;
     }
     finalPass = true;
     onePass();
+    waitRules(_Scope(_mainKey, _mainKey));
     return finish();
   }
 }

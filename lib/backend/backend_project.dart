@@ -14,6 +14,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
+import 'package:lopicode/backend/backend_lib_store.dart';
 import 'package:lopicode/backend/backend_model.dart';
 import 'package:lopicode/backend/backend_readme.dart';
 import 'package:lopicode/backend/backend_strict_target.dart';
@@ -158,6 +159,7 @@ Future<List<BackendProjectInfo>> findBackendProjects(String workspaceDir) async 
       out.add(BackendProjectInfo(file: rel, dir: dir, readable: false, note: read.note));
       continue;
     }
+    if (doc.usesLibs) await beLibsAttach(guard, doc);
     out.add(
       BackendProjectInfo(
         file: rel,
@@ -211,6 +213,7 @@ class BackendRegenResult {
     this.blocked = false,
     this.strictPending = false,
     this.note,
+    this.libraryNote,
   });
 
   /// 没做成的原因；null＝生成了（[conflicts] 里的文件除外）。有 error 时一个文件都没动。
@@ -244,6 +247,9 @@ class BackendRegenResult {
 
   /// 读文件时的说明（比如跳过了几条读不懂的内容）。
   final String? note;
+
+  /// 存的是一个库、它改了以后用它的文档里新冒出了问题：这句话要告诉用户。没有是 null。
+  final String? libraryNote;
 
   bool get ok => error == null;
 
@@ -342,6 +348,16 @@ Future<BackendRegenResult> _regenerate(PathGuard guard, {String? file, BeDocumen
     document = read.doc!;
     note = read.note;
   }
+
+  // 2b. 库：这份文档自己是库 → 不生成代码，出库文件（写进它的文件夹）；用了库 → 把项目里的库交给它。
+  if (document.library != null) {
+    final saved = await beLibSaveSource(guard, rel, document);
+    if (saved.problems.isNotEmpty) {
+      return BackendRegenResult(error: '库文件现在出不来：${saved.problems.first}。库文件没有更新（上一次出的原样留着）', blocked: true, errorCount: saved.problems.length, file: rel, dir: dir, note: note);
+    }
+    return BackendRegenResult(file: rel, dir: dir, language: document.language, languageLabel: '库', note: saved.freshNote ?? note, libraryNote: saved.freshNote);
+  }
+  if (document.usesLibs && document.loaded.isEmpty) await beLibsAttach(guard, document);
 
   // 3. 有“错误”级的问题就不生成：上一次生成的文件、登记文件都不动（警告不拦）。
   final errors = backendErrors(document).length;

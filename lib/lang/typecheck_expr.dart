@@ -98,12 +98,25 @@ mixin _Exprs on _Core {
         return sc.thisType ?? _any;
       case LAwait(:final x):
         final t = w.res(ex(sc, x));
-        return t.kind == LKind.future && !t.nullable ? WL.elem(t) : t;
-      case LSpawn(:final body):
-        // 现在只认“返回 f()”一句（见 LSpawn）：结果是“稍后的结果〈那个式子的类型〉”。别的样子先按任意（核心 3）。
-        final only = body.length == 1 ? body.first : null;
-        if (only is! LReturn || only.value == null) return _any;
-        return LType(LKind.future, of: ex(sc, only.value!));
+        waited(sc, e, '用了“等”');
+        if (t.kind == LKind.future && !t.nullable) return WL.elem(t);
+        if (!t.isAny && !t.isNever && !WL.isHole(t)) {
+          final what = t.kind == LKind.future ? '可能是空的${t.nonNull.show()}（先判断“不是空”）' : t.show();
+          err(
+            'T31',
+            sc,
+            '“等”后面要一个“稍后的结果”（“开始做”给出来的那种），这里是$what',
+            node: e,
+            fixes: [if (t.kind != LKind.future) LFix(LFixKind.dropAwait, '去掉“等”', target: e)],
+          );
+        }
+        return t.kind == LKind.future ? WL.elem(t) : t;
+      case LSpawn():
+        // 里面的几句话当成一个不带参数的匿名函数；它要不要等是它自己的事，“开始做”本身不用等。
+        final l = lSpawnLambda(e);
+        final ft = lam(sc, l, null);
+        if (finalPass) types[l] = ft;
+        return LType(LKind.future, of: ft.returns);
       case LRt():
         return runtimeCall(sc, e, wantT);
       case LNative(:final name, :final args):
@@ -112,7 +125,26 @@ mixin _Exprs on _Core {
           _all(sc, args);
           return _any;
         }
-        return apply(sc, name, [for (final p in d.params) w.resolve(p.type)], w.resolve(d.type), const [], const {}, args, node: e);
+        if (kHostV2Waits.contains(name)) waited(sc, e, '用了「${kHostV2[name]?.label ?? name}」');
+        // 参数里的函数“许不许等”听宿主的（声明里不用写）。
+        final host = kHostV2[name]?.params;
+        return apply(
+          sc,
+          name,
+          [
+            for (var i = 0; i < d.params.length; i++)
+              () {
+                final t = w.resolve(d.params[i].type);
+                final h = host != null && i < host.length ? host[i] : null;
+                return t.kind == LKind.fn && h != null && h.kind == LKind.fn && t.waits == null ? LType(LKind.fn, args: t.args, nullable: t.nullable, waits: h.waits) : t;
+              }(),
+          ],
+          w.resolve(d.type),
+          const [],
+          const {},
+          args,
+          node: e,
+        );
       case LRecordNew():
         return _recordNew(sc, e);
       case LRecordCopy(:final of, :final fields):
@@ -361,7 +393,11 @@ mixin _Exprs on _Core {
   LType arg(_Scope sc, LExpr e, LType wantT, String where, {int? argIndex}) {
     final t = w.res(ex(sc, e, wantT));
     final wt = w.res(wantT);
-    if (!w.ok(t, wt)) mismatch(sc, e, t, wt, '$where要${wt.show()}', argIndex: argIndex);
+    if (!w.ok(t, wt)) {
+      mismatch(sc, e, t, wt, '$where要${wt.show()}', argIndex: argIndex);
+    } else {
+      waitFit(sc, e, t, wt, where, argIndex: argIndex);
+    }
     w.unify(wantT, t, {});
     want(e, wantT);
     return t;

@@ -37,7 +37,7 @@ func FailV[T any](m string) T {
 	panic(Error{Msg: m})
 }
 
-var errKinds = [][2]string{{"除以 0", "数值不对"}, {"整数超出范围", "数值不对"}, {"变不成整数", "数值不对"}, {"超出了", "找不到"}, {"拿到的是", "类型不对"}, {"值是空", "类型不对"}}
+var errKinds = [][2]string{{"除以 0", "数值不对"}, {"整数超出范围", "数值不对"}, {"变不成整数", "数值不对"}, {"超出了", "找不到"}, {"拿到的是", "类型不对"}, {"值是空", "类型不对"}, {"还没做完", "超时"}, {"被取消了", "取消了"}}
 
 // ErrKind：小库自己报的错归到哪一种。
 func ErrKind(m string) string {
@@ -382,64 +382,64 @@ func DictValues[V any](d Dict[V]) *List[V] {
 	}
 	return out
 }
-func Map[T, U any](xs *List[T], f func(T) U) *List[U] {
+func Map[T, U any](lt *Line, xs *List[T], f func(*Line, T) U) *List[U] {
 	out := &List[U]{Items: make([]U, 0, len(xs.Items))}
 	for _, x := range xs.Snap() {
-		out.Items = append(out.Items, f(x))
+		out.Items = append(out.Items, f(lt, x))
 	}
 	return out
 }
-func Filter[T any](xs *List[T], f func(T) bool) *List[T] {
+func Filter[T any](lt *Line, xs *List[T], f func(*Line, T) bool) *List[T] {
 	out := &List[T]{Items: []T{}}
 	for _, x := range xs.Snap() {
-		if f(x) {
+		if f(lt, x) {
 			out.Items = append(out.Items, x)
 		}
 	}
 	return out
 }
-func Reduce[T, A any](xs *List[T], f func(A, T) A, init A) A {
+func Reduce[T, A any](lt *Line, xs *List[T], f func(*Line, A, T) A, init A) A {
 	acc := init
 	for _, x := range xs.Snap() {
-		acc = f(acc, x)
+		acc = f(lt, acc, x)
 	}
 	return acc
 }
-func Find[T any](xs *List[T], f func(T) bool) *T {
+func Find[T any](lt *Line, xs *List[T], f func(*Line, T) bool) *T {
 	for _, x := range xs.Snap() {
-		if f(x) {
+		if f(lt, x) {
 			v := x
 			return &v
 		}
 	}
 	return nil
 }
-func FindNil[T any](xs *List[T], f func(T) bool) T {
-	if p := Find(xs, f); p != nil {
+func FindNil[T any](lt *Line, xs *List[T], f func(*Line, T) bool) T {
+	if p := Find(lt, xs, f); p != nil {
 		return *p
 	}
 	var z T
 	return z
 }
-func Every[T any](xs *List[T], f func(T) bool) bool {
+func Every[T any](lt *Line, xs *List[T], f func(*Line, T) bool) bool {
 	for _, x := range xs.Snap() {
-		if !f(x) {
+		if !f(lt, x) {
 			return false
 		}
 	}
 	return true
 }
-func Any[T any](xs *List[T], f func(T) bool) bool {
+func Any[T any](lt *Line, xs *List[T], f func(*Line, T) bool) bool {
 	for _, x := range xs.Snap() {
-		if f(x) {
+		if f(lt, x) {
 			return true
 		}
 	}
 	return false
 }
-func Each[T any](xs *List[T], f func(T)) {
+func Each[T any](lt *Line, xs *List[T], f func(*Line, T)) {
 	for _, x := range xs.Snap() {
-		f(x)
+		f(lt, x)
 	}
 }
 func Join(xs *List[string], sep string) string { return strings.Join(xs.Items, sep) }

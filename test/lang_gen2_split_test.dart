@@ -49,7 +49,7 @@ void main() {
     expect(gen2SplitOf(program, linkProgram(program))!.ident, {'底': '底', 'a_test': 'a_test', 'A_Test': 'A_Test_2', '带空格/的': '带空格_u2f_的'});
     List<String> own(String language) => [
       for (final k in gen2ProgramFiles(language, program).keys)
-        if (!k.startsWith('lc2.') && !k.startsWith('lc/') && k != 'go.mod' && k != 'Lc.java' && k != 'LcHost.java') k,
+        if (!k.startsWith('lc2.') && !k.startsWith('lc/') && k != 'go.mod' && k != 'Lc.java' && k != 'LcHost.java' && k != 'LcTask.java') k,
     ];
     expect(own('node'), ['main.js', 'lc_kinds.js', 'm_底.js', 'm_a_test.js', 'm_A_Test_2.js', 'm_带空格_u2f_的.js']);
     expect(own('python'), ['main.py', 'lc_kinds.py', 'm_底.py', 'm_a_test.py', 'm_A_Test_2.py', 'm_带空格_u2f_的.py']);

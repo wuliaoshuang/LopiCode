@@ -179,9 +179,11 @@ void main() {
 
   test('积木上表达不了的五种修法：不硬造，返回 null / false', () {
     for (final kind in LFixKind.values) {
-      final wrapped = beTypeFixWrap(LFix(kind, ''), nm(1));
+      // “去掉‘等’”要那一格里真是一块“等”才有的修（核心 3）；别的修法放什么都能包。
+      final wrapped = beTypeFixWrap(LFix(kind, ''), kind == LFixKind.dropAwait ? ex('await', {'x': nm(1)}) : nm(1));
       expect(wrapped == null, !kBeBlockFixKinds.contains(kind), reason: kind.name);
     }
+    expect(beTypeFixWrap(const LFix(LFixKind.dropAwait, ''), nm(1)), isNull, reason: '那一格里不是“等”：不动');
     final doc = sample();
     expect(beApplyTypeFix(doc.routes.single, const LFix(LFixKind.addMatchElse, ''), const BeSlotRef('r1', [(inElse: false, index: 0, arm: -1)], 'value', [])), isFalse);
     // 格子不在了也不崩。

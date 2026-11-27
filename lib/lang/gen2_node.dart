@@ -91,7 +91,7 @@ class NodeGen2 extends Gen2Dyn {
   @override
   String lambdaCode(LLambda e, LType ft, V2Fn inner) {
     final params = paramCodes(inner, e.params).join(', ');
-    final head = e.waits ? 'async ' : '';
+    final head = inner.waits ? 'async ' : '';
     if (e.expr != null && !inner.isVoid && localsOf(inner.scope).isEmpty) return '($head($params) => ${inFn(inner, () => x(e.expr!, inner.ret))})';
     return '($head($params) => {\n${indent(funcBody(inner, e.stmts)).join('\n')}\n})';
   }
@@ -103,7 +103,7 @@ class NodeGen2 extends Gen2Dyn {
   @override
   String awaited(String code) => '(await $code)';
   @override
-  String waitCode(String task, LType of) => task;
+  String waitCode(String task, LType of) => 'lc.wait($task)';
 
   @override
   List<String> globalDecls(List<String> names) => names.isEmpty ? const [] : ['let ${names.map((n) => '$n = null').join(', ')};'];

@@ -31,7 +31,7 @@ final class Lc {
     LcError(String m, Object obj) { super(m); this.obj = obj; }
   }
 
-  private static final String[][] ERR_KINDS = {{"除以 0", "数值不对"}, {"整数超出范围", "数值不对"}, {"变不成整数", "数值不对"}, {"超出了", "找不到"}, {"拿到的是", "类型不对"}, {"值是空", "类型不对"}};
+  private static final String[][] ERR_KINDS = {{"除以 0", "数值不对"}, {"整数超出范围", "数值不对"}, {"变不成整数", "数值不对"}, {"超出了", "找不到"}, {"拿到的是", "类型不对"}, {"值是空", "类型不对"}, {"还没做完", "超时"}, {"被取消了", "取消了"}};
   /** 小库自己报的错归到哪一种。 */
   static String errKind(String m) {
     for (String[] p : ERR_KINDS) if (m.contains(p[0])) return p[1];

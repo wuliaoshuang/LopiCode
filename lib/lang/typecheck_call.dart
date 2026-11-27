@@ -43,7 +43,8 @@ mixin _Calls on _Core {
         ret = ret.isNul ? r : w.join(ret, r);
       }
     }
-    return LType(LKind.fn, args: [...pts, ret], waits: e.waits ? true : null);
+    if (e.waits && waitKeys.add(key)) w.changed = true;
+    return LType(LKind.fn, args: [...pts, ret], waits: waitKeys.contains(key) ? true : null);
   }
 
   static bool _sameMap(Map<String, LType> a, Map<String, LType> b) {
@@ -113,7 +114,11 @@ mixin _Calls on _Core {
         continue;
       }
       want(args[i], wantT);
-      if (w.ok(got[i], wantT)) continue;
+      final slot0 = i < slots.length ? slots[i] : '';
+      if (w.ok(got[i], wantT)) {
+        waitFit(sc, args[i], got[i], wantT, slot0.isEmpty ? '「$name」的第 ${i + 1} 个参数' : slot0, argIndex: i);
+        continue;
+      }
       if (WL.isFn(got[i]) && WL.isFn(wantT) && got[i].args.length != wantT.args.length) continue; // 参数个数不对已经报过 T07（一处错只说一句）
       final slot = i < slots.length ? slots[i] : '';
       mismatch(sc, args[i], got[i], wantT, '${slot.isEmpty ? '「$name」的第 ${i + 1} 个参数' : slot}要${wantT.show()}', argIndex: i);
@@ -145,10 +150,15 @@ mixin _Calls on _Core {
       final f = w.funcs[callee.name];
       if (f != null) {
         if (finalPass) types[callee] = fnType(f);
+        if (fnWaits(f.key)) waited(sc, e, '调了要等的「${f.name}」');
         return apply(sc, f.name, [for (var i = 0; i < f.params.length; i++) ptype(f, i)], rtype(f), f.typeVars, f.bounds, e.args, f: f, node: e);
       }
     }
     final t = w.res(ex(sc, callee));
+    if (valueWaits(t)) {
+      final ft = w.res(t);
+      waited(sc, e, '调了${callee is LName ? '「${callee.name}」这个' : '一个'}可能要等的函数', slot: callee is LName && ft.kind == LKind.fn && ft.waits == null ? vt[find(sc, callee.name)]?.slot : null);
+    }
     if (WL.isFn(t) && t.hasShape) return apply(sc, callee is LName ? callee.name : '这个函数', t.params, t.returns, const [], const {}, e.args, node: e);
     for (final x in e.args) {
       ex(sc, x);
@@ -175,10 +185,14 @@ mixin _Calls on _Core {
     final t = nonnull(sc, e.obj, (_) => '对象');
     if (w.isClass(t)) {
       final m = _method(w.classes[t.name], e.method, t.args);
-      if (m != null) return apply(sc, e.method, m.$1, m.$2, const [], const {}, e.args, f: m.$3, node: e);
+      if (m != null) {
+        if (fnWaits(m.$3.key)) waited(sc, e, '调了要等的方法「${e.method}」');
+        return apply(sc, e.method, m.$1, m.$2, const [], const {}, e.args, f: m.$3, node: e);
+      }
     } else if (w.isInterface(t)) {
       final m = w.interfaces[t.name]?.methods.where((m) => m.name == e.method).firstOrNull;
       if (m != null) {
+        if (waitIface.contains('${t.name}.${m.name}')) waited(sc, e, '调了要等的方法「${e.method}」');
         return apply(sc, e.method, [for (final p in m.params) w.resolve(p.type)], w.resolve(m.returns ?? LType.nul), const [], const {}, e.args, node: e, least: lMinArgs(m.params));
       }
     } else if (t.isAny || t.isNever) {
@@ -229,6 +243,7 @@ mixin _Calls on _Core {
       err('T08', sc, '${parent.name}没有「${e.method}」这个方法', node: e);
       return _never;
     }
+    if (fnWaits(m.$3.key)) waited(sc, e, '调了父类要等的方法「${e.method}」');
     return apply(sc, e.method, m.$1, m.$2, const [], const {}, e.args, f: m.$3, node: e);
   }
 

@@ -47,7 +47,7 @@ const String kBeServiceBlocks = r'''
 {"blocks": [
   {"id": "onRequest", "category": "接口", "how": "expand", "needs": ["路由表"], "provides": {"请求": "这次请求"},
    "slotKinds": {"method": "literal", "path": "literal", "body": "mouth"},
-   "expand": "(做 (调 加路由 (隐含 路由表) (槽 method) (槽 path) (要等λ块 ((这次请求 请求)) (口 body (收尾 (返回 (调 没有内容)))))))",
+   "expand": "(做 (调 加路由 (隐含 路由表) (槽 method) (槽 path) (λ块 ((这次请求 请求)) (口 body (收尾 (返回 (调 没有内容)))))))",
    "look": {"name": "当收到请求", "shape": "hat", "template": "当收到 {method} {path} {body}", "colorKey": "route",
             "hint": "走完没有“返回”就回 204（没有内容）",
             "slots": [{"name": "method", "kind": "choice", "options": ["GET", "POST", "PUT", "PATCH", "DELETE"], "defaultValue": "GET"}]}},

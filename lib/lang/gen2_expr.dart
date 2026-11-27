@@ -106,9 +106,10 @@ mixin Gen2Expr on Gen2Base {
   /// 等“稍后的结果”[task]（里面的值是 [of]）。
   String waitCode(String task, LType of);
 
-  // “要等的事”只能出现在标了“要等”的函数里（现在靠写的人明着标；自动推、放错地方的检查在核心 3）。
+  // “要等的事”所在的函数一定是“要等”的：这是检查器推出来的（typecheck_wait.dart），这里只是再对一遍——对不上说明推漏了，
+  // 宁可不生成（Node 里会悄悄拿到一个 Promise 当结果用）。
   String _wait(String code, LNode at) {
-    if (!fn.waits) unsupported('这里有“要等”的事，所在的函数要先标成“要等”', at);
+    if (!fn.waits) unsupported('这里有“要等”的事，可是所在的函数没有被推成“要等”（检查器漏了，请报告）', at);
     fn.usedWait = true;
     return awaited(code);
   }
@@ -204,7 +205,7 @@ mixin Gen2Expr on Gen2Base {
       case LLambda():
         final ft = t(e).nonNull;
         final key = r.lambdaScope(e) ?? unsupported('这个匿名函数没有经过类型检查', e);
-        return lambdaCode(e, ft, V2Fn(key, ft.hasShape ? ft.returns : _any, parent: fn, lambda: e, waits: e.waits));
+        return lambdaCode(e, ft, V2Fn(key, ft.hasShape ? ft.returns : _any, parent: fn, lambda: e, waits: r.waitsOf(key)));
       case LRt():
         return _rt(e);
       case LField(:final of, :final name):
@@ -229,7 +230,7 @@ mixin Gen2Expr on Gen2Base {
         final got = w.classMethod(parent, method) ?? unsupported('父类没有「$method」这个方法', e);
         final sig = r.funcs[got.$1.key]!;
         final code = superCall(method, argCodes(args, sig.params, sig.info.params));
-        return conv(sig.info.decl?.waits == true ? _wait(code, e) : code, sig.returns, t(e));
+        return conv(sig.waits ? _wait(code, e) : code, sig.returns, t(e));
       case LNew(:final cls, :final args):
         final c = w.classes[cls] ?? unsupported('没有叫「$cls」的类', e);
         final ot = t(e).nonNull;
@@ -273,7 +274,9 @@ mixin Gen2Expr on Gen2Base {
         final sig = kHostV2[name] ?? unsupported('宿主接口「$name」这里还没有（现在有：${kHostV2.keys.join('、')}）', e);
         final d = module.decls.whereType<LNativeDecl>().where((d) => d.name == name).firstOrNull ?? unsupported('宿主接口「$name」用之前要先声明', e);
         final same =
-            d.params.length == sig.params.length && w.resolve(d.type) == sig.ret && [for (var i = 0; i < sig.params.length; i++) w.resolve(d.params[i].type) == sig.params[i]].every((ok) => ok);
+            d.params.length == sig.params.length &&
+            w.resolve(d.type) == sig.ret &&
+            [for (var i = 0; i < sig.params.length; i++) _sameHostParam(w.resolve(d.params[i].type), sig.params[i])].every((ok) => ok);
         if (!same || args.length != sig.params.length) unsupported('宿主接口「$name」的声明和宿主给的对不上：应该是 (${sig.params.map((p) => p.show()).join(', ')}) → ${sig.ret.show()}', e);
         final host = hostCall(kHostV2Code[name]!, argCodes(args, sig.params, null));
         return conv(kHostV2Waits.contains(name) ? _wait(host, e) : host, sig.ret, t(e));
@@ -282,15 +285,19 @@ mixin Gen2Expr on Gen2Base {
         if (ft.kind != LKind.future || ft.nullable) unsupported('“等”后面要一个“稍后的结果”，这里是${ft.show()}', e);
         final of = ft.of ?? _any;
         return conv(_wait(waitCode(x(v, ft), of), e), of, t(e));
-      case LSpawn(:final body):
-        final only = body.length == 1 ? body.first : null;
-        final call = only is LReturn ? only.value : null;
-        if (call is! LCall || call.args.isNotEmpty) unsupported('“开始做”里现在只能放一句“返回 f()”（f 是不带参数的函数）；更随意的写法在核心 3', e);
-        final ft = t(call.callee).nonNull;
-        if (ft.kind != LKind.fn || !ft.hasShape || ft.params.isNotEmpty) unsupported('“开始做”要一个不带参数的函数，这里是${ft.show()}', e);
-        return spawnCode(x(call.callee, ft), ft);
+      case LSpawn():
+        // 里面的几句话＝一个不带参数的匿名函数，马上开始做。
+        final l = lSpawnLambda(e);
+        final ft = t(l).nonNull;
+        final key = r.lambdaScope(l) ?? unsupported('这块“开始做”没有经过类型检查', e);
+        return spawnCode(lambdaCode(l, ft, V2Fn(key, ft.returns, parent: fn, lambda: l, waits: r.waitsOf(key))), ft);
     }
   }
+
+  // 声明里的函数参数不用写“许不许等”（听宿主的）；写了就要和宿主的一样。
+  static bool _sameHostParam(LType declared, LType host) =>
+      declared == host ||
+      (declared.kind == LKind.fn && host.kind == LKind.fn && declared.waits == null && LType(LKind.fn, args: declared.args, nullable: declared.nullable, waits: host.waits) == host);
 
   String _index(LNode node, LExpr of, LExpr key) {
     final ot = t(of).nonNull;
@@ -373,16 +380,17 @@ mixin Gen2Expr on Gen2Base {
         final args = <String>[];
         args.addAll(argCodes(e.args, [for (final p in sig.params) w.subst(p, b)], ps));
         final code = callNamed(sig, args, [for (final v in sig.info.own) b[v] ?? _any]);
-        return conv(sig.info.decl?.waits == true ? _wait(code, e) : code, w.subst(sig.returns, b), t(e));
+        return conv(sig.waits ? _wait(code, e) : code, w.subst(sig.returns, b), t(e));
       }
     }
     final ft = t(callee).nonNull;
     if (ft.kind == LKind.fn && ft.hasShape) {
       final ps = ft.params;
       final code = callValue(x(callee, ft), [for (var i = 0; i < e.args.length; i++) x(e.args[i], i < ps.length ? ps[i] : null)], ft);
-      return conv(ft.waits == true ? _wait(code, e) : code, ft.returns, t(e));
+      return conv(r.valueWaits(ft) ? _wait(code, e) : code, ft.returns, t(e));
     }
-    return conv(dynCall(x(callee, _any), [for (final a in e.args) x(a, _any)]), _any, t(e));
+    final dyn = dynCall(x(callee, _any), [for (final a in e.args) x(a, _any)]);
+    return conv(r.waitEscaped ? _wait(dyn, e) : dyn, _any, t(e));
   }
 
   String _send(LSend e) {
@@ -391,7 +399,7 @@ mixin Gen2Expr on Gen2Base {
       // 类本身的方法＝模块级的函数。
       final sig = r.funcs[sk] ?? unsupported('找不到「$sk」', e);
       final code = callNamed(sig, argCodes(e.args, sig.params, sig.info.params), const []);
-      return conv(sig.info.decl?.waits == true ? _wait(code, e) : code, sig.returns, t(e));
+      return conv(sig.waits ? _wait(code, e) : code, sig.returns, t(e));
     }
     final ot = t(e.obj).nonNull;
     var waits = false;
@@ -403,7 +411,7 @@ mixin Gen2Expr on Gen2Base {
       params = [for (final p in m.params) w.resolve(p.type)];
       ps = m.params;
       ret = w.resolve(m.returns ?? LType.nul);
-      waits = m.waits;
+      waits = r.ifaceWaits(ot.name!, m.name);
     } else if (ot.kind == LKind.object && w.classes.containsKey(ot.name)) {
       final got = w.classMethod(w.classes[ot.name], e.method) ?? unsupported('「${ot.name}」没有「${e.method}」这个方法', e);
       final sig = r.funcs[got.$1.key]!;
@@ -411,7 +419,7 @@ mixin Gen2Expr on Gen2Base {
       params = [for (final p in sig.params) w.subst(p, b)];
       ps = sig.info.params;
       ret = w.subst(sig.returns, b);
-      waits = sig.info.decl?.waits == true;
+      waits = sig.waits;
     } else {
       unsupported('调方法「${e.method}」：前面的值是${ot.show()}，不是对象', e);
     }
@@ -463,7 +471,8 @@ mixin Gen2Expr on Gen2Base {
     final types = [for (final p in sig.params) w.subst(p, b)];
     if (a.length != types.length) unsupported('「${sig.label}」要 ${types.length} 个参数，给了 ${a.length} 个', e);
     final ret = w.subst(sig.ret, b);
-    return conv(rtCall(e.fn, [for (var i = 0; i < a.length; i++) x(a[i], types[i])], types, ret, e), ret, t(e));
+    final code = rtCall(e.fn, [for (var i = 0; i < a.length; i++) x(a[i], types[i])], types, ret, e);
+    return conv(kLangRtV2Waits.contains(e.fn) ? _wait(code, e) : code, ret, t(e));
   }
 }
 

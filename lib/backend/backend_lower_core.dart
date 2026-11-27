@@ -8,6 +8,7 @@ library;
 import 'package:lopicode/backend/backend_blocks_core.dart';
 import 'package:lopicode/backend/backend_core.dart';
 import 'package:lopicode/backend/backend_function.dart';
+import 'package:lopicode/backend/backend_lower_wait.dart';
 import 'package:lopicode/backend/backend_model.dart';
 import 'package:lopicode/lang/ast.dart';
 import 'package:lopicode/lang/errors.dart';
@@ -16,6 +17,15 @@ import 'package:lopicode/lang/types.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 
 /// backend_lower_lang.dart 借过来的几样。
+/// 改名时要知道“这一处读字段 / 改字段 / 让对象做，对象是谁”（backend_rename_follow.dart）：翻到这种积木时，
+/// 把（积木或值本身，翻出来的那个对象式子）报一声。平时是 null，什么都不做。
+void Function(Object holder, LExpr receiver)? beMemberTap;
+
+T _tap<T extends LExpr>(Object holder, T receiver) {
+  beMemberTap?.call(holder, receiver);
+  return receiver;
+}
+
 class BeCoreCx {
   const BeCoreCx({required this.lx, required this.src, required this.note, required this.core, required this.temp, this.pure = false});
 
@@ -87,12 +97,12 @@ LExpr? beCoreExpr(String kind, Object? e, BeCoreCx cx) {
       return LNew(k, [sub('message'), ...args], src: cx.src());
     case 'getField':
       final n = pick('name', '字段');
-      return n == null ? hole : LField(sub('of'), n, src: cx.src());
+      return n == null ? hole : LField(_tap(e, sub('of')), n, src: cx.src());
     case 'recNew':
       final t = pick('type', '记录');
       return t == null ? hole : LRecordNew(t, _inits(cx, e['fields']), src: cx.src());
     case 'recCopy':
-      return LRecordCopy(sub('of'), _inits(cx, e['fields']), src: cx.src());
+      return LRecordCopy(_tap(e, sub('of')), _inits(cx, e['fields']), src: cx.src());
     case 'enumVal':
       final t = pick('type', '枚举'), c = t == null ? null : pick('case', '情况');
       return c == null ? hole : LEnumValue(t!, c, src: cx.src());
@@ -104,7 +114,7 @@ LExpr? beCoreExpr(String kind, Object? e, BeCoreCx cx) {
       return t == null ? hole : LNew(t, _list(cx, e['args']), src: cx.src());
     case 'callMethod':
       final n = pick('name', '方法');
-      return n == null ? hole : LSend(sub('of'), n, _list(cx, e['args']), src: cx.src());
+      return n == null ? hole : LSend(_tap(e, sub('of')), n, _list(cx, e['args']), src: cx.src());
     case 'superCall':
       final n = pick('name', '方法');
       return n == null ? hole : LSuperSend(n, _list(cx, e['args']), src: cx.src());
@@ -117,7 +127,7 @@ LExpr? beCoreExpr(String kind, Object? e, BeCoreCx cx) {
       final t = pick('type', '类');
       return t == null ? hole : LName(t, src: cx.src());
   }
-  return null;
+  return beWaitExpr(kind, e, cx);
 }
 
 const Map<String, LType?> _isTypes = {'number': null, 'text': LType.text, 'bool': LType.boolean, 'list': LType.listOf(LType.any), 'dict': LType.dictOf(LType.any)};
@@ -166,13 +176,13 @@ List<LStmt>? beCoreBlock(LcBlock b, BeCoreCx cx, List<LStmt> Function(List<LcBlo
     case 'setField':
       final n = _name(b.args['name']);
       if (n == null) return skip('字段没选好');
-      return [LAssign(LTField(arg('of'), n), arg('value'), src: cx.src())];
+      return [LAssign(LTField(_tap(b, arg('of')), n), arg('value'), src: cx.src())];
     case 'callMethodStmt':
       final n = _name(b.args['name']);
       if (n == null) return skip('方法没选好');
       return [
         LExprStmt(
-          LSend(arg('of'), n, _list(cx, b.args['args'], arg: 'args'), src: cx.src()),
+          LSend(_tap(b, arg('of')), n, _list(cx, b.args['args'], arg: 'args'), src: cx.src()),
           src: cx.src(),
         ),
       ];
@@ -193,7 +203,7 @@ List<LStmt>? beCoreBlock(LcBlock b, BeCoreCx cx, List<LStmt> Function(List<LcBlo
         ),
       ];
   }
-  return null;
+  return beWaitBlock(b, cx, inner, varName);
 }
 
 List<LStmt> _match(LcBlock b, BeCoreCx cx, List<LStmt> Function(List<LcBlock> list, {bool inElse, int arm}) inner, LExpr subject, String? Function(Object?) varName) {

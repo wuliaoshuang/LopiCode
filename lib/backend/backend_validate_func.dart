@@ -109,7 +109,15 @@ List<BeLangFinding> beFuncFindings(BeFuncTable table, BeFunction f, Set<String> 
       // “函数里有只能放在接口里的积木”不要整个函数报一条：backend_validate.dart 已经指到具体那一块上了。
       for (final i in table.analysis.issues)
         if (!(i.code == 'L15' && i.message.contains('只能放在接口里的积木'))) i,
-      ...table.analysis.unusedIssues(used, where: {for (final l in table.lowered) l.decl.name: l.decl.src}),
+      // 库文档里公开成积木的函数是给别的文档用的，不算“没人用”。
+      ...table.analysis.unusedIssues(
+        {
+          ...used,
+          for (final l in table.lowered)
+            if (table.doc.library?.blocks.any((b) => b.fn == l.function.id) ?? false) l.decl.name,
+        },
+        where: {for (final l in table.lowered) l.decl.name: l.decl.src},
+      ),
     ];
     return beMapLangIssues(issues, lowered.spots, script: f.id);
   } on Object {

@@ -11,7 +11,10 @@ import 'package:lopicode/lang/ast.dart';
 import 'package:lopicode/lang/types.dart';
 
 class LRenamer {
-  LRenamer(this.resolve);
+  LRenamer(this.resolve, {this.keep});
+
+  /// 这些节点（按“是不是同一个对象”认）原样留着、不往里走。库积木展开时用：模板里的名字要改，填进洞里的用户的东西不改。
+  final Set<Object>? keep;
 
   /// 一个没被挡住的顶层名字 → 它在合并以后的程序里叫什么（不改就原样返回）。
   final String Function(String name) resolve;
@@ -54,7 +57,18 @@ class LRenamer {
   LFuncDecl func(LFuncDecl d) {
     final tv = [for (final p in d.typeParams) p.name];
     return _scoped([for (final p in d.params) p.name], tv, () {
-      return LFuncDecl(d.name, params(d.params), block(d.body), isPublic: d.isPublic, typeParams: _tps(d.typeParams), codeName: d.codeName, waits: d.waits, src: d.src, type: typeQ(d.type));
+      return LFuncDecl(
+        d.name,
+        params(d.params),
+        block(d.body),
+        isPublic: d.isPublic,
+        typeParams: _tps(d.typeParams),
+        codeName: d.codeName,
+        waits: d.waits,
+        noWait: d.noWait,
+        src: d.src,
+        type: typeQ(d.type),
+      );
     });
   }
 
@@ -65,7 +79,7 @@ class LRenamer {
       case LFuncDecl():
         final name = resolve(d.name); // 函数自己的名字不会被自己的参数挡住
         final f = func(d);
-        return LFuncDecl(name, f.params, f.body, isPublic: f.isPublic, typeParams: f.typeParams, codeName: f.codeName, waits: f.waits, src: f.src, type: f.type);
+        return LFuncDecl(name, f.params, f.body, isPublic: f.isPublic, typeParams: f.typeParams, codeName: f.codeName, waits: f.waits, noWait: f.noWait, src: f.src, type: f.type);
       case LClassDecl():
         final name = resolve(d.name);
         return _scoped(const [], [for (final p in d.typeParams) p.name], () {
@@ -86,7 +100,7 @@ class LRenamer {
       case LInterfaceDecl():
         return LInterfaceDecl(
           resolve(d.name),
-          [for (final m in d.methods) LSignature(m.name, params(m.params), returns: typeQ(m.returns), waits: m.waits)],
+          [for (final m in d.methods) LSignature(m.name, params(m.params), returns: typeQ(m.returns), waits: m.waits, noWait: m.noWait)],
           isPublic: d.isPublic,
           codeName: d.codeName,
           src: d.src,
@@ -111,12 +125,13 @@ class LRenamer {
   List<LExpr> exprs(List<LExpr> xs) => [for (final e in xs) expr(e)];
 
   LTarget _target(LTarget t) => switch (t) {
-    LTName() => LTName(_val(t.name), src: t.src),
+    LTName() => keep?.contains(t) ?? false ? t : LTName(_val(t.name), src: t.src),
     LTIndex() => LTIndex(expr(t.of), expr(t.key), src: t.src),
     LTField() => LTField(expr(t.of), t.name, src: t.src),
   };
 
   LStmt stmt(LStmt s) {
+    if (keep?.contains(s) ?? false) return s;
     switch (s) {
       case LLet():
         final value = expr(s.value);
@@ -178,6 +193,7 @@ class LRenamer {
   List<LFieldInit> _inits(List<LFieldInit> xs) => [for (final f in xs) LFieldInit(f.name, expr(f.value))];
 
   LExpr expr(LExpr e) {
+    if (keep?.contains(e) ?? false) return e;
     switch (e) {
       case LLit() || LThis():
         return e;
