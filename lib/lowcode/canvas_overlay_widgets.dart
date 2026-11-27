@@ -12,6 +12,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:lopicode/lowcode/canvas_css.dart';
 import 'package:lopicode/lowcode/model.dart';
+import 'package:lopicode/lowcode/model_v3_components.dart';
 import 'package:lopicode/lowcode/style_resolve.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:material_ui/material_ui.dart';
@@ -198,6 +199,28 @@ bool sizeLabelAvoids(LcDocument doc, String selectedId, Rect selected, String id
   final both = box.expandToInclude(selected);
   // 包着选中框的不避；在选中框里面的（比如顶栏右边放的按钮）也要避——标签收进框里面时别压在它上面（第四轮 B5）。
   return both != box;
+}
+
+/// 顶部导航栏选了“标题居中”时，标题那几个字占的那一块（页面坐标；[rect]＝导航栏的框）。别的组件、标题是空的：null。
+/// 标题不是一个单独的组件，量不到，所以照画布的画法（canvas_v3_widgets.dart 的 _appBar：18 号半粗、两边各留 72）算出来：
+/// 尺寸标签收进框里放正中时要避开它（第四轮 B6）。
+Rect? appBarTitleBox(LcNode n, Rect rect) {
+  final title = n.strProp('title') ?? '';
+  if (n.type != 'appBar' || lcVariantOf(n) != 'center' || title.isEmpty) return null;
+  final room = rect.width - 144;
+  if (room <= 0) return null;
+  final tp = TextPainter(
+    text: TextSpan(
+      text: title,
+      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600, height: 1.4),
+    ),
+    textDirection: TextDirection.ltr,
+    maxLines: 1,
+  )..layout(maxWidth: room);
+  final size = tp.size;
+  tp.dispose();
+  // 导航栏自己没设内边距时左 16 右 8，标题的正中会偏右 4：两边各放宽 8，偏一点也盖得住。
+  return Rect.fromCenter(center: rect.center, width: size.width + 16, height: size.height);
 }
 
 /// 尺寸标签的左上角放哪（页面坐标）。[rect]＝选中框，[visible]＝屏幕上看得见的那一块，都是页面坐标。

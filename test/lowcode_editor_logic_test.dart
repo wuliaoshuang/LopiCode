@@ -475,6 +475,27 @@ void main() {
       expect(mid.overlaps(left) || mid.overlaps(right) || mid.overlaps(below), isFalse, reason: '$mid');
     });
 
+    test('B6：顶栏标题居中、左右都放着按钮：标签不压在标题上（标题那一块是算出来的）', () {
+      const bar = Rect.fromLTWH(0, 0, 390, 56);
+      const t = '390 × 56';
+      final n = LcDocument.starter('x').newNode('appBar')..props['title'] = '我的首页';
+      expect(appBarTitleBox(n, bar), isNull, reason: '标题靠左的不用算');
+      n.props['variant'] = 'center';
+      final title = appBarTitleBox(n, bar)!;
+      expect(title.center, bar.center);
+      expect(title.width, greaterThan(56));
+      expect(title.left >= 72 && title.right <= 390 - 72, isTrue);
+      n.props['title'] = '';
+      expect(appBarTitleBox(n, bar), isNull);
+      const left = Rect.fromLTWH(8, 8, 64, 40), right = Rect.fromLTWH(318, 8, 64, 40), below = Rect.fromLTWH(0, 56, 390, 40);
+      final at = box(sizeLabelOrigin(bar, visible, 1, t, avoid: [left, right, below, title]), t);
+      expect(at.overlaps(title), isFalse, reason: '$at 压在标题 $title 上了');
+      expect(at.overlaps(left) || at.overlaps(right), isFalse, reason: '$at');
+      // 只有右边放着按钮：左头空着，放左头，也不压标题
+      final onlyRight = box(sizeLabelOrigin(bar, visible, 1, t, avoid: [right, below, title]), t);
+      expect(onlyRight.overlaps(title) || onlyRight.overlaps(right) || onlyRight.overlaps(below), isFalse, reason: '$onlyRight');
+    });
+
     test('上方有别的组件：换到下方；上下都有：换到左右；都不盖住旁边的', () {
       const rect = Rect.fromLTWH(16, 116, 64, 48);
       const t = '64 × 48';
