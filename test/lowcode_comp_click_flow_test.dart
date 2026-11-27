@@ -242,6 +242,12 @@ void main() {
     expect(stored.single.ok, isTrue);
     await _back(tester);
 
+    // 第四轮 B4：“已导入”的提示条抬到了底部工具栏上面，不再压着“添加”按钮。
+    final tip = find.textContaining('已导入「我的小店」');
+    expect(tip, findsOneWidget);
+    final tipBox = tester.getRect(tip).inflate(14), addBox = tester.getRect(lbKey('lc-tool-add').last);
+    expect(tipBox.overlaps(addBox), isFalse, reason: '提示条 $tipBox 压着“添加” $addBox');
+    expect(tipBox.bottom, lessThanOrEqualTo(addBox.top));
     // “已导入”的提示条浮在底下的工具栏上面：等它自己收掉再去点“添加”（有上限）。
     for (var i = 0; i < 20 && find.textContaining('已导入「我的小店」').evaluate().isNotEmpty; i++) {
       await tester.pump(const Duration(milliseconds: 500));

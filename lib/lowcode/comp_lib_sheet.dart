@@ -13,6 +13,7 @@ import 'package:lopicode/lowcode/component_extras.dart';
 import 'package:lopicode/lowcode/component_model.dart';
 import 'package:lopicode/lowcode/component_values_widgets.dart';
 import 'package:lopicode/lowcode/edit_types.dart';
+import 'package:lopicode/lowcode/editor_toolbar_widgets.dart';
 import 'package:lopicode/lowcode/image_pick_sheet.dart';
 import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/theme/tokens.dart';
@@ -141,7 +142,7 @@ class _LibSheetState extends State<_LibSheet> {
     _filesChanged();
     await _load();
     if (!mounted) return;
-    showSnack(context, '已存成库「${form.name}」${form.version}（${lib.defs.length} 个组件${lib.missingImages.isEmpty ? '' : '，有 ${lib.missingImages.length} 张图片没带上'}）');
+    _say(context, '已存成库「${form.name}」${form.version}（${lib.defs.length} 个组件${lib.missingImages.isEmpty ? '' : '，有 ${lib.missingImages.length} 张图片没带上'}）');
   }
 
   String _nextVersion(Object? v) {
@@ -201,7 +202,7 @@ class _LibSheetState extends State<_LibSheet> {
     await _load();
     if (!mounted) return;
     if (notes.isEmpty) {
-      showSnack(context, '已${had ? '更新' : '导入'}「${lib.name}」${lib.version}${wrote == 0 ? '' : '，带进来 $wrote 张图片'}');
+      _say(context, '已${had ? '更新' : '导入'}「${lib.name}」${lib.version}${wrote == 0 ? '' : '，带进来 $wrote 张图片'}');
     } else {
       await tellComponentProblem(context, '已更新「${lib.name}」${lib.version}。重查发现 ${notes.length} 处对不上：\n\n${notes.take(8).map((n) => '· $n').join('\n')}${notes.length > 8 ? '\n……' : ''}');
     }
@@ -213,7 +214,7 @@ class _LibSheetState extends State<_LibSheet> {
     await compLibWriteImages(widget.images.guard, lib.lib);
     if (!mounted) return;
     setState(() {});
-    showSnack(context, notes.isEmpty ? '「${lib.name}」的组件已放进组件盒“我的”' : '已放进组件盒；有 ${notes.length} 处对不上');
+    _say(context, notes.isEmpty ? '「${lib.name}」的组件已放进组件盒“我的”' : '已放进组件盒；有 ${notes.length} 处对不上');
   }
 
   Future<void> _remove(CompStoredLib lib) async {
@@ -243,7 +244,7 @@ class _LibSheetState extends State<_LibSheet> {
       made = compLibFork(d, compLibDefId(lib.id, forked));
     });
     setState(() {});
-    showSnack(context, made == null ? '没复制成' : '已复制成项目自己的组件，在“自定义组件”里能改');
+    _say(context, made == null ? '没复制成' : '已复制成项目自己的组件，在“自定义组件”里能改');
   }
 
   @override
@@ -490,4 +491,11 @@ class _LibFormState extends State<_LibForm> {
       ],
     );
   }
+}
+
+/// 组件库面板里的提示条。面板关掉以后它还在：抬到底部工具栏上面，不挡“添加”那一排按钮（第四轮 B4）。
+void _say(BuildContext context, String text) {
+  ScaffoldMessenger.of(context)
+    ..hideCurrentSnackBar()
+    ..showSnackBar(SnackBar(content: Text(text), margin: const EdgeInsets.fromLTRB(Space.x4, Space.x1, Space.x4, kEditorToolbarHeight + Space.x4)));
 }

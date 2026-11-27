@@ -166,6 +166,16 @@ void main() {
       await menu(tester, '事件');
       await until(tester, lbKey('comp-event-row-addCart'), '事件表');
       await shot(tester, 'editor-events');
+      // 第四轮 B4：事件的单子里多一行“发出时带上一项数据”，点开是一张单选的单子
+      await tap(tester, lbKey('comp-event-row-addCart'));
+      await until(tester, lbKey('comp-event-data'), '“发出时带上一项数据”');
+      await shot(tester, 'editor-event-menu');
+      await tap(tester, lbKey('comp-event-data'));
+      await until(tester, lbKey('comp-event-data-price'), '能带出去的东西');
+      await shot(tester, 'editor-event-data-pick');
+      await tap(tester, lbKey('comp-event-data-price'));
+      expect(find.textContaining('带：price'), findsOneWidget);
+      await shot(tester, 'editor-events-with-data');
       await back(tester);
       await menu(tester, '变体');
       await until(tester, lbKey('comp-variant-row-kind-hot'), '变体表');

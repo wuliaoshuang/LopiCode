@@ -786,3 +786,14 @@ Flutter 导出在测试里真的跳了页（`test/lowcode_pages_export_test.dart
   （没有用 `sync.Cond`，它没有带超时的 Wait）。关闭的 channel 读起来立刻返回是语言规范里写的（go.dev/ref/spec#Receive_operator）。
 - **PHP `flock` / `hrtime` / `usleep`**：`flock(LOCK_EX)` 进程之间互斥、进程结束自动放；`hrtime(true)` 是纳秒的单调时钟（php.net/manual/zh/function.hrtime.php）。
   **未核对**：`flock` 在网络文件系统（NFS）上的行为；生成的工程放在本机磁盘上才保证“一次只让一个做”跨工作进程有效。
+
+## 第四轮 B4：组件文件用到的框架写法
+
+- **Vue 3 `defineProps` / `defineEmits`（`<script setup>`）、组件上的 `v-model:名字`**：`v-model:title="x"` 等于传属性 `title` 并监听 `update:title`；3.4 起官方推荐 `defineModel()`，
+  但“属性＋`update:名字` 事件”的老写法仍然有效（官方文档 vuejs.org/guide/components/v-model.html 的“Under the Hood”和“v-model Arguments”两节，2026-11-27 核对）。
+  这里用老写法（不依赖 3.4）。本机用官方编译器 `@vue/compiler-sfc` 真编译 0 错 0 警告、jsdom 真跑验证（`lowcode_comp_live_run_test`、`lowcode_comp_files_test`）。
+- **Vue 3 组件事件不冒泡**：所以套着的实例要往外发，得在外层组件里显式再 `emit` 一次（第三方课程讲义里的说法；**官方出处未核对**，行为由真跑测试里“登录表单→页面”这条链验证）。
+- **React `useRef`**：返回 `{ current }`，同一个组件实例每次渲染拿到同一个对象，改它不触发重画（react.dev/learn/referencing-values-with-refs，2026-11-27 核对）。
+  **同一页官方提醒“渲染时不要读写 `ref.current`”**——导出的页面文件（第 5 期起）和组件文件都在渲染时读写 `lcVars`（靠 `lcRefresh()` 手动重画）。这是已知的出入：
+  在并发渲染（一次渲染被打断重做）下可能读到中间值。**未核对**：React 18/19 的 StrictMode、并发特性下的实际表现；现有验证只有 jsdom 里的同步渲染。
+- **React 事件回调属性**：父组件把函数当属性传给子组件、子组件调用它，是 React 的常规写法（react.dev“Responding to Events”一节；**这一条没单独打开核对**）。
