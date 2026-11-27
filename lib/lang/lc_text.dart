@@ -6,11 +6,13 @@ library;
 
 import 'package:lopicode/lang/ast.dart';
 import 'package:lopicode/lang/ast_util.dart';
+import 'package:lopicode/lang/lc_write.dart' show lcUnescapeText;
 import 'package:lopicode/lang/types.dart';
 
 final RegExp _tok = RegExp(r'\s*(;[^\n]*|\(|\)|"(?:[^"\\]|\\.)*"|[^\s()";]+)');
 
 /// 切成一层层括号。文字（双引号里的）原样留着，**不做转义**：写了反斜杠就是反斜杠（老样例靠这个）。
+/// 要放双引号、换行的文字写成 `(字 "…")`，那里面才做转义（见 lc_write.dart；写出器写的、库作者手写的都行）。
 List<Object> lcParse(String src) {
   final toks = [
     for (final m in _tok.allMatches(src))
@@ -336,6 +338,34 @@ class LcReader {
         return LExprStmt(expr(a[0]));
       case '父创建':
         return LExprStmt(LSuperSend.ctor(exprs(a)));
+      // —— 下面几种是写出器（lc_write.dart）用的写法：语法树里有、上面的老写法表达不了的 ——
+      case '若':
+        // (若 (条件 语句…)… (否则 语句…))
+        final arms = <LIfArm>[];
+        var orElse = const <LStmt>[];
+        for (final c in a.cast<LcList>()) {
+          if (c.isNotEmpty && c[0] == '否则') {
+            orElse = stmts(c.skip(1));
+          } else {
+            arms.add(LIfArm(expr(c[0]), stmts(c.skip(1))));
+          }
+        }
+        return LIf(arms, orElse: orElse);
+      case '一直':
+        return LWhile(null, stmts(a));
+      case '从数':
+        // (从数 i 从 到 步长 语句…)：含两头。
+        final from = expr(a[1]), to = expr(a[2]), step = expr(a[3]);
+        return LForCount(_decl(a[0]), from, to, step, stmts(a.skip(4)));
+      case '每个带号':
+        final list = expr(a[2]);
+        return LForEach(list, _decl(a[0]), stmts(a.skip(3)), index: _decl(a[1]));
+      case '每个旧':
+        return LForEach(expr(a[1]), _use(a[0]), stmts(a.skip(2)), reuse: true);
+      case '重复':
+        return LRepeat(expr(a[0]), stmts(a.skip(1)));
+      case '临设':
+        return LLet(a[0] as String, expr(a[1]), kind: LNameKind.temp);
       case '分情况':
         final arms = <LMatchArm>[];
         List<LStmt>? orElse;
@@ -408,6 +438,22 @@ class LcReader {
     final rt = _rt[h];
     if (rt != null) return LRt(rt, exprs(a));
     switch (h) {
+      case '字':
+        final t = a[0] as String;
+        return LLit(lcUnescapeText(t.substring(1, t.length - 1)));
+      case '临':
+        return LName(a[0] as String, kind: LNameKind.temp);
+      case '三元':
+        return LCond(expr(a[0]), expr(a[1]), expr(a[2]));
+      case '负':
+        return LUnary('-', expr(a[0]));
+      case '一元' || '二元':
+        final op = (a[0] as String).replaceAll('"', '');
+        return h == '一元' ? LUnary(op, expr(a[1])) : LBinary(op, expr(a[1]), expr(a[2]));
+      case '调用':
+        return LCall(expr(a[0]), exprs(a.skip(1)));
+      case '造于':
+        return LVariantNew(a[0] as String, a[1] as String, exprs(a.skip(2)));
       case '且' || '或':
         return a.skip(2).fold(LLogic(h == '且' ? 'and' : 'or', expr(a[0]), expr(a[1])), (acc, x) => LLogic(h == '且' ? 'and' : 'or', acc, expr(x)));
       case '非':
