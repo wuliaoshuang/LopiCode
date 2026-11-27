@@ -1,14 +1,15 @@
 /// 规矩版本 2 的小库·Java·宿主那一半（`LcHost.java`）：宿主接口、格子、要等的事、开服务。
-/// 细则见 docs/blocks-v5-parts/C-library-system.md 9.1 和 B-gen-notes.md 第 12 节。只用 JDK 自带的（开服务用 jdk.httpserver）。
+/// 细则见 docs/blocks-v5-parts/C-library-system.md 9.1 和 B-gen-notes.md 第 12 节。只用 JDK 自带的（开服务是自己用 ServerSocket 读请求，原因见源码里“开服务”一节）。
 library;
 
 const String kRt2JavaHost = r'''
 // LopiCode 积木的小库（Java，严格规矩）·宿主那一半。由 LopiCode 生成，别手改。
-import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.InetSocketAddress;
+import java.net.ServerSocket;
+import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.nio.charset.CharacterCodingException;
 import java.nio.charset.StandardCharsets;
@@ -17,7 +18,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executors;
 import java.util.concurrent.locks.ReentrantLock;
 
 final class LcHost {
@@ -92,112 +92,185 @@ final class LcHost {
   }
 
   // —— 开服务 ——
+  // 没有用 JDK 自带的 com.sun.net.httpserver：它先把请求的地址解析一遍，路径以两个斜杠开头、百分号写法不对的请求自己就回 400，
+  // 到不了处理函数，和别的语言对不上。所以直接用 ServerSocket 读请求（一个连接只处理一个请求，一个连接一条虚拟线）。
   private static final int BODY_LIMIT = 1048576;
-  private static void writeRaw(HttpExchange ex, int status, TreeMap<String, Object> headers, String text) throws IOException {
+  private static final int HEAD_LIMIT = 65536; // 请求行加请求头最多这么多字节
+  private static final int SOCKET_TIMEOUT_MS = 30000; // 对方 30 秒不说话就挂断
+  private static String reason(int status) {
+    return switch (status) {
+      case 200 -> "OK";
+      case 201 -> "Created";
+      case 204 -> "No Content";
+      case 304 -> "Not Modified";
+      case 400 -> "Bad Request";
+      case 401 -> "Unauthorized";
+      case 403 -> "Forbidden";
+      case 404 -> "Not Found";
+      case 405 -> "Method Not Allowed";
+      case 413 -> "Payload Too Large";
+      case 500 -> "Internal Server Error";
+      default -> status < 200 ? "Continue" : status < 300 ? "OK" : status < 400 ? "Redirect" : "Error";
+    };
+  }
+  private static String headerSafe(String s) { return s.replace('\r', ' ').replace('\n', ' '); }
+  private static void writeRaw(OutputStream out, boolean head, int status, TreeMap<String, Object> headers, String text) throws IOException {
     byte[] bytes = text.getBytes(StandardCharsets.UTF_8);
     boolean noBody = status == 204 || status == 304 || status < 200;
-    boolean head = ex.getRequestMethod().equals("HEAD");
+    StringBuilder h = new StringBuilder();
+    h.append("HTTP/1.1 ").append(status).append(' ').append(reason(status)).append("\r\n");
     for (Map.Entry<String, Object> e : headers.entrySet()) {
-      if (!e.getKey().equalsIgnoreCase("content-length")) ex.getResponseHeaders().set(e.getKey(), Lc.dtext(e.getValue()));
+      String low = e.getKey().toLowerCase(java.util.Locale.ROOT);
+      if (low.equals("content-length") || low.equals("connection") || low.equals("transfer-encoding")) continue;
+      h.append(headerSafe(e.getKey())).append(": ").append(headerSafe(Lc.dtext(e.getValue()))).append("\r\n");
     }
-    if (head && !noBody) ex.getResponseHeaders().set("Content-Length", Integer.toString(bytes.length));
-    boolean send = !noBody && !head && bytes.length > 0;
-    ex.sendResponseHeaders(status, send ? bytes.length : -1);
-    if (send) ex.getResponseBody().write(bytes);
-    ex.close();
+    if (!noBody) h.append("Content-Length: ").append(bytes.length).append("\r\n");
+    h.append("Connection: close\r\n\r\n");
+    out.write(h.toString().getBytes(StandardCharsets.UTF_8));
+    if (!noBody && !head) out.write(bytes);
+    out.flush();
   }
-  private static void hostError(HttpExchange ex, int status, String message) throws IOException {
+  private static void hostError(OutputStream out, boolean head, int status, String message) throws IOException {
     TreeMap<String, Object> h = Lc.dict(), b = Lc.dict();
     h.put("Content-Type", "application/json; charset=utf-8");
     b.put("error", message);
-    writeRaw(ex, status, h, Lc.toJson(b));
+    writeRaw(out, head, status, h, Lc.toJson(b));
   }
-  private static void serveOne(HttpExchange ex, Lc.Fn1<TreeMap<String, Object>, TreeMap<String, Object>> handler) throws IOException {
-    String lengthText = ex.getRequestHeaders().getFirst("Content-Length");
-    long length = lengthText != null && lengthText.matches("[0-9]{1,12}") ? Long.parseLong(lengthText) : 0;
-    byte[] raw = new byte[0];
-    if (length <= BODY_LIMIT) {
-      try (InputStream in = ex.getRequestBody()) { raw = in.readNBytes(BODY_LIMIT + 1); }
+  /** 读到空行为止（请求行＋请求头），交回各行；对方没发完就断开、或者太长＝null。 */
+  private static java.util.ArrayList<String> readHead(InputStream in) throws IOException {
+    java.util.ArrayList<String> lines = new java.util.ArrayList<>();
+    java.io.ByteArrayOutputStream line = new java.io.ByteArrayOutputStream();
+    for (int total = 0; total < HEAD_LIMIT; total++) {
+      int c = in.read();
+      if (c < 0) return null;
+      if (c != '\n') {
+        line.write(c);
+        continue;
+      }
+      String text = line.toString(StandardCharsets.UTF_8);
+      if (text.endsWith("\r")) text = text.substring(0, text.length() - 1);
+      line.reset();
+      if (text.isEmpty()) {
+        if (lines.isEmpty()) continue; // 请求行前面的空行不算
+        return lines;
+      }
+      lines.add(text);
     }
-    if (length > BODY_LIMIT || raw.length > BODY_LIMIT) {
-      ex.getResponseHeaders().set("Connection", "close");
-      hostError(ex, 413, "请求内容太大");
+    return null;
+  }
+  private static void serveOne(InputStream in, OutputStream out, Lc.Fn1<TreeMap<String, Object>, TreeMap<String, Object>> handler) throws IOException {
+    java.util.ArrayList<String> head = readHead(in);
+    if (head == null) return;
+    String[] first = head.get(0).split(" ", -1);
+    if (first.length != 3 || !first[2].startsWith("HTTP/") || first[1].isEmpty()) {
+      hostError(out, false, 400, "看不懂这个请求");
       return;
     }
+    String method = first[0], target = first[1];
+    boolean isHead = method.equals("HEAD");
+    TreeMap<String, Object> headers = Lc.dict();
+    for (String l : head.subList(1, head.size())) {
+      int colon = l.indexOf(':');
+      if (colon <= 0) continue;
+      String name = l.substring(0, colon).trim().toLowerCase(java.util.Locale.ROOT);
+      String value = l.substring(colon + 1).replaceAll("^[ \\t]+|[ \\t]+$", "");
+      Object old = headers.get(name);
+      headers.put(name, old == null ? value : old + ", " + value); // 重名的用“, ”连
+    }
+    String lengthText = headers.get("content-length") instanceof String t ? t : "0";
+    long length = lengthText.matches("[0-9]{1,12}") ? Long.parseLong(lengthText) : 0;
+    if (length > BODY_LIMIT) {
+      hostError(out, isHead, 413, "请求内容太大");
+      return;
+    }
+    if (headers.get("expect") instanceof String ex && ex.toLowerCase(java.util.Locale.ROOT).contains("100-continue")) {
+      out.write("HTTP/1.1 100 Continue\r\n\r\n".getBytes(StandardCharsets.ISO_8859_1));
+      out.flush();
+    }
+    byte[] raw = in.readNBytes((int) length);
+    if (raw.length < length) return; // 对方没发完就断开了
     String body;
     try {
       body = StandardCharsets.UTF_8.newDecoder().decode(ByteBuffer.wrap(raw)).toString();
     } catch (CharacterCodingException e) {
       body = null;
     }
-    TreeMap<String, Object> headers = Lc.dict();
-    for (Map.Entry<String, List<String>> e : ex.getRequestHeaders().entrySet()) {
-      StringBuilder joined = new StringBuilder();
-      for (String v : e.getValue()) {
-        if (joined.length() > 0) joined.append(", ");
-        joined.append(v.replaceAll("^[ \\t]+|[ \\t]+$", ""));
-      }
-      headers.put(e.getKey().toLowerCase(java.util.Locale.ROOT), joined.toString());
+    // 请求行里写的是整个网址（http://主机/路径）时只要路径那一段；别的原样，不解码、不收拾斜杠。
+    if (!target.startsWith("/") && target.matches("^[A-Za-z][A-Za-z0-9+.-]*://.*")) {
+      int slash = target.indexOf('/', target.indexOf("://") + 3);
+      target = slash < 0 ? "/" : target.substring(slash);
     }
-    String rawQuery = ex.getRequestURI().getRawQuery();
+    int hash = target.indexOf('#');
+    if (hash >= 0) target = target.substring(0, hash);
+    int q = target.indexOf('?');
     TreeMap<String, Object> request = Lc.dict();
-    request.put("method", ex.getRequestMethod());
-    request.put("path", ex.getRequestURI().getRawPath());
-    request.put("query", rawQuery == null ? "" : rawQuery);
+    request.put("method", method);
+    request.put("path", q < 0 ? target : target.substring(0, q));
+    request.put("query", q < 0 ? "" : target.substring(q + 1));
     request.put("headers", headers);
     request.put("body", body);
-    TreeMap<String, Object> out;
+    TreeMap<String, Object> res;
     try {
-      out = handler.call(request);
+      res = handler.call(request);
     } catch (Lc.LcError e) {
       Lc.errLine("出错：" + e.getMessage());
-      hostError(ex, 500, "服务器内部出错");
+      hostError(out, isHead, 500, "服务器内部出错");
       return;
-    } catch (RuntimeException e) {
+    } catch (RuntimeException | StackOverflowError e) {
       java.io.StringWriter w = new java.io.StringWriter();
       e.printStackTrace(new java.io.PrintWriter(w));
       Lc.errLine(w.toString().stripTrailing());
-      hostError(ex, 500, "服务器内部出错");
+      hostError(out, isHead, 500, "服务器内部出错");
       return;
     }
-    Object st = out == null ? null : out.get("status");
+    Object st = res == null ? null : res.get("status");
     double status = st instanceof Double d ? d : st instanceof Long n ? (double) n : -1;
     if (status != Math.floor(status) || status < 100 || status > 599) {
       Lc.errLine("处理函数返回的响应不对（要一个字典，status 是 100 到 599 的整数）");
-      hostError(ex, 500, "服务器内部出错");
+      hostError(out, isHead, 500, "服务器内部出错");
       return;
     }
     TreeMap<String, Object> hs = Lc.dict();
-    if (out.get("headers") instanceof TreeMap<?, ?> m) {
+    if (res.get("headers") instanceof TreeMap<?, ?> m) {
       for (Map.Entry<?, ?> e : m.entrySet()) hs.put((String) e.getKey(), e.getValue());
     }
-    writeRaw(ex, (int) status, hs, Lc.dtext(out.get("body")));
+    writeRaw(out, isHead, (int) status, hs, Lc.dtext(res.get("body")));
+  }
+  private static void serveSocket(Socket socket, Lc.Fn1<TreeMap<String, Object>, TreeMap<String, Object>> handler) {
+    try (Socket s = socket) {
+      s.setSoTimeout(SOCKET_TIMEOUT_MS);
+      serveOne(new java.io.BufferedInputStream(s.getInputStream()), new java.io.BufferedOutputStream(s.getOutputStream()), handler);
+    } catch (IOException e) {
+      // 对方中途断开、超时：这个连接不管了
+    } catch (RuntimeException e) {
+      Lc.errLine("回应没写出去：" + e);
+    }
   }
   /** 一直服务，不返回；端口用不了＝出错。 */
   static void hostServe(long port, String host, Lc.Fn1<TreeMap<String, Object>, TreeMap<String, Object>> handler) {
     if (port < 0 || port > 65535) Lc.fail("开不了服务：端口要在 0 到 65535 之间");
-    HttpServer server;
+    ServerSocket server = null;
     try {
-      server = HttpServer.create(new InetSocketAddress(host, (int) port), 0);
-    } catch (IOException e) {
+      server = new ServerSocket();
+      server.setReuseAddress(true);
+      server.bind(new InetSocketAddress(host, (int) port), 128);
+    } catch (IOException | RuntimeException e) {
+      try {
+        if (server != null) server.close();
+      } catch (IOException e2) {
+        Lc.errLine("端口没关掉");
+      }
       Lc.fail("开不了服务：" + host + ":" + port + " 用不了");
       return;
     }
-    server.createContext("/", ex -> {
-      try {
-        serveOne(ex, handler);
-      } catch (IOException | RuntimeException e) {
-        Lc.errLine("回应没写出去：" + e);
-        ex.close();
+    Lc.log("后端已启动：http://" + host + ":" + server.getLocalPort());
+    try (ServerSocket listening = server) {
+      while (true) {
+        Socket socket = listening.accept();
+        Thread.ofVirtual().start(() -> serveSocket(socket, handler));
       }
-    });
-    server.setExecutor(Executors.newVirtualThreadPerTaskExecutor());
-    server.start();
-    Lc.log("后端已启动：http://" + host + ":" + server.getAddress().getPort());
-    try {
-      new CountDownLatch(1).await();
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
+    } catch (IOException e) {
+      Lc.fail("服务停了：" + e.getMessage());
     }
   }
   // —— 随机字节、文件、请求别的网址（细则见 docs/blocks-v5-parts/B-gen-notes.md 第 14 节）——
@@ -277,8 +350,12 @@ final class LcHost {
     int hash = s.indexOf('#');
     byte[] raw = (hash < 0 ? s : s.substring(0, hash)).getBytes(StandardCharsets.UTF_8);
     StringBuilder out = new StringBuilder();
+    // 方括号只在主机那一段（:// 后面到第一个 / ? # 之前，IPv6 地址）原样；后面的 java.net.URI 不认，转义掉（对方解出来是一样的）。
+    int pathFrom = s.indexOf("://") + 3;
+    while (pathFrom < s.length() && "/?#".indexOf(s.charAt(pathFrom)) < 0) pathFrom++;
     for (int i = 0; i < raw.length; i++) {
       int c = raw[i] & 0xFF;
+      if ((c == '[' || c == ']') && i >= pathFrom) { out.append(c == '[' ? "%5B" : "%5D"); continue; }
       boolean escaped = c == '%' && i + 2 < raw.length && Character.digit(raw[i + 1], 16) >= 0 && Character.digit(raw[i + 2], 16) >= 0;
       boolean keep = (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || "-._~:/?[]@!$&'()*+,;=".indexOf(c) >= 0;
       if (escaped || keep) out.append((char) c);

@@ -269,7 +269,15 @@ void main() {
       await tester.pumpAndSettle();
       expect(k('be-strict-sheet'), findsOneWidget);
       expect(tester.widget<Text>(k('be-strict-preview')).data, contains('3 处标红要改'));
+      // 升级前先说清楚：多出几条、哪些能一键修；逐条列出来（在哪、什么问题、能不能一键修）。
+      expect(tester.widget<Text>(k('be-strict-how')).data, contains('其中 3 处能一键修'));
+      expect(k('be-strict-item-0'), findsOneWidget);
+      expect(k('be-strict-item-2'), findsOneWidget);
+      expect(k('be-strict-item-3'), findsNothing);
+      expect(find.descendant(of: k('be-strict-sheet'), matching: find.text('接口「GET /a」')), findsNWidgets(3));
+      expect(find.descendant(of: k('be-strict-sheet'), matching: find.text('能一键修')), findsNWidgets(3));
       await shot(tester, '$out/11-upgrade-$suffix');
+      await shot(tester, '$out/../lang/a2/upgrade-$suffix');
       // 先不升：什么都没变。
       await tester.tap(k('be-strict-cancel'));
       await tester.pumpAndSettle();
@@ -294,19 +302,31 @@ void main() {
     });
   }
 
-  testWidgets('默认：老规矩的文档“⋯”菜单里没有“升级到严格规矩…”（等后端接上严格生成再打开）；别的菜单项都在', (tester) async {
-    expect(kStrictRulesUpgradeEnabled, isFalse);
-    expect(beStrictUpgradeEntry, isFalse);
+  testWidgets('默认：老规矩的文档“⋯”菜单里有“升级到严格规矩…”（严格生成接上了，2026-11-27 起入口打开）；别的菜单项都在；不点就还是老规矩', (tester) async {
+    expect(kStrictRulesUpgradeEnabled, isTrue);
+    expect(beStrictUpgradeEntry, isTrue);
+    await open(tester, 1);
+    await tester.tap(k('be-more'));
+    await tester.pumpAndSettle();
+    expect(k('be-menu-strict'), findsOneWidget);
+    expect(find.text('升级到严格规矩…'), findsOneWidget);
+    expect(k('be-menu-strict-on'), findsNothing);
+    for (final item in ['language', 'data', 'settings', 'regen']) {
+      expect(k('be-menu-$item'), findsOneWidget, reason: item);
+    }
+    expect(be(tester).host!.doc.rules, 1);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('把入口关掉（beStrictUpgradeEntry = false）：菜单里没有“升级到严格规矩…”', (tester) async {
+    beStrictUpgradeEntry = false;
+    addTearDown(() => beStrictUpgradeEntry = kStrictRulesUpgradeEnabled);
     await open(tester, 1);
     await tester.tap(k('be-more'));
     await tester.pumpAndSettle();
     expect(k('be-menu-strict'), findsNothing);
     expect(find.text('升级到严格规矩…'), findsNothing);
     expect(k('be-menu-strict-on'), findsNothing);
-    for (final item in ['language', 'data', 'settings', 'regen']) {
-      expect(k('be-menu-$item'), findsOneWidget, reason: item);
-    }
-    expect(be(tester).host!.doc.rules, 1);
     expect(tester.takeException(), isNull);
   });
 }

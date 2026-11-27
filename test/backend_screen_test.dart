@@ -17,6 +17,7 @@ import 'package:lopicode/blocks/block_editor_view.dart';
 import 'package:lopicode/blocks/block_geometry.dart';
 import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/core/templates.dart';
+import 'package:lopicode/lang/rules.dart';
 import 'package:lopicode/lowcode/builder_screen.dart';
 import 'package:lopicode/lowcode/logic_expr.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
@@ -194,6 +195,10 @@ Future<void> typeInline(WidgetTester tester, String value) async {
 }
 
 void main() {
+  // 这个文件考的是老规矩（规矩版本 1）的行为：新建的文档现在默认是严格规矩，这里钉回 1，测完改回去。
+  setUp(() => beNewDocRules = kLangRulesLoose);
+  tearDown(() => beNewDocRules = kLangRulesForNewDocs);
+
   setUpAll(() async => fontsLoaded = await loadRealFonts());
 
   testWidgets('新建“后端服务（积木）”项目 → 搭建页直接是后端积木页：画布、样本接口、语言；看代码是这种语言的入口文件', (tester) async {

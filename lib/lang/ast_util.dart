@@ -202,3 +202,19 @@ List<LDecl> lStaticDecls(LClassDecl d) => [
   for (final m in d.methods)
     if (m.isStatic) LFuncDecl(lStaticName(d.name, m.fn.name), m.fn.params, m.fn.body, typeParams: m.fn.typeParams, waits: m.fn.waits, src: m.fn.src ?? d.src, type: m.fn.type),
 ];
+
+/// 展开出来的语句没有来处的（库积木展开的）：最外面那几句补上“是哪一块积木”。有来处的不动。
+List<LStmt> lStampSrc(List<LStmt> list, LSrc src) => [
+  for (final s in list)
+    if (s.src != null)
+      s
+    else
+      switch (s) {
+        LReturn(:final value) => LReturn(value, src: src),
+        LExprStmt(:final expr) => LExprStmt(expr, src: src),
+        LAssign(:final target, :final value) => LAssign(target, value, src: src),
+        LLet(:final name, :final value, :final isConst, :final kind, :final type) => LLet(name, value, isConst: isConst, kind: kind, src: src, type: type),
+        LIf(:final arms, :final orElse) => LIf(arms, orElse: orElse, src: src),
+        _ => s,
+      },
+];

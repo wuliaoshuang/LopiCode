@@ -1,0 +1,20 @@
+{"blocks": [
+  {"id": "double", "how": "call", "of": "加倍", "args": ["x"],
+   "look": {"name": "加倍", "shape": "value", "template": "{x} 的两倍"}},
+  {"id": "counterZero", "how": "static", "of": "计数器.从零", "args": [],
+   "look": {"name": "新计数器", "shape": "value", "template": "从零开始的计数器"}},
+  {"id": "counterAdd", "how": "method", "of": "加", "args": ["c", "n"], "into": "into",
+   "slotKinds": {"into": "assign"},
+   "look": {"name": "计数器加", "shape": "statement", "template": "让 {c} 加上 {n}，结果放进 {into}"}},
+  {"id": "withPocket", "how": "expand", "provides": {"口袋": "袋"}, "needs": ["账本"],
+   "slotKinds": {"name": "literal", "body": "mouth"},
+   "expand": "(设 袋 (新记 口袋 (名 (槽 name)) (件数 (设置 size)))) (加项 (隐含 账本) (连 \"拿出\" (. 袋 名))) (口 body (收尾 (打印 \"口袋用完了\")))",
+   "look": {"name": "拿一个口袋", "shape": "statement", "template": "拿一个叫 {name} 的口袋 {body}"}},
+  {"id": "pocketReport", "how": "call", "of": "报告", "args": [{"context": "口袋"}, "prefix"], "needs": ["口袋"],
+   "look": {"name": "口袋报告", "shape": "value", "template": "口袋的报告，前面加 {prefix}"}},
+  {"id": "pocketPut", "how": "expand", "needs": ["口袋", "账本"], "slotKinds": {"into": "assign"},
+   "expand": "(设 件 (+ (. (隐含 口袋) 件数) (槽 n))) (加项 (隐含 账本) (连 \"放进\" 件)) (放进 into 件)",
+   "look": {"name": "往口袋里放", "shape": "statement", "template": "往口袋里再放 {n} 件，现在几件放进 {into}"}},
+  {"id": "fixedDouble", "how": "call", "of": "加倍", "args": [{"preset": 21}],
+   "look": {"name": "四十二", "shape": "value", "template": "二十一的两倍"}}
+]}

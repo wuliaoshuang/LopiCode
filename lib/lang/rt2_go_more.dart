@@ -4,6 +4,8 @@
 library;
 
 const String kRt2GoMore = r'''
+// LopiCode 积木的小库（Go，严格规矩）·第三份。由 LopiCode 生成，别手改。
+
 package lc
 
 import (

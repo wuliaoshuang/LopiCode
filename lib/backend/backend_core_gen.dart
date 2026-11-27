@@ -1,8 +1,8 @@
 /// “看代码”的另一条路（积木第 5 版·核心 2·A3）：只用语言核心积木的严格文档，走版本 2 的生成器出五种语言的代码。
 ///
-/// 产品里严格文档的后端生成开关（`kLangStrictBackendGen`）关着——那个开关管的是“接口服务”那一整套（接口、数据集合、请求）
-/// 按严格规矩生成，还没接。这里不动它：只有**不含接口、有“程序开始时”、从头到尾没用旧的“干活”积木**的文档才走这条路，
-/// 而且只用来“看代码”；写文件、启动服务照旧不做（见 backend_project.dart、ui/backend_screen.dart 里 `beStrictGenPending` 的用处）。
+/// **不含接口、有“程序开始时”、从头到尾没用旧的“干活”积木**的文档走这条路：生成出来是一个跑完就结束的程序。
+/// 严格生成开着（`kLangStrictBackendGen`，2026-11-27 起）的时候，写文件、看代码都用它（backend_strict_target.dart）；
+/// 关着的时候只用来“看代码”。带接口的严格文档走“接口服务”库那条路（backend_to_service.dart）。
 library;
 
 import 'package:lopicode/backend/backend_model.dart';

@@ -12,6 +12,7 @@ import 'package:lopicode/backend/backend_targets.dart';
 import 'package:lopicode/core/path_guard.dart';
 import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/core/templates.dart';
+import 'package:lopicode/lang/rules.dart';
 import 'package:lopicode/templates/code_starters.dart';
 import 'package:lopicode/ui/file_icon.dart';
 import 'package:lopicode/ui/new_project_sheet.dart';
@@ -194,9 +195,9 @@ void main() {
     await tester.runAsync(() async {
       final doc = BeDocument.parse(File(p.join(project.dir, kBackendFileName)).readAsStringSync());
       expect((doc.note, doc.doc.name, doc.doc.language), (null, '待办接口', 'python'));
-      expect(File(p.join(project.dir, backendTargetFor('python')!.entryFile)).existsSync(), isTrue);
+      expect(File(p.join(project.dir, backendTargetForRules('python', kLangRulesForNewDocs)!.entryFile)).existsSync(), isTrue);
       expect(File(p.join(project.dir, 'README.md')).readAsStringSync(), contains('curl'));
-      expect(File(p.join(project.dir, backendTargetFor('node')!.entryFile)).existsSync(), isFalse, reason: '没选的语言不生成');
+      expect(File(p.join(project.dir, backendTargetForRules('node', kLangRulesForNewDocs)!.entryFile)).existsSync(), isFalse, reason: '没选的语言不生成');
       final meta = jsonDecode(File(p.join(project.dir, PathGuard.reservedDir, 'project.json')).readAsStringSync()) as Map;
       expect((meta['template'], meta['language']), ('backend-blocks', 'python'));
       final info = await detectBackendProject(project.dir);
@@ -238,7 +239,15 @@ void main() {
     final first = backendTargets.first;
     expect((project.template, project.language), (ProjectTemplate.fullstack, first.id));
     await tester.runAsync(() async {
-      for (final f in ['README.md', 'index.html', 'web/index.html', 'web/app.js', 'web/style.css', 'server/$kBackendFileName', 'server/${first.entryFile}']) {
+      for (final f in [
+        'README.md',
+        'index.html',
+        'web/index.html',
+        'web/app.js',
+        'web/style.css',
+        'server/$kBackendFileName',
+        'server/${backendTargetForRules(first.id, kLangRulesForNewDocs)!.entryFile}',
+      ]) {
         expect(File(p.join(project.dir, f)).existsSync(), isTrue, reason: f);
       }
       final info = await detectBackendProject(project.dir);

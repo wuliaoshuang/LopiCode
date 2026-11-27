@@ -44,9 +44,18 @@ final class Lc {
     if (is_infinite($n)) return $n > 0 ? "无穷大" : "-无穷大";
     if ($n == 0.0) return "0";
     if (floor($n) === $n && abs($n) <= self::MAX) return (string)(int)$n;
-    preg_match('/^(-?)([0-9])(?:\.([0-9]+))?e([+-][0-9]+)$/', sprintf('%.11e', $n), $m);
-    $digits = rtrim($m[2] . $m[3], "0");
-    $e = (int)$m[4];
+    // 先要 41 位有效数字（看得出第 13 位是不是正好一半），再自己四舍五入到 12 位（正好一半时远离 0，和别的语言一样；sprintf 自己的取法不一样）。
+    preg_match('/^([0-9])[.,]([0-9]{40})[eE]([+-]?[0-9]+)$/', sprintf('%.40e', abs($n)), $q);
+    $m = [1 => $n < 0 ? "-" : ""];
+    $all = $q[1] . $q[2];
+    $e = (int)$q[3];
+    $head = substr($all, 0, 12);
+    if (ord($all[12]) >= ord('5')) {
+      $i = 11;
+      while ($i >= 0 && $head[$i] === '9') { $head[$i] = '0'; $i--; }
+      if ($i < 0) { $head = '1' . $head; $e++; } else { $head[$i] = chr(ord($head[$i]) + 1); }
+    }
+    $digits = rtrim($head, "0");
     $len = strlen($digits);
     if ($e >= 15 || $e < -7) return $m[1] . $digits[0] . ($len > 1 ? "." . substr($digits, 1) : "") . "e" . $e;
     if ($e >= $len - 1) return $m[1] . $digits . str_repeat("0", $e - $len + 1);

@@ -25,6 +25,10 @@ BeDocument docOf(List<J> body) => parseLangBlocksDocument(langBlocksDocumentJson
 final J ok = json(dc({'ok': yes()}));
 
 void main() {
+  // 这个文件考的是老规矩（规矩版本 1）的行为：新建的文档现在默认是严格规矩，这里钉回 1，测完改回去。
+  setUp(() => beNewDocRules = kLangRulesLoose);
+  tearDown(() => beNewDocRules = kLangRulesForNewDocs);
+
   group('读写', () {
     test('往返：用了全部新积木的样本文档，读进来再写出去再读，内容一样；接口里的积木原样（op、参数、段、收起的否则）', () {
       final source = langBlocksDocumentJson(langBlocksRoutes());

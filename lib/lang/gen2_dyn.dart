@@ -6,6 +6,7 @@ import 'package:lopicode/lang/ast.dart';
 import 'package:lopicode/lang/ast_util.dart';
 import 'package:lopicode/lang/gen2.dart';
 import 'package:lopicode/lang/gen2_expr.dart';
+import 'package:lopicode/lang/gen2_split.dart';
 import 'package:lopicode/lang/gen_support.dart';
 import 'package:lopicode/lang/type_world.dart';
 import 'package:lopicode/lang/typecheck.dart';
@@ -64,7 +65,27 @@ abstract class Gen2Dyn extends Gen2 {
   List<String> enumDecl(String name, String label, List<(String, String)> cases);
   List<String> classDecl(DynClass c);
   List<String> globalDecls(List<String> names);
-  String programText(List<String> top, List<String> mainBody);
+  String programText(List<String> top, List<String> mainBody, {List<String> head = const []});
+
+  // —— 分文件（gen2_split.dart）：各语言答的 ——
+
+  /// 文件的后缀（不带点）。
+  String get ext;
+
+  /// 别的模块的模块级变量在这个文件里怎么写（PHP 的全局变量哪个文件都看得见，不用改）。
+  String globalFrom(String part, String base) => base;
+
+  /// 把 [part] 那一份引进来的几行：[names] 是它的类型、函数，[vars] 是它有没有模块级变量；[inMain]＝是不是写在主文件里。
+  List<String> importLines(String part, List<String> names, {required bool vars, required bool inMain});
+
+  /// 文件最后“交出去”的几行（只有 Node 要）。
+  List<String> exportLines(List<String> names, List<String> globals) => const [];
+
+  /// 一个不是主文件的文件：[what] 写进开头的说明。
+  String moduleText(String what, List<String> head, List<String> top, List<String> tail);
+
+  String partBase(String part) => part == Gen2Split.kinds ? 'lc_kinds' : 'm_${split!.ident[part]}';
+  String modVar(String part) => '${vp}lcM_${split!.ident[part]}';
 
   // —— 名字 ——
 
@@ -80,7 +101,10 @@ abstract class Gen2Dyn extends Gen2 {
 
   @override
   String varCode(V2Var v) {
-    if (v.global) return '${vp}g_${v2Ident(v.name)}';
+    if (v.global) {
+      final base = '${vp}g_${v2Ident(v.name)}', part = split?.of(v.name);
+      return part == null || part == curModule ? base : globalFrom(part, base);
+    }
     if (v.info.kind == LVarKind.temp) return '${vp}lcT${v2Ident(v.name)}';
     return v.depth == 0 ? '${vp}v_${v2Ident(v.name)}' : '${vp}v${v.depth}_${v2Ident(v.name)}';
   }
@@ -366,40 +390,76 @@ abstract class Gen2Dyn extends Gen2 {
     return found;
   }
 
-  @override
-  String program() {
-    final top = <String>[];
-    void add(List<String> lines) {
-      if (lines.isEmpty) return;
-      if (top.isNotEmpty) top.add('');
-      top.addAll(lines);
+  /// 顶层代码按“归哪一份”攒好（不分文件时只有一份），外加主程序的代码、每一份的模块级变量。
+  (Gen2Parts, List<String>, Map<String, List<String>>) _collect() {
+    final parts = Gen2Parts();
+    String part(String name) => split?.of(name) ?? Gen2Split.kinds;
+    void add(String p, List<String> lines) => parts.add(p, lines, gap: true);
+    final vars = <String, List<String>>{};
+    for (final g in globals) {
+      curModule = part(g.name);
+      (vars[curModule] ??= []).add(varCode(V2Var(g, 0, global: true)));
     }
-
-    add(globalDecls([for (final g in globals) varCode(V2Var(g, 0, global: true))]));
+    vars.forEach((p, names) => add(p, globalDecls(names)));
     for (final d in decls) {
+      final p = curModule = part(d.name);
       switch (d) {
         case LRecordDecl():
-          add(recordDecl(typeName(d.name), d.name, [for (final f in d.fields) member(f.name)]));
+          parts.name(p, typeName(d.name));
+          add(p, recordDecl(typeName(d.name), d.name, [for (final f in d.fields) member(f.name)]));
         case LEnumDecl():
-          add(enumDecl(typeName(d.name), d.name, [for (final c in d.cases) ('c_${v2Ident(c)}', c)]));
+          parts.name(p, typeName(d.name));
+          add(p, enumDecl(typeName(d.name), d.name, [for (final c in d.cases) ('c_${v2Ident(c)}', c)]));
         case LVariantDecl():
-          add(recordDecl(typeName(d.name), d.name, const [], base: ''));
+          parts.name(p, typeName(d.name));
+          add(p, recordDecl(typeName(d.name), d.name, const [], base: ''));
           for (final c in d.cases) {
-            add(recordDecl(caseType(d.name, c.name), c.name, [for (final f in c.fields) member(f.name)], base: typeName(d.name)));
+            parts.name(p, caseType(d.name, c.name));
+            add(p, recordDecl(caseType(d.name, c.name), c.name, [for (final f in c.fields) member(f.name)], base: typeName(d.name)));
           }
         case LClassDecl():
-          add(classDecl(_class(w.classes[d.name]!)));
+          parts.name(p, typeName(d.name));
+          add(p, classDecl(_class(w.classes[d.name]!)));
         case LFuncDecl():
-          add(_function(d));
+          parts.name(p, funcName(d.name));
+          add(p, _function(d));
         case LAliasDecl() || LInterfaceDecl() || LVarDecl() || LNativeDecl():
           break;
       }
     }
     final main = V2Fn(Gen2Base.mainScope, LType.nul, isMain: true, waits: true);
-    if (r.usesErrors) add(errSupport());
+    curModule = Gen2Split.kinds;
+    if (r.usesErrors) add(Gen2Split.kinds, errSupport());
+    curModule = split?.entry ?? Gen2Split.kinds;
     final body = funcBody(main, startup);
     mainWaits = main.usedWait;
-    return programText(top, body);
+    return (parts, body, vars);
+  }
+
+  @override
+  String program() {
+    final (parts, body, _) = _collect();
+    return programText(parts.of(Gen2Split.kinds), body);
+  }
+
+  /// 一个模块一个文件：主文件（入口模块＋主程序）、内置错误种类一份（用到了才有）、别的模块各一份。
+  @override
+  Map<String, String> programFiles() {
+    final s = split;
+    if (s == null) return super.programFiles();
+    final (parts, body, vars) = _collect();
+    const kinds = Gen2Split.kinds;
+    final hasKinds = parts.of(kinds).isNotEmpty;
+    List<String> head(String part) => [
+      if (hasKinds) ...importLines(kinds, parts.namesOf(kinds), vars: false, inMain: part == s.entry),
+      for (final m in s.before(part)) ...importLines(m, parts.namesOf(m), vars: vars[m]?.isNotEmpty ?? false, inMain: part == s.entry),
+    ];
+    return {
+      mainFile: programText(parts.of(s.entry), body, head: head(s.entry)),
+      if (hasKinds) '${partBase(kinds)}.$ext': moduleText('内置的错误种类', const [], parts.of(kinds), exportLines(parts.namesOf(kinds), const [])),
+      for (final m in s.order)
+        '${partBase(m)}.$ext': moduleText('模块「${m.replaceAll(RegExp(r'[\x00-\x1f\x7f\u0085\u2028\u2029]'), ' ')}」', head(m), parts.of(m), exportLines(parts.namesOf(m), vars[m] ?? const [])),
+    };
   }
 }
 

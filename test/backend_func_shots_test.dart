@@ -6,9 +6,11 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lopicode/backend/backend_targets.dart';
 import 'package:lopicode/blocks/block_dock.dart';
 import 'package:lopicode/blocks/block_palette_model.dart';
 import 'package:lopicode/core/templates.dart';
+import 'package:lopicode/lang/rules.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -145,6 +147,10 @@ Future<void> realShadows(Future<void> Function() body) async {
 }
 
 void main() {
+  // 这个文件考的是老规矩（规矩版本 1）的行为：新建的文档现在默认是严格规矩，这里钉回 1，测完改回去。
+  setUp(() => beNewDocRules = kLangRulesLoose);
+  tearDown(() => beNewDocRules = kLangRulesForNewDocs);
+
   setUpAll(() async => fontsLoaded = await loadRealFonts());
   tearDown(BkDockMemory.clear);
 

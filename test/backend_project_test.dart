@@ -15,6 +15,10 @@ import 'package:lopicode/lang/rules.dart';
 import 'package:path/path.dart' as p;
 
 void main() {
+  // 这个文件考的是老规矩（规矩版本 1）的行为：新建的文档现在默认是严格规矩，这里钉回 1，测完改回去。
+  setUp(() => beNewDocRules = kLangRulesLoose);
+  tearDown(() => beNewDocRules = kLangRulesForNewDocs);
+
   late Directory tmp;
   late String ws;
 
@@ -366,11 +370,16 @@ void main() {
     }
   });
 
-  group('严格规矩的文档（规矩版本 2）：后端的严格生成还没接上，不拿老办法生成', () {
+  group('严格规矩的文档（规矩版本 2）：把严格生成关掉的时候，不拿老办法生成', () {
+    // 严格生成 2026-11-27 起默认开着；这一组考的是“关着的时候”那条保底的路，所以每条先把它关掉、测完改回去。
+    // 老规矩的样本都明着写 rules: kLangRulesLoose（新建的文档现在默认是严格规矩）。
+    setUp(() => beStrictBackendGen = false);
+    tearDown(() => beStrictBackendGen = kLangStrictBackendGen);
+
     test('开关现在的值', () {
-      expect(kLangStrictBackendGen, isFalse);
-      expect(kStrictRulesUpgradeEnabled, isFalse);
-      expect(kLangRulesForNewDocs, kLangRulesLoose);
+      expect(kLangStrictBackendGen, isTrue);
+      expect(kStrictRulesUpgradeEnabled, isTrue);
+      expect(kLangRulesForNewDocs, kLangRulesStrict);
     });
 
     test('没有错误的严格文档：不生成、一个文件都不写，明说原因；老规矩的同一份照常生成', () async {

@@ -36,11 +36,22 @@ final class LcHost {
   private static function file(): ?string {
     if (PHP_SAPI !== 'cli-server') return null;
     if (self::$path !== null) return self::$path;
-    $start = '';
-    $stat = @file_get_contents('/proc/self/stat');
-    if (is_string($stat) && strrpos($stat, ')') !== false) $start = explode(' ', substr($stat, strrpos($stat, ')') + 2))[19] ?? '';
+    // 开了几个工作进程（PHP_CLI_SERVER_WORKERS）时每个请求落在不同的进程上：格子要认“最上面那个服务进程”，不然各存各的。
+    // 顺着父进程往上找命令行和自己一样的（就是 php -S 起的那一个）；没有 /proc 的系统只认自己。
+    $pid = getmypid();
+    $fields = function ($p) {
+      $stat = @file_get_contents('/proc/' . $p . '/stat');
+      return is_string($stat) && strrpos($stat, ')') !== false ? explode(' ', substr($stat, strrpos($stat, ')') + 2)) : [];
+    };
+    $me = @file_get_contents('/proc/' . $pid . '/cmdline');
+    for ($i = 0; $i < 3 && is_string($me) && $me !== ''; $i++) {
+      $up = (int)($fields($pid)[1] ?? 0);
+      if ($up <= 1 || @file_get_contents('/proc/' . $up . '/cmdline') !== $me) break;
+      $pid = $up;
+    }
+    $start = $fields($pid)[19] ?? '';
     $dir = sys_get_temp_dir();
-    self::$path = $dir . '/lcstore-' . getmypid() . '-' . $start . '.dat';
+    self::$path = $dir . '/lcstore-' . $pid . '-' . $start . '.dat';
     if (!file_exists(self::$path) && is_dir('/proc')) {
       // 顺手清掉已经不在了的服务留下的格子文件。
       foreach (glob($dir . '/lcstore-*.dat') ?: [] as $old) {

@@ -1,0 +1,19 @@
+{
+  "kind": "lopicode-lib",
+  "format": 1,
+  "id": "demo/kit",
+  "name": "小工具",
+  "version": "1.0.0",
+  "summary": "示例库：四种定义积木的办法各一块",
+  "rules": 2,
+  "modules": [{"file": "modules/kit.lc", "name": "小工具"}],
+  "blocks": ["blocks.json"],
+  "types": [{"name": "口袋", "module": "小工具", "hint": "一个名字加件数"}, {"name": "计数器", "module": "小工具"}],
+  "settings": [
+    {"id": "size", "name": "口袋里放几件", "type": "整数", "default": 3, "min": 0, "max": 99},
+    {"id": "greeting", "name": "开张说的话", "type": "文字", "default": "开张"}
+  ],
+  "init": "(设 账本 (调 开张 (设置 greeting)))",
+  "start": "(打印 (连 \"收工：\" (拼 账本 \"、\")))",
+  "provides": {"账本": "账本"}
+}

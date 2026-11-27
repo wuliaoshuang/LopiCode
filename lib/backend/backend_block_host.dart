@@ -19,6 +19,7 @@ import 'package:lopicode/backend/backend_func_host.dart';
 import 'package:lopicode/backend/backend_function.dart';
 import 'package:lopicode/backend/backend_model.dart';
 import 'package:lopicode/backend/backend_palette.dart';
+import 'package:lopicode/backend/backend_strict_target.dart';
 import 'package:lopicode/backend/backend_targets.dart';
 import 'package:lopicode/backend/backend_text.dart';
 import 'package:lopicode/backend/backend_type_host.dart';
@@ -389,7 +390,7 @@ class BeBlockHost extends BlockHost with BeFuncHost, BeCoreHost, BeTypeHost {
   /// “错误”级的问题有几条（有错误时不重新生成代码）。照现在的内容算，不用缓存里可能慢一拍的结果。
   int get errorCount => issues.where((i) => i.isError).length;
 
-  BackendTarget? get target => backendTargetFor(_doc.language);
+  BackendTarget? get target => backendTargetOf(_doc);
 
   String? _code;
 
@@ -398,12 +399,15 @@ class BeBlockHost extends BlockHost with BeFuncHost, BeCoreHost, BeTypeHost {
   String get codeText {
     final cached = _code;
     if (cached != null) return cached;
-    // 严格规矩的文档现在不生成（见 kBeStrictGenPending）：不拿老办法翻出来的代码冒充。
-    // 只用语言核心的严格文档（没有接口、有“程序开始时”）例外：走版本 2 的生成器（见 backend_core_gen.dart）。
-    if (coreCodeMode) return _code = coreCodeText(_doc.language);
-    if (beStrictGenPending(_doc)) return _code = '$kBeStrictGenPending。\n\n没有代码可看。';
-    final gen = generateBackend(_doc);
-    return _code = gen == null ? '语言“${_doc.language}”还没有生成器，没有代码可看。' : (gen.files[gen.target.entryFile] ?? '');
+    // 严格生成关着时（kBeStrictGenPending）严格文档不生成，不拿老办法翻出来的代码冒充；
+    // 只用语言核心的（没有接口、有“程序开始时”）例外：走版本 2 的生成器（见 backend_core_gen.dart）。
+    if (beStrictGenPending(_doc)) return _code = coreCodeMode ? coreCodeText(_doc.language) : '$kBeStrictGenPending。\n\n没有代码可看。';
+    final t = target;
+    if (t == null) return _code = '语言“${_doc.language}”还没有生成器，没有代码可看。';
+    // 看到的就是写进项目的那个入口文件。严格规矩的文档翻不出来时说原因。
+    final files = t.generate(_doc);
+    if (files.isEmpty && t is StrictBackendTarget) return _code = '代码现在出不来：${t.problem(_doc) ?? ''}。\n\n把标红的地方改好再来看。';
+    return _code = files[t.entryFile] ?? '';
   }
 
   @override
@@ -411,7 +415,7 @@ class BeBlockHost extends BlockHost with BeFuncHost, BeCoreHost, BeTypeHost {
 
   /// 看的就是入口文件，高亮按它的文件名来；这种语言没有生成器时不高亮。
   @override
-  String get codeFileName => coreCodeMode ? coreCodeFileName(_doc.language) : (target?.entryFile ?? '');
+  String get codeFileName => beStrictGenPending(_doc) && coreCodeMode ? coreCodeFileName(_doc.language) : (target?.entryFile ?? '');
 
   // —— 改动、撤销 ——
 

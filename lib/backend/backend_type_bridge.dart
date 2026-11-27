@@ -18,6 +18,7 @@ import 'package:lopicode/backend/backend_lower_core.dart';
 import 'package:lopicode/backend/backend_lower_func.dart';
 import 'package:lopicode/backend/backend_lower_lang.dart';
 import 'package:lopicode/backend/backend_model.dart';
+import 'package:lopicode/backend/backend_to_service.dart';
 import 'package:lopicode/lang/errors.dart';
 import 'package:lopicode/lang/lang.dart';
 import 'package:lopicode/lang/link.dart';
@@ -139,6 +140,10 @@ BeSpot _spot(BeSlotRef r) => (treeId: r.treeId, path: r.path, arg: r.arg, exprPa
 BeTypeCheck? beTypeCheck(BeDocument doc, {bool pure = false}) {
   if (!langRulesStrict(doc.rules)) return null;
   try {
+    if (!pure) {
+      final viaLibrary = _viaLibrary(doc);
+      if (viaLibrary != null) return viaLibrary;
+    }
     final core = doc.core;
     final trees = <String, LcBlockTree>{};
     final lowers = <String, BeLangLower>{};
@@ -203,7 +208,6 @@ BeTypeCheck? beTypeCheck(BeDocument doc, {bool pure = false}) {
       scripts.add(LTypeScript(name, lower.stmts(r.body, const [], 0)));
     }
     final result = checkTypes(decls: [for (final d in decls) d.decl], main: main, scripts: scripts, outer: outer);
-    final findings = <BeTypeFinding>[];
     // 模块之间的事（M01–M08）：按模块分好再查一遍；问题不在哪块积木上，记在整份文档名下。
     final program = beCoreProgram(core, decls, main);
     // 没分模块也有一件要查：顶上的变量初始值用到了排在它后面的（M08）。
@@ -214,65 +218,15 @@ BeTypeCheck? beTypeCheck(BeDocument doc, {bool pure = false}) {
                 LModule(name: 'main', decls: [for (final d in decls) d.decl], body: main),
               ], entry: 'main')
             : null);
-    if (linked != null) {
-      for (final i in linkProgram(linked).issues) {
-        if (program == null && i.code != 'M08') continue;
-        findings.add(BeTypeFinding(i, const BeSlotRef('', [], null, []), const [], extra: beCoreExtraFixes(doc, i, treeId: '')));
-      }
-    }
-    for (final i in result.issues) {
-      // 变量、函数的名字找不到：老规则（G03 / L01）已经报了，说法也更贴着积木，不重复。字段、方法、情况找不到的照报。
-      final node = i.node;
-      if (i.code == 'T08' && (node is LName || node is LCall || node is LAssign || node == null || i.message.endsWith('」的变量'))) continue;
-      final id = i.src?.script ?? scopes.entries.where((e) => e.value == i.where).firstOrNull?.key;
-      final tree = trees[id], lower = lowers[id];
-      if (tree == null || lower == null) {
-        // 类一级的问题（继承、实现接口…）：不在哪块积木上，记在那个类型名下。
-        if (id == null || core.type(id) == null) continue;
-        findings.add(BeTypeFinding(i, BeSlotRef(id, const [], null, const []), const [], extra: beCoreExtraFixes(doc, i, treeId: id)));
-        continue;
-      }
-      BeSlotRef? blockOf(LNode? n) {
-        final k = int.tryParse(n?.src?.block ?? '');
-        final spot = k != null && k >= 0 && k < lower.spots.length ? lower.spots[k] : null;
-        return spot == null ? null : BeSlotRef(tree.id, spot.path, null, const []);
-      }
-
-      var at = _slotOf(tree, lower, i.node);
-      if (at == null) {
-        final n = int.tryParse(i.src?.block ?? '');
-        final spot = n != null && n >= 0 && n < lower.spots.length ? lower.spots[n] : null;
-        at = BeSlotRef(tree.id, spot?.path ?? const [], spot?.arg, const []);
-      }
-      final fixes = <({LFix fix, BeSlotRef slot})>[];
-      final extra = <BeCoreFix>[];
-      for (final f in i.fixes) {
-        final slot = _slotOf(tree, lower, f.target);
-        if (kBeBlockFixKinds.contains(f.kind)) {
-          if (slot != null && slot.arg != null) fixes.add((fix: f, slot: slot));
-          continue;
-        }
-        final block = blockOf(f.target);
-        final fix = beCoreFixOf(f, block: block == null ? null : _spot(block), slot: slot == null || slot.arg == null ? null : _spot(slot));
-        if (fix != null) extra.add(fix);
-      }
-      final got = node is LExpr ? result.typeOf(node) : null;
-      final gotError = got != null && got.name != null && (langIsBuiltinError(got.name) || core.errorKinds.contains(got.name));
-      final block = blockOf(i.node) ?? (at.path.isEmpty ? null : BeSlotRef(tree.id, at.path, null, const []));
-      extra.addAll(beCoreExtraFixes(doc, i, treeId: tree.id, slot: at.arg == null ? null : _spot(at), block: block == null ? null : _spot(block), gotError: gotError));
-      findings.add(BeTypeFinding(i, at, fixes, extra: extra));
-    }
-    // “看是哪种情况”看可空的值 / “任意”的值：列全了没有在这里查（见 beMatchGap）。
-    for (final tree in trees.values) {
-      tree.visitBlocks((b, path) {
-        final at = BeSlotRef(tree.id, path, null, const []);
-        final gap = beMatchGap(b, _spot(at));
-        if (gap != null) findings.add(BeTypeFinding(LTypeIssue('T03', scopes[tree.id] ?? '', gap.$1, level: LTypeLevel.error), at, const [], extra: gap.$2));
-      });
-    }
+    final links = linked == null
+        ? const <LTypeIssue>[]
+        : [
+            for (final i in linkProgram(linked).issues)
+              if (program != null || i.code == 'M08') i,
+          ];
     return BeTypeCheck(
       result,
-      findings,
+      _findings(doc, result, links, trees, lowers, scopes),
       scopes,
       module: LModule(decls: [for (final d in decls) d.decl], body: main),
       program: program,
@@ -296,4 +250,87 @@ BeTypeCheck? beTypeCheckShared(BeDocument doc) {
   _sharedDoc = doc;
   _sharedKey = key;
   return _shared = check;
+}
+
+/// 检查结果里的问题 → 对回到积木上。[links]＝模块之间的问题（不在哪块积木上，记在整份文档名下）。
+List<BeTypeFinding> _findings(BeDocument doc, LTypeResult result, List<LTypeIssue> links, Map<String, LcBlockTree> trees, Map<String, BeLangLower> lowers, Map<String, String> scopes) {
+  final core = doc.core;
+  final findings = <BeTypeFinding>[for (final i in links) BeTypeFinding(i, const BeSlotRef('', [], null, []), const [], extra: beCoreExtraFixes(doc, i, treeId: ''))];
+  for (final i in result.issues) {
+    // 变量、函数的名字找不到：老规则（G03 / L01）已经报了，说法也更贴着积木，不重复。字段、方法、情况找不到的照报。
+    final node = i.node;
+    if (i.code == 'T08' && (node is LName || node is LCall || node is LAssign || node == null || i.message.endsWith('」的变量'))) continue;
+    final id = i.src?.script ?? scopes.entries.where((e) => e.value == i.where).firstOrNull?.key;
+    final tree = trees[id], lower = lowers[id];
+    if (tree == null || lower == null) {
+      // 类一级的问题（继承、实现接口…）：不在哪块积木上，记在那个类型名下。
+      if (id == null || core.type(id) == null) continue;
+      findings.add(BeTypeFinding(i, BeSlotRef(id, const [], null, const []), const [], extra: beCoreExtraFixes(doc, i, treeId: id)));
+      continue;
+    }
+    BeSlotRef? blockOf(LNode? n) {
+      final k = int.tryParse(n?.src?.block ?? '');
+      final spot = k != null && k >= 0 && k < lower.spots.length ? lower.spots[k] : null;
+      return spot == null ? null : BeSlotRef(tree.id, spot.path, null, const []);
+    }
+
+    var at = _slotOf(tree, lower, i.node);
+    if (at == null) {
+      final n = int.tryParse(i.src?.block ?? '');
+      final spot = n != null && n >= 0 && n < lower.spots.length ? lower.spots[n] : null;
+      at = BeSlotRef(tree.id, spot?.path ?? const [], spot?.arg, const []);
+    }
+    final fixes = <({LFix fix, BeSlotRef slot})>[];
+    final extra = <BeCoreFix>[];
+    for (final f in i.fixes) {
+      final slot = _slotOf(tree, lower, f.target);
+      if (kBeBlockFixKinds.contains(f.kind)) {
+        if (slot != null && slot.arg != null) fixes.add((fix: f, slot: slot));
+        continue;
+      }
+      final block = blockOf(f.target);
+      final fix = beCoreFixOf(f, block: block == null ? null : _spot(block), slot: slot == null || slot.arg == null ? null : _spot(slot));
+      if (fix != null) extra.add(fix);
+    }
+    final got = node is LExpr ? result.typeOf(node) : null;
+    final gotError = got != null && got.name != null && (langIsBuiltinError(got.name) || core.errorKinds.contains(got.name));
+    final block = blockOf(i.node) ?? (at.path.isEmpty ? null : BeSlotRef(tree.id, at.path, null, const []));
+    extra.addAll(beCoreExtraFixes(doc, i, treeId: tree.id, slot: at.arg == null ? null : _spot(at), block: block == null ? null : _spot(block), gotError: gotError));
+    findings.add(BeTypeFinding(i, at, fixes, extra: extra));
+  }
+  // “看是哪种情况”看可空的值 / “任意”的值：列全了没有在这里查（见 beMatchGap）。
+  for (final tree in trees.values) {
+    tree.visitBlocks((b, path) {
+      final at = BeSlotRef(tree.id, path, null, const []);
+      final gap = beMatchGap(b, _spot(at));
+      if (gap != null) findings.add(BeTypeFinding(LTypeIssue('T03', scopes[tree.id] ?? '', gap.$1, level: LTypeLevel.error), at, const [], extra: gap.$2));
+    });
+  }
+  return findings;
+}
+
+/// 走库的查法（积木第 5 版·库 1 下半）：查的就是翻译给生成器的那一份——库的声明、每个接口的处理函数、“这次请求”的类型都是真的，
+/// 所以“查过了却生成不了”不会再有。翻不出来返回 null，退回老查法。
+BeTypeCheck? _viaLibrary(BeDocument doc) {
+  final built = beServiceBuild(doc, shadow: true);
+  final program = built.program;
+  if (program == null) return null;
+  final own = [for (final d in built.decls) d.decl];
+  final result = checkTypes(decls: [...beServiceLibDecls(), ...own], main: built.body);
+  final scopes = {...built.names};
+  for (final e in built.lambdas.entries) {
+    final scope = result.lambdaScope(e.value);
+    if (scope != null) scopes[e.key] = scope;
+  }
+  final links = [
+    for (final i in linkProgram(program).issues)
+      if (built.split || i.code == 'M08') i,
+  ];
+  return BeTypeCheck(
+    result,
+    _findings(doc, result, links, built.trees, built.lowers, scopes),
+    scopes,
+    module: LModule(decls: own, body: built.body),
+    program: program,
+  );
 }

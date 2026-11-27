@@ -379,7 +379,8 @@ abstract class JavaGen2Types extends Gen2 {
   /// 用“是不是这种类型”顺手起个名字：空的时候不成立，[def] 只在那时才算（和别的语言一样）。
   @override
   String orElseCode(String code, LType type, String def, LType want) {
-    final p = tmpName('P'), cast = prim(want) ? '' : '(${jb(want)}) ';
+    // 原生类型也明着转一下：`x instanceof Long p ? p : 0L` 当参数传给有几个重名版本的函数（Lc.min）时，javac 认不准它是 long。
+    final p = tmpName('P'), cast = '(${prim(want) ? jt(want) : jb(want)}) ';
     return '($code instanceof ${jb(type.nonNull)} $p ? $cast$p : $cast$def)';
   }
 

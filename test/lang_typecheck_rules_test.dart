@@ -371,8 +371,21 @@ void main() {
         expect(back.doc.rules, v);
         expect(back.doc.encode(), doc.encode());
       }
-      final a = backendStarterDocument('样本', rules: kLangRulesLoose).toJson(), b = backendStarterDocument('样本', rules: kLangRulesStrict).toJson()..remove(kLangRulesField);
-      expect('$b', '$a');
+      // 两种规矩的入门样本：接口、路径、变量、集合一样；严格规矩的只有两处写法不同（“等于”不再把空和 "" 当一样，
+      // 所以网址参数包了“是空就用”、请求内容的字段先问“是空”）。老规矩的样本里没有这些。
+      final a = backendStarterDocument('样本', rules: kLangRulesLoose), b = backendStarterDocument('样本', rules: kLangRulesStrict);
+      expect([for (final r in b.routes) '${r.method} ${r.path} ${r.body.length}'], [for (final r in a.routes) '${r.method} ${r.path} ${r.body.length}']);
+      expect(b.variables.map((v) => v.name), a.variables.map((v) => v.name));
+      expect(b.collections.map((c) => c.name), a.collections.map((c) => c.name));
+      expect(a.encode(), isNot(contains('orElse')));
+      expect(a.encode(), isNot(contains('"logic"')));
+      expect(b.encode(), contains('orElse'));
+      expect(b.encode(), contains('"logic"'));
+      // 除了那两处，别的接口两份一字不差。
+      for (final (i, r) in a.routes.indexed) {
+        if (r.path == '/hello' || (r.method == 'POST' && r.path == '/todos')) continue;
+        expect('${b.routes[i].toJson()}', '${r.toJson()}', reason: '${r.method} ${r.path}');
+      }
     });
   });
 

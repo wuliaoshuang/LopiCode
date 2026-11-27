@@ -152,7 +152,11 @@ class BeLangLower {
   /// 只出语言核心的东西（“看代码”走版本 2 的生成器时用）：小库调用写成 `LRt`，“写到日志”“加上”也翻成核心的节点。
   bool pure = false;
 
-  LExpr _toLang(BeX x) => bePureExpr(beToLangExpr(x, request: kBeRequestName), pure: pure);
+  /// 挂上了就“走库”（见 [BeLibBridge]）。
+  BeLibBridge? bridge;
+
+  LExpr _toLang(BeX x) => bridge?.expr(x) ?? bePureExpr(beToLangExpr(x, request: kBeRequestName), pure: pure);
+  List<LStmt> _host(List<BeS> list) => bridge?.stmts(list) ?? beHostStmts(list);
 
   /// 语法树里的式子 → 它是积木文档里的哪个值翻来的（文档里那个对象本身）。规矩版本 2 的类型检查靠它把问题、
   /// 一键修对回到具体哪一格上（backend_type_bridge.dart）；别处不用。
@@ -521,27 +525,38 @@ class BeLangLower {
         return [
           LExprStmt(LRt(b.op, [for (final a in _rtArgs[b.op]!) arg(a)]), src: src()),
         ];
+      case 'fetch' when bridge != null:
+        // 走库：库里“请求别的网址”是一块带两个口的展开型积木，口里的积木原样放进去（里面的“返回”就是从接口返回）。
+        final method = b.args['method'] == 'POST' ? 'POST' : 'GET';
+        final into = b.args['into'];
+        final url = arg('url');
+        final data = method == 'POST' && isExpr(b.args['data']) ? arg('data') : const LLit(null);
+        final okBody = inner(b.body), failBody = inner(b.orElse, inElse: true);
+        final got = bridge!.mouthBlock('fetch', [LLit(method), url, data], mouths: {'body': okBody, 'orElse': failBody}, into: knows(into) ? into as String : null);
+        return got == null ? _skip('“请求别的网址”还没有接到库上') : lStampSrc(got, src());
       case 'fetch':
         // 旧路翻出来是“存临时值 + 如果（没拿到）…否则…”；口里的积木换成这边翻的。
         final old = host.leaf(b.copyWith(body: const [], orElse: const []));
         final branch = old.whereType<BeSIf>().firstOrNull;
-        if (branch == null) return beHostStmts(old);
+        if (branch == null) return _host(old);
         return [
           if (shadow) ..._shadow(b),
-          ...beHostStmts([
+          ..._host([
             for (final s in old)
               if (s is! BeSIf) s,
           ]),
           LIf(
             [
-              LIfArm(_toLang(branch.cond), [...beHostStmts(branch.then), ...inner(b.orElse, inElse: true)]),
+              LIfArm(_toLang(branch.cond), [..._host(branch.then), ...inner(b.orElse, inElse: true)]),
             ],
-            orElse: [...beHostStmts(branch.orElse), ...inner(b.body)],
+            orElse: [..._host(branch.orElse), ...inner(b.body)],
             src: src(),
           ),
         ];
       default:
-        return [if (shadow) ..._shadow(b), ...beHostStmts(host.leaf(b))];
+        // 走库：翻成了库里的调用，检查器看得见，不补影子；记上是哪一块（问题才标得到这一块上）。
+        if (bridge != null) return lStampSrc(_host(host.leaf(b)), src());
+        return [if (shadow) ..._shadow(b), ..._host(host.leaf(b))];
     }
   }
 

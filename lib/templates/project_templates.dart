@@ -59,7 +59,7 @@ Map<String, String> projectTemplateFiles(ProjectTemplate template, String name, 
       return codeStarterFor(lang!)?.files(name) ?? _fallback(name);
     case ProjectTemplate.fullstack:
       final server = backendBlocksTemplateFiles(name, lang!, dir: 'server');
-      final target = backendTargetFor(lang);
+      final target = backendTargetForRules(lang, beNewDocRules);
       if (server == null || target == null) return _fallback(name);
       final command = ['cd server', for (final c in target.buildCommands) c.join(' '), target.startCommand.join(' ')].join(' && ');
       return {

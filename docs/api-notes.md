@@ -756,3 +756,16 @@ Flutter 导出在测试里真的跳了页（`test/lowcode_pages_export_test.dart
 再看界面上的字、属性、行内样式对不对。jsdom 不排版，所以**看不了样式表的效果**（比如类名开关加上以后长什么样）；它也没有真的换页和 `scrollTo`，这两处报的“没实现”被脚本当成正常。
 测试 `test/lowcode_bind_run_test.dart` 找不到这套环境时明确跳过并打印原因。
 
+## 积木第 5 版·库 1 下半用到的（2026-11-27）
+
+状态：**实跑核对**（同一台开发机，`test/backend_conformance_strict_test.dart`、`test/lang_gen2_split_test.dart` 五种语言真跑）；各家官方文档原文**未核对**的单独标出。
+
+- Java `java.net.ServerSocket`：`new ServerSocket(端口, 队列, 地址)`、`accept()`、`Socket.setSoTimeout(毫秒)`；自己读请求行和请求头，网址以两个斜杠开头也原样拿得到。未核对。
+- Java：没有包名的类不能被 `import static`，但子类直接看得见父类的 static 成员和里面的类（模块分文件靠这个）。未核对；javac 21 `-Xlint:all -Werror` 真编译过。
+- Java：`javac` 重载挑选时，一个参数是原生类型、另一个是包装类型会报歧义。未核对；实测。
+- Go：两个写死的小数相乘在编译期算，结果超出小数范围直接编译不过（`constant … overflows float64`）；变量参与就是运行时算、得无穷大。未核对；实测。
+- Go：文件名以 `_test.go`、`_操作系统.go`、`_处理器.go` 结尾的是特殊文件（只在测试 / 对应平台才编译）。未核对；生成的模块文件名最后垫了 `_lc` 避开。
+- Go `net/http`：请求的网址写坏（`%zz`）时服务自己回 400，到不了处理函数；现在小库自己从连接上读请求行。实测。
+- Node CommonJS：`module.exports` 里写 `get 名字() {}`、`set 名字(v) {}`，别的文件 `模块.名字` 读写的就是原文件里的变量。实测。
+- Python：`from 模块 import 变量` 拿到的是当时的值；`import 模块` 以后 `模块.变量` 读写的是模块里的变量。实测。
+- PHP 自带的开发服务器：环境变量 `PHP_CLI_SERVER_WORKERS=数字` 开多个工作进程（“请求别的网址”请求自己时要靠它）；工作进程是主进程的子进程。未核对；本机 PHP 8.3 实测。
