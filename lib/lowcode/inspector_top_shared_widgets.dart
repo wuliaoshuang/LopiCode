@@ -72,7 +72,8 @@ class LcTopShareBlock extends StatelessWidget {
 
   Future<void> _own(BuildContext context, String key, bool mine) async {
     final id = ed.node.id;
-    if (!mine && key == 'slots' && ed.node.children.isNotEmpty) {
+    // 面板手里的节点是给预览用的那一份，不带子控件：有没有放过东西要到文档里看。
+    if (!mine && key == 'slots' && (ed.doc.find(id)?.children.isNotEmpty ?? false)) {
       final ok = await confirmDialog(context, title: '左右按钮换回共用的', message: '这一页顶栏左右两边放的控件会换成共用的那一份，这一页给它们接的逻辑也会去掉。做错了可以撤销。', confirmLabel: '换回共用的');
       if (!ok || !context.mounted) return;
     }

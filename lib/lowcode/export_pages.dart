@@ -58,10 +58,21 @@ class LcSitePlan {
       }
       componentNames[c.id] = name;
     }
+    // 各页共用的底部导航在 Vue / React 里抽成的公共部件（export_shared_parts.dart）：名字最后发，不抢页面和组件的。
+    if (doc.sharedNav != null) {
+      var name = 'LcBottomNav';
+      for (var k = 2; !used.add(name); k++) {
+        name = 'LcBottomNav$k';
+      }
+      navPart = name;
+    }
   }
 
   final List<LcPagePlan> pages = [];
   final Map<String, String> componentNames = {};
+
+  /// 共用底部导航的公共部件叫什么；项目里没有共用导航是 null。
+  String? navPart;
 }
 
 /// “点一下去这一页”的 JS 表达式（给底部导航项用；里面不带双引号，事件对象用 [kLcEv] 占位）。

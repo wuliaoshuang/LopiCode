@@ -28,6 +28,7 @@ import 'package:lopicode/lowcode/export_live_doc.dart';
 import 'package:lopicode/lowcode/export_pages.dart';
 import 'package:lopicode/lowcode/export_react_bind.dart';
 import 'package:lopicode/lowcode/export_react_target.dart';
+import 'package:lopicode/lowcode/export_shared_parts.dart';
 import 'package:lopicode/lowcode/export_theme_bp.dart';
 import 'package:lopicode/lowcode/export_v3_fields.dart';
 import 'package:lopicode/lowcode/export_web_v3.dart';
@@ -97,6 +98,7 @@ LcFrameworkExport _exportSite(LcDocument doc) {
   final done = <String>{};
   for (final p in site.pages) {
     final plans = LcComponentPlans.build(p.view, pageName: p.name, notes: notes, fixedNames: site.componentNames);
+    if (site.navPart != null) lcNavPartOf[p.view.root] = site.navPart!;
     final (jsx, css) = _page(p.view, p.name, plans, notes);
     files
       ..add(lcFormatted('${p.name}.jsx', jsx, 'jsx'))
@@ -110,6 +112,10 @@ LcFrameworkExport _exportSite(LcDocument doc) {
     }
   }
   files.add(lcFormatted(kReactBaseCss, '/* $kExportHeader */\n$kFrameworkBaseCss${lcThemeCssIfUsed(doc)}', 'css'));
+  final nav = site.navPart;
+  if (nav != null && files.any((f) => f.content.contains('import $nav from'))) {
+    components.add(lcFormatted('components/$nav.jsx', lcReactNavPart(doc, site, nav, text: jsxText, attr: jsxAttr)!, 'jsx'));
+  }
   final shared = LcBindPlan.of(doc, doc.root);
   if (shared != null && shared.hasProject) files.add(LcExportFile(path: kLcReactStateFile, content: lcReactStateFile(shared)));
   return LcFrameworkExport(files: [...files, ...components], notes: {...notes}.toList());
@@ -167,6 +173,7 @@ class _View {
   final bool Function(LcNode n)? textNeedsString;
 
   final Set<LcComponentPlan> used = {};
+  final Set<String> parts = {};
   final Set<String> _slotsSeen = {};
 
   /// 状态与绑定（第 5 期）：只有用了绑定的页面给；别的是 null，下面每一处都走原来那条路。
@@ -271,6 +278,12 @@ class _View {
       return const _Jsx(['嵌套太深，这里面的内容没有导出'], _Kind.comment);
     }
     final a = _attrs(n);
+    // 各页共用的底部导航：引用公共部件（export_shared_parts.dart）。
+    final part = lcNavPartFor(pageRoot, n, attrs: a, plain: ' className="${lcNodeClass(n, prefix)}"');
+    if (part != null) {
+      parts.add(part);
+      return _Jsx(['<$part$a${lcIsPageBar(pageRoot, n) ? ' data-page=""' : ''} current={${lcNavPartCurrent(n)}} />']);
+    }
     // 第 3 版的新组件：元素树三种导出共用（export_web_v3.dart）。
     final el = bind == null ? lcWebElement(n, web) : lcBoundWebElement(n, web);
     if (el != null) {
@@ -369,7 +382,7 @@ class _View {
     }
   }
 
-  List<String> imports() => [for (final p in used) 'import ${p.name} from ${jsString('$importDir${p.name}.jsx')};'];
+  List<String> imports() => [for (final p in used) 'import ${p.name} from ${jsString('$importDir${p.name}.jsx')};', for (final p in parts) 'import $p from ${jsString('$importDir$p.jsx')};'];
 }
 
 String _objectLiteral(Iterable<(String, String)> entries) =>

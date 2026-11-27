@@ -23,6 +23,7 @@ import 'package:lopicode/lowcode/export_bind_plan.dart';
 import 'package:lopicode/lowcode/export_framework_common.dart';
 import 'package:lopicode/lowcode/export_live_doc.dart';
 import 'package:lopicode/lowcode/export_pages.dart';
+import 'package:lopicode/lowcode/export_shared_parts.dart';
 import 'package:lopicode/lowcode/export_theme_bp.dart';
 import 'package:lopicode/lowcode/export_v3_fields.dart';
 import 'package:lopicode/lowcode/export_vue_bind.dart';
@@ -132,18 +133,22 @@ LcFrameworkExport _exportSite(LcDocument doc) {
   final files = <LcExportFile>[lcFormatted('$kLcShellName.vue', lcVueShell(site, themeCss: lcThemeCssIfUsed(doc)), 'vue')];
   final components = <LcExportFile>[];
   final done = <String>{};
+  final nav = site.navPart;
   for (final p in site.pages) {
+    if (nav != null) lcNavPartOf[p.view.root] = nav;
     final plans = LcComponentPlans.build(p.view, pageName: p.name, notes: notes, fixedNames: site.componentNames);
     files.add(lcFormatted('${p.name}.vue', _page(p.view, plans, notes), 'vue'));
     for (final plan in plans.all) {
       if (done.add(plan.def.id)) components.add(lcFormatted('components/${plan.name}.vue', _component(plan, plans, notes, doc: p.view), 'vue'));
     }
   }
+  final navFile = nav != null && files.any((f) => f.content.contains('import $nav from')) ? lcVueNavPart(doc, site, text: vueText, attr: vueAttr) : null;
   final shared = LcBindPlan.of(doc, doc.root);
   return LcFrameworkExport(
     files: [
       ...files,
       ...components,
+      if (navFile != null) lcFormatted('components/$nav.vue', navFile, 'vue'),
       if (shared != null && shared.hasProject) LcExportFile(path: kLcStateFile, content: lcVueStateFile(shared)),
     ],
     notes: {...notes}.toList(),
@@ -187,6 +192,7 @@ class _Template {
 
   /// 模板里用到的组件（要在脚本里 import）。
   final Set<LcComponentPlan> used = {};
+  final Set<String> parts = {};
   final Set<String> _slotsSeen = {};
 
   String _attrs(LcNode n) {
@@ -251,6 +257,12 @@ class _Template {
       return;
     }
     final a = _attrs(n);
+    // 各页共用的底部导航：引用公共部件（export_shared_parts.dart）。
+    final part = lcNavPartFor(pageRoot, n, attrs: a, plain: ' class="${lcNodeClass(n, prefix)}"');
+    if (part != null) {
+      parts.add(part);
+      return out.writeln('$pad<$part$a${lcIsPageBar(pageRoot, n) ? ' data-page=""' : ''} :current="${lcNavPartCurrent(n)}" />');
+    }
     // 第 3 版的新组件：元素树三种导出共用（export_web_v3.dart）。
     final el = bind == null ? lcWebElement(n, web) : lcBoundWebElement(n, web);
     if (el != null) {
@@ -359,7 +371,7 @@ class _Template {
     }
   }
 
-  List<String> imports() => [for (final p in used) 'import ${p.name} from ${jsString('$importDir${p.name}.vue')};'];
+  List<String> imports() => [for (final p in used) 'import ${p.name} from ${jsString('$importDir${p.name}.vue')};', for (final p in parts) 'import $p from ${jsString('$importDir$p.vue')};'];
 }
 
 /// [globalCss]：不带 scoped 的一段（主题变量的 `:root` 写在 scoped 里不生效，所以单独一段）。
