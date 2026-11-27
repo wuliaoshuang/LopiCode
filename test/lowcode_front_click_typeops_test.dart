@@ -46,6 +46,7 @@ void main() {
     expect(fuErrors(tester), isEmpty, reason: '任意 → 列表：运行时才知道，搭的时候不报');
     await fuPick(tester, fuArg(tester, h1, [lcStep(0)], 'value', via: const ['x', 'to']), beTypeKey(LType.integer));
     expect(fuErrors(tester).join('\n'), contains('这里标的是'), reason: '文字标成整数放不进去');
+    expect(fuErrors(tester).join('\n'), allOf(contains('库的帽子「当控件被点击」'), contains('（改控件）'), isNot(contains('不认识的积木'))), reason: '帽子下面的问题画布上看得见，库的积木按名字说');
     await fuShot(tester, 'typeops-2-wrong');
     await fuPick(tester, fuArg(tester, h1, [lcStep(0)], 'value', via: const ['x', 'to']), beTypeKey(LType.any));
     await fuPick(tester, fuArg(tester, h1, [lcStep(0)], 'value', via: const ['to']), beTypeKey(LType.text));
