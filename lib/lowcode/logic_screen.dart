@@ -103,7 +103,7 @@ class _LogicScreenState extends State<LogicScreen> {
   BlockMenuExtra? _menuExtra(LcArgSpec arg) {
     if (arg.kind != LcArgKind.variable) return null;
     return (
-      label: '新建变量…',
+      label: '新建状态…',
       run: (context) async {
         final draft = await showLcVariableDialog(context, taken: {for (final v in _host.doc.logic.variables) v.name});
         if (draft == null || draft.delete) return null;
@@ -129,7 +129,7 @@ class _LogicScreenState extends State<LogicScreen> {
       extraActions: [
         IconButton(
           key: const ValueKey('lc-top-vars'),
-          tooltip: '变量',
+          tooltip: '状态',
           onPressed: _openVars,
           icon: Badge(isLabelVisible: vars > 0, label: Text('$vars'), backgroundColor: c.accentFill, textColor: c.onAccent, child: const Icon(Icons.data_object_rounded)),
         ),

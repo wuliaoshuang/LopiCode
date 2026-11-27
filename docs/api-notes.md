@@ -794,11 +794,15 @@ Flutter 导出在测试里真的跳了页（`test/lowcode_pages_export_test.dart
 - **`fetch()`（已核对，developer.mozilla.org/en-US/docs/Web/API/Window/fetch）**：只有请求本身失败（网址不对、网络错误）才拒绝；服务器回了 404、504 这类状态**不拒绝**，
   要自己看 `Response.ok` / `Response.status`；被 `AbortController.abort()` 中止时以 `AbortError` 拒绝。
   所以原生绑定“发请求”只在连不上、超时、被中止时出错，状态码原样交回；旧积木“请求网址”的“不是 200 多算失败”是在“页面”库里补的。
-- **`AbortController` / `signal`（未核对原文）**：把 `signal` 递给 `fetch`，调 `abort()` 中止。超时是自己用定时器加 `abort()` 做的。
-- **`history.pushState / replaceState / go`、`popstate`（未核对 MDN 原文，只见到第三方转述）**：`pushState`、`replaceState` 不会触发 `popstate`；
+- **`AbortController` / `signal`（已核对，2026-11-27，developer.mozilla.org/en-US/docs/Web/API/AbortSignal 的摘录）**：把 `signal` 放在 `fetch` 的选项里递进去，
+  调 `AbortController.abort()` 后那次 `fetch` 以名叫 `AbortError` 的 `DOMException` 拒绝；一个信号只能用一次，中止以后再拿它发请求会马上被拒绝
+  （所以“新的中止令牌”每次都新建一个）。超时是自己用定时器加 `abort()` 做的，没有用 `AbortSignal.timeout()`。
+- **`history.pushState / replaceState / go`、`popstate`（未核对 MDN 原文；2026-11-27 只见到几处第三方文章的转述，说法一致）**：`pushState`、`replaceState` 不会触发 `popstate`；
   前进后退（含 `history.go()`）才触发，事件的 `state` 是当时存的那份。存的东西要能被浏览器复制（普通数据），所以递进去前先转成普通 JSON 值。
-- **`localStorage` / `sessionStorage`（未核对原文）**：`setItem` 在放不下或浏览器不让存时抛错（小库接住，报“存不进去”）；有的环境读 `window.localStorage` 本身就抛错（报“这里用不了本地存储”）。
-- **`requestAnimationFrame` / `cancelAnimationFrame`（未核对原文）**：回调收到一个时间戳；没有这个函数的环境退回 16 毫秒的定时器。
+- **`localStorage` / `sessionStorage`（未核对 MDN 原文；2026-11-27 只见到第三方文章的转述：放不下时 `setItem` 抛 `QuotaExceededError`，有的环境一碰 `window.localStorage` 就抛 `SecurityError`）**：`setItem` 在放不下或浏览器不让存时抛错（小库接住，报“存不进去”）；有的环境读 `window.localStorage` 本身就抛错（报“这里用不了本地存储”）。
+- **`requestAnimationFrame` / `cancelAnimationFrame`（已核对，2026-11-27，developer.mozilla.org/en-US/docs/Web/API/Window/requestAnimationFrame 的摘录）**：
+  只叫回一次（要接着动得自己再排）；回调收到一个参数，是毫秒时间戳；交回一个编号，拿它调 `cancelAnimationFrame()` 取消，编号的值不要做任何假定
+  （小库不把浏览器给的编号交给积木，自己另发编号）。没有这个函数的环境退回 16 毫秒的定时器——这一条是自己定的，不是文档说的。
 - **`setTimeout` 负数当 0（未核对原文）**：小库自己先 `Math.max(0, ms)`，不靠浏览器。
 - **Vue 3 `ref` / `onMounted`、React `useRef` / `useEffect` / `useSyncExternalStore`（这一段没有新用法）**：新路没有新加任何框架接口，用的还是第 5 期导出里已有的那些（见上文各节）；
   React 里“开工只做一次”用的是 `useRef` 存一个值、第一次画的时候填上。**未核对**：React 开着 StrictMode 时组件函数会多跑一遍，开工那段是否因此做两遍——

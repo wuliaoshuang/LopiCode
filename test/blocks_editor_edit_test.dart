@@ -196,7 +196,7 @@ void main() {
 
     // 长按直接填的框也可以（把数字换成变量）。
     await longPress(tester, rig.slot(0, [lcStep(0)], (s) => s.look == BkSlotLook.field));
-    await tester.tap(find.byKey(const ValueKey('bk-replace-tab-变量')));
+    await tester.tap(find.byKey(const ValueKey('bk-replace-tab-状态')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('bk-replace-var')));
     await tester.pumpAndSettle();

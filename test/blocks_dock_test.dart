@@ -288,7 +288,7 @@ void main() {
     final rig = Rig(sampleDoc());
     await rig.pump(tester);
     await pull(tester, -1200);
-    await tester.tap(k('bk-palette-tab-变量'));
+    await tester.tap(k('bk-palette-tab-状态'));
     await tester.pumpAndSettle();
     await tester.tap(k('bk-palette-item-expr-var'));
     await tester.pump();
@@ -363,7 +363,7 @@ void main() {
     // 表达式提示：一定有提示条。面板收起时点不到积木，先回默认档拿到提示再收起。
     await tester.tap(k('bk-palette-grip'));
     await tester.pumpAndSettle();
-    await tester.tap(k('bk-palette-tab-变量'));
+    await tester.tap(k('bk-palette-tab-状态'));
     await tester.pumpAndSettle();
     await tester.tap(k('bk-palette-item-expr-var'));
     await tester.pump();

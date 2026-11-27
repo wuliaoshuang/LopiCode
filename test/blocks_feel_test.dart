@@ -256,7 +256,7 @@ void main() {
     expect(find.byKey(const ValueKey('bk-palette-star-toggle')), findsNothing);
     expect(rig.edits, 0);
 
-    g = await rig.liftFromPalette(tester, '变量', 'expr-var');
+    g = await rig.liftFromPalette(tester, '状态', 'expr-var');
     expect(painterOf(tester).hints, BkSnapKind.expr);
     await g.up();
     await tester.pumpAndSettle();
@@ -297,7 +297,7 @@ void main() {
     expect(find.byKey(const ValueKey('bk-toast')), findsNothing, reason: '谁也没丢，不用提示');
 
     // 积木盒里的新变量盖住“不是 ok”：旧值没处去 → 提示 + 撤销。
-    g = await rig.liftFromPalette(tester, '变量', 'expr-var');
+    g = await rig.liftFromPalette(tester, '状态', 'expr-var');
     await rig.glide(tester, g, rig.exprSnap(id, [lcStep(1), lcStep(0)], 'message'));
     await rig.drop(tester, g);
     expect(exprKind(rig.h(0).body[1].body[0].args['message']), 'var');
@@ -309,7 +309,7 @@ void main() {
     expect(find.byKey(const ValueKey('bk-toast')), findsNothing);
 
     // 盖住的是默认值（数字 0 这种没内容的）不啰嗦。
-    g = await rig.liftFromPalette(tester, '变量', 'expr-var');
+    g = await rig.liftFromPalette(tester, '状态', 'expr-var');
     await rig.glide(tester, g, rig.exprSnap(id, [lcStep(2)], 'times'));
     await rig.drop(tester, g);
     expect(exprKind(rig.h(0).body[2].args['times']), 'var');

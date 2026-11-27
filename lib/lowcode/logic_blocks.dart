@@ -163,21 +163,21 @@ class LcExprSpec {
 }
 
 /// 积木面板的分类，按这个顺序排。
-const List<String> lcBlockCategories = ['变量', '控件', '流程', '交互', '网络'];
+const List<String> lcBlockCategories = ['状态', '控件', '流程', '交互', '网络'];
 
 /// 选表达式时的分类。
-const List<String> lcExprCategories = ['直接填', '变量', '控件', '运算'];
+const List<String> lcExprCategories = ['直接填', '状态', '控件', '运算'];
 
 const List<String> _propLabels = ['文字', '输入内容', '是否显示', '背景色', '文字颜色', '图片地址', '提示文字'];
 const List<String> _binLabels = ['加', '减', '乘', '除以', '除以…的余数', '等于', '不等于', '小于', '小于等于', '大于', '大于等于', '并且', '或者'];
 
 /// 全部积木，按积木面板里的顺序。键是 op。
 const Map<String, LcBlockSpec> lcBlockSpecs = {
-  'setVar': LcBlockSpec('setVar', '设置变量', '变量', [LcArgSpec('name', '变量', LcArgKind.variable), LcArgSpec('value', '值', LcArgKind.expr)], hint: '把变量改成一个新的值'),
-  'changeVar': LcBlockSpec('changeVar', '变量加上', '变量', [
-    LcArgSpec('name', '变量', LcArgKind.variable, valueType: LcType.number),
+  'setVar': LcBlockSpec('setVar', '设置状态', '状态', [LcArgSpec('name', '状态', LcArgKind.variable), LcArgSpec('value', '值', LcArgKind.expr)], hint: '把状态改成一个新的值'),
+  'changeVar': LcBlockSpec('changeVar', '状态加上', '状态', [
+    LcArgSpec('name', '状态', LcArgKind.variable, valueType: LcType.number),
     LcArgSpec('by', '加上', LcArgKind.expr, valueType: LcType.number),
-  ], hint: '数字变量加上一个数（减就加负数）'),
+  ], hint: '数字状态加上一个数（减就加负数）'),
   'setProp': LcBlockSpec('setProp', '改控件', '控件', [
     LcArgSpec('node', '控件', LcArgKind.node),
     LcArgSpec('prop', '改什么', LcArgKind.choice, choices: kWritableProps, choiceLabels: _propLabels),
@@ -220,11 +220,11 @@ const Map<String, LcBlockSpec> lcBlockSpecs = {
     [
       LcArgSpec('url', '网址', LcArgKind.expr, valueType: LcType.text),
       LcArgSpec('method', '方式', LcArgKind.choice, choices: ['GET', 'POST'], choiceLabels: ['GET（取数据）', 'POST（提交）']),
-      LcArgSpec('into', '结果放进变量', LcArgKind.variable, optional: true),
+      LcArgSpec('into', '结果放进状态', LcArgKind.variable, optional: true),
     ],
     bodyLabel: '成功后',
     elseLabel: '失败后',
-    hint: '向一个网址要数据，拿到的文字放进变量',
+    hint: '向一个网址要数据，拿到的文字放进状态',
   ),
 };
 
@@ -233,7 +233,7 @@ const Map<String, LcExprSpec> lcExprSpecs = {
   'text': LcExprSpec('text', '文字', '直接填', [LcArgSpec('v', '文字', LcArgKind.literalText)]),
   'num': LcExprSpec('num', '数字', '直接填', [LcArgSpec('v', '数字', LcArgKind.literalNumber)]),
   'bool': LcExprSpec('bool', '是 / 否', '直接填', [LcArgSpec('v', '是否', LcArgKind.literalBool)]),
-  'var': LcExprSpec('var', '变量的值', '变量', [LcArgSpec('name', '变量', LcArgKind.variable)]),
+  'var': LcExprSpec('var', '状态的值', '状态', [LcArgSpec('name', '状态', LcArgKind.variable)]),
   'prop': LcExprSpec('prop', '控件的属性', '控件', [
     LcArgSpec('node', '控件', LcArgKind.node),
     LcArgSpec('prop', '读什么', LcArgKind.choice, choices: kReadableProps, choiceLabels: ['文字', '输入内容', '是否显示']),

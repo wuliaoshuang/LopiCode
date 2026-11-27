@@ -114,7 +114,7 @@ void main() {
       expect(picked.single.kind, BlockPaletteKind.hat);
       expect(picked.single.id, 'click');
 
-      for (final (id, shotName) in [('流程', 'control'), ('运算', 'operator'), ('网络', 'network'), ('控件', 'widget'), ('变量', 'variable')]) {
+      for (final (id, shotName) in [('流程', 'control'), ('运算', 'operator'), ('网络', 'network'), ('控件', 'widget'), ('状态', 'variable')]) {
         final tab = find.byKey(ValueKey('bk-palette-tab-$id'));
         // 分类一行放不下，要横着滑；滑到看得见再点。
         final tabs = find.descendant(of: find.byType(BlockPaletteView), matching: find.byType(Scrollable)).first;

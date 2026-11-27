@@ -190,7 +190,7 @@ void main() {
     await rig.pump(tester);
     final id = rig.h(0).id;
     // 变量 → “把 count 加上 [1]” 的那个槽。
-    var g = await rig.liftFromPalette(tester, '变量', 'expr-var');
+    var g = await rig.liftFromPalette(tester, '状态', 'expr-var');
     expect(rig.s.drag!.kind, BkDragKind.expr);
     await rig.glide(tester, g, rig.exprSnap(id, [lcStep(0)], 'by'));
     expect(rig.s.drag!.target, isNotNull);

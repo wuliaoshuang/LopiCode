@@ -199,7 +199,7 @@ void main() {
         expect(tester.getRect(find.byType(ActionPill)).right, 390 - Space.x4);
 
         expectButton(tester, find.byTooltip('返回'), '返回');
-        expectButton(tester, k('lc-top-vars'), '变量');
+        expectButton(tester, k('lc-top-vars'), '状态');
         expectButton(tester, k('bk-issues'), '问题');
         expectButton(tester, k('bk-code'), '看代码');
 
@@ -210,7 +210,7 @@ void main() {
         await tester.pumpAndSettle();
         await tester.tap(k('lc-top-vars'));
         await tester.pumpAndSettle();
-        expect(find.textContaining('变量'), findsWidgets);
+        expect(find.textContaining('状态'), findsWidgets);
         await tester.binding.handlePopRoute();
         await tester.pumpAndSettle();
         await tester.tap(find.byTooltip('返回'));
