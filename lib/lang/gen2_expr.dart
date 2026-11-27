@@ -97,6 +97,13 @@ mixin Gen2Expr on Gen2Base {
   /// 调宿主接口（[fn] 是小库里的名字，见 host_v2.dart）。
   String hostCall(String fn, List<String> args);
 
+  /// 这种目标认哪些宿主接口：后端五种语言认后端那张表（host_v2.dart）；浏览器目标自己覆盖成前端那张。
+  LRtSig? hostSig(String name) => kHostV2[name];
+  Iterable<String> get hostNames => kHostV2.keys;
+
+  /// 宿主接口在小库里叫什么（交给 [hostCall]）。
+  String hostCode(String name) => kHostV2Code[name]!;
+
   /// 调库里带的手写函数：[ident] 是它在代码里的名字（那个文件也叫这个名字，和主文件放在一起）。
   String nativeCall(String ident, List<String> args);
 
@@ -282,15 +289,15 @@ mixin Gen2Expr on Gen2Base {
           final code = nativeCall(user.user!.ident, argCodes(args, ps, null));
           return conv(user.user!.waits ? _wait(code, e) : code, w.resolve(user.type), t(e));
         }
-        final sig = kHostV2[name] ?? unsupported('宿主接口「$name」这里还没有（现在有：${kHostV2.keys.join('、')}）', e);
+        final sig = hostSig(name) ?? unsupported('宿主接口「$name」这里还没有（现在有：${hostNames.join('、')}）', e);
         final d = module.decls.whereType<LNativeDecl>().where((d) => d.name == name).firstOrNull ?? unsupported('宿主接口「$name」用之前要先声明', e);
         final same =
             d.params.length == sig.params.length &&
             w.resolve(d.type) == sig.ret &&
             [for (var i = 0; i < sig.params.length; i++) _sameHostParam(w.resolve(d.params[i].type), sig.params[i])].every((ok) => ok);
         if (!same || args.length != sig.params.length) unsupported('宿主接口「$name」的声明和宿主给的对不上：应该是 (${sig.params.map((p) => p.show()).join(', ')}) → ${sig.ret.show()}', e);
-        final host = hostCall(kHostV2Code[name]!, argCodes(args, sig.params, null));
-        return conv(kHostV2Waits.contains(name) ? _wait(host, e) : host, sig.ret, t(e));
+        final host = hostCall(hostCode(name), argCodes(args, sig.params, null));
+        return conv(langHostWaits(name) ? _wait(host, e) : host, sig.ret, t(e));
       case LAwait(x: final v):
         final ft = t(v);
         if (ft.kind != LKind.future || ft.nullable) unsupported('“等”后面要一个“稍后的结果”，这里是${ft.show()}', e);

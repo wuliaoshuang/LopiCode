@@ -131,7 +131,7 @@ class BeLibPreview {
 String beLibBlockLine(LibBlock b) => b.look.template.replaceAllMapped(RegExp(r'\{([^{}]+)\}'), (m) => '〔${m[1]}〕');
 
 /// 宿主能力用人话怎么说（预览页、库的面板都用）。
-String beHostWord(String host) => _hostWords[host] ?? kHostV2[host]?.label ?? host;
+String beHostWord(String host) => _hostWords[host] ?? langHostSig(host)?.label ?? host;
 
 const Map<String, String> _hostWords = {
   'http.serve': '开一个网络服务（听一个端口）',
