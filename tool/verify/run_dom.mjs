@@ -68,7 +68,7 @@ async function openBundle() {
     wrapper,
     kind === 'vue'
       ? `import { createApp } from "vue";\nimport Page from ${JSON.stringify(`./${entry}`)};\nconst app = createApp(Page);\napp.config.warnHandler = (m) => console.warn("Vue 警告：" + m);\napp.config.errorHandler = (e) => console.error("Vue 出错：" + ((e && e.message) || e));\napp.mount(document.getElementById("app"));\n`
-      : `import React from "react";\nimport { createRoot } from "react-dom/client";\nimport Page from ${JSON.stringify(`./${entry}`)};\ncreateRoot(document.getElementById("app")).render(React.createElement(Page));\n`,
+      : `import React from "react";\nimport { createRoot } from "react-dom/client";\nimport Page from ${JSON.stringify(`./${entry}`)};\ncreateRoot(document.getElementById("app")).render(${process.env.LOPI_REACT_STRICT === "1" ? "React.createElement(React.StrictMode, null, React.createElement(Page))" : "React.createElement(Page)"});\n`,
   );
   const plugins = [];
   if (kind === 'vue') {

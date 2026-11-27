@@ -137,7 +137,7 @@ class LibEntry {
     for (final a in bkLookArgs(custom))
       switch (block.kindOf(a.name)) {
         LibSlotKind.assign => LcArgSpec(a.name, a.name, LcArgKind.variable, optional: true),
-        _ => pickOf(a.name) == null ? a : LcArgSpec(a.name, a.name, LcArgKind.choice),
+        _ => pickOf(a.name) == null ? a : LcArgSpec(a.name, kLibPickHints[pickOf(a.name)] ?? a.name, LcArgKind.choice),
       },
   ];
 
@@ -285,11 +285,12 @@ BlockHat libHatLook(LibEntry e, Map<String, dynamic> args, {String? Function(Str
         ),
 ], colorKey: e.lib.id == kLcPageLibId ? BlockColorKey.event : BlockColorKey.custom);
 
-const Map<String, String> _pickHints = {'node': '选控件', 'state': '选状态', 'prop': '选属性', 'page': '选页面'};
+/// “从页面里挑一个”的槽还空着时写的字。
+const Map<String, String> kLibPickHints = {'node': '选控件', 'state': '选状态', 'prop': '选属性', 'page': '选页面'};
 
 String _picked(String pick, Object? v, String? Function(String pick, String value)? label) {
   final value = libHatShow(v, '');
-  if (value.isEmpty) return _pickHints[pick] ?? '选一个';
+  if (value.isEmpty) return kLibPickHints[pick] ?? '选一个';
   return label?.call(pick, value) ?? value;
 }
 

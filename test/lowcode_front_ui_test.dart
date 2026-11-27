@@ -7,6 +7,8 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lopicode/appearance/theme_builtin.dart';
 import 'package:lopicode/backend/backend_block_host.dart';
+import 'package:lopicode/backend/backend_lib_doc.dart';
+import 'package:lopicode/backend/backend_lib_store.dart';
 import 'package:lopicode/backend/backend_model.dart';
 import 'package:lopicode/backend/front_doc.dart';
 import 'package:lopicode/blocks/block_editor_view.dart';
@@ -26,8 +28,11 @@ import 'support/backend_core_samples.dart';
 import 'support/backend_func_blocks.dart';
 import 'support/backend_lang_blocks.dart';
 import 'support/harness.dart' hide call;
+import 'support/lib_files.dart';
 import 'support/lowcode_builder.dart';
+import 'support/page_core_samples.dart';
 import 'support/page_front_samples.dart';
+import 'support/page_front_samples2.dart';
 
 const String _shots = '../preview/front/a3';
 
@@ -116,6 +121,7 @@ void main() {
     }
     expect(find.byKey(const ValueKey('be-libs')), findsOneWidget);
     expect(find.byKey(const ValueKey('be-lib-new')), findsOneWidget);
+    await tester.pumpAndSettle();
     await lbShot(tester, _shots, 'front-libs');
     await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
@@ -192,6 +198,102 @@ void main() {
     late String js;
     await tester.runAsync(() async => js = File(session.guard.resolve('logic.js')).readAsStringSync());
     expect(js, contains('function lcProgram(lc, lcHost)'));
+  });
+
+  testWidgets('积木库：前端库和“都行”库能启用、积木进积木盒、用上以后存盘导出走新路；只给后端的库灰掉并写原因；“要等的事”能用', (tester) async {
+    final session = await _open(tester, LcDocument.starter('测试页'));
+    await tester.runAsync(() async {
+      expect(await beLibWriteFolder(session.guard, 'test/page-kit', kPageKitFiles), isNull);
+      expect(await beLibWriteFolder(session.guard, 'test/front-kit', kFrontKitFiles), isNull);
+      expect(await beLibWriteFolder(session.guard, 'demo/kit', libFilesFromDir('test/fixtures/libs/demo-kit')), isNull);
+    });
+    await _openLogic(tester);
+    final host = _host(tester);
+    Future<void> until(bool Function() done, String what) async {
+      for (var i = 0; i < 400 && !done(); i++) {
+        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 5)));
+        await tester.pump(const Duration(milliseconds: 20));
+      }
+      expect(done(), isTrue, reason: what);
+      await tester.pumpAndSettle();
+    }
+
+    Future<void> openLibs() async {
+      await tester.tap(find.byKey(const ValueKey('lf-more')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('be-menu-libs')));
+      await until(() => find.byKey(const ValueKey('be-lib-test/front-kit')).evaluate().isNotEmpty, '积木库面板里列出项目里的库');
+    }
+
+    Future<void> useLib(String id) async {
+      await tester.ensureVisible(find.byKey(ValueKey('be-lib-$id')));
+      await tester.tap(find.byKey(ValueKey('be-lib-$id')));
+      await until(() => find.byKey(const ValueKey('be-lib-use')).evaluate().isNotEmpty, '库的详情里有“在这份文档里用它”');
+    }
+
+    await openLibs();
+    for (final k in ['be-lib-test/page-kit', 'be-lib-demo/kit', 'be-lib-new', 'be-lib-import']) {
+      expect(find.byKey(ValueKey(k)), findsOneWidget, reason: k);
+    }
+    await lbShot(tester, _shots, 'front-libs-list');
+
+    // 只给后端的库：开关灰着，下面写着原因
+    await useLib('demo/kit');
+    final off = tester.widget<SwitchListTile>(find.byKey(const ValueKey('be-lib-use')));
+    expect(off.onChanged, isNull, reason: '只给后端的库在页面逻辑里不能启用');
+    expect(find.textContaining('只给后端用的库'), findsWidgets);
+    await lbShot(tester, _shots, 'front-libs-backend-only');
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+
+    // 前端库、“都行”库：打开开关
+    for (final id in ['test/front-kit', 'test/page-kit']) {
+      if (find.byKey(ValueKey('be-lib-$id')).evaluate().isEmpty) await openLibs();
+      await useLib(id);
+      expect(tester.widget<SwitchListTile>(find.byKey(const ValueKey('be-lib-use'))).onChanged, isNotNull);
+      await tester.tap(find.byKey(const ValueKey('be-lib-use')));
+      await until(() => host.doc.use(id) != null, '启用 $id');
+      if (id == 'test/front-kit') await lbShot(tester, _shots, 'front-libs-on');
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+    }
+    while (find.byKey(const ValueKey('be-libs')).evaluate().isNotEmpty) {
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+    }
+    await until(() => host.categories.any((c) => c.label == '喊话') && host.categories.any((c) => c.label == '页工具'), '两个库各自在积木盒里有一页（现在有：${[for (final c in host.categories) c.label]}）');
+
+    // 用上库的积木＋“要等的事”里的“等一会儿”
+    final button = host.pageCx!.nodes.firstWhere((o) => o.label.contains('提交'));
+    host.edit(() {
+      host.doc.hats.add(
+        BeLibHat(
+          id: 'h1',
+          op: pg('onClick'),
+          args: {'node': button.value},
+          body: [
+            LcBlock.tryParse(blk('sleep', {'ms': nm(5)}), 0)!,
+            LcBlock.tryParse(
+              blk('lib:test/front-kit#shout', {
+                'text': toText(kit('addTwice', {'x': nm(1), 'step': nm(2)})),
+              }),
+              0,
+            )!,
+          ],
+        ),
+      );
+    });
+    await settle(tester, rounds: 4);
+    expect([for (final i in host.issues.where((i) => i.isError)) i.message], isEmpty, reason: '用了两个库和“等一会儿”，不该有标红');
+    expect(host.codeText, contains('function lcProgram(lc, lcHost)'));
+    await lbShot(tester, _shots, 'front-libs-used');
+
+    final saved = await lbSaved(tester, session);
+    expect([for (final u in saved.logic.uses) u['id']], containsAll(['test/front-kit', 'test/page-kit']));
+    late String js;
+    await tester.runAsync(() async => js = File(session.guard.resolve('logic.js')).readAsStringSync());
+    expect(js, contains('function lcProgram(lc, lcHost)'));
+    expect(js, isNot(contains('这一页的逻辑没有导出')));
   });
 
   testWidgets('旧页面：还是旧的逻辑页，顶栏有“升级到新的页面逻辑…”；升级后换成新的逻辑页，处理一块块换好', (tester) async {

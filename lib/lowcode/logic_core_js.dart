@@ -17,6 +17,7 @@ import 'package:lopicode/lang/gen2_browser.dart';
 import 'package:lopicode/lang/gen_support.dart';
 import 'package:lopicode/lang/rt2_browser.dart';
 import 'package:lopicode/lowcode/export_framework_common.dart' show lcInitialLiteral;
+import 'package:lopicode/lowcode/front_check.dart';
 import 'package:lopicode/lowcode/logic_expr.dart' show kWritableProps;
 import 'package:lopicode/lowcode/logic_js.dart';
 import 'package:lopicode/lowcode/logic_libs.dart';
@@ -58,9 +59,10 @@ LcCoreJs? lcCoreJsFor(LcDocument doc, JsTarget target, List<String>? notes, {LcV
   if (front != null) {
     final out = lcFrontProgram(front);
     final touch = lcFrontTouch(front);
-    problems = [...out.problems];
+    // 对着页面才查得出的错（帽子挂的控件没了、“这一项”用在重复外面、去页面少带参数……）也拦。
+    problems = [...out.problems, for (final i in lcFrontPageIssues(doc, doc.page, front)) '${i.where}：${i.problem}'];
     skipped = out.skipped;
-    program = out.code;
+    program = problems.isEmpty ? out.code : null;
     // 库里的函数可以按名字读写状态，所以页面声明过的状态全都进读写表。
     states = {for (final v in doc.logic.variables) v.name, ...touch.states};
     props = touch.props;
@@ -205,8 +207,10 @@ String exportCoreLogicJs(LcDocument doc, {List<String>? notes}) {
   [...core.top, ...core.boot].forEach(out.writeln);
   out
     ..writeln('// 页面准备好以后：开工（处理都挂到控件上），再做“当页面放上以后”。')
+    ..writeln('let lcPage = null;')
     ..writeln('function lcStart() {')
-    ..writeln('  lcBoot().emitLife("mounted");')
+    ..writeln('  lcPage = lcBoot();')
+    ..writeln('  lcPage.emitLife("mounted");')
     ..writeln('}')
     ..writeln()
     ..writeln('if (document.readyState === "loading") {')

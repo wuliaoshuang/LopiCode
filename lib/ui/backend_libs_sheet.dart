@@ -18,6 +18,7 @@ import 'package:lopicode/backend/lib_service.dart';
 import 'package:lopicode/backend/lib_service_fork.dart';
 import 'package:lopicode/core/path_guard.dart';
 import 'package:lopicode/lang/lib_model.dart';
+import 'package:lopicode/lowcode/lib_page.dart' show kLcPageLibId;
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/backend_core_sheet.dart';
@@ -38,7 +39,7 @@ Future<void> showBeLibs(BuildContext context, ProjectSession session, BeBlockHos
 /// 后端积木页“更多”菜单里和库有关的几项：所有文档有“积木库…”；库文档多一项“这个库…”。
 List<PopupMenuEntry<String>> beLibMenuItems(BeBlockHost host, Widget Function(IconData icon, String text) row) => [
   if (host.doc.library != null) PopupMenuItem(key: const ValueKey('be-menu-lib-info'), value: 'lib-info', child: row(Icons.extension_outlined, '这个库（公开了 ${host.doc.library!.blocks.length} 块积木）…')),
-  if (host.strictRules) PopupMenuItem(key: const ValueKey('be-menu-libs'), value: 'libs', child: row(Icons.widgets_outlined, '积木库（用了 ${host.doc.uses.length} 个）…')),
+  if (host.strictRules) PopupMenuItem(key: const ValueKey('be-menu-libs'), value: 'libs', child: row(Icons.widgets_outlined, '积木库（用了 ${host.doc.uses.where((u) => u.id != kLcPageLibId).length} 个）…')),
 ];
 
 void beLibOnMenu(BuildContext context, ProjectSession session, BeBlockHost host, String value) {

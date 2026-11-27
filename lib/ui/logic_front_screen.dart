@@ -18,6 +18,7 @@ import 'package:lopicode/blocks/block_palette_model.dart';
 import 'package:lopicode/blocks/block_panels_sheet.dart';
 import 'package:lopicode/core/crash_log.dart';
 import 'package:lopicode/lowcode/edit_types.dart';
+import 'package:lopicode/lowcode/front_check.dart';
 import 'package:lopicode/lowcode/lib_page.dart';
 import 'package:lopicode/lowcode/logic_blocks.dart';
 import 'package:lopicode/lowcode/logic_text.dart';
@@ -29,7 +30,9 @@ import 'package:lopicode/ui/app_ref.dart';
 import 'package:lopicode/ui/backend_core_sheet.dart';
 import 'package:lopicode/ui/backend_libs_sheet.dart';
 import 'package:lopicode/ui/backend_modules_sheet.dart';
+import 'package:lopicode/ui/backend_screen.dart';
 import 'package:lopicode/ui/backend_types_sheet.dart';
+import 'package:lopicode/ui/shell.dart';
 import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -99,11 +102,10 @@ class _LogicFrontScreenState extends State<LogicFrontScreen> {
   final GlobalKey<BlockEditorViewState> _editor = GlobalKey();
   late LcDocument _page = widget.doc;
 
-  late final BeBlockHost _host = BeBlockHost(
-    doc: (lcFrontOf(widget.doc.logic) ?? lcFrontNew()).clone()..loaded = widget.doc.logic.loaded,
-    onEdited: _commit,
-    onNotice: (m) => mounted ? showSnack(context, m) : null,
-  )..pageCx = _PageCx(() => _page);
+  late final BeBlockHost _host =
+      BeBlockHost(doc: (lcFrontOf(widget.doc.logic) ?? lcFrontNew()).clone()..loaded = widget.doc.logic.loaded, onEdited: _commit, onNotice: (m) => mounted ? showSnack(context, m) : null)
+        ..pageCx = _PageCx(() => _page)
+        ..extraIssues = () => lcFrontPageIssues(_page, _page.page, _host.doc);
 
   String get _stored => jsonEncode(_page.logic.front);
 
@@ -186,9 +188,28 @@ class _LogicFrontScreenState extends State<LogicFrontScreen> {
         unawaited(showBeCoreTypes(context, _host));
       case 'modules':
         unawaited(showBeModules(context, _host));
+      case 'libs':
+        unawaited(_openLibs());
       default:
         beLibOnMenu(context, widget.session, _host, value);
     }
+  }
+
+  /// 积木库面板（和后端积木页同一个）。关掉以后重新读一遍库：启用的、新建的、导入的马上进积木盒。
+  Future<void> _openLibs() async {
+    await showBeLibs(context, widget.session, _host, open: (rel) => unawaited(_openLibCanvas(rel)));
+    if (mounted) await _attach();
+  }
+
+  /// “在画布上改”：进这个库自己的画布（积木页，盖在上面）；回来以后库可能改过了，重新读。
+  Future<void> _openLibCanvas(String rel) async {
+    final go = ShellScope.maybeOf(context)?.go;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => BackendScreen(session: widget.session, file: rel.replaceAll('\\', '/'), go: go ?? (_) {}),
+      ),
+    );
+    if (mounted) await _attach();
   }
 
   @override

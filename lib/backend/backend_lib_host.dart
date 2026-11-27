@@ -54,7 +54,7 @@ mixin BeLibHost on BlockHost, BeFuncHost {
   /// 下拉里选中的那个值在积木上显示成什么（控件的名字、页面的标题）；不归这边管返回 null。
   String? libOptionLabel(LcArgSpec arg, String value) {
     final cx = pageCx;
-    if (cx == null || arg.kind != LcArgKind.choice || arg.choices.isNotEmpty || arg.label != arg.name) return null;
+    if (cx == null || arg.kind != LcArgKind.choice || arg.choices.isNotEmpty || !kLibPickHints.containsValue(arg.label)) return null;
     return switch (arg.name) {
       'node' => value.isEmpty ? '选控件' : cx.label('node', value) ?? '（已经删掉的控件）',
       'page' => value.isEmpty ? '选页面' : cx.label('page', value) ?? '（已经删掉的页面）',

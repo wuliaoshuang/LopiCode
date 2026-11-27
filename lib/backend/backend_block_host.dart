@@ -394,10 +394,14 @@ class BeBlockHost extends BlockHost with BeFuncHost, BeCoreHost, BeTypeHost, BeL
 
   // —— 校验与代码 ——
 
+  /// 积木文档自己查不出、要外面帮着查的问题（页面逻辑里：对着页面才知道的那些）。
+  List<LcLogicIssue> Function()? extraIssues;
+
   late final BlockIssueCache _issueCache = BlockIssueCache(
     () => withTypeIssues([
       // 前端文档不挑后端语言（“选的语言还不能生成”这一条不查）。
       for (final i in validateBackend(_doc, languages: _doc.isFront ? null : [for (final t in backendTargets) t.id], table: funcTable)) blockIssueOf(i),
+      for (final i in extraIssues?.call() ?? const <LcLogicIssue>[]) blockIssueOf(i),
     ]),
     () => _revision,
     () => onChanged?.call(),

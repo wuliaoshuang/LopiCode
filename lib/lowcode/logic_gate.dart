@@ -5,11 +5,21 @@
 /// Agent 的页面工具都从这里问，文案也从这里拿，免得各说各的。
 library;
 
+import 'package:lopicode/backend/backend_validate.dart';
+import 'package:lopicode/backend/front_code.dart';
+import 'package:lopicode/backend/front_doc.dart';
+import 'package:lopicode/lowcode/front_check.dart';
 import 'package:lopicode/lowcode/logic_validate.dart';
 import 'package:lopicode/lowcode/model.dart';
 
 /// 逻辑里“错误”级的问题有几条。大于 0＝logic.js 不更新、框架导出被拦下。
-int lcLogicErrorCount(LcDocument doc) => logicErrors(doc).length;
+/// 新的页面逻辑（`logic.front`）另算：积木文档自己的错误、对着页面才查得出的错误；这两样都没有而程序还是出不来（类型对不上……）算 1 条。
+int lcLogicErrorCount(LcDocument doc) {
+  final front = lcFrontOf(doc.logic);
+  if (front == null) return logicErrors(doc).length;
+  final n = validateBackend(front).where((i) => i.isError).length + lcFrontPageIssues(doc, doc.page, front).length;
+  return n > 0 ? n : (lcFrontProgram(front).problems.isEmpty ? 0 : 1);
+}
 
 /// 每一页逻辑里“错误”级的问题各有几条（只列有错误的页：页名 → 条数）。框架导出是整个项目一起导的，任何一页有错误都拦。
 Map<String, int> lcLogicErrorsByPage(LcDocument doc) {
