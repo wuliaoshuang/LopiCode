@@ -175,7 +175,8 @@ class LcExpander {
       if (live != null) {
         for (final e in lcEmitsOf(src).entries) {
           final body = live.handlers[e.value.event];
-          if (body != null && body.isNotEmpty) synth.add(LcSynthHandler(id, e.key, body));
+          // 摊开以后没有“事件对象”了：处理里读“事件带来的值”的地方，换成那一项数据的式子。
+          if (body != null && body.isNotEmpty) synth.add(LcSynthHandler(id, e.key, lcWithEventData(body, lcFirstEmitArg(def, e.value))));
         }
       }
       // 节点上别的东西（在哪个插槽里、状态样式…）照带；名字、锁定、编辑器里隐藏是定义自己的事，不带到页面上。

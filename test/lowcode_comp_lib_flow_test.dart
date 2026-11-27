@@ -57,7 +57,8 @@ void main() {
         expect(r.warnings, isEmpty, reason: r.raw);
         expect(r.ok, isTrue);
         expect(r.html, contains(word));
-        final list = steps();
+        // 第四轮 B4：Vue / React 里组件是单独的文件，找元素的写法跟着换（步骤不变）。
+        final list = kind == 'html' ? steps() : compFileSteps(steps(), compDefsOf(flow.doc));
         final run = await runInDom(kind, files, _entry[kind]!, list);
         expect(run.errors, isEmpty);
         expect(run.warnings, isEmpty);

@@ -126,8 +126,16 @@ bool lcSetQuick(LcDocument doc, String nodeId, LcQuickAction a, String? value) {
 /// “让一个数字状态加 1”：只给组件事件用（页面上的点击要这个就进积木）。填的是状态名。
 const LcQuickAction kLcBumpQuick = LcQuickAction('changeVar', 'name', '让一个数字加 1', '选一个数字状态');
 
+/// “把一个状态设成事件带来的值”：只给**带数据**的组件事件用（第四轮 B4）。填的是状态名；
+/// 值是事件带的第一项数据（存成现成的“输入的内容”那个值积木，约定见 export_comp_files.dart 开头）。
+const LcQuickAction kLcTakeQuick = LcQuickAction('setVar', 'name', '把一个状态设成事件带来的值', '选一个状态');
+
 /// 这块积木在这个快捷动作里填的是什么；不是这个快捷动作的样子返回 null。
 String? lcQuickBlockValue(LcBlock b, LcQuickAction a) {
+  if (identical(a, kLcTakeQuick)) {
+    final v = b.args['value'];
+    return b.op == a.op && b.body.isEmpty && b.args['name'] is String && v is Map && v['e'] == 'event' ? b.args['name'] as String : null;
+  }
   if (!identical(a, kLcBumpQuick)) return _valueOf(b, a);
   final by = b.args['by'];
   return b.op == a.op && b.args['name'] is String && by is Map && by['e'] == 'num' && by['v'] == 1 ? b.args['name'] as String : null;
@@ -135,6 +143,7 @@ String? lcQuickBlockValue(LcBlock b, LcQuickAction a) {
 
 /// 造这个快捷动作的那一块积木。
 LcBlock lcQuickBlock(LcQuickAction a, String v) => switch (a) {
+  _ when identical(a, kLcTakeQuick) => LcBlock(op: a.op, args: {a.arg: v, 'value': exEvent()}),
   _ when identical(a, kLcBumpQuick) => LcBlock(op: a.op, args: {a.arg: v, 'by': exNum(1)}),
   _ when a.picksPage => LcBlock(op: a.op, args: {a.arg: v}),
   _ when a.picksDialog => LcBlock(op: a.op, args: {a.arg: v, 'prop': 'visible', 'value': exBool(a.dialogShown!)}),

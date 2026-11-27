@@ -177,3 +177,40 @@ class LcLiveScope {
   /// 定义里套着的另一个实例：它那个组件的事件在这里接到谁身上（往外转发的，接到外面那一层给的积木上）。
   Map<String, List<LcBlock>> forwarded(LcNode inner) => {for (final e in lcEmitsOf(inner).entries) e.key: ?handlers[e.value.event]};
 }
+
+/// 往外发时带的第一项数据（按事件声明的先后；没声明的照存的先后）的式子；没带数据返回 null。
+Map<String, dynamic>? lcFirstEmitArg(LcComponentDef def, LcEmit emit) {
+  for (final p in lcCompEvent(def, emit.event)?.params ?? const <LcCompEventParam>[]) {
+    if (emit.args.containsKey(p.name)) return lcSrcExprOf(emit.args[p.name]);
+  }
+  return emit.args.isEmpty ? null : lcSrcExprOf(emit.args.values.first);
+}
+
+/// 把一串积木里读“事件带来的值”（`{e: event}`）的地方换成 [data]（没有就换成空字）。交回的是拷出来的一份。
+List<LcBlock> lcWithEventData(List<LcBlock> body, Map<String, dynamic>? data) {
+  Object? swap(Object? v, int depth) {
+    if (depth > kMaxExprDepth * 2 + 8) return v;
+    if (v is Map) {
+      if (v['e'] == 'event') return data == null ? exText('') : copyExpr(data);
+      return <String, dynamic>{for (final e in v.entries) '${e.key}': swap(e.value, depth + 1)};
+    }
+    return v is List ? [for (final x in v) swap(x, depth + 1)] : v;
+  }
+
+  LcBlock one(LcBlock b) {
+    final c = b.clone();
+    for (final k in c.args.keys.toList()) {
+      c.args[k] = swap(c.args[k], 0);
+    }
+    final inner = lcWithEventData(c.body, data), other = lcWithEventData(c.orElse, data);
+    c.body
+      ..clear()
+      ..addAll(inner);
+    c.orElse
+      ..clear()
+      ..addAll(other);
+    return c;
+  }
+
+  return [for (final b in body) one(b)];
+}

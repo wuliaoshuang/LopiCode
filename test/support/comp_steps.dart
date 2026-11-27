@@ -1,4 +1,6 @@
-/// 第四轮 B2 三种形状的组件（support/comp_samples.dart）在浏览器里要走的步骤：tool/verify/run_dom.mjs 照着做。
+// 第四轮 B2 三种形状的组件（support/comp_samples.dart）在浏览器里要走的步骤：tool/verify/run_dom.mjs 照着做。
+import 'package:lopicode/lowcode/model.dart';
+
 typedef CompSteps = List<Map<String, Object?>>;
 
 class _S {
@@ -71,4 +73,27 @@ CompSteps tagBarSteps() {
   s.text('.n-curText', '现在选的：');
   s.check('hasClass', '.n-tags__chip', false, name: 'on', at: 1);
   return s.s;
+}
+
+/// 第四轮 B4 起，Vue 3 / React 的导出里用了新东西的组件是单独的组件文件，不再摊开进页面：组件里面的控件不再叫
+/// `<实例>__<控件>`，而是“实例最外层元素里面的 `<定义>-<控件>`”。步骤（点什么、该是什么）一条不变，只换找元素的写法。
+/// [defOf]：实例 id → 它用的定义 id。
+CompSteps compFileSteps(CompSteps steps, Map<String, String> defOf) => [
+  for (final s in steps)
+    {...s, 'sel': (s['sel']! as String).replaceAllMapped(RegExp(r'\.n-([A-Za-z0-9]+)__([A-Za-z0-9]+)'), (m) => defOf[m[1]] == null ? m[0]! : '.n-${m[1]} .n-${defOf[m[1]]}-${m[2]}')},
+];
+
+/// 样例页（support/comp_samples.dart 的 compUserPageJson）里各实例用的定义。
+const Map<String, String> kCompUserDefs = {'p1': 'c1', 'p2': 'c1', 'login': 'c2', 'tags': 'c3'};
+
+/// 当前这一页上各实例用的定义（定义的 id 导入库以后会变，从文档里现查）。
+Map<String, String> compDefsOf(LcDocument doc) {
+  final out = <String, String>{};
+  void walk(LcNode n) {
+    if (n.type == 'component' && n.props['ref'] is String) out[n.id] = n.props['ref'] as String;
+    n.children.forEach(walk);
+  }
+
+  walk(doc.root);
+  return out;
 }

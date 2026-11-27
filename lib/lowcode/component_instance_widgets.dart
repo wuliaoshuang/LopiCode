@@ -4,7 +4,7 @@
 // - ②“属性跟着状态变”（组件有属性才有）：一个属性一行，点了出单子选页面里的一个状态；选了以后上面填的固定值不再起作用，
 //   所以这一行下面有一句灰字说明。只能选状态本身（要拼、要比，先在“状态”页做一个派生值再选它）。
 // - ③“组件的事件”（组件有事件才有）：一个事件一行，右边写现在接的动作；点了出单子选做哪件事
-//   （去页面 / 打开网址 / 弹出提示 / 打开弹窗 / 关闭弹窗 / 让一个数字加 1），再填 / 选它要的那一样东西；最下面一行“不要这个动作”。
+//   （去页面 / 打开网址 / 弹出提示 / 打开弹窗 / 关闭弹窗 / 让一个数字加 1；带数据的事件多一样“把一个状态设成事件带来的值”），再填 / 选它要的那一样东西；最下面一行“不要这个动作”。
 // - 没有主操作。取用的 tokens：Space.x2/x3/x4、accent、textMuted、textFaint、danger、border。
 import 'package:lopicode/lowcode/bind_model.dart';
 import 'package:lopicode/lowcode/component_extras.dart';
@@ -18,7 +18,7 @@ import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// 组件事件上能挂的快捷动作。
-const List<LcQuickAction> kLcEventQuickActions = [...kLcQuickActions, kLcBumpQuick];
+const List<LcQuickAction> kLcEventQuickActions = [...kLcQuickActions, kLcBumpQuick, kLcTakeQuick];
 
 String _actionName(LcQuickAction a) => a.label.startsWith('点击时') ? a.label.substring(3) : a.label;
 
@@ -159,7 +159,11 @@ class ComponentInstanceExtras extends StatelessWidget {
       final which = await lcPickFromList(
         context,
         title: '${e.label}：做什么',
-        choices: [for (final a in kLcEventQuickActions) (a.id, _actionName(a))],
+        // “把一个状态设成事件带来的值”只有带数据的事件才有。
+        choices: [
+          for (final a in kLcEventQuickActions)
+            if (!identical(a, kLcTakeQuick) || e.params.isNotEmpty) (a.id, _actionName(a)),
+        ],
         current: now?.$1.id,
         none: on[e.name] == null ? null : '不要这个动作',
         keyPrefix: 'comp-event-act',
@@ -167,10 +171,12 @@ class ComponentInstanceExtras extends StatelessWidget {
       if (which == null || !context.mounted) return;
       if (which.isEmpty) return apply((n) => lcSetOn(n, e.name, null));
       final a = kLcEventQuickActions.firstWhere((x) => x.id == which);
-      final choices = identical(a, kLcBumpQuick)
+      final take = identical(a, kLcTakeQuick);
+      final picksState = take || identical(a, kLcBumpQuick);
+      final choices = picksState
           ? [
               for (final s in lcStatesInScope(doc))
-                if (s.variable.type == 'number' && !s.variable.isDerived) (s.name, s.name),
+                if (!s.variable.isDerived && (take ? LcVariable.types.contains(s.variable.type) : s.variable.type == 'number')) (s.name, s.name),
             ]
           : a.picksPage
           ? [
@@ -180,12 +186,18 @@ class ComponentInstanceExtras extends StatelessWidget {
           : [for (final d in a.picksDialog ? lcDialogsOf(doc) : const <LcNode>[]) (d.id, lcDialogName(d))];
       final old = now != null && identical(now.$1, a) ? now.$2 : null;
       final String? v;
-      if (identical(a, kLcBumpQuick) || a.picksId) {
+      if (picksState || a.picksId) {
         if (choices.isEmpty) {
           await showDialog<void>(
             context: context,
             builder: (context) => AlertDialog(
-              content: Text(identical(a, kLcBumpQuick) ? '页面里还没有“数字”类型的状态。先到“状态”页加一个。' : (a.picksPage ? '项目里还没有别的页面。先加一个页面。' : '页面里还没有弹窗。先加一个弹窗。')),
+              content: Text(
+                take
+                    ? '页面里还没有能放这个值的状态（文字、数字、是 / 否）。先到“状态”页加一个。'
+                    : identical(a, kLcBumpQuick)
+                    ? '页面里还没有“数字”类型的状态。先到“状态”页加一个。'
+                    : (a.picksPage ? '项目里还没有别的页面。先加一个页面。' : '页面里还没有弹窗。先加一个弹窗。'),
+              ),
               actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('知道了'))],
             ),
           );

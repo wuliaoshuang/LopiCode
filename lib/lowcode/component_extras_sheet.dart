@@ -1,12 +1,16 @@
 // 设计约束（低代码 · 编辑组件 ›“事件”和“变体”两张底部面板 · 390×844）
 // - 两张面板一个排法：标题 + 一句灰字说明 → 一行一条（名字在上，下面一行弱化的说明）→ 最后是唯一的主操作“添加…”。
 // - 事件：一行一个事件，副标题写“由谁发出”（“按钮 被点击时”/“还没有控件发出它”）。点一行出一张单子：
-//   让现在选中的控件“被点击时 / 输入时”发出它、不再发出、改叫法、删除（删除要确认）。
+//   让现在选中的控件“被点击时 / 输入时”发出它、发出时带上一项数据（第四轮 B4；有控件发出它才有这一行，
+//   点开是一张单选的单子：组件的属性、组件的状态、重复带出的那一项；已经带了的多一行“不带数据”）、
+//   不再发出、改叫法、删除（删除要确认）。副标题末尾写“带：名字”。
 //   进面板前没选中控件时，单子里“让选中的控件发出”那一行换成一句灰字提示。
 // - 变体：一行一个变体，“组 · 名字”在上，下面写“改了 N 个控件的样子”。点一行＝去画布上改它的样子（面板关掉，
 //   顶栏写着正在改哪个变体）；改名 / 删除收进行尾的“⋮”。
 // - 每次操作一条撤销记录。取用的 tokens：Space.x1/x2/x4/x6、textMuted、danger。
+import 'package:lopicode/lowcode/bind_model.dart';
 import 'package:lopicode/lowcode/component_extras.dart';
+import 'package:lopicode/lowcode/component_instance_widgets.dart';
 import 'package:lopicode/lowcode/component_model.dart';
 import 'package:lopicode/lowcode/component_values_widgets.dart';
 import 'package:lopicode/lowcode/edit_types.dart';
@@ -103,6 +107,34 @@ class _EventsSheetState extends State<_EventsSheet> {
     return out;
   }
 
+  /// 这个事件发出时能带上什么：(名字, 类型, 给人看的说法)。属性、组件自己的状态（文字 / 数字 / 是否），
+  /// 再加上发出它的控件都够得着的“重复带出的那一项 / 第几个”。面板上一个事件只配一项（模型里最多 [kLcMaxEventParams] 项）。
+  List<(String, String, String)> _dataSources(LcComponentDef def, String event) {
+    const simple = {'text': '文字', 'number': '数字', 'bool': '是 / 否'};
+    final out = <(String, String, String)>[
+      for (final p in def.props)
+        if (simple[p.type == 'color' ? 'text' : p.type] != null) (p.name, p.type == 'color' ? 'text' : p.type, '属性'),
+      for (final v in lcCompStates(def))
+        if (simple[v.type] != null && def.prop(v.name) == null) (v.name, v.type, '组件的状态'),
+    ];
+    // “重复”带出的名字：每个发出它的控件各自够得着哪些，取大家都有的。
+    Set<(String, String)>? common;
+    void walk(LcNode n, Set<(String, String)> scope) {
+      final r = lcRepeatOf(n);
+      final here = r == null ? scope : {...scope, (r.item, 'text'), (r.index, 'number')};
+      if (lcEmitsOf(n).values.any((x) => x.event == event)) common = common == null ? here : common!.intersection(here);
+      for (final c in n.children) {
+        walk(c, here);
+      }
+    }
+
+    walk(def.root, const {});
+    for (final (name, type) in common ?? const <(String, String)>{}) {
+      if (out.every((x) => x.$1 != name)) out.add((name, type, type == 'number' ? '重复里的第几个' : '重复带出的那一项'));
+    }
+    return out;
+  }
+
   Future<void> _add() async {
     final def = _def;
     if (def == null) return;
@@ -141,6 +173,12 @@ class _EventsSheetState extends State<_EventsSheet> {
               padding: const EdgeInsets.fromLTRB(Space.x6, 0, Space.x6, Space.x2),
               child: Text('要让某个控件发出它：先关掉这张面板，在画布上选中那个控件（比如按钮），再回来点这一行。', style: t.bodySmall),
             ),
+          if (has)
+            SimpleDialogOption(
+              key: const Key('comp-event-data'),
+              onPressed: () => Navigator.pop(context, 'data'),
+              child: Text(e.params.isEmpty ? '发出时带上一项数据' : '换一项带出去的数据（现在带：${e.params.first.name}）'),
+            ),
           if (has) SimpleDialogOption(key: const Key('comp-event-unemit'), onPressed: () => Navigator.pop(context, 'unemit'), child: const Text('不再让任何控件发出它')),
           SimpleDialogOption(key: const Key('comp-event-rename'), onPressed: () => Navigator.pop(context, 'rename'), child: const Text('改叫法')),
           SimpleDialogOption(
@@ -162,7 +200,41 @@ class _EventsSheetState extends State<_EventsSheet> {
       final on = pick.substring(5), id = sel!.id;
       _run((def) {
         final n = _find(def.root, id);
-        if (n != null) lcSetEmit(n, on, name);
+        if (n == null) return;
+        lcSetEmit(n, on, name);
+        // 这个事件已经定了要带数据：新接上的控件照样带（来源它够得着才带）。
+        final first = lcCompEvent(def, name)?.params.firstOrNull;
+        if (first != null && _dataSources(def, name).any((x) => x.$1 == first.name)) lcSetEmitArg(n, on, first.name, lcSrcVar(first.name));
+      });
+    } else if (pick == 'data') {
+      final sources = _dataSources(def, name);
+      if (sources.isEmpty && e.params.isEmpty) {
+        return tellComponentProblem(context, '这个组件里还没有能带出去的东西。先给组件加一个属性或者状态（文字、数字、是 / 否）；发出它的控件在“重复”里的话，重复带出的那一项也能带。');
+      }
+      final which = await lcPickFromList(
+        context,
+        title: '「${e.label}」发出时带上',
+        choices: [for (final (n, _, what) in sources) (n, '$n · $what')],
+        current: e.params.firstOrNull?.name,
+        none: e.params.isEmpty ? null : '不带数据',
+        keyPrefix: 'comp-event-data',
+      );
+      if (which == null || !mounted) return;
+      _run((def) {
+        final type = which.isEmpty ? null : sources.firstWhere((x) => x.$1 == which).$2;
+        _walk(def.root, (n) {
+          for (final x in lcEmitsOf(n).entries.toList()) {
+            if (x.value.event != name) continue;
+            for (final old in x.value.args.keys.toList()) {
+              lcSetEmitArg(n, x.key, old, null);
+            }
+            if (type != null) lcSetEmitArg(n, x.key, which, lcSrcVar(which));
+          }
+        });
+        lcSetCompEvents(def, [
+          for (final x in lcCompEvents(def))
+            if (x.name == name) LcCompEvent(name: x.name, label: x.label, params: [if (type != null) LcCompEventParam(which, type)]) else x,
+        ]);
       });
     } else if (pick == 'unemit') {
       _run(clear);
@@ -204,7 +276,8 @@ class _EventsSheetState extends State<_EventsSheet> {
             subtitle: Text(
               () {
                 final from = _emitters(def!, e.name);
-                return from.isEmpty ? '${e.name} · 还没有控件发出它' : '${e.name} · ${[for (final (n, on) in from) '${n.spec.label}${_onLabels[on] ?? on}'].join('、')}发出';
+                final data = e.params.isEmpty ? '' : ' · 带：${e.params.first.name}';
+                return from.isEmpty ? '${e.name} · 还没有控件发出它' : '${e.name} · ${[for (final (n, on) in from) '${n.spec.label}${_onLabels[on] ?? on}'].join('、')}发出$data';
               }(),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,

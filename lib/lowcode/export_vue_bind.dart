@@ -70,6 +70,22 @@ class LcVueBind {
     return s != null && s.project && !s.variable.isDerived ? _member('lcShared', name) : null;
   }
 
+  /// 现在套着的“重复”带出来的名字（给要带着这一项去调用的函数当参数）。
+  String get scopeParams => _scope.join(', ');
+
+  /// 一个式子直接翻成代码（按现在的作用域）。
+  String code(Object? e) => lcBindJs(e, _resolve).code;
+
+  /// 组件实例的属性绑了式子：登记成小函数，返回模板里的调用。[type]＝属性的类型。
+  String propCall(LcNode n, String label, Object? e, String type) => _call(n, label, e, text: type == 'text' || type == 'color', flag: type == 'bool', list: type == 'list');
+
+  /// 这个名字是一个能直接写的状态（不是派生值、不是“重复”带出来的）：返回模板里的写法；不是返回 null。
+  String? writableRef(String name) {
+    final s = plan.state(name);
+    if (s == null || s.variable.isDerived || _localOf.containsKey(name)) return null;
+    return (s.project ? _member('lcShared', name) : varNames[name])?.replaceAll('"', "'");
+  }
+
   /// 派生值的算法（写成 computed 的函数体）。
   String derivedCode(Object? expr) => lcBindJs(expr, _resolve).code;
 

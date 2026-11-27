@@ -37,7 +37,8 @@ void main() {
       }, skip: skipWithoutDom);
 
       test('${_label[kind]}·${shape.key}：真跑，一步不差', () async {
-        final list = steps();
+        // Vue / React：组件是单独的文件，找元素的写法跟着换（步骤不变）。
+        final list = kind == 'html' ? steps() : compFileSteps(steps(), kCompUserDefs);
         final r = await runInDom(kind, exportFilesOf(compUserDoc([def()]), kind), _entry[kind]!, list);
         expect(r.errors, isEmpty);
         expect(r.warnings, isEmpty);
@@ -51,7 +52,8 @@ void main() {
       final c = await compileExport('compile_$kind.mjs', files, _entry[kind]!);
       expect(c.errors, isEmpty, reason: c.raw);
       expect(c.warnings, isEmpty, reason: c.raw);
-      final list = [...productCardSteps(), ...loginFormSteps(), ...tagBarSteps()];
+      final all = [...productCardSteps(), ...loginFormSteps(), ...tagBarSteps()];
+      final list = kind == 'html' ? all : compFileSteps(all, kCompUserDefs);
       final r = await runInDom(kind, files, _entry[kind]!, list);
       expect(r.errors, isEmpty);
       expect(r.done, list.length);
