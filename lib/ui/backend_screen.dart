@@ -34,6 +34,7 @@ import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/app_backdrop.dart';
 import 'package:lopicode/ui/app_ref.dart';
 import 'package:lopicode/ui/backend_core_sheet.dart';
+import 'package:lopicode/ui/backend_libs_sheet.dart';
 import 'package:lopicode/ui/backend_modules_sheet.dart';
 import 'package:lopicode/ui/backend_panels_sheet.dart';
 import 'package:lopicode/ui/backend_run_sheet.dart';
@@ -159,6 +160,7 @@ class BackendScreenState extends ConsumerState<BackendScreen> {
     final kind = json['kind'];
     if (kind != null && kind != 'backend') return (doc: null, text: text, note: '这个文件不是后端积木文件（kind 不是 backend）');
     final parsed = BeDocument.fromJson(json);
+    await beLibAttach(_s.guard, parsed.doc); // 项目里的库交给文档：积木盒、校验才认识库积木
     return (doc: parsed.doc, text: text, note: parsed.note);
   }
 
@@ -214,7 +216,7 @@ class BackendScreenState extends ConsumerState<BackendScreen> {
         _problem = '项目里没有 $_rel。';
       });
     }
-    if (read.text == _diskText) return;
+    if (read.text == _diskText) return beLibRefresh(_s.guard, _host); // 自己没变，可是项目里的库可能变了
     if (_dirty) {
       // 这里有没存的改动：以这里为准（马上会存下去盖掉那边的），说一声。
       _diskText = read.text;
@@ -293,6 +295,7 @@ class BackendScreenState extends ConsumerState<BackendScreen> {
     }
     _strictSaid = false;
     if (!result.ok) return _say('代码没有重新生成：${result.error}');
+    if (result.libraryNote case final note?) _say(note);
     final conflicts = result.conflicts.length;
     if (conflicts > 0 && conflicts != _conflictsShown) {
       ScaffoldMessenger.of(context)
@@ -382,6 +385,7 @@ class BackendScreenState extends ConsumerState<BackendScreen> {
     if (await _gate('启动') || !mounted) return;
     final host = _host!;
     // 严格规矩的文档现在没有生成代码：启动起来的会是升级前的旧代码，不让启动，说清楚。
+    if (host.doc.library != null) return _say('这份文档是一个库，不能直接启动。在别的后端文档里用上它，再启动那一份。');
     if (beStrictGenPending(host.doc)) return _say(kBeStrictGenPending.replaceFirst('所以代码没有更新（上一次生成的文件原样留着）', '所以现在不能启动'));
     final action = await showModalBottomSheet<String>(
       context: context,
@@ -417,6 +421,8 @@ class BackendScreenState extends ConsumerState<BackendScreen> {
         unawaited(showBeCoreTypes(context, _host!));
       case 'modules':
         unawaited(showBeModules(context, _host!));
+      default:
+        beLibOnMenu(context, _s, _host!, value);
     }
   }
 
@@ -460,6 +466,7 @@ class BackendScreenState extends ConsumerState<BackendScreen> {
     final regen = _regen;
     if (errors > 0) return blockErrorsBrief(errors);
     if (host.canvasType case final inside?) return '在类「${inside.name}」里面';
+    if (host.doc.library case final lib?) return regen != null && !regen.ok ? '库文件没有更新' : '库 · 公开了 ${lib.blocks.length} 块积木';
     if (regen != null && !regen.ok) return '代码没有重新生成';
     if (regen != null && regen.conflicts.isNotEmpty) return '${regen.conflicts.length} 个文件没覆盖';
     final target = host.target;
@@ -536,6 +543,7 @@ class BackendScreenState extends ConsumerState<BackendScreen> {
             // 类型与类、模块：只有严格规矩的文档才有（老规矩的文档这个菜单一项不多）。
             if (host.strictRules) PopupMenuItem(key: const ValueKey('be-menu-types'), value: 'types', child: _menuRow(Icons.category_outlined, '类型与类（${host.core.types.length}）…')),
             if (host.strictRules) PopupMenuItem(key: const ValueKey('be-menu-modules'), value: 'modules', child: _menuRow(Icons.view_module_outlined, '模块（${host.core.modules.length}）…')),
+            ...beLibMenuItems(host, _menuRow),
             if (host.strictRules)
               PopupMenuItem(key: const ValueKey('be-menu-strict-on'), enabled: false, child: _menuRow(Icons.verified_outlined, '严格规矩：已开启'))
             else if (beStrictUpgradeEntry)
