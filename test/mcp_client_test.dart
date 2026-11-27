@@ -10,6 +10,7 @@ import 'package:lopicode/agent/mcp/mcp_models.dart';
 import 'package:lopicode/agent/mcp/mcp_sse.dart';
 
 import 'support/fake_mcp_server.dart';
+import 'support/wait.dart';
 
 const _token = 'tok-SECRET-9f8e7d6c5b4a';
 const _fast = McpTimeouts(
@@ -252,7 +253,7 @@ void main() {
       final r = await c.callTool('echo', {'text': '流'});
       expect(r.text, contains('回声：流'));
       // 等回给服务器的那两条发完
-      await Future<void>.delayed(const Duration(milliseconds: 200));
+      await waitUntilReal(() => server.seen.where((r) => r.body != null && r.rpcMethod == null).length >= 2, '回给服务器的两条回音发完');
       final answers = {for (final r in server.seen.where((r) => r.body != null && r.rpcMethod == null)) r.body!['id']: r.body!};
       expect((answers['srv-1']!['error'] as Map)['code'], -32601);
       expect(answers['srv-2']!['result'], <String, dynamic>{});
@@ -313,7 +314,7 @@ void main() {
       expect(r.text, contains('回声：老'));
       expect(server.seen.where((r) => r.path == '/messages').map((r) => r.rpcMethod).whereType<String>(), ['initialize', 'notifications/initialized', 'tools/list', 'tools/call']);
       expect(server.seen.where((r) => r.httpMethod == 'GET' && r.path == '/sse').length, 1);
-      await Future<void>.delayed(const Duration(milliseconds: 200));
+      await waitUntilReal(() => server.seen.where((r) => r.path == '/messages' && r.body != null && r.rpcMethod == null).length >= 2, '服务器夹带的两个请求都收到回音');
       final answered = server.seen.where((r) => r.path == '/messages' && r.body != null && r.rpcMethod == null).map((r) => r.body!['id']).toSet();
       expect(answered, {'srv-1', 'srv-2'}, reason: '服务器夹带的请求有回音');
     });

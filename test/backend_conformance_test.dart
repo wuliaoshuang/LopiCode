@@ -18,6 +18,7 @@ import 'package:lopicode/backend/backend_validate.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 
 import 'support/backend_conformance.dart';
+import 'support/wait.dart';
 
 /// 语言 id → 本机要有的命令。
 const Map<String, String> _languages = {'node': 'node', 'python': 'python3', 'go': 'go', 'java': 'javac', 'php': 'php'};
@@ -181,7 +182,7 @@ void main() {
           // 键按码点排：那段文字的开头是 U+0000，排在 sum 和 text 前面
           final expected = '{${_jsonText(_tricky.substring(0, 200))}:1,"sum":23,"text":${_jsonText(_tricky)}}';
           expect(utf8.decode(r.body), expected);
-          await Future<void>.delayed(const Duration(milliseconds: 200));
+          await waitUntilReal(() => server.stdoutLines.isNotEmpty, '服务把那一行日志写到标准输出');
           expect(server.stdoutLines, [''], reason: '“写到日志”一个空值：一个空行');
         } finally {
           await server.stop();

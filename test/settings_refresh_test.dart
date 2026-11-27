@@ -169,7 +169,7 @@ void main() {
       settings.setLater('k', 1);
       expect(settings.get<int>('k'), 1);
       await pendingWrites();
-      await Future<void>.delayed(const Duration(milliseconds: 20));
+      await waitUntilReal(() => CrashLog.instance.entries.isNotEmpty, '写盘失败被记进错误日志');
       expect(CrashLog.instance.entries.single.source, '保存设置 k');
     });
 
@@ -186,7 +186,7 @@ void main() {
       runtime.recordLaunchSuccess();
       expect(settings.getBool(SettingKeys.runtimeCompat), isTrue, reason: '内存里已经记住了');
       await pendingWrites();
-      await Future<void>.delayed(const Duration(milliseconds: 20));
+      await waitUntilReal(() => CrashLog.instance.entries.isNotEmpty, '写盘失败被记进错误日志');
       expect(CrashLog.instance.entries.single.source, contains('保存设置'));
     });
   });

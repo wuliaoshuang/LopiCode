@@ -16,7 +16,9 @@ import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
 import 'package:lopicode/backend/backend_lib_build.dart';
+import 'package:lopicode/backend/lib_native_trust.dart';
 import 'package:lopicode/backend/lib_service.dart';
+import 'package:lopicode/lang/host_v2.dart';
 import 'package:lopicode/lang/lib_model.dart';
 
 /// 导出文件的扩展名。
@@ -85,7 +87,16 @@ BeLibUnpacked beLibUnpack(List<int> bytes) {
 
 /// 导入前给人看的东西。
 class BeLibPreview {
-  const BeLibPreview({required this.files, required this.lib, this.blocks = const [], this.needs = const [], this.nativeFiles = const [], this.problems = const [], this.hasSource = false});
+  const BeLibPreview({
+    required this.files,
+    required this.lib,
+    this.blocks = const [],
+    this.needs = const [],
+    this.nativeFiles = const [],
+    this.problems = const [],
+    this.hasSource = false,
+    this.nativeBlocked = false,
+  });
 
   final Map<String, String> files;
   final LibLibrary lib;
@@ -110,11 +121,17 @@ class BeLibPreview {
   String get author => lib.author.isEmpty ? '（没写）' : lib.author;
   String get version => lib.version;
   bool get hasNative => nativeFiles.isNotEmpty;
+
+  /// 带了手写代码、而全应用的开关关着：不能导入就是因为这个。
+  final bool nativeBlocked;
   bool get canImport => problems.isEmpty;
 }
 
 /// 一块积木在清单里怎么写：把槽写成〔名字〕。
 String beLibBlockLine(LibBlock b) => b.look.template.replaceAllMapped(RegExp(r'\{([^{}]+)\}'), (m) => '〔${m[1]}〕');
+
+/// 宿主能力用人话怎么说（预览页、库的面板都用）。
+String beHostWord(String host) => _hostWords[host] ?? kHostV2[host]?.label ?? host;
 
 const Map<String, String> _hostWords = {
   'http.serve': '开一个网络服务（听一个端口）',
@@ -128,16 +145,17 @@ const Map<String, String> _hostWords = {
 };
 
 /// 文件表 → 预览。[others]＝项目里已经有的库（查“它靠的库在不在”）。
-BeLibPreview beLibPreview(Map<String, String> files, {List<LibLibrary> others = const []}) {
-  final lib = libRead(files, builtin: false);
+/// `nativeEnabled`＝全应用“允许库里的手写代码”开没开（不给就问 [LibNativeTrust]）。
+BeLibPreview beLibPreview(Map<String, String> files, {List<LibLibrary> others = const [], bool? nativeEnabled}) {
+  // 先按“手写代码许用”读一遍：看的是库本身有没有毛病；许不许导入另算。
+  final lib = libRead(files, builtin: false, nativeOk: true);
   final native = [
     for (final name in files.keys)
       if (name.startsWith('native/')) name,
   ]..sort();
   final problems = <String>[...lib.problems];
-  if (native.isNotEmpty && !problems.any((p) => p.contains('手写代码'))) {
-    problems.add('库里带了手写代码。这一版的应用还不会把手写代码放进生成的工程里，所以这个库现在不能启用');
-  }
+  final blocked = native.isNotEmpty && !(nativeEnabled ?? LibNativeTrust.instance.enabled);
+  if (blocked) problems.add('这个库带了手写代码，而“允许库里的手写代码”是关着的（设置 › 能力 › 积木库的手写代码）。关着的时候带手写代码的库一律不能导入');
   final service = beServiceLibrary();
   final needs = <String>[];
   for (final r in lib.requires) {
@@ -149,8 +167,9 @@ BeLibPreview beLibPreview(Map<String, String> files, {List<LibLibrary> others = 
     }
   }
   for (final h in lib.hosts) {
-    needs.add('直接用宿主能力：${_hostWords[h] ?? h}');
+    needs.add('直接用宿主能力：${beHostWord(h)}');
   }
+  if (lib.replaces == kBeServiceLibId) needs.add('它是用来顶替应用自带的“${service.name}”的：要你在文档里指定“用它顶替”才生效，那以后接口、返回、数据集合这些积木都走它');
   if (lib.ok && problems.isEmpty) {
     final deps = [
       if (lib.requires.contains(kBeServiceLibId)) service,
@@ -168,5 +187,6 @@ BeLibPreview beLibPreview(Map<String, String> files, {List<LibLibrary> others = 
     nativeFiles: native,
     problems: problems,
     hasSource: files.containsKey(kBeLibSourceFile),
+    nativeBlocked: blocked,
   );
 }

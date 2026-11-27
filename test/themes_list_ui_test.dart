@@ -105,7 +105,7 @@ void main() {
       expect(tester.getRect(k('themes-more-${t.id}')).right, lessThanOrEqualTo(390 - 16));
     }
     await tester.tap(k('themes-card-${made.last.id}'));
-    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+    await waitUntil(tester, () => env.services.container.read(themesProvider).lightId == made.last.id, '点的那套主题被选成浅色时用的');
     await tester.pumpAndSettle();
     expect(env.services.container.read(themesProvider).lightId, made.last.id);
     expect(k('themes-inuse-${made.last.id}'), findsOneWidget);

@@ -171,8 +171,7 @@ void main() {
       final server = ctl.server;
       expect(server.isRunning, isTrue);
       closing.dispose();
-      await Future<void>.delayed(const Duration(milliseconds: 20));
-      expect(server.isRunning, isFalse);
+      await waitUntilReal(() => !server.isRunning, '工作区关掉后预览服务器停掉');
 
       final half = ProjectSession(env.services, project, headless: true);
       final halfCtl = box.read(previewProvider(half).notifier);
@@ -180,7 +179,7 @@ void main() {
       final starting = halfCtl.start();
       half.dispose();
       await starting;
-      await Future<void>.delayed(const Duration(milliseconds: 20));
+      await waitUntilReal(() => !halfServer.isRunning, '起到一半关掉：预览服务器不留着');
       expect(halfServer.isRunning, isFalse);
       expect(box.read(previewProvider(half)).ready, isFalse);
     });

@@ -124,6 +124,8 @@ class PhpGen2 extends Gen2Dyn {
   }
 
   @override
+  String nativeCall(String ident, List<String> args) => "(\$GLOBALS['$ident'] ??= require __DIR__ . '/$ident.php')(${args.join(', ')})";
+  @override
   String hostCall(String fn, List<String> args) => 'LcHost::$fn(${args.join(', ')})';
 
   @override

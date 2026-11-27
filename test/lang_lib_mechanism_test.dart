@@ -196,9 +196,13 @@ void main() {
       says(edit('blocks.json', '"how": "static"', '"how": "magic"'), 'how');
     });
 
-    test('只有自带的库能做的三件事：直接声明宿主接口、旧名对照、旧文档的键', () {
+    test('只有自带的库能做的两件事：旧名对照、旧文档的键；直接声明宿主接口要在清单里写明', () {
       final host = edit('modules/kit.lc', '(模块 小工具', '(模块 小工具 (宿主 time.now () -> 整数)');
-      says(host, '只有应用自带的库可以');
+      // 第四轮：自己写的库也能直接声明宿主接口了（复制自带库来改要用），但清单的 hosts 里必须一个不落写明。
+      says(host, 'hosts 里没有写明');
+      final declared = libRead({...host, 'lib.json': host['lib.json']!.replaceFirst('"rules": 2,', '"rules": 2, "hosts": ["time.now"],')}, builtin: false);
+      expect(declared.problems, isEmpty);
+      expect(declared.hosts, ['time.now']);
       expect(libRead(host, builtin: true).problems, isEmpty);
       expect(libRead(host, builtin: true).hosts, ['time.now']);
       says(edit('modules/kit.lc', '(模块 小工具', '(模块 小工具 (宿主 disk.format () -> 空)'), '没有它', builtin: true);
@@ -208,9 +212,11 @@ void main() {
       says(edit('lib.json', '"min": 0,', '"legacyKey": "size", "min": 0,'), '只有应用自带的库可以写');
     });
 
-    test('手写代码：开关没开不收；开了这一版也还用不了（如实说）', () {
-      says({...files, 'native/x.node.js': 'return 1;'}, '不会启用手写代码');
-      says({...edit('lib.json', '"rules": 2,', '"rules": 2, "native": {"allowed": true},'), 'native/x.node.js': 'return 1;'}, '还不会把手写代码放进生成的工程');
+    test('手写代码：默认不收（要全应用的开关开着、这个库又确认过）；文件没在清单里登记也不收', () {
+      // 第四轮：手写代码有了能启用的路。读库时默认（nativeOk 否）照旧不收，说法换了。
+      says({...files, 'native/x.node.js': 'return 1;'}, '要先打开“允许库里的手写代码”');
+      says({...edit('lib.json', '"rules": 2,', '"rules": 2, "native": {"allowed": true},'), 'native/x.node.js': 'return 1;'}, '清单里没有登记');
+      expect(libRead({...edit('lib.json', '"rules": 2,', '"rules": 2, "native": {"allowed": true},'), 'native/x.node.js': 'return 1;'}, builtin: false, nativeOk: true).ok, isFalse);
     });
 
     test('用的时候：不在给它东西的积木下面，说得出来', () {

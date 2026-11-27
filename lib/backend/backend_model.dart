@@ -17,6 +17,7 @@ import 'package:lopicode/backend/backend_lib_doc.dart';
 import 'package:lopicode/core/safe_file.dart';
 import 'package:lopicode/lang/lib_model.dart';
 import 'package:lopicode/lang/rules.dart';
+import 'package:lopicode/lowcode/lib_blocks.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 
 /// 存盘文件名。
@@ -140,7 +141,7 @@ class BeRoute with LcBlockTree {
 /// 读文件的结果：文档一定有；`note` 不为 null＝读的时候出了状况（整份读不懂、跳过了几条），可以给人看。
 typedef BeParseResult = ({BeDocument doc, String? note});
 
-class BeDocument {
+class BeDocument implements LibUser {
   BeDocument({
     this.name = '我的后端',
     int port = kBeDefaultPort,
@@ -153,6 +154,7 @@ class BeDocument {
     int rules = kLangRulesLoose,
     this.library,
     List<BeLibUse>? uses,
+    this.serviceLib = '',
     List<BeLibHat>? hats,
     this.loaded = const [],
   }) : port = _validPort(port) ? port : kBeDefaultPort,
@@ -192,21 +194,41 @@ class BeDocument {
   BeLibInfo? library;
 
   /// 用了哪些库（应用自带的“接口服务”不在这里，它是自动带上的）。
+  @override
   final List<BeLibUse> uses;
+
+  /// 用哪个库顶替自带的“接口服务”（库的标识；那个库的清单里要写着 replaces）。空＝用自带的。
+  String serviceLib;
 
   /// 画布上以库的帽子积木开头的那些串。
   final List<BeLibHat> hats;
 
   /// [uses] 里的库读进来的样子（不存盘：打开文档的人从项目的 `blocks/` 里读好了放进来，见 backend_lib_store.dart）。
   /// 翻译、检查、生成都从这里找库；[uses] 里写了、这里没有的＝“库不在项目里”。
+  @override
   List<LibLibrary> loaded;
+
+  // —— “会用库的文档”（lib/lowcode/lib_blocks.dart 的 [LibUser]）要的几样 ——
+  @override
+  LibSide get libSide => LibSide.backend;
+  @override
+  String? get libraryId => library?.id;
+  @override
+  List<String> libMouthsOf(String fnId) => [
+    for (final d in library?.blocks ?? const <BeLibDef>[])
+      if (d.fn == fnId) ...d.mouths,
+  ];
+  @override
+  Iterable<List<LcBlock>> get libBodies => [for (final r in routes) r.body, for (final f in functions) f.body, for (final t in core.trees) t.body, for (final h in hats) h.body];
+  @override
+  Iterable<String> get libHatOps => [for (final h in hats) h.op];
 
   LibLibrary? lib(String id) => loaded.where((l) => l.id == id).firstOrNull;
   BeLibUse? use(String id) => uses.where((u) => u.id == id).firstOrNull;
   BeLibHat? hat(String id) => hats.where((h) => h.id == id).firstOrNull;
 
   /// 有没有用到“用户自己写库”才有的东西。用到了版本号写 5。
-  bool get usesLibs => library != null || uses.isNotEmpty || hats.isNotEmpty;
+  bool get usesLibs => library != null || uses.isNotEmpty || hats.isNotEmpty || serviceLib.isNotEmpty;
 
   /// 规矩版本（见 lang/rules.dart）：1＝老规矩（旧文档，行为不变）；2＝严格规矩。是 1 时存盘不写这个字段。
   int rules;
@@ -238,6 +260,7 @@ class BeDocument {
     if (!core.isEmpty) 'core': core.toJson(),
     if (library != null) 'library': library!.toJson(),
     if (uses.isNotEmpty) 'uses': [for (final u in uses) u.toJson()],
+    if (serviceLib.isNotEmpty) 'serviceLib': serviceLib,
     if (hats.isNotEmpty) 'hats': [for (final h in hats) h.toJson()],
   };
 
@@ -256,6 +279,7 @@ class BeDocument {
     rules: rules,
     library: library?.clone(),
     uses: [for (final u in uses) u.clone()],
+    serviceLib: serviceLib,
     hats: [for (final h in hats) h.clone()],
     loaded: loaded,
   );
@@ -302,6 +326,7 @@ class BeDocument {
       rules: langRulesFromJson(json[kLangRulesField]),
       library: BeLibInfo.tryParse(json['library']),
       uses: list(json['uses'], BeLibUse.tryParse),
+      serviceLib: json['serviceLib'] is String && kLibIdPattern.hasMatch(json['serviceLib'] as String) ? json['serviceLib'] as String : '',
       hats: list(json['hats'], BeLibHat.tryParse),
     );
     return (doc: doc, note: skipped == 0 ? null : '后端文件里有 $skipped 条读不懂的内容，已跳过');

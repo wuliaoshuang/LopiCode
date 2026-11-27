@@ -45,6 +45,8 @@ import 'package:lopicode/ui/top_bar.dart';
 import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
 
+part 'backend_screen_menu.dart';
+
 /// 改动后等多久再存盘 + 重新生成（连着改几下只存一次）。
 const Duration kBackendSaveDelay = Duration(milliseconds: 500);
 
@@ -460,22 +462,6 @@ class BackendScreenState extends ConsumerState<BackendScreen> {
     return null;
   }
 
-  /// 副标题：现在什么状态。平时是“语言 · 几个接口”，出了状况换成那句话。
-  String _status(BeBlockHost host) {
-    final errors = host.errorCount;
-    final regen = _regen;
-    if (errors > 0) return blockErrorsBrief(errors);
-    if (host.canvasType case final inside?) return '「${inside.name}」';
-    if (host.doc.library case final lib?) return regen != null && !regen.ok ? '库文件没有更新' : '库 · 公开了 ${lib.blocks.length} 块积木';
-    if (regen != null && !regen.ok) return '代码没有重新生成';
-    if (regen != null && regen.conflicts.isNotEmpty) return '${regen.conflicts.length} 个文件没覆盖';
-    final target = host.target;
-    final lang = target == null ? '${host.doc.language}（没有生成器）' : beLanguageName(target);
-    return '$lang · ${host.doc.routes.length} 个接口';
-  }
-
-  bool _attention(BeBlockHost host) => host.errorCount > 0 || (_regen != null && (!_regen!.ok || _regen!.conflicts.isNotEmpty));
-
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
@@ -504,13 +490,12 @@ class BackendScreenState extends ConsumerState<BackendScreen> {
               ),
       );
     }
-    final target = host.target;
-    final attention = _attention(host);
+    final attention = _beAttention(host, _regen);
     return BlockEditorView(
       key: _editor,
       host: host,
       title: host.canvasType == null ? '后端积木' : '类的画布', // 类的画布里多一颗“回主画布”，标题那一格更窄：只写类名
-      subtitle: _status(host),
+      subtitle: _beStatus(host, _regen),
       dockMemoryKey: 'backend',
       stars: _stars,
       menuExtra: _menuExtra,
@@ -525,51 +510,11 @@ class BackendScreenState extends ConsumerState<BackendScreen> {
           tooltip: '更多',
           onSelected: _onMenu,
           icon: Badge(isLabelVisible: attention, smallSize: 8, backgroundColor: c.warning, child: const Icon(Icons.more_horiz_rounded)),
-          itemBuilder: (_) => [
-            PopupMenuItem(
-              key: const ValueKey('be-menu-language'),
-              value: 'language',
-              child: Row(
-                children: [
-                  FileIcon.language(host.doc.language, size: 20),
-                  const SizedBox(width: Space.x3),
-                  Flexible(child: Text('语言：${target == null ? host.doc.language : beLanguageName(target)}${target != null && !target.verified ? '（未实测）' : ''}')),
-                ],
-              ),
-            ),
-            PopupMenuItem(key: const ValueKey('be-menu-data'), value: 'data', child: _menuRow(Icons.data_object_rounded, '变量与集合（${host.doc.variables.length} + ${host.doc.collections.length}）')),
-            PopupMenuItem(key: const ValueKey('be-menu-settings'), value: 'settings', child: _menuRow(Icons.tune_rounded, '服务设置（端口 ${host.doc.port}）')),
-            // 规矩版本：已经是严格规矩的只说一声（不能点）；老规矩的文档给“升级”的入口（beStrictUpgradeEntry 管出不出现，现在默认出现）。
-            // 类型与类、模块：只有严格规矩的文档才有（老规矩的文档这个菜单一项不多）。
-            if (host.strictRules) PopupMenuItem(key: const ValueKey('be-menu-types'), value: 'types', child: _menuRow(Icons.category_outlined, '类型与类（${host.core.types.length}）…')),
-            if (host.strictRules) PopupMenuItem(key: const ValueKey('be-menu-modules'), value: 'modules', child: _menuRow(Icons.view_module_outlined, '模块（${host.core.modules.length}）…')),
-            ...beLibMenuItems(host, _menuRow),
-            if (host.strictRules)
-              PopupMenuItem(key: const ValueKey('be-menu-strict-on'), enabled: false, child: _menuRow(Icons.verified_outlined, '严格规矩：已开启'))
-            else if (beStrictUpgradeEntry)
-              PopupMenuItem(key: const ValueKey('be-menu-strict'), value: 'strict', child: _menuRow(Icons.upgrade_rounded, '升级到严格规矩…')),
-            PopupMenuItem(
-              key: const ValueKey('be-menu-regen'),
-              value: 'regen',
-              child: _menuRow(
-                attention ? Icons.warning_amber_rounded : Icons.task_alt_rounded,
-                _regen != null && _regen!.conflicts.isNotEmpty ? '${_regen!.conflicts.length} 个文件没覆盖…' : '代码生成情况',
-                color: attention ? c.warning : null,
-              ),
-            ),
-          ],
+          itemBuilder: (context) => _beMenuItems(context, host, _regen, attention),
         ),
       ],
     );
   }
-
-  Widget _menuRow(IconData icon, String text, {Color? color}) => Row(
-    children: [
-      Icon(icon, size: 20, color: color ?? context.colors.textMuted),
-      const SizedBox(width: Space.x3),
-      Flexible(child: Text(text)),
-    ],
-  );
 }
 
 /// 给还没有后端积木的工作区建一份入门样本（根目录的 backend.lc.json + 生成的代码）。已经有同名的代码文件不会被覆盖。

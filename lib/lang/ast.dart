@@ -199,10 +199,22 @@ class LInterfaceDecl extends LDecl {
 
 /// 宿主 / 原生库提供的函数的签名，没有函数体（第 3 阶段）。
 class LNativeDecl extends LDecl {
-  const LNativeDecl(this.name, this.params, {super.src, super.type});
+  const LNativeDecl(this.name, this.params, {super.src, super.type, this.user});
   @override
   final String name;
   final List<LParam> params;
+
+  /// 不是宿主给的、是库里带的手写函数：它在生成的代码里叫什么、要不要等（读库的时候照清单填，见 lib_native.dart）。
+  final LNativeUser? user;
+}
+
+/// 库里带的一个手写函数在生成的代码里的样子。
+class LNativeUser {
+  const LNativeUser(this.ident, {this.waits = false});
+
+  /// 代码里的名字，也是那个文件的名字（不带后缀）。只有英文字母、数字、下划线。
+  final String ident;
+  final bool waits;
 }
 
 // ———————————————————————— 语句 ————————————————————————

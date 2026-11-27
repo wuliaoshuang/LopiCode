@@ -294,6 +294,7 @@ BeLibBuilt _build(BeDocument source, BeLibInfo info, List<String> problems) {
     if (info.author.isNotEmpty) 'author': info.author,
     if (info.summary.isNotEmpty) 'summary': info.summary,
     'rules': 2,
+    if (info.side != LibSide.backend) 'for': info.side.name,
     'native': {'allowed': false},
     if (requires.isNotEmpty) 'requires': requires,
     'modules': moduleEntries,

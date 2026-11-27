@@ -13,6 +13,7 @@ import 'package:lopicode/terminal/terminal_session.dart';
 import 'package:path/path.dart' as p;
 
 import 'support/runtime_fakes.dart';
+import 'support/wait.dart';
 
 /// 会对写入做出反应的假伪终端：像真 tty 一样先回显，再给结果。
 class EchoPty extends FakePty {
@@ -78,7 +79,7 @@ void main() {
       await backend.start(columns: 80, rows: 24);
       await Future<void>.delayed(const Duration(milliseconds: 80));
       expect(backend.stalled, isFalse, reason: '还没到时间');
-      await Future<void>.delayed(const Duration(milliseconds: 150));
+      await waitUntilReal(() => backend.stalled && seen.toString().contains('还没有任何响应'), '到点后提示“没有响应”');
       expect(backend.stalled, isTrue);
       expect(seen.toString(), contains('还没有任何响应'));
       expect(runtime.logLines.join('\n'), contains('没有任何输出'));
@@ -100,11 +101,9 @@ void main() {
       final late = make(spawned2, []);
       late.output.listen((_) {});
       await late.start(columns: 80, rows: 24);
-      await Future<void>.delayed(const Duration(milliseconds: 250));
-      expect(late.stalled, isTrue);
+      await waitUntilReal(() => late.stalled, '没输出的会话到点后标成“没有响应”');
       spawned2.single.emit('root@localhost:~# ');
-      await Future<void>.delayed(const Duration(milliseconds: 20));
-      expect(late.stalled, isFalse);
+      await waitUntilReal(() => !late.stalled, '迟到的输出把“没有响应”撤掉');
       await late.close();
     });
 
@@ -115,8 +114,7 @@ void main() {
       final seen = StringBuffer();
       backend.output.listen(seen.write);
       await backend.start(columns: 80, rows: 24);
-      await Future<void>.delayed(const Duration(milliseconds: 250));
-      expect(backend.stalled, isTrue);
+      await waitUntilReal(() => backend.stalled, '没输出的会话到点后标成“没有响应”');
       expect(envs.single.containsKey('PROOT_NO_SECCOMP'), isFalse);
 
       await backend.retryCompat();
@@ -129,7 +127,7 @@ void main() {
       expect(runtime.launchFailures, 0, reason: '卡住不算进连续失败，不会把以后的会话都赶去本机 shell');
 
       spawned.last.emit('root@localhost:~# ');
-      await Future<void>.delayed(const Duration(milliseconds: 80));
+      await waitUntilReal(() => settings.getBool(SettingKeys.runtimeCompat), '有响应后记住兼容模式');
       expect(settings.getBool(SettingKeys.runtimeCompat), isTrue, reason: '兼容模式确实有用才记住');
       await backend.close();
     });
@@ -139,10 +137,9 @@ void main() {
       final backend = make(spawned, []);
       backend.output.listen((_) {});
       await backend.start(columns: 80, rows: 24);
-      await Future<void>.delayed(const Duration(milliseconds: 250));
+      await waitUntilReal(() => backend.stalled, '没输出的会话到点后标成“没有响应”');
       await backend.retryCompat();
-      await Future<void>.delayed(const Duration(milliseconds: 250));
-      expect(backend.stalled, isTrue);
+      await waitUntilReal(() => backend.stalled, '兼容模式下还是没输出：再次标成“没有响应”');
       expect(settings.getBool(SettingKeys.runtimeCompat), isFalse);
       await backend.close();
     });
@@ -154,7 +151,7 @@ void main() {
       final seen = StringBuffer();
       backend.output.listen(seen.write);
       await backend.start(columns: 80, rows: 24);
-      await Future<void>.delayed(const Duration(milliseconds: 250));
+      await waitUntilReal(() => backend.stalled, '没输出的会话到点后标成“没有响应”');
       await backend.switchToLocal();
       expect(spawned.single.killed, isTrue);
       expect(local, hasLength(1));

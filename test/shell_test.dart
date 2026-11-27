@@ -424,11 +424,12 @@ void main() {
     await settle(tester, rounds: 2);
     // 空对话时“新对话”不堆空的；有内容后才开新的
     await newChat(tester);
-    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 100)));
+    await waitUntil(tester, () => session.conversations.length == 2 && session.chat.isEmpty, '新对话建好');
     await settle(tester, rounds: 2);
     expect(session.conversations.length, 2);
     expect(session.chat, isEmpty);
     await newChat(tester);
+    // 这里断言的是“没有多建一段”：没有可等的条件，settle 会把存盘等完；真等的 100 毫秒只是给它出错的机会。
     await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 100)));
     await settle(tester, rounds: 2);
     expect(session.conversations.length, 2, reason: '当前对话还是空的，不再新建');
@@ -441,7 +442,7 @@ void main() {
     expect(highlighted(tester, '第一段对话'), isFalse);
     await tester.tap(find.descendant(of: find.byType(AppDrawer), matching: find.text('第一段对话')));
     await drawerSettle(tester);
-    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 150)));
+    await waitUntil(tester, () => session.conversationTitle == '第一段对话' && session.chat.whereType<UserItem>().length == 1, '切回第一段对话并读完它的内容');
     await settle(tester, rounds: 3);
     expect(session.conversationTitle, '第一段对话');
     expect(session.chat.whereType<UserItem>().single.text, '第一段对话');
@@ -487,7 +488,7 @@ void main() {
     expect(find.textContaining('只对这个工作区生效'), findsOneWidget);
     await tester.enterText(find.byKey(const Key('rules-field')), '页面一律用中文');
     await tester.tap(find.byKey(const Key('rules-save')));
-    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 100)));
+    await waitUntil(tester, () => File('${project.dir}/.lopicode/rules.md').existsSync() && session.systemPrompt.contains('页面一律用中文'), '项目规则写进文件并生效');
     await settle(tester, rounds: 3);
     expect(session.systemPrompt, contains('页面一律用中文'));
     expect(File('${project.dir}/.lopicode/rules.md').readAsStringSync(), '页面一律用中文');

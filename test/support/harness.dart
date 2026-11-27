@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
@@ -13,6 +14,10 @@ import 'package:lopicode/core/stores.dart';
 import 'package:lopicode/state/app_providers.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:path/path.dart' as p;
+
+import 'wait.dart';
+
+export 'wait.dart';
 
 const Size kPhone = Size(390, 844);
 const String kTestFont = 'LopiCJK';
@@ -81,7 +86,16 @@ Widget appFor(TestEnv env, Widget home, {ThemeMode mode = ThemeMode.light, Strin
 Widget bareScope(Widget child) =>
     ProviderScope(overrides: [settingsStoreProvider.overrideWithValue(SettingsStore(File(p.join(Directory.systemTemp.path, 'lopicode-bare-settings-does-not-exist.json'))))], child: child);
 
-/// 界面里有真实的文件 / 进程 IO：让真实异步跑一会儿，再推几帧。
+/// 界面里有真实的文件 / 进程 IO：让真实异步跑一会儿、推几帧，**再等排着队的存盘全部写完**。
+///
+/// 这里分两部分：
+/// - 固定的那部分（[rounds] 轮、每轮真等 [ms] 毫秒再让测试时钟走 120 毫秒）只负责“让界面动画和一连串很短的异步接力走完”。
+///   它是安全的，因为它后面的断言不该靠它等磁盘或后台任务：页面切换、面板滑出最长 300 毫秒，四轮测试时钟是 480 毫秒，够了；
+///   测试时钟不受机器忙不忙影响。
+/// - 存盘那部分是“等到条件成立”：所有经 `safe_file.dart` 排队的写入（设置、项目、对话、低代码与后端文档…）都落盘了才返回，
+///   机器再忙也不会读到写了一半的文件。最多等 [kWaitLimit]，到了就报出来。
+///
+/// 调用方要等的是**别的事**（下载完、进程起来、扫描完、某行字出现）：不要靠加轮数，用 [waitUntil]。
 Future<void> settle(WidgetTester tester, {int rounds = 4, int ms = 60}) async {
   // 真实文件读写的每一步（建目录、写临时文件、改名…）都要“真等一下 + 让测试时钟走一下”才能接着往下走。
   // 存盘改成原子写以后步数变多了，所以每一轮里再细分成几小步，免得靠调轮数去凑。
@@ -94,18 +108,39 @@ Future<void> settle(WidgetTester tester, {int rounds = 4, int ms = 60}) async {
     }
     await tester.pump(const Duration(milliseconds: 120));
   }
+  await waitWritesDone(tester);
+}
+
+/// 等所有排着队的存盘写完（界面测试用）。写入是在根 Zone 里跑的，所以要放进 runAsync 里等；写完后推两帧，让“写完了”的回调跑到界面上。
+Future<void> waitWritesDone(WidgetTester tester, {Duration limit = kWaitLimit}) async {
+  final ok = await tester.runAsync(() => pendingWrites().then((_) => true).timeout(limit, onTimeout: () => false));
+  if (ok == false) fail('等了 ${limit.inSeconds} 秒，还有存盘没写完');
+  await tester.pump();
+  await tester.pump();
+}
+
+/// 界面测试里“等到条件成立”：每一小步真等一下（让文件、进程、网络往前走）再让测试时钟走一下（让界面跟上），
+/// 条件成立就返回；到了上限（真实时间）就失败，并报出等的是什么（[what]）。
+///
+/// [cond] 里可以看界面（`find.text(...).evaluate().isNotEmpty`）、看状态对象、看磁盘（`File(...).existsSync()`）。
+/// [pump] 是每一步让测试时钟走多少：界面上有“停手多久才做”的计时器时调大一点。
+Future<void> waitUntil(WidgetTester tester, bool Function() cond, String what, {Duration limit = kWaitLimit, Duration pump = const Duration(milliseconds: 20)}) async {
+  final watch = Stopwatch()..start();
+  while (!cond()) {
+    if (watch.elapsed > limit) fail('等了 ${limit.inSeconds} 秒也没等到：$what');
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 5)));
+    await tester.pump(pump);
+  }
+  await tester.pump();
 }
 
 /// 低代码搭建页“停手 0.4 秒才存盘”：把这段时间走完，再等真实的写盘做完（顶栏小字不再是“正在保存…”）才返回。
 /// 不靠“等固定的一小会儿”：机器忙的时候写盘可能很慢，读早了会读到写了一半的文件。最多等 10 秒（真实时间）。
 Future<void> waitLowcodeSaved(WidgetTester tester) async {
+  // 这 500 毫秒是测试时钟（不是真实时间）：只为走完“停手 0.4 秒才存盘”那个计时器，机器忙不忙都一样。
   await tester.pump(const Duration(milliseconds: 500));
-  for (var i = 0; i < 500; i++) {
-    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
-    await tester.pump();
-    if (find.textContaining('正在保存', skipOffstage: false).evaluate().isEmpty) break;
-  }
-  await tester.pump();
+  await waitUntil(tester, () => find.textContaining('正在保存', skipOffstage: false).evaluate().isEmpty, '低代码页面存盘写完（顶栏不再是“正在保存…”）');
+  await waitWritesDone(tester);
 }
 
 /// 脚本化的模型客户端（不走网络）。

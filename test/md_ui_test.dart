@@ -237,15 +237,13 @@ void main() {
     expect(rich('没有打开工作区'), findsOneWidget);
 
     await tester.tap(find.byKey(const Key('md-image-load')));
-    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
-    await tester.pump();
+    await waitUntil(tester, () => rich('图片没加载出来').evaluate().isNotEmpty, '图片下载失败的提示出来');
     expect(hits, 1);
     expect(rich('图片没加载出来'), findsOneWidget);
     expect(rich('500'), findsOneWidget);
     fail = false;
     await tester.tap(find.byKey(const Key('md-image-retry')));
-    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
-    await tester.pump();
+    await waitUntil(tester, () => find.byKey(const Key('md-image')).evaluate().length == 2, '重试后图片下载完、显示出来');
     expect(hits, 2);
     expect(find.byKey(const Key('md-image')), findsNWidgets(2));
   });
@@ -265,8 +263,7 @@ void main() {
     expect(find.byKey(const Key('md-image-load')), findsOneWidget);
     await tester.runAsync(() => env.services.settings.set(SettingKeys.chatAutoImages, true));
     await tester.pump();
-    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
-    await tester.pump();
+    await waitUntil(tester, () => find.byKey(const Key('md-image')).evaluate().isNotEmpty, '自动下载的图片显示出来');
     expect(hits, 1, reason: '开了以后自己去下；http 的那张还是不下');
     expect(find.byKey(const Key('md-image')), findsOneWidget);
     expect(find.byKey(const Key('md-image-load')), findsNothing);

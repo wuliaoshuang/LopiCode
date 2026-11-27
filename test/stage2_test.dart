@@ -19,6 +19,8 @@ import 'package:lopicode/terminal/terminal_session.dart';
 import 'package:path/path.dart' as p;
 import 'package:xterm/xterm.dart';
 
+import 'support/wait.dart';
+
 class FakeSecureBackend implements SecureBackend {
   final Map<String, String> data = {};
   Object? failWith;
@@ -431,7 +433,7 @@ void main() {
       expect(backend.mode, LocalShellMode.pipe);
       expect(seen.toString(), contains('已退回基础模式'));
       backend.write('lx\x7fs\r'); // 打错一个字、退格、再回车
-      await Future<void>.delayed(const Duration(milliseconds: 500));
+      await waitUntilReal(() => seen.toString().contains('hello.txt'), 'ls 的输出（hello.txt）回到终端');
       expect(seen.toString(), contains('hello.txt'));
       expect(seen.toString(), contains('\b \b'));
       await backend.close();
@@ -560,7 +562,7 @@ void main() {
       final exec = FakeRemoteExec()..holdBuild = Completer<void>();
       final job = controller(exec);
       final done = job.run();
-      await Future<void>.delayed(const Duration(milliseconds: 20));
+      await waitUntilReal(() => job.phase == BuildPhase.building, '构建机上的构建开始');
       expect(job.phase, BuildPhase.building);
       expect(job.busy, isTrue);
       job.cancel();

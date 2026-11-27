@@ -320,6 +320,8 @@ abstract class GoGen2Types extends Gen2 {
   static const Set<String> _rtLine = {'listMap', 'listFilter', 'listReduce', 'listEvery', 'listSome', 'listEach', 'awaitMax', 'awaitAll', 'awaitAny', 'cancelled', 'lockEnter', 'lockLeave'};
 
   @override
+  String nativeCall(String ident, List<String> args) => '$ident(${args.join(', ')})';
+  @override
   String hostCall(String fn, List<String> args) => 'lc.${fn[0].toUpperCase()}${fn.substring(1)}(${_hostLine.contains(fn) ? lineArgs(args) : args.join(', ')})';
 
   // 这几个宿主接口要知道“这条线”：会等的（被取消了要叫得醒）、收函数的、认“谁正在改”的。

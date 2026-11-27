@@ -21,6 +21,7 @@ import 'package:lopicode/lang/lib_model.dart';
 import 'support/backend_core_samples.dart';
 import 'support/backend_func_blocks.dart';
 import 'support/backend_lang_blocks.dart';
+import 'support/native_lib.dart';
 import 'support/user_libs.dart';
 
 List<String> problemsOf(J doc, [List<LibLibrary> loaded = const []]) => beLibFiles(parseLangBlocksDocument(doc)..loaded = [...loaded]).problems;
@@ -381,7 +382,7 @@ void main() {
       expect(native.canImport, isFalse);
       expect((await beLibInstall(guard, native)).problems, isNotEmpty);
       expect(await beLibsRead(guard), isEmpty);
-      // 清单里自称“允许手写代码”也一样不许。
+      // 清单里自称“允许手写代码”也一样不许（第四轮起：全应用的开关默认关着；清单的写法也换成了逐个函数声明）。
       final manifest = jsonDecode(files[kLibManifestFile]!) as Map;
       final allowed = beLibPreview({
         ...files,
@@ -396,7 +397,9 @@ void main() {
         'native/hack.js': 'x',
       });
       expect(allowed.canImport, isFalse);
-      expect(allowed.lib.nativeWaits, ['慢慢来']);
+      expect(allowed.problems.join(), contains('清单里没有登记'));
+      // “要等”的手写函数现在在清单的 native.functions 里逐个声明（旧的 native.waits 名单不再读）。
+      expect(libRead(handLibFiles(), builtin: false, nativeOk: true).nativeWaits, ['twice']);
       // 冒充应用自带的库。
       final fake = beLibPreview({
         ...files,
