@@ -174,7 +174,13 @@ void main() {
         for (final f in ex.files)
           if (f.content.contains('共用改的名')) f,
       ];
-      expect(pages.length, 3, reason: '三页各有一条导航，写的都是改过的名字：${[for (final f in pages) f.path]}');
+      // 第四轮 B3 起：Vue / React 里共用的导航抽成一个公共部件文件，改过的名字只写在那一个文件里；三页都引用它、各亮各的。
+      expect([for (final f in pages) f.path.replaceAll(RegExp(r'\.(vue|jsx)$'), '')], ['components/LcBottomNav'], reason: '改过的名字只该在公共部件里');
+      final refs = [
+        for (final f in ex.files)
+          if (f.content.contains('<LcBottomNav ')) RegExp(r'current[=:{"]+(\d)').firstMatch(f.content.substring(f.content.indexOf('<LcBottomNav ')))?[1],
+      ];
+      expect(refs, ['0', '1', '2'], reason: '三页各引用一次、各亮各自那一项');
     }
     final dart = exportDart(doc);
     expect('共用改的名'.allMatches(dart).length, 3);
