@@ -19,7 +19,7 @@ import 'package:lopicode/backend/lib_service_fork.dart';
 import 'package:lopicode/core/path_guard.dart';
 import 'package:lopicode/lang/lib_model.dart';
 import 'package:lopicode/lang/rules.dart';
-import 'package:lopicode/lowcode/lib_page.dart' show kLcPageLibId;
+import 'package:lopicode/lowcode/lib_page.dart' show kLcPageLibId, lcPageLibrary;
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/backend_core_sheet.dart';
@@ -193,6 +193,7 @@ class _LibsSheetState extends State<_LibsSheet> {
     final libs = _libs;
     final doc = host.doc;
     final service = beServiceLibrary();
+    final page = lcPageLibrary();
     final mine = [
       for (final s in libs ?? const <BeStoredLib>[])
         if (s.id != doc.library?.id) s,
@@ -210,12 +211,23 @@ class _LibsSheetState extends State<_LibsSheet> {
         if (host.strictRules) BeSheetAdd(key: const ValueKey('be-lib-new'), label: '新建库', onTap: () => unawaited(_create())),
         if (host.strictRules) BeSheetAdd(key: const ValueKey('be-lib-import'), label: '从文件导入', onTap: () => unawaited(_import())),
         const BeSheetSection('应用自带'),
-        BeSheetRow(
-          key: const ValueKey('be-lib-builtin'),
-          label: service.name,
-          value: '${service.blocks.length} 块积木 · 自带',
-          onTap: () => unawaited(showBeServiceLib(context, fork: _forkService)),
-        ),
+        // 自带的两个库都列出来；这份文档这一边用不了的那个是灰的，下面一行写原因（点开也看得到）。
+        for (final b in [if (doc.isFront) page, service, if (!doc.isFront) page]) ...[
+          BeSheetRow(
+            key: ValueKey(b.id == kLcPageLibId ? 'be-lib-builtin-page' : 'be-lib-builtin'),
+            label: b.name,
+            value: b.sideProblem(doc.libSide) != null ? '这里用不了' : '${b.blocks.length} 块积木 · 自带${b.id == kLcPageLibId ? ' · 用着' : ''}',
+            muted: b.sideProblem(doc.libSide) != null,
+            onTap: () => unawaited(b.id == kLcPageLibId ? showBePageLib(context, b, why: b.sideProblem(doc.libSide)) : showBeServiceLib(context, fork: _forkService, why: b.sideProblem(doc.libSide))),
+          ),
+          if (b.sideProblem(doc.libSide) case final why?)
+            Padding(
+              key: ValueKey(b.id == kLcPageLibId ? 'be-lib-builtin-page-why' : 'be-lib-builtin-why'),
+              padding: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x2),
+              // 清单里只说一句短的；完整的原因点开以后在面板顶上。
+              child: Text(why.isEmpty ? '' : (b.id == kLcPageLibId ? '只在页面逻辑和前端的库里用得上' : '只在后端的积木里用得上'), style: Theme.of(context).textTheme.bodySmall?.copyWith(color: context.colors.textMuted)),
+            ),
+        ],
       ],
     );
   }

@@ -110,6 +110,13 @@ extension _ValidatorArgs on _Validator {
       _warn(LcIssueCode.unknownExpr, '不认识的值 ${kind ?? ''}，生成代码时会当成空的', arg: arg);
       return;
     }
+    if (kind == kBeHostCall) {
+      final why = beHostCallProblem(doc, expr['name']);
+      if (why != null) _error(BeIssueCode.badLibrary, why, arg: arg, fix: '长按这个值换成别的；要碰宿主的事，等这条路放开以后再做。');
+    }
+    if ((kind == kBeCast || kind == kBeAscribe) && beTypeOfKey(expr['to']) == null) {
+      _error(LcIssueCode.unknownExpr, '还没选好类型（${expr['to'] ?? ''} 读不出来）', arg: arg, fix: '点这块积木上的类型，重新挑一个。');
+    }
     final base = _xp;
     final noValue = beCallNoValueProblem(table, kind);
     if (noValue != null) _warn(BeFuncIssueCode.badReturn, noValue, arg: arg, fix: '在它的定义里加一块“返回 (值)”；或者把它单独当一句用。');

@@ -6,6 +6,7 @@
 library;
 
 import 'package:lopicode/backend/backend_blocks_core.dart';
+import 'package:lopicode/backend/backend_blocks_typeops.dart';
 import 'package:lopicode/backend/backend_core.dart';
 import 'package:lopicode/backend/backend_function.dart';
 import 'package:lopicode/backend/backend_lower_wait.dart';
@@ -127,7 +128,7 @@ LExpr? beCoreExpr(String kind, Object? e, BeCoreCx cx) {
       final t = pick('type', '类');
       return t == null ? hole : LName(t, src: cx.src());
   }
-  return beWaitExpr(kind, e, cx);
+  return beWaitExpr(kind, e, cx) ?? beTypeOpExpr(kind, e, cx);
 }
 
 const Map<String, LType?> _isTypes = {'number': null, 'text': LType.text, 'bool': LType.boolean, 'list': LType.listOf(LType.any), 'dict': LType.dictOf(LType.any)};
@@ -203,7 +204,7 @@ List<LStmt>? beCoreBlock(LcBlock b, BeCoreCx cx, List<LStmt> Function(List<LcBlo
         ),
       ];
   }
-  return beWaitBlock(b, cx, inner, varName);
+  return beWaitBlock(b, cx, inner, varName) ?? beTypeOpBlock(b, cx);
 }
 
 List<LStmt> _match(LcBlock b, BeCoreCx cx, List<LStmt> Function(List<LcBlock> list, {bool inElse, int arm}) inner, LExpr subject, String? Function(Object?) varName) {
@@ -288,6 +289,10 @@ BeCoreUnit beCoreUnit(BeDocument doc, {required List<LStmt> Function(BeMethod tr
   final core = doc.core;
   final out = <({String key, LDecl decl})>[];
   bool pub(String key) => core.publics.contains(key);
+  // 库里“调宿主接口”用到的接口：各先声明一句（排在最前面）。
+  for (final d in beHostDecls(doc)) {
+    out.add((key: 'host:${d.name}', decl: d));
+  }
   List<LTypedField> typed(List<BeField> fs) => [for (final f in fs) LTypedField(f.name, f.type)];
   for (final t in core.types) {
     final src = LSrc(script: t.id);

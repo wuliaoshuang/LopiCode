@@ -7,6 +7,7 @@ library;
 
 import 'package:lopicode/backend/backend_blocks.dart';
 import 'package:lopicode/backend/backend_blocks_core.dart';
+import 'package:lopicode/backend/backend_blocks_typeops.dart';
 import 'package:lopicode/backend/backend_core.dart';
 import 'package:lopicode/backend/backend_func_edit.dart';
 import 'package:lopicode/backend/backend_func_table.dart';
@@ -94,7 +95,11 @@ class _Validator {
   bool get _inFn => _fn != null || _core != null || _hat != null;
   LcBlockTree? get _tree => _fn ?? _core ?? _hat ?? _route;
   Map<String, bool> _withGlobals(Map<String, bool> m) => {...m, for (final g in doc.core.globals) g.name: g.isConst, for (final p in _core?.params ?? const <BeParam>[]) p.name: false};
-  String? _fnName(String id) => doc.function(id)?.name;
+  String? _fnName(String id) {
+    final ref = beLibOpOf(id);
+    if (ref == null) return doc.function(id)?.name;
+    return doc.loaded.where((l) => l.id == ref.lib).firstOrNull?.block(ref.block)?.look.name;
+  }
 
   /// 这一串里出现过的参数名（定义的 + 匿名函数的）。
   Set<String> _known = const {};
@@ -381,6 +386,10 @@ class _Validator {
     _xp = const [];
     _values.block(b, spec);
     _newNames(b);
+    if (b.op == kBeHostCallStmt) {
+      final why = beHostCallProblem(doc, b.args['name']);
+      if (why != null) _error(BeIssueCode.badLibrary, why, fix: '删掉这一块，换成语言核心的积木来做；要碰宿主的事，等这条路放开以后再做。');
+    }
     if (b.op == 'fetch') _url(b);
     // 库文档里的函数可以公开成拿着“这次请求”的积木，能不能回响应由库的类型检查说。
     final misplaced = doc.library != null && b.op != 'fetch' ? null : beHostOnlyProblem(b.op, inFunction: _inFn, inLambda: _lambdas > 0);

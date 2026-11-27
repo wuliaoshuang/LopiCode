@@ -13,6 +13,7 @@ library;
 
 import 'dart:convert';
 
+import 'package:lopicode/backend/backend_blocks_typeops.dart';
 import 'package:lopicode/backend/backend_func_table.dart';
 import 'package:lopicode/backend/backend_function.dart';
 import 'package:lopicode/backend/backend_lib_doc.dart';
@@ -296,6 +297,8 @@ BeLibBuilt _build(BeDocument source, BeLibInfo info, List<String> problems) {
     'rules': 2,
     if (info.side != LibSide.backend) 'for': info.side.name,
     'native': {'allowed': false},
+    // 库里“调宿主接口”用到的接口，一个不落地写明（读库的时候会对）。
+    if (beHostsUsed(doc).isNotEmpty) 'hosts': beHostsUsed(doc)..sort(),
     if (requires.isNotEmpty) 'requires': requires,
     'modules': moduleEntries,
     'blocks': ['blocks.json'],

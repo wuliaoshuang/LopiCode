@@ -9,6 +9,7 @@ library;
 
 import 'package:lopicode/backend/backend_core_fix.dart';
 import 'package:lopicode/backend/backend_function.dart';
+import 'package:lopicode/backend/backend_lib_doc.dart';
 import 'package:lopicode/backend/backend_lower_lang.dart';
 import 'package:lopicode/backend/backend_model.dart';
 import 'package:lopicode/backend/backend_text.dart';
@@ -85,7 +86,12 @@ mixin BeTypeHost on BlockHost {
   List<BlockIssue> withTypeIssues(List<BlockIssue> base) {
     final check = typeCheck;
     if (check == null || check.findings.isEmpty) return base;
-    String? fnName(String id) => doc.function(id)?.name;
+    String? libName(String op) {
+      final ref = beLibOpOf(op);
+      return ref == null ? null : doc.loaded.where((l) => l.id == ref.lib).firstOrNull?.block(ref.block)?.look.name;
+    }
+
+    String? fnName(String id) => libName(id) ?? doc.function(id)?.name;
     bool sameSlot(BlockIssue i, BeSlotRef at) {
       final xp = i.exprPath ?? const <Object>[];
       if (i.scriptId != at.treeId || i.arg != at.arg || i.path.length != at.path.length || xp.length != at.exprPath.length) return false;
@@ -131,6 +137,8 @@ mixin BeTypeHost on BlockHost {
           ? '积木「${tree.name}」'
           : tree is BeRoute
           ? '接口「${describeBeRoute(tree)}」'
+          : tree is BeLibHat
+          ? '库的帽子「${libName(tree.op) ?? '找不到'}」'
           : (coreScopeName(tree) ?? '');
       final spot = block == null ? '' : '${describeBeBlockPath(tree, f.at.path)}（${describeBeBlock(block, fnName)}）';
       final issue = f.issue;
