@@ -26,6 +26,8 @@ String describeNode(LcDocument doc, String? id) {
   final node = doc.find(id);
   if (node == null) return '「已删除的控件」';
   final label = lcSpecs[node.type]?.label ?? node.type;
+  // 在图层里起过名字的：用她起的名字认（第四轮 B6，补 GAP-E-7 的后半）；没起名字的照旧用上面的字。
+  if (node.name.trim().isNotEmpty) return '「$label“${_clip(node.name.trim())}”」';
   final words = switch (node.type) {
     'input' => node.strProp('placeholder'),
     'page' => doc.title.isEmpty ? null : doc.title,
