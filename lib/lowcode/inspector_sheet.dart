@@ -13,6 +13,8 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:lopicode/lowcode/bind_model.dart';
+import 'package:lopicode/lowcode/component_editing.dart';
 import 'package:lopicode/lowcode/component_ops.dart';
 import 'package:lopicode/lowcode/css_codec.dart';
 import 'package:lopicode/lowcode/edit_types.dart';
@@ -124,6 +126,9 @@ class InspectorPanelState extends State<InspectorPanel> {
 
   LcNode? get _node => _doc.find(widget.nodeId);
   bool get _hasEvents => widget.onOpenLogic != null;
+
+  /// 页面上能绑；“编辑组件”页里也能（第四轮 B2：挑的是组件的属性和组件自己的状态）。
+  bool get _canBind => _hasEvents || _doc.root.id == kComponentEditRootId;
 
   /// 换到某一页（选中条上的三个入口用）。
   void showPage(InspectorPage page) {
@@ -385,7 +390,7 @@ class InspectorPanelState extends State<InspectorPanel> {
             bp: bp,
             onStylePage: _page == InspectorPage.style,
             filled: bpOwn.isNotEmpty,
-            stateLabel: state == null ? null : kLcStateLabels[state],
+            stateLabel: state == null ? null : lcStateLabel(state),
             onClear: () => _apply((n, _) => lcReplaceBp(n, bp, const {})),
           );
     final Widget content = switch (_page) {
@@ -399,7 +404,7 @@ class InspectorPanelState extends State<InspectorPanel> {
               key: ValueKey('common-${node.id}'),
               // 平板 / 桌面档：看到的是这一档的样子，样子类的改动只记这一档（inspector_bp_write.dart）。
               ed: bp == null
-                  ? InspectorEdit(doc: _doc, node: preview, parent: parent, apply: _apply, pickImage: widget.pickImage, editDoc: _editDoc, canBind: _hasEvents)
+                  ? InspectorEdit(doc: _doc, node: preview, parent: parent, apply: _apply, pickImage: widget.pickImage, editDoc: _editDoc, canBind: _canBind)
                   : InspectorEdit(
                       doc: _doc,
                       node: seen,
@@ -407,7 +412,7 @@ class InspectorPanelState extends State<InspectorPanel> {
                       apply: (change, {merge = false}) => _apply((n, p) => lcApplyCommonAtBp(n, p, bp, change), merge: merge),
                       pickImage: widget.pickImage,
                       editDoc: _editDoc,
-                      canBind: _hasEvents,
+                      canBind: _canBind,
                       bp: bp,
                     ),
             ),
@@ -444,9 +449,10 @@ class InspectorPanelState extends State<InspectorPanel> {
             LcStateBar(
               state: state,
               filled: {
-                for (final s in kLcStateNames)
+                for (final s in [...kLcStateNames, for (final k in lcClassIfOf(preview)) lcClassState(k.name)])
                   if (lcStateStyle(preview, s).isNotEmpty) s,
               },
+              classes: [for (final k in lcClassIfOf(preview)) k.name],
               onPick: (s) => setState(() => _pickState(s)),
               onClear: () => _apply((n, _) => lcReplaceState(n, state!, const {})),
               caveat: lcStateCaveat(preview.type, state),

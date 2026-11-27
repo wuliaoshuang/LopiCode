@@ -21,6 +21,7 @@ import 'package:lopicode/lowcode/bind_model.dart';
 import 'package:lopicode/lowcode/component_model.dart';
 import 'package:lopicode/lowcode/export_bind_plan.dart';
 import 'package:lopicode/lowcode/export_framework_common.dart';
+import 'package:lopicode/lowcode/export_live_doc.dart';
 import 'package:lopicode/lowcode/export_pages.dart';
 import 'package:lopicode/lowcode/export_theme_bp.dart';
 import 'package:lopicode/lowcode/export_v3_fields.dart';
@@ -106,8 +107,10 @@ class VueJsTarget extends JsTarget {
 ///
 /// 多页面的项目：每页一个 `<页名>.vue`，外加一个外壳 `LcApp.vue`（看地址栏决定显示哪一页，见 export_pages.dart）；
 /// 自定义组件所有页面共用一份。只有一页时和以前逐字节一样。
-LcFrameworkExport exportVue(LcDocument doc) {
-  lcSettleSharedNav(doc); // 共用的底部导航：各页都取“刚改过的那一份”（编辑器里每次修改后已经做过，这里是给直接调导出的人兜底）
+LcFrameworkExport exportVue(LcDocument source) {
+  lcSettleSharedNav(source);
+  // 用了第 6 期新东西（事件、变体、自己的状态、属性绑定）的组件实例：先摊开成普通页面的样子再导出。
+  final doc = lcExportDoc(source, allPages: true);
   if (doc.isMultiPage) return _exportSite(doc);
   final notes = <String>[kNoteBody];
   final pageName = lcPageName(doc);

@@ -2,7 +2,7 @@
 // 状态与绑定：状态是页面 State 类里 s_ 开头的字段（跨页共用的在 LcAppState 里），绑了它的地方跟着变；输入框、开关这些会把值写回去。
 // 积木逻辑这一份不导出（按钮的 onPressed 是空的）：在自己的代码里用 update(() => s_xxx = 新值) 改状态。
 // 没有导出的：
-// · 类名开关 ready（Flutter 里没有“类名”这个东西，而且编辑器里现在也没有给类名配样子的地方；要它在 Flutter 里起作用，请改用“显示条件”或“样式绑定”）。
+// · 类名开关 ready（它还没配“成立时的样子”，Flutter 里没有“类名”这个东西，所以这条在 Flutter 里什么也不做；在编辑器里给它配上样子就会导出）。
 import 'package:flutter/material.dart';
 
 class BindHomePage extends StatefulWidget {

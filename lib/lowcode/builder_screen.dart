@@ -21,6 +21,8 @@ import 'package:lopicode/lowcode/canvas_parts_widgets.dart';
 import 'package:lopicode/lowcode/canvas_view.dart';
 import 'package:lopicode/lowcode/canvas_view_sheet.dart';
 import 'package:lopicode/lowcode/code_sheet.dart';
+import 'package:lopicode/lowcode/comp_lib.dart';
+import 'package:lopicode/lowcode/comp_lib_sheet.dart';
 import 'package:lopicode/lowcode/component_sheet.dart';
 import 'package:lopicode/lowcode/edit_types.dart';
 import 'package:lopicode/lowcode/editor_recents.dart';

@@ -286,7 +286,7 @@ class InspectorDataSection extends StatelessWidget {
                   ),
                 ],
               ),
-              Text('类名开关：条件成立时给这个组件加上这个类名（类名的样子要在导出以后自己的样式表里写）。样式：某一条 CSS 的值跟着状态变。', style: t.bodySmall?.copyWith(color: c.textFaint)),
+              Text('类名开关：条件成立时给这个组件加上这个类名；它成立时的样子在“样式”页顶上“状态”一行里选“类名 xx”来配。样式：某一条 CSS 的值跟着状态变。', style: t.bodySmall?.copyWith(color: c.textFaint)),
             ],
           ),
         ],

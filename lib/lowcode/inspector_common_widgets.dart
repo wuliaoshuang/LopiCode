@@ -5,6 +5,7 @@
 // - 没有主操作：改了就生效。文字框打字、加减算连续操作（停 0.4 秒记一条撤销），点档、点选项一下一条。
 // - 写到哪儿：见 inspector_write.dart（能用简写属性表达且样式里没盖着就写简写属性——四种导出和旧面板逐字一样）。
 // - 取用的 tokens：Space.x2/x3/x4、textMuted（名字）、textFaint（说明小字）。
+import 'package:lopicode/lowcode/component_instance_widgets.dart';
 import 'package:lopicode/lowcode/component_values_widgets.dart';
 import 'package:lopicode/lowcode/edit_types.dart';
 import 'package:lopicode/lowcode/inspector_bind_widgets.dart';
@@ -453,6 +454,7 @@ class _InspectorCommonPageState extends State<InspectorCommonPage> {
                 }
               }),
             ),
+            ComponentInstanceExtras(doc: ed.doc, node: n, apply: (change) => ed.apply((n, _) => change(n))),
             const SizedBox(height: Space.x2),
             _width(),
             _margin(),

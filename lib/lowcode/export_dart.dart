@@ -2,6 +2,7 @@ import 'package:lopicode/lowcode/component_ops.dart';
 import 'package:lopicode/lowcode/export_dart_hook.dart';
 import 'package:lopicode/lowcode/export_dart_live.dart';
 import 'package:lopicode/lowcode/export_dart_v3.dart';
+import 'package:lopicode/lowcode/export_live_doc.dart';
 import 'package:lopicode/lowcode/icon_set.dart';
 import 'package:lopicode/lowcode/image_assets.dart';
 import 'package:lopicode/lowcode/model.dart';
@@ -16,8 +17,10 @@ import 'package:lopicode/lowcode/quick_actions.dart';
 ///
 /// 项目里用了主题变量、状态与绑定、断点、状态样式、网格中的任何一样，走“会动的那一路”（export_dart_live.dart）：
 /// 变量集中在一个类里、状态变了界面重画、按屏宽取样子。一样都没用的项目走原来的路，结果和以前逐字节一样。
-String exportDart(LcDocument doc, {String? className}) {
-  lcSettleSharedNav(doc); // 共用的底部导航：各页都取“刚改过的那一份”（编辑器里每次修改后已经做过，这里是给直接调导出的人兜底）
+String exportDart(LcDocument source, {String? className}) {
+  lcSettleSharedNav(source); // 共用的底部导航：各页都取“刚改过的那一份”（编辑器里每次修改后已经做过，这里是给直接调导出的人兜底）
+  // 用了第 6 期新东西的组件实例先化成普通页面的样子（没有这种实例时就是原来的文档）。
+  final doc = lcExportDoc(source, allPages: true);
   final live = dartLiveWanted(doc) ? DartLiveExport(doc) : null;
   String page(String name) => live == null ? _pageClass(doc, name) : live.pageClass(name);
   String file(List<String> classes, String tail) => live == null ? _file(classes, tail, '') : _file(classes, tail + live.tail(), live.header());

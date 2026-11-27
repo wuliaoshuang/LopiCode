@@ -13,8 +13,12 @@
 ///   · 拆开（[deep] 为 false）：只拆这一层，里面套的实例原样留着；填进来的内容原样接过去（就是原来那几个节点）。
 library;
 
+import 'package:lopicode/lowcode/bind_model.dart';
+import 'package:lopicode/lowcode/component_expand_live.dart';
+import 'package:lopicode/lowcode/component_extras.dart';
 import 'package:lopicode/lowcode/component_model.dart';
 import 'package:lopicode/lowcode/component_ops.dart';
+import 'package:lopicode/lowcode/logic_model.dart';
 import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/lowcode/slots.dart';
 
@@ -42,6 +46,12 @@ class LcExpander {
   final Set<String> visiting = {};
   int budget = kComponentExpandBudget;
 
+  /// 展开时冒出来的“每个实例一份”的组件状态（名字已经换成 `<实例 id>__<状态名>`），见 component_expand_live.dart。
+  final List<LcVariable> hoisted = [];
+
+  /// 展开时冒出来的事件处理（组件里的控件往外发事件、实例上给那个事件接了积木）。
+  final List<LcSynthHandler> synth = [];
+
   /// 页面上（不在任何定义里）的一棵子树：里面的实例都展开，别的照原样（有子节点的拷一层壳）。
   LcNode outer(LcNode n) {
     if (n.type == 'component') return expand(n) ?? n;
@@ -67,7 +77,8 @@ class LcExpander {
   }
 
   /// [content]：已经处理好的、要填进插槽的子节点；不给就用 [inst] 自己的子节点。
-  LcNode? expand(LcNode inst, [int depth = 0, List<LcNode>? content]) {
+  /// [handlers]：这个实例那个组件的事件接到的积木；不给就用实例自己的 `on`（页面上的实例）。
+  LcNode? expand(LcNode inst, [int depth = 0, List<LcNode>? content, Map<String, List<LcBlock>>? handlers]) {
     final ref = inst.type == 'component' ? inst.props['ref'] : null;
     final def = ref is String ? doc.component(ref) : null;
     // 定义没了、套得太深、绕回自己：这一层不展开。
@@ -81,6 +92,8 @@ class LcExpander {
     visiting.add(def.id);
     final values = instanceValues(def, inst);
     final rootId = inst.id;
+    // 第 6 期的新东西（事件、变体、组件状态、绑定）：用了才走这条路；没用的和以前一个字不差。
+    final live = lcDefIsLive(def) || lcInstanceIsLive(inst) ? LcLiveScope(def, inst, values, handlers ?? lcOnOf(inst)) : null;
 
     String mint(LcNode src) {
       var id = '${rootId}__${src.id}';
@@ -136,12 +149,16 @@ class LcExpander {
       final id = isRoot ? rootId : mint(src);
       if (src.type == 'component') {
         final placed = LcNode(id: id, type: 'component', props: cloneLcProps(src.props), style: Map.of(src.style))..slot = src.slot;
+        // 里面套的实例自己的设置（选的变体、绑的属性——已经改写成外面这一层的写法）照带。
+        for (final k in const [kLcVariant, kLcData]) {
+          if (live != null && src.more[k] != null) placed.more[k] = src.more[k];
+        }
         // 定义里的实例也可以带着填好的内容（都是这个定义里的节点，按这个定义的规矩造出来）。
         final inner = [
           for (final c in src.children)
             if (budget > 0) ...build(c, false),
         ];
-        return [(deep ? expand(placed, depth + 1, inner) : null) ?? (placed..children.addAll(inner))];
+        return [(deep ? expand(placed, depth + 1, inner, live?.forwarded(src) ?? const {}) : null) ?? (placed..children.addAll(inner))];
       }
       final props = cloneLcProps(src.props);
       src.bind.forEach((attr, name) {
@@ -155,15 +172,21 @@ class LcExpander {
           props[attr] = componentValueText(v);
         }
       });
+      if (live != null) {
+        for (final e in lcEmitsOf(src).entries) {
+          final body = live.handlers[e.value.event];
+          if (body != null && body.isNotEmpty) synth.add(LcSynthHandler(id, e.key, body));
+        }
+      }
       // 节点上别的东西（在哪个插槽里、状态样式…）照带；名字、锁定、编辑器里隐藏是定义自己的事，不带到页面上。
       return [
         LcNode(
           id: id,
           type: src.type,
           props: props,
-          style: Map.of(src.style),
+          style: live == null ? Map.of(src.style) : {...src.style, ...live.variantStyle(src.id)},
           keptProps: src.keptProps,
-          more: {...src.more},
+          more: {...src.more}..remove(live == null ? '' : kLcEmit),
           raw: src.raw,
           children: [
             for (final c in src.children)
@@ -173,7 +196,8 @@ class LcExpander {
       ];
     }
 
-    final root = build(def.root, true).first;
+    final root = build(live?.root() ?? def.root, true).first;
+    if (live != null) hoisted.addAll(live.states());
     visiting.remove(def.id);
     // 实例自己的摆放（宽度、外边距、样式、在父节点的哪个插槽里）盖在最外层。
     for (final key in const ['width', 'margin']) {

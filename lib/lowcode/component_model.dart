@@ -13,12 +13,14 @@ class LcComponentProp {
   String type;
   Object defaultValue;
 
-  static const List<String> types = ['text', 'number', 'color', 'bool'];
+  /// `list`（第四轮 B2 加的）：一个列表，默认是空的；多半由用它的地方绑一个列表状态进来。
+  static const List<String> types = ['text', 'number', 'color', 'bool', 'list'];
   static final RegExp namePattern = RegExp(r'^[A-Za-z_][A-Za-z0-9_]{0,31}$');
 
   static Object coerce(String type, Object? v) => switch (type) {
     'number' => v is num ? v : 0,
     'bool' => v is bool && v,
+    'list' => v is List ? v : const <Object?>[],
     'color' => v is String && RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(v) ? v.toUpperCase() : '#000000',
     _ => v is String ? v : '',
   };

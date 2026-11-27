@@ -198,8 +198,32 @@ class DartLiveGen implements DartLiveHook {
         (props ??= {...n.props})[prop] = subs.number('_lcPx(${expr(b.value)}, $fallback)');
       }
     }
+    // 类名开关：Flutter 里没有类名，按“条件成立时用另一组属性”接上（只认和样式绑定一样的那几条）。
     for (final c in lcClassIfOf(n)) {
-      notes.add('类名开关 ${c.name}（Flutter 里没有“类名”这个东西，而且编辑器里现在也没有给类名配样子的地方；要它在 Flutter 里起作用，请改用“显示条件”或“样式绑定”）。');
+      if (c.style.isEmpty) {
+        notes.add('类名开关 ${c.name}（它还没配“成立时的样子”，Flutter 里没有“类名”这个东西，所以这条在 Flutter 里什么也不做；在编辑器里给它配上样子就会导出）。');
+        continue;
+      }
+      final on = '_lcBool(${expr(c.when)})';
+      for (final d in c.style.entries) {
+        final prop = _styleBindProps[d.key];
+        if (prop == null) {
+          notes.add('类名开关 ${c.name} 的样子里的 ${d.key}（Flutter 这边只认底色、文字颜色、字号、内外边距、圆角、间距、宽、高这几条）。');
+          continue;
+        }
+        final old = (props ?? n.props)[prop];
+        final value = dartLiveStr(lcSubstVars(d.value, vars.values));
+        if (prop == 'bg' || prop == 'color') {
+          final fallback = subs.colorCode(old) ?? (old is String && cssColorToArgb(old) != null ? dartLiveColor(cssColorToArgb(old)!) : null);
+          (props ??= {...n.props})[prop] = subs.color('_lcColor($on ? $value : null${fallback == null ? '' : ', $fallback'})');
+        } else if (prop == 'width' || prop == 'height') {
+          final fallback = subs.numberCode(old) ?? (old is num ? dartLiveNum(old) : null);
+          (props ??= {...n.props})[prop] = subs.number(fallback == null ? '_lcPxOrNull($on ? $value : null)' : '_lcPx($on ? $value : null, $fallback)');
+        } else {
+          final fallback = subs.numberCode(old) ?? (old is num ? dartLiveNum(old) : '0');
+          (props ??= {...n.props})[prop] = subs.number('_lcPx($on ? $value : null, $fallback)');
+        }
+      }
     }
     return props == null ? n : dartLiveCopy(n, props: props);
   }

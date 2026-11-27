@@ -93,6 +93,7 @@ bool valueFitsProp(LcComponentProp p, Object? v) => _fit(p, v) != null;
 Object? _fit(LcComponentProp p, Object? v) => switch (p.type) {
   'number' => v is num && v.isFinite ? v : null,
   'bool' => v is bool ? v : null,
+  'list' => v is List ? v : null,
   'color' => v is String && _hex.hasMatch(v) ? v.toUpperCase() : null,
   _ => v is String ? v : null,
 };

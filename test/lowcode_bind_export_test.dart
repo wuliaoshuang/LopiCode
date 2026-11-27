@@ -83,7 +83,7 @@ void main() {
     expect('for (final (v_i, v_it)'.allMatches(dart).length, 1, reason: '重复只写一份模板');
   });
 
-  test('自定义组件定义里的绑定：普通网页和 Flutter 把实例摊开，所以起作用；Vue / React 的组件文件照没绑的出', () {
+  test('自定义组件定义里的绑定：四种导出都起作用（第四轮 B2 起 Vue / React 也把这种实例摊开进页面）', () {
     LcDocument make(bool bound) {
       final doc = LcDocument.starter('我的小站');
       doc.logic.variables.add(LcVariable(name: 'who', type: 'text', initial: '小塔塔'));
@@ -105,7 +105,9 @@ void main() {
       for (final k in bound.keys)
         if (bound[k] != plain[k]) k,
     ];
-    expect(changed, ['html/index.html', 'html/logic.js', 'flutter/page.dart'], reason: '变了的文件');
+    expect(changed, ['html/index.html', 'html/logic.js', 'vue/LcPage.vue', 'react/LcPage.jsx', 'flutter/page.dart'], reason: '变了的文件');
+    expect(bound['vue/LcPage.vue'], contains('小塔塔'));
+    expect(bound['react/LcPage.jsx'], contains('小塔塔'));
     expect(bound['html/index.html'], contains('小塔塔'));
     expect(bound['flutter/page.dart'], contains("'小塔塔'"));
   });

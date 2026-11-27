@@ -4,6 +4,7 @@ import 'package:lopicode/lowcode/bind_model.dart';
 import 'package:lopicode/lowcode/component_ops.dart';
 import 'package:lopicode/lowcode/export_bind_plan.dart';
 import 'package:lopicode/lowcode/export_html_bind.dart';
+import 'package:lopicode/lowcode/export_live_doc.dart';
 import 'package:lopicode/lowcode/export_pages.dart';
 import 'package:lopicode/lowcode/export_theme_bp.dart';
 import 'package:lopicode/lowcode/export_v3_fields.dart';
@@ -58,7 +59,9 @@ const String kLowcodeLogicMarker = '// 由 LopiCode 低代码搭建器生成';
 
 /// 把页面导出成 `index.html` + `style.css`（有逻辑时再加 `logic.js`）的内容。
 /// [cssFile] / [jsFile]：这一页引用的样式和脚本文件名（多页面时除首页外每页各有一份，见 export_pages.dart）。
-LcHtmlExport exportHtml(LcDocument doc, {String cssFile = 'style.css', String jsFile = kLowcodeLogicFile}) {
+LcHtmlExport exportHtml(LcDocument source, {String cssFile = 'style.css', String jsFile = kLowcodeLogicFile}) {
+  // 用了第 6 期新东西的组件实例先化成普通页面的样子（没有这种实例时就是原来的文档）。
+  final doc = lcExportDoc(source);
   final css = StringBuffer();
   final body = StringBuffer();
   final bp = LcBpCss();

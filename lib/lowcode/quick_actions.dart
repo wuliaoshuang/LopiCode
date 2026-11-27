@@ -120,3 +120,23 @@ bool lcSetQuick(LcDocument doc, String nodeId, LcQuickAction a, String? value) {
   });
   return true;
 }
+
+// —— 给组件事件用的（第四轮 B2）：同一批快捷动作，只是不挂在“点击”的帽子下，而是存在实例的 `on` 里 ——
+
+/// “让一个数字状态加 1”：只给组件事件用（页面上的点击要这个就进积木）。填的是状态名。
+const LcQuickAction kLcBumpQuick = LcQuickAction('changeVar', 'name', '让一个数字加 1', '选一个数字状态');
+
+/// 这块积木在这个快捷动作里填的是什么；不是这个快捷动作的样子返回 null。
+String? lcQuickBlockValue(LcBlock b, LcQuickAction a) {
+  if (!identical(a, kLcBumpQuick)) return _valueOf(b, a);
+  final by = b.args['by'];
+  return b.op == a.op && b.args['name'] is String && by is Map && by['e'] == 'num' && by['v'] == 1 ? b.args['name'] as String : null;
+}
+
+/// 造这个快捷动作的那一块积木。
+LcBlock lcQuickBlock(LcQuickAction a, String v) => switch (a) {
+  _ when identical(a, kLcBumpQuick) => LcBlock(op: a.op, args: {a.arg: v, 'by': exNum(1)}),
+  _ when a.picksPage => LcBlock(op: a.op, args: {a.arg: v}),
+  _ when a.picksDialog => LcBlock(op: a.op, args: {a.arg: v, 'prop': 'visible', 'value': exBool(a.dialogShown!)}),
+  _ => LcBlock(op: a.op, args: {a.arg: exText(v)}),
+};

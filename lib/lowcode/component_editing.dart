@@ -1,9 +1,11 @@
 /// “编辑组件的内容”用的临时文档：怎么造、怎么写回定义（不带界面；界面在 component_editor_sheet.dart）。
 library;
 
+import 'package:lopicode/lowcode/component_extras.dart';
 import 'package:lopicode/lowcode/component_model.dart';
 import 'package:lopicode/lowcode/component_ops.dart';
 import 'package:lopicode/lowcode/component_slots.dart';
+import 'package:lopicode/lowcode/logic_model.dart';
 import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/lowcode/slots.dart';
 
@@ -17,6 +19,26 @@ void _walk(LcNode n, void Function(LcNode n) visit) {
   }
 }
 
+/// 组件里的绑定能读到的东西：属性（一个属性一个同名的状态，初值＝默认值）＋组件自己的状态。
+List<LcVariable> componentScopeVariables(LcComponentDef def) {
+  final props = {for (final p in def.props) p.name};
+  return [
+    for (final p in def.props)
+      LcVariable(
+        name: p.name,
+        type: switch (p.type) {
+          'number' => 'number',
+          'bool' => 'bool',
+          'list' => 'list',
+          _ => 'text',
+        },
+        initial: p.defaultValue,
+      ),
+    for (final s in lcCompStates(def))
+      if (!props.contains(s.name)) LcVariable(name: s.name, type: s.type, initial: s.initial, derived: s.derived),
+  ];
+}
+
 /// 造一份只在“编辑组件”时用的临时文档：一张空白页，里面只放这个组件的内容（拷贝）。
 /// 搭建页现成的画布、属性、样式面板都能直接作用在它上面；改完用 [applyComponentEditing] 写回去。
 /// 临时文档里带着别的组件定义（拷贝，供里面套的实例显示、供组件栏列出），会造成循环的那些不带。
@@ -26,6 +48,8 @@ LcDocument? componentEditingDocument(LcDocument doc, String componentId) {
   return LcDocument(
     title: def.name,
     root: LcNode(id: kComponentEditRootId, type: 'page', props: Map.of(lcSpecs['page']!.defaults), children: [copyLcTree(def.root)]),
+    // 这一页的“页面级状态”＝组件的属性（按默认值，只是给绑定挑、给画布算初值用）＋组件自己的状态。
+    logic: LcLogic(variables: componentScopeVariables(def)),
     components: [
       for (final c in doc.components)
         if (c.id != componentId && !wouldCycle(doc, componentId, c.id))
@@ -95,6 +119,12 @@ LcOpResult applyComponentEditing(LcDocument doc, String componentId, LcDocument 
   if (blocked != null) return LcOpResult.fail(blocked);
   renameSlotsInInstances(doc, componentId, renames);
   def.root = root;
+  // 临时页面里不是属性的那些状态＝组件自己的状态（每个实例一份）。
+  final propNames = {for (final p in def.props) p.name};
+  lcSetCompStates(def, [
+    for (final v in editing.logic.variables)
+      if (!propNames.contains(v.name)) v,
+  ]);
   lcLinkInstances(doc);
   return LcOpResult.ok(componentId: componentId);
 }

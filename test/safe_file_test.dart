@@ -34,7 +34,11 @@ import 'package:lopicode/core/safe_file.dart';
 import 'package:lopicode/core/stores.dart';
 import 'package:lopicode/core/templates.dart';
 import 'package:lopicode/lang/gen2_all.dart';
+import 'package:lopicode/lowcode/comp_lib.dart';
+import 'package:lopicode/lowcode/comp_lib_store.dart';
+import 'package:lopicode/lowcode/component_model.dart';
 import 'package:lopicode/lowcode/editor_recents.dart';
+import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/session/conversation.dart';
 import 'package:lopicode/session/favorites.dart';
 import 'package:lopicode/session/turn_journal.dart';
@@ -1142,6 +1146,28 @@ void main() {
         final made = await beLibCreate(guard, id: 'tata/fine', name: '好的');
         expect(made.problem, isNull);
         expect((await beLibsRead(guard)).map((s) => s.id), contains('tata/fine'));
+      });
+    }
+  });
+  group('项目里的组件库 components/libs.json 和库的文件夹', () {
+    for (final entry in corruptSamples.entries) {
+      test('坏内容（${entry.key}）：登记表坏了当没有登记、库文件坏了那个库标成用不了，不抛异常；之后照常能存新的', () async {
+        final guard = PathGuard(tmp.path);
+        File('${tmp.path}/components/libs.json')
+          ..createSync(recursive: true)
+          ..writeAsStringSync(entry.value);
+        for (final name in ['lib.json', 'components.json', 'images.json']) {
+          File('${tmp.path}/components/tata/bad/$name')
+            ..createSync(recursive: true)
+            ..writeAsStringSync(entry.value);
+        }
+        final libs = await compLibsRead(guard);
+        expect(libs.where((s) => s.ok), isEmpty);
+        File('${tmp.path}/bad.lopilib').writeAsStringSync(entry.value);
+        expect((await compLibOpenPack(guard, 'bad.lopilib')).lib.ok, isFalse);
+        final good = CompLib(id: 'tata/fine', name: '好的', version: '1.0.0', defs: [LcComponentDef(id: 'c1', name: '组件', root: LcNode(id: 'r', type: 'column'))]);
+        expect(await compLibStore(guard, good), isNull);
+        expect((await compLibsRead(guard)).where((s) => s.ok).map((s) => s.id), ['tata/fine']);
       });
     }
   });

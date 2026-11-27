@@ -26,11 +26,13 @@ String componentPropTypeLabel(String type) => switch (type) {
   'number' => '数字',
   'color' => '颜色',
   'bool' => '开关',
+  'list' => '列表',
   _ => '文字',
 };
 
 /// 一个值写成给人看的短句（列表副标题里用）。
 String componentValueSummary(Object? v) => switch (v) {
+  final List<Object?> l => l.isEmpty ? '空列表' : '${l.length} 项',
   final bool b => b ? '开' : '关',
   final String s => s.isEmpty ? '（空）' : '“$s”',
   _ => componentValueText(v),
@@ -194,7 +196,10 @@ class ComponentValuesForm extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 6),
-          ComponentValueField(key: ValueKey('comp-value-${p.name}'), type: p.type, value: values[p.name] ?? p.defaultValue, onChanged: (v) => _set(p, v)),
+          if (p.type == 'list')
+            Text('列表不在这里填：在下面“属性跟着状态变”里选一个列表状态。', style: t.bodySmall?.copyWith(color: c.textMuted))
+          else
+            ComponentValueField(key: ValueKey('comp-value-${p.name}'), type: p.type, value: values[p.name] ?? p.defaultValue, onChanged: (v) => _set(p, v)),
           const SizedBox(height: Space.x4),
         ],
       ],

@@ -455,6 +455,7 @@ List<(String, LcComponentProp, Object)> lcInstanceValues(LcComponentPlan plan, L
     final fits = switch (p.type) {
       'number' => v is num && v.isFinite,
       'bool' => v is bool,
+      'list' => v is List,
       'color' => v is String && RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(v),
       _ => v is String,
     };

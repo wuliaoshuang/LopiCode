@@ -4,13 +4,17 @@
 // - 选了“平时”以外的：下面多一行小字说清楚“现在改的只记成这个状态下和平时不一样的地方”，右边“清掉”（这个状态写过东西才有）。
 //   这一行用强调色的浅底，时刻提醒她现在改的不是平时的样子。
 // - 选了“禁用”、可这种组件不能禁用（文本、容器…）：提示条下面再加一句灰字，说清楚设了不生效、哪些组件能禁用。
+// - 这个控件上有“类名开关”时（第四轮 B2）：每条类名在后面多一个药丸“类名 xx”，选了改的是这条类名成立时的样子。
 // - 取用的 tokens：Space.x1/x2/x3、Radii.sm、accent、accentSoft、surfaceMuted、text、textMuted。
 import 'package:lopicode/lowcode/states.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:material_ui/material_ui.dart';
 
 class LcStateBar extends StatelessWidget {
-  const LcStateBar({super.key, required this.state, required this.filled, required this.onPick, required this.onClear, this.caveat});
+  const LcStateBar({super.key, required this.state, required this.filled, required this.onPick, required this.onClear, this.caveat, this.classes = const []});
+
+  /// 这个控件上的类名开关（第四轮 B2）：每条多一个药丸“类名 xx”，选了改的是它成立时的样子。
+  final List<String> classes;
 
   /// 这个状态在这种组件上不生效时的一句说明（灰字，写在提示条下面）。
   final String? caveat;
@@ -45,7 +49,7 @@ class LcStateBar extends StatelessWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(name == null ? '平时' : kLcStateLabels[name]!, style: t.labelLarge?.copyWith(color: on ? c.accent : c.text)),
+                    Text(name == null ? '平时' : (lcClassOfState(name) == null ? kLcStateLabels[name]! : '类名 ${lcClassOfState(name)}'), style: t.labelLarge?.copyWith(color: on ? c.accent : c.text)),
                     if (name != null && filled.contains(name))
                       Container(
                         key: Key('lc-state-dot-$name'),
@@ -77,7 +81,7 @@ class LcStateBar extends StatelessWidget {
             Expanded(
               child: SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
-                child: Row(children: [pill(null), for (final s in kLcStateNames) pill(s)]),
+                child: Row(children: [pill(null), for (final s in kLcStateNames) pill(s), for (final k in classes) pill(lcClassState(k))]),
               ),
             ),
           ],
@@ -91,7 +95,7 @@ class LcStateBar extends StatelessWidget {
             child: Row(
               children: [
                 Expanded(
-                  child: Text('现在改的是“${kLcStateLabels[now]}”时的样子：只记和平时不一样的地方。', style: t.bodySmall?.copyWith(color: c.text)),
+                  child: Text('现在改的是“${lcStateLabel(now)}”时的样子：只记和平时不一样的地方。', style: t.bodySmall?.copyWith(color: c.text)),
                 ),
                 if (filled.contains(now)) TextButton(key: const Key('lc-state-clear'), onPressed: onClear, child: const Text('清掉')) else const SizedBox(height: 40),
               ],
