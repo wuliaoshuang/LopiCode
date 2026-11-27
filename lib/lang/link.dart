@@ -16,6 +16,10 @@ import 'package:lopicode/lang/errors.dart';
 import 'package:lopicode/lang/rename.dart';
 import 'package:lopicode/lang/type_issue.dart';
 
+/// 指明了模块的名字：`模块名` ＋ 这个记号 ＋ `名字`。只在内存里的语法树上有（库积木展开时加的），不落盘、不进生成的代码。
+const String kLQualifiedMark = '\u001f';
+String lQualified(String module, String name) => '$module$kLQualifiedMark$name';
+
 /// [linkProgram] 的结果。
 class LLinked {
   const LLinked(this.module, this.issues, this.order, this.names);
@@ -158,6 +162,15 @@ LLinked linkProgram(LProgram p) {
     final m = byName[mn]!;
     final own = {for (final d in m.decls) d.name};
     String resolve(String n) {
+      // 指明了模块的名字（库积木展开出来的，见 lib_apply.dart 的 lQualified）：不看“用到了谁”、不怕和别人重名，只要那个东西公开了。
+      final cut = n.indexOf(kLQualifiedMark);
+      if (cut > 0) {
+        final qm = n.substring(0, cut), qn = n.substring(cut + 1);
+        final d = byName[qm]?.decls.where((d) => d.name == qn).firstOrNull;
+        if (d == null) return qn;
+        if (qm != mn && !_isPublic(d)) bad('M06', mn, '模块「$qm」里的「$qn」没有公开，「$mn」用不了：在「$qm」里给它勾上“公开”', node: m);
+        return finalName(qm, qn);
+      }
       if (own.contains(n)) return finalName(mn, n);
       final all = owners[n];
       if (all == null) return n; // 不是哪个模块的顶层名字（内置的、写错的）：留给类型检查说

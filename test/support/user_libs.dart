@@ -408,3 +408,54 @@ J batchUserDoc() => {
   ],
 };
 const String kBatchWant = '[9,1,4]｜算出 16｜超时了｜做完｜超时';
+
+// ———————————————————— 两个（三个）库同时用：故意起一样的名字 ————————————————————
+// “记事”库里的函数、变量和“流程”库同名，还有一个函数和“校验器”库的同名；用它们的文档自己也有一个叫“记一笔”的函数。
+const String kLibNotes = 'tata/notes';
+J notesLibDoc() => libDoc(
+  '记事',
+  kLibNotes,
+  author: '小塔塔',
+  globals: [
+    {'name': 'noted', 'init': nm(0), 'type': tInt},
+  ],
+  functions: [
+    tfn('f1', '记一笔', [tpar('话', tText)], [
+      setv('noted', op2('+', vr('noted'), nm(10))),
+      say([tx('〔记事〕'), pm('话')]),
+    ]),
+    tfn('f2', '记了几笔了', [], [ret(vr('noted'))], returns: tInt),
+    tfn('f3', '不为空的规则', [], [ret(tx('记事的规则'))], returns: tText),
+    tfn('f4', '记两笔', [tpar('话', tText)], [
+      callS('f1', {'话': pm('话')}),
+      callS('f1', {'话': pm('话')}),
+    ]),
+  ],
+  blocks: [
+    def('note', 'call', fn: 'f1', look: look('记一笔', '记事：{话}')),
+    def('noted', 'call', fn: 'f2', look: look('记了几笔', '记事记了几笔')),
+    def('rule', 'call', fn: 'f3', look: look('规则', '记事的规则')),
+    def('twice', 'expand', fn: 'f4', look: look('记两笔', '记事两遍：{话}')),
+  ],
+);
+
+J manyUserDoc() => {
+  ...coreDoc('三个库一起用', functions: [
+    tfn('f1', '记一笔', [tpar('话', tText)], [say([tx('自己的 '), pm('话')])]),
+  ], main: [
+    callS('f1', {'话': tx('甲')}),
+    lb(kLibFlow, 'note', {'话': tx('乙')}),
+    lb(kLibNotes, 'note', {'话': tx('丙')}),
+    lb(kLibNotes, 'twice', {'话': tx('丁')}),
+    log(lx(kLibNotes, 'rule')),
+    konst('c', lx(kLibCheck, 'newChecker')),
+    lb(kLibCheck, 'add', {'对象': vr('c'), 'r': lx(kLibCheck, 'notEmpty')}),
+    log(lx(kLibCheck, 'joinAll', {'问题': lx(kLibCheck, 'check', {'对象': vr('c'), '值': tx('')})})),
+    let('noted', nm(0)),
+    lb(kLibFlow, 'sumTo', {'n': nm(3), '结果': 'noted'}),
+    say([lx(kLibFlow, 'noted'), tx('/'), lx(kLibNotes, 'noted'), tx('/'), vr('noted')]),
+  ]),
+  'version': 5,
+  'uses': [use(kLibFlow), use(kLibNotes), use(kLibCheck)],
+};
+const String kManyWant = '自己的 甲\n▶乙\n〔记事〕丙\n〔记事〕丁\n〔记事〕丁\n记事的规则\n不能空着\n1/30/6\n';

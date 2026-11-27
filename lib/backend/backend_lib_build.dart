@@ -23,6 +23,8 @@ import 'package:lopicode/lang/ast.dart';
 import 'package:lopicode/lang/custom_block.dart';
 import 'package:lopicode/lang/lc_write.dart';
 import 'package:lopicode/lang/lib_model.dart';
+import 'package:lopicode/lang/link.dart';
+import 'package:lopicode/lang/rename.dart';
 import 'package:lopicode/lang/rules.dart';
 import 'package:lopicode/lang/typecheck.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
@@ -221,6 +223,8 @@ BeLibBuilt _build(BeDocument source, BeLibInfo info, List<String> problems) {
       if (d.how == LibHow.expand) doc.function(d.fn)!.ident: d,
   };
 
+  // 库里用了别的库的积木：展开出来的名字带着“是哪个模块的”记号（lQualified），落盘前去掉——库的模块靠“用到了谁”去找它们。
+  final plain = LRenamer((n) => n.contains(kLQualifiedMark) ? n.substring(n.indexOf(kLQualifiedMark) + 1) : n);
   final files = <String, String>{};
   final moduleEntries = <Map<String, String>>[];
   final moduleOf = <String, String>{};
@@ -228,10 +232,10 @@ BeLibBuilt _build(BeDocument source, BeLibInfo info, List<String> problems) {
   final writer = LcWriter();
   var n = 0;
   for (final m in own) {
-    final decls = [
+    final decls = plain.decls([
       for (final d in m.decls)
         if (!(d is LFuncDecl && expandFns.containsKey(d.name))) d,
-    ];
+    ]);
     for (final d in m.decls) {
       moduleOf[d.name] = rename(m.name);
     }
@@ -263,7 +267,7 @@ BeLibBuilt _build(BeDocument source, BeLibInfo info, List<String> problems) {
   final table = BeFuncTable(doc);
   final blocks = <Map<String, Object?>>[];
   for (final d in info.blocks) {
-    final got = _block(doc, info, d, table, built, moduleOf, problems);
+    final got = _block(doc, info, d, table, built, moduleOf, problems, plain);
     if (got != null) blocks.add(got);
   }
   if (problems.isNotEmpty) return _fail(problems);
@@ -323,7 +327,7 @@ Object _arg(String param, BeLibParam? p) => switch (p?.from) {
   _ => param,
 };
 
-Map<String, Object?>? _block(BeDocument doc, BeLibInfo info, BeLibDef d, BeFuncTable table, BeServiceBuilt built, Map<String, String> moduleOf, List<String> problems) {
+Map<String, Object?>? _block(BeDocument doc, BeLibInfo info, BeLibDef d, BeFuncTable table, BeServiceBuilt built, Map<String, String> moduleOf, List<String> problems, LRenamer plain) {
   void bad(String why) => problems.add('积木「${d.look?.name ?? d.id}」：$why');
   final List<BeParam> params;
   final CustomBlockLook base;
@@ -413,7 +417,8 @@ Map<String, Object?>? _block(BeDocument doc, BeLibInfo info, BeLibDef d, BeFuncT
     return out;
   }
   // 原地展开：函数的定义写成模板。
-  final decl = built.decls.where((x) => x.key == fn!.id).firstOrNull?.decl;
+  final found = built.decls.where((x) => x.key == fn!.id).firstOrNull?.decl;
+  final decl = found == null ? null : plain.decl(found);
   if (decl is! LFuncDecl) {
     bad('它的定义翻不出来');
     return null;

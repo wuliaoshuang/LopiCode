@@ -11,7 +11,10 @@ import 'package:lopicode/lang/ast.dart';
 import 'package:lopicode/lang/types.dart';
 
 class LRenamer {
-  LRenamer(this.resolve);
+  LRenamer(this.resolve, {this.keep});
+
+  /// 这些节点（按“是不是同一个对象”认）原样留着、不往里走。库积木展开时用：模板里的名字要改，填进洞里的用户的东西不改。
+  final Set<Object>? keep;
 
   /// 一个没被挡住的顶层名字 → 它在合并以后的程序里叫什么（不改就原样返回）。
   final String Function(String name) resolve;
@@ -122,12 +125,13 @@ class LRenamer {
   List<LExpr> exprs(List<LExpr> xs) => [for (final e in xs) expr(e)];
 
   LTarget _target(LTarget t) => switch (t) {
-    LTName() => LTName(_val(t.name), src: t.src),
+    LTName() => keep?.contains(t) ?? false ? t : LTName(_val(t.name), src: t.src),
     LTIndex() => LTIndex(expr(t.of), expr(t.key), src: t.src),
     LTField() => LTField(expr(t.of), t.name, src: t.src),
   };
 
   LStmt stmt(LStmt s) {
+    if (keep?.contains(s) ?? false) return s;
     switch (s) {
       case LLet():
         final value = expr(s.value);
@@ -189,6 +193,7 @@ class LRenamer {
   List<LFieldInit> _inits(List<LFieldInit> xs) => [for (final f in xs) LFieldInit(f.name, expr(f.value))];
 
   LExpr expr(LExpr e) {
+    if (keep?.contains(e) ?? false) return e;
     switch (e) {
       case LLit() || LThis():
         return e;

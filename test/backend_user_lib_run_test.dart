@@ -20,6 +20,7 @@ void main() {
   final cases = <(String, J Function(), List<J Function()>, String)>[
     ('校验器（类与接口）', checkUserDoc, [checkLibDoc], kCheckWant),
     ('流程（帽子、隐含的东西、带口）', flowUserDoc, [flowLibDoc], kFlowWant),
+    ('三个库一起用（故意同名）', manyUserDoc, [flowLibDoc, notesLibDoc, checkLibDoc], kManyWant),
   ];
   for (final (name, user, libs, want) in cases) {
     for (final language in kGen2Languages) {
