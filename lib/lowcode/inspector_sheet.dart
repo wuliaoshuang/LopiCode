@@ -395,6 +395,8 @@ class InspectorPanelState extends State<InspectorPanel> {
             filled: bpOwn.isNotEmpty,
             stateLabel: state == null ? null : lcStateLabel(state),
             stateSplit: stateBp != null,
+            stateFilled: state != null && lcStateStyleAt(preview, state, bp).isNotEmpty,
+            onClearState: () => _apply((n, _) => stateBp == null ? lcReplaceState(n, state!, const {}) : lcReplaceBpState(n, stateBp, state!, const {})),
             onClear: () => _apply((n, _) => lcReplaceBp(n, bp, const {})),
           );
     final Widget content = switch (_page) {
@@ -451,8 +453,10 @@ class InspectorPanelState extends State<InspectorPanel> {
         top: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            ?bpNote,
+            // 选了状态：屏宽、状态并成一条，放到状态那一行下面（LcStateBar 的 note）
+            if (state == null) ?bpNote,
             LcStateBar(
+              note: state == null ? null : bpNote,
               state: state,
               filled: {
                 for (final s in [...kLcStateNames, for (final k in lcClassIfOf(preview)) lcClassState(k.name)])
