@@ -22,6 +22,7 @@ import 'package:lopicode/lowcode/canvas_view.dart';
 import 'package:lopicode/lowcode/canvas_view_sheet.dart';
 import 'package:lopicode/lowcode/code_sheet.dart';
 import 'package:lopicode/lowcode/comp_lib.dart';
+import 'package:lopicode/lowcode/comp_lib_builtin.dart';
 import 'package:lopicode/lowcode/comp_lib_sheet.dart';
 import 'package:lopicode/lowcode/component_sheet.dart';
 import 'package:lopicode/lowcode/edit_types.dart';
@@ -221,6 +222,7 @@ class _BuilderScreenState extends State<BuilderScreen> with WidgetsBindingObserv
     final node = doc.newNode(type);
     if (ref != null) node.props['ref'] = ref; // 自定义组件的实例
     _apply((d) {
+      lcEnsureBuiltin(d, ref); // 内置组件库里的组件：第一次用才把定义装进来
       lcAdoptNewNav(d, node);
       lcAdoptNewTop(d, node);
       if (sel != null && sel.isContainer && type != 'dialog') {
@@ -243,6 +245,7 @@ class _BuilderScreenState extends State<BuilderScreen> with WidgetsBindingObserv
       final node = _doc!.newNode(drag.type!);
       if (drag.ref != null) node.props['ref'] = drag.ref;
       _apply((d) {
+        lcEnsureBuiltin(d, drag.ref);
         lcAdoptNewNav(d, node);
         lcAdoptNewTop(d, node);
         lcInsertAt(d, parentId, node, index);

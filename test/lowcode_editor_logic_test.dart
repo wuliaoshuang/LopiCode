@@ -16,6 +16,15 @@ import 'package:lopicode/lowcode/save_queue.dart';
 
 List<String> keysOf(List<PaletteEntry> list) => [for (final e in list) e.key];
 
+const builtinKeys = [
+  'component:lib_lopi_builtin_iconButton',
+  'component:lib_lopi_builtin_link',
+  'component:lib_lopi_builtin_grid',
+  'component:lib_lopi_builtin_scroll',
+  'component:lib_lopi_builtin_stepper',
+  'component:lib_lopi_builtin_formItem',
+];
+
 void main() {
   group('组件盒目录', () {
     final mine = [
@@ -33,7 +42,8 @@ void main() {
     final all = paletteEntries(mine);
 
     test('全部条目：内置的一个不少、顺序不变，自定义组件排在后面', () {
-      expect(keysOf(all), [...lcPaletteTypes, 'component:c1', 'component:c2']);
+      // 第四轮 B5：原生控件后面多了内置组件库里进组件盒的六个
+      expect(keysOf(all), [...lcPaletteTypes, ...builtinKeys, 'component:c1', 'component:c2']);
       expect(all.last.label, '价格表');
       expect(all.last.group, PaletteGroup.mine);
     });
@@ -47,8 +57,17 @@ void main() {
         expect(grouped.intersection(inGroup.toSet()), isEmpty, reason: '一个组件只在一类里');
         grouped.addAll(inGroup);
       }
-      expect(grouped, lcPaletteTypes.toSet());
-      expect(keysOf(paletteInGroup(all, PaletteGroup.layout, const [])), ['container', 'row', 'column', 'card', 'spacer', 'dialog']);
+      expect(grouped, {...lcPaletteTypes, ...builtinKeys});
+      expect(keysOf(paletteInGroup(all, PaletteGroup.layout, const [])), [
+        'container',
+        'row',
+        'column',
+        'card',
+        'spacer',
+        'dialog',
+        'component:lib_lopi_builtin_grid',
+        'component:lib_lopi_builtin_scroll',
+      ]);
       expect(keysOf(paletteInGroup(all, PaletteGroup.mine, const [])), ['component:c1', 'component:c2']);
       expect([for (final g in paletteGroups(all)) g.label], ['常用', '布局', '基础', '表单', '展示', '导航', '我的']);
       expect([for (final g in paletteGroups(paletteEntries(const []))) g.label], ['常用', '布局', '基础', '表单', '展示', '导航']);
@@ -91,10 +110,11 @@ void main() {
     });
 
     test('搜索：按名字、中文别名、英文、拼音；不分大小写、去首尾空格；自定义组件按名字', () {
-      expect(keysOf(paletteSearch(all, '按钮')), ['button']);
-      expect(keysOf(paletteSearch(all, ' BUTTON ')), ['button']);
+      // 第四轮 B5：多了“图标按钮”，搜“按钮”它也在
+      expect(keysOf(paletteSearch(all, '按钮')), ['button', 'component:lib_lopi_builtin_iconButton']);
+      expect(keysOf(paletteSearch(all, ' BUTTON ')), ['button', 'component:lib_lopi_builtin_iconButton']);
       expect(keysOf(paletteSearch(all, 'btn')), ['button']);
-      expect(keysOf(paletteSearch(all, 'anniu')), ['button']);
+      expect(keysOf(paletteSearch(all, 'anniu')), ['button', 'component:lib_lopi_builtin_iconButton']);
       expect(keysOf(paletteSearch(all, '图')), contains('image'));
       expect(keysOf(paletteSearch(all, '输入')), ['input', 'textarea']);
       expect(keysOf(paletteSearch(all, '问候')), ['component:c1']);

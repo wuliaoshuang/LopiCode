@@ -15,6 +15,7 @@ import 'dart:async';
 import 'package:lopicode/lowcode/builder_bars_widgets.dart';
 import 'package:lopicode/lowcode/canvas_parts_widgets.dart';
 import 'package:lopicode/lowcode/canvas_view_sheet.dart';
+import 'package:lopicode/lowcode/comp_lib_builtin.dart';
 import 'package:lopicode/lowcode/component_editing.dart';
 import 'package:lopicode/lowcode/component_extras.dart';
 import 'package:lopicode/lowcode/component_extras_sheet.dart';
@@ -240,6 +241,8 @@ class _ComponentEditorState extends State<_ComponentEditor> with LcMultiSelectHo
   LcNode _fresh(String type, String? ref) {
     final node = _temp.newNode(type);
     if (ref != null) node.props['ref'] = ref;
+    // 内置组件库里的组件：先装进这份临时文档（画布才画得出来）；写回定义时再装进真的文档（applyComponentEditing）。
+    lcEnsureBuiltin(_temp, ref);
     return node;
   }
 

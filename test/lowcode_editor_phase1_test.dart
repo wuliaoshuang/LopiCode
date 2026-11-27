@@ -340,8 +340,9 @@ void main() {
       ];
 
       await type('按钮');
-      expect(shown(), ['button']);
-      expect(find.text('找到 1 个'), findsOneWidget);
+      // 第四轮 B5：多了“图标按钮”
+      expect(shown(), ['button', 'component:lib_lopi_builtin_iconButton']);
+      expect(find.text('找到 2 个'), findsOneWidget);
       expect(k('palette-group-layout'), findsNothing, reason: '搜索时不显示分类');
       await type('btn');
       expect(shown(), ['button']);

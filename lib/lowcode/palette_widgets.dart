@@ -50,6 +50,14 @@ IconData lcIcon(String type) => switch (type) {
   'bottomNav' => Icons.video_label,
   'tabs' => Icons.tab,
   'dialog' => Icons.chat_bubble_outline,
+  // 内置组件库里进组件盒的那几个（comp_lib_builtin.dart）和滑块。
+  'iconButton' => Icons.add_circle_outline,
+  'link' => Icons.link,
+  'grid' => Icons.grid_view,
+  'scroll' => Icons.swap_vert,
+  'stepper' => Icons.exposure,
+  'formItem' => Icons.short_text,
+  'slider' => Icons.linear_scale,
   _ => Icons.widgets_outlined,
 };
 
@@ -315,7 +323,7 @@ class PalettePanelState extends State<PalettePanel> {
   Widget _cell(BuildContext context, PaletteEntry e) {
     final c = context.colors;
     final t = Theme.of(context).textTheme;
-    final mine = e.ref != null;
+    final mine = e.ref != null && e.builtin == null;
     return LcLiftDetector(
       key: ValueKey('palette-item-${e.key}'),
       onLift: (at) => widget.onLift(e, at),
@@ -333,7 +341,7 @@ class PalettePanelState extends State<PalettePanel> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(lcIcon(e.type), size: 22, color: mine ? c.accent : c.text),
+                Icon(lcIcon(e.icon), size: 22, color: mine ? c.accent : c.text),
                 const SizedBox(height: 6),
                 Text(
                   e.label,
