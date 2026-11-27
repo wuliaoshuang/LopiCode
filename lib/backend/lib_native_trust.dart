@@ -13,6 +13,7 @@ import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:lopicode/core/safe_file.dart';
 import 'package:lopicode/lang/lib_model.dart';
+import 'package:lopicode/lang/rules.dart';
 
 /// 一个库的手写代码的校验值：清单 + `native/` 下每个文件（路径和内容）。
 String libNativeSum(Map<String, String> files) {
@@ -33,8 +34,8 @@ class LibNativeTrust {
   bool _enabled = false;
   final Map<String, String> _confirmed = {};
 
-  /// 开关现在开没开。
-  bool get enabled => _enabled;
+  /// 开关现在开没开。总开关（rules.dart 的 `libNativeCodeEntry`）关着时一律算没开——存过“开着”也不算数。
+  bool get enabled => libNativeCodeEntry && _enabled;
 
   static String _key(String projectRoot, String libId) => '$projectRoot\u0000$libId';
 
@@ -61,19 +62,20 @@ class LibNativeTrust {
     await writeJsonAtomic(file, {'enabled': _enabled, 'confirmed': _confirmed});
   }
 
-  /// 开 / 关。关的时候把所有确认清掉。
+  /// 开 / 关。关的时候把所有确认清掉。总开关关着时打不开（什么都不改）。
   Future<void> setEnabled(bool on) async {
+    if (on && !libNativeCodeEntry) return;
     _enabled = on;
     if (!on) _confirmed.clear();
     await _save();
   }
 
   /// 这个项目里这个库的这一份手写代码许不许用：开关开着，而且确认过的正是这一份。
-  bool allows(String projectRoot, String libId, String sum) => _enabled && _confirmed[_key(projectRoot, libId)] == sum;
+  bool allows(String projectRoot, String libId, String sum) => enabled && _confirmed[_key(projectRoot, libId)] == sum;
 
   /// 她看过并确认了这一份。开关关着时不记（返回否）。
   Future<bool> confirm(String projectRoot, String libId, String sum) async {
-    if (!_enabled) return false;
+    if (!enabled) return false;
     _confirmed[_key(projectRoot, libId)] = sum;
     await _save();
     return true;

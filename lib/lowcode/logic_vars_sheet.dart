@@ -58,7 +58,7 @@ Object? lcParseJsonInitial(String type, String text) {
 /// 新建 / 编辑一个变量。[taken]＝别的变量已经占用的名字。取消返回 null。
 /// [wide]：类型里多“列表”“记录”两种（搭建页的状态用；初值填 JSON）。正在改的本来就是这两种时也自动带上。
 /// [noun]：对话框里怎么叫它（“变量”/“状态”）。
-Future<LcVarDraft?> showLcVariableDialog(BuildContext context, {required Set<String> taken, LcVariable? editing, String? suggestType, int refCount = 0, bool wide = false, String noun = '变量'}) =>
+Future<LcVarDraft?> showLcVariableDialog(BuildContext context, {required Set<String> taken, LcVariable? editing, String? suggestType, int refCount = 0, bool wide = false, String noun = '状态'}) =>
     showDialog<LcVarDraft>(
       context: context,
       builder: (_) =>
@@ -257,7 +257,7 @@ class _LcVarsSheetState extends State<LcVarsSheet> {
     if (draft == null || !mounted) return;
     if (draft.delete) {
       if (refs > 0) {
-        final ok = await confirmDialog(context, title: '删除变量 $old？', message: '有 $refs 处在用它。删掉以后那些积木会被标出问题，要你一个个改。', confirmLabel: '删除', danger: true);
+        final ok = await confirmDialog(context, title: '删除状态 $old？', message: '有 $refs 处在用它。删掉以后那些积木会被标出问题，要你一个个改。', confirmLabel: '删除', danger: true);
         if (!ok || !mounted) return;
       }
       widget.edit((d) => d.logic.removeVariable(old));
@@ -279,15 +279,15 @@ class _LcVarsSheetState extends State<LcVarsSheet> {
     final c = context.colors;
     final logic = widget.read().logic;
     return LcSheetFrame(
-      title: '页面变量',
-      note: '变量用来记住东西（次数、输入的字、开关…），积木可以读它、改它。',
-      footer: FilledButton.icon(key: const ValueKey('lc-vars-add'), onPressed: _create, icon: const Icon(Icons.add_rounded, size: 18), label: const Text('新建变量')),
+      title: '页面状态',
+      note: '状态用来记住东西（次数、输入的字、开关…），积木可以读它、改它。',
+      footer: FilledButton.icon(key: const ValueKey('lc-vars-add'), onPressed: _create, icon: const Icon(Icons.add_rounded, size: 18), label: const Text('新建状态')),
       children: [
         if (logic.variables.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: Space.x4, vertical: Space.x6),
             child: Text(
-              '还没有变量。',
+              '还没有状态。',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: c.textMuted),
             ),

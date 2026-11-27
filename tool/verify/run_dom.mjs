@@ -68,7 +68,7 @@ async function openBundle() {
     wrapper,
     kind === 'vue'
       ? `import { createApp } from "vue";\nimport Page from ${JSON.stringify(`./${entry}`)};\nconst app = createApp(Page);\napp.config.warnHandler = (m) => console.warn("Vue 警告：" + m);\napp.config.errorHandler = (e) => console.error("Vue 出错：" + ((e && e.message) || e));\napp.mount(document.getElementById("app"));\n`
-      : `import React from "react";\nimport { createRoot } from "react-dom/client";\nimport Page from ${JSON.stringify(`./${entry}`)};\ncreateRoot(document.getElementById("app")).render(React.createElement(Page));\n`,
+      : `import React from "react";\nimport { createRoot } from "react-dom/client";\nimport Page from ${JSON.stringify(`./${entry}`)};\ncreateRoot(document.getElementById("app")).render(${process.env.LOPI_REACT_STRICT === "1" ? "React.createElement(React.StrictMode, null, React.createElement(Page))" : "React.createElement(Page)"});\n`,
   );
   const plugins = [];
   if (kind === 'vue') {
@@ -192,6 +192,28 @@ for (const s of steps) {
         } else {
           dom.window.location.hash = s.hash;
         }
+        break;
+      case 'fake': {
+        // 假网络、假对话框（页面逻辑的“请求网址”“弹提示”要它们）：routes＝网址 → {status, body}；不在表里的网址当“连不上”。
+        const w = dom.window;
+        const routes = s.routes || {};
+        w.lcAlerts = [];
+        w.alert = (m) => { w.lcAlerts.push(String(m)); };
+        w.confirm = (m) => { w.lcAlerts.push('问：' + String(m)); return s.confirm !== false; };
+        w.fetch = (url) => {
+          const r = routes[String(url)];
+          if (!r) return Promise.reject(new TypeError('Failed to fetch'));
+          const status = r.status || 200;
+          return Promise.resolve({ ok: status >= 200 && status < 300, status, headers: new Map(), text: () => Promise.resolve(String(r.body)) });
+        };
+        break;
+      }
+      case 'alerts':
+        same((dom.window.lcAlerts || []).join(' | '));
+        break;
+      case 'wait':
+        // 等一小会儿（让定时器、请求回来），最多 2 秒。
+        await new Promise((r) => setTimeout(r, Math.min(Number(s.ms) || 0, 2000)));
         break;
       case 'hash':
         same(dom.window.location.hash);

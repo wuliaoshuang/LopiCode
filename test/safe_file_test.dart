@@ -46,6 +46,8 @@ import 'package:lopicode/session/turn_journal.dart';
 import 'package:lopicode/templates/project_templates.dart';
 import 'package:path/path.dart' as p;
 
+import 'support/lib_switches.dart';
+
 List<File> badBackups(File file) => [
   for (final e in file.parent.listSync())
     if (e is File && p.basename(e.path).startsWith('${p.basename(file.path)}.bad-')) e,
@@ -1185,6 +1187,8 @@ void main() {
   });
 
   group('手写代码的确认记录（应用私有目录里的 lib_native_trust.json）', () {
+    // 中途包：带手写代码的库的启用、自己的库直接用宿主接口默认都关着（rules.dart）；这里测的是开着时的样子，每条先打开、测完改回默认。
+    libSwitchesOn();
     for (final entry in corruptSamples.entries) {
       test('坏内容（${entry.key}）：当开关关着、一个都没确认过，不抛异常；之后照常能开、能确认、能读回', () async {
         final file = File('${tmp.path}/private/lib_native_trust.json')

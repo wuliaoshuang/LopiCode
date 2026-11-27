@@ -117,9 +117,15 @@ final Object skipWithoutDom = skipWithoutWebdev != false
     ? '找不到 jsdom（LOPI_WEBDEV_DOM 或 ~/workspace/tools/webdev-dom），跳过真跑'
     : false;
 
-/// 把导出的文件写进临时目录，在 jsdom 里照 [steps] 一步步做（tool/verify/run_dom.mjs）。[kind]：html / vue / react。
+/// 把导出的文件写进临时目录，在 jsdom 里照 [steps] 一步步做（tool/verify/run_dom.mjs）。[kind]：html / vue / react。[strict]＝React 外面包一层 StrictMode（开发时 React 会把开工那段多跑一遍，用来查“做了两遍事”）。
 /// 返回（成不成、错误、警告、做完了几步）。
-Future<({bool ok, List<String> errors, List<String> warnings, int done})> runInDom(String kind, Map<String, String> files, String entry, List<Map<String, Object?>> steps) async {
+Future<({bool ok, List<String> errors, List<String> warnings, int done})> runInDom(
+  String kind,
+  Map<String, String> files,
+  String entry,
+  List<Map<String, Object?>> steps, {
+  bool strict = false,
+}) async {
   final dir = Directory.systemTemp.createTempSync('lopi_dom_');
   try {
     for (final f in files.entries) {
@@ -128,7 +134,11 @@ Future<({bool ok, List<String> errors, List<String> warnings, int done})> runInD
         ..writeAsStringSync(f.value);
     }
     File('${dir.path}/.lc-steps.json').writeAsStringSync(jsonEncode(steps));
-    final r = await Process.run('node', ['${Directory.current.path}/tool/verify/run_dom.mjs', kind, dir.path, entry], environment: {'LOPI_WEBDEV': webdevDir!, 'LOPI_WEBDEV_DOM': webdevDomDir!});
+    final r = await Process.run(
+      'node',
+      ['${Directory.current.path}/tool/verify/run_dom.mjs', kind, dir.path, entry],
+      environment: {'LOPI_WEBDEV': webdevDir!, 'LOPI_WEBDEV_DOM': webdevDomDir!, if (strict) 'LOPI_REACT_STRICT': '1'},
+    );
     final out = (r.stdout as String).trim();
     if (out.isEmpty || !out.startsWith('{')) {
       return (ok: false, errors: ['脚本没有给出结果（退出码 ${r.exitCode}）：${r.stderr}'], warnings: const <String>[], done: 0);

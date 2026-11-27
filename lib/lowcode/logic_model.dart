@@ -5,9 +5,14 @@
 /// JSON 结构的完整约定见 docs/lowcode-v2-design.md。
 library;
 
+import 'dart:convert';
+
+import 'package:lopicode/lang/lib_model.dart';
 import 'package:lopicode/lowcode/logic_variable.dart';
 
 export 'package:lopicode/lowcode/logic_variable.dart';
+
+part 'logic_model_logic.dart';
 
 /// 多口积木里的一段（“否则如果 <条件> 那么 { … }”“是 (1) 时 { … }”“出错了 { … }”）：自己的参数 + 自己那个口里的积木。
 /// 一种积木有没有段、每段带哪些参数，由它的规格（`LcBlockSpec.arms`）说；这里只管存。
@@ -456,99 +461,4 @@ class LcHandler with LcBlockTree {
       y: y is num && y.isFinite ? y.toDouble() : null,
     );
   }
-}
-
-class LcLogic {
-  LcLogic({List<LcVariable>? variables, List<LcHandler>? handlers}) : variables = variables ?? [], handlers = handlers ?? [] {
-    _normalize();
-  }
-
-  final List<LcVariable> variables;
-  final List<LcHandler> handlers;
-
-  bool get isEmpty => variables.isEmpty && handlers.isEmpty;
-
-  Map<String, dynamic> toJson() => {
-    'variables': [for (final v in variables) v.toJson()],
-    'handlers': [for (final h in handlers) h.toJson()],
-  };
-
-  /// 容错读取：不是对象就当没有逻辑；坏的变量 / 处理 / 积木逐条跳过。
-  factory LcLogic.fromJson(Object? json) {
-    if (json is! Map) return LcLogic();
-    final vars = json['variables'];
-    final hs = json['handlers'];
-    return LcLogic(
-      variables: [
-        if (vars is List)
-          for (final v in vars) ?LcVariable.tryParse(v, wide: true),
-      ],
-      handlers: [
-        if (hs is List)
-          for (final h in hs) ?LcHandler.tryParse(h),
-      ],
-    );
-  }
-
-  /// 变量重名只留第一个；处理的 id 缺了 / 重了就补一个 `h数字`。
-  void _normalize() {
-    final names = <String>{};
-    variables.removeWhere((v) => !names.add(v.name));
-    final ids = <String>{};
-    var next = 1;
-    for (final h in handlers) {
-      if (h.id.isEmpty || !RegExp(r'^[A-Za-z0-9_]+$').hasMatch(h.id) || !ids.add(h.id)) {
-        while (ids.contains('h$next')) {
-          next++;
-        }
-        h.id = 'h$next';
-        ids.add(h.id);
-      }
-    }
-  }
-
-  LcVariable? variable(String name) {
-    for (final v in variables) {
-      if (v.name == name) return v;
-    }
-    return null;
-  }
-
-  Iterable<LcHandler> handlersFor(String nodeId) => handlers.where((h) => h.target == nodeId);
-
-  LcHandler? handler(String id) {
-    for (final h in handlers) {
-      if (h.id == id) return h;
-    }
-    return null;
-  }
-
-  /// 新建一个处理并加到最后；id 自动取一个没用过的 `h数字`。`event` 不认识返回 null。
-  LcHandler? addHandler(String event, {String? target}) {
-    if (!LcHandler.events.contains(event)) return null;
-    final ids = {for (final h in handlers) h.id};
-    var n = 1;
-    while (ids.contains('h$n')) {
-      n++;
-    }
-    final h = LcHandler(id: 'h$n', event: event, target: event == 'load' ? null : target);
-    handlers.add(h);
-    return h;
-  }
-
-  bool removeHandler(String id) {
-    final before = handlers.length;
-    handlers.removeWhere((h) => h.id == id);
-    return handlers.length != before;
-  }
-
-  /// 加一个变量；名字不合规矩或重名返回 null。
-  LcVariable? addVariable(String name, {String type = 'text', Object? initial}) {
-    if (!LcVariable.namePattern.hasMatch(name) || variable(name) != null || !LcVariable.stateTypes.contains(type)) return null;
-    final v = LcVariable(name: name, type: type, initial: initial);
-    variables.add(v);
-    return v;
-  }
-
-  LcLogic clone() => LcLogic(variables: [for (final v in variables) v.clone()], handlers: [for (final h in handlers) h.clone()]);
 }

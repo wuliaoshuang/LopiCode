@@ -217,17 +217,20 @@ class _Validator {
     _handler = null;
   }
 
+  /// 规则表和后端共用（那边叫“变量”），页面这边单独说。
+  static const String _fixBadState = '到“状态”里给它改个名字：英文字母开头，只用字母、数字和下划线，不能重名。';
+
   void _variables() {
     final seen = <String>{};
     for (final v in doc.logic.variables) {
-      final where = '变量 ${v.name.isEmpty ? '（没有名字）' : v.name}';
+      final where = '状态 ${v.name.isEmpty ? '（没有名字）' : v.name}';
       if (!LcVariable.namePattern.hasMatch(v.name)) {
-        _error(LcIssueCode.badVariable, '名字只能用英文字母、数字和下划线，不能用数字开头，最多 32 个字符', where: where);
+        _error(LcIssueCode.badVariable, '名字只能用英文字母、数字和下划线，不能用数字开头，最多 32 个字符', where: where, fix: _fixBadState);
       } else if (!seen.add(v.name)) {
-        _error(LcIssueCode.badVariable, '有两个变量叫这个名字', where: where);
+        _error(LcIssueCode.badVariable, '有两个状态叫这个名字', where: where, fix: _fixBadState);
       }
       if (!LcVariable.stateTypes.contains(v.type)) {
-        _error(LcIssueCode.badVariable, '不认识的类型 ${v.type}（只能是文字、数字、是 / 否、列表、记录）', where: where);
+        _error(LcIssueCode.badVariable, '不认识的类型 ${v.type}（只能是文字、数字、是 / 否、列表、记录）', where: where, fix: _fixBadState);
       }
     }
   }
@@ -294,7 +297,7 @@ class _Validator {
     if (b.op == 'changeVar' && name is String) {
       final v = doc.logic.variable(name);
       if (v != null && v.type != 'number') {
-        _error(LcIssueCode.changeVarNotNumber, '变量 $name 是${describeVarType(v.type)}，不是数字，不能“加上”；要改它请用“设置变量”', arg: 'name');
+        _error(LcIssueCode.changeVarNotNumber, '状态 $name 是${describeVarType(v.type)}，不是数字，不能“加上”；要改它请用“设置状态”', arg: 'name', fix: '换成数字类型的状态，或者改用“设置状态”。');
       }
     }
     if (b.op == 'setProp') _propFit(b.args['node'], b.args['prop'], write: true);
@@ -363,11 +366,11 @@ class _Validator {
         }
       case LcArgKind.variable:
         if (missing || value == '') {
-          if (!a.optional) _error(LcIssueCode.missingArg, '还没选变量', arg: a.name);
+          if (!a.optional) _error(LcIssueCode.missingArg, '还没选状态', arg: a.name);
         } else if (value is! String) {
-          _error(LcIssueCode.badArg, '“${a.label}”应该是变量的名字', arg: a.name);
+          _error(LcIssueCode.badArg, '“${a.label}”应该是状态的名字', arg: a.name);
         } else if (doc.logic.variable(value) == null) {
-          _error(LcIssueCode.unknownVar, '变量 $value 还没有声明（先到“变量”里加一个）', arg: a.name);
+          _error(LcIssueCode.unknownVar, '状态 $value 还没有声明（先到“状态”里加一个）', arg: a.name, fix: '到“状态”里把它加回来，或者在这一格里换一个状态。');
         }
       case LcArgKind.node:
         if (missing || value == '') {

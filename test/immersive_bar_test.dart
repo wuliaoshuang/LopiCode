@@ -199,7 +199,7 @@ void main() {
         expect(tester.getRect(find.byType(ActionPill)).right, 390 - Space.x4);
 
         expectButton(tester, find.byTooltip('返回'), '返回');
-        expectButton(tester, k('lc-top-vars'), '变量');
+        expectButton(tester, k('lc-top-vars'), '状态');
         expectButton(tester, k('bk-issues'), '问题');
         expectButton(tester, k('bk-code'), '看代码');
 
@@ -210,7 +210,7 @@ void main() {
         await tester.pumpAndSettle();
         await tester.tap(k('lc-top-vars'));
         await tester.pumpAndSettle();
-        expect(find.textContaining('变量'), findsWidgets);
+        expect(find.textContaining('状态'), findsWidgets);
         await tester.binding.handlePopRoute();
         await tester.pumpAndSettle();
         await tester.tap(find.byTooltip('返回'));
@@ -308,7 +308,7 @@ void main() {
         final canvas = tester.getRect(k('lowcode-canvas'));
         expect(canvas.top, 0);
         expect(canvas.width, 390);
-        expect(pageRect(tester).top, barBottom, reason: '页面的顶边起始时正好在悬浮顶栏的下沿');
+        expect(pageRect(tester).top, barBottom + BarScrim.kTail, reason: '页面的顶边起始时正好在悬浮顶栏渐隐遮罩的下沿（第四轮 B3 起让出遮罩那一段）');
         expect(pageRect(tester).bottom, lessThanOrEqualTo(canvas.bottom + 0.5), reason: '一屏放得下的页面不超出画布');
         // 顶栏标题是页面名，下面一行小字是“屏宽档 · 保存状态”。
         expect(find.descendant(of: bar(), matching: find.text('我的小站')), findsOneWidget);
@@ -346,7 +346,7 @@ void main() {
       testWidgets('长页面：在顶栏空白处往上拖＝滚动画布，页面从顶栏下面滑过去；滚到底时底边贴着画布底边；适应屏幕回到顶栏下沿', (tester) async {
         await openBuilder(tester, doc: longDoc(), safe: safe);
         final canvas = tester.getRect(k('lowcode-canvas'));
-        expect(pageRect(tester).top, barBottom);
+        expect(pageRect(tester).top, barBottom + BarScrim.kTail);
         expect(pageRect(tester).height, greaterThan(canvas.height), reason: '这张页面一屏放不下');
 
         await tester.dragFrom(blankInBar(top), const Offset(0, -160));
@@ -365,12 +365,12 @@ void main() {
 
         tester.state<CanvasViewState>(find.byType(CanvasView)).fitToScreen();
         await settle(tester, rounds: 2);
-        expect(pageRect(tester).top, barBottom);
+        expect(pageRect(tester).top, barBottom + BarScrim.kTail);
         // 往下拖不动：顶边不会离开顶栏下沿。
         await tester.dragFrom(Offset(195, barBottom + 320), const Offset(0, 200));
         await tester.pump(const Duration(seconds: 2));
         await settle(tester, rounds: 2);
-        expect(pageRect(tester).top, barBottom);
+        expect(pageRect(tester).top, barBottom + BarScrim.kTail);
         expect(tester.takeException(), isNull);
       });
     });
@@ -385,7 +385,7 @@ void main() {
     expect(find.descendant(of: bar(), matching: find.text('问候卡')), findsOneWidget);
     final canvas = find.byKey(const ValueKey('lowcode-canvas')).hitTestable();
     expect(tester.getRect(canvas).top, 0);
-    expect(pageRect(tester).top, PageBar.kHeight);
+    expect(pageRect(tester).top, PageBar.kHeight + BarScrim.kTail);
     for (final tip in ['返回', '更多']) {
       expectButton(tester, find.byTooltip(tip), tip);
     }
@@ -442,7 +442,7 @@ void main() {
         const Rect.fromLTWH(16, 10, 44, 44),
         reason: '顶栏不因为多了切换条往下挪',
       );
-      expect(pageRect(tester).top, sw.bottom + Space.x2, reason: '页面起始在切换条下面');
+      expect(pageRect(tester).top, sw.bottom + Space.x2 + BarScrim.kTail, reason: '页面起始在切换条下面、渐隐遮罩的下沿');
       expect(
         tester.getRect(find.descendant(of: bar(), matching: find.byKey(const ValueKey('bar-scrim')))).bottom,
         sw.bottom + Space.x2 + BarScrim.kTail,

@@ -18,6 +18,7 @@ import 'package:lopicode/lowcode/component_expand_live.dart';
 import 'package:lopicode/lowcode/component_extras.dart';
 import 'package:lopicode/lowcode/component_model.dart';
 import 'package:lopicode/lowcode/component_ops.dart';
+import 'package:lopicode/lowcode/front_emit_bridge.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/lowcode/slots.dart';
@@ -51,6 +52,9 @@ class LcExpander {
 
   /// 展开时冒出来的事件处理（组件里的控件往外发事件、实例上给那个事件接了积木）。
   final List<LcSynthHandler> synth = [];
+
+  /// 页面上的实例“这个事件接到的积木”从哪来：不给就用实例自己的 `on`。新的页面逻辑给的是转发记号（front_emit_bridge.dart）。
+  Map<String, List<LcBlock>> Function(LcNode instance)? pageHandlers;
 
   /// 页面上（不在任何定义里）的一棵子树：里面的实例都展开，别的照原样（有子节点的拷一层壳）。
   LcNode outer(LcNode n) {
@@ -93,7 +97,7 @@ class LcExpander {
     final values = instanceValues(def, inst);
     final rootId = inst.id;
     // 第 6 期的新东西（事件、变体、组件状态、绑定）：用了才走这条路；没用的和以前一个字不差。
-    final live = lcDefIsLive(def) || lcInstanceIsLive(inst) ? LcLiveScope(def, inst, values, handlers ?? lcOnOf(inst)) : null;
+    final live = lcDefIsLive(def) || lcInstanceIsLive(inst) ? LcLiveScope(def, inst, values, handlers ?? pageHandlers?.call(inst) ?? lcOnOf(inst)) : null;
 
     String mint(LcNode src) {
       var id = '${rootId}__${src.id}';
@@ -176,7 +180,7 @@ class LcExpander {
         for (final e in lcEmitsOf(src).entries) {
           final body = live.handlers[e.value.event];
           // 摊开以后没有“事件对象”了：处理里读“事件带来的值”的地方，换成那一项数据的式子。
-          if (body != null && body.isNotEmpty) synth.add(LcSynthHandler(id, e.key, lcWithEventData(body, lcFirstEmitArg(def, e.value))));
+          if (body != null && body.isNotEmpty) synth.add(LcSynthHandler(id, e.key, lcIsEmitBridge(body) ? lcEmitBridgeWithData(body, e.value) : lcWithEventData(body, lcFirstEmitArg(def, e.value))));
         }
       }
       // 节点上别的东西（在哪个插槽里、状态样式…）照带；名字、锁定、编辑器里隐藏是定义自己的事，不带到页面上。

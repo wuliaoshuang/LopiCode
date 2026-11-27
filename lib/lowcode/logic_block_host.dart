@@ -36,7 +36,7 @@ const Map<String, String> _exprSentences = {'var': '{name}', 'prop': '{node} 的
 const Map<String, String> _opSigns = {'+': '+', '-': '−', '*': '×', '/': '÷', '%': '余', '==': '=', '!=': '≠', '<': '<', '<=': '≤', '>': '>', '>=': '≥', 'and': '并且', 'or': '或者'};
 
 const Map<String, String> _colorOfCategory = {
-  '变量': BlockColorKey.variable,
+  '状态': BlockColorKey.variable,
   '控件': BlockColorKey.widget,
   '流程': BlockColorKey.control,
   '交互': BlockColorKey.action,

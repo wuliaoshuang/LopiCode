@@ -16,6 +16,7 @@ import 'package:lopicode/backend/lib_service.dart';
 import 'package:lopicode/backend/lib_service_fork.dart';
 import 'package:lopicode/core/path_guard.dart';
 import 'package:lopicode/lang/lib_model.dart';
+import 'package:lopicode/lang/rules.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/state/code_font.dart';
 import 'package:lopicode/theme/tokens.dart';
@@ -60,16 +61,20 @@ Future<void> showBeServiceLib(BuildContext context, {required Future<void> Funct
       hint:
           '应用自带的库，只读。接口、请求、响应、数据集合这些积木都是它的；有接口的文档会自动用上它。\n'
           '它不是在画布上搭的，是直接用语言基础的文字写法写的，底下接着宿主的能力（${[for (final h in service.hosts) beHostWord(h)].join('、')}）。'
-          '“复制一份来改”会得到同样的一份文字写法的库：可以改它的文字，再让文档用它顶替自带的这个。',
+          '${userLibHostEntry ? '“复制一份来改”会得到同样的一份文字写法的库：可以改它的文字，再让文档用它顶替自带的这个。' : ''}',
       children: [
-        BeSheetAdd(
-          key: const ValueKey('be-lib-builtin-fork'),
-          label: '复制一份来改',
-          onTap: () {
-            Navigator.pop(sheet);
-            unawaited(fork());
-          },
-        ),
+        // 复制件直接用宿主接口；那条路关着时（rules.dart 的 userLibHostEntry）复制出来必然用不了，所以只放一行灰字说明。
+        if (userLibHostEntry)
+          BeSheetAdd(
+            key: const ValueKey('be-lib-builtin-fork'),
+            label: '复制一份来改',
+            onTap: () {
+              Navigator.pop(sheet);
+              unawaited(fork());
+            },
+          )
+        else
+          const BeSheetRow(key: ValueKey('be-lib-builtin-no-fork'), label: kServiceForkOffNote, muted: true),
         BeSheetSection('积木（${service.blocks.length} 块）'),
         for (final b in service.blocks) BeSheetRow(label: beLibBlockLine(b), muted: true),
       ],
@@ -83,7 +88,10 @@ Future<bool> confirmBeLibNative(BuildContext context, PathGuard guard, BeStoredL
     for (final e in s.files.entries)
       if (e.key != kBeLibSourceFile) e.key: e.value,
   }, others: others);
-  final yes = await showLibImport(context, beLibImportView(preview), title: '确认手写代码', action: '我确认，可以用', hint: '「${s.name}」已经在项目里了，它带着手写代码。看过并确认以后才能用；以后它的手写代码或清单变了，要回到这里重新确认。');
+  // 总开关关着（rules.dart 的 libNativeCodeEntry）：这一页只能看，按钮是灰的（预览里有“不能启用”那条问题）。
+  final yes = libNativeCodeEntry
+      ? await showLibImport(context, beLibImportView(preview), title: '确认手写代码', action: '我确认，可以用', hint: '「${s.name}」已经在项目里了，它带着手写代码。看过并确认以后才能用；以后它的手写代码或清单变了，要回到这里重新确认。')
+      : await showLibImport(context, beLibImportView(preview), title: '看手写代码', action: '用不了', hint: '「${s.name}」已经在项目里了，它带着手写代码。$kLibNativeOffNote，这里只能看。');
   if (!yes) return false;
   return LibNativeTrust.instance.confirm(guard.root, s.id, libNativeSum(s.files));
 }

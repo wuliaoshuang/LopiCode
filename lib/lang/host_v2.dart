@@ -1,3 +1,4 @@
+import 'package:lopicode/lang/host_front.dart';
 import 'package:lopicode/lang/rt_v2.dart';
 import 'package:lopicode/lang/types.dart';
 
@@ -69,3 +70,20 @@ const Map<String, String> kHostV2Code = {
   'file.list': 'fileList',
   'file.remove': 'fileRemove',
 };
+
+// —— 两边的表合起来看（前端那张在 host_front.dart）——
+
+/// 这个宿主接口的样子：先找后端那张表，再找前端那张。两张表都没有＝这一版的应用不认识它。
+LRtSig? langHostSig(String name) => kHostV2[name] ?? kHostFront[name];
+
+/// 是不是“要等”的。
+bool langHostWaits(String name) => kHostV2Waits.contains(name) || kHostFrontWaits.contains(name);
+
+/// 在后端能不能用（五种后端语言的生成器只认这些）。
+bool langHostOnBackend(String name) => kHostV2.containsKey(name);
+
+/// 在前端（浏览器）能不能用：前端那张表里的，加上两边都有的几个。
+bool langHostOnFrontend(String name) => kHostFront.containsKey(name) || kHostBothSides.contains(name);
+
+/// 在浏览器生成的代码里叫什么。
+String? langHostFrontCode(String name) => kHostFrontCode[name] ?? (kHostBothSides.contains(name) ? kHostV2Code[name] : null);

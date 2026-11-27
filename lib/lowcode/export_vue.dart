@@ -30,6 +30,7 @@ import 'package:lopicode/lowcode/export_v3_fields.dart';
 import 'package:lopicode/lowcode/export_vue_bind.dart';
 import 'package:lopicode/lowcode/export_web_v3.dart';
 import 'package:lopicode/lowcode/logic_blocks.dart';
+import 'package:lopicode/lowcode/logic_core_js.dart';
 import 'package:lopicode/lowcode/logic_js_core.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 import 'package:lopicode/lowcode/logic_text.dart';
@@ -185,7 +186,8 @@ class _Template {
     if (styles.isNotEmpty) {
       b.write(' :style="{ ${styles.join(', ')} }"');
     }
-    events(n).forEach((event, fn) => b.write(' @$event="$fn"'));
+    final at = bound?.eachAt; // 新的页面逻辑、在“重复”里：事件带上这一项
+    events(n).forEach((event, fn) => b.write(at == null ? ' @$event="$fn"' : ' @$event="$fn(Object.assign(\$event, { lcAt: $at }))"'));
     return b.toString();
   }
 
@@ -274,16 +276,24 @@ String _page(LcDocument doc, LcComponentPlans plans, List<String> notes) {
   };
   final states = LcPropStates(names);
   final bind = plan == null ? null : LcVueBind(plan, varNames);
-  final writer = JsLogicWriter(doc, VueJsTarget(varNames, states, notes, bind: bind), lookup: plan?.lookup);
+  bind?.eventAt = doc.logic.front != null;
+  final target = VueJsTarget(varNames, states, notes, bind: bind);
+  final writer = JsLogicWriter(doc, target, lookup: plan?.lookup);
+  // 用了新积木的页面：处理函数只把事件转给页面宿主（见 logic_core_js.dart）；没用的页面下面和以前一样。
+  final core = lcCoreJsFor(doc, target, notes, lookup: plan?.lookup, hash: true);
 
   // 先翻处理函数：翻的过程中才知道哪些控件属性被用到了。
-  final functions = <String>[];
+  final functions = <String>[
+    ...?core?.top,
+    ...?core?.boot,
+    if (core != null) ...['const lcPage = lcBoot();', ''],
+  ];
   for (var i = 0; i < logic.handlers.length; i++) {
     final h = logic.handlers[i];
     functions
       ..add('// ${jsComment(describeHandler(h, doc))}')
       ..add('function ${handlers.names[i]}(${h.event == 'load' ? '' : 'event'}) {')
-      ..addAll([for (final l in writer.blocks(h.body, event: h.event)) '  $l'])
+      ..addAll([for (final l in core?.body(i) ?? writer.blocks(h.body, event: h.event)) '  $l'])
       ..add('}')
       ..add('');
   }

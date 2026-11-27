@@ -18,6 +18,7 @@ import 'package:lopicode/agent/quota.dart';
 import 'package:lopicode/agent/web_search.dart';
 import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/core/stores.dart';
+import 'package:lopicode/lang/rules.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/runtime/runtime_screen.dart';
 import 'package:lopicode/ssh/ssh_config.dart';
@@ -163,7 +164,7 @@ class SettingsScreen extends ConsumerWidget {
               value: memorySettingsLabel(app),
               onTap: () => go(MemorySettingsScreen(session: session)),
             ),
-            SettingsRow(key: const Key('settings-lib-native'), icon: Icons.code_off_outlined, title: '积木库的手写代码', onTap: () => go(const LibNativeSettingsScreen())),
+            if (libNativeCodeEntry) SettingsRow(key: const Key('settings-lib-native'), icon: Icons.code_off_outlined, title: '积木库的手写代码', onTap: () => go(const LibNativeSettingsScreen())),
             SettingsRow(
               key: const Key('settings-automations'),
               icon: Icons.event_repeat,

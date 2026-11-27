@@ -37,7 +37,7 @@ String describeNode(LcDocument doc, String? id) {
 /// 属性的中文名（文字 / 输入内容 / 是否显示 / 背景色…）；不认识的原样返回。
 String describeProp(String prop) => lcBlockSpecs['setProp']!.arg('prop')!.choiceLabel(prop);
 
-String _varName(Object? name) => name is String && name.isNotEmpty ? name : '（还没选变量）';
+String _varName(Object? name) => name is String && name.isNotEmpty ? name : '（还没选状态）';
 
 const Map<String, String> _opSigns = {'+': '+', '-': '-', '*': '×', '/': '÷', '%': '除以后余', '==': '=', '!=': '≠', '<': '<', '<=': '≤', '>': '>', '>=': '≥', 'and': '并且', 'or': '或者'};
 

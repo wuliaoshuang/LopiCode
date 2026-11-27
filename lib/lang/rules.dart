@@ -33,6 +33,30 @@ const bool kLangStrictBackendGen = true;
 /// 界面读的是 backend_screen.dart 的 `beStrictUpgradeEntry`（测试里可以改）。
 const bool kStrictRulesUpgradeEnabled = true;
 
+/// **开关：带手写代码的库能不能启用。** 2026-11-27 中途包：**关**（等霜霜点头再开）。
+/// 关着时：设置 › 能力 里没有“积木库的手写代码”那一行；`LibNativeTrust` 一律当成没开（存过“开着”和确认记录也不算数）；
+/// 带手写代码的库导入预览照样如实列出文件、能点开看，但不能导入；已经在项目里的照旧“有问题、用不了”。
+/// 各处读的是 [libNativeCodeEntry]（测试里可以改，测完改回去）。
+const bool kLibNativeCodeEnabled = false;
+
+/// 默认跟着 [kLibNativeCodeEnabled]；测试里可以改，测完改回去。
+bool libNativeCodeEntry = kLibNativeCodeEnabled;
+
+/// [libNativeCodeEntry] 关着时，各处对“带手写代码的库”统一用的一句话（不指向任何入口）。
+const String kLibNativeOffNote = '这一版还不能启用带手写代码的库';
+
+/// **开关：自己的库（含前端库）在清单里写明宿主接口后能不能直接用宿主接口。** 2026-11-27 中途包：**关**（等霜霜点头再开）。
+/// 关着时：不是应用自带的库只要模块里直接声明了宿主接口，读出来就多一条问题、用不了、不能导入；
+/// 自带“接口服务”库的“复制一份来改”也不出现（复制件必然直接用宿主接口）。应用自带的库（“接口服务”“页面”）不受影响。
+/// 各处读的是 [userLibHostEntry]（测试里可以改，测完改回去）。
+const bool kUserLibHostEnabled = false;
+
+/// 默认跟着 [kUserLibHostEnabled]；测试里可以改，测完改回去。
+bool userLibHostEntry = kUserLibHostEnabled;
+
+/// [userLibHostEntry] 关着时，自带“接口服务”库面板上顶替“复制一份来改”的那一行字。
+const String kServiceForkOffNote = '这一版还不能复制自带的接口服务库来改';
+
 /// 从存盘的值读规矩版本：没有、不是整数、小于 1 → 1。比 [kLangRulesLatest] 大的原样留着（可能是新版本的应用写的）。
 int langRulesFromJson(Object? raw) => raw is int && raw >= 1 ? raw : kLangRulesLoose;
 

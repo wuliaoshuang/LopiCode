@@ -7,6 +7,7 @@ library;
 
 import 'package:lopicode/lowcode/component_expand.dart';
 import 'package:lopicode/lowcode/component_extras.dart';
+import 'package:lopicode/lowcode/front_emit_bridge.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 import 'package:lopicode/lowcode/model.dart';
 
@@ -41,6 +42,11 @@ class LcLivePage {
 
 LcLivePage lcLivePage(LcDocument doc) {
   final x = LcExpander(doc);
+  // 新的页面逻辑：实例上的 `on` 不作数；接了帽子“当〔实例〕发出〔事件〕”的事件落成转发记号。
+  if (doc.logic.front != null) {
+    final hats = lcFrontEmitHats(doc.logic);
+    x.pageHandlers = (inst) => lcEmitBridgeHandlers(hats, inst.id);
+  }
   final tree = x.outer(doc.root);
   final taken = {for (final h in doc.logic.handlers) h.id};
   var n = 1;
@@ -54,6 +60,12 @@ LcLivePage lcLivePage(LcDocument doc) {
   }
   return LcLivePage(tree, x.hoisted, handlers);
 }
+
+final Expando<LcDocument> _sourceOf = Expando('lcExportSource');
+
+/// [lcExportDoc] 交回的文档是从哪份文档化出来的（不是它化出来的就交回自己）。
+/// 新的页面逻辑“对着页面的检查”要对着原来的页面查：摊开以后实例已经不是实例了，帽子“当〔实例〕发出〔事件〕”会被误判成挂错了地方。
+LcDocument lcExportSource(LcDocument doc) => _sourceOf[doc] ?? doc;
 
 /// 导出看的文档（见文件开头）。[allPages]：每一页都这样处理（Flutter 导出一次出所有页）；不然只处理当前这一页。
 LcDocument lcExportDoc(LcDocument doc, {bool allPages = false}) {
@@ -77,7 +89,10 @@ LcDocument lcExportDoc(LcDocument doc, {bool allPages = false}) {
             if (!own.contains(v.name)) v,
         ],
         handlers: [...p.logic.handlers, ...live.handlers],
-      );
+        // 新的页面逻辑和它用上的库要带着（不带的话这一页就被当成旧逻辑、只剩一堆空壳处理）。
+        uses: p.logic.uses,
+        front: p.logic.front,
+      )..loaded = p.logic.loaded;
       pages.add(LcPage(id: p.id, title: p.title, root: live.tree, logic: logic, more: p.more));
       changed = true;
     }
@@ -86,7 +101,7 @@ LcDocument lcExportDoc(LcDocument doc, {bool allPages = false}) {
   }
   if (!changed) return doc;
   final first = pages.first;
-  return LcDocument(
+  final out = LcDocument(
     title: first.title,
     root: first.root,
     logic: first.logic,
@@ -99,4 +114,6 @@ LcDocument lcExportDoc(LcDocument doc, {bool allPages = false}) {
     sharedNav: doc.sharedNav,
     sharedTop: doc.sharedTop,
   )..openPageAt(at);
+  _sourceOf[out] = doc;
+  return out;
 }

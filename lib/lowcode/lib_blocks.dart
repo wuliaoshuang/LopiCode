@@ -7,6 +7,7 @@ library;
 
 import 'package:lopicode/blocks/block_host.dart';
 import 'package:lopicode/lang/lib_model.dart';
+import 'package:lopicode/lowcode/lib_page.dart';
 import 'package:lopicode/lowcode/logic_blocks.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 
@@ -90,7 +91,13 @@ abstract interface class LibUser {
 
 /// 一块库积木在编辑器里的样子。
 class LibEntry {
-  LibEntry(this.lib, this.block) : op = libOp(lib.id, block.id);
+  LibEntry(this.lib, this.block, {this.pick = false}) : op = libOp(lib.id, block.id);
+
+  /// 页面逻辑里：“页面”库积木上“从页面里挑一个”的槽（控件、状态、属性、页面）画成下拉，值是直接的字。
+  final bool pick;
+
+  /// 这个槽是不是“从页面里挑一个”，是的话挑什么（node / state / prop / page）。
+  String? pickOf(String slot) => pick && lib.id == kLcPageLibId && block.kindOf(slot) == LibSlotKind.literal ? lcPagePickOf(block.id, slot) : null;
 
   final LibLibrary lib;
   final LibBlock block;
@@ -130,7 +137,7 @@ class LibEntry {
     for (final a in bkLookArgs(custom))
       switch (block.kindOf(a.name)) {
         LibSlotKind.assign => LcArgSpec(a.name, a.name, LcArgKind.variable, optional: true),
-        _ => a,
+        _ => pickOf(a.name) == null ? a : LcArgSpec(a.name, kLibPickHints[pickOf(a.name)] ?? a.name, LcArgKind.choice),
       },
   ];
 
@@ -151,7 +158,7 @@ class LibEntry {
     for (final p in params)
       p: switch (block.kindOf(p)) {
         LibSlotKind.assign => '',
-        _ => slotValue(block.look.slotFor(p)),
+        _ => pickOf(p) == null ? slotValue(block.look.slotFor(p)) : '',
       },
   };
 }
@@ -159,6 +166,9 @@ class LibEntry {
 class LibTable {
   LibTable(this.user);
   final LibUser user;
+
+  /// 这份文档是不是页面逻辑（“页面”库积木上挑控件、状态的槽画成下拉）。
+  bool get pick => false;
 
   /// 用上了、项目里有、读得懂、“给谁用”对得上的库，按“用上”的先后。
   late final List<LibLibrary> libs = [
@@ -168,7 +178,7 @@ class LibTable {
 
   late final Map<String, LibEntry> _entries = {
     for (final l in libs)
-      for (final b in l.blocks) libOp(l.id, b.id): LibEntry(l, b),
+      for (final b in l.blocks) libOp(l.id, b.id): LibEntry(l, b, pick: pick),
   };
 
   bool get isEmpty => _entries.isEmpty;
@@ -258,40 +268,77 @@ void _exprs(Object? v, void Function(Map<String, dynamic> e) f, [int depth = 0])
 }
 
 /// 库的帽子在画布上、积木盒里的样子。
-BlockHat libHatLook(LibEntry e, Map<String, dynamic> args) => BlockHat([
+BlockHat libHatLook(LibEntry e, Map<String, dynamic> args, {String? Function(String pick, String value)? label}) => BlockHat([
   for (final part in parseLookTemplate(e.block.look.template))
     if (!part.isSlot)
       BlockHatPart.text(part.text)
     else if (e.block.kindOf(part.text) != LibSlotKind.mouth)
-      BlockHatPart.slot(
-        part.text,
-        libHatShow(args[part.text], part.text),
-        empty: libHatShow(args[part.text], '').isEmpty,
-        kind: args[part.text] is num ? LcArgKind.literalNumber : LcArgKind.literalText,
-      ),
-], colorKey: BlockColorKey.custom);
+      if (e.pickOf(part.text) case final pick?)
+        // 页面逻辑里：从页面里挑一个（控件……），显示它的名字。
+        BlockHatPart.slot(part.text, _picked(pick, args[part.text], label), empty: libHatShow(args[part.text], '').isEmpty)
+      else
+        BlockHatPart.slot(
+          part.text,
+          libHatShow(args[part.text], part.text),
+          empty: libHatShow(args[part.text], '').isEmpty,
+          kind: args[part.text] is num ? LcArgKind.literalNumber : LcArgKind.literalText,
+        ),
+], colorKey: e.lib.id == kLcPageLibId ? BlockColorKey.event : BlockColorKey.custom);
+
+/// “从页面里挑一个”的槽还空着时写的字。
+const Map<String, String> kLibPickHints = {'node': '选控件', 'state': '选状态', 'prop': '选属性', 'page': '选页面'};
+
+String _picked(String pick, Object? v, String? Function(String pick, String value)? label) {
+  final value = libHatShow(v, '');
+  if (value.isEmpty) return kLibPickHints[pick] ?? '选一个';
+  return label?.call(pick, value) ?? value;
+}
 
 String libHatShow(Object? v, String fallback) => v is String && v.isNotEmpty ? v : (v is num || v is bool ? '$v' : fallback);
 
-/// 接在积木盒后面的页：每个用上的库一页；库文档再多一页“做库积木”。
-List<BlockCategory> libCategories(LibTable table) => [
+/// 内置“页面”库的积木在编辑器里用哪种颜色（库里写的是它自己的叫法）。
+const Map<String, String> kLcPageColors = {'event': BlockColorKey.event, 'state': BlockColorKey.variable, 'ui': BlockColorKey.widget, 'page': BlockColorKey.action, 'old': BlockColorKey.unknown};
+
+/// 库积木的颜色：“页面”库照上面那张表；别的库照库里写的。
+String libEntryColor(LibEntry e) => e.lib.id == kLcPageLibId ? (kLcPageColors[e.block.look.colorKey] ?? BlockColorKey.custom) : e.block.look.colorKey;
+
+/// “页面”库在积木盒里分成的几页（照库积木的分类；“旧积木”那一类只给旧文件用，不进积木盒）。
+const List<(String, String)> kLcPageCategories = [('事件', BlockColorKey.event), ('状态', BlockColorKey.variable), ('控件', BlockColorKey.widget), ('页面', BlockColorKey.action)];
+
+BlockCategory _libPage(LibTable table, String id, String label, String colorKey, bool Function(LibEntry e) keep, {LibHatLook? hat}) => BlockCategory(
+  id: id,
+  label: label,
+  colorKey: colorKey,
+  hats: [
+    for (final e in table.ofLib(kLibOfCategory(id)))
+      if (e.isHat && keep(e)) BlockHatTemplate('$kLibHatTemplate${e.op}', (hat ?? libHatLook)(e, const {}), hint: e.block.look.hint),
+  ],
+  blocks: [
+    for (final e in table.ofLib(kLibOfCategory(id)))
+      if (!e.isHat && !e.isValue && keep(e)) e.op,
+  ],
+  exprs: [
+    for (final e in table.ofLib(kLibOfCategory(id)))
+      if (e.isValue && keep(e)) e.op,
+  ],
+);
+
+/// 分类页的 id 是 `lib:库标识`，“页面”库的几页是 `lib:lopi/page:分类`；取回库标识。
+String kLibOfCategory(String categoryId) {
+  final rest = categoryId.substring(4);
+  return rest.startsWith('$kLcPageLibId:') ? kLcPageLibId : rest;
+}
+
+typedef LibHatLook = BlockHat Function(LibEntry e, Map<String, dynamic> args);
+
+/// 接在积木盒后面的页：每个用上的库一页（“页面”库分成事件、状态、控件、页面四页）；库文档再多一页“做库积木”。
+/// [first]＝只要“页面”库的那几页（页面逻辑把它们排在积木盒最前面）；false＝只要别的库；null＝全要。
+List<BlockCategory> libCategories(LibTable table, {bool? first, LibHatLook? hat}) => [
   for (final l in table.libs)
-    BlockCategory(
-      id: 'lib:${l.id}',
-      label: l.name,
-      colorKey: BlockColorKey.custom,
-      hats: [
-        for (final e in table.ofLib(l.id))
-          if (e.isHat) BlockHatTemplate('$kLibHatTemplate${e.op}', libHatLook(e, const {}), hint: e.block.look.hint),
-      ],
-      blocks: [
-        for (final e in table.ofLib(l.id))
-          if (!e.isHat && !e.isValue) e.op,
-      ],
-      exprs: [
-        for (final e in table.ofLib(l.id))
-          if (e.isValue) e.op,
-      ],
-    ),
-  if (table.user.libraryId != null) const BlockCategory(id: 'libdef', label: kLibDefCategory, colorKey: BlockColorKey.custom, blocks: [kLibMouthOp, kLibPutOp]),
+    if (l.id == kLcPageLibId) ...[
+      if (first != false)
+        for (final (name, color) in kLcPageCategories) _libPage(table, 'lib:${l.id}:$name', name, color, (e) => e.block.category == name, hat: hat),
+    ] else if (first != true)
+      _libPage(table, 'lib:${l.id}', l.name, BlockColorKey.custom, (e) => true),
+  if (first != true && table.user.libraryId != null) const BlockCategory(id: 'libdef', label: kLibDefCategory, colorKey: BlockColorKey.custom, blocks: [kLibMouthOp, kLibPutOp]),
 ];

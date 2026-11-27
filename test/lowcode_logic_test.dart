@@ -452,7 +452,7 @@ void main() {
       expect(issues.single.code, LcIssueCode.changeVarNotNumber);
       expect(issues.single.isError, isTrue);
       expect(issues.single.arg, 'name');
-      expect(issues.single.message, '「点击「按钮“提交”」时」第 1 块（把 name 加上 1）：变量 name 是文字，不是数字，不能“加上”；要改它请用“设置变量”');
+      expect(issues.single.message, '「点击「按钮“提交”」时」第 1 块（把 name 加上 1）：状态 name 是文字，不是数字，不能“加上”；要改它请用“设置状态”');
     });
 
     test('“输入的内容”用在不是 input 的处理里', () {
@@ -543,7 +543,7 @@ void main() {
       d.logic.variables.add(LcVariable(name: 'x', type: 'date'));
       final issues = validateLogic(d);
       expect([for (final i in issues) i.code], List.filled(3, LcIssueCode.badVariable));
-      expect(issues[1].message, '变量 count：有两个变量叫这个名字');
+      expect(issues[1].message, '状态 count：有两个状态叫这个名字');
       expect(issues.first.handlerId, isNull);
     });
 
@@ -567,7 +567,7 @@ void main() {
       expect(issue.path, [lcStep(1), lcStep(0, inElse: true)]);
       expect(issue.arg, 'value');
       expect(issue.where, '「点击「按钮“提交”」时」第 2 块 › 否则 › 第 1 块（把 count 设为 total + 1）');
-      expect(issue.problem, '变量 total 还没有声明（先到“变量”里加一个）');
+      expect(issue.problem, '状态 total 还没有声明（先到“状态”里加一个）');
       expect('$issue', startsWith('错误 「点击'));
       expect(d.logic.handlers.single.blockAt(issue.path)!.op, 'setVar');
     });
@@ -605,7 +605,7 @@ void main() {
       expect(e(exJoin([exText('共 '), exVar('count'), exText(' 次')])), '拼接（“共 ”、count、“ 次”）');
       expect(e(null), '（空）');
       expect(e({'e': 'magic'}), '不认识的值（magic）');
-      expect(e(exVar('')), '（还没选变量）');
+      expect(e(exVar('')), '（还没选状态）');
     });
 
     test('每种积木', () {

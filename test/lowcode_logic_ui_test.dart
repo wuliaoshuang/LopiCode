@@ -105,7 +105,7 @@ void main() {
     expect(rig.handlers.single.event, 'click');
     expect(rig.handlers.single.target, button, reason: '默认挂在第一个按钮上');
     expect(k('bk-empty'), findsNothing);
-    await pick(tester, '变量', 'block-changeVar');
+    await pick(tester, '状态', 'block-changeVar');
     expect(rig.ops(0), ['changeVar']);
     expect(rig.h(0).body.single.args['name'], '', reason: '还没有变量');
     expect(rig.s.host.issues, isNotEmpty);
@@ -203,7 +203,7 @@ void main() {
     await tapAt(tester, rig.arg(0, at, 'cond', const ['l', 'op']));
     await menuPick(tester, '>');
     await longPress(tester, rig.arg(0, at, 'cond', const ['l', 'l']));
-    await replaceWith(tester, '变量', 'var');
+    await replaceWith(tester, '状态', 'var');
     await tapAt(tester, rig.arg(0, at, 'cond', const ['l', 'r']));
     await typeInline(tester, '10');
 
@@ -414,7 +414,7 @@ void main() {
     await tapKey(tester, 'lc-vars-row-count');
     await tester.enterText(k('lc-var-name'), 'name');
     await tap(tester, find.text('保存'));
-    expect(find.text('已经有一个变量叫 name 了'), findsOneWidget);
+    expect(find.text('已经有一个状态叫 name 了'), findsOneWidget);
     await tester.enterText(k('lc-var-name'), '1abc');
     await tap(tester, find.text('保存'));
     expect(find.textContaining('不能用数字开头'), findsOneWidget);

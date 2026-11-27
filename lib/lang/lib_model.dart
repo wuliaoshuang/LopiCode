@@ -10,10 +10,12 @@ import 'dart:convert';
 
 import 'package:lopicode/lang/ast.dart';
 import 'package:lopicode/lang/custom_block.dart';
+import 'package:lopicode/lang/host_front.dart';
 import 'package:lopicode/lang/host_v2.dart';
 import 'package:lopicode/lang/lc_text.dart';
 import 'package:lopicode/lang/lib_check.dart';
 import 'package:lopicode/lang/lib_native.dart';
+import 'package:lopicode/lang/rules.dart';
 import 'package:lopicode/lang/types.dart';
 
 export 'package:lopicode/lang/lib_native.dart' show LibNative, LibSide;
@@ -410,7 +412,7 @@ LibLibrary libRead(Map<String, String> files, {required bool builtin, bool nativ
     ..clear()
     ..addAll(nat.modules);
   if (!builtin && (natives.isNotEmpty || nativeFiles.isNotEmpty) && !nativeOk) {
-    problems.add('这个库带了手写代码（${nativeFiles.length} 个文件）。要先打开“允许库里的手写代码”，再看过并确认这个库的代码，才能用');
+    problems.add(libNativeCodeEntry ? '这个库带了手写代码（${nativeFiles.length} 个文件）。要先打开“允许库里的手写代码”，再看过并确认这个库的代码，才能用' : '这个库带了手写代码（${nativeFiles.length} 个文件）。$kLibNativeOffNote');
   }
 
   // 宿主接口：模块里的“宿主”声明（手写函数的不算）。应用自带的库可以直接声明；自己的库要在清单的 hosts 里一个不落地写明。
@@ -420,10 +422,14 @@ LibLibrary libRead(Map<String, String> files, {required bool builtin, bool nativ
         if (d is LNativeDecl && d.user == null && !d.name.startsWith(kLibNativePrefix)) d.name,
   };
   for (final h in hosts) {
-    if (!kHostV2.containsKey(h)) problems.add('模块里声明了宿主接口「$h」，这一版的应用没有它');
+    if (langHostSig(h) == null) problems.add('模块里声明了宿主接口「$h」，这一版的应用没有它');
+    if (!builtin && kHostFrontBuiltinOnly.contains(h)) problems.add('宿主接口「$h」是给旧页面积木留的，只有应用自带的库能用');
   }
   final declaredHosts = {for (final h in _list(manifest['hosts'])) ?_text(h, max: 64)};
-  if (!builtin && hosts.difference(declaredHosts).isNotEmpty) {
+  if (!builtin && !userLibHostEntry && hosts.isNotEmpty) {
+    // 中途包：自己的库直接碰宿主接口这条路先关着（rules.dart 的 userLibHostEntry）。清单里写没写明都一样。
+    problems.add('这个库直接用了宿主接口（${(hosts.toList()..sort()).join('、')}）。这一版自己的库还不能直接碰宿主接口，只有应用自带的库可以');
+  } else if (!builtin && hosts.difference(declaredHosts).isNotEmpty) {
     problems.add('这个库直接用了宿主接口（${hosts.difference(declaredHosts).join('、')}），可是清单的 hosts 里没有写明。自己写的库要碰宿主接口，必须在清单里一个不落地写出来（导入的人要看得见）');
   }
   if (!builtin && (id.startsWith('lopi/') || id.startsWith('local/'))) problems.add('作者段 lopi、local 是应用自己留着用的，别的库不能用');
@@ -431,7 +437,17 @@ LibLibrary libRead(Map<String, String> files, {required bool builtin, bool nativ
   final replaces = _text(manifest['replaces'], max: 65) ?? '';
   if (side == LibSide.both && hosts.isNotEmpty) problems.add('这个库写的是“后端和前端都行”，可是它用了宿主接口（${hosts.join('、')}）。两边都能用的库只能用语言核心，不能碰宿主接口');
   if (side == LibSide.both && natives.isNotEmpty) problems.add('这个库写的是“后端和前端都行”，可是它带了手写代码。手写代码是照后端的五种语言写的，前端用不了');
-  if (side == LibSide.frontend && (hosts.isNotEmpty || natives.isNotEmpty)) problems.add('这个库写的是“只给前端”，可是它用了后端的宿主接口或手写代码');
+  // 只给前端的库：可以用前端的宿主接口（页面、定时、请求、存储、地址……）；后端的宿主接口和手写代码一律不行（浏览器里不接手写代码）。
+  final notFront = [
+    for (final h in hosts)
+      if (langHostSig(h) != null && !langHostOnFrontend(h)) h,
+  ];
+  if (side == LibSide.frontend && (notFront.isNotEmpty || natives.isNotEmpty)) problems.add('这个库写的是“只给前端”，可是它用了后端的宿主接口或手写代码');
+  final notBack = [
+    for (final h in hosts)
+      if (langHostSig(h) != null && !langHostOnBackend(h)) h,
+  ];
+  if (side == LibSide.backend && notBack.isNotEmpty) problems.add('这个库写的是“只给后端”，可是它用了前端才有的宿主接口（${notBack.join('、')}）');
   if (side != LibSide.backend && _list(manifest['requires']).contains('lopi/service')) problems.add('这个库写的不是“只给后端”，可是它靠着“接口服务”（那是后端才有的）。要么改成只给后端，要么别用接口服务的积木');
   if (replaces.isNotEmpty && (builtin || side != LibSide.backend)) problems.add('只有给后端用的、自己的库才能顶替自带库');
 

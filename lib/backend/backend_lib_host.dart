@@ -6,6 +6,7 @@ import 'package:lopicode/backend/backend_func_edit.dart';
 import 'package:lopicode/backend/backend_func_host.dart';
 import 'package:lopicode/backend/backend_lib_doc.dart';
 import 'package:lopicode/backend/backend_lib_table.dart';
+import 'package:lopicode/backend/front_doc.dart';
 import 'package:lopicode/blocks/block_host.dart';
 import 'package:lopicode/lowcode/lib_blocks.dart';
 import 'package:lopicode/lowcode/lib_blocks.dart' as lib_blocks show libCategories;
@@ -18,10 +19,49 @@ const String kBeLibHatTemplate = kLibHatTemplate;
 mixin BeLibHost on BlockHost, BeFuncHost {
   BeLibTable get libTable => funcTable.libs;
 
-  /// 接在积木盒后面的页：每个用上的库一页；库文档再多一页“做库积木”（怎么分是“文档无关”那一层定的）。
-  List<BlockCategory> get libCategories => lib_blocks.libCategories(libTable);
+  /// 页面逻辑里：页面上有什么（控件、状态、属性、页面）。不是页面逻辑（后端文档、库文档）＝null。
+  BePageCx? pageCx;
 
-  BlockHat _hat(BeLibEntry e, Map<String, dynamic> args) => libHatLook(e, args);
+  /// 接在积木盒后面的页：每个用上的库一页；库文档再多一页“做库积木”（怎么分是“文档无关”那一层定的）。
+  List<BlockCategory> get libCategories => lib_blocks.libCategories(libTable, first: false);
+
+  /// 前端文档排在积木盒最前面的那几页：自带“页面”库的事件、状态、控件、页面。
+  List<BlockCategory> get pageCategories => lib_blocks.libCategories(libTable, first: true, hat: _hat);
+
+  BlockHat _hat(BeLibEntry e, Map<String, dynamic> args) => libHatLook(e, args, label: pageCx?.label);
+
+  List<BlockOption> _picks(String pick, {Object? node, Object? current}) {
+    final cx = pageCx;
+    final list =
+        switch (pick) {
+          'node' => cx?.nodes,
+          'state' => cx?.states,
+          'prop' => cx?.props(node is String ? node : null),
+          'page' => cx?.pages,
+          _ => null,
+        } ??
+        const <BlockOption>[];
+    return [...list, if (current is String && current.isNotEmpty && !list.any((o) => o.value == current)) BlockOption(current, current, hint: '页面里已经没有它了')];
+  }
+
+  /// 帽子上“从页面里挑一个”的槽有哪些选项；不归这边管返回 null。
+  List<BlockOption>? libHatSlotOptions(LcBlockTree tree, String slotId) {
+    if (tree is! BeLibHat) return null;
+    final pick = libTable.of(tree.op)?.pickOf(slotId);
+    return pick == null ? null : _picks(pick, node: tree.args['node'], current: tree.args[slotId]);
+  }
+
+  /// 下拉里选中的那个值在积木上显示成什么（控件的名字、页面的标题）；不归这边管返回 null。
+  String? libOptionLabel(LcArgSpec arg, String value) {
+    final cx = pageCx;
+    if (cx == null || arg.kind != LcArgKind.choice || arg.choices.isNotEmpty || !kLibPickHints.containsValue(arg.label)) return null;
+    return switch (arg.name) {
+      'node' => value.isEmpty ? '选控件' : cx.label('node', value) ?? '（已经删掉的控件）',
+      'page' => value.isEmpty ? '选页面' : cx.label('page', value) ?? '（已经删掉的页面）',
+      'prop' => value.isEmpty ? '选属性' : cx.label('prop', value) ?? value,
+      _ => null,
+    };
+  }
 
   static String _show(Object? v, String fallback) => libHatShow(v, fallback);
 
@@ -83,10 +123,13 @@ mixin BeLibHost on BlockHost, BeFuncHost {
     return e == null ? null : {'e': kind, ...e.newArgs(beSlotValue)};
   }
 
-  String? libColorKey(String op) => libTable.of(op)?.block.look.colorKey ?? (op == kBeLibMouthOp || op == kBeLibPutOp ? BlockColorKey.custom : null);
+  String? libColorKey(String op) => (libTable.of(op) == null ? null : libEntryColor(libTable.of(op)!)) ?? (op == kBeLibMouthOp || op == kBeLibPutOp ? BlockColorKey.custom : null);
 
   /// “做口里的积木”的下拉：这个函数公开成的积木有哪些口。不归这边管返回 null。
-  List<BlockOption>? libOptions(LcArgSpec arg, {LcBlockTree? tree, LcBlock? block}) {
+  List<BlockOption>? libOptions(LcArgSpec arg, {LcBlockTree? tree, LcBlock? block, Map<String, dynamic>? expr}) {
+    final args = expr ?? block?.args;
+    final pick = libTable.of(expr != null ? exprKind(expr) : block?.op)?.pickOf(arg.name);
+    if (pick != null) return _picks(pick, node: args?['node'], current: args?[arg.name]);
     if (block?.op != kBeLibMouthOp || arg.name != 'name') return null;
     final names = tree == null ? const <String>[] : libTable.mouthsOfFunction(tree.id);
     final current = block!.args['name'];

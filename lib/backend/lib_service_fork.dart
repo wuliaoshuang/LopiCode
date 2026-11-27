@@ -18,6 +18,7 @@ import 'package:lopicode/backend/lib_service_module.dart';
 import 'package:lopicode/core/path_guard.dart';
 import 'package:lopicode/lang/lc_locate.dart';
 import 'package:lopicode/lang/lib_model.dart';
+import 'package:lopicode/lang/rules.dart';
 
 /// 自带库启动时用的那个变量（清单的 init / start / provides 里）。复制件要换一个名字，两个库同时在也不撞。
 const String _kRoutesVar = '接口服务的路由表';
@@ -28,6 +29,8 @@ const String _kRoutesVar = '接口服务的路由表';
   if (beLibAuthorReserved(id.split('/').first)) return (files: null, problem: '作者段 lopi、local 是应用自己留着用的，换一个');
   final title = name.trim();
   if (title.isEmpty || title.length > 24) return (files: null, problem: '库的名字要 1 到 24 个字');
+  // 复制件直接用宿主接口；“自己的库直接用宿主接口”关着时（rules.dart 的 userLibHostEntry）复制出来必然用不了，所以干脆不复制。
+  if (!userLibHostEntry) return (files: null, problem: kServiceForkOffNote);
   final base = beServiceLibrary();
   final manifest = jsonDecode(kBeServiceManifest) as Map<String, dynamic>;
   final routes = '路由表_${id.replaceAll(RegExp('[^a-z0-9]'), '_')}';
@@ -126,7 +129,7 @@ Future<({String? problem, Map<String, String>? files})> _checkText(PathGuard gua
     final where = line == null ? '' : '（这个文件第 $line 行附近）';
     return no(typed.length == 1 ? '${typed.first}$where' : '${typed.first}$where\n（连带还有 ${typed.length - 1} 条，先改好这一条）');
   }
-  if (read.natives.isNotEmpty && !LibNativeTrust.instance.enabled) return no('这个库带手写代码，而“允许库里的手写代码”是关着的');
+  if (read.natives.isNotEmpty && !LibNativeTrust.instance.enabled) return no(libNativeCodeEntry ? '这个库带手写代码，而“允许库里的手写代码”是关着的' : '这个库带手写代码。$kLibNativeOffNote');
   return (problem: null, files: files);
 }
 

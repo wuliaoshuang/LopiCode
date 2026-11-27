@@ -33,6 +33,7 @@ import 'package:lopicode/lowcode/export_shared_parts.dart';
 import 'package:lopicode/lowcode/export_theme_bp.dart';
 import 'package:lopicode/lowcode/export_v3_fields.dart';
 import 'package:lopicode/lowcode/export_web_v3.dart';
+import 'package:lopicode/lowcode/logic_core_js.dart';
 import 'package:lopicode/lowcode/logic_js_core.dart';
 import 'package:lopicode/lowcode/logic_text.dart';
 import 'package:lopicode/lowcode/model.dart';
@@ -199,12 +200,14 @@ class _View {
     final model = n.type == 'input' ? bound?.modelName(n) : null;
     final set = model == null ? null : bound!.modelSet(model, 'event.target.value');
     var wired = false;
+    final at = bound?.eachAt; // 新的页面逻辑、在“重复”里：事件带上这一项
+    final ev = at == null ? 'event' : 'Object.assign(event, { lcAt: $at })';
     events(n).forEach((attr, fn) {
       if (set != null && attr == 'onChange') {
         wired = true;
-        b.write(' onChange={(event) => { $set $fn(event); }}');
+        b.write(' onChange={(event) => { $set $fn($ev); }}');
       } else {
-        b.write(' $attr={$fn}');
+        b.write(at == null ? ' $attr={$fn}' : ' $attr={(event) => $fn($ev)}');
       }
     });
     if (set != null && !wired) b.write(' onChange={(event) => { $set }}');
@@ -258,15 +261,22 @@ String _objectLiteral(Iterable<(String, String)> entries) =>
   // 第 5 期：这一页用了状态与绑定才有 plan / bind；没用的页面下面每一处都走原来那条路。
   final plan = LcBindPlan.of(doc, doc.root);
   final bind = plan == null ? null : LcReactBind(plan);
-  final writer = JsLogicWriter(doc, ReactJsTarget(states, notes, bind: bind), lookup: plan?.lookup);
+  bind?.eventAt = doc.logic.front != null;
+  final target = ReactJsTarget(states, notes, bind: bind);
+  final writer = JsLogicWriter(doc, target, lookup: plan?.lookup);
+  // 用了新积木的页面：处理函数只把事件转给页面宿主（见 logic_core_js.dart）；没用的页面下面和以前一样。
+  final core = lcCoreJsFor(doc, target, notes, lookup: plan?.lookup, hash: true);
 
-  final functions = <String>[];
+  final functions = <String>[
+    ...?core?.boot,
+    if (core != null) ...['const lcBootRef = useRef(null);', 'if (lcBootRef.current === null) lcBootRef.current = lcBoot();', 'const lcPage = lcBootRef.current;', ''],
+  ];
   for (var i = 0; i < logic.handlers.length; i++) {
     final h = logic.handlers[i];
     functions
       ..add('// ${jsComment(describeHandler(h, doc))}')
       ..add('function ${handlers.names[i]}(${h.event == 'load' ? '' : 'event'}) {')
-      ..addAll(_indent(writer.blocks(h.body, event: h.event)))
+      ..addAll(_indent(core?.body(i) ?? writer.blocks(h.body, event: h.event)))
       ..add('}')
       ..add('');
   }
@@ -340,6 +350,7 @@ String _objectLiteral(Iterable<(String, String)> entries) =>
       ..writeln('// —— 小工具 ——')
       ..writeln(lcJsRuntime.trim())
       ..writeln();
+    core?.top.forEach(out.writeln);
     if (plan != null) {
       out
         ..writeln(lcBindJsRuntime.trim())

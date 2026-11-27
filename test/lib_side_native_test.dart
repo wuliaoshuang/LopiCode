@@ -25,6 +25,7 @@ import 'package:lopicode/ui/backend_lib_import_sheet.dart';
 import 'support/backend_core_samples.dart';
 import 'support/backend_func_blocks.dart';
 import 'support/backend_lang_blocks.dart';
+import 'support/lib_switches.dart';
 import 'support/native_lib.dart';
 import 'support/service_strict_doc.dart';
 import 'support/user_libs.dart';
@@ -80,6 +81,8 @@ J pureLib(String id, String side) {
 }
 
 void main() {
+  // 中途包：带手写代码的库的启用、自己的库直接用宿主接口默认都关着（rules.dart）；这里测的是开着时的样子，每条先打开、测完改回默认。
+  libSwitchesOn();
   late Directory dir;
   late PathGuard guard;
   setUp(() async {

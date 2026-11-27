@@ -66,8 +66,13 @@ class LcPage {
   }
 
   /// 深拷贝一份（id 由调用的人另给）。
-  LcPage copyAs(String id, String title) =>
-      LcPage(id: id, title: title, root: root.clone(), logic: LcLogic.fromJson(jsonDecode(jsonEncode(logic.toJson()))), more: jsonDecode(jsonEncode(more)) as Map<String, dynamic>);
+  LcPage copyAs(String id, String title) => LcPage(
+    id: id,
+    title: title,
+    root: root.clone(),
+    logic: LcLogic.fromJson(jsonDecode(jsonEncode(logic.toJson())))..loaded = logic.loaded,
+    more: jsonDecode(jsonEncode(more)) as Map<String, dynamic>,
+  );
 }
 
 /// 页面 id 缺了 / 写法不对 / 重了，补成 `p数字`（文档每次建好时调）。

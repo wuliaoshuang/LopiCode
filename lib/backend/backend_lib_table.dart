@@ -16,4 +16,6 @@ typedef BeLibEntry = LibEntry;
 class BeLibTable extends LibTable {
   BeLibTable(BeDocument super.doc);
   BeDocument get doc => user as BeDocument;
+  @override
+  bool get pick => doc.front && doc.library == null;
 }

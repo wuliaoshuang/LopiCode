@@ -8,7 +8,9 @@
 library;
 
 import 'package:lopicode/lowcode/logic_blocks.dart';
+import 'package:lopicode/lowcode/logic_core_js.dart';
 import 'package:lopicode/lowcode/logic_js_core.dart';
+import 'package:lopicode/lowcode/logic_libs.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 import 'package:lopicode/lowcode/logic_text.dart';
 import 'package:lopicode/lowcode/model.dart';
@@ -122,6 +124,7 @@ String _initialLiteral(LcVariable v) {
 String exportLogicJs(LcDocument doc) {
   final logic = doc.logic;
   if (logic.isEmpty) return '';
+  if (lcDocUsesCore(doc)) return exportCoreLogicJs(doc);
   const target = DomJsTarget();
   final writer = JsLogicWriter(doc, target);
   final names = logicHandlerNames(doc);

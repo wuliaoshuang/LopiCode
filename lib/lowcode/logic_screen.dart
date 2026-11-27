@@ -24,7 +24,10 @@ import 'package:material_ui/material_ui.dart';
 /// 整页的积木逻辑编辑器。[doc] 是搭建页手里那份活的文档；[initialNodeId] 不为空时先看这个组件的事件。
 /// [history] + [onRestore] 给了才有撤销 / 重做（搭建页把自己的历史交过来，两边是同一条撤销线）。
 class LogicScreen extends StatefulWidget {
-  const LogicScreen({super.key, required this.doc, required this.onEdit, this.initialNodeId, this.history, this.onRestore});
+  const LogicScreen({super.key, required this.doc, required this.onEdit, this.initialNodeId, this.history, this.onRestore, this.onUpgrade});
+
+  /// 给了才有“升级到新的页面逻辑…”那一颗（搭建页接：先问清楚，升了就换成新的逻辑页）。
+  final VoidCallback? onUpgrade;
   final LcDocument doc;
   final LcEdit onEdit;
   final String? initialNodeId;
@@ -103,7 +106,7 @@ class _LogicScreenState extends State<LogicScreen> {
   BlockMenuExtra? _menuExtra(LcArgSpec arg) {
     if (arg.kind != LcArgKind.variable) return null;
     return (
-      label: '新建变量…',
+      label: '新建状态…',
       run: (context) async {
         final draft = await showLcVariableDialog(context, taken: {for (final v in _host.doc.logic.variables) v.name});
         if (draft == null || draft.delete) return null;
@@ -127,9 +130,10 @@ class _LogicScreenState extends State<LogicScreen> {
       menuExtra: _menuExtra,
       onHostChanged: () => setState(() {}),
       extraActions: [
+        if (widget.onUpgrade != null) IconButton(key: const ValueKey('lc-top-upgrade'), tooltip: '升级到新的页面逻辑…', onPressed: widget.onUpgrade, icon: const Icon(Icons.upgrade_rounded)),
         IconButton(
           key: const ValueKey('lc-top-vars'),
-          tooltip: '变量',
+          tooltip: '状态',
           onPressed: _openVars,
           icon: Badge(isLabelVisible: vars > 0, label: Text('$vars'), backgroundColor: c.accentFill, textColor: c.onAccent, child: const Icon(Icons.data_object_rounded)),
         ),
