@@ -57,7 +57,7 @@ class JavaGen2 extends JavaGen2Types {
   @override
   List<String> throwObjLines(String obj, String message) => ['throw new Lc.LcError($message, $obj);'];
   @override
-  String errObjCode(String e) => 'lcErrObj($e)';
+  String errObjCode(String e) => '${split == null || curModule == Gen2Split.kinds ? '' : 'LcKinds.'}lcErrObj($e)';
   @override
   List<String> rethrowLines(String e) => ['throw $e;'];
   @override
@@ -329,12 +329,14 @@ class JavaGen2 extends JavaGen2Types {
     void add(String p, List<String> lines) => parts.add(p, lines.isEmpty ? lines : [...lines, '']);
     final vars = <String, List<String>>{};
     for (final g in globals) {
-      (vars[part(g.name)] ??= []).add('static ${jt(g.type)} ${varBase(V2Var(g, 0, global: true))} = ${zero(g.type)};');
+      curModule = part(g.name);
+      (vars[curModule] ??= []).add('static ${jt(g.type)} ${varBase(V2Var(g, 0, global: true))} = ${zero(g.type)};');
     }
     vars.forEach(add);
+    curModule = Gen2Split.kinds;
     if (r.usesErrors) add(Gen2Split.kinds, errSupport());
     for (final d in decls) {
-      final p = part(d.name);
+      final p = curModule = part(d.name);
       switch (d) {
         case LRecordDecl():
           add(p, _recordDecl(d));
@@ -352,17 +354,18 @@ class JavaGen2 extends JavaGen2Types {
           break;
       }
     }
+    curModule = split?.entry ?? Gen2Split.kinds;
     final main = V2Fn(Gen2Base.mainScope, LType.nul, isMain: true, waits: true);
     return (parts, funcBody(main, startup));
   }
 
-  String _mainText(List<String> top, List<String> body, {String parent = ''}) => [
+  String _mainText(List<String> top, List<String> body) => [
     '// 由 LopiCode 积木生成（Java，严格规矩、带原生类型）。',
     'import java.util.ArrayList;',
     'import java.util.TreeMap;',
     '',
     '@SuppressWarnings({"unchecked", "rawtypes", "cast"})',
-    'public final class Main$parent {',
+    'public final class Main {',
     ...indent([
       'private Main() {}',
       '',
@@ -382,8 +385,8 @@ class JavaGen2 extends JavaGen2Types {
   }
 
   /// 一个模块一个类文件，里面的东西都是 static 的：内置错误种类 `LcKinds`、别的模块 `M_模块名`、入口在 `Main`。
-  /// 这些类按启动顺序一个接一个“继承”下来（`M_乙 extends M_甲`…`Main extends 最后一个`）：Java 里子类直接看得见父类的
-  /// static 成员和里面的类，所以别的模块的函数、变量、类型在代码里照旧只写名字，不用带类名。（没有包名的类不能 import static，只能这样。）
+  /// 类和类之间没有继承关系：别的模块的函数、变量、类型在代码里都带着它所在的类名（`M_甲.f_x`、`M_甲.T_点`、`LcKinds.T_…`），
+  /// 自己这一份里的只写名字（见 gen2_java.dart 的 `from`）。多个库一起用时，各是各的类，谁也不是谁的子类。
   @override
   Map<String, String> programFiles() {
     final s = split;
@@ -391,7 +394,6 @@ class JavaGen2 extends JavaGen2Types {
     final (parts, body) = _collect();
     const kinds = Gen2Split.kinds;
     final out = <String, String>{};
-    var parent = '';
     void file(String cls, String what, List<String> top) {
       out['$cls.java'] = [
         '// 由 LopiCode 积木生成（Java，严格规矩、带原生类型）：$what。',
@@ -399,18 +401,17 @@ class JavaGen2 extends JavaGen2Types {
         'import java.util.TreeMap;',
         '',
         '@SuppressWarnings({"unchecked", "rawtypes", "cast"})',
-        'class $cls$parent {',
+        'final class $cls {',
         ...indent(['$cls() {}', '', ...top]),
         '}',
         '',
       ].join('\n');
-      parent = ' extends $cls';
     }
 
     if (parts.of(kinds).isNotEmpty) file('LcKinds', '内置的错误种类', parts.of(kinds));
     for (final m in s.order) {
       file('M_${ascii(s.ident[m]!)}', '模块「${m.replaceAll(RegExp(r'[\x00-\x1f\x7f\u0085\u2028\u2029]'), ' ')}」', parts.of(m));
     }
-    return {mainFile: _mainText(parts.of(s.entry), body, parent: parent), ...out};
+    return {mainFile: _mainText(parts.of(s.entry), body), ...out};
   }
 }

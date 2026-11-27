@@ -362,7 +362,7 @@ class _DefSheetState extends State<_DefSheet> {
             onChanged: (v) => _do(() => d.into = v),
           ),
           if (expand) ...[
-            const BeSheetSection('口（用的人往里放积木；最多两个）'),
+            const BeSheetSection('口（最多两个；函数里用“做口里的积木”指明在哪做）'),
             for (final m in d.mouths)
               BeSheetRow(
                 key: ValueKey('be-lib-def-mouth-$m'),
@@ -374,7 +374,6 @@ class _DefSheetState extends State<_DefSheet> {
                 ),
               ),
             if (d.mouths.length < 2) BeSheetAdd(key: const ValueKey('be-lib-def-mouth-add'), label: '加一个口', onTap: () => unawaited(_addMouth())),
-            if (d.mouths.isNotEmpty) const BeSheetRow(label: '函数里用“做 … 里的积木”那块指明口里的积木在哪做', muted: true),
             const BeSheetSection('递给口里的积木的东西'),
             for (final e in d.provides.entries)
               BeSheetRow(

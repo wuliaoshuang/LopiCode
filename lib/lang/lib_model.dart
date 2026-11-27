@@ -496,7 +496,7 @@ LibLibrary libRead(Map<String, String> files, {required bool builtin}) {
     for (final f in files.keys)
       if (f.startsWith('native/')) f,
   ];
-  if (nativeFiles.isNotEmpty && !nativeAllowed) problems.add('库里带了手写代码（${nativeFiles.length} 个文件），可是“允许手写代码”没打开');
+  if (nativeFiles.isNotEmpty && !nativeAllowed) problems.add('库里带了手写代码（${nativeFiles.length} 个文件），这一版的应用不会启用手写代码');
   if (nativeFiles.isNotEmpty && nativeAllowed) problems.add('库里带了手写代码。这一版的应用还不会把手写代码放进生成的工程里，所以这个库现在用不了');
   if (!builtin && (id.startsWith('lopi/') || id.startsWith('local/'))) problems.add('作者段 lopi、local 是应用自己留着用的，别的库不能用');
 
