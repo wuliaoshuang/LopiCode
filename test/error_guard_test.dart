@@ -68,10 +68,8 @@ void main() {
       await shot(tester, '97-error-notice-$suffix');
 
       await tester.tap(find.byKey(const Key('error-notice-open')));
-      for (var i = 0; i < 4; i++) {
-        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
-        await settle(tester, rounds: 3);
-      }
+      await waitUntil(tester, () => find.byKey(const Key('error-log-text')).evaluate().isNotEmpty && find.text('错误日志').evaluate().length == 1, '错误日志页打开、转场走完');
+      await settle(tester, rounds: 3);
       expect(find.text('错误日志'), findsOneWidget);
       expect(find.byKey(const Key('error-notice')), findsNothing, reason: '点了查看，提示收起');
       final shown = tester.widget<SelectableText>(find.byKey(const Key('error-log-text'))).data!;
@@ -90,10 +88,8 @@ void main() {
       await tester.tap(find.byKey(const Key('error-log-clear')));
       await settle(tester, rounds: 3);
       await tester.tap(find.text('清空').last);
-      for (var i = 0; i < 4; i++) {
-        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
-        await settle(tester, rounds: 3);
-      }
+      await waitUntil(tester, () => find.text('没有记录到错误').evaluate().isNotEmpty, '错误日志清空（日志文件删掉、页面刷新）');
+      await settle(tester, rounds: 3);
       expect(find.text('没有记录到错误'), findsOneWidget);
       expect(CrashLog.instance.entries, isEmpty);
     });

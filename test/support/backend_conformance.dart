@@ -14,6 +14,8 @@ import 'package:lopicode/lowcode/logic_model.dart';
 
 import 'proc_bounded.dart';
 
+import 'wait.dart';
+
 export 'proc_bounded.dart' show RunningBackend;
 
 LcBlock _b(String op, Map<String, dynamic> args, {List<LcBlock>? body, List<LcBlock>? orElse}) => LcBlock(op: op, args: args, body: body, orElse: orElse);
@@ -979,8 +981,8 @@ Future<List<BeResponse>> runConformance(String language, BeToolchain tools) asyn
     final server = await startBackend(dir, tools.resolve(target.startCommandFor(0), dir), environment: tools.environment);
     try {
       final responses = await runCases(server, language);
-      // 给标准输出一点时间落地
-      await Future<void>.delayed(const Duration(milliseconds: 200));
+      await waitUntilReal(() => server.stdoutLines.length >= conformanceLogLines.length, '[$language] 服务把 ${conformanceLogLines.length} 行日志写到标准输出（现在 ${server.stdoutLines.length} 行）');
+      await Future<void>.delayed(const Duration(milliseconds: 50)); // 条件已经成立；再多留一小会儿只为了抓“多写出来的行”，不靠它等
       expect(server.stdoutLines, conformanceLogLines, reason: '[$language] “写到日志”的输出');
       return responses;
     } finally {

@@ -314,7 +314,7 @@ void main() {
       session.stopAgent();
       gate.complete();
       await first;
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+      await waitFor(() => !session.agentBusy, what: '停止后这一轮收完尾');
       expect(session.agentBusy, isFalse);
       expect(session.queue.single.text, '排着的');
       expect(log, hasLength(1));

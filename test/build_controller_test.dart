@@ -8,6 +8,7 @@ import 'package:lopicode/core/path_guard.dart';
 import 'package:path/path.dart' as p;
 
 import 'github_client_test.dart' show FakeGitHub;
+import 'support/wait.dart';
 
 void main() {
   late FakeGitHub gh;
@@ -74,8 +75,7 @@ void main() {
     gh.runPolls = -1000000; // 永远 in_progress
     final job = controller();
     final running = job.run();
-    await Future<void>.delayed(const Duration(milliseconds: 80));
-    expect(job.phase, BuildPhase.waiting);
+    await waitUntilReal(() => job.phase == BuildPhase.waiting, '打包任务进到“等待”这一步');
     job.cancel();
     await running;
     expect(job.phase, BuildPhase.cancelled);

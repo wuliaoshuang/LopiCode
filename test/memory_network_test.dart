@@ -114,7 +114,8 @@ void main() {
       Future<int> after(Future<void> Function() act) async {
         final before = n;
         await act();
-        await Future<void>.delayed(const Duration(milliseconds: 20));
+        await waitUntilReal(() => n > before, '“记忆变了”的通知到达');
+        await Future<void>.delayed(const Duration(milliseconds: 20)); // 通知已经到了；多留一拍只为了抓“多通知了一次”
         return n - before;
       }
 
@@ -134,7 +135,7 @@ void main() {
       box.dispose();
       expect(memory().changeListeners.length, before);
       await memory().global.write('丙', '销毁后写的');
-      await Future<void>.delayed(const Duration(milliseconds: 20));
+      await Future<void>.delayed(const Duration(milliseconds: 20)); // 写入上一行已经等完；这一拍只是给“销毁后迟到的通知”一个出错的机会
       expect(memory().global.find('丙'), isNotNull);
     });
   });

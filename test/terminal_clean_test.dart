@@ -107,7 +107,7 @@ void main() {
       expect(groupAtSpawn, contains('aid_3003:x:3003:'), reason: 'PRoot 启动的那一刻文件已经改好');
       _expectGroupsNamed(env);
       ptys.single.emit('root@localhost:/workspace# ');
-      await Future<void>.delayed(const Duration(milliseconds: 20));
+      await waitUntilReal(() => t.text.isNotEmpty, '提示符显示到终端屏幕上');
       expect(t.text, 'root@localhost:/workspace#', reason: '屏幕上只有提示符');
       expect(env.runtime.logLines.where((l) => l.contains('登记安卓的组')), hasLength(1));
     });

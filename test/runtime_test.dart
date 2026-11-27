@@ -19,6 +19,7 @@ import 'package:lopicode/terminal/terminal_session.dart';
 import 'package:path/path.dart' as p;
 
 import 'support/runtime_fakes.dart';
+import 'support/wait.dart';
 
 void main() {
   late Directory tmp;
@@ -547,15 +548,14 @@ void main() {
       final seen = StringBuffer();
       backend.output.listen(seen.write);
       await backend.start(columns: 80, rows: 24);
-      await Future<void>.delayed(const Duration(milliseconds: 20));
-      await Future<void>.delayed(const Duration(milliseconds: 150));
+      await waitUntilReal(() => runtime.launchFailures == 1 && seen.toString().contains('按回车再试一次'), '第一次启动失败被记下并提示重试');
       expect(runtime.launchFailures, 1);
       expect(seen.toString(), contains('按回车再试一次'));
       expect(backend.usingFallback, isFalse);
       expect(envs.single.containsKey('PROOT_NO_SECCOMP'), isFalse);
 
       backend.write('\r'); // 回车重试
-      await Future<void>.delayed(const Duration(milliseconds: 200));
+      await waitUntilReal(() => backend.usingFallback && seen.toString().contains('已退回手机自带的 sh'), '第二次失败后退回本机 shell');
       expect(envs.length, 2);
       expect(envs.last['PROOT_NO_SECCOMP'], '1', reason: '第二次要用兼容模式');
       expect(runtime.launchFailures, 2);
@@ -594,10 +594,7 @@ void main() {
       expect(runtime.compatMode, isTrue);
       runtime.recordLaunchSuccess();
       // 设置是“不等结果”写盘的：等它真的落盘，否则机器忙时收尾删临时目录会抢在写盘前面。
-      for (var i = 0; i < 100 && !(runtime.settings.file.existsSync() && runtime.settings.file.readAsStringSync().contains('true')); i++) {
-        await Future<void>.delayed(const Duration(milliseconds: 20));
-      }
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+      await waitUntilReal(() => runtime.settings.file.existsSync() && runtime.settings.file.readAsStringSync().contains('true'), '“记住兼容模式”那一笔设置落盘');
       expect(runtime.launchFailures, 0);
       expect(runtime.settings.getBool(SettingKeys.runtimeCompat), isTrue);
       expect(runtime.prootCommand(guestCommand: guestLoginShell).environment['PROOT_NO_SECCOMP'], '1');
@@ -614,7 +611,7 @@ void main() {
       backend.output.listen(seen.write);
       await backend.start(columns: 80, rows: 24);
       pty.exit(0);
-      await Future<void>.delayed(const Duration(milliseconds: 200));
+      await waitUntilReal(() => seen.toString().contains('按回车重新进入'), '正常退出后提示“按回车重新进入”');
       expect(runtime.launchFailures, 0);
       expect(seen.toString(), contains('按回车重新进入'));
       await backend.close();

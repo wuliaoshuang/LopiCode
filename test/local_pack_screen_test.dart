@@ -504,9 +504,7 @@ void main() {
     // 生成：卡住看等待状态
     fake.keyGate = Completer<void>();
     await tester.tap(find.byKey(const Key('key-generate')));
-    await tester.pump(const Duration(milliseconds: 100));
-    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
-    await tester.pump();
+    await waitUntil(tester, () => find.text('正在生成钥匙…').evaluate().isNotEmpty, '打包页显示“正在生成钥匙…”');
     expect(find.text('正在生成钥匙…'), findsOneWidget);
     expect(find.textContaining('可能要十几秒'), findsOneWidget);
     await shot(tester, 'pack-09c-key-generating-light');

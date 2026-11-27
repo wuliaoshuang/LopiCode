@@ -194,10 +194,8 @@ void main() {
       await tester.ensureVisible(find.byKey(const Key('channel-save')));
       await tester.pump(const Duration(milliseconds: 300));
       await tester.tap(find.byKey(const Key('channel-save')));
-      for (var i = 0; i < 4; i++) {
-        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 40)));
-        await settle(tester, rounds: 4);
-      }
+      await waitUntil(tester, () => env.services.models.channels.isNotEmpty && find.byType(ProviderPickerScreen).evaluate().isEmpty, '渠道存好并回到渠道列表');
+      await settle(tester, rounds: 4);
       await loadIcons(tester);
 
       expect(find.byType(ProviderPickerScreen), findsNothing, reason: '保存后一路回到渠道列表');

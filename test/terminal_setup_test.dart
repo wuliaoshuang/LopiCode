@@ -238,7 +238,7 @@ void main() {
       final seen = StringBuffer();
       backend.output.listen(seen.write);
       await backend.start(columns: 80, rows: 24);
-      await Future<void>.delayed(const Duration(milliseconds: 200));
+      await waitUntilReal(() => (backend.failure ?? '').contains('退出码 255') && notified > 0, 'Ubuntu 启动失败被记下并通知终端页');
       expect(backend.failure, contains('退出码 255'));
       expect(notified, greaterThan(0), reason: '要通知终端页换成失败页');
       expect(backend.usingFallback, isFalse);
@@ -249,7 +249,7 @@ void main() {
 
       // 再失败一次（到了“连续失败”的上限）：还是不退回本机
       await backend.retryCompat();
-      await Future<void>.delayed(const Duration(milliseconds: 200));
+      await waitUntilReal(() => env.runtime.launchFailures == 2, '兼容模式重试也失败：连续失败记到 2');
       expect(envs.last['PROOT_NO_SECCOMP'], '1');
       expect(env.runtime.launchFailures, 2);
       expect(env.runtime.shouldUseLinux, isFalse);
@@ -286,11 +286,11 @@ void main() {
       );
       backend.output.listen((_) {});
       await backend.start(columns: 80, rows: 24);
-      await Future<void>.delayed(const Duration(milliseconds: 200));
+      await waitUntilReal(() => env.runtime.launchFailures >= 1, '第一次启动失败被记下');
       expect(env.runtime.compatPinned, isFalse);
       await backend.retry();
       expect(envs.last.containsKey('PROOT_NO_SECCOMP'), isFalse);
-      await Future<void>.delayed(const Duration(milliseconds: 200));
+      await waitUntilReal(() => env.runtime.launchFailures >= 1, '重试后的那次失败被记下');
       expect(env.runtime.launchFailures, 1, reason: '重试前清过零');
       await backend.close();
     });

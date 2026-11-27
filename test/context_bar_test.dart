@@ -242,7 +242,7 @@ void main() {
       expect(expected.toolResults, greaterThan(0), reason: '这一轮读了文件：工具结果单独成段');
 
       await tester.tap(find.byKey(const Key('context-ring')));
-      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 200)));
+      await waitUntil(tester, () => find.byKey(const Key('context-bar')).evaluate().isNotEmpty, '上下文用量条展开');
       await settle(tester);
       expect(tester.takeException(), isNull);
       expect(find.byKey(const Key('context-bar')), findsOneWidget);

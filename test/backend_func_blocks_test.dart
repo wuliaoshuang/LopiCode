@@ -10,6 +10,7 @@ import 'package:lopicode/backend/backend_validate.dart';
 import 'support/backend_conformance.dart';
 import 'support/backend_func_blocks.dart';
 import 'support/lang_conformance.dart';
+import 'support/wait.dart';
 
 void main() {
   final doc = funcBlocksDocument();
@@ -62,7 +63,8 @@ void main() {
               expect(r.type, startsWith(c.type), reason: where);
             }
             if (dump) File('.tmp/func_blocks_$language.txt').writeAsStringSync('${got.join('\n')}\n--- stdout\n${server.stdoutLines.join('\n')}\n--- stderr\n${server.stderrText}');
-            await Future<void>.delayed(const Duration(milliseconds: 200));
+            if (!dump) await waitUntilReal(() => server.stdoutLines.length >= funcBlocksLogLines.length, '[$language] 服务把 ${funcBlocksLogLines.length} 行日志写到标准输出（现在 ${server.stdoutLines.length} 行）');
+            await Future<void>.delayed(const Duration(milliseconds: 50)); // 条件已经成立；再多留一小会儿只为了抓“多写出来的行”，不靠它等
             if (!dump) expect(server.stdoutLines, funcBlocksLogLines, reason: '[$language] “写到日志”的输出');
             bodies[language] = got;
           } finally {
