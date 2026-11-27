@@ -7,7 +7,7 @@
 ///
 /// 三样都是没有就不写键——没碰库的旧文档读进来再存出去一个字节不差。读的时候容错：坏的逐条跳过，不抛异常。
 /// 库积木在文档里的写法：语句 `{"op": "lib:作者段/库名#积木编号", "args": {槽名: 值}}`，当值用 `{"e": "lib:…#…", 槽名: 值}`。
-/// 落盘格式（库文件夹）怎么从这里出来见 backend_lib_build.dart；格式说明见 docs/blocks-v5-parts/library-format.md 第 9–12 节。
+/// 落盘格式（库文件夹）怎么从这里出来见 backend_lib_build.dart；格式说明见 docs/blocks-v5-parts/library-format.md 第 12–17 节。
 library;
 
 import 'package:lopicode/backend/backend_function.dart';

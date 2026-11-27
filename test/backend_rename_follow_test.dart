@@ -183,4 +183,15 @@ void main() {
     expect(after, isNot(contains('lib:$kLibFlow#')));
     expect(after.replaceAll('shuang/flow2', kLibFlow), before);
   });
+
+  test('类型改名：新建、父类、字段和参数的类型都跟着改；积木改名：调用按编号认，不用动', () {
+    final doc = parseLangBlocksDocument(zoo());
+    expect(beRenameType(doc, 't3', '生物'), isNull);
+    expect(doc.core.type('t4')!.parent, '生物');
+    expect(beRenameType(doc, 't1', '住户'), isNull);
+    expect(jsonEncode(doc.core.main!.toJson()), contains('"type":"住户"'));
+    doc.functions[0].look = doc.functions[0].look.copyWith(name: '多一个');
+    expect(beFunctionUses(doc, 'f1'), 1);
+    expect(errors(doc), isEmpty, reason: '改完不标红');
+  });
 }
