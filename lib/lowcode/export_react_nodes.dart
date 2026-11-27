@@ -11,6 +11,7 @@ LcFrameworkExport _exportSite(LcDocument doc) {
   for (final p in site.pages) {
     final plans = LcComponentPlans.build(p.view, pageName: p.name, notes: notes, fixedNames: site.componentNames);
     if (site.navPart != null) lcNavPartOf[p.view.root] = site.navPart!;
+    if (site.topPart != null) lcTopPartOf[p.view.root] = site.topPart!;
     final (jsx, css) = _page(p.view, p.name, plans, notes);
     files
       ..add(lcFormatted('${p.name}.jsx', jsx, 'jsx'))
@@ -27,6 +28,10 @@ LcFrameworkExport _exportSite(LcDocument doc) {
   final nav = site.navPart;
   if (nav != null && files.any((f) => f.content.contains('import $nav from'))) {
     components.add(lcFormatted('components/$nav.jsx', lcReactNavPart(doc, site, nav, text: jsxText, attr: jsxAttr)!, 'jsx'));
+  }
+  final top = site.topPart;
+  if (top != null && files.any((f) => f.content.contains('import $top from'))) {
+    components.add(lcFormatted('components/$top.jsx', lcReactTopPart(doc, site, top, text: jsxText, attr: jsxAttr)!, 'jsx'));
   }
   final shared = LcBindPlan.of(doc, doc.root);
   if (shared != null && shared.hasProject) files.add(LcExportFile(path: kLcReactStateFile, content: lcReactStateFile(shared)));
@@ -45,6 +50,22 @@ extension _ViewNodes on _View {
     if (part != null) {
       parts.add(part);
       return _Jsx(['<$part$a${lcIsPageBar(pageRoot, n) ? ' data-page=""' : ''} current={${lcNavPartCurrent(n)}} />']);
+    }
+    // 各页共用的顶部导航栏：同理；这一页的标题、返回箭头当属性传，左右按钮也当属性传（left / right）。
+    final topPart = lcTopPartFor(pageRoot, n, attrs: a, plain: ' className="${lcNodeClass(n, prefix)}"');
+    if (topPart != null) {
+      parts.add(topPart);
+      final head = '<$topPart$a${lcIsPageBar(pageRoot, n) ? ' data-page=""' : ''}${jsxAttr('title', lcTopPartTitle(n))}${lcTopPartBack(n) ? ' back' : ''}';
+      final sides = [
+        for (final side in ['left', 'right'])
+          if (lcTopPartSlot(n, side).isNotEmpty) (side, [for (final c in lcTopPartSlot(n, side)) ...node(c, depth + 2).asChild]),
+      ];
+      if (sides.isEmpty) return _Jsx(['$head />']);
+      return _Jsx([
+        head,
+        for (final (side, kids) in sides) ...['  $side={', '    <>', ..._indent(_indent(_indent(kids))), '    </>', '  }'],
+        '/>',
+      ]);
     }
     // 第 3 版的新组件：元素树三种导出共用（export_web_v3.dart）。
     final el = bind == null ? lcWebElement(n, web) : lcBoundWebElement(n, web);

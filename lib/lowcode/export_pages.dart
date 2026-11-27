@@ -66,6 +66,14 @@ class LcSitePlan {
       }
       navPart = name;
     }
+    // 各页共用的顶部导航栏同理（第四轮 B5）。
+    if (doc.sharedTop != null) {
+      var name = 'LcTopBar';
+      for (var k = 2; !used.add(name); k++) {
+        name = 'LcTopBar$k';
+      }
+      topPart = name;
+    }
   }
 
   final List<LcPagePlan> pages = [];
@@ -73,6 +81,9 @@ class LcSitePlan {
 
   /// 共用底部导航的公共部件叫什么；项目里没有共用导航是 null。
   String? navPart;
+
+  /// 共用顶部导航栏的公共部件叫什么；项目里没有共用顶栏是 null。
+  String? topPart;
 }
 
 /// “点一下去这一页”的 JS 表达式（给底部导航项用；里面不带双引号，事件对象用 [kLcEv] 占位）。
