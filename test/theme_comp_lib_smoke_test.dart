@@ -138,7 +138,9 @@ void main() {
       await until(tester, lbKey('complib-file-exports/组件库-商城组件-1.0.0.lopilib'), '选文件的单子');
       await shot(tester, 'lib-pick-file');
       await tap(tester, lbKey('complib-file-exports/组件库-商城组件-1.0.0.lopilib'));
-      await until(tester, lbKey('complib-import'), '导入前的预览');
+      await until(tester, lbKey('be-lib-import-sheet'), '导入前的预览（和积木库同一页）');
+      expect(find.text('前端'), findsOneWidget, reason: '给谁用那一行');
+      expect(find.textContaining('组件（1 个）'), findsOneWidget);
       expect(find.text('更新组件库'), findsOneWidget);
       expect(find.textContaining('没有手写代码'), findsOneWidget);
       expect(find.textContaining('商品卡片'), findsWidgets);

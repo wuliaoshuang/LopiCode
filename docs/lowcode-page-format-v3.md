@@ -283,11 +283,11 @@ Agent 用 `lowcode_update_page` 写页面时没写 `version` 的，按第 3 版�
 ### 组件库在项目里怎么放
 
 - 每个库一个文件夹 `components/作者段/库名/`：
-  - `lib.json`：`{kind: "lopicode-complib", format: 1, id, name, version, author, side: "front", components: [{id, name}], images?: [路径], missing?: [没带上的图片路径]}`；
+  - `lib.json`：`{kind: "lopicode-complib", format: 1, id, name, version, author, side: "frontend", components: [{id, name}], images?: [路径], missing?: [没带上的图片路径]}`；
   - `components.json`：`{components: [组件定义…], themeVars?: {<变量名>: 值}}`；
   - `images.json`（有图片才有）：`{<项目里的相对路径>: <base64>}`。
 - 登记表 `components/libs.json`：`{format: 1, libs: [{id, version, from, sum}]}`。`from`：`project`＝在这个项目里存的，`file`＝从文件导入的；`sum` 是三个文件内容的 sha256。和积木库的 `blocks/libs.json` 是并列的两张，互不相干。
 - 导出文件：`exports/组件库-名字-版本.lopilib`，就是上面三个文件打成的 zip（和积木库同一种包、同一套防护）。
 - 装进文档：库里的定义拷进 `components`，id 换成 `lib_<库标识里的非字母数字换成下划线>_<原 id>`，带上 `lib` 那一笔；库带的主题变量项目里没有的补进 `theme.vars`，已有的不动；库带的图片写进项目里原来的路径，已有同名文件的不动。
-- 导入时拦下的：没有清单或清单不是 JSON；`kind` 不对（是积木库会单独说）；缺 `id`／`name`／`version`；标识、版本号写法不对；作者段是 `lopi`、`local`；`side` 不是 `front`；带 `native/`（手写代码）；一个组件都没有、超过 64 个、有读不懂的、id 重复；用到库里没有的组件；组件互相套成圈；图片路径不对劲；项目里已有同标识同版本、内容却不一样的库；以及打包层的全部防护（超大小、文件太多、路径往外跳、不是压缩包、内容不是文字）。
+- 导入时拦下的：没有清单或清单不是 JSON；`kind` 不对（是积木库会单独说）；缺 `id`／`name`／`version`；标识、版本号写法不对；作者段是 `lopi`、`local`；`side` 不是 `frontend`（B2 那一版写的 `front` 也认）；带 `native/`（手写代码）；一个组件都没有、超过 64 个、有读不懂的、id 重复；用到库里没有的组件；组件互相套成圈；图片路径不对劲；项目里已有同标识同版本、内容却不一样的库；以及打包层的全部防护（超大小、文件太多、路径往外跳、不是压缩包、内容不是文字）。
 

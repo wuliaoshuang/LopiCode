@@ -2,7 +2,7 @@
 /// 这里只管数据：库长什么样、怎么从文档里收出来、怎么读（带检查）、怎么装进一份文档。不碰磁盘、不联网、不执行任何东西。
 ///
 /// 一个库三个文件（格式见 docs/lowcode-page-format-v3.md“组件库”一节）：
-/// - `lib.json`：清单——`kind: lopicode-complib`、`format: 1`、`id`（作者段/库名）、`name`、`version`、`author`、`side: front`、
+/// - `lib.json`：清单——`kind: lopicode-complib`、`format: 1`、`id`（作者段/库名）、`name`、`version`、`author`、`side: frontend`（和积木库的“给谁用”同一个写法；B2 写的 `front` 也认）、
 ///   `components`（每个组件的 id 和名字，给预览看）、`images`（用到的图片）、`missing`（太大没带上的图片）；
 /// - `components.json`：`components`（组件定义，和页面文件里 `components` 一个写法）、`themeVars`（用到的主题变量和它们的值）；
 /// - `images.json`：图片路径 → 内容（base64）；没有图片就没有这个文件。
@@ -15,6 +15,7 @@ library;
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
+import 'package:lopicode/lang/lib_native.dart';
 import 'package:lopicode/lowcode/component_extras.dart';
 import 'package:lopicode/lowcode/component_model.dart';
 import 'package:lopicode/lowcode/model.dart';
@@ -111,7 +112,7 @@ Map<String, String> compLibFiles(CompLib lib) {
       'name': lib.name,
       'version': lib.version,
       'author': lib.author,
-      'side': 'front',
+      'side': LibSide.frontend.name,
       'components': [
         for (final d in lib.defs) {'id': d.id, 'name': d.name},
       ],
@@ -211,9 +212,9 @@ CompLib compLibRead(Map<String, String> files) {
   if (id.isNotEmpty && !kCompLibId.hasMatch(id)) problems.add('标识不对（$id）：要写成“作者段/库名”，小写字母、数字、连字符，字母开头');
   if (id.isNotEmpty && kCompLibId.hasMatch(id) && compLibAuthorReserved(id.split('/').first)) problems.add('作者段 lopi、local 是应用自己留着用的');
   if (version.isNotEmpty && !kCompLibVersion.hasMatch(version)) problems.add('版本号不对（$version）：要写成 1.0.0 这样');
-  if (m['side'] != 'front') problems.add('清单里“给谁用”不是前端（side 应该是 front）');
+  if (m['side'] != LibSide.frontend.name && m['side'] != 'front') problems.add('清单里“给谁用”不是前端（side 应该是 frontend）');
   if (name.length > 40) problems.add('名字太长了（最多 40 个字）');
-  if (files.keys.any((k) => k.startsWith('native/')) || m['native'] != null) problems.add('这个库带着手写代码。这一版不能导入带手写代码的组件库');
+  if (files.keys.any((k) => k.startsWith('native/')) || m['native'] != null) problems.add('这个库带了手写代码。组件库是只给前端用的，手写代码是照后端的五种语言写的，前端用不了，所以不能导入');
 
   final body = _json(files[kCompLibDefsFile]);
   final raw = body is Map ? body['components'] : null;

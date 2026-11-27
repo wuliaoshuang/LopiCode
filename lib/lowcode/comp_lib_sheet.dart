@@ -4,10 +4,10 @@
 // - 清单一行一个库：名字在上，下面一行弱化的“标识 · 版本 · 几个组件 · 从哪来的”；动作都收进行尾“⋮”
 //   （导出成文件、再存一版、看里面的组件、从项目里拿掉）。坏的库用警示色写一句原因。
 // - “存进库”是一张表，一行一项：名字、标识、版本、作者、要放进去的组件（勾选）。标识写错当场说怎么写。
-// - 导入一定先看预览（comp_lib_import_sheet.dart），点了头才落盘；导入以后把“重查”的结果说出来。
+// - 导入一定先看预览（和积木库同一页：lib/ui/lib_import_sheet.dart），点了头才落盘；导入以后把“重查”的结果说出来。
 // - 库里的组件不能直接改：看定义里给“复制一份来改”。颜色全取主题值。
+import 'package:lopicode/lang/lib_native.dart';
 import 'package:lopicode/lowcode/comp_lib.dart';
-import 'package:lopicode/lowcode/comp_lib_import_sheet.dart';
 import 'package:lopicode/lowcode/comp_lib_store.dart';
 import 'package:lopicode/lowcode/component_extras.dart';
 import 'package:lopicode/lowcode/component_model.dart';
@@ -16,6 +16,7 @@ import 'package:lopicode/lowcode/edit_types.dart';
 import 'package:lopicode/lowcode/image_pick_sheet.dart';
 import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/lib_import_sheet.dart';
 import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -38,13 +39,15 @@ Future<void> showCompLibSheet(BuildContext context, {required LcDocument Functio
   builder: (_) => _LibSheet(doc: doc, onEdit: onEdit, images: images, pickComponent: pickComponent),
 );
 
-/// 预览要看的东西（和线 A 的公用预览页一个形状）。
-CompLibImportView compLibImportView(CompLib lib) => CompLibImportView(
+/// 预览要看的东西：交给和积木库共用的那一页（lib/ui/lib_import_sheet.dart）。
+LibImportView compLibImportView(CompLib lib) => LibImportView(
   name: lib.name,
   id: lib.id,
   version: lib.version,
   author: lib.author,
-  side: '给前端用',
+  side: LibSide.frontend.label,
+  listTitle: '组件',
+  unit: '个',
   hasSource: true,
   needs: [
     if (lib.images.isNotEmpty) '带着 ${lib.images.length} 张图片：${lib.images.keys.join('、')}',
@@ -177,7 +180,7 @@ class _LibSheetState extends State<_LibSheet> {
     if (!mounted) return;
     final lib = opened.lib;
     final had = (_libs ?? const <CompStoredLib>[]).any((s) => s.id == lib.id);
-    final go = await showCompLibImport(
+    final go = await showLibImport(
       context,
       compLibImportView(lib),
       title: had ? '更新组件库' : '导入组件库',
@@ -358,7 +361,7 @@ class _LibPeek extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x6),
         children: [
           Text(lib.name, style: t.titleLarge),
-          Text('${lib.id} · ${lib.lib.version}${lib.lib.author.isEmpty ? '' : ' · ${lib.lib.author}'} · 给前端用', style: t.bodySmall?.copyWith(color: c.textMuted)),
+          Text('${lib.id} · ${lib.lib.version}${lib.lib.author.isEmpty ? '' : ' · ${lib.lib.author}'} · 给${LibSide.frontend.label}用', style: t.bodySmall?.copyWith(color: c.textMuted)),
           const SizedBox(height: Space.x2),
           Text('库里的组件不能直接改。要改就“复制一份来改”：副本是项目自己的组件，和库不再有关系。', style: t.bodySmall),
           for (final d in lib.lib.defs) ...[
