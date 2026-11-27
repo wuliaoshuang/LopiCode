@@ -360,6 +360,10 @@ void main() {
       await tester.tap(find.byKey(const Key('mirror-option-aliyun')));
       await settle(tester);
       await tester.pumpAndSettle();
+      // 选项先写进设置，界面上的字要等真实写盘做完才跟着换；机器忙的时候固定等一次不够，这里等到换过来为止（有上限）。
+      for (var i = 0; i < 40 && tester.widget<Text>(find.byKey(const Key('rootfs-source-value'))).data != '阿里云镜像'; i++) {
+        await settle(tester, rounds: 1);
+      }
       expect(env.runtime.rootfsSource.id, 'aliyun');
       expect(tester.widget<Text>(find.byKey(const Key('rootfs-source-value'))).data, '阿里云镜像');
       expect(tester.widget<Text>(find.byKey(const Key('apt-mirror-value'))).data, '清华大学镜像', reason: '两个源各管各的');
