@@ -116,7 +116,9 @@ function lcPageHost(lc, t) {
   function uiWrite(id, prop, v) {
     const io = t.prop(id, prop);
     if (!io || !io[1]) return null;
-    io[1](lc.toPlain(v));
+    // 文字属性里放“是 / 否”：三种产物要显示得一样（React 不画布尔值，另两种画成 true / false），这里先变成字。
+    const p = lc.toPlain(v);
+    io[1](prop === "text" && typeof p === "boolean" ? String(p) : p);
     touched();
     return null;
   }

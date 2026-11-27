@@ -50,7 +50,8 @@ Future<LibSide?> askBeLibSide(BuildContext context, {LibSide initial = LibSide.b
 );
 
 /// 自带的“接口服务”库的面板。`fork`＝点了“复制一份来改”（问名字、复制、刷新都由调用方做）。
-Future<void> showBeServiceLib(BuildContext context, {required Future<void> Function() fork}) {
+/// [why]＝这份文档用不了它的原因（页面逻辑里看它时）：有原因就把原因放最上面，不给复制入口。
+Future<void> showBeServiceLib(BuildContext context, {required Future<void> Function() fork, String? why}) {
   final service = beServiceLibrary();
   return showModalBottomSheet<void>(
     context: context,
@@ -61,10 +62,13 @@ Future<void> showBeServiceLib(BuildContext context, {required Future<void> Funct
       hint:
           '应用自带的库，只读。接口、请求、响应、数据集合这些积木都是它的；有接口的文档会自动用上它。\n'
           '它不是在画布上搭的，是直接用语言基础的文字写法写的，底下接着宿主的能力（${[for (final h in service.hosts) beHostWord(h)].join('、')}）。'
-          '${userLibHostEntry ? '“复制一份来改”会得到同样的一份文字写法的库：可以改它的文字，再让文档用它顶替自带的这个。' : ''}',
+          '${userLibHostEntry && why == null ? '“复制一份来改”会得到同样的一份文字写法的库：可以改它的文字，再让文档用它顶替自带的这个。' : ''}',
+      problem: why,
       children: [
         // 复制件直接用宿主接口；那条路关着时（rules.dart 的 userLibHostEntry）复制出来必然用不了，所以只放一行灰字说明。
-        if (userLibHostEntry)
+        if (why != null)
+          const SizedBox.shrink()
+        else if (userLibHostEntry)
           BeSheetAdd(
             key: const ValueKey('be-lib-builtin-fork'),
             label: '复制一份来改',
@@ -81,6 +85,22 @@ Future<void> showBeServiceLib(BuildContext context, {required Future<void> Funct
     ),
   );
 }
+
+/// 自带的“页面”库的面板（只看）。[why]＝这份文档用不了它的原因（后端积木页里看它时）。
+Future<void> showBePageLib(BuildContext context, LibLibrary page, {String? why}) => showModalBottomSheet<void>(
+  context: context,
+  isScrollControlled: true,
+  builder: (sheet) => BeSheetFrame(
+    key: const ValueKey('be-lib-builtin-page-sheet'),
+    title: page.name,
+    hint: '应用自带的库，只读。事件、状态、控件、去别的页面这些积木都是它的；页面逻辑会自动用上它。',
+    problem: why,
+    children: [
+      BeSheetSection('积木（${page.blocks.length} 块）'),
+      for (final b in page.blocks) BeSheetRow(label: beLibBlockLine(b), muted: true),
+    ],
+  ),
+);
 
 /// 已经在项目里的库：看它的手写代码并确认（或者重新确认）。确认了返回 true。
 Future<bool> confirmBeLibNative(BuildContext context, PathGuard guard, BeStoredLib s, {List<LibLibrary> others = const []}) async {

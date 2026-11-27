@@ -144,7 +144,9 @@ String describeBeBlock(LcBlock b, [String? Function(String id)? fnName]) {
       final data = method == 'POST' && isExpr(b.args['data']) ? '，提交 ${arg('data')}' : '';
       return '用 $method 请求 ${arg('url')}$data${into('，结果放进')}';
     default:
-      return describeBeLangBlock(b, arg, (key) => _name(b.args[key], '没填')) ?? describeBeFuncBlock(b, arg, fnName) ?? describeBeCoreBlock(b, arg) ?? '不认识的积木（${_clip(b.op)}）';
+      // 库的积木：名字由调用方按 op 查（检查报问题时给了；没给的地方保持原样）。
+      final libName = b.op.startsWith('lib:') ? fnName?.call(b.op) : null;
+      return describeBeLangBlock(b, arg, (key) => _name(b.args[key], '没填')) ?? describeBeFuncBlock(b, arg, fnName) ?? describeBeCoreBlock(b, arg) ?? libName ?? '不认识的积木（${_clip(b.op)}）';
   }
 }
 

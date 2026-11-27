@@ -6,6 +6,7 @@
 library;
 
 import 'package:lopicode/backend/backend_blocks.dart';
+import 'package:lopicode/backend/backend_blocks_typeops.dart';
 import 'package:lopicode/backend/backend_blocks_wait.dart';
 import 'package:lopicode/backend/backend_core.dart';
 import 'package:lopicode/lang/errors.dart';
@@ -43,6 +44,7 @@ const Map<String, LcBlockSpec> beCoreBlockSpecs = {
   'superInit': LcBlockSpec('superInit', '调父类的创建时', kBeCatType, [_args], hint: '只能是子类“创建时”的第一句'),
   'superCallStmt': LcBlockSpec('superCallStmt', '调父类的方法', kBeCatType, [_member, _args], hint: '重写的方法里，接着做父类原来的那一段'),
   ...beWaitBlockSpecs,
+  ...beTypeOpBlockSpecs,
 };
 
 const Map<String, LcExprSpec> beCoreExprSpecs = {
@@ -63,6 +65,7 @@ const Map<String, LcExprSpec> beCoreExprSpecs = {
   'isA': LcExprSpec('isA', '是不是某类', kBeCatType, [LcArgSpec('x', '谁', LcArgKind.expr), _type], hint: '是这个类（或它的子类）、实现了这个接口'),
   'classRef': LcExprSpec('classRef', '类本身', kBeCatType, [_type], hint: '读、改、调“类本身的”字段和方法时放在“谁”那一格'),
   ...beWaitExprSpecs,
+  ...beTypeOpExprSpecs,
 };
 
 const Map<String, String> beCoreBlockSentences = {
@@ -74,6 +77,7 @@ const Map<String, String> beCoreBlockSentences = {
   'superInit': '调父类的创建时 {args}',
   'superCallStmt': '调父类的 {name} {args}',
   ...beWaitBlockSentences,
+  ...beTypeOpBlockSentences,
 };
 
 const Map<String, String> beCoreArmSentences = {'try': '出错时 只接 {kind} 放进 {name}', 'match': '是 {case} 时 带出 {binds}'};
@@ -92,6 +96,7 @@ const Map<String, String> beCoreExprSentences = {
   'isA': '{x} 是不是 {type}',
   'classRef': '{type} 这个类',
   ...beWaitExprSentences,
+  ...beTypeOpExprSentences,
 };
 
 bool beIsCoreOp(Object? op) => beCoreBlockSpecs.containsKey(op);
@@ -220,7 +225,7 @@ Map<String, dynamic>? newBeCoreExpr(String kind, BeCore core, {String? type}) {
     case 'classRef':
       return {'e': kind, 'type': first((t) => t.kind == BeTypeKind.klass)?.name ?? ''};
   }
-  return newBeWaitExpr(kind);
+  return newBeWaitExpr(kind) ?? newBeTypeOpExpr(kind);
 }
 
 /// 积木盒里拖出来的新的一块语句；不是核心 2 的返回 null。
@@ -245,7 +250,7 @@ LcBlock? newBeCoreBlock(String op, BeCore core) => switch (op) {
   'callMethodStmt' => LcBlock(op: op, args: {'of': null, 'name': '', 'args': <dynamic>[]}),
   'superInit' => LcBlock(op: op, args: {'args': <dynamic>[]}),
   'superCallStmt' => LcBlock(op: op, args: {'name': '', 'args': <dynamic>[]}),
-  _ => newBeWaitBlock(op),
+  _ => newBeWaitBlock(op) ?? newBeTypeOpBlock(op),
 };
 
 String _label(Object? v, [String missing = '（没选）']) => v is String && v.isNotEmpty ? (kBeCaseLabels[v] ?? (v == kBeCatchAny ? '任何错误' : v)) : missing;
@@ -266,7 +271,7 @@ String? describeBeCoreExpr(Object? expr, String Function(String key) sub) {
     'this' => '我自己',
     'isA' => '${sub('x')} 是不是 ${_label(e['type'])}',
     'classRef' => '${_label(e['type'])} 这个类',
-    _ => describeBeWaitExpr(expr, sub),
+    _ => describeBeWaitExpr(expr, sub) ?? describeBeTypeOpExpr(expr, sub),
   };
 }
 
@@ -278,5 +283,5 @@ String? describeBeCoreBlock(LcBlock b, String Function(String name) arg) => swit
   'callMethodStmt' => '让 ${arg('of')} 做 ${_label(b.args['name'])}',
   'superInit' => '调父类的创建时',
   'superCallStmt' => '调父类的 ${_label(b.args['name'])}',
-  _ => describeBeWaitBlock(b, arg),
+  _ => describeBeWaitBlock(b, arg) ?? describeBeTypeOpBlock(b),
 };

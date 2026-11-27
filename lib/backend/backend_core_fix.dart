@@ -22,7 +22,8 @@ class BeCoreFix {
 }
 
 /// 文档里的一串积木：接口、“我的积木”、类的方法 / “创建时”、“程序开始时”。
-LcBlockTree? beTreeById(BeDocument doc, String id) => doc.function(id) ?? doc.route(id) ?? doc.core.tree(id);
+/// 按号找一串积木：我的积木、接口、核心 2 的串（方法、“创建时”、“程序开始时”）、库的帽子（页面逻辑里的事件帽子就是这一种）。
+LcBlockTree? beTreeById(BeDocument doc, String id) => doc.function(id) ?? doc.route(id) ?? doc.core.tree(id) ?? doc.hat(id);
 
 /// 一格的位置（和 backend_type_bridge.dart 的 `BeSlotRef` 一样的四样，这里不依赖它）。
 typedef BeSpot = ({String treeId, LcBlockPath path, String? arg, List<Object> exprPath});

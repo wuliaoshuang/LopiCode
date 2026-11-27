@@ -9,6 +9,7 @@ library;
 
 import 'package:lopicode/backend/backend_blocks.dart';
 import 'package:lopicode/backend/backend_blocks_core.dart';
+import 'package:lopicode/backend/backend_blocks_typeops.dart';
 import 'package:lopicode/backend/backend_blocks_wait.dart';
 import 'package:lopicode/backend/backend_core.dart';
 import 'package:lopicode/backend/backend_core_edit.dart';
@@ -16,6 +17,7 @@ import 'package:lopicode/backend/backend_core_gen.dart';
 import 'package:lopicode/backend/backend_model.dart';
 import 'package:lopicode/blocks/block_host.dart';
 import 'package:lopicode/lang/errors.dart';
+import 'package:lopicode/lang/lib_native.dart';
 import 'package:lopicode/lang/rules.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 
@@ -137,10 +139,13 @@ mixin BeCoreHost on BlockHost {
         colorKey: BlockColorKey.classes,
         groups: [
           const BlockGroup('看是哪种', blocks: ['match'], exprs: ['isA']),
+          const BlockGroup('当成和标上', exprs: [kBeCast, kBeAscribe]),
           const BlockGroup('记录', exprs: ['recNew', 'getField', 'recCopy']),
           const BlockGroup('枚举和变体', exprs: ['enumVal', 'varNew']),
           BlockGroup('对象', blocks: const ['setField', 'callMethodStmt'], exprs: ['classNew', 'callMethod', if (t != null) 'this', 'classRef']),
           if (t != null && (t.parent != null)) const BlockGroup('父类', blocks: ['superInit', 'superCallStmt'], exprs: ['superCall']),
+          // 原生绑定积木：只在库的画布上、开关开着、这一边有宿主接口可调时才有（见 backend_blocks_typeops.dart）。
+          if (userLibHostEntry && doc.library != null && doc.library!.side != LibSide.both) const BlockGroup('宿主接口', blocks: [kBeHostCallStmt], exprs: [kBeHostCall]),
         ],
       ),
       // “要等的事”排在最后（核心 3）：前面几页的位置不动。
@@ -229,6 +234,15 @@ mixin BeCoreHost on BlockHost {
         for (final k in kBeCaseIsTypes) BlockOption('$kBeCaseIsPrefix$k', kBeCaseLabels['$kBeCaseIsPrefix$k']!, hint: '看的是“任意”的值'),
       ];
     }
+    if (expr == null && block != null && block.op == kBeHostCallStmt && arg.name == 'name') {
+      return keep(beHostOptions(doc.library?.side ?? LibSide.both), block.args['name'], '这一边没有这个接口');
+    }
+    if (kind == kBeHostCall && arg.name == 'name') return keep(beHostOptions(doc.library?.side ?? LibSide.both), expr!['name'], '这一边没有这个接口');
+    if ((kind == kBeCast || kind == kBeAscribe) && arg.name == 'to') {
+      final list = beTypeOptions(core);
+      final now = expr!['to'];
+      return [...list, if (now is String && now.isNotEmpty && !list.any((o) => o.value == now)) BlockOption(now, beTypeLabel(now) ?? now, hint: beTypeLabel(now) == null ? '读不出来的类型' : '')];
+    }
     if (expr == null && block != null && beIsCoreOp(block.op) && arg.name == 'name') {
       return keep([for (final n in _memberNames(methods: block.op != 'setField')) BlockOption(n, n)], block.args['name'], '现在没有叫这个的');
     }
@@ -253,7 +267,7 @@ mixin BeCoreHost on BlockHost {
     return null;
   }
 
-  String? coreOptionLabel(LcArgSpec arg, String value) => value == kBeCatchAny ? '任何错误' : kBeCaseLabels[value];
+  String? coreOptionLabel(LcArgSpec arg, String value) => value == kBeCatchAny ? '任何错误' : (kBeCaseLabels[value] ?? (arg.name == 'to' ? beTypeLabel(value) : null));
 
   /// 刚改过的这一格里，选的类型 / 情况 / 种类变了：后面的字段、参数格子按新的重排（原来填的、名字还对得上的留着）。
   void coreArgChanged(LcBlock block, String arg, List<Object> exprPath) {

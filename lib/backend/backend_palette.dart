@@ -5,6 +5,7 @@
 library;
 
 import 'package:lopicode/backend/backend_blocks.dart';
+import 'package:lopicode/backend/backend_blocks_typeops.dart';
 import 'package:lopicode/blocks/block_host.dart';
 
 /// 新积木上的话（旧积木的在 backend_block_host.dart 的 `beBlockSentences`）。
@@ -225,7 +226,7 @@ const Map<String, List<String>> beAliases = {
   'expr:cond': ['三目', '二选一', '条件', 'if', '?:'],
   'expr:isNull': ['空', '没有', 'null', 'none'],
   'expr:null': ['空', '没有', 'null', 'none', 'nil'],
-  'expr:isType': ['类型', '是不是', 'typeof', 'is'],
+  'expr:isType': ['类型', '是不是', '哪一类', '看是哪一类值', 'typeof', 'is'],
   'expr:convert': ['类型', '转成', '转数字', '转文字', 'parse', 'string', 'number'],
   'expr:copy': ['拷贝', '克隆', 'copy', 'clone'],
   'expr:join': ['文字', '字符串', '连接', '拼起来', 'concat', '+'],
@@ -326,7 +327,7 @@ const Map<String, List<String>> _variantAliases = {
 };
 
 List<String> beAliasesOf(BlockItemRef item) =>
-    item.preset.isEmpty ? (beAliases[item.token] ?? beFuncAliases[item.token] ?? const []) : (_variantAliases['${item.id}:${item.preset.values.first}'] ?? const []);
+    item.preset.isEmpty ? (beAliases[item.token] ?? beFuncAliases[item.token] ?? beTypeOpAliases[item.token] ?? const []) : (_variantAliases['${item.id}:${item.preset.values.first}'] ?? const []);
 
 List<BlockItemRef> beVariantsOf(BlockItemRef item) {
   if (item.kind != BlockPaletteKind.expr) return const [];
