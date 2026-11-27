@@ -14,6 +14,7 @@ library;
 
 import 'package:lopicode/lowcode/bind_model.dart';
 import 'package:lopicode/lowcode/bind_refs.dart';
+import 'package:lopicode/lowcode/box_off.dart';
 import 'package:lopicode/lowcode/component_extras.dart';
 import 'package:lopicode/lowcode/component_model.dart';
 import 'package:lopicode/lowcode/component_ops.dart';
@@ -162,6 +163,7 @@ class LcLiveScope {
     }
 
     emitArgs(copy);
+    lcBoxFoldLiterals(copy);
     return copy;
   }
 

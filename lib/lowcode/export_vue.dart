@@ -18,6 +18,7 @@ import 'dart:convert';
 
 import 'package:lopicode/lowcode/bind_js.dart';
 import 'package:lopicode/lowcode/bind_model.dart';
+import 'package:lopicode/lowcode/box_off.dart';
 import 'package:lopicode/lowcode/component_extras.dart';
 import 'package:lopicode/lowcode/component_model.dart';
 import 'package:lopicode/lowcode/export_bind_plan.dart';

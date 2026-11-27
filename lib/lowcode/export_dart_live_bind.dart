@@ -3,8 +3,10 @@
 library;
 
 import 'package:lopicode/lowcode/bind_model.dart';
+import 'package:lopicode/lowcode/box_off.dart';
 import 'package:lopicode/lowcode/css_codec.dart';
 import 'package:lopicode/lowcode/css_color.dart';
+import 'package:lopicode/lowcode/export_dart.dart';
 import 'package:lopicode/lowcode/export_dart_hook.dart';
 import 'package:lopicode/lowcode/export_dart_live_events.dart';
 import 'package:lopicode/lowcode/export_dart_live_tree.dart';
@@ -358,7 +360,8 @@ class DartLiveGen implements DartLiveHook {
       final off = lcBindable(n.type, 'disabled') == null ? null : lcDataExpr(n, 'disabled');
       String make(LcNode x) {
         final code = dartLiveExtras(n, _withStates(n, core(x, parent, indent)), indent, notes);
-        return events?.attach(n, code, indent) ?? code;
+        final tip = lcBoxCanOff(x) ? lcDataExpr(n, 'alt') : null;
+        return dartBoxExtras(x, events?.attach(n, code, indent, off: lcBoxOff(x)) ?? code, indent, labelCode: tip == null ? null : '_lcText(${expr(tip)})');
       }
 
       var widget = off == null

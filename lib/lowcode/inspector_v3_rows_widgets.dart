@@ -78,6 +78,9 @@ List<Widget> lcButtonV3Rows(BuildContext context, InspectorEdit ed) {
   return [lcIconRow(context, ed), lcSwitchRow(ed, 'disabled', '禁用')];
 }
 
+/// 容器：禁用（变淡、点了不算数）、说明文字（给读屏用的那句话）。见 box_off.dart。
+List<Widget> lcBoxOffRows(InspectorEdit ed) => [lcSwitchRow(ed, 'disabled', '禁用'), LcPropTextRow(key: ValueKey('${ed.node.id}-alt'), ed: ed, prop: 'alt', label: '说明文字', hint: '这一块是干什么的（给读屏用）')];
+
 /// 图片：说明文字（看不见图的人、图没加载出来时读到的那句话）。
 List<Widget> lcImageV3Rows(InspectorEdit ed) => [LcPropTextRow(ed: ed, prop: 'alt', label: '说明文字', hint: '图上是什么（给读屏和加载失败时用）')];
 

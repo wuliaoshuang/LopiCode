@@ -9,6 +9,7 @@ import 'dart:math' as math;
 
 import 'package:lopicode/lowcode/bind_eval.dart';
 import 'package:lopicode/lowcode/bind_preview.dart';
+import 'package:lopicode/lowcode/box_off.dart';
 import 'package:lopicode/lowcode/canvas_component_widgets.dart';
 import 'package:lopicode/lowcode/canvas_controls_widgets.dart';
 import 'package:lopicode/lowcode/canvas_css.dart';
@@ -492,7 +493,7 @@ class CanvasPage extends StatelessWidget {
 
     // 角标：隐藏的、脱离文档流的组件画布上照样占位（不然选不中），用角标说明。
     final tag = hidden ? '已隐藏' : (condOff ? '条件不成立' : (position == 'absolute' || position == 'fixed' ? '绝对定位' : (position == 'sticky' ? '粘性定位' : badge)));
-    final opacity = cssOpacity(s['opacity']) * (hidden || condOff ? 0.35 : 1) * (copy > 0 ? 0.5 : 1);
+    final opacity = cssOpacity(s['opacity']) * (hidden || condOff ? 0.35 : 1) * (copy > 0 ? 0.5 : 1) * (lcBoxOff(n) ? 0.5 : 1);
     if (opacity < 1) box = Opacity(opacity: opacity, child: box);
     if (tag != null) box = canvasBadged(box, tag);
     if (!margin.isZero) box = Padding(padding: EdgeInsets.fromLTRB(margin.left, margin.top, margin.right, margin.bottom), child: box);

@@ -168,6 +168,7 @@ class _BuilderScreenState extends State<BuilderScreen> with WidgetsBindingObserv
         return;
       }
       final doc = LcDocument.parse(await _file.readAsString());
+      lcUpgradeBuiltins(doc); // 内置组件库出了新版：装着的旧定义原地换新
       await lcAttachLibs(widget.session.guard, doc); // 项目里的积木库：页面逻辑用上的库从这里找
       if (!mounted) return;
       setState(() {

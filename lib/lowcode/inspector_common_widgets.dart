@@ -283,6 +283,7 @@ class _InspectorCommonPageState extends State<InspectorCommonPage> {
       _switch('wrap', '换行', _css('flex-wrap') == 'wrap', (v) => ed.apply((n, _) => writeStyleOnly(n, 'flex-wrap', v ? 'wrap' : null))),
       _padding(),
       _color('bg', '背景', 'background-color'),
+      if (n.type == 'container') ...lcBoxOffRows(ed),
     ];
   }
 

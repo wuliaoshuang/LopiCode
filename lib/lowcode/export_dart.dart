@@ -1,3 +1,5 @@
+import 'package:lopicode/lowcode/box_off.dart';
+import 'package:lopicode/lowcode/comp_self_wire.dart';
 import 'package:lopicode/lowcode/component_ops.dart';
 import 'package:lopicode/lowcode/export_dart_hook.dart';
 import 'package:lopicode/lowcode/export_dart_live.dart';
@@ -22,7 +24,7 @@ String exportDart(LcDocument source, {String? className}) {
   lcSettleSharedNav(source); // 共用的底部导航：各页都取“刚改过的那一份”（编辑器里每次修改后已经做过，这里是给直接调导出的人兜底）
   lcSettleSharedTop(source);
   // 用了第 6 期新东西的组件实例先化成普通页面的样子（没有这种实例时就是原来的文档）。
-  final doc = lcExportDoc(source, allPages: true);
+  final doc = lcExportDoc(lcSelfWired(source), allPages: true);
   // 摊开过实例的（[doc] 不是原来那一份）也走“会动的那一路”：选的变体是叠在样式上的，组件事件接的动作也只有那一路会写。
   final live = dartLiveWanted(doc) || !identical(doc, source) ? DartLiveExport(doc) : null;
   // 新的页面逻辑（积木）：语言核心没有 Dart 的生成器，这一份不导出，文件开头说一句。旧页面没有这一句。
@@ -106,14 +108,33 @@ String _ind(int n) => '  ' * n;
 
 /// 一个节点的代码。多页面时，设了“点击时去页面”的组件在这里接上跳转：
 /// 按钮直接写进 `onPressed`；别的组件外面包一层 GestureDetector（在行里被 Expanded / Flexible 包着的，包在它们里面）。
-String _node(LcNode n, LcNode? parent, int i) => dartLive?.node(n, parent, i, _nodeJump) ?? _nodeJump(n, parent, i);
+String _node(LcNode n, LcNode? parent, int i) => dartLive?.node(n, parent, i, _nodeJump) ?? dartBoxExtras(n, _nodeJump(n, parent, i), i);
 
 /// 给“会动的那一路”用：生成一个节点（弹窗的内容、页面的根）。
 String dartNode(LcNode n, LcNode? parent, int indent) => _node(n, parent, indent);
 
+/// 容器的“禁用”（变淡）和“说明文字”（Tooltip：长按看得到，读屏也读它）。被 Expanded / Flexible 包着的，包在它们里面。没设这两样的原样交回。
+/// [labelCode]：说明文字绑了状态时的那句 Dart（空文字时 Tooltip 自己不出来）。
+String dartBoxExtras(LcNode n, String code, int i, {String? labelCode}) {
+  final text = lcBoxLabel(n);
+  final label = labelCode ?? (text == null ? null : _s(text));
+  if (!lcBoxOff(n) && label == null) return code;
+  String wrap(String inner) {
+    var out = inner;
+    if (lcBoxOff(n)) out = 'Opacity(opacity: 0.5, child: $out)';
+    if (label != null) out = 'Tooltip(message: $label, child: $out)';
+    return out;
+  }
+
+  final m = RegExp(r'^(Expanded|Flexible)\(\n(\s*)child: ').firstMatch(code);
+  final tail = ',\n${_ind(i)})';
+  if (m != null && code.endsWith(tail)) return '${m[1]}(\n${m[2]}child: ${wrap(code.substring(m.end, code.length - tail.length))}$tail';
+  return wrap(code);
+}
+
 String _nodeJump(LcNode n, LcNode? parent, int i) {
   final code = _nodeCore(n, parent, i);
-  final to = dartPageJumps?.clickPage(n);
+  final to = lcBoxOff(n) ? null : dartPageJumps?.clickPage(n); // 禁用着的容器不接点击
   if (to == null) return code;
   final go = '() => _lcGoTo(context, const $to())';
   if (n.type == 'button') return code.replaceFirst('onPressed: () {}', 'onPressed: $go');

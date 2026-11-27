@@ -8,14 +8,17 @@
 /// - 去页面：`_lcGoTo(context, 那一页())`（多页面的项目才有）；
 /// - 弹提示：`_lcAlert(context, …)`（一个只有“知道了”的对话框）；
 /// - 打开弹窗（改控件 某个弹窗 的 显示 改成 是）：调那个弹窗的 `showDialog_xxx(context)`；
-/// - 如果 / 否则。
-/// 一条处理里只要有一块不认得的（打开网址要第三方包、关闭弹窗、等一会儿、要数据、新页面逻辑的转发记号…），
+/// - 如果 / 否则；重复几次（最多 1 万次，和网页一样）；
+/// - 等一会儿：`Future.delayed`，和网页一样只有它里面的积木会等，排在它后面的马上接着做；等完页面已经关了就不做了；
+/// - 打印到控制台：`debugPrint`。
+/// 一条处理里只要有一块不认得的（打开网址要第三方包、关闭弹窗、要数据、新页面逻辑的转发记号…），
 /// 整条不导出，文件开头记一句，按钮照旧是空的 `onPressed: () {}`。
 ///
 /// 代码是写在那个控件自己身上的（不是另起一个函数），所以控件在“重复”里时，动作里读“重复带出的那一项 / 第几个”读得到。
 library;
 
 import 'package:lopicode/lowcode/export_dart_v3.dart';
+import 'package:lopicode/lowcode/logic_js_core.dart' show kRepeatLimit;
 import 'package:lopicode/lowcode/logic_model.dart';
 import 'package:lopicode/lowcode/model.dart';
 
@@ -57,6 +60,7 @@ class DartLiveEvents {
 
   /// 这一份导出里有没有真的写出过动作（文件开头的说明用）。
   bool wrote = false;
+  int _loops = 0;
 
   String? _assign(String name, String value) {
     final v = state(name);
@@ -98,6 +102,18 @@ class DartLiveEvents {
         final yes = _block(b.body, depth + 1), no = _block(b.orElse, depth + 1);
         if (yes == null || no == null) return null;
         return 'if (_lcBool(${expr(b.args['cond'])})) { $yes }${b.orElse.isEmpty ? '' : ' else { $no }'}';
+      case 'repeat':
+        final inner = _block(b.body, depth + 1);
+        if (inner == null) return null;
+        final i = 'lcI${++_loops}';
+        return 'for (var $i = 0, lcN$_loops = _lcNum(${expr(b.args['times'])}).clamp(0, $kRepeatLimit); $i < lcN$_loops; $i++) { $inner }';
+      case 'wait':
+        final inner = _block(b.body, depth + 1);
+        if (inner == null) return null;
+        // context.mounted：等完页面要是已经关了（或者这个控件已经不在了），里面的就不做了。
+        return 'Future<void>.delayed(Duration(milliseconds: _lcNum(${expr(b.args['ms'])}).clamp(0, 86400000).round()), () { if (!context.mounted) return; $inner });';
+      case 'log':
+        return "debugPrint('\${${expr(b.args['value'])}}');";
     }
     return null;
   }
@@ -121,7 +137,7 @@ class DartLiveEvents {
       if (event == 'click' && h.body.length == 1 && h.body.single.op == kLcGoPageOp && dartPageJumps?.clickPage(n) != null) continue;
       final code = _block(h.body, 0);
       if (code == null) {
-        notes.add('有的组件事件接的动作（Flutter 这边导出的是：设置状态、状态加上、去页面、弹提示、打开弹窗、如果。打开网址要另装第三方包、关闭弹窗、等一会儿、向网址要数据、改控件别的属性，以及新的页面逻辑里接的事件都没有导出，那个控件点了没反应）。');
+        notes.add('有的组件事件接的动作（Flutter 这边导出的是：设置状态、状态加上、去页面、弹提示、打开弹窗、如果、重复几次、等一会儿、打印到控制台。打开网址要另装第三方包、关闭弹窗、向网址要数据、改控件别的属性，以及新的页面逻辑里接的事件都没有导出，那个控件点了没反应）。');
         continue;
       }
       out.add(code);
@@ -134,10 +150,11 @@ class DartLiveEvents {
   static final RegExp _fieldHead = RegExp(r'\b(TextField|TextFormField)\(\n( *)');
 
   /// 把这个控件的动作接到已经生成好的 [code] 上。
-  String attach(LcNode n, String code, int indent) {
+  /// [off]：这是个禁用着的容器，点击不接。
+  String attach(LcNode n, String code, int indent, {bool off = false}) {
     if (handlers[n.id] == null) return code;
     var out = code;
-    final click = _body(n, 'click');
+    final click = off ? null : _body(n, 'click');
     if (click != null) {
       final fn = '() { $click }';
       if (n.type == 'button') {

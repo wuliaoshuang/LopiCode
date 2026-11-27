@@ -96,7 +96,7 @@ void main() {
     await lbShot(tester, _shotDir, 'b5-lib-list');
     await _tap(tester, lbKey('complib-builtin'));
     await _until(tester, lbKey('complib-peek'), '库里的组件');
-    expect(find.textContaining('lopi/builtin · 1.0.0'), findsOneWidget);
+    expect(find.textContaining('lopi/builtin · 1.1.0'), findsOneWidget);
     await lbShot(tester, _shotDir, 'b5-lib-peek');
     // 清单是滚着看的：一个个滚出来，十四个都在，各有一个“复制一份来改”
     for (final b in kBuiltinComps) {

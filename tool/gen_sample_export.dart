@@ -4,7 +4,9 @@ import 'dart:io';
 
 import 'package:lopicode/lowcode/export_dart.dart';
 
+import '../test/support/b7_live_sample.dart';
 import '../test/support/bind_sample.dart';
+import '../test/support/box_off_sample.dart';
 import '../test/support/builtin_p1_sample.dart';
 import '../test/support/comp_event_samples.dart';
 import '../test/support/comp_samples.dart';
@@ -42,5 +44,9 @@ void main() {
   // 第四轮 B6：组件事件接的动作、变体、能滚的区域、下划线在 Flutter 里（test/lowcode_dart_events_test.dart 会 import 它们）。
   File('test/generated/builtin_p1_page.dart').writeAsStringSync(exportDart(builtinP1Doc(), className: 'BuiltinP1Page'));
   File('test/generated/comp_event_page.dart').writeAsStringSync(exportDart(compEventDoc(), className: 'CompEventPage'));
+  // 第四轮 B7：容器的禁用 / 说明文字、图标按钮的两个属性（test/lowcode_box_off_test.dart 会 import 它）。
+  File('test/generated/box_off_page.dart').writeAsStringSync(exportDart(boxOffDoc(), className: 'BoxOffPage'));
+  // 第四轮 B7：步进器开箱即用、“重复”里的事件、重复几次 / 等一会儿 / 打印（test/lowcode_b7_live_test.dart 会 import 它）。
+  File('test/generated/b7_live_page.dart').writeAsStringSync(exportDart(b7LiveDoc(), className: 'B7LivePage'));
   stdout.writeln('ok');
 }

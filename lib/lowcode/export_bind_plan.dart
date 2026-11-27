@@ -15,7 +15,6 @@ import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/lowcode/state_model.dart';
 
 const String kNoteBindings = '这一页用了状态和数据绑定：状态改了，绑了它的地方自己跟着变。';
-const String kNoteBindRepeatEvents = '“重复”出来的每一份里，按钮的事件处理是同一个：处理里还拿不到“是哪一项”（下一期做）。';
 const String kNoteBindComponent = '自定义组件的定义里的绑定这一版不导出（组件自己的状态留给下一期）。';
 
 class LcBindPlan {

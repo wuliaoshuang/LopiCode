@@ -173,7 +173,7 @@ extension _TemplateNodes on _Template {
         if (real) out.writeln('$pad</slot>');
       default:
         final tag = n.type == 'page' ? 'main' : 'div';
-        out.writeln('$pad<$tag$a>');
+        out.writeln('$pad<$tag$a${lcBoxVueAttrs(n, off: bind?.value(n, 'disabled'), label: bind?.value(n, 'alt'), attr: vueAttr)}>');
         for (final c in n.children) {
           node(c, depth + 1);
         }

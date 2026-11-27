@@ -20,7 +20,7 @@ import 'package:lopicode/lowcode/model.dart';
 
 const String kBuiltinCompLibId = 'lopi/builtin';
 const String kBuiltinCompLibName = '内置组件库';
-const String kBuiltinCompLibVersion = '1.0.0';
+const String kBuiltinCompLibVersion = '1.1.0';
 
 /// 库里的一个组件给界面看的东西：在组件盒哪一类（`null`＝不进组件盒）、搜索用的别名、一句话说明、格子上画哪个图标。
 class BuiltinComp {
@@ -148,6 +148,40 @@ String? lcBuiltinIdOf(String? docDefId) {
 
 /// 这个定义是不是内置库装进来的（还带着来源那一笔）。
 bool lcIsBuiltinDef(LcComponentDef def) => compLibOf(def)?.id == kBuiltinCompLibId;
+
+/// 内置库里组件的属性在面板上叫什么（定义里的名字是英文的标识，给人看的用这里的）。不是内置库的、没列的返回 null。
+String? lcBuiltinPropLabel(LcComponentDef def, String prop) {
+  final lib = compLibOf(def);
+  return lib == null || lib.id != kBuiltinCompLibId ? null : _propLabels[lib.component]?[prop];
+}
+
+const Map<String, Map<String, String>> _propLabels = {
+  'iconButton': {'disabled': '禁用', 'label': '说明文字'},
+  'link': {'text': '文字'},
+  'stepper': {'value': '值', 'min': '最小', 'max': '最大', 'step': '每次加减'},
+  'formItem': {'label': '标签', 'required': '必填', 'help': '说明', 'error': '错误提示'},
+};
+
+/// 文档里装着的内置库组件是旧版的：原地换成这一版（id 不变，所以实例不断；新版只多属性、不少东西）。返回换了几个。
+int lcUpgradeBuiltins(LcDocument doc) {
+  var n = 0;
+  final fresh = {for (final d in lcBuiltinCompLib().defs) d.id: d};
+  for (var i = 0; i < doc.components.length; i++) {
+    final old = doc.components[i];
+    final lib = compLibOf(old);
+    if (lib == null || lib.id != kBuiltinCompLibId || lib.version == kBuiltinCompLibVersion) continue;
+    final src = fresh[lib.component];
+    if (src == null) continue;
+    final json = (jsonDecode(jsonEncode(src.toJson())) as Map).cast<String, dynamic>();
+    json['id'] = old.id;
+    json[kCompLibMark] = {'id': kBuiltinCompLibId, 'name': kBuiltinCompLibName, 'version': kBuiltinCompLibVersion, 'component': lib.component};
+    final copy = LcComponentDef.tryParse(json);
+    if (copy == null) continue;
+    doc.components[i] = copy;
+    n++;
+  }
+  return n;
+}
 
 /// 用到内置库的某个组件之前调一下：文档里还没有它的定义就装进去（只装这一个，带着来源那一笔）。
 /// [docDefId] 不是内置库的 id、或者已经装了：什么都不做。返回这次装没装。

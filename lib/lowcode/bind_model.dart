@@ -329,6 +329,7 @@ class LcBindable {
 List<LcBindable> lcBindablesOf(String type) => switch (type) {
   'text' => const [LcBindable('text', '文字', 'text')],
   'button' => const [LcBindable('text', '文字', 'text'), LcBindable('disabled', '禁用', 'bool')],
+  'container' => const [LcBindable('disabled', '禁用', 'bool'), LcBindable('alt', '说明文字', 'text')],
   'image' => const [LcBindable('src', '图片地址', 'text'), LcBindable('alt', '说明文字', 'text')],
   'input' || 'textarea' => const [LcBindable('placeholder', '提示文字', 'text'), LcBindable('disabled', '禁用', 'bool')],
   'checkbox' => const [LcBindable('text', '文字', 'text'), LcBindable('disabled', '禁用', 'bool')],

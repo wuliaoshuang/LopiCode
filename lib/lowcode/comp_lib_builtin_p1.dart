@@ -50,6 +50,10 @@ List<Map<String, Object?>> lcBuiltinP1Defs() => [
   {
     'id': 'iconButton',
     'name': '图标按钮',
+    'props': [
+      {'name': 'disabled', 'type': 'bool', 'default': false},
+      {'name': 'label', 'type': 'text', 'default': ''},
+    ],
     'root': _n(
       'btn',
       'container',
@@ -59,7 +63,10 @@ List<Map<String, Object?>> lcBuiltinP1Defs() => [
           _n('icon', 'icon', {'icon': 'add', 'size': 24, 'color': '#222435'}),
         ]),
       ],
-      {'emit': _tap},
+      {
+        'data': {'disabled': _from('disabled'), 'alt': _from('label')},
+        'emit': _tap,
+      },
     ),
     'events': _tapEvent,
     'variants': [
@@ -188,6 +195,8 @@ List<Map<String, Object?>> lcBuiltinP1Defs() => [
         ],
       },
     ],
+    // 没人接“改了”时导出自己记着值（comp_self_wire.dart）。
+    'hold': {'prop': 'value', 'event': 'change'},
   },
   {
     'id': 'formItem',

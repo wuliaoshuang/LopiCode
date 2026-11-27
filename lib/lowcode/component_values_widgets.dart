@@ -3,6 +3,7 @@
 //   文字＝输入框；数字＝数字输入框；开关＝一个开关；颜色＝一排常用色块 + “其它颜色”。
 // - 这里的控件既用在属性面板里（改某个实例传的值），也用在“改默认值”的对话框里。
 // - 填错（数字框里不是数字）不改数据，输入框下面说明原因。
+import 'package:lopicode/lowcode/comp_lib_builtin.dart';
 import 'package:lopicode/lowcode/component_model.dart';
 import 'package:lopicode/lowcode/component_ops.dart';
 import 'package:lopicode/lowcode/css_color.dart';
@@ -184,7 +185,7 @@ class ComponentValuesForm extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: Text('${p.name} · ${componentPropTypeLabel(p.type)}', style: t.labelMedium, maxLines: 1, overflow: TextOverflow.ellipsis),
+                child: Text('${lcBuiltinPropLabel(def, p.name) ?? p.name} · ${componentPropTypeLabel(p.type)}', style: t.labelMedium, maxLines: 1, overflow: TextOverflow.ellipsis),
               ),
               if (instanceOverrides(def, node, p.name))
                 TextButton(

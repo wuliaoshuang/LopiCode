@@ -165,7 +165,11 @@ extension _ViewNodes on _View {
         return _Jsx(['$attr ?? (', '  <>', ..._indent(_indent(kids)), '  </>', ')'], _Kind.expression);
       default:
         final tag = n.type == 'page' ? 'main' : 'div';
-        return _Jsx(['<$tag$a>', for (final c in n.children) ..._indent(node(c, depth + 1).asChild), '</$tag>']);
+        return _Jsx([
+          '<$tag$a${lcBoxReactAttrs(n, off: bind?.value(n, 'disabled'), label: bind?.value(n, 'alt'), attr: jsxAttr)}>',
+          for (final c in n.children) ..._indent(node(c, depth + 1).asChild),
+          '</$tag>',
+        ]);
     }
   }
 
