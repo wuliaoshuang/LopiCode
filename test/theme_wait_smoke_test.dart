@@ -79,7 +79,14 @@ void main() {
           await env.dispose();
         });
       });
-      await tester.pumpWidget(appFor(env, ProjectShell(project: project, session: session, initial: ShellDest.builder), mode: mode, font: kTestFont));
+      await tester.pumpWidget(
+        appFor(
+          env,
+          ProjectShell(project: project, session: session, initial: ShellDest.builder),
+          mode: mode,
+          font: kTestFont,
+        ),
+      );
       await settle(tester, rounds: 8);
       return tester.state<BackendScreenState>(find.byType(BackendScreen));
     }

@@ -102,7 +102,13 @@ mixin _Exprs on _Core {
         if (t.kind == LKind.future && !t.nullable) return WL.elem(t);
         if (!t.isAny && !t.isNever && !WL.isHole(t)) {
           final what = t.kind == LKind.future ? '可能是空的${t.nonNull.show()}（先判断“不是空”）' : t.show();
-          err('T31', sc, '“等”后面要一个“稍后的结果”（“开始做”给出来的那种），这里是$what', node: e, fixes: [if (t.kind != LKind.future) LFix(LFixKind.dropAwait, '去掉“等”', target: e)]);
+          err(
+            'T31',
+            sc,
+            '“等”后面要一个“稍后的结果”（“开始做”给出来的那种），这里是$what',
+            node: e,
+            fixes: [if (t.kind != LKind.future) LFix(LFixKind.dropAwait, '去掉“等”', target: e)],
+          );
         }
         return t.kind == LKind.future ? WL.elem(t) : t;
       case LSpawn():

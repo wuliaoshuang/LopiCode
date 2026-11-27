@@ -261,6 +261,25 @@ extension _Finish on _Checker {
         w.classes.values.any((c) => !prelude.contains(c.decl) && w.supers(c.name).contains(kErrBase)) ||
         closedTypes.values.any((t) => t.anyPart((x) => x.kind == LKind.object && langIsBuiltinError(x.name))) ||
         vars.any((v) => v.type.anyPart((x) => x.kind == LKind.object && langIsBuiltinError(x.name)));
-    return LTypeResult._(w, issues, closedTypes, closedWants, ops, closedArgs, outChecks, sigs, vars, lambdaKeys, lines, passes, _sharedNodes(), prelude, usesErrors, waitKeys, waitIface, w.waitEscaped);
+    return LTypeResult._(
+      w,
+      issues,
+      closedTypes,
+      closedWants,
+      ops,
+      closedArgs,
+      outChecks,
+      sigs,
+      vars,
+      lambdaKeys,
+      lines,
+      passes,
+      _sharedNodes(),
+      prelude,
+      usesErrors,
+      waitKeys,
+      waitIface,
+      w.waitEscaped,
+    );
   }
 }

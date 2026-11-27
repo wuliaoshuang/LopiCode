@@ -12,6 +12,10 @@ import 'package:lopicode/backend/backend_model.dart';
 import 'package:lopicode/backend/backend_targets.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 
+import 'proc_bounded.dart';
+
+export 'proc_bounded.dart' show RunningBackend;
+
 LcBlock _b(String op, Map<String, dynamic> args, {List<LcBlock>? body, List<LcBlock>? orElse}) => LcBlock(op: op, args: args, body: body, orElse: orElse);
 LcBlock _json(int status, Map<String, dynamic> value) => _b('respondJson', {'status': exNum(status), 'value': value});
 LcBlock _text(int status, Map<String, dynamic> value) => _b('respondText', {'status': exNum(status), 'value': value});
@@ -850,27 +854,6 @@ Directory writeProject(Map<String, String> files, String prefix) {
   return dir;
 }
 
-/// 一个起好的服务。
-class RunningBackend {
-  RunningBackend(this.process, this.port, this.stdoutLines, this.stderrText, this._subs);
-
-  final Process process;
-  final int port;
-
-  /// “已启动”之后标准输出的每一行。
-  final List<String> stdoutLines;
-  final StringBuffer stderrText;
-  final List<StreamSubscription<String>> _subs;
-
-  Future<void> stop() async {
-    process.kill(ProcessSignal.sigkill);
-    await process.exitCode.timeout(const Duration(seconds: 10), onTimeout: () => -1);
-    for (final s in _subs) {
-      await s.cancel();
-    }
-  }
-}
-
 /// 在 `dir` 里用 `command` 起服务（随机端口、只绑 127.0.0.1），等它打印“已启动”那一行。
 ///
 /// PHP 不一样（`php -S 地址:端口 server.php`）：端口写在命令里、启动后不打印“已启动”。所以这里先挑一个空着的端口换进命令，
@@ -902,7 +885,7 @@ Future<RunningBackend> startBackend(Directory dir, List<String> command, {Map<St
     final port = await ready.future.timeout(const Duration(seconds: 60));
     return RunningBackend(process, port, lines, err, subs);
   } on Object {
-    process.kill(ProcessSignal.sigkill);
+    procKillTree(process);
     for (final s in subs) {
       await s.cancel();
     }
@@ -940,7 +923,7 @@ Future<RunningBackend> _startPhpBackend(Directory dir, List<String> command, int
       // 还没开始监听：等一下再试
     }
     if (DateTime.now().isAfter(deadline)) {
-      process.kill(ProcessSignal.sigkill);
+      procKillTree(process);
       for (final s in subs) {
         await s.cancel();
       }

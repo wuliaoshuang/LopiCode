@@ -180,9 +180,7 @@ mixin _Waits on _Core {
       }
     }
     if (!finalPass) return;
-    final fixes = [
-      if (e is LLambda && _spawnable(e)) LFix(LFixKind.wrapSpawn, '把里面要等的事改成“开始做”（不等它做完）', target: _whyNode(lambdaKeys[e] ?? '')),
-    ];
+    final fixes = [if (e is LLambda && _spawnable(e)) LFix(LFixKind.wrapSpawn, '把里面要等的事改成“开始做”（不等它做完）', target: _whyNode(lambdaKeys[e] ?? ''))];
     if (src.waits == true) {
       final key = e is LLambda ? lambdaKeys[e] : (e is LName ? e.name : null);
       // 它要等只是因为调了外面函数的参数：记下来，带着“那个参数只收不用等的函数”重查一遍（checkTypes）。

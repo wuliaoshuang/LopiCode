@@ -54,7 +54,18 @@ class LRenamer {
   LFuncDecl func(LFuncDecl d) {
     final tv = [for (final p in d.typeParams) p.name];
     return _scoped([for (final p in d.params) p.name], tv, () {
-      return LFuncDecl(d.name, params(d.params), block(d.body), isPublic: d.isPublic, typeParams: _tps(d.typeParams), codeName: d.codeName, waits: d.waits, noWait: d.noWait, src: d.src, type: typeQ(d.type));
+      return LFuncDecl(
+        d.name,
+        params(d.params),
+        block(d.body),
+        isPublic: d.isPublic,
+        typeParams: _tps(d.typeParams),
+        codeName: d.codeName,
+        waits: d.waits,
+        noWait: d.noWait,
+        src: d.src,
+        type: typeQ(d.type),
+      );
     });
   }
 

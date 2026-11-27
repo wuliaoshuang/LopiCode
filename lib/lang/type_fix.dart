@@ -147,7 +147,9 @@ class _Rewriter {
 
   LFuncDecl func(LFuncDecl d) {
     final body = block(d.body);
-    return identical(body, d.body) ? d : LFuncDecl(d.name, d.params, body, isPublic: d.isPublic, typeParams: d.typeParams, codeName: d.codeName, waits: d.waits, noWait: d.noWait, src: d.src, type: d.type);
+    return identical(body, d.body)
+        ? d
+        : LFuncDecl(d.name, d.params, body, isPublic: d.isPublic, typeParams: d.typeParams, codeName: d.codeName, waits: d.waits, noWait: d.noWait, src: d.src, type: d.type);
   }
 
   LDecl decl(LDecl d) {

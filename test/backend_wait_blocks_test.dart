@@ -55,9 +55,13 @@ void main() {
       ...coreDoc('乙', functions: [waitSlowFn()], main: const []),
       'routes': [
         route('r1', 'GET', '/a', [
-          blk('spawn', {'name': ''}, [
-            blk('do', {'value': slow(1, 2)}),
-          ]),
+          blk(
+            'spawn',
+            {'name': ''},
+            [
+              blk('do', {'value': slow(1, 2)}),
+            ],
+          ),
           text(tx('好')),
         ]),
       ],
@@ -100,11 +104,16 @@ void main() {
       final h = hostOf(
         coreDoc(
           '错',
-          functions: [
-            waitSlowFn(),
-          ],
+          functions: [waitSlowFn()],
           types: [
-            typeDef('t1', 'class', '东西', ctor: method('m1', '创建时', [], [blk('do', {'value': slow(1, 5)})])),
+            typeDef(
+              't1',
+              'class',
+              '东西',
+              ctor: method('m1', '创建时', [], [
+                blk('do', {'value': slow(1, 5)}),
+              ]),
+            ),
           ],
           main: [log(tx('好'))],
         ),
@@ -118,10 +127,10 @@ void main() {
       final h = hostOf(
         coreDoc(
           '错',
-          functions: [
-            waitSlowFn(),
+          functions: [waitSlowFn()],
+          main: [
+            log(hof('listMap', ls([nm(1), nm(2)]), arrow(['x'], slow(1, 5)))),
           ],
-          main: [log(hof('listMap', ls([nm(1), nm(2)]), arrow(['x'], slow(1, 5))))],
         ),
       );
       expect(dump(h), contains('T30'));

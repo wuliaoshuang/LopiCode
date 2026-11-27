@@ -15,14 +15,7 @@ const LcArgSpec _list = LcArgSpec('list', '哪些事', LcArgKind.expr);
 const LcArgSpec _ms = LcArgSpec('ms', '毫秒', LcArgKind.expr, valueType: LcType.number);
 
 const Map<String, LcBlockSpec> beWaitBlockSpecs = {
-  'spawn': LcBlockSpec(
-    'spawn',
-    '开始做',
-    kBeCatWait,
-    [LcArgSpec('name', '记成', LcArgKind.literalText, optional: true)],
-    bodyLabel: '同时做',
-    hint: '里面的积木马上开始做，不等它做完就接着往下；起个名字以后可以“等”它、“取消”它。里面的“返回”只结束这件事',
-  ),
+  'spawn': LcBlockSpec('spawn', '开始做', kBeCatWait, [LcArgSpec('name', '记成', LcArgKind.literalText, optional: true)], bodyLabel: '同时做', hint: '里面的积木马上开始做，不等它做完就接着往下；起个名字以后可以“等”它、“取消”它。里面的“返回”只结束这件事'),
   'sleep': LcBlockSpec('sleep', '等一会儿', kBeCatWait, [_ms], hint: '停这么多毫秒再接着做（1000 毫秒＝1 秒）'),
   'cancel': LcBlockSpec('cancel', '取消', kBeCatWait, [_task], hint: '让那件事到它下一个要等的地方就停；等它的人会拿到“取消了”这种错误。已经做完的不受影响'),
   'critical': LcBlockSpec(
@@ -46,14 +39,7 @@ const Map<String, LcExprSpec> beWaitExprSpecs = {
 
 const Map<String, String> beWaitBlockSentences = {'spawn': '开始做，记成 {name}', 'sleep': '等 {ms} 毫秒', 'cancel': '取消 {x}', 'critical': '一次只让一个做 {name}'};
 
-const Map<String, String> beWaitExprSentences = {
-  'spawnOf': '开始算 {x}',
-  'await': '等 {x}',
-  'awaitMax': '等 {x} 最多 {ms} 毫秒',
-  'awaitAll': '等全部 {list}',
-  'awaitAny': '等最先的一个 {list}',
-  'cancelled': '被取消了吗',
-};
+const Map<String, String> beWaitExprSentences = {'spawnOf': '开始算 {x}', 'await': '等 {x}', 'awaitMax': '等 {x} 最多 {ms} 毫秒', 'awaitAll': '等全部 {list}', 'awaitAny': '等最先的一个 {list}', 'cancelled': '被取消了吗'};
 
 /// 积木盒里拖出来的新的一块值；不是这里的返回 null。
 Map<String, dynamic>? newBeWaitExpr(String kind) => switch (kind) {

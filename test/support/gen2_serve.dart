@@ -6,7 +6,10 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:flutter_test/flutter_test.dart';
+
 import 'gen2_run.dart';
+import 'proc_bounded.dart';
 
 /// 一个回应：状态码、头（名字小写；同名的用“, ”连起来）、内容的原始字节。
 class Gen2Reply {
@@ -19,6 +22,9 @@ class Gen2Reply {
 class Gen2Server {
   Gen2Server._(this._proc, this.port, this._dir, this.startLine, this._out, this._err, this._pipes);
   final Process _proc;
+
+  /// 服务的进程号（测试“有没有杀干净”用）。
+  int get pid => _proc.pid;
   final int port;
   final Directory _dir;
 
@@ -76,6 +82,8 @@ class Gen2Server {
 
   /// 按进程号关掉服务，交回它写到标准输出的每一行（不含“后端已启动”那一行）。
   Future<List<String>> stop() async {
+    // 先记下子进程（php -S 的几个工作进程、bash 起的东西）：父进程一退就查不到了，最后按进程号补杀一遍。
+    final kids = procDescendants(_proc.pid);
     _proc.kill(ProcessSignal.sigterm);
     await _proc.exitCode.timeout(
       const Duration(seconds: 10),
@@ -84,6 +92,9 @@ class Gen2Server {
         return -1;
       },
     );
+    for (final k in kids) {
+      Process.killPid(k, ProcessSignal.sigkill);
+    }
     await Future.wait(_pipes).timeout(const Duration(seconds: 10), onTimeout: () => const []);
     _dir.deleteSync(recursive: true);
     final lines = const LineSplitter().convert(utf8.decode(_out, allowMalformed: true));
@@ -127,7 +138,7 @@ Future<Gen2Server> gen2Serve(String language, Map<String, String> files, {int se
     final port = await _freePort();
     final env = _env(port);
     Future<void> build(String exe, List<String> args, String what) async {
-      final b = await Process.run(exe, args, workingDirectory: dir.path, environment: env, includeParentEnvironment: false).timeout(const Duration(seconds: 600));
+      final b = await runBounded(exe, args, workingDirectory: dir.path, environment: env, includeParentEnvironment: false, limit: const Duration(seconds: 600));
       if (b.exitCode != 0) throw StateError('$what 没过：${b.stderr}');
     }
 
@@ -195,9 +206,16 @@ Future<Gen2Server> _launch(List<String> cmd, Directory dir, int port, Map<String
       startLine = await Future.any([started.future, exited]).timeout(Duration(seconds: seconds), onTimeout: () => throw StateError('等了 $seconds 秒，服务没说“后端已启动”'));
       if (startLine != '后端已启动：http://127.0.0.1:$port') throw StateError('第一行应该是“后端已启动：http://127.0.0.1:$port”，实际是：$startLine');
     }
-  } on StateError catch (e) {
-    proc.kill(ProcessSignal.sigkill);
-    throw StateError('${e.message}\n标准输出：${utf8.decode(out, allowMalformed: true)}\n标准错误：${utf8.decode(err, allowMalformed: true)}');
+  } on Object catch (e) {
+    // 不管哪种没起成（超时、第一行不对、别的异常）：连子进程一起杀掉，不留在后台占着锁。
+    procKillTree(proc);
+    throw StateError('${e is StateError ? e.message : e}\n标准输出：${utf8.decode(out, allowMalformed: true)}\n标准错误：${utf8.decode(err, allowMalformed: true)}');
+  }
+  // 保底：测试在 stop() 之前失败、超时、抛异常时，测试收尾也会把服务连子进程杀掉（已经停了的不碍事）。
+  try {
+    addTearDown(() => procKillTree(proc));
+  } on Object {
+    // 不在测试里调用（没有收尾可挂）：由调用的人自己 stop()
   }
   return Gen2Server._(proc, port, dir, startLine, out, err, pipes);
 }
@@ -212,7 +230,7 @@ Future<Gen2Server> gen2ServeShell(Directory dir, {required List<String> build, r
   final bins = {for (final t in gen2Tools.values) ?(t == null ? null : File(t).parent.path)};
   env['PATH'] = [...bins, env['PATH'] ?? '/usr/bin:/bin'].join(':');
   for (final b in build) {
-    final r = await Process.run('bash', ['-c', b], workingDirectory: dir.path, environment: env, includeParentEnvironment: false).timeout(const Duration(seconds: 600));
+    final r = await runBounded('bash', ['-c', b], workingDirectory: dir.path, environment: env, includeParentEnvironment: false, limit: const Duration(seconds: 600));
     if (r.exitCode != 0) throw StateError('“$b”没过：${r.stderr}');
   }
   return _launch(['bash', '-c', 'exec $start'], dir, port, env, php: php, seconds: seconds, firstLine: false);

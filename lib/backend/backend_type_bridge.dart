@@ -131,7 +131,16 @@ BeSlotRef? _slotOf(LcBlockTree tree, BeLangLower lower, LNode? node) {
 }
 
 /// 把那一格里的东西包一层就行的修法（backend_type_fix.dart）；别的五种（补情况、补字段…）在 backend_core_fix.dart。
-const Set<LFixKind> kBeBlockFixKinds = {LFixKind.wrapToText, LFixKind.wrapToInt, LFixKind.wrapParseInt, LFixKind.wrapOrElse, LFixKind.wrapMust, LFixKind.compareNotZero, LFixKind.dropAwait, LFixKind.wrapSpawn};
+const Set<LFixKind> kBeBlockFixKinds = {
+  LFixKind.wrapToText,
+  LFixKind.wrapToInt,
+  LFixKind.wrapParseInt,
+  LFixKind.wrapOrElse,
+  LFixKind.wrapMust,
+  LFixKind.compareNotZero,
+  LFixKind.dropAwait,
+  LFixKind.wrapSpawn,
+};
 
 BeSpot _spot(BeSlotRef r) => (treeId: r.treeId, path: r.path, arg: r.arg, exprPath: r.exprPath);
 

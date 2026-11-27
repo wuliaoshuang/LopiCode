@@ -221,5 +221,12 @@ List<LStmt> lStampSrc(List<LStmt> list, LSrc src) => [
 /// 里面的“返回”“跳出”照常算外面那个函数 / 循环的；不管怎么出来的，“出”都会做。
 List<LStmt> lCritical(LExpr name, List<LStmt> body, String temp, {LSrc? src}) => [
   LLet(temp, LRt('lockEnter', [name], src: src), isConst: true, src: src),
-  LTry(body, handlers: const [], finallyBody: [LExprStmt(LRt('lockLeave', [LName(temp)]), src: src)], src: src),
+  LTry(
+    body,
+    handlers: const [],
+    finallyBody: [
+      LExprStmt(LRt('lockLeave', [LName(temp)]), src: src),
+    ],
+    src: src,
+  ),
 ];

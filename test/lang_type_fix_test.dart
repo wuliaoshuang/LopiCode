@@ -123,7 +123,9 @@ void main() {
       () => const LModule(
         decls: [
           LNativeDecl('time.sleep', [LParam('毫秒', type: _int)], type: LType.nul),
-          LFuncDecl('快', [], [LExprStmt(LNative('time.sleep', [LLit(1)]))], noWait: true),
+          LFuncDecl('快', [], [
+            LExprStmt(LNative('time.sleep', [LLit(1)])),
+          ], noWait: true),
         ],
         body: [LExprStmt(LCall(LName('快'), []))],
       ),

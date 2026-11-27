@@ -10,6 +10,7 @@ import 'package:lopicode/backend/backend_targets.dart';
 import 'package:lopicode/lang/lang.dart';
 
 import 'backend_conformance.dart';
+import 'proc_bounded.dart';
 
 // —— 搭语法树的小写法 ——
 
@@ -77,7 +78,7 @@ Map<String, String> langProjectFiles(String language, List<LModule> modules) {
 
 /// 在 [dir] 里跑一条命令（有超时）。
 Future<ProcessResult> runTool(List<String> command, Directory dir, Map<String, String> environment, [Duration limit = const Duration(minutes: 5)]) {
-  return Process.run(command.first, command.sublist(1), workingDirectory: dir.path, environment: environment, stdoutEncoding: utf8, stderrEncoding: utf8).timeout(limit);
+  return runBounded(command.first, command.sublist(1), workingDirectory: dir.path, environment: environment, limit: limit); // 超时会杀掉，不留在后台
 }
 
 /// 生成、（要编译的先编译、）运行。本机没有这种语言的工具时返回 null。不联网、不下载。

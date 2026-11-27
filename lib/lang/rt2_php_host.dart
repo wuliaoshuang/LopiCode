@@ -10,8 +10,11 @@ library;
 
 import 'package:lopicode/lang/rt2_php_task.dart';
 
-const String kRt2PhpHost = r'''
-''' + kRt2PhpTask + r'''
+const String kRt2PhpHost =
+    r'''
+''' +
+    kRt2PhpTask +
+    r'''
 final class LcHost {
   const BODY_LIMIT = 1048576;
 

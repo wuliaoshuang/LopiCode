@@ -274,7 +274,9 @@ mixin Gen2Expr on Gen2Base {
         final sig = kHostV2[name] ?? unsupported('宿主接口「$name」这里还没有（现在有：${kHostV2.keys.join('、')}）', e);
         final d = module.decls.whereType<LNativeDecl>().where((d) => d.name == name).firstOrNull ?? unsupported('宿主接口「$name」用之前要先声明', e);
         final same =
-            d.params.length == sig.params.length && w.resolve(d.type) == sig.ret && [for (var i = 0; i < sig.params.length; i++) _sameHostParam(w.resolve(d.params[i].type), sig.params[i])].every((ok) => ok);
+            d.params.length == sig.params.length &&
+            w.resolve(d.type) == sig.ret &&
+            [for (var i = 0; i < sig.params.length; i++) _sameHostParam(w.resolve(d.params[i].type), sig.params[i])].every((ok) => ok);
         if (!same || args.length != sig.params.length) unsupported('宿主接口「$name」的声明和宿主给的对不上：应该是 (${sig.params.map((p) => p.show()).join(', ')}) → ${sig.ret.show()}', e);
         final host = hostCall(kHostV2Code[name]!, argCodes(args, sig.params, null));
         return conv(kHostV2Waits.contains(name) ? _wait(host, e) : host, sig.ret, t(e));
@@ -294,7 +296,8 @@ mixin Gen2Expr on Gen2Base {
 
   // 声明里的函数参数不用写“许不许等”（听宿主的）；写了就要和宿主的一样。
   static bool _sameHostParam(LType declared, LType host) =>
-      declared == host || (declared.kind == LKind.fn && host.kind == LKind.fn && declared.waits == null && LType(LKind.fn, args: declared.args, nullable: declared.nullable, waits: host.waits) == host);
+      declared == host ||
+      (declared.kind == LKind.fn && host.kind == LKind.fn && declared.waits == null && LType(LKind.fn, args: declared.args, nullable: declared.nullable, waits: host.waits) == host);
 
   String _index(LNode node, LExpr of, LExpr key) {
     final ot = t(of).nonNull;

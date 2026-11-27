@@ -131,17 +131,6 @@ mixin BeCoreHost on BlockHost {
             ],
           ),
       const BlockCategory(id: kBeCatError, label: kBeCatError, colorKey: BlockColorKey.error, blocks: ['try', 'throw'], exprs: ['errNew']),
-      const BlockCategory(
-        id: kBeCatWait,
-        label: kBeCatWait,
-        colorKey: BlockColorKey.async,
-        groups: [
-          BlockGroup('同时做', blocks: ['spawn', 'sleep'], exprs: ['spawnOf']),
-          BlockGroup('等结果', exprs: ['await', 'awaitMax', 'awaitAll', 'awaitAny']),
-          BlockGroup('取消', blocks: ['cancel'], exprs: ['cancelled']),
-          BlockGroup('排队', blocks: ['critical']),
-        ],
-      ),
       BlockCategory(
         id: kBeCatType,
         label: kBeCatType,
@@ -152,6 +141,18 @@ mixin BeCoreHost on BlockHost {
           const BlockGroup('枚举和变体', exprs: ['enumVal', 'varNew']),
           BlockGroup('对象', blocks: const ['setField', 'callMethodStmt'], exprs: ['classNew', 'callMethod', if (t != null) 'this', 'classRef']),
           if (t != null && (t.parent != null)) const BlockGroup('父类', blocks: ['superInit', 'superCallStmt'], exprs: ['superCall']),
+        ],
+      ),
+      // “要等的事”排在最后（核心 3）：前面几页的位置不动。
+      const BlockCategory(
+        id: kBeCatWait,
+        label: kBeCatWait,
+        colorKey: BlockColorKey.async,
+        groups: [
+          BlockGroup('同时做', blocks: ['spawn', 'sleep'], exprs: ['spawnOf']),
+          BlockGroup('等结果', exprs: ['await', 'awaitMax', 'awaitAll', 'awaitAny']),
+          BlockGroup('取消', blocks: ['cancel'], exprs: ['cancelled']),
+          BlockGroup('排队', blocks: ['critical']),
         ],
       ),
     ];

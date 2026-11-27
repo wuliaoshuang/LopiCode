@@ -179,7 +179,9 @@ class LcReader {
           );
         case '接口':
           decls.add(
-            LInterfaceDecl(name, [for (final m in d.skip(2).cast<LcList>()) LSignature(m[0] as String, params(m[1]), returns: ty(m[2]), waits: m.length > 3 && m[3] == '要等', noWait: m.length > 3 && m[3] == '不等')], isPublic: public),
+            LInterfaceDecl(name, [
+              for (final m in d.skip(2).cast<LcList>()) LSignature(m[0] as String, params(m[1]), returns: ty(m[2]), waits: m.length > 3 && m[3] == '要等', noWait: m.length > 3 && m[3] == '不等'),
+            ], isPublic: public),
           );
         case '别名':
           decls.add(LAliasDecl(name, ty(d[2]), isPublic: public));

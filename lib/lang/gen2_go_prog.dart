@@ -27,7 +27,14 @@ class GoGen2 extends GoGen2Types {
   @override
   String get mainFile => 'main.go';
   @override
-  Map<String, String> get runtimeFiles => const {'go.mod': 'module lcprog\n\ngo 1.18\n', 'lc/lc.go': kRt2GoSource, 'lc/host.go': kRt2GoHost, 'lc/more.go': kRt2GoMore, 'lc/io.go': kRt2GoIo, 'lc/task.go': kRt2GoTask};
+  Map<String, String> get runtimeFiles => const {
+    'go.mod': 'module lcprog\n\ngo 1.18\n',
+    'lc/lc.go': kRt2GoSource,
+    'lc/host.go': kRt2GoHost,
+    'lc/more.go': kRt2GoMore,
+    'lc/io.go': kRt2GoIo,
+    'lc/task.go': kRt2GoTask,
+  };
 
   final Map<V2Fn, _TryState> _states = Map.identity();
   _TryState get _st => _states[fn] ??= _TryState();

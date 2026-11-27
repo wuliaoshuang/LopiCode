@@ -6,7 +6,8 @@ library;
 
 import 'package:lopicode/lang/rt2_node_task.dart';
 
-const String kRt2NodeSource = r'''
+const String kRt2NodeSource =
+    r'''
 // LopiCode 积木的小库（Node.js，严格规矩）。由 LopiCode 生成，别手改。
 "use strict";
 // 抛出去的错：外面这层带着那句话；obj 是错误对象（小库自己报的错没有，接住的时候才按种类造）。
@@ -411,7 +412,9 @@ async function hostFetch(method, url, headers, body, timeoutMs) {
   return new Map([["status", res.status], ["headers", back], ["body", new TextDecoder("utf-8", { ignoreBOM: true }).decode(bytes)]]);
 }
 
-''' + kRt2NodeTask + r'''
+''' +
+    kRt2NodeTask +
+    r'''
 // —— 开服务（细则见 docs/blocks-v5-parts/C-library-system.md 9.1 和 B-gen-notes.md 第 12 节）——
 const BODY_LIMIT = 1048576;
 const errText = (e) => (e instanceof LcError ? "出错：" + e.message : String((e && e.stack) || e));

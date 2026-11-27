@@ -1,9 +1,8 @@
 // 规矩版本 2 的生成器“真跑”用的小工具：找各语言的编译器 / 解释器，把生成的整套文件写进临时目录，编译、运行，交回标准输出的原始字节。
 // 找不到哪个程序就交回跳过的原因（测试里明确跳过并打印）。都不联网。
-import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
+
+import 'proc_bounded.dart';
 
 String? _which(List<String> candidates, List<String> probe) {
   for (final exe in candidates) {
@@ -60,23 +59,16 @@ Map<String, String> _env(String work) => {
   'GOCACHE': '${Directory.systemTemp.path}/lopi_gen2_gocache',
 };
 
-/// 跑一条命令。到时间没跑完就**按进程号杀掉**再报超时——不杀的话它会留下来接着占全机的锁
-///（2026-11-27 出过一次：一个开了服务不退出的生成程序超时后没人管，锁被占了 17 分钟）。
-Future<ProcessResult> _run(String exe, List<String> args, String dir, {int seconds = 240}) async {
-  final proc = await Process.start(exe, args, workingDirectory: dir, environment: _env(dir), includeParentEnvironment: false);
-  final out = BytesBuilder(copy: false);
-  final outDone = proc.stdout.forEach(out.add);
-  final err = proc.stderr.transform(const Utf8Decoder(allowMalformed: true)).join();
-  unawaited(proc.stdin.close().catchError((Object _) {}));
-  try {
-    final code = await proc.exitCode.timeout(Duration(seconds: seconds));
-    await outDone;
-    return ProcessResult(proc.pid, code, out.takeBytes(), await err);
-  } on TimeoutException {
-    proc.kill(ProcessSignal.sigkill);
-    rethrow;
-  }
-}
+/// 跑一条命令；到时间没跑完就按进程号杀掉再报超时（见 proc_bounded.dart）。
+Future<ProcessResult> _run(String exe, List<String> args, String dir, {int seconds = 240}) => runBounded(
+  exe,
+  args,
+  workingDirectory: dir,
+  environment: _env(dir),
+  includeParentEnvironment: false,
+  limit: Duration(seconds: seconds),
+  binaryOut: true,
+);
 
 /// 把 [files]（相对路径 → 内容）写进临时目录，按 [language] 编译并运行。用完目录就删。
 /// [extra]：另外要放进目录的文件（相对路径 → 原始字节），给“读文件”的测试准备不是文字的文件用。

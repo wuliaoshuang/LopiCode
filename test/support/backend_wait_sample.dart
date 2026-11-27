@@ -9,7 +9,17 @@ J spawnOf(J x) => ex('spawnOf', {'x': x});
 J await_(J x) => ex('await', {'x': x});
 J slow(num n, num ms) => call('f1', {'n': nm(n), 'ms': nm(ms)});
 
-J waitSlowFn() => tfn('f1', '慢慢翻倍', [tpar('n', tInt), tpar('ms', tInt)], [sleep(1), blk('sleep', {'ms': pm('ms')}), ret(op2('*', pm('n'), nm(2)))], returns: tInt);
+J waitSlowFn() => tfn(
+  'f1',
+  '慢慢翻倍',
+  [tpar('n', tInt), tpar('ms', tInt)],
+  [
+    sleep(1),
+    blk('sleep', {'ms': pm('ms')}),
+    ret(op2('*', pm('n'), nm(2))),
+  ],
+  returns: tInt,
+);
 
 /// 一个接口里把十块都用一遍，结果拼成一行字回出去（开着服务，五种语言回的要一个字不差）。
 J waitSampleDoc() => {
@@ -64,4 +74,3 @@ J waitSampleDoc() => {
 };
 
 const String kWaitSampleWant = '42｜等了 100 毫秒还没做完｜[2,4]｜8｜这件事被取消了｜false｜在里面';
-
