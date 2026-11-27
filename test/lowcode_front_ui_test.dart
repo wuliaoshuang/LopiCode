@@ -29,6 +29,7 @@ import 'support/backend_func_blocks.dart';
 import 'support/backend_lang_blocks.dart';
 import 'support/harness.dart' hide call;
 import 'support/lib_files.dart';
+import 'support/lib_switches.dart';
 import 'support/lowcode_builder.dart';
 import 'support/page_core_samples.dart';
 import 'support/page_front_samples.dart';
@@ -75,6 +76,8 @@ Future<void> _openLogic(WidgetTester tester) async {
 BeBlockHost _host(WidgetTester tester) => tester.state<BlockEditorViewState>(find.byType(BlockEditorView)).widget.host as BeBlockHost;
 
 void main() {
+  // 中途包：带手写代码的库的启用、自己的库直接用宿主接口默认都关着（rules.dart）；这里测的是开着时的样子，每条先打开、测完改回默认。
+  libSwitchesOn();
   setUpAll(() async => lbFontsLoaded = await loadRealFonts());
 
   testWidgets('从零：进新的逻辑页 → 积木盒各页都在 → 帽子、函数、类、列表状态 → 存盘里是新的页面逻辑', (tester) async {

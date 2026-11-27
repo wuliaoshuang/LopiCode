@@ -15,6 +15,7 @@ import 'package:lopicode/lowcode/model.dart';
 import 'support/backend_lang_blocks.dart';
 import 'support/bind_export_files.dart';
 import 'support/lib_files.dart';
+import 'support/lib_switches.dart';
 import 'support/page_front_samples.dart';
 import 'support/page_front_samples2.dart';
 
@@ -95,6 +96,8 @@ J _detailReadsWho() => _detail([
 ]);
 
 void main() {
+  // 中途包：带手写代码的库的启用、自己的库直接用宿主接口默认都关着（rules.dart）；这里测的是开着时的样子，每条先打开、测完改回默认。
+  libSwitchesOn();
   test('“这一项”“第几项”“这一项的…”用在不是重复出来的控件的事件里：拦下；用在重复里的照常', () {
     for (final e in [
       ex(pg('eventItem')),

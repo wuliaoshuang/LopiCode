@@ -12,6 +12,7 @@ import 'package:lopicode/backend/front_upgrade.dart';
 import 'package:lopicode/lowcode/model.dart';
 
 import 'support/dev_tools.dart';
+import 'support/lib_switches.dart';
 import 'support/page_core_samples.dart';
 import 'support/page_front_check.dart';
 import 'support/page_front_samples.dart';
@@ -25,6 +26,8 @@ LcDocument _upgraded() {
 }
 
 void main() {
+  // 中途包：带手写代码的库的启用、自己的库直接用宿主接口默认都关着（rules.dart）；这里测的是开着时的样子，每条先打开、测完改回默认。
+  libSwitchesOn();
   if (skipWithoutDom != false) {
     // ignore: avoid_print 跳过的原因要在测试输出里看得见
     print('【跳过】新的页面逻辑的真编译 / 真跑：$skipWithoutDom');
