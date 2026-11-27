@@ -372,7 +372,9 @@ class _LibSheetState extends State<_LibSheet> {
         const BeSheetSection('更多'),
         if (s.hasSource) BeSheetRow(key: const ValueKey('be-lib-edit'), label: '在画布上改', onTap: () => Navigator.pop(context, s.sourceRel)),
         if (s.ok) BeSheetRow(key: const ValueKey('be-lib-export'), label: '导出成一个文件', onTap: () => unawaited(_export())),
-        s.hasSource ? BeSheetRow(key: const ValueKey('be-lib-fork'), label: '复制一份来改', onTap: () => unawaited(_fork())) : const BeSheetRow(key: ValueKey('be-lib-no-fork'), label: '这个库没带画布上的原样，不能复制来改', muted: true),
+        s.hasSource
+            ? BeSheetRow(key: const ValueKey('be-lib-fork'), label: '复制一份来改', onTap: () => unawaited(_fork()))
+            : const BeSheetRow(key: ValueKey('be-lib-no-fork'), label: '这个库没带画布上的原样，不能复制来改', muted: true),
         InkWell(
           key: const ValueKey('be-lib-remove'),
           onTap: () => unawaited(_remove()),

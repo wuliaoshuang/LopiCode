@@ -248,7 +248,7 @@ mixin _Stmts on _Core {
         err(
           'T03',
           sc,
-          '“看是哪种情况”还少了：${miss.join('、')}（或者加一个“其他情况”）',
+          '“分情况”还少了：${miss.join('、')}（或者加一个“其余”）', // 这句和类型系统原型逐字对照（lang_typecheck_proto_test），不改；积木上看到的是 backend_core_fix.dart 里那句“其他情况”
           node: s,
           fixes: [
             LFix(LFixKind.addMatchCases, '补上少的情况', target: s, params: {'cases': miss}),
