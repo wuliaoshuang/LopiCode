@@ -254,6 +254,7 @@ String _nodeCore(LcNode n, LcNode? parent, int i) {
       'checkbox' || 'radio' when inRow => 'Flexible(\n${_ind(i + 1)}child: ${_reindent(_margin(n, i, v3), 1)},\n${_ind(i)})',
       'icon' || 'switch' || 'checkbox' || 'radio' || 'bottomNav' => _margin(n, i, v3),
       'select' => _margin(n, i, v3),
+      'slider' when inRow && n.props['width'] == null => _margin(n, i, 'SizedBox(\n${_ind(i + 1)}width: 160,\n${_ind(i + 1)}child: ${_reindent(v3, 1)},\n${_ind(i)})'),
       'textarea' when inRow && n.props['width'] == null => _margin(n, i, 'SizedBox(\n${_ind(i + 1)}width: 160,\n${_ind(i + 1)}child: ${_reindent(v3, 1)},\n${_ind(i)})'),
       _ => wrapFill(_sized(n, i, v3, inRow: inRow)),
     };

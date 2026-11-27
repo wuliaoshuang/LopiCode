@@ -34,7 +34,9 @@ LcNode lcBoundNode(LcNode n, LcBindEnv env, {bool placeholder = true}) {
   final modelProp = lcModelProp(n.type);
   if (model != null && modelProp != null && env.has(model)) {
     final v = env.read(model);
-    (props ??= {...n.props})[modelProp] = modelProp == 'checked' ? lcEvalBool(v) : (n.type == 'input' || n.type == 'textarea' ? lcEvalText(v) : v);
+    (props ??= {...n.props})[modelProp] = modelProp == 'checked'
+        ? lcEvalBool(v)
+        : (n.type == 'input' || n.type == 'textarea' ? lcEvalText(v) : (n.type == 'slider' ? (v is num ? v : n.props[modelProp]) : v));
   }
   Map<String, String>? style;
   for (final e in lcStyleBinds(n).entries) {

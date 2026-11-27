@@ -80,7 +80,10 @@ CompSteps tagBarSteps() {
 /// [defOf]：实例 id → 它用的定义 id。
 CompSteps compFileSteps(CompSteps steps, Map<String, String> defOf) => [
   for (final s in steps)
-    {...s, 'sel': (s['sel']! as String).replaceAllMapped(RegExp(r'\.n-([A-Za-z0-9]+)__([A-Za-z0-9]+)'), (m) => defOf[m[1]] == null ? m[0]! : '.n-${m[1]} .n-${defOf[m[1]]}-${m[2]}')},
+    if (s['sel'] is! String)
+      s // 不找元素的步骤（看地址栏）原样留着
+    else
+      {...s, 'sel': (s['sel']! as String).replaceAllMapped(RegExp(r'\.n-([A-Za-z0-9]+)__([A-Za-z0-9]+)'), (m) => defOf[m[1]] == null ? m[0]! : '.n-${m[1]} .n-${defOf[m[1]]}-${m[2]}')},
 ];
 
 /// 样例页（support/comp_samples.dart 的 compUserPageJson）里各实例用的定义。

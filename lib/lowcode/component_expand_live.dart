@@ -135,7 +135,12 @@ class LcLiveScope {
         // 没接到一个状态本身上：只是初值。
         lcSetModel(n, null);
         final prop = lcModelProp(n.type);
-        if (prop != null && e == null) n.props[prop] = prop == 'checked' ? values[state] == true : componentValueText(values[state]);
+        if (prop == null || e != null) return;
+        if (n.type == 'slider') {
+          if (values[state] is num) n.props[prop] = values[state]; // 滑块的值是数
+        } else {
+          n.props[prop] = prop == 'checked' ? values[state] == true : componentValueText(values[state]);
+        }
       },
     );
     void emitArgs(LcNode n) {

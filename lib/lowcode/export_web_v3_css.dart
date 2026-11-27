@@ -29,6 +29,7 @@ const Map<String, List<String>> _rules = {
     ':where(.lc-switch:checked)::after { transform: translateX(18px); }',
     ':where(.lc-switch:disabled) { opacity: .5; cursor: not-allowed; }',
   ],
+  'slider': [':where(.lc-slider) { flex: none; height: 28px; margin: 0; min-width: 0; accent-color: #058654; cursor: pointer; }', ':where(.lc-slider:disabled) { opacity: .5; cursor: not-allowed; }'],
   'checkbox': [
     ':where(.lc-checkbox) { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }',
     ':where(.lc-checkbox > input) { flex: none; width: 18px; height: 18px; margin: 0; accent-color: #058654; }',
@@ -110,12 +111,16 @@ String? _neg(Map<String, String> pageStyle, String side) {
   return m == null || double.parse(m.group(1)!) == 0 ? null : '-${m.group(1)}px';
 }
 
+/// 这个节点在 Vue 页面里已经写成“引用公共部件”了（export_shared_parts.dart 记的）：页面样式里不用再带它那一类的通用规则。
+final Expando<bool> lcPartExtracted = Expando<bool>('lcPartExtracted');
+
 /// 这棵树用到了哪些新组件，就写哪些的公共 CSS；一个都没用到返回空串。[root] 是页面时顺带写“页面级的栏”贴边的规则。
 String lcV3ComponentsCss(LcNode root) {
   final used = <String>{};
   void walk(LcNode n, int depth) {
     if (depth > LcNode.maxDepth * 4) return;
-    if (lcWebV3Types.contains(n.type)) used.add(n.type);
+    // Vue 页面里已经写成“引用公共部件”的导航：它那一类的通用规则在部件文件里，页面这份用不上（样式只在本文件生效）。
+    if (lcWebV3Types.contains(n.type) && !(depth > 0 && lcPartExtracted[n] == true)) used.add(n.type);
     for (final c in n.children) {
       walk(c, depth + 1);
     }

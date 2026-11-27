@@ -50,6 +50,10 @@ Future<void> _add(WidgetTester tester, String group, String itemKey) async {
   final panel = find.byType(PalettePanel);
   if (panel.evaluate().isEmpty || tester.state<PalettePanelState>(panel).collapsed) await _tap(tester, lbKey('lc-tool-add').last);
   await _tap(tester, lbKey('palette-group-$group'));
+  // 一类里东西多了要滑一下才看得到（手机上用手滑；这里滚到它露出来再点）
+  await _until(tester, lbKey('palette-item-$itemKey'), '组件盒里的 $itemKey');
+  await lbShow(tester, lbKey('palette-item-$itemKey'));
+  await settle(tester, rounds: 2);
   await _tap(tester, lbKey('palette-item-$itemKey'), '组件盒里的 $itemKey');
 }
 
@@ -139,8 +143,11 @@ void main() {
     expect((await lbSaved(tester, a)).components, isEmpty);
     final ids0 = (await lbSaved(tester, a)).root.children.map((n) => n.id).toSet();
 
-    await _add(tester, 'form', 'component:${lcBuiltinDefId('stepper')}');
+    await _tap(tester, lbKey('lc-tool-add').last);
+    await _tap(tester, lbKey('palette-group-form'));
+    await _until(tester, lbKey('palette-item-slider'), '“表单”里的滑块');
     await lbShot(tester, _shotDir, 'b5-palette-form');
+    await _tap(tester, lbKey('palette-item-component:${lcBuiltinDefId('stepper')}'));
     var doc = await lbSaved(tester, a);
     expect(doc.components.single.id, lcBuiltinDefId('stepper'));
     expect(lcIsBuiltinDef(doc.components.single), isTrue);
@@ -176,6 +183,81 @@ void main() {
     await _tap(tester, lbKey('comp-editor-done'));
     doc = await lbSaved(tester, a);
     expect(doc.components.map((c) => c.name), containsAll(['步进器', '步进器 副本']));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('六个 P1 组件：组件盒里各点一个上画布，都画得出来；链接在面板里改得了字，网格选得了列数', (tester) async {
+    final a = await _open(tester);
+    const where = {'iconButton': 'basic', 'link': 'basic', 'grid': 'layout', 'scroll': 'layout', 'stepper': 'form', 'formItem': 'form'};
+    final made = <String, String>{};
+    for (final e in where.entries) {
+      final before = (await lbSaved(tester, a)).root.children.map((n) => n.id).toSet();
+      // 每次先取消选中：不然新的会被放到刚才那个的里面或后面
+      lbCanvas(tester).widget.onSelect(null);
+      await settle(tester, rounds: 2);
+      await _add(tester, e.value, 'component:${lcBuiltinDefId(e.key)}');
+      final doc = await lbSaved(tester, a);
+      final fresh = [
+        for (final n in doc.root.children)
+          if (!before.contains(n.id)) n,
+      ];
+      expect(fresh, hasLength(1), reason: '${e.key} 应该放在页面最外层');
+      expect(fresh.single.props['ref'], lcBuiltinDefId(e.key));
+      made[e.key] = fresh.single.id;
+      expect(tester.takeException(), isNull, reason: '${e.key} 画的时候出了异常');
+    }
+    lbCanvas(tester).widget.onSelect(null);
+    await settle(tester, rounds: 2);
+    final doc0 = await lbSaved(tester, a);
+    expect(doc0.components.map((c) => c.name).toSet(), {'图标按钮', '链接', '网格', '滚动区', '步进器', '表单项'});
+    expect(find.text('链接'), findsWidgets);
+    expect(find.text('标签'), findsWidgets);
+    await lbShot(tester, _shotDir, 'b5-p1-all-on-canvas');
+
+    // 链接：面板里改字
+    await _tap(tester, lbNode(made['link']!));
+    await lbOpenCommon(tester);
+    await lbShow(tester, lbKey('comp-value-text'));
+    await lbShot(tester, _shotDir, 'b5-link-panel');
+    final field = find.descendant(of: lbKey('comp-value-text'), matching: find.byType(TextField));
+    await tester.enterText(field, '看详情');
+    await settle(tester, rounds: 3);
+    expect((await lbSaved(tester, a)).find(made['link']!)!.props['values'], {'text': '看详情'});
+    expect(find.text('看详情'), findsWidgets, reason: '画布上跟着变');
+    await _back(tester);
+
+    // 网格：选“3 列”
+    await _tap(tester, lbNode(made['grid']!));
+    await lbOpenCommon(tester);
+    await lbShow(tester, lbKey('comp-instance-extras'));
+    await lbTapShown(tester, lbKey('comp-variant-cols'));
+    await _tap(tester, lbKey('comp-variant-pick-c3'));
+    await lbShot(tester, _shotDir, 'b5-grid-cols');
+    expect((await lbSaved(tester, a)).find(made['grid']!)!.more['variant'], {'cols': 'c3'});
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('滑块：“表单”里点出来，画布上有；面板里改最大、现在的值、禁用，存得上', (tester) async {
+    final a = await _open(tester);
+    final before = (await lbSaved(tester, a)).root.children.map((n) => n.id).toSet();
+    await _add(tester, 'form', 'slider');
+    var doc = await lbSaved(tester, a);
+    final sl = doc.root.children.firstWhere((n) => !before.contains(n.id));
+    expect(sl.type, 'slider');
+    expect(sl.props, {'value': 50, 'min': 0, 'max': 100, 'step': 1, 'width': 'fill'});
+    await _back(tester);
+    await _tap(tester, lbNode(sl.id));
+    await lbOpenCommon(tester);
+    await lbShow(tester, lbKey('lc-common-max'));
+    await lbShot(tester, _shotDir, 'b5-slider-panel');
+    await tester.enterText(lbKey('lc-common-max'), '10');
+    await settle(tester, rounds: 2);
+    await tester.enterText(lbKey('lc-common-value'), '0');
+    await settle(tester, rounds: 2);
+    await lbTapShown(tester, lbKey('lc-common-disabled'));
+    doc = await lbSaved(tester, a);
+    expect(doc.find(sl.id)!.props, {'value': 0, 'min': 0, 'max': 10, 'step': 1, 'width': 'fill', 'disabled': true});
+    await lbShot(tester, _shotDir, 'b5-slider-on-canvas');
     expect(tester.takeException(), isNull);
   });
 }

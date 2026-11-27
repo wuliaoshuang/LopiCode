@@ -194,7 +194,8 @@ class CanvasPage extends StatelessWidget {
     final justify = cssJustify(s['justify-content']) ?? CssJustify.start;
     final kids = [
       for (final c in only ?? n.children)
-        if (!c.hidden) c,
+        // 实例里面条件不成立的：反正点不中，不画也不占位（和导出来的样子一致）；页面上、组件编辑里的照旧调淡带角标。
+        if (!c.hidden && !(inert && inner.env.bind != null && !lcCondHolds(c, inner.env.bind!))) c,
     ];
     if ((only ?? n.children).isEmpty) {
       return inert ? const SizedBox.shrink() : const CanvasEmptyHint();

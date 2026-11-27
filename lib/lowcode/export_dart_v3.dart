@@ -119,6 +119,17 @@ String? dartV3Node(LcNode n, int i, DartChild child, {required bool inRow}) {
       ], i);
     case 'switch':
       return 'Switch(value: ${read == null ? flag('checked') : '_lcBool($read)'}, onChanged: ${flag('disabled') ? 'null' : (read == null ? '(value) {}' : '(value) => ${write('value')}')})';
+    case 'slider':
+      final s = lcSliderOf(n);
+      final steps = ((s.max - s.min) / s.step).round();
+      return _call('Slider', [
+        // 状态里的数可能跑到范围外面：夹回来（Slider 遇到范围外的值会直接报错）。
+        'value: ${read == null ? _d(s.value) : '_lcNum($read).clamp(${_d(s.min)}, ${_d(s.max)}).toDouble()'}',
+        'min: ${_d(s.min)}',
+        'max: ${_d(s.max)}',
+        if (steps >= 1 && steps <= 1000) 'divisions: $steps',
+        'onChanged: ${flag('disabled') ? 'null' : (read == null ? '(value) {}' : '(value) => ${write('value')}')}',
+      ], i);
     case 'checkbox':
       return _call('Row', [
         'mainAxisSize: MainAxisSize.min',

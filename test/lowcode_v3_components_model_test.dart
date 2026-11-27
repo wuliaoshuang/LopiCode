@@ -25,7 +25,7 @@ Map<String, Object?> _n(String id, String type, [Map<String, Object?> props = co
 void main() {
   group('登记', () {
     test('11 个新组件都登记了、都在组件盒里；带插槽的四个算容器', () {
-      expect(lcV3PaletteTypes, ['icon', 'textarea', 'switch', 'checkbox', 'radio', 'select', 'listItem', 'appBar', 'bottomNav', 'tabs', 'dialog']);
+      expect(lcV3PaletteTypes, ['icon', 'textarea', 'switch', 'slider', 'checkbox', 'radio', 'select', 'listItem', 'appBar', 'bottomNav', 'tabs', 'dialog']); // B5：多了滑块
       for (final t in lcV3PaletteTypes) {
         expect(lcSpecs[t], isNotNull, reason: t);
         expect(lcPaletteTypes, contains(t));

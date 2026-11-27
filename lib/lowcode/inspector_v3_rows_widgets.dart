@@ -98,7 +98,7 @@ List<Widget> lcInputV3Rows(InspectorEdit ed) => [
 
 /// 一行文字属性：打字就生效（连着打算一条撤销），清空＝把这个属性去掉。
 class LcPropTextRow extends StatefulWidget {
-  const LcPropTextRow({super.key, required this.ed, required this.prop, required this.label, this.hint, this.maxLines = 1, this.number = false});
+  const LcPropTextRow({super.key, required this.ed, required this.prop, required this.label, this.hint, this.maxLines = 1, this.number = false, this.lowest = 1});
   final InspectorEdit ed;
   final String prop;
   final String label;
@@ -107,6 +107,9 @@ class LcPropTextRow extends StatefulWidget {
 
   /// 这一项是个正整数（最多几个字）：只收数字，写成数；空的、0＝把这个属性去掉。
   final bool number;
+
+  /// 填数字时最小能填几（默认 1；滑块的几个数可以是 0 和负数）。
+  final int lowest;
 
   @override
   State<LcPropTextRow> createState() => _LcPropTextRowState();
@@ -138,7 +141,7 @@ class _LcPropTextRowState extends State<LcPropTextRow> {
         decoration: InputDecoration(isDense: true, hintText: widget.hint),
         onChanged: (v) => widget.ed.apply((n, _) {
           final count = int.tryParse(v.trim());
-          lcSetOrDrop(n, widget.prop, widget.number ? (count != null && count >= 1 && count <= 100000 ? count : null) : v);
+          lcSetOrDrop(n, widget.prop, widget.number ? (count != null && count >= widget.lowest && count <= 100000 ? count : null) : v);
         }, merge: true),
       ),
     ),

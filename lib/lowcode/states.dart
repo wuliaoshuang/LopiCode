@@ -16,7 +16,7 @@ const Map<String, String> kLcStateLabels = {'pressed': '按下', 'disabled': '�
 const Map<String, String> kLcStatePseudo = {'pressed': ':active', 'disabled': ':disabled', 'focused': ':focus'};
 
 /// 能“禁用”的组件：导出的网页里它们是真的表单控件，`:disabled` 才对得上。
-const Set<String> kLcCanDisable = {'button', 'input', 'textarea', 'switch', 'select'};
+const Set<String> kLcCanDisable = {'button', 'input', 'textarea', 'switch', 'select', 'slider'};
 
 /// 在 [type] 这种组件上设 [state] 的样子不会生效时，给一句说明；会生效是 null。
 String? lcStateCaveat(String type, String? state) => state == 'disabled' && !kLcCanDisable.contains(type) ? '这种组件不能禁用，这里设的样子不会生效。能禁用的有：按钮、输入框、多行输入框、开关、下拉选择。' : null;

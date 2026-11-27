@@ -27,6 +27,8 @@ const Map<String, LcSpec> lcV3Specs = {
   'icon': LcSpec('icon', '图标', defaults: {'icon': 'star', 'size': 24, 'color': '#222435'}, fields: ['margin']),
   'textarea': LcSpec('textarea', '多行输入', defaults: {'placeholder': '请输入', 'rows': 3, 'radius': 8, 'width': 'fill'}, fields: ['width', 'radius', 'margin']),
   'switch': LcSpec('switch', '开关', defaults: {'checked': true}, fields: ['margin']),
+  // 滑块（第四轮 B5）：值、最小、最大、一步走多少都是数；网页是 <input type="range">，Flutter 是 Slider。
+  'slider': LcSpec('slider', '滑块', defaults: {'value': 50, 'min': 0, 'max': 100, 'step': 1, 'width': 'fill'}, fields: ['width', 'margin']),
   'checkbox': LcSpec('checkbox', '勾选框', defaults: {'text': '选项'}, fields: ['fontSize', 'color', 'margin']),
   'radio': LcSpec('radio', '单选组', defaults: {'options': _twoOptions, 'value': 'a'}, fields: ['fontSize', 'color', 'margin']),
   'select': LcSpec('select', '下拉选择', defaults: {'options': _twoOptions, 'placeholder': '请选择', 'radius': 8, 'width': 'fill'}, fields: ['width', 'radius', 'margin']),
@@ -68,7 +70,7 @@ const Map<String, LcSpec> lcV3Specs = {
 };
 
 /// 组件盒里的顺序。
-const List<String> lcV3PaletteTypes = ['icon', 'textarea', 'switch', 'checkbox', 'radio', 'select', 'listItem', 'appBar', 'bottomNav', 'tabs', 'dialog'];
+const List<String> lcV3PaletteTypes = ['icon', 'textarea', 'switch', 'slider', 'checkbox', 'radio', 'select', 'listItem', 'appBar', 'bottomNav', 'tabs', 'dialog'];
 
 /// 各组件 `props.variant` 能取的值（第一个是不写时的默认）。
 const Map<String, List<String>> lcVariants = {
@@ -135,7 +137,20 @@ const Set<String> lcV3ComponentKeys = {
 };
 
 /// 这个键归不归这里管（[lcCleanV3] 说了算，model_props.dart 不再往下看）。
-bool lcIsV3ComponentKey(String type, String key) => lcV3ComponentKeys.contains(key) || (key == 'items' && type == 'bottomNav');
+bool lcIsV3ComponentKey(String type, String key) => lcV3ComponentKeys.contains(key) || (key == 'items' && type == 'bottomNav') || (type == 'slider' && kLcSliderKeys.contains(key));
+
+/// 滑块的四个数。只在滑块上归这里管：`value` 在别的控件上是一段文字（model_props.dart），`min` / `max` / `step` 别的控件不认识。
+const Set<String> kLcSliderKeys = {'value', 'min', 'max', 'step'};
+
+/// 滑块现在的四个数（没写、写得不对的用默认；最大不比最小大时当成最小 + 1；值夹在最小和最大之间）。
+({num value, num min, num max, num step}) lcSliderOf(LcNode n) {
+  final min = n.numProp('min') ?? 0;
+  final rawMax = n.numProp('max') ?? 100;
+  final max = rawMax > min ? rawMax : min + 1;
+  final step = n.numProp('step') ?? 1;
+  final value = (n.numProp('value') ?? min).clamp(min, max);
+  return (value: value, min: min, max: max, step: step > 0 ? step : 1);
+}
 
 Map<String, dynamic>? _obj(Object? v) => v is Map ? {for (final e in v.entries) '${e.key}': e.value} : null;
 
@@ -156,6 +171,10 @@ bool _optLabel(Map<String, dynamic> m) => m['label'] == null || m['label'] is St
 Object? lcCleanV3(String type, String key, Object? value) {
   if (key == 'items') {
     return _objects(value, kLcMaxNavItems, (m) => m['icon'] is String && _iconName.hasMatch(m['icon'] as String) && _optLabel(m) && (m['page'] == null || m['page'] is String));
+  }
+  if (type == 'slider' && kLcSliderKeys.contains(key)) {
+    if (value is! num || !value.isFinite || value.abs() > 1e9) return null;
+    return key == 'step' && value <= 0 ? null : value;
   }
   if (!(_keyTypes[key]?.contains(type) ?? false)) return null;
   switch (key) {
