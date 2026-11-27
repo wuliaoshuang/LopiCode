@@ -36,6 +36,7 @@ import 'package:lopicode/lowcode/logic_text.dart';
 import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/lowcode/nav_shared.dart';
 import 'package:lopicode/lowcode/slots.dart';
+import 'package:lopicode/lowcode/top_shared.dart';
 
 export 'package:lopicode/lowcode/export_framework_common.dart' show LcExportFile, LcFrameworkExport;
 export 'package:lopicode/lowcode/export_react_target.dart' show ReactJsTarget;
@@ -64,6 +65,7 @@ String jsxAttr(String name, String value) => ' $name={${jsString(value)}}';
 /// 自定义组件所有页面共用一份。只有一页时和以前逐字节一样。
 LcFrameworkExport exportReact(LcDocument source) {
   lcSettleSharedNav(source);
+  lcSettleSharedTop(source);
   // 用了第 6 期新东西（事件、变体、自己的状态、属性绑定）的组件实例：先摊开成普通页面的样子再导出。
   final doc = lcExportDoc(source, allPages: true);
   if (doc.isMultiPage) return _exportSite(doc);

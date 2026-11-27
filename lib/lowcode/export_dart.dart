@@ -8,6 +8,7 @@ import 'package:lopicode/lowcode/image_assets.dart';
 import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/lowcode/nav_shared.dart';
 import 'package:lopicode/lowcode/quick_actions.dart';
+import 'package:lopicode/lowcode/top_shared.dart';
 
 /// 把页面导出成一个可直接放进 Flutter 项目的 Dart 文件（一个 StatelessWidget）。
 ///
@@ -19,6 +20,7 @@ import 'package:lopicode/lowcode/quick_actions.dart';
 /// 变量集中在一个类里、状态变了界面重画、按屏宽取样子。一样都没用的项目走原来的路，结果和以前逐字节一样。
 String exportDart(LcDocument source, {String? className}) {
   lcSettleSharedNav(source); // 共用的底部导航：各页都取“刚改过的那一份”（编辑器里每次修改后已经做过，这里是给直接调导出的人兜底）
+  lcSettleSharedTop(source);
   // 用了第 6 期新东西的组件实例先化成普通页面的样子（没有这种实例时就是原来的文档）。
   final doc = lcExportDoc(source, allPages: true);
   final live = dartLiveWanted(doc) ? DartLiveExport(doc) : null;

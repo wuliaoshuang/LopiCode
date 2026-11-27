@@ -17,6 +17,7 @@
 import 'package:lopicode/lowcode/edit_types.dart';
 import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/lowcode/nav_shared.dart';
+import 'package:lopicode/lowcode/top_shared.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
@@ -92,6 +93,8 @@ class _PagesSheetState extends State<PagesSheet> {
         _edit((d) => d.movePage(page.id, at - 1));
       case 'down':
         _edit((d) => d.movePage(page.id, at + 1));
+      case 'top':
+        _edit((d) => lcSetPageShowsSharedTop(d, page.id, !lcPageShowsSharedTop(page)));
       case 'nav':
         _edit((d) => lcSetPageShowsSharedNav(d, page.id, !lcPageShowsSharedNav(page)));
       case 'delete':
@@ -144,7 +147,8 @@ class _PagesSheetState extends State<PagesSheet> {
     final current = doc.page.id == page.id, home = i == 0;
     final nodes = _nodeCount(page.root), chains = page.logic.handlers.length;
     final hasShared = doc.sharedNav != null, showsNav = lcPageShowsSharedNav(page);
-    final facts = [if (current) '正在编辑', if (home) '首页', '$nodes 个组件', if (chains > 0) '$chains 串逻辑', if (hasShared && !showsNav) '不显示底部导航'].join(' · ');
+    final hasTop = doc.sharedTop != null, showsTop = lcPageShowsSharedTop(page);
+    final facts = [if (current) '正在编辑', if (home) '首页', '$nodes 个组件', if (chains > 0) '$chains 串逻辑', if (hasTop && !showsTop) '不显示顶部导航', if (hasShared && !showsNav) '不显示底部导航'].join(' · ');
     return Material(
       color: current ? c.accentSoft : Colors.transparent,
       child: InkWell(
@@ -188,6 +192,7 @@ class _PagesSheetState extends State<PagesSheet> {
                   PopupMenuItem(value: 'up', enabled: i > 1, child: const Text('上移')),
                   PopupMenuItem(value: 'down', enabled: !home && i < doc.pages.length - 1, child: const Text('下移')),
                   // 项目里有共用的底部导航时：这一页显不显示它。
+                  if (hasTop) PopupMenuItem(value: 'top', child: Text(showsTop ? '这一页不显示顶部导航' : '这一页显示顶部导航')),
                   if (hasShared) PopupMenuItem(value: 'nav', child: Text(showsNav ? '这一页不显示底部导航' : '这一页显示底部导航')),
                   PopupMenuItem(
                     value: 'delete',

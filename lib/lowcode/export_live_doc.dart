@@ -97,5 +97,6 @@ LcDocument lcExportDoc(LcDocument doc, {bool allPages = false}) {
     fileVersion: doc.fileVersion,
     more: doc.more,
     sharedNav: doc.sharedNav,
+    sharedTop: doc.sharedTop,
   )..openPageAt(at);
 }

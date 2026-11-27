@@ -18,6 +18,7 @@ import 'package:lopicode/lowcode/logic_js.dart';
 import 'package:lopicode/lowcode/logic_js_core.dart';
 import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/lowcode/nav_shared.dart';
+import 'package:lopicode/lowcode/top_shared.dart';
 
 /// Vue / React 多页面导出的外壳的名字（文件是 `LcApp.vue` / `LcApp.jsx`）。`Lc` 开头是我们自己的地盘。
 const String kLcShellName = 'LcApp';
@@ -162,6 +163,7 @@ class LcHtmlPageFiles {
 /// 过程中会临时把 [doc] 换到各页上，结束时换回原来那页（同步做完，中间没有别人插得进来）。
 List<LcHtmlPageFiles> exportHtmlPages(LcDocument doc, {LcHtmlExport Function(LcHtmlExport e)? tidy}) {
   lcSettleSharedNav(doc); // 共用的底部导航：各页都取“刚改过的那一份”（编辑器里每次修改后已经做过，这里是给直接调导出的人兜底）
+  lcSettleSharedTop(doc);
   final keep = doc.pageIndex;
   final out = <LcHtmlPageFiles>[];
   try {

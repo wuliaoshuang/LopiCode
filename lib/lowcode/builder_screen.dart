@@ -47,6 +47,7 @@ import 'package:lopicode/lowcode/slots.dart';
 import 'package:lopicode/lowcode/state_screen.dart';
 import 'package:lopicode/lowcode/style_model.dart';
 import 'package:lopicode/lowcode/theme_vars_screen.dart';
+import 'package:lopicode/lowcode/top_shared.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/app_backdrop.dart';
@@ -221,6 +222,7 @@ class _BuilderScreenState extends State<BuilderScreen> with WidgetsBindingObserv
     if (ref != null) node.props['ref'] = ref; // 自定义组件的实例
     _apply((d) {
       lcAdoptNewNav(d, node);
+      lcAdoptNewTop(d, node);
       if (sel != null && sel.isContainer && type != 'dialog') {
         d.insert(sel.id, node);
       } else if (sel != null && sel.id != d.root.id && type != 'dialog') {
@@ -242,6 +244,7 @@ class _BuilderScreenState extends State<BuilderScreen> with WidgetsBindingObserv
       if (drag.ref != null) node.props['ref'] = drag.ref;
       _apply((d) {
         lcAdoptNewNav(d, node);
+        lcAdoptNewTop(d, node);
         lcInsertAt(d, parentId, node, index);
       });
       setState(() => _selected = node.id);

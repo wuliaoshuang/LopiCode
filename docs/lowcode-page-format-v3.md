@@ -291,3 +291,17 @@ Agent 用 `lowcode_update_page` 写页面时没写 `version` 的，按第 3 版�
 - 装进文档：库里的定义拷进 `components`，id 换成 `lib_<库标识里的非字母数字换成下划线>_<原 id>`，带上 `lib` 那一笔；库带的主题变量项目里没有的补进 `theme.vars`，已有的不动；库带的图片写进项目里原来的路径，已有同名文件的不动。
 - 导入时拦下的：没有清单或清单不是 JSON；`kind` 不对（是积木库会单独说）；缺 `id`／`name`／`version`；标识、版本号写法不对；作者段是 `lopi`、`local`；`side` 不是 `frontend`（B2 那一版写的 `front` 也认）；带 `native/`（手写代码）；一个组件都没有、超过 64 个、有读不懂的、id 重复；用到库里没有的组件；组件互相套成圈；图片路径不对劲；项目里已有同标识同版本、内容却不一样的库；以及打包层的全部防护（超大小、文件太多、路径往外跳、不是压缩包、内容不是文字）。
 
+## 第四轮 B3 之后的补充说明（顶部导航跨页共用；版本号没动，只多了可选字段）
+
+- 最外层的 `shared` 里新增可选 `topBar`：`{"props": {…}, "style": {…}, "states": {…}, "responsive": {…}, "data": …, "children": […]}`。
+  它是跨页共用的那一条顶部导航栏**唯一的一份**：样子、样式，外加“默认的”标题（`props.title`）、返回箭头（`props.back`）、
+  左右两边放的控件（`children`，每个带 `slot: "left"` / `"right"`）。
+  `shared.topBar` 不是对象、或它的 `props` 不是对象：整个当看不懂，原样留着。`children` 里读不出来的项跳过。
+- 顶部导航栏节点（`appBar`）新增可选 `shared: true`：这个节点显示的是共用的那一条。还可以带可选 `own`
+  （`["title", "back", "slots"]` 的子集）：这一页自己说了算的是哪几样。文件里这个节点只写自己的记号（`id`、名字、锁定…）、
+  `shared`、`own`，以及 `own` 里那几样的值——`props.title`、`props.back`、`children`；别的都不写，读的时候从最外层那一份填上。
+- 有节点带 `shared: true` 却没有最外层那一份（手写的、Agent 写的）：取第一个自己带着整套 props 的这种节点当那一份，都没有就用默认的。
+- 最外层没有 `shared.topBar` 时，节点上的 `shared` / `own` 不算数，存盘时去掉（比如把共用的那条粘贴进了另一个项目）。
+- 没用共用顶栏的文件：没有这些字段，存出来和以前逐字节一样。规矩和同步点见 `lib/lowcode/top_shared.dart`。
+
+组件库清单（`lopilib.json`）的 `side` 写成 `frontend`（和积木库同一个写法）；第四轮 B2 写的 `front` 读的时候照样认。
