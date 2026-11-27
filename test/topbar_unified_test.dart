@@ -337,7 +337,7 @@ void main() {
       expectFloatingBar(tester, '我的小站'); // 顶栏标题是页面名（第 5 版第 1 期）
       final view = find.byType(CanvasView).hitTestable();
       expect(tester.getRect(view).top, 0, reason: '画布从屏幕最顶铺起');
-      expect(tester.state<CanvasViewState>(view).pageRect.top, kInset, reason: '页面顶边起始在顶栏下沿');
+      expect(tester.state<CanvasViewState>(view).pageRect.top, kInset + BarScrim.kTail, reason: '页面顶边起始在顶栏渐隐遮罩的下沿（第四轮 B3 起让出遮罩那一段）');
       await shot(tester, '05-搭建-$suffix');
       await tester.dragFrom(const Offset(195, 400), const Offset(0, -120));
       await tester.pump(const Duration(seconds: 2));

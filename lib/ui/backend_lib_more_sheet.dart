@@ -198,6 +198,7 @@ class _TextPageState extends ConsumerState<_TextPage> {
     return Scaffold(
       key: const ValueKey('be-lib-text-page'),
       backgroundColor: c.canvas,
+      extendBodyBehindAppBar: true,
       appBar: PageBar(
         background: c.canvas,
         titleText: widget.rel,
@@ -206,43 +207,45 @@ class _TextPageState extends ConsumerState<_TextPage> {
           TextButton(key: const ValueKey('be-lib-text-save'), onPressed: _busy ? null : () => unawaited(_save()), child: const Text('存')),
         ],
       ),
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (_problem != null)
-            Container(
-              key: const ValueKey('be-lib-text-problem'),
-              constraints: const BoxConstraints(maxHeight: 160),
-              color: c.surfaceMuted,
-              padding: const EdgeInsets.all(Space.x3),
-              child: SingleChildScrollView(
-                child: Text('$_problem', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: c.danger)),
+      body: BelowBar(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (_problem != null)
+              Container(
+                key: const ValueKey('be-lib-text-problem'),
+                constraints: const BoxConstraints(maxHeight: 160),
+                color: c.surfaceMuted,
+                padding: const EdgeInsets.all(Space.x3),
+                child: SingleChildScrollView(
+                  child: Text('$_problem', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: c.danger)),
+                ),
+              ),
+            if (_fine && _problem == null)
+              Container(
+                key: const ValueKey('be-lib-text-fine'),
+                color: c.surfaceMuted,
+                padding: const EdgeInsets.all(Space.x3),
+                child: Text('查过了，没有问题（还没存）。', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: c.textMuted)),
+              ),
+            Expanded(
+              child: TextField(
+                key: const ValueKey('be-lib-text-field'),
+                onChanged: (_) {
+                  if (_fine) setState(() => _fine = false);
+                },
+                controller: _text,
+                maxLines: null,
+                expands: true,
+                textAlignVertical: TextAlignVertical.top,
+                autocorrect: false,
+                enableSuggestions: false,
+                style: TextStyle(fontFamily: kMonoFont, fontFamilyFallback: kMonoFallback, fontSize: ref.watch(compactCodeFontProvider), color: c.text, height: 1.4),
+                decoration: const InputDecoration(border: InputBorder.none, enabledBorder: InputBorder.none, focusedBorder: InputBorder.none, filled: false, contentPadding: EdgeInsets.all(Space.x3)),
               ),
             ),
-          if (_fine && _problem == null)
-            Container(
-              key: const ValueKey('be-lib-text-fine'),
-              color: c.surfaceMuted,
-              padding: const EdgeInsets.all(Space.x3),
-              child: Text('查过了，没有问题（还没存）。', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: c.textMuted)),
-            ),
-          Expanded(
-            child: TextField(
-              key: const ValueKey('be-lib-text-field'),
-              onChanged: (_) {
-                if (_fine) setState(() => _fine = false);
-              },
-              controller: _text,
-              maxLines: null,
-              expands: true,
-              textAlignVertical: TextAlignVertical.top,
-              autocorrect: false,
-              enableSuggestions: false,
-              style: TextStyle(fontFamily: kMonoFont, fontFamilyFallback: kMonoFallback, fontSize: ref.watch(compactCodeFontProvider), color: c.text, height: 1.4),
-              decoration: const InputDecoration(border: InputBorder.none, enabledBorder: InputBorder.none, focusedBorder: InputBorder.none, filled: false, contentPadding: EdgeInsets.all(Space.x3)),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
