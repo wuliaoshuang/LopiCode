@@ -504,7 +504,7 @@ class BackendScreenState extends ConsumerState<BackendScreen> {
       extraActions: [
         // 在某个类的画布里：多一颗“回主画布”。
         if (host.canvasType != null) IconButton(key: const ValueKey('be-canvas-back'), tooltip: '回主画布', onPressed: () => host.openCanvas(null), icon: const Icon(Icons.keyboard_return_rounded)),
-        IconButton(key: const ValueKey('be-run'), tooltip: '运行', onPressed: _openRun, icon: const Icon(Icons.play_arrow_rounded)),
+        if (!host.doc.isFront) IconButton(key: const ValueKey('be-run'), tooltip: '运行', onPressed: _openRun, icon: const Icon(Icons.play_arrow_rounded)),
         PopupMenuButton<String>(
           key: const ValueKey('be-more'),
           tooltip: '更多',

@@ -11,6 +11,7 @@ String _beStatus(BeBlockHost host, BackendRegenResult? regen) {
   if (regen != null && !regen.ok) return '代码没有重新生成';
   if (regen != null && regen.conflicts.isNotEmpty) return '${regen.conflicts.length} 个文件没覆盖';
   final target = host.target;
+  if (host.doc.isFront) return '前端库 · 在浏览器里跑';
   final lang = target == null ? '${host.doc.language}（没有生成器）' : beLanguageName(target);
   return '$lang · ${host.doc.routes.length} 个接口';
 }
@@ -22,19 +23,22 @@ List<PopupMenuEntry<String>> _beMenuItems(BuildContext context, BeBlockHost host
   final target = host.target;
   Widget row(IconData icon, String text, {Color? color}) => _beMenuRow(context, icon, text, color: color);
   return [
-    PopupMenuItem(
-      key: const ValueKey('be-menu-language'),
-      value: 'language',
-      child: Row(
-        children: [
-          FileIcon.language(host.doc.language, size: 20),
-          const SizedBox(width: Space.x3),
-          Flexible(child: Text('语言：${target == null ? host.doc.language : beLanguageName(target)}${target != null && !target.verified ? '（未实测）' : ''}')),
-        ],
+    // 给前端用的库（在浏览器里跑）：没有语言、变量与集合、服务设置这三样。
+    if (!host.doc.isFront) ...[
+      PopupMenuItem(
+        key: const ValueKey('be-menu-language'),
+        value: 'language',
+        child: Row(
+          children: [
+            FileIcon.language(host.doc.language, size: 20),
+            const SizedBox(width: Space.x3),
+            Flexible(child: Text('语言：${target == null ? host.doc.language : beLanguageName(target)}${target != null && !target.verified ? '（未实测）' : ''}')),
+          ],
+        ),
       ),
-    ),
-    PopupMenuItem(key: const ValueKey('be-menu-data'), value: 'data', child: row(Icons.data_object_rounded, '变量与集合（${host.doc.variables.length} + ${host.doc.collections.length}）')),
-    PopupMenuItem(key: const ValueKey('be-menu-settings'), value: 'settings', child: row(Icons.tune_rounded, '服务设置（端口 ${host.doc.port}）')),
+      PopupMenuItem(key: const ValueKey('be-menu-data'), value: 'data', child: row(Icons.data_object_rounded, '变量与集合（${host.doc.variables.length} + ${host.doc.collections.length}）')),
+      PopupMenuItem(key: const ValueKey('be-menu-settings'), value: 'settings', child: row(Icons.tune_rounded, '服务设置（端口 ${host.doc.port}）')),
+    ],
     // 规矩版本：已经是严格规矩的只说一声（不能点）；老规矩的文档给“升级”的入口（beStrictUpgradeEntry 管出不出现，现在默认出现）。
     // 类型与类、模块：只有严格规矩的文档才有（老规矩的文档这个菜单一项不多）。
     if (host.strictRules) PopupMenuItem(key: const ValueKey('be-menu-types'), value: 'types', child: row(Icons.category_outlined, '类型与类（${host.core.types.length}）…')),

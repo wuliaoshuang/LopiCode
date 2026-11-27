@@ -90,8 +90,8 @@ bool _blocksUseLib(List<LcBlock> list) {
   return false;
 }
 
-/// 这一页的逻辑有没有用到“新功能”（现在是：用上了积木库，或者哪一串里有库积木）。用到了，导出走语言核心那条新路。
-bool lcLogicUsesCore(LcLogic logic) => logic.uses.isNotEmpty || logic.handlers.any((h) => _blocksUseLib(h.body));
+/// 这一页的逻辑有没有用到“新功能”（是新的页面逻辑、用上了积木库，或者哪一串里有库积木）。用到了，导出走语言核心那条新路。
+bool lcLogicUsesCore(LcLogic logic) => logic.front != null || logic.uses.isNotEmpty || logic.handlers.any((h) => _blocksUseLib(h.body));
 
 /// 测试用：把这个开关打开，没用新功能的页面也走新路（拿来和老路对比行为）。产品里永远是关的。
 bool lcForceCorePath = false;

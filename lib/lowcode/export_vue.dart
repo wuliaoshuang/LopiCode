@@ -196,7 +196,8 @@ class _Template {
     if (styles.isNotEmpty) {
       b.write(' :style="{ ${styles.join(', ')} }"');
     }
-    events(n).forEach((event, fn) => b.write(' @$event="$fn"'));
+    final at = bound?.eachAt; // 新的页面逻辑、在“重复”里：事件带上这一项
+    events(n).forEach((event, fn) => b.write(at == null ? ' @$event="$fn"' : ' @$event="$fn(Object.assign(\$event, { lcAt: $at }))"'));
     return b.toString();
   }
 
@@ -403,6 +404,7 @@ String _page(LcDocument doc, LcComponentPlans plans, List<String> notes) {
   };
   final states = LcPropStates(names);
   final bind = plan == null ? null : LcVueBind(plan, varNames);
+  bind?.eventAt = doc.logic.front != null;
   final target = VueJsTarget(varNames, states, notes, bind: bind);
   final writer = JsLogicWriter(doc, target, lookup: plan?.lookup);
   // 用了新积木的页面：处理函数只把事件转给页面宿主（见 logic_core_js.dart）；没用的页面下面和以前一样。

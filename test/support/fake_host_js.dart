@@ -341,4 +341,39 @@ cases["page.ui.life"] = async () => {
   h.emitLife("unmount"); await settle(); eq(got, ["放上", "晚来的", "拿走"]);
   await fails(async () => h.uiLife("别的", () => null), "只能是 mounted、unmount 或 error");
 };
+cases["page.nav.go"] = async () => {
+  const win = fakeWin(); const lc = lcRuntime(win); const went = [];
+  delete globalThis.lcNav;
+  const h = lcPageHost(lc, { state: () => null, prop: () => null, page: "a", go: (id) => { if (id !== "b") return false; went.push(id); return true; } });
+  h.navGo("b", new Map([["who", "甲"], ["n", 2]])); eq(went, ["b"]);
+  eq([globalThis.lcNav.b.who, globalThis.lcNav.b.n], ["甲", 2], "带的参数按要去的页记着");
+  await fails(async () => h.navGo("没有的", new Map()), "项目里没有这一页");
+};
+cases["page.nav.params"] = async () => {
+  const win = fakeWin(); const lc = lcRuntime(win);
+  delete globalThis.lcNav;
+  const a = lcPageHost(lc, { state: () => null, prop: () => null, page: "a", go: () => true });
+  eq(a.navParams().size, 0, "没人带参数来：空字典");
+  a.navGo("b", new Map([["who", "甲"]]));
+  const b = lcPageHost(lc, { state: () => null, prop: () => null, page: "b", go: () => true });
+  eq(b.navParams().get("who"), "甲"); eq(a.navParams().size, 0, "只有被带到的那一页读得到");
+};
+cases["page.ui.item"] = async () => {
+  const [h] = page(); const got = [];
+  h.uiOn("n1", "click", (ev) => { got.push(h.uiItem(ev)); return null; }, new Map());
+  h.emit("n1", "click", { lcAt: { item: { name: "乙" }, index: 1 } }); await settle();
+  eq(got[0].get("name"), "乙", "模板递过来的这一项（记录变成字典）");
+  h.emit("n1", "click", {}); await settle(); eq(got[1], null, "不在重复里：空");
+  // 组件实例发出来的事件：按“emit:事件名”登记，带的数据在事件记录的 lcData 里
+  const seen = [];
+  h.uiOn("inst", "emit:picked", (ev) => { seen.push(ev.get("lcData").get("id")); return null; }, new Map());
+  h.emit("inst", "emit:picked", { lcData: { id: "a7" } }); await settle(); eq(seen, ["a7"]);
+};
+cases["page.ui.index"] = async () => {
+  const win = fakeWin(); const lc = lcRuntime(win); const got = [];
+  const h = lcPageHost(lc, { state: () => null, prop: () => null, item: (id, ev) => (ev.row === undefined ? null : { item: "x", index: ev.row }) });
+  h.uiOn("n1", "click", (ev) => { got.push(h.uiIndex(ev)); return null; }, new Map());
+  h.emit("n1", "click", { row: 2 }); await settle(); eq(got, [2], "读写表从页面上找的第几项");
+  h.emit("n1", "click", {}); await settle(); eq(got, [2, -1], "不在重复里：-1");
+};
 ''';

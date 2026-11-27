@@ -55,6 +55,12 @@ class LcVueBind {
   final List<Map<String, String>> _frames = [];
   final Map<LcNode, String> _forAttr = Map.identity();
 
+  /// 新的页面逻辑才开：“重复”里的控件，事件要带上“这一项、第几项”（页面宿主从事件上的 lcAt 读）。
+  bool eventAt = false;
+
+  /// 现在在“重复”里面：最里面那一层的 `{ item: 这一项, index: 第几项 }`；不在重复里（或者没开）是 null。
+  String? get eachAt => !eventAt || _frames.isEmpty ? null : '{ item: ${_frames.last.values.first}, index: ${_frames.last.values.last} }';
+
   JsExpr? _resolve(String name) {
     final local = _localOf[name];
     if (local != null) return JsExpr(local, LcType.any);

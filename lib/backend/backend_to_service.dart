@@ -33,6 +33,7 @@ import 'package:lopicode/lang/rt.dart';
 import 'package:lopicode/lang/rules.dart';
 import 'package:lopicode/lang/typecheck.dart';
 import 'package:lopicode/lang/types.dart';
+import 'package:lopicode/lowcode/lib_page.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 
 export 'package:lopicode/backend/backend_to_service_libs.dart';
@@ -150,10 +151,12 @@ LLambda? _firstLambda(List<LStmt> stmts) {
 BeServiceBuilt beServiceBuild(BeDocument doc, {bool shadow = false}) {
   final problems = <String>[], skipped = <String>[];
   if (!langRulesStrict(doc.rules)) return const BeServiceBuilt(problems: ['这份文档照的是规矩版本 1，不走库']);
-  final base = beServiceLibrary();
-  if (base.problems.isNotEmpty) return BeServiceBuilt(problems: ['内置库“接口服务”读不了：${base.problems.first}']);
+  // 前端这一边的文档（页面逻辑、前端库）：没有接口，垫底的自带库是“页面”不是“接口服务”，它在“用上的库”里排第一个。
+  final front = doc.isFront;
+  final base = front ? lcPageLibrary() : beServiceLibrary();
+  if (base.problems.isNotEmpty) return BeServiceBuilt(problems: ['内置库“${base.name}”读不了：${base.problems.first}']);
   // 文档可以指定一个库顶替自带的“接口服务”（“复制一份来改”出来的）：接口、旧积木都走它。
-  final lib = beServiceLibOf(doc, problems);
+  final lib = front ? base : beServiceLibOf(doc, problems);
   try {
     final core = doc.core;
     final fresh = _Fresh();
@@ -225,11 +228,11 @@ BeServiceBuilt beServiceBuild(BeDocument doc, {bool shadow = false}) {
       main = unit.main;
     }
 
-    final hat = lib.block('onRequest');
+    final hat = lib.block(front ? 'onMounted' : 'onRequest');
     if (hat == null) return const BeServiceBuilt(problems: ['内置库里没有“当收到请求”']);
-    if (doc.routes.isNotEmpty) flags.service = true;
+    if (doc.routes.isNotEmpty && !front) flags.service = true;
     final routes = <LStmt>[];
-    for (final r in doc.routes) {
+    for (final r in front ? const <BeRoute>[] : doc.routes) {
       final title = describeBeRoute(r);
       final badMethod = !kBeMethods.contains(r.method), badPath = parseBePath(r.path) == null;
       if (badMethod) skipped.add('$title：请求方式不认识');
@@ -298,8 +301,8 @@ BeServiceBuilt beServiceBuild(BeDocument doc, {bool shadow = false}) {
     }
 
     // 带不带“接口服务”：没碰库的文档照旧一定带；用了库的文档，有接口、用了它的积木、或者哪个库靠着它才带。
-    if (doc.usesLibs && !flags.service) flags.service = _mentions(lib, [for (final d in decls) d.decl], [...routes, ...main]);
-    final service = !doc.usesLibs || flags.service || userLibs.any((l) => l.requires.contains(kBeServiceLibId));
+    if (doc.usesLibs && !flags.service && !front) flags.service = _mentions(lib, [for (final d in decls) d.decl], [...routes, ...main]);
+    final service = !front && (!doc.usesLibs || flags.service || userLibs.any((l) => l.requires.contains(kBeServiceLibId)));
     // 有库顶替了“接口服务”、别的库却还靠着自带的那个：两边的“请求”“一条记录”是两个模块里的两样东西，接不上——如实拦下。
     if (service && !identical(lib, base)) {
       for (final l in userLibs) {

@@ -86,17 +86,26 @@ extension _BuilderActions on _BuilderScreenState {
   }
 
   Future<void> _openLogic([String? nodeId]) async {
-    await Navigator.push(
+    // 新的页面逻辑（或者这一页还没有任何逻辑）走新的逻辑页；有旧处理的页面照旧，顶栏多一颗“升级到新的页面逻辑…”。
+    final doc = _doc!;
+    final fresh = doc.logic.front != null || doc.logic.handlers.isEmpty;
+    final upgrade = await Navigator.push<bool>(
       context,
-      MaterialPageRoute<void>(
+      MaterialPageRoute<bool>(
         // 逻辑页是另开的一页：也接上背景（跟“其它页面”开关走），不然“透出背景 › 积木画布”在这页不起作用
-        builder: (_) => AppBackdrop(
+        builder: (route) => AppBackdrop(
           area: BackdropArea.pages,
-          builder: (_, _) => LogicScreen(doc: _doc!, onEdit: _apply, initialNodeId: nodeId, history: _history, onRestore: _restore),
+          builder: (_, _) => fresh
+              ? LogicFrontScreen(doc: _doc!, onEdit: _apply, session: widget.session, initialNodeId: nodeId)
+              : LogicScreen(doc: _doc!, onEdit: _apply, initialNodeId: nodeId, history: _history, onRestore: _restore, onUpgrade: () => Navigator.of(route).pop(true)),
         ),
       ),
     );
     _refresh();
+    if (upgrade != true || !mounted) return;
+    // 点了“升级”：问清楚；升了打开新的逻辑页，没升回到旧的逻辑页。
+    await showLcFrontUpgrade(context, _doc!, _apply);
+    if (mounted) await _openLogic(nodeId);
   }
 
   Future<void> _openComponents() async {

@@ -797,13 +797,18 @@ Flutter 导出在测试里真的跳了页（`test/lowcode_pages_export_test.dart
 - **`AbortController` / `signal`（已核对，2026-11-27，developer.mozilla.org/en-US/docs/Web/API/AbortSignal 的摘录）**：把 `signal` 放在 `fetch` 的选项里递进去，
   调 `AbortController.abort()` 后那次 `fetch` 以名叫 `AbortError` 的 `DOMException` 拒绝；一个信号只能用一次，中止以后再拿它发请求会马上被拒绝
   （所以“新的中止令牌”每次都新建一个）。超时是自己用定时器加 `abort()` 做的，没有用 `AbortSignal.timeout()`。
-- **`history.pushState / replaceState / go`、`popstate`（未核对 MDN 原文；2026-11-27 只见到几处第三方文章的转述，说法一致）**：`pushState`、`replaceState` 不会触发 `popstate`；
+- **`history.pushState / replaceState / go`、`popstate`（已核对（摘录），2026-11-27 夜，A3：读的是搜索结果里摘出来的 MDN 原文，没有整页打开；developer.mozilla.org/en-US/docs/Web/API/Window/popstate_event。原文还说：页面没被人碰过时浏览器可能根本不发 `popstate`；它排在 `pageshow` 之后、`hashchange` 之前）**：`pushState`、`replaceState` 不会触发 `popstate`；
   前进后退（含 `history.go()`）才触发，事件的 `state` 是当时存的那份。存的东西要能被浏览器复制（普通数据），所以递进去前先转成普通 JSON 值。
-- **`localStorage` / `sessionStorage`（未核对 MDN 原文；2026-11-27 只见到第三方文章的转述：放不下时 `setItem` 抛 `QuotaExceededError`，有的环境一碰 `window.localStorage` 就抛 `SecurityError`）**：`setItem` 在放不下或浏览器不让存时抛错（小库接住，报“存不进去”）；有的环境读 `window.localStorage` 本身就抛错（报“这里用不了本地存储”）。
+- **`sessionStorage`（已核对（摘录），2026-11-27 夜，A3：MDN “Window: sessionStorage property”的摘录，没有整页打开）**：按“源＋标签页”各存各的；刷新、恢复页面以后还在；
+  新开的标签页或窗口是新的一份；从别的页面打开（有 `opener`）时一开始是那一页的副本，之后各管各的；关掉标签页就清掉；
+  源不合规矩（`file:`、`data:`）或用户设置不让存时，一取 `sessionStorage` 就抛 `SecurityError`（小库报“这里用不了本地存储”）。
+  “去页面带参数”在纯网页产物里靠它把参数带到下一页（见 `docs/blocks-v5-parts/D-frontend-logic.md` 末尾 A3 的落地说明）。
+- **`setItem` 放不下时抛 `QuotaExceededError`（已核对（摘录），HTML 标准开发者版 webstorage 一节的摘录）**：小库接住，报“存不进去”。
+- **`localStorage`（未核对 MDN 原文）**：MDN 的 `localStorage` 页这次没有读到摘录；按 `sessionStorage` 同一套规矩处理（取它会抛错就报“这里用不了本地存储”，存不进去报“存不进去”）。
 - **`requestAnimationFrame` / `cancelAnimationFrame`（已核对，2026-11-27，developer.mozilla.org/en-US/docs/Web/API/Window/requestAnimationFrame 的摘录）**：
   只叫回一次（要接着动得自己再排）；回调收到一个参数，是毫秒时间戳；交回一个编号，拿它调 `cancelAnimationFrame()` 取消，编号的值不要做任何假定
   （小库不把浏览器给的编号交给积木，自己另发编号）。没有这个函数的环境退回 16 毫秒的定时器——这一条是自己定的，不是文档说的。
-- **`setTimeout` 负数当 0（未核对原文）**：小库自己先 `Math.max(0, ms)`，不靠浏览器。
+- **`setTimeout` 负数当 0（已核对（摘录），2026-11-27 夜，A3：MDN “Window: setTimeout() method”的摘录，developer.mozilla.org/en-US/docs/Web/API/Window/setTimeout）**：原文“Negative values behave the same as 0”；不写延时就是 0；最大 2147483647 毫秒（内部按有符号 32 位整数存，超了会溢出）。小库自己先 `Math.max(0, ms)`，不靠浏览器；超过上限的没有另外拦。
 - **Vue 3 `ref` / `onMounted`、React `useRef` / `useEffect` / `useSyncExternalStore`（这一段没有新用法）**：新路没有新加任何框架接口，用的还是第 5 期导出里已有的那些（见上文各节）；
   React 里“开工只做一次”用的是 `useRef` 存一个值、第一次画的时候填上。**未核对**：React 开着 StrictMode 时组件函数会多跑一遍，开工那段是否因此做两遍——
   `useRef` 的值在同一次挂载里是同一个，按理只做一次，这一段没有在 StrictMode 下验证。

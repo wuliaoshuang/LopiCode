@@ -18,6 +18,7 @@ import 'package:lopicode/core/safe_file.dart';
 import 'package:lopicode/lang/lib_model.dart';
 import 'package:lopicode/lang/rules.dart';
 import 'package:lopicode/lowcode/lib_blocks.dart';
+import 'package:lopicode/lowcode/lib_page.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 
 /// 存盘文件名。
@@ -156,8 +157,10 @@ class BeDocument implements LibUser {
     List<BeLibUse>? uses,
     this.serviceLib = '',
     List<BeLibHat>? hats,
-    this.loaded = const [],
-  }) : port = _validPort(port) ? port : kBeDefaultPort,
+    List<LibLibrary> loaded = const [],
+    this.front = false,
+  }) : _loaded = loaded, // ignore: prefer_initializing_formals 对外的参数名要叫 loaded，不叫 _loaded
+       port = _validPort(port) ? port : kBeDefaultPort,
        rules = rules < kLangRulesLoose ? kLangRulesLoose : rules,
        language = _idPattern.hasMatch(language) ? language : kBeDefaultLanguage,
        variables = variables ?? [],
@@ -205,12 +208,30 @@ class BeDocument implements LibUser {
 
   /// [uses] 里的库读进来的样子（不存盘：打开文档的人从项目的 `blocks/` 里读好了放进来，见 backend_lib_store.dart）。
   /// 翻译、检查、生成都从这里找库；[uses] 里写了、这里没有的＝“库不在项目里”。
+  /// 前端这一边的文档永远带着内置库“页面”（排第一个），不用项目里有。
   @override
-  List<LibLibrary> loaded;
+  List<LibLibrary> get loaded => isFront ? [lcPageLibrary(), ..._loaded.where((l) => l.id != kLcPageLibId)] : _loaded;
+  @override
+  set loaded(List<LibLibrary> value) => _loaded = value;
+  List<LibLibrary> _loaded;
+
+  /// 前端这一边的文档自动用上内置库“页面”（排第一个）；不是前端的文档不许用它。改了“给谁用”以后调一下。
+  void syncSide() {
+    final has = uses.any((u) => u.id == kLcPageLibId);
+    if (isFront && !has) uses.insert(0, BeLibUse(kLcPageLibId));
+    if (!isFront && has) uses.removeWhere((u) => u.id == kLcPageLibId);
+  }
 
   // —— “会用库的文档”（lib/lowcode/lib_blocks.dart 的 [LibUser]）要的几样 ——
   @override
-  LibSide get libSide => LibSide.backend;
+  LibSide get libSide => isFront ? LibSide.frontend : LibSide.backend;
+
+  /// 这份文档是一页的页面逻辑（存在页面文件的 `logic.front` 里，见 front_doc.dart）：没有接口、集合、端口、语言，
+  /// 自动带上内置库“页面”而不是“接口服务”。存盘时写 `"side": "frontend"`；后端文档不写这一项。
+  bool front;
+
+  /// 前端这一边的文档：页面逻辑，或者“给谁用＝前端”的库。
+  bool get isFront => front || library?.side == LibSide.frontend;
   @override
   String? get libraryId => library?.id;
   @override
@@ -249,6 +270,7 @@ class BeDocument implements LibUser {
         ? 4
         : (usesFunctions ? 3 : (usesLang ? 2 : 1)),
     'kind': 'backend',
+    if (front) 'side': 'frontend',
     if (rules != kLangRulesLoose) kLangRulesField: rules,
     'name': name,
     'port': port,
@@ -281,7 +303,8 @@ class BeDocument implements LibUser {
     uses: [for (final u in uses) u.clone()],
     serviceLib: serviceLib,
     hats: [for (final h in hats) h.clone()],
-    loaded: loaded,
+    loaded: _loaded,
+    front: front,
   );
 
   /// 从文件内容读。读不懂（不是 JSON、不是对象、不是后端文档）→ 空白文档 + 说明；坏的条目逐条跳过并在说明里报数。绝不抛异常。
@@ -328,6 +351,7 @@ class BeDocument implements LibUser {
       uses: list(json['uses'], BeLibUse.tryParse),
       serviceLib: json['serviceLib'] is String && kLibIdPattern.hasMatch(json['serviceLib'] as String) ? json['serviceLib'] as String : '',
       hats: list(json['hats'], BeLibHat.tryParse),
+      front: json['side'] == 'frontend',
     );
     return (doc: doc, note: skipped == 0 ? null : '后端文件里有 $skipped 条读不懂的内容，已跳过');
   }
@@ -336,6 +360,7 @@ class BeDocument implements LibUser {
   /// 函数最多留 [kBeMaxFunctions] 个（多出来的丢掉）。
   /// 函数的 id 先占位（调用是按它认的，不能动）：缺了 / 不合规矩 / 重了才补一个 `f数字`；接口的 id 和函数撞了，换的是接口的。
   void _normalize() {
+    syncSide();
     final names = <String>{};
     variables.removeWhere((v) => !names.add(v.name));
     final cols = <String>{};

@@ -7,6 +7,8 @@
 /// t.state(名字)      → [读, 写] 或 null     页面（或项目）里声明过的状态。纯网页＝state 对象；Vue＝ref；React＝lcVars / lcShared。
 /// t.prop(控件, 属性)  → [读, 写] 或 null     控件属性。纯网页＝直接读写页面上的元素；Vue / React＝模板绑着的那些 ref / lcUi。
 /// t.changed()                              改完以后要不要叫界面重画（React 要；别的不用）。可以没有。
+/// t.page / t.go(页 id)                    这一页是谁；换到项目里的另一页（去不了交回 false）。新的页面逻辑才给。
+/// t.item(控件, 浏览器事件)                   纯网页：这次事件是从“重复”出来的第几份上来的（{item, index}）。可以没有。
 /// t.listen(控件, 事件, 叫谁)                 纯网页：往元素上挂监听。Vue / React 没有这一项——事件由模板接好，再调 host.emit。
 /// ```
 ///
@@ -136,6 +138,11 @@ function lcPageHost(lc, t) {
     const list = handlers[id + " " + type];
     if (!list || list.length === 0) return;
     const rec = lc.eventRec(ev);
+    // “重复”出来的控件：这一份是第几项、那一项是什么（导出的模板递过来的，或者读写表从页面上找的）。
+    const at = ev && ev.lcAt ? ev.lcAt : t.item ? t.item(id, ev) : null;
+    if (at) rec.set("lcAt", at);
+    // 组件实例发出来的事件：带的数据。
+    if (ev && ev.lcData && typeof ev.lcData === "object") rec.set("lcData", lc.fromPlain(ev.lcData));
     for (const h of list.slice()) {
       if (h.once) list.splice(list.indexOf(h), 1);
       lc.fire(h.f, rec);
@@ -156,6 +163,42 @@ function lcPageHost(lc, t) {
     for (const f of life[which].slice()) lc.fire(f, null);
   }
 
-  return { stateNew, stateRead, stateWrite, stateDerived, stateWatch, uiRead, uiWrite, uiOn, uiLife, emit, emitLife, poke };
+  // 去项目里的另一页（带上参数）；这一页这次带来的参数。怎么换页、参数放哪，读写表说了算（t.go / t.params）。
+  // 带的参数放两处：这次打开的网页里记一份（同一个网页里换页用它）；sessionStorage 里记一份（纯网页换页是换了一个文件，靠它带过去；刷新也还在）。
+  function navStore() {
+    const g = typeof globalThis === "object" ? globalThis : {};
+    if (!g.lcNav) g.lcNav = Object.create(null);
+    return g.lcNav;
+  }
+  function navGo(id, params) {
+    const plain = lc.toPlain(params);
+    navStore()[id] = plain;
+    try { sessionStorage.setItem("lc-nav:" + id, JSON.stringify(plain)); } catch (e) { /* 存不了（隐私模式）：同一个网页里换页照样带得过去 */ }
+    if (!t.go || !t.go(id)) lc.fail("项目里没有这一页，去不了");
+    return null;
+  }
+  function navParams() {
+    const id = t.page || "";
+    let p = navStore()[id];
+    if (p === undefined) {
+      try { p = JSON.parse(sessionStorage.getItem("lc-nav:" + id) || "{}"); } catch (e) { p = {}; }
+    }
+    return lc.fromPlain(p && typeof p === "object" && !Array.isArray(p) ? p : {});
+  }
+  // 这次事件是从“重复”出来的哪一份控件上来的：读写表按控件和浏览器事件找（t.item）；不在重复里＝空、-1。
+  function itemOf(rec) {
+    const at = rec instanceof Map ? rec.get("lcAt") : null;
+    return at && typeof at === "object" ? at : null;
+  }
+  function uiItem(rec) {
+    const at = itemOf(rec);
+    return at ? lc.fromPlain(at.item) : null;
+  }
+  function uiIndex(rec) {
+    const at = itemOf(rec);
+    return at ? at.index : -1;
+  }
+
+  return { stateNew, stateRead, stateWrite, stateDerived, stateWatch, uiRead, uiWrite, uiOn, uiLife, navGo, navParams, uiItem, uiIndex, emit, emitLife, poke };
 }
 ''';

@@ -11,6 +11,8 @@
 /// 没用新功能的页面不走这里，导出和以前逐字节一样。
 library;
 
+import 'package:lopicode/backend/front_code.dart';
+import 'package:lopicode/backend/front_doc.dart';
 import 'package:lopicode/lang/gen2_browser.dart';
 import 'package:lopicode/lang/gen_support.dart';
 import 'package:lopicode/lang/rt2_browser.dart';
@@ -47,17 +49,36 @@ class LcCoreJs {
 /// [listen]＝读写表里带“往控件上挂事件”（纯网页用：这时不需要一个个处理函数）。
 LcCoreJs? lcCoreJsFor(LcDocument doc, JsTarget target, List<String>? notes, {LcVariable? Function(String name)? lookup, required bool hash, bool listen = false}) {
   if (!lcDocUsesCore(doc)) return null;
-  final built = lcLogicToCore(doc, lookup: lookup, pageUrl: (p) => hash ? '#/${p.id}' : '${lcPageFileBase(doc, p.id)}.html');
-  final problems = [...built.problems];
+  // 新的页面逻辑（`logic.front`，一份前端这一边的积木文档）直接出程序；旧积木走新路（用了库的旧页面）照 A2 的翻法。
+  final front = lcFrontOf(doc.logic);
+  final List<String> problems, skipped;
+  final Set<String> states;
+  final Set<(String, String)> props;
   String? program;
-  if (problems.isEmpty) {
-    try {
-      program = gen2BrowserProgram(built.program!);
-    } on LangUnsupported catch (e) {
-      problems.add(e.message);
+  if (front != null) {
+    final out = lcFrontProgram(front);
+    final touch = lcFrontTouch(front);
+    problems = [...out.problems];
+    skipped = out.skipped;
+    program = out.code;
+    // 库里的函数可以按名字读写状态，所以页面声明过的状态全都进读写表。
+    states = {for (final v in doc.logic.variables) v.name, ...touch.states};
+    props = touch.props;
+  } else {
+    final built = lcLogicToCore(doc, lookup: lookup, pageUrl: (p) => hash ? '#/${p.id}' : '${lcPageFileBase(doc, p.id)}.html');
+    problems = [...built.problems];
+    skipped = built.skipped;
+    states = built.states;
+    props = built.props;
+    if (problems.isEmpty) {
+      try {
+        program = gen2BrowserProgram(built.program!);
+      } on LangUnsupported catch (e) {
+        problems.add(e.message);
+      }
     }
   }
-  for (final s in built.skipped) {
+  for (final s in skipped) {
     notes?.add('页面逻辑：$s');
   }
   if (program == null) {
@@ -72,7 +93,7 @@ LcCoreJs? lcCoreJsFor(LcDocument doc, JsTarget target, List<String>? notes, {LcV
 
   LcVariable? find(String name) => lookup == null ? doc.logic.variable(name) : lookup(name);
   final boot = <String>['// 开工：做一张读写表（状态、控件属性各放在哪），把这一页的程序跑起来，交回页面宿主。', 'function lcBoot() {', '  const lcT = {', '    state(name) {', '      switch (name) {'];
-  for (final name in built.states) {
+  for (final name in states) {
     final v = find(name);
     if (v == null) continue;
     boot.add('        case ${jsString(name)}:');
@@ -86,7 +107,7 @@ LcCoreJs? lcCoreJsFor(LcDocument doc, JsTarget target, List<String>? notes, {LcV
     }
   }
   boot.addAll(['      }', '      return null;', '    },', '    prop(id, prop) {', '      switch (id + " " + prop) {']);
-  for (final (id, prop) in built.props) {
+  for (final (id, prop) in props) {
     final node = doc.find(id);
     if (node == null) continue;
     boot.add('        case ${jsString('$id $prop')}:');
@@ -105,6 +126,22 @@ LcCoreJs? lcCoreJsFor(LcDocument doc, JsTarget target, List<String>? notes, {LcV
     '      return null;',
     '    },',
     if (listen) ...['    listen(id, type, f) {', '      lcOn(id, type, f);', '    },'],
+    // 新的页面逻辑才有的：这一页是谁、去别的页怎么去（带的参数由页面宿主存取）、“重复”出来的控件是第几份。
+    if (front != null) ...[
+      '    page: ${jsString(doc.page.id)},',
+      ...['    item(id, ev) {', '      for (let el = ev && ev.target; el; el = el.parentNode) {', '        if (el.lcAt) return el.lcAt;', '      }', '      return null;', '    },'],
+      '    go(id) {',
+      '      switch (id) {',
+      for (final p in doc.pages)
+        if (p.id != doc.page.id) ...[
+          '        case ${jsString(p.id)}:',
+          hash ? '          location.hash = ${jsString('#/${p.id}')};' : '          location.href = ${jsString('${lcPageFileBase(doc, p.id)}.html')};',
+          '          return true;',
+        ],
+      '      }',
+      '      return false;',
+      '    },',
+    ],
     '  };',
     '  const lcRt = lcRuntime(globalThis);',
     '  const lcHost = lcPageHost(lcRt, lcT);',

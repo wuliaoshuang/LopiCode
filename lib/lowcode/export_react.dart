@@ -212,12 +212,14 @@ class _View {
     final model = n.type == 'input' ? bound?.modelName(n) : null;
     final set = model == null ? null : bound!.modelSet(model, 'event.target.value');
     var wired = false;
+    final at = bound?.eachAt; // 新的页面逻辑、在“重复”里：事件带上这一项
+    final ev = at == null ? 'event' : 'Object.assign(event, { lcAt: $at })';
     events(n).forEach((attr, fn) {
       if (set != null && attr == 'onChange') {
         wired = true;
-        b.write(' onChange={(event) => { $set $fn(event); }}');
+        b.write(' onChange={(event) => { $set $fn($ev); }}');
       } else {
-        b.write(' $attr={$fn}');
+        b.write(at == null ? ' $attr={$fn}' : ' $attr={(event) => $fn($ev)}');
       }
     });
     if (set != null && !wired) b.write(' onChange={(event) => { $set }}');
@@ -377,6 +379,7 @@ String _objectLiteral(Iterable<(String, String)> entries) =>
   // 第 5 期：这一页用了状态与绑定才有 plan / bind；没用的页面下面每一处都走原来那条路。
   final plan = LcBindPlan.of(doc, doc.root);
   final bind = plan == null ? null : LcReactBind(plan);
+  bind?.eventAt = doc.logic.front != null;
   final target = ReactJsTarget(states, notes, bind: bind);
   final writer = JsLogicWriter(doc, target, lookup: plan?.lookup);
   // 用了新积木的页面：处理函数只把事件转给页面宿主（见 logic_core_js.dart）；没用的页面下面和以前一样。

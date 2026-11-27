@@ -27,6 +27,7 @@ import 'package:lopicode/lowcode/editor_recents.dart';
 import 'package:lopicode/lowcode/editor_workbench_widgets.dart';
 import 'package:lopicode/lowcode/export_dart.dart';
 import 'package:lopicode/lowcode/export_sheet.dart';
+import 'package:lopicode/lowcode/front_store.dart';
 import 'package:lopicode/lowcode/image_pick_sheet.dart';
 import 'package:lopicode/lowcode/inspector_sheet.dart';
 import 'package:lopicode/lowcode/layers_sheet.dart';
@@ -47,6 +48,7 @@ import 'package:lopicode/lowcode/theme_vars_screen.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/app_backdrop.dart';
+import 'package:lopicode/ui/logic_front_screen.dart';
 import 'package:lopicode/ui/shell.dart';
 import 'package:lopicode/ui/top_bar.dart';
 import 'package:lopicode/ui/widgets.dart';
@@ -95,7 +97,11 @@ class _BuilderScreenState extends State<BuilderScreen> with WidgetsBindingObserv
   GlobalKey<EditorWorkbenchState> get _bench => _benches.putIfAbsent(_doc?.page.id ?? '', GlobalKey.new);
   late final PaletteRecents _recents = PaletteRecents(onChanged: _saveRecents);
   late final SaveQueue<LcDocument> _saver = SaveQueue<LcDocument>(
-    snapshot: () => LcDocument.parse(_doc!.encode()),
+    snapshot: () {
+      final copy = LcDocument.parse(_doc!.encode());
+      lcCopyLoaded(_doc!, copy);
+      return copy;
+    },
     write: (snapshot) async {
       await saveLowcodePage(widget.session.guard, snapshot);
       widget.session.filesChanged();
@@ -157,6 +163,7 @@ class _BuilderScreenState extends State<BuilderScreen> with WidgetsBindingObserv
         return;
       }
       final doc = LcDocument.parse(await _file.readAsString());
+      await lcAttachLibs(widget.session.guard, doc); // 项目里的积木库：页面逻辑用上的库从这里找
       if (!mounted) return;
       setState(() {
         _doc = doc;
@@ -202,6 +209,7 @@ class _BuilderScreenState extends State<BuilderScreen> with WidgetsBindingObserv
     // 退掉 / 重做的那一步在别的页上：跟过去，并说一声（不然人看着当前页会以为没反应）。
     final moved = doc.page.id != _doc!.page.id;
     if (moved) showEditorHint(context, '已换到「${doc.title}」：刚才那一步是在这一页上做的。');
+    lcCopyLoaded(_doc!, doc);
     setState(() {
       _doc = doc;
       if (_selected != null && doc.find(_selected!) == null) _selected = null;

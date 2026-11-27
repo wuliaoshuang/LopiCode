@@ -47,6 +47,13 @@ const Map<String, LRtSig> kHostFront = {
     LType.func([LType.any, LType.nul], waits: true),
   ], LType.nul),
 
+  // 去项目里的另一页，带上参数；这一页“这次带来的参数”。三种产物各有各的换页办法，所以也是甲类（前端 1·下半加的）。
+  'page.nav.go': LRtSig('去页面', [LType.text, _dictAny], LType.nul),
+  'page.nav.params': LRtSig('这次带来的参数', [], _dictAny),
+  // 这一轮事件是从“重复”出来的第几份控件上来的：那一项、第几项（不在重复里＝空、-1）。
+  'page.ui.item': LRtSig('这一项', [_dictAny], LType.any),
+  'page.ui.index': LRtSig('第几项', [_dictAny], LType.number),
+
   // —— 乙类：定时 ——
   'timer.after': LRtSig('过后做', [LType.number, _cb0], LType.integer),
   'timer.every': LRtSig('每隔做', [LType.number, _cb0], LType.integer),
@@ -95,8 +102,22 @@ const Map<String, LRtSig> kHostFront = {
 /// 哪几个是“要等”的。
 const Set<String> kHostFrontWaits = {'net.request'};
 
-/// 甲类（三份实现）的那 9 个。
-const Set<String> kHostFrontPage = {'page.state.new', 'page.state.read', 'page.state.write', 'page.state.derived', 'page.state.watch', 'page.ui.read', 'page.ui.write', 'page.ui.on', 'page.ui.life'};
+/// 甲类（三份实现）的那 13 个（A2 的 9 个＋换页 2 个＋重复里的“这一项”2 个）。
+const Set<String> kHostFrontPage = {
+  'page.nav.go',
+  'page.nav.params',
+  'page.ui.item',
+  'page.ui.index',
+  'page.state.new',
+  'page.state.read',
+  'page.state.write',
+  'page.state.derived',
+  'page.state.watch',
+  'page.ui.read',
+  'page.ui.write',
+  'page.ui.on',
+  'page.ui.life',
+};
 
 /// 乙类（一份实现）的那 20 个。
 const Set<String> kHostFrontBrowser = {
@@ -139,6 +160,10 @@ const Map<String, String> kHostFrontCode = {
   'page.ui.write': '@uiWrite',
   'page.ui.on': '@uiOn',
   'page.ui.life': '@uiLife',
+  'page.nav.go': '@navGo',
+  'page.nav.params': '@navParams',
+  'page.ui.item': '@uiItem',
+  'page.ui.index': '@uiIndex',
   'timer.after': 'timerAfter',
   'timer.every': 'timerEvery',
   'timer.cancel': 'timerCancel',

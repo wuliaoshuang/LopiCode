@@ -12,6 +12,7 @@ import 'package:lopicode/core/templates.dart';
 import 'package:lopicode/lowcode/export_html.dart';
 import 'package:lopicode/lowcode/export_pages.dart';
 import 'package:lopicode/lowcode/export_tidy.dart';
+import 'package:lopicode/lowcode/front_store.dart';
 import 'package:lopicode/lowcode/logic_gate.dart';
 import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/lowcode/newer_notice.dart';
@@ -520,6 +521,8 @@ class ToolArgError implements Exception {
 /// 每个文件都是“先写同目录的临时文件、写完再改名”（lib/core/safe_file.dart）：写到一半被杀 / 写不进去时，
 /// 原来的页面文件和网页还是完整的旧内容，不会剩半截——页面文件坏了整个页面就打不开了。
 Future<void> saveLowcodePage(PathGuard guard, LcDocument doc) async {
+  // 页面逻辑用了积木库、手上却还没拿到项目里的库（Agent 改的、刚读出来的）：先读来，不然导出时会说“库没了”。
+  if (doc.pages.any((p) => p.logic.uses.isNotEmpty && p.logic.loaded.isEmpty)) await lcAttachLibs(guard, doc);
   final pages = exportHtmlPages(doc, tidy: tidyHtmlExport);
   await writeStringAtomic(File(guard.resolve(kLowcodePageFile)), doc.encode());
   // 只删我们自己生成的（看开头那行标记），用户自己写的同名文件不碰。

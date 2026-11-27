@@ -153,7 +153,9 @@ String exportBoundLogicJs(LcBindPlan plan, LcNode tree, {List<String>? notes}) {
   out.writeln();
 
   out.writeln('// —— 小工具（每份导出都一样）——');
-  for (final block in [lcJsRuntime, lcBindJsRuntime, lcJsDomRuntime.substring(0, lcJsDomRuntime.indexOf('// 给控件挂事件。')), lcJsDelegatedOn, lcJsBindRuntime]) {
+  // 新的页面逻辑：“重复”出来的每一份元素上记着“这一项、第几项”，事件来了页面宿主顺着往上找（旧页面这份小工具一字不变）。
+  final bindRuntime = doc.logic.front == null ? lcJsBindRuntime : lcJsBindRuntime.replaceFirst('    lcApply(el, b.id, sc);', '    el.lcAt = { item: list[i], index: i };\n    lcApply(el, b.id, sc);');
+  for (final block in [lcJsRuntime, lcBindJsRuntime, lcJsDomRuntime.substring(0, lcJsDomRuntime.indexOf('// 给控件挂事件。')), lcJsDelegatedOn, bindRuntime]) {
     out.writeln(block.trim());
     out.writeln();
   }

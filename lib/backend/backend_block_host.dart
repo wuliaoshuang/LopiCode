@@ -25,6 +25,7 @@ import 'package:lopicode/backend/backend_targets.dart';
 import 'package:lopicode/backend/backend_text.dart';
 import 'package:lopicode/backend/backend_type_host.dart';
 import 'package:lopicode/backend/backend_validate.dart';
+import 'package:lopicode/backend/front_code.dart';
 import 'package:lopicode/blocks/block_host.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 
@@ -171,18 +172,36 @@ class BeBlockHost extends BlockHost with BeFuncHost, BeCoreHost, BeTypeHost, BeL
   @override
   String? coreScopeName(LcBlockTree tree) => coreScopeOf(tree);
 
+  /// 前端这一边的文档（页面逻辑、前端库）用不上的页：接口的请求和返回、数据集合、后端的“请求网址”。
+  static const Set<String> _backendOnly = {'请求', '返回', '数据', '网络'};
+
+  /// 前端文档的积木盒：最前面是自带“页面”库的事件、状态、控件、页面；后面是语言核心；再后面是用上的库。没有接口帽子。
+  List<BlockCategory> _frontCategories() => [
+    if (canvasType == null) ...pageCategories,
+    for (final c in coreCategories([
+      const BlockCategory(id: 'event', label: '事件', colorKey: BlockColorKey.event),
+      for (final c in bePaletteCategories)
+        if (!_backendOnly.contains(c.id)) c.id == '运算' ? beStrictOperatorCategory(c) : c,
+      if (canvasType == null) ...libCategories,
+    ]))
+      // 类的画布上“事件”页是“创建时”“方法”；别的时候这一页只有“程序开始时”，页面里用“当页面放上以后”，不要它。
+      if (c.id != 'event' || canvasType != null) c,
+  ];
+
   @override
-  List<BlockCategory> get categories => _categories ??= coreCategories([
-    BlockCategory(
-      id: 'event',
-      label: '事件',
-      colorKey: BlockColorKey.event,
-      hats: [for (final m in kBeMethods) BlockHatTemplate(m, _hat(m, freePath(m)), hint: '新接口：${describeBeMethod(m)}')],
-    ),
-    // 严格规矩才有的三块（处理“空”、文字变整数）接在“运算”页最后；老规矩的文档积木盒和以前一样。
-    if (!strictRules) ...bePaletteCategories else for (final c in bePaletteCategories) c.id == '运算' ? beStrictOperatorCategory(c) : c,
-    if (strictRules && canvasType == null) ...libCategories,
-  ]);
+  List<BlockCategory> get categories => _categories ??= _doc.isFront
+      ? _frontCategories()
+      : coreCategories([
+          BlockCategory(
+            id: 'event',
+            label: '事件',
+            colorKey: BlockColorKey.event,
+            hats: [for (final m in kBeMethods) BlockHatTemplate(m, _hat(m, freePath(m)), hint: '新接口：${describeBeMethod(m)}')],
+          ),
+          // 严格规矩才有的三块（处理“空”、文字变整数）接在“运算”页最后；老规矩的文档积木盒和以前一样。
+          if (!strictRules) ...bePaletteCategories else for (final c in bePaletteCategories) c.id == '运算' ? beStrictOperatorCategory(c) : c,
+          if (strictRules && canvasType == null) ...libCategories,
+        ]);
 
   @override
   List<String> aliasesOf(BlockItemRef item) => beAliasesOf(item);
@@ -191,7 +210,7 @@ class BeBlockHost extends BlockHost with BeFuncHost, BeCoreHost, BeTypeHost, BeL
   List<BlockItemRef> variantsOf(BlockItemRef item) => beVariantsOf(item);
 
   @override
-  List<BlockItemRef> get starterItems => beStarterItems;
+  List<BlockItemRef> get starterItems => _doc.isFront ? beFrontStarterItems(libTable) : beStarterItems;
 
   @override
   String? armSentence(String op) => beArmSentences[op] ?? coreArmSentence(op);
@@ -247,7 +266,8 @@ class BeBlockHost extends BlockHost with BeFuncHost, BeCoreHost, BeTypeHost, BeL
         };
 
   @override
-  List<BlockOption> hatSlotOptions(LcBlockTree tree, String slotId) => slotId == 'method' ? [for (final m in kBeMethods) BlockOption(m, m, hint: describeBeMethod(m))] : const [];
+  List<BlockOption> hatSlotOptions(LcBlockTree tree, String slotId) =>
+      libHatSlotOptions(tree, slotId) ?? (slotId == 'method' ? [for (final m in kBeMethods) BlockOption(m, m, hint: describeBeMethod(m))] : const []);
 
   /// 改请求方式 / 路径。路径会收拾一下（去掉两头空格）再校验格式；不对就不改，并通过 [onNotice] 说原因。
   /// 路径参数只是改了名字（个数没变）时，这个接口里读旧名字的“路径参数”积木跟着改名。
@@ -300,7 +320,7 @@ class BeBlockHost extends BlockHost with BeFuncHost, BeCoreHost, BeTypeHost, BeL
 
   @override
   List<BlockOption> options(LcArgSpec arg, {LcBlockTree? tree, LcBlock? block, Map<String, dynamic>? expr}) {
-    final own = funcOptions(arg, tree: tree, expr: expr) ?? libOptions(arg, tree: tree, block: block) ?? coreOptions(arg, block: block, expr: expr);
+    final own = funcOptions(arg, tree: tree, expr: expr) ?? libOptions(arg, tree: tree, block: block, expr: expr) ?? coreOptions(arg, block: block, expr: expr);
     if (own != null) return own;
     switch (arg.kind) {
       case LcArgKind.variable:
@@ -366,7 +386,7 @@ class BeBlockHost extends BlockHost with BeFuncHost, BeCoreHost, BeTypeHost, BeL
   @override
   String optionLabel(LcArgSpec arg, String value) {
     if (arg.kind != LcArgKind.choice) return value;
-    final fn = funcOptionLabel(arg, value) ?? coreOptionLabel(arg, value);
+    final fn = libOptionLabel(arg, value) ?? funcOptionLabel(arg, value) ?? coreOptionLabel(arg, value);
     if (fn != null) return fn;
     if (arg.name == 'op') return _opSigns[value] ?? arg.choiceLabel(value);
     return arg.choiceLabel(value).split('（').first;
@@ -376,7 +396,8 @@ class BeBlockHost extends BlockHost with BeFuncHost, BeCoreHost, BeTypeHost, BeL
 
   late final BlockIssueCache _issueCache = BlockIssueCache(
     () => withTypeIssues([
-      for (final i in validateBackend(_doc, languages: [for (final t in backendTargets) t.id], table: funcTable)) blockIssueOf(i),
+      // 前端文档不挑后端语言（“选的语言还不能生成”这一条不查）。
+      for (final i in validateBackend(_doc, languages: _doc.isFront ? null : [for (final t in backendTargets) t.id], table: funcTable)) blockIssueOf(i),
     ]),
     () => _revision,
     () => onChanged?.call(),
@@ -403,6 +424,7 @@ class BeBlockHost extends BlockHost with BeFuncHost, BeCoreHost, BeTypeHost, BeL
   String get codeText {
     final cached = _code;
     if (cached != null) return cached;
+    if (_doc.isFront) return _code = lcFrontCodeText(_doc);
     // 严格生成关着时（kBeStrictGenPending）严格文档不生成，不拿老办法翻出来的代码冒充；
     // 只用语言核心的（没有接口、有“程序开始时”）例外：走版本 2 的生成器（见 backend_core_gen.dart）。
     if (beStrictGenPending(_doc)) return _code = coreCodeMode ? coreCodeText(_doc.language) : '$kBeStrictGenPending。\n\n没有代码可看。';
@@ -415,11 +437,15 @@ class BeBlockHost extends BlockHost with BeFuncHost, BeCoreHost, BeTypeHost, BeL
   }
 
   @override
-  String get codeLanguage => target?.label ?? _doc.language;
+  String get codeLanguage => _doc.isFront ? '浏览器里的 JavaScript' : (target?.label ?? _doc.language);
 
   /// 看的就是入口文件，高亮按它的文件名来；这种语言没有生成器时不高亮。
   @override
-  String get codeFileName => beStrictGenPending(_doc) && coreCodeMode ? coreCodeFileName(_doc.language) : (target?.entryFile ?? '');
+  String get codeFileName => _doc.isFront
+      ? 'logic.js'
+      : beStrictGenPending(_doc) && coreCodeMode
+      ? coreCodeFileName(_doc.language)
+      : (target?.entryFile ?? '');
 
   // —— 改动、撤销 ——
 
