@@ -220,6 +220,23 @@ void main() {
       expect(kLcEvtJs, contains('target: { value:'));
     });
 
+    // 组件里套着组件：里面那个发的事件一层层往外发到页面，带的数据原样带出去。
+    for (final kind in ['vue', 'react']) {
+      test('${_label[kind]}·组件里套组件：真编译 0 错误 0 警告，里面的事件带着数据传到页面', () async {
+        final files = exportFilesOf(compNestedDoc(), kind);
+        expect(files.keys.where((k) => k.startsWith('components/') && !k.endsWith('.css')), hasLength(2));
+        final c = await compileExport('compile_$kind.mjs', files, _entry[kind]!);
+        expect(c.errors, isEmpty, reason: c.raw);
+        expect(c.warnings, isEmpty, reason: c.raw);
+        final steps = nestedSteps();
+        final r = await runInDom(kind, files, _entry[kind]!, steps);
+        expect(r.errors, isEmpty);
+        expect(r.warnings, isEmpty);
+        expect(r.done, steps.length);
+        expect(r.ok, isTrue);
+      }, skip: skipWithoutDom);
+    }
+
     for (final kind in ['html', 'vue', 'react']) {
       // “重复”里带出的项：只有组件文件的两种导出拿得到。
       final withPick = kind != 'html';

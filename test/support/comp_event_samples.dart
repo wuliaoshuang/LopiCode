@@ -198,3 +198,85 @@ CompSteps pickBarSteps() => [
   {'op': 'click', 'sel': '.n-tags__chip', 'at': 0},
   {'op': 'text', 'sel': '.n-curText', 'is': '现在选的：水果'},
 ];
+
+/// 外壳：里面套着一个加量按钮（step 写死 9），按钮发的“要加”接着往外发成外壳的“里面要加”。
+Map<String, Object?> shellDef([String id = 'c7']) => {
+  'id': id,
+  'name': '外壳',
+  'root': cn('box', 'column', {}, [
+    cn('cap', 'text', {'text': '外壳'}),
+    cn(
+      'inner',
+      'component',
+      {
+        'ref': 'c6',
+        'values': {'step': 9},
+      },
+      [],
+      {
+        'emit': {
+          'add': {'event': 'bump'},
+        },
+      },
+    ),
+  ]),
+  'events': [
+    {
+      'name': 'bump',
+      'label': '里面要加',
+      'params': [
+        {'name': 'n', 'type': 'number'},
+      ],
+    },
+  ],
+};
+
+/// 页面：一个外壳；“里面要加”→ 状态 got 设成事件带来的值。
+LcDocument compNestedDoc() => LcDocument.fromJson(
+  <String, Object?>{
+    'version': 3,
+    'title': 'Pick',
+    'logic': {
+      'variables': [
+        {'name': 'got', 'type': 'number', 'initial': 0},
+      ],
+    },
+    'components': [addButtonDef(), shellDef()],
+    'root': cn('root', 'page', {}, [
+      cn(
+        'sh',
+        'component',
+        {'ref': 'c7'},
+        [],
+        {
+          'on': {
+            'bump': [
+              {
+                'op': 'setVar',
+                'args': {'name': 'got', 'value': _event},
+              },
+            ],
+          },
+        },
+      ),
+      cn(
+        'gotText',
+        'text',
+        {'text': ''},
+        [],
+        {
+          'data': {
+            'text': cExpr(cJoin([cText('拿到 '), cVar('got')])),
+          },
+        },
+      ),
+    ]),
+  }.cast<String, dynamic>(),
+);
+
+/// 套着的那几步：点外壳里面那个组件的按钮。
+CompSteps nestedSteps() => [
+  {'op': 'text', 'sel': '.n-gotText', 'is': '拿到 0'},
+  {'op': 'click', 'sel': '.n-sh button'},
+  {'op': 'text', 'sel': '.n-gotText', 'is': '拿到 9'},
+];
