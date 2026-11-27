@@ -10,6 +10,7 @@ import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/core/safe_file.dart';
 import 'package:lopicode/core/templates.dart';
 import 'package:lopicode/lowcode/export_html.dart';
+import 'package:lopicode/lowcode/export_pages.dart';
 import 'package:lopicode/lowcode/export_tidy.dart';
 import 'package:lopicode/lowcode/logic_gate.dart';
 import 'package:lopicode/lowcode/model.dart';
@@ -261,7 +262,7 @@ class AgentToolbox {
       {
         'page': {
           'type': 'object',
-          'description': '完整的页面对象：{title, root, logic?, components?}，root.type 必须是 page；节点可带 style（CSS 声明表）、name（名字）；读到的不认识的字段原样带回、不要删。除原有的节点类型外还有 11 种：icon{icon,size,color}、textarea{placeholder,rows,value}、switch{checked}、checkbox{text,checked}、radio{options:[{value,label}],value}、select{options:[{value,label}],value,placeholder}、listItem{title,subtitle,chevron}（插槽 left / right）、appBar{title}（插槽 left / right）、bottomNav{items:[{icon,label}],current}、tabs{tabs:[{id,label}],current}（每个页签的 id 就是一个插槽）、dialog{title,text,okText,cancelText,variant,open,dismissible}（插槽 content / footer）。放进带插槽组件里的子节点用节点上的 slot 字段指明放哪个插槽；自定义组件（components 里的定义）也能带插槽：定义的树里放 {type:"slot", name:"给人看的名字", props:{name:"插槽名"}（不写＝默认插槽）, children:[没填时显示的默认内容]}，slot 节点只能放在组件定义里、不能当定义的最外层；页面上的实例 {type:"component", props:{ref}} 可以带 children，每个子节点用 slot 字段指明进哪个插槽（不写＝默认插槽）；拿不准某个属性时先用 lowcode_get_page 看现有页面的写法。logic（积木逻辑）/ components（自定义组件）不传就沿用现有的，要清空请传 {} / []',
+          'description': '完整的页面对象：{title, root, logic?, components?}，root.type 必须是 page；节点可带 style（CSS 声明表）、name（名字）；读到的不认识的字段原样带回、不要删。除原有的节点类型外还有 11 种：icon{icon,size,color}、textarea{placeholder,rows,value}、switch{checked}、checkbox{text,checked}、radio{options:[{value,label}],value}、select{options:[{value,label}],value,placeholder}、listItem{title,subtitle,chevron}（插槽 left / right）、appBar{title}（插槽 left / right）、bottomNav{items:[{icon,label}],current}、tabs{tabs:[{id,label}],current}（每个页签的 id 就是一个插槽）、dialog{title,text,okText,cancelText,variant,open,dismissible}（插槽 content / footer）。放进带插槽组件里的子节点用节点上的 slot 字段指明放哪个插槽；自定义组件（components 里的定义）也能带插槽：定义的树里放 {type:"slot", name:"给人看的名字", props:{name:"插槽名"}（不写＝默认插槽）, children:[没填时显示的默认内容]}，slot 节点只能放在组件定义里、不能当定义的最外层；页面上的实例 {type:"component", props:{ref}} 可以带 children，每个子节点用 slot 字段指明进哪个插槽（不写＝默认插槽）；拿不准某个属性时先用 lowcode_get_page 看现有页面的写法。logic（积木逻辑）/ components（自定义组件）不传就沿用现有的，要清空请传 {} / []。多页面：最外层的 title / root / logic 是首页，别的页放在 pages:[{id,title,root,logic?}]（id 形如 p2，不传 pages 就沿用现有的，要删光别的页请传 []；自定义组件所有页面共用）；去另一页用积木 {op:"goPage",args:{page:"页面 id"}}，底部导航项可以带 page（页面 id）；别的页导出成 page-<页面 id>.html',
         },
       },
       ['page'],
@@ -481,11 +482,18 @@ class AgentToolbox {
     final given = merged['version'];
     if (oldVersion != null && given is int && oldVersion > given) merged = {...merged, 'version': oldVersion};
     final doc = LcDocument.fromJson(merged); // 结构不合法会抛 FormatException，文件不会被改
-    for (final f in [kLowcodePageFile, 'index.html', 'style.css', kLowcodeLogicFile]) {
+    for (final f in [
+      kLowcodePageFile,
+      'index.html',
+      'style.css',
+      kLowcodeLogicFile,
+      for (final p in doc.pages.skip(1)) ...['page-${p.id}.html', 'page-${p.id}.css', 'page-${p.id}.js'],
+    ]) {
       _checkScope(guard.resolve(f));
     }
     await saveLowcodePage(guard, doc);
-    return ToolOutcome('页面已更新，并重新导出了 index.html 和 style.css。${lcLogicToolReport(doc)}${doc.isFromNewer ? '\n注意：${lcNewerNoticeText(doc)}' : ''}', changedFiles: true);
+    final more = doc.isMultiPage ? '（共 ${doc.pages.length} 页，别的页是 page-<页面 id>.html）' : '';
+    return ToolOutcome('页面已更新，并重新导出了 index.html 和 style.css$more。${lcLogicToolReport(doc)}${doc.isFromNewer ? '\n注意：${lcNewerNoticeText(doc)}' : ''}', changedFiles: true);
   }
 
   static String argString(Map<String, dynamic> args, String key, {bool allowEmpty = false}) {
@@ -512,18 +520,43 @@ class ToolArgError implements Exception {
 /// 每个文件都是“先写同目录的临时文件、写完再改名”（lib/core/safe_file.dart）：写到一半被杀 / 写不进去时，
 /// 原来的页面文件和网页还是完整的旧内容，不会剩半截——页面文件坏了整个页面就打不开了。
 Future<void> saveLowcodePage(PathGuard guard, LcDocument doc) async {
-  final export = tidyHtmlExport(exportHtml(doc));
+  final pages = exportHtmlPages(doc, tidy: tidyHtmlExport);
   await writeStringAtomic(File(guard.resolve(kLowcodePageFile)), doc.encode());
-  await writeStringAtomic(File(guard.resolve('index.html')), export.html);
-  await writeStringAtomic(File(guard.resolve('style.css')), export.css);
-  final logic = File(guard.resolve(kLowcodeLogicFile));
-  if (lcLogicErrorCount(doc) > 0) {
-    // 积木逻辑有“错误”：不导出新的 logic.js，上一次导出的原样留着（见 lib/lowcode/logic_gate.dart）。
-  } else if (export.js.isNotEmpty) {
-    await writeStringAtomic(logic, export.js);
-  } else if (await logic.exists()) {
-    // 逻辑删光了：把上次导出的 logic.js 也删掉。只删我们自己生成的（看开头那行标记），用户自己写的同名文件不碰。
-    final head = await logic.openRead(0, 200).transform(const Utf8Decoder(allowMalformed: true)).join();
-    if (head.startsWith(kLowcodeLogicMarker)) await logic.delete();
+  // 只删我们自己生成的（看开头那行标记），用户自己写的同名文件不碰。
+  Future<void> dropIfOurs(File f, bool Function(String head) ours) async {
+    if (!await f.exists()) return;
+    final head = await f.openRead(0, 600).transform(const Utf8Decoder(allowMalformed: true)).join();
+    if (ours(head)) await f.delete();
+  }
+
+  final written = <String>{};
+  for (final page in pages) {
+    written.addAll([page.htmlName, page.cssName, page.jsName]);
+    await writeStringAtomic(File(guard.resolve(page.htmlName)), page.files.html);
+    await writeStringAtomic(File(guard.resolve(page.cssName)), page.files.css);
+    final logic = File(guard.resolve(page.jsName));
+    if (page.logicErrors > 0) {
+      // 这一页的积木逻辑有“错误”：不导出新的脚本，上一次导出的原样留着（见 lib/lowcode/logic_gate.dart）。
+      // 例外：换过首页以后，logic.js 可能是上一个首页的——那就不是“这一页上一次的”，删掉。
+      if (page.base == 'index') await dropIfOurs(logic, (head) => head.startsWith(kLowcodeLogicMarker) && lcStaleHomeScript(head, page.pageId));
+    } else if (page.files.js.isNotEmpty) {
+      await writeStringAtomic(logic, page.files.js);
+    } else {
+      // 逻辑删光了：把上次导出的脚本也删掉。
+      await dropIfOurs(logic, (head) => head.startsWith(kLowcodeLogicMarker));
+    }
+  }
+  // 页面删掉 / 换了首页以后，上一次导出留下的 page-<id>.* 没人要了：清掉（同样只清我们自己生成的）。
+  final root = Directory(guard.root);
+  if (!await root.exists()) return;
+  await for (final e in root.list(followLinks: false)) {
+    final name = e.uri.pathSegments.lastWhere((s) => s.isNotEmpty, orElse: () => '');
+    if (e is! File || !lcLooksLikePageFile(name) || written.contains(name)) continue;
+    final base = name.substring(0, name.lastIndexOf('.'));
+    await dropIfOurs(e, (head) {
+      if (name.endsWith('.js')) return head.startsWith(kLowcodeLogicMarker);
+      if (name.endsWith('.css')) return head.startsWith(kLowcodeCssMarker);
+      return head.contains('href="$base.css"');
+    });
   }
 }

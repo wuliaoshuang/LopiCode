@@ -712,3 +712,47 @@ Vue 那边（`<slot name>` 里写默认内容、用的地方 `<template #名字>
 - Java `java.net.http.HttpClient`（21 起可以放进 try-with-resources）：`HttpTimeoutException`；`connectTimeout`；`followRedirects(NORMAL)`；`java.security.SecureRandom`；`Files.move(…, REPLACE_EXISTING, ATOMIC_MOVE)`。未核对。
 - Java `com.sun.net.httpserver.HttpServer`：请求路径以两个斜杠开头时它自己回 400 `Bad request URI`，不进处理函数（本机实测）。未核对。
 - 这台开发机的运行环境：Java 程序连本机回环地址要带 `-Djava.net.preferIPv4Stack=true`，不带的话连接被运行环境拦下（只是这台机器的事，不是 JDK 的规矩）。
+
+## 低代码多页面导出用到的浏览器 / 框架接口（2026-11-27，编辑器第 4 期 B1）
+
+状态：**实跑核对了一部分**——Vue 3 / React 的外壳和三页样例用开发机验证环境里的官方编译器真编译（0 错 0 警告）并在 Node 里服务端渲染出首页（`test/dev_webdev_compile_test.dart`）；
+Flutter 导出在测试里真的跳了页（`test/lowcode_pages_export_test.dart`）。**没有逐条对官方文档，没在真浏览器里点过**——下面每条标“未核对”的是指文档。
+
+- 浏览器：改 `location.hash` 会触发 `window` 的 `hashchange` 事件，并且进浏览器历史（后退能回上一页）；`location.href = "别的.html"` 是整页跳转。未核对；**真浏览器里没点过**（服务端渲染只出第一屏）。
+- Vue 3：`<component :is="组件对象" :key="…">` 按变量换组件；`shallowRef`、`onMounted`、`onBeforeUnmount` 从 `vue` 引入；`<script setup>` 里引入的组件能直接放进普通对象里当值用。未核对（真编译通过）。
+- React：`useState(函数)` 把函数当“第一次取初值”用；`useEffect(…, [])` 里加监听、返回的函数里取消；组件变量名要大写开头才能当标签用（`<LcCurrentPage />`）。未核对（真编译通过）。
+- 服务端渲染时没有 `location` / `window`：外壳里取当前页的函数先判 `typeof location === "undefined"`；监听都放在只在浏览器里跑的钩子里（`onMounted` / `useEffect`）。实跑如此。
+- Flutter：`Navigator.of(context).push(MaterialPageRoute(...))` 叠一页、`pushReplacement` 换掉当前页；`NavigationBar.onDestinationSelected` 给的是点中项的下标。未核对（测试里真跑过）。
+
+## 低代码主题变量和断点导出用到的 CSS / Vue 写法（2026-11-27，编辑器第 4 期 B2；`lib/lowcode/export_theme_bp.dart`、`export_vue.dart`）
+
+| 用到的 | 核对情况 | 来源 |
+|---|---|---|
+| CSS 自定义属性：名字以两个连字符开头（`--color-primary: #058654;`），名字区分大小写；写在 `:root` 上整个网页都能用 | 核对过（2026-11-27） | MDN《Using CSS custom properties (variables)》https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Cascading_variables/Using_custom_properties |
+| `var(--名)` 取值；`var(--名, 后备)`，第一个逗号后面全部是后备值，后备值里可以再套 `var()` | 核对过（同上） | 同上 |
+| 自定义属性会继承（所以放在 `:root` 就够） | 核对过（同上） | 同上 |
+| `@media (min-width: 768px) { … }`：屏宽不小于 768 时生效；写在后面的规则盖前面同样分量的规则 | **未核对**（这次没打开 MDN 的 `@media` 页；写法是多年通用的，esbuild 解析通过） | — |
+| 断点里“去掉某一条”写成 `属性: initial` | **未核对**（`initial` 是 CSS 通用关键字；对继承类属性，`initial` 回到的是属性的初始值而不是手机档继承来的值，见 §10.7 的局限） | — |
+| Vue 单文件组件：`<style scoped>` 会给每条选择器加上 `[data-v-xxxx]`；同一个文件里可以同时有一段不带 `scoped` 的 `<style>`（全局）和一段带的 | 核对过（2026-11-27） | Vue 官方文档《SFC CSS Features》（Scoped CSS、Mixing Local and Global Styles）https://de.vuejs.org/api/sfc-css-features |
+| 所以 `:root { … }` 写在 `scoped` 的样式里会变成 `:root[data-v-xxxx]`、对不上网页的根元素 | **推断，没在真浏览器里试**；我们的做法是把它放进不带 `scoped` 的那段，绕开这个问题 | 由上一条推出 |
+
+## 低代码状态与数据绑定导出用到的 Vue / React / 浏览器写法（2026-11-27，编辑器第 5 期 B3；`lib/lowcode/export_*_bind.dart`）
+
+核对方式：2026-11-27 读官方文档页面的文字（不是凭记忆）；另外三种产物都在开发机上真编译、并用 jsdom 当浏览器真跑过（见下面“验证环境”）。
+
+| 用到的写法 | 核对结果 | 来源 |
+|---|---|---|
+| Vue `v-model` 用在文本输入框（value＋input 事件）、勾选框（checked＋change 事件）；绑的状态是唯一真相，元素上原有的 `value` / `checked` 会被忽略 | 已核对 | https://vuejs.org/guide/essentials/forms.html |
+| Vue `v-model` 在中文等输入法拼字过程中**不更新**，拼完才更新 | 已核对（同一页的提示） | 同上 |
+| Vue `v-for="(item, index) in 列表"` 加 `:key`；`v-if` 和 `v-for` 写在同一个元素上时 `v-if` 先算、读不到这一项，要把 `v-for` 挪到外面一层 `<template>` | 已核对；导出里“又重复又有存在条件”就是这么包的 | https://vuejs.org/guide/essentials/list.html |
+| React `useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot?)`：`subscribe` 返回取消订阅的函数；仓库没变时 `getSnapshot` 必须返回同一个值，变了要返回不一样的值（按 `Object.is` 比） | 已核对（读的是 react.dev 的匈牙利语镜像站，页面正文是英文原文）。导出里快照是一个只增不减的版本号，满足这两条 | https://hu.react.dev/reference/react/useSyncExternalStore |
+| Vue `reactive()` 对象被多个组件 import 后共用一份、`ref` / `computed` 的写法；`v-show`、`:class` 对象写法、`:style` 对象写法 | **未核对文档**（没去读对应页面）；真编译 0 错 0 警告、真跑通过 | — |
+| React 受控输入框（`value`＋`onChange`）、勾选框（`checked`＋`onChange`）、列表 `map` 加 `key`、`cond && <元素>` | **未核对文档**；真编译、真跑通过 | — |
+| React `onChange` 在中文输入法拼字过程中每敲一下都触发 | **未核对**（文档没读到，jsdom 也模拟不了输入法），只能真机验 | — |
+| 浏览器 `sessionStorage`：同一个标签页里换页还在、关掉标签页就没 | **未核对文档**；jsdom 里跨页带过去再带回来跑通了 | — |
+
+验证环境（只在开发机，不进应用、不进安装包）：在原有 `~/workspace/tools/webdev`（vue、react、esbuild 等）之外，新装了 `~/workspace/tools/webdev-dom/`，
+里面只有 `jsdom 31.0.1`（从 npm 官方源装的，装的时候联过一次网）。`tool/verify/run_dom.mjs` 用它当浏览器：把导出的页面装进去，照一串步骤点按钮、打字，
+再看界面上的字、属性、行内样式对不对。jsdom 不排版，所以**看不了样式表的效果**（比如类名开关加上以后长什么样）；它也没有真的换页和 `scrollTo`，这两处报的“没实现”被脚本当成正常。
+测试 `test/lowcode_bind_run_test.dart` 找不到这套环境时明确跳过并打印原因。
+

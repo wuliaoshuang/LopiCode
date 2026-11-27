@@ -88,21 +88,29 @@ class InspectorEventsPage extends StatelessWidget {
           for (final a in kLcQuickActions)
             () {
               final value = lcQuickValue(doc, node.id, a);
-              final dialogs = a.picksDialog ? lcDialogsOf(doc) : const <LcNode>[];
-              final off = a.picksDialog && dialogs.isEmpty && value == null;
+              // 要“选一样东西”的动作：弹窗（这一页里的）、页面（项目里别的页）。没有可选的、又没设过，就是灰的。
+              final choices = a.picksPage
+                  ? [
+                      for (final p in doc.pages)
+                        if (!identical(p, doc.page)) (p.id, p.title),
+                    ]
+                  : [for (final d in a.picksDialog ? lcDialogsOf(doc) : const <LcNode>[]) (d.id, lcDialogName(d))];
+              final off = a.picksId && choices.isEmpty && value == null;
               final picked = a.picksDialog && value != null ? doc.find(value) : null;
-              final shown = !a.picksDialog
-                  ? value
-                  : value == null
+              final shown = value == null
                   ? null
-                  : (picked?.type == 'dialog' ? lcDialogName(picked!) : '弹窗已经删了');
+                  : a.picksPage
+                  ? (doc.pageTitle(value) ?? '页面已经删了')
+                  : a.picksDialog
+                  ? (picked?.type == 'dialog' ? lcDialogName(picked!) : '弹窗已经删了')
+                  : value;
               return InkWell(
                 key: Key('lc-quick-${a.id}'),
                 onTap: off
                     ? null
                     : () async {
-                        final v = a.picksDialog
-                            ? await _pickDialog(context, a.label, dialogs, value)
+                        final v = a.picksId
+                            ? await _pickOne(context, a.label, choices, value, page: a.picksPage)
                             : await promptDialog(context, title: a.label, initial: value ?? '', hint: '${a.hint}（清空＝不要这个动作）', confirmLabel: '保存');
                         if (v == null) return;
                         onEdit!((d) => lcSetQuick(d, node.id, a, v));
@@ -115,7 +123,7 @@ class InspectorEventsPage extends StatelessWidget {
                       const SizedBox(width: Space.x3),
                       Expanded(
                         child: Text(
-                          off ? '先加一个弹窗' : shown ?? '设置',
+                          off ? (a.picksPage ? '先加一个页面' : '先加一个弹窗') : shown ?? '设置',
                           textAlign: TextAlign.right,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -136,8 +144,8 @@ class InspectorEventsPage extends StatelessWidget {
   }
 }
 
-/// 选页面里的哪个弹窗。返回弹窗的 id；选“不要这个动作”返回空字；没选（点外面关掉）返回 null。
-Future<String?> _pickDialog(BuildContext context, String title, List<LcNode> dialogs, String? current) => showModalBottomSheet<String>(
+/// 选页面里的哪个弹窗 / 项目里的哪一页（[choices]：id 和给人看的名字）。返回选中的 id；选“不要这个动作”返回空字；没选（点外面关掉）返回 null。
+Future<String?> _pickOne(BuildContext context, String title, List<(String, String)> choices, String? current, {required bool page}) => showModalBottomSheet<String>(
   context: context,
   builder: (context) {
     final c = context.colors;
@@ -151,17 +159,17 @@ Future<String?> _pickDialog(BuildContext context, String title, List<LcNode> dia
             padding: const EdgeInsets.fromLTRB(Space.x4, Space.x2, Space.x4, Space.x2),
             child: Text(title, style: t.titleMedium),
           ),
-          for (final (i, d) in dialogs.indexed)
+          for (final (i, (id, name)) in choices.indexed)
             ListTile(
-              key: Key('lc-quick-dialog-$i'),
-              leading: Icon(Icons.web_asset_outlined, color: c.textMuted),
-              title: Text(lcDialogName(d)),
-              trailing: d.id == current ? Icon(Icons.check, color: c.accent) : null,
-              onTap: () => Navigator.pop(context, d.id),
+              key: Key(page ? 'lc-quick-page-$id' : 'lc-quick-dialog-$i'),
+              leading: Icon(page ? Icons.description_outlined : Icons.web_asset_outlined, color: c.textMuted),
+              title: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
+              trailing: id == current ? Icon(Icons.check, color: c.accent) : null,
+              onTap: () => Navigator.pop(context, id),
             ),
           if (current != null)
             ListTile(
-              key: const Key('lc-quick-dialog-none'),
+              key: Key(page ? 'lc-quick-page-none' : 'lc-quick-dialog-none'),
               title: Text('不要这个动作', style: TextStyle(color: c.danger)),
               onTap: () => Navigator.pop(context, ''),
             ),

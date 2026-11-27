@@ -70,6 +70,7 @@ Future<ProjectSession> lbOpen(WidgetTester tester, {LcDocument? doc, String? tex
 /// 存盘里的页面（改完停手一会儿才存：先等存完）。
 Future<LcDocument> lbSaved(WidgetTester tester, ProjectSession session) async {
   await waitLowcodeSaved(tester);
+  expect(find.textContaining('没存上', skipOffstage: false), findsNothing, reason: '存盘失败了');
   late String text;
   await tester.runAsync(() async => text = File(session.guard.resolve(kLowcodePageFile)).readAsStringSync());
   return LcDocument.parse(text);

@@ -190,7 +190,10 @@ void main() {
       final bar = find.byType(PageBar);
       expect(find.descendant(of: bar, matching: find.text('我的小站')), findsOneWidget);
       expect(find.descendant(of: bar, matching: find.text('自适应 · 已保存')), findsOneWidget);
-      expect(find.descendant(of: bar, matching: find.byType(PopupMenuButton<String>)), findsOneWidget);
+      // 第 4 期 B2：顶栏多了一个“看哪种屏宽”的按钮（也是弹菜单的），所以弹菜单的按钮是两个：它和“⋮”。
+      expect(find.descendant(of: bar, matching: find.byType(PopupMenuButton<String>)), findsNWidgets(2));
+      expect(find.descendant(of: bar, matching: find.byKey(const Key('lc-bp-open'))), findsOneWidget);
+      expect(find.descendant(of: bar, matching: find.byTooltip('更多')), findsOneWidget);
       for (final tip in ['撤销', '重做', '图层', '预览']) {
         expect(
           find.descendant(of: bar, matching: find.byTooltip(tip)),

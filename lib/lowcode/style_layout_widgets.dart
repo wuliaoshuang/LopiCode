@@ -130,6 +130,25 @@ class LayoutGroup extends StatelessWidget {
     final grid = container && lcIsGrid(ed.resolved);
     final span = ed.parentColumns;
     return _column([
+      // 显示 / 隐藏（GAP-E-16）：写的就是 display。在某一档屏宽下关掉＝只在那一档（和更宽的）隐藏。
+      StyleRow(
+        label: '显示',
+        hint: hidden ? '现在是“隐藏”：页面上看不到，也不占位置' : (ed.inherited('display') ? (ed.inheritedHint ?? kInheritedHint) : null),
+        child: Switch(
+          key: const Key('lc-style-visible'),
+          value: !hidden,
+          onChanged: (v) => ed.apply((s) {
+            if (!v) {
+              s.set('display', 'none');
+            } else if (ed.inheritedHint != null && !ed.isOwn('display')) {
+              // 在改某一档屏宽，而“隐藏”是更窄的那一档带上来的：这一档要显示，得写一个不是 none 的值盖过去。
+              s.set('display', container ? 'flex' : 'block');
+            } else {
+              s.set('display', null);
+            }
+          }),
+        ),
+      ),
       if (container) ...[_heading(context, '里面的组件怎么排'), GridModeRow(ed), if (grid) GridRows(ed)],
       if (container && !grid) ...[
         // 没设时的方向跟组件类型走（“行”是横的，其余容器是竖的），和导出的页面一致。
@@ -139,7 +158,7 @@ class LayoutGroup extends StatelessWidget {
         StyleChoiceRow(ed, 'align-items', '交叉轴对齐（垂直于排列方向）', _alignItems, stacked: true),
         StyleRow(
           label: '子项间距',
-          hint: sameGap ? (ed.inherited('row-gap') && ed.inherited('column-gap') ? kInheritedHint : null) : '行、列间距不一样',
+          hint: sameGap ? (ed.inherited('row-gap') && ed.inherited('column-gap') ? (ed.inheritedHint ?? kInheritedHint) : null) : '行、列间距不一样',
           child: LengthField(
             id: 'gap',
             value: sameGap ? rowGap : null,
@@ -157,7 +176,6 @@ class LayoutGroup extends StatelessWidget {
       StyleDropdownRow(ed, 'align-self', '自身对齐', _alignSelf, fallbackLabel: '跟着容器'),
       StyleNumberRow(ed, 'flex-grow', '伸展（分剩余空间）', min: 0),
       StyleDropdownRow(ed, 'display', '显示方式', _display),
-      if (hidden) _note(context, '现在是“隐藏”：页面上看不到这个组件，也不占位置。'),
       MoreSection(
         id: 'layout',
         initiallyOpen: more.any(ed.isOwn) || (container && !grid && !sameGap),

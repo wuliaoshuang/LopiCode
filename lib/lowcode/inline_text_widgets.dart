@@ -9,6 +9,7 @@ import 'package:lopicode/lowcode/canvas_view.dart';
 import 'package:lopicode/lowcode/css_color.dart';
 import 'package:lopicode/lowcode/inspector_write.dart';
 import 'package:lopicode/lowcode/model.dart';
+import 'package:lopicode/lowcode/responsive.dart';
 import 'package:lopicode/lowcode/style_resolve.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:material_ui/material_ui.dart';
@@ -73,7 +74,7 @@ class _InlineTextEditorState extends State<InlineTextEditor> {
   Widget build(BuildContext context) {
     final c = context.colors;
     final n = widget.node;
-    final r = resolvedStyle(n, widget.parent);
+    final r = resolvedStyle(lcViewNode(n, widget.canvas.env), widget.parent);
     final multiline = n.type == 'text';
     return LayoutBuilder(
       builder: (context, box) {

@@ -109,7 +109,7 @@ Future<List<String>> lcListProjectImages(PathGuard guard) async {
   return out.take(kLcImageListMax).toList();
 }
 
-/// 页面（连同自定义组件）里用到的项目图片地址，不重复、按出现的顺序。网址不算。
+/// 所有页面（连同自定义组件）里用到的项目图片地址，不重复、按出现的顺序。网址不算。
 List<String> lcLocalImageSrcs(LcDocument doc) {
   final out = <String>{};
   void walk(LcNode n) {
@@ -118,7 +118,9 @@ List<String> lcLocalImageSrcs(LcDocument doc) {
     n.children.forEach(walk);
   }
 
-  walk(doc.root);
+  for (final p in doc.pages) {
+    walk(p.root);
+  }
   for (final c in doc.components) {
     walk(c.root);
   }

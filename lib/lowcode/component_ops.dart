@@ -158,14 +158,16 @@ LcNode expandedTree(LcDocument doc) {
   return any ? LcExpander(doc).outer(doc.root) : doc.root;
 }
 
-/// 这个组件被用了几次（页面里的实例 + 别的组件定义里的实例）。
+/// 这个组件被用了几次（**所有页面**里的实例 + 别的组件定义里的实例；组件是项目级的）。
 int componentUseCount(LcDocument doc, String componentId) {
   var n = 0;
   void count(LcNode x) {
     if (_refOf(x) == componentId) n++;
   }
 
-  _walk(doc.root, count);
+  for (final p in doc.pages) {
+    _walk(p.root, count);
+  }
   for (final c in doc.components) {
     if (c.id != componentId) _walk(c.root, count);
   }
@@ -356,13 +358,15 @@ LcOpResult addComponentProp(LcDocument doc, String componentId, String name, Str
   return LcOpResult.ok(componentId: componentId);
 }
 
-/// 走一遍这个组件的所有实例（页面里的和别的定义里的）。
+/// 走一遍这个组件的所有实例（所有页面里的和别的定义里的）。
 void _eachInstance(LcDocument doc, String componentId, void Function(LcNode inst) visit) {
   void check(LcNode n) {
     if (_refOf(n) == componentId) visit(n);
   }
 
-  _walk(doc.root, check);
+  for (final p in doc.pages) {
+    _walk(p.root, check);
+  }
   for (final c in doc.components) {
     _walk(c.root, check);
   }
@@ -506,7 +510,10 @@ LcOpResult deleteComponent(LcDocument doc, String componentId, {LcDeleteInstance
     }
 
     // 连实例一起删：填在它插槽里的内容也跟着没了，挂在上面的逻辑一并清掉。
-    sweep(doc.root, () => doc.newNode('spacer').id, (inst) => _walk(inst, (n) => doc.logic.removeNodeRefs(n.id)));
+    // 每一页都要扫（组件是项目级的）；清的是那一页自己的逻辑。
+    for (final p in doc.pages) {
+      sweep(p.root, () => doc.newNode('spacer').id, (inst) => _walk(inst, (n) => p.logic.removeNodeRefs(n.id)));
+    }
     for (final other in doc.components) {
       if (other.id == componentId) continue;
       final mint = _minterFor(other.root);

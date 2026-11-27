@@ -22,12 +22,15 @@ import 'package:lopicode/lowcode/canvas_viewport.dart';
 import 'package:lopicode/lowcode/editor_drag.dart';
 import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/lowcode/palette_widgets.dart';
+import 'package:lopicode/lowcode/responsive.dart';
 import 'package:lopicode/lowcode/slots.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/app_backdrop.dart';
 import 'package:material_ui/material_ui.dart';
 
 export 'package:lopicode/lowcode/canvas_viewport.dart';
+
+part 'canvas_drag_view.dart';
 
 class CanvasView extends StatefulWidget {
   const CanvasView({
@@ -47,6 +50,7 @@ class CanvasView extends StatefulWidget {
     this.bottomInset = 0,
     this.overlayId,
     this.statePreview,
+    this.bp,
   });
 
   final LcDocument doc;
@@ -82,13 +86,17 @@ class CanvasView extends StatefulWidget {
   final String? overlayId;
   final ({String nodeId, String state})? statePreview;
 
+  /// 按哪一档屏宽画（null＝手机）。页面画多宽由 [presetWidth] 定，外面两样一起给。
+  final String? bp;
+
   @override
   State<CanvasView> createState() => CanvasViewState();
 }
 
-class CanvasViewState extends State<CanvasView> with SingleTickerProviderStateMixin {
+class CanvasViewState extends State<CanvasView> with SingleTickerProviderStateMixin, _CanvasDragging {
   /// 缩放和位置：平移 / 缩放只改它，只有最外面那层变换跟着重画（页面不重搭）。
   final ValueNotifier<CanvasViewport> _view = ValueNotifier(const CanvasViewport(1, Offset.zero));
+  @override
   Size _viewport = Size.zero;
   Size _pageSize = Size.zero;
 
@@ -96,7 +104,9 @@ class CanvasViewState extends State<CanvasView> with SingleTickerProviderStateMi
   CanvasViewport _vp = const CanvasViewport(1, Offset.zero);
   bool _syncQueued = false;
 
+  @override
   double get _scale => _vp.scale;
+  @override
   Offset get _offset => _vp.offset;
 
   /// 换位置。[quiet]：现在正在搭界面 / 排版（不许通知），画布自己马上会按新位置重画，通知留到这一帧结束。
@@ -114,6 +124,7 @@ class CanvasViewState extends State<CanvasView> with SingleTickerProviderStateMi
   }
 
   /// 露出来的那一段（悬浮顶栏下沿到底部遮挡的上沿）多高。
+  @override
   double get _room => (_viewport.height - widget.topInset - widget.bottomInset).clamp(0.0, double.infinity).toDouble();
 
   /// 页面此刻在可视区里占的那一块（屏幕像素；测试用）。
@@ -127,6 +138,7 @@ class CanvasViewState extends State<CanvasView> with SingleTickerProviderStateMi
   Offset _gesturePagePoint = Offset.zero;
 
   // 松手后的惯性滑动
+  @override
   late final Ticker _ticker = createTicker(_onFlingTick);
   FrictionSimulation? _flingX, _flingY;
 
@@ -134,28 +146,17 @@ class CanvasViewState extends State<CanvasView> with SingleTickerProviderStateMi
   CanvasResizePreview? _preview;
   ({String id, int hx, int hy, Offset start, double width, double height})? _resize;
 
-  // 拖组件：量好的盒子、手指位置、停够了的容器、落点
-  ({LcDrag drag, DropBox root})? _drag;
-  Offset? _dragAt;
-  final Map<String, Timer> _dwell = {};
-  final Set<String> _armed = {};
-  final ValueNotifier<DropTarget?> _target = ValueNotifier(null);
-
-  /// 手指在页面里的横向位置：落点标签要躲着它（见 canvas_drag_widgets.dart）。
-  final ValueNotifier<double?> _fingerX = ValueNotifier(null);
-  Timer? _autoScroll;
-
   /// 当前缩放比例（1＝100%）。
   double get scale => _scale;
 
   /// 缩放 / 位置变了会通知（外面要显示比例时订阅它）。
   ValueListenable<CanvasViewport> get view => _view;
 
+  /// 按什么条件看组件（主题变量的值、现在是哪一档屏宽）：选中框、落点、就地改字都按它算样式。
+  LcViewEnv get env => LcViewEnv.of(widget.doc, widget.bp);
+
   /// 当前页面宽度（屏幕像素 ÷ 缩放之前的）。
   double get pageWidth => widget.presetWidth == 0 ? _viewport.width : widget.presetWidth.toDouble();
-
-  /// 拖动中算出来的落点（测试用）。
-  DropTarget? get dropTarget => _target.value;
 
   @override
   void didUpdateWidget(CanvasView oldWidget) {
@@ -196,6 +197,7 @@ class CanvasViewState extends State<CanvasView> with SingleTickerProviderStateMi
   }
 
   /// 只改 [_view]：不 setState，页面不重搭。
+  @override
   void _moveTo(double scale, Offset offset, {bool quiet = false}) {
     final s = scale.clamp(kCanvasMinScale, kCanvasMaxScale).toDouble();
     _place(CanvasViewport(s, _clamp(offset, s)), quiet: quiet);
@@ -261,12 +263,14 @@ class CanvasViewState extends State<CanvasView> with SingleTickerProviderStateMi
 
   // ───────────── 量：页面多大、组件在哪 ─────────────
 
+  @override
   RenderBox? get _pageBox {
     final box = _keys[widget.doc.root.id]?.currentContext?.findRenderObject();
     return box is RenderBox && box.hasSize ? box : null;
   }
 
   /// 一个组件的边框盒在页面上的位置（页面坐标）；还没排出来就是 null。
+  @override
   Rect? _rectOf(String id, RenderBox pageBox) {
     final box = _keys[id]?.currentContext?.findRenderObject();
     if (box is! RenderBox || !box.hasSize || !box.attached) return null;
@@ -298,7 +302,7 @@ class CanvasViewState extends State<CanvasView> with SingleTickerProviderStateMi
       for (final id in _keys.keys)
         if (_rectOf(id, pageBox) case final box? when sizeLabelAvoids(doc, node.id, rect, id, box)) box,
     ];
-    _selection.value = CanvasSelection.of(node, parent, rect, base: base, page: _pageSize, avoid: avoid);
+    _selection.value = CanvasSelection.of(lcViewNode(node, env), parent, rect, base: base, page: _pageSize, avoid: avoid);
   }
 
   /// 一个组件此刻在屏幕上占的那一块（屏幕坐标）；量不到是 null。
@@ -367,113 +371,6 @@ class CanvasViewState extends State<CanvasView> with SingleTickerProviderStateMi
     if (width != null || height != null) widget.onResize(r.id, width, height);
   }
 
-  // ───────────── 拖组件：算落点、边缘自动滚 ─────────────
-
-  DropBox? _boxes(RenderBox pageBox) => lcDropBoxTree(widget.doc, (id) => _rectOf(id, pageBox), overlayId: widget.overlayId);
-
-  /// 在拖柄上点了一下（没拖）：当成点在它下面的组件上——拖柄能按的范围比看到的大，不能把旁边的小组件挡得点不着。
-  void _tapThrough(Offset global) {
-    final self = context.findRenderObject(), pageBox = _pageBox;
-    final root = pageBox == null ? null : _boxes(pageBox);
-    if (root == null || self is! RenderBox) return;
-    final point = (self.globalToLocal(global) - _offset) / _scale;
-    widget.onSelect(root.rect.contains(point) ? lcSplitSlotId(dropChain(root, point).last.id).$1 : null);
-  }
-
-  /// 开始拖：把所有组件的位置量下来（拖动中排版不变，量一次就够）。量不到（页面还没排出来）返回 false。
-  bool beginDrag(LcDrag drag) {
-    _stopDrag();
-    _ticker.stop();
-    final pageBox = _pageBox;
-    final root = pageBox == null ? null : _boxes(pageBox);
-    if (root == null) return false;
-    setState(() => _drag = (drag: drag, root: root));
-    _autoScroll = Timer.periodic(const Duration(milliseconds: 16), (_) => _autoScrollTick());
-    return true;
-  }
-
-  /// 手指到了 [global]（屏幕坐标）：重新算落点。返回现在的落点。
-  DropTarget? dragMove(Offset global) {
-    final self = context.findRenderObject();
-    if (_drag == null || self is! RenderBox) return null;
-    _dragAt = self.globalToLocal(global);
-    _fingerX.value = (_dragAt!.dx - _offset.dx) / _scale;
-    return _retarget();
-  }
-
-  /// 手指离开画布了（比如移到底部的删除区上）：不要落点了。
-  void dragAway() {
-    _dragAt = null;
-    _retarget();
-  }
-
-  DropTarget? _retarget() {
-    final drag = _drag, at = _dragAt;
-    if (drag == null) return null;
-    if (at == null || at.dy < 0 || at.dy > _viewport.height) {
-      _setHover(const []);
-      return _target.value = null;
-    }
-    final point = (at - _offset) / _scale;
-    final moving = drag.drag.nodeId;
-    bool can(String id) => widget.canDrop(drag.drag, id);
-    // 手指下面除了页面以外的容器：各自开始计时，停够了才算“要放进去”。
-    final chain = dropChain(drag.root, point);
-    final cut = moving == null ? -1 : chain.indexWhere((b) => b.id == moving);
-    _setHover([
-      for (final b in (cut < 0 ? chain : chain.sublist(0, cut)).skip(1))
-        if (b.container && b.children.isNotEmpty && can(b.id)) b.id,
-    ]);
-    return _target.value = pickDropTarget(drag.root, point, armed: _armed, canDrop: can, movingId: moving);
-  }
-
-  void _setHover(List<String> ids) {
-    for (final id in _dwell.keys.toList()) {
-      if (!ids.contains(id)) _dwell.remove(id)?.cancel();
-    }
-    _armed.removeWhere((id) => !ids.contains(id));
-    for (final id in ids) {
-      if (_armed.contains(id) || _dwell.containsKey(id)) continue;
-      _dwell[id] = Timer(kDropDwell, () {
-        _dwell.remove(id);
-        _armed.add(id);
-        if (mounted) _retarget();
-      });
-    }
-  }
-
-  void _autoScrollTick() {
-    final at = _dragAt;
-    if (!mounted || _drag == null || at == null) return;
-    final vy = autoScrollSpeed(at.dy, widget.topInset, widget.topInset + _room);
-    final vx = autoScrollSpeed(at.dx, 0, _viewport.width);
-    if (vx == 0 && vy == 0) return;
-    final before = _offset;
-    // 往下滚＝页面往上走。
-    _moveTo(_scale, _offset - Offset(vx, vy) * 0.016);
-    if (_offset != before) _retarget();
-  }
-
-  void _stopDrag() {
-    _autoScroll?.cancel();
-    _autoScroll = null;
-    for (final t in _dwell.values) {
-      t.cancel();
-    }
-    _dwell.clear();
-    _armed.clear();
-    _dragAt = null;
-  }
-
-  /// 拖动结束（松手 / 取消）：返回最后的落点，并把拖动时的东西都收起来。
-  DropTarget? finishDrag() {
-    final target = _target.value;
-    _stopDrag();
-    _target.value = null;
-    if (_drag != null && mounted) setState(() => _drag = null);
-    return target;
-  }
-
   // ───────────── 界面 ─────────────
 
   @override
@@ -519,6 +416,7 @@ class CanvasViewState extends State<CanvasView> with SingleTickerProviderStateMi
               preview: _preview,
               overlayId: widget.overlayId,
               statePreview: widget.statePreview,
+              bp: widget.bp,
             ),
             Positioned.fill(
               child: ListenableBuilder(

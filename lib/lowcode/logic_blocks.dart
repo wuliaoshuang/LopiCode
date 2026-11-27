@@ -210,6 +210,8 @@ const Map<String, LcBlockSpec> lcBlockSpecs = {
   ),
   'alert': LcBlockSpec('alert', '弹提示', '交互', [LcArgSpec('message', '内容', LcArgKind.expr, valueType: LcType.text)], hint: '弹出一个提示框'),
   'navigate': LcBlockSpec('navigate', '跳转网址', '交互', [LcArgSpec('url', '网址', LcArgKind.expr, valueType: LcType.text)], hint: '打开另一个页面'),
+  // 去页面（第 4 期·多页面）：`page` 存的是页面 id；可选的页面跟着项目走，所以这里的 choices 是空的，由积木宿主现列。
+  kLcGoPageOp: LcBlockSpec(kLcGoPageOp, '去页面', '交互', [LcArgSpec('page', '页面', LcArgKind.choice)], hint: '换到这个项目里的另一页'),
   'log': LcBlockSpec('log', '写到控制台', '交互', [LcArgSpec('value', '内容', LcArgKind.expr)], hint: '调试用：在浏览器控制台里记一笔'),
   'fetch': LcBlockSpec(
     'fetch',
@@ -346,6 +348,11 @@ LcBlock newBlock(String op, [LcDocument? doc]) {
       return LcBlock(op: op, args: {'message': exText('你好')});
     case 'navigate':
       return LcBlock(op: op, args: {'url': exText('https://')});
+    case kLcGoPageOp:
+      // 先挑一个“别的页”；只有一页时填它自己（照样合规矩，等有了别的页再改）。
+      final pages = doc?.pages ?? const <LcPage>[];
+      final other = pages.where((p) => !identical(p, doc?.page)).firstOrNull ?? pages.firstOrNull;
+      return LcBlock(op: op, args: {'page': other?.id ?? ''});
     case 'log':
       return LcBlock(op: op, args: {'value': exText('')});
     case 'fetch':

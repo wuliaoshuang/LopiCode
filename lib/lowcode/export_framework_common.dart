@@ -5,8 +5,11 @@
 /// 保证同一页导出来的两份代码结构、命名、简化项一致。
 library;
 
+import 'dart:convert';
+
 import 'package:lopicode/format/format.dart';
 import 'package:lopicode/lowcode/component_model.dart';
+import 'package:lopicode/lowcode/export_theme_bp.dart';
 import 'package:lopicode/lowcode/export_v3_fields.dart';
 import 'package:lopicode/lowcode/export_web_v3.dart';
 import 'package:lopicode/lowcode/export_web_v3_css.dart';
@@ -141,8 +144,21 @@ String lcInitialLiteral(LcVariable v) => lcValueLiteral(v.type, v.initial);
 String lcValueLiteral(String type, Object? value) => switch (type) {
   'number' => value is num && value.isFinite ? (value is int || value == value.roundToDouble() && value.abs() < 1e15 ? '${value.round()}' : '$value') : '0',
   'bool' => value == true ? 'true' : 'false',
+  'list' => lcJsonLiteral(value is List ? value : const <Object?>[]),
+  'record' => lcJsonLiteral(value is Map ? value : const <String, Object?>{}),
   _ => jsString(value is String ? value : ''),
 };
+
+/// 列表 / 记录的初值写成 JS 字面量（就是 JSON；`<` 和行分隔符转义掉，放进网页、Vue 文件里都不会把文件截断）。
+String lcJsonLiteral(Object? value) {
+  String text;
+  try {
+    text = jsonEncode(value);
+  } on Object {
+    text = value is List ? '[]' : '{}';
+  }
+  return text.replaceAll('<', r'\u003c').replaceAll('\u2028', r'\u2028').replaceAll('\u2029', r'\u2029');
+}
 
 // —— 类名和 CSS ——
 
@@ -161,6 +177,7 @@ String lcComponentPrefix(LcComponentDef def) => '${_safeId(def.id)}-';
 /// “父容器”都按占位节点所在的那个容器算（撑满、对齐这些规则跟着它走）。
 String lcCollectCss(LcNode root, String prefix, List<String> notes, {LcComponentPlans? plans}) {
   final out = StringBuffer();
+  final bp = LcBpCss();
   void walk(LcNode n, LcNode? parent, int depth) {
     if (depth > kExportMaxDepth) return;
     if (n.type == 'slot') {
@@ -176,6 +193,7 @@ String lcCollectCss(LcNode root, String prefix, List<String> notes, {LcComponent
       out.writeln('.n-$prefix${_safeId(n.id)} { $body }');
     }
     lcStateRules(n, '.n-$prefix${_safeId(n.id)}').forEach(out.writeln);
+    bp.add(n, parent, '.n-$prefix${_safeId(n.id)}');
     final fieldRule = lcFieldRule(n, parent, '.n-$prefix${_safeId(n.id)}');
     if (fieldRule.isNotEmpty) out.writeln(fieldRule);
     for (final c in n.children) {
@@ -186,6 +204,8 @@ String lcCollectCss(LcNode root, String prefix, List<String> notes, {LcComponent
   walk(root, null, 0);
   // 第 3 版加的属性要的公共样式：用到了才写。
   out.write(lcV3ExtraCss(root));
+  // 断点的规则放最后（同样的选择器，后写的赢）。
+  out.write(bp.css());
   return out.toString();
 }
 
@@ -358,7 +378,8 @@ class LcComponentPlans {
   }
 
   /// 从页面出发把用到的组件都找出来。找不到定义的、循环引用的各记一条说明。
-  static LcComponentPlans build(LcDocument doc, {required String pageName, required List<String> notes}) {
+  /// [fixedNames]：多页面导出时每个组件叫什么已经全项目定好了（组件 id → 名字，见 export_pages.dart），各页照着用。
+  static LcComponentPlans build(LcDocument doc, {required String pageName, required List<String> notes, Map<String, String>? fixedNames}) {
     final all = <LcComponentPlan>[];
     final byId = <String, LcComponentPlan>{};
     final broken = <String>{};
@@ -377,9 +398,9 @@ class LcComponentPlans {
           if (ownerId != null) broken.add(_edge(ownerId, n));
           notes.add('组件「${jsComment(def.name, 30)}」里绕了一圈又用到了自己（循环引用），那个位置没有展开，只留了一行注释。');
         } else if (!byId.containsKey(def.id)) {
-          var name = lcPascalName(def.name, fallback: 'LcComponent');
+          var name = fixedNames?[def.id] ?? lcPascalName(def.name, fallback: 'LcComponent');
           final base = name;
-          for (var i = 2; !names.add(name); i++) {
+          for (var i = 2; fixedNames?[def.id] == null && !names.add(name); i++) {
             name = '$base$i';
           }
           final attrNames = LcNames(_reservedPropNames);

@@ -8,14 +8,21 @@
 // - 值填得不对（空、和别的重复）：不写进页面，这一行下面出一句红字原因；改对了红字消失。
 // - 删页签会连里面的组件一起删：里面有东西时先问一句（说清楚有几个）。别的删除不问（能撤销）。
 // - 主次：名字是主角（正常字号、最宽）；值是次要的（窄、等宽感的小字）；三个小按钮用次要色。
+// - 第 4 期·多页面（只有导航项有）：项目里有别的页面时，每一项下面多一行“点了去：〔页面名 ▾〕”——一行只管“去哪页”这一件事，
+//   点开是一张单选的小单子（不跳转 / 各个页面）。指着的页面已经删掉的显示红字“已经删掉的页面”。
+//   整块最下面一个描边按钮“同步到其它页面”：把这条导航栏抄到它指向的各页（规矩见 nav_sync.dart），做之前说清楚会改哪几页。
+//   只有一页的项目里这两样都不出现，只在最下面说一句“加了别的页面以后可以选去哪页”。
 // - 取用的 tokens：Space.x1/x2/x3、accent（选中圈）、textMuted / textFaint（小按钮、小标题）、danger（红字）。
+import 'package:lopicode/lowcode/editor_workbench_widgets.dart';
 import 'package:lopicode/lowcode/icon_set_widgets.dart';
 import 'package:lopicode/lowcode/inspector_common_widgets.dart';
 import 'package:lopicode/lowcode/inspector_v3_rows_widgets.dart';
 import 'package:lopicode/lowcode/items_edit.dart';
 import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/lowcode/model_v3_components.dart';
+import 'package:lopicode/lowcode/nav_sync.dart';
 import 'package:lopicode/theme/tokens.dart';
+import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
 
 class LcItemsEditor extends StatefulWidget {
@@ -78,11 +85,80 @@ class _LcItemsEditorState extends State<LcItemsEditor> {
     ed.apply((n, _) => lcItemSet(n, kind, index, 'icon', picked));
   }
 
+  /// 选这一项点了去哪页。
+  Future<void> _pickPage(int index, String? now) async {
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      builder: (context) {
+        final c = context.colors;
+        return SafeArea(
+          child: ListView(
+            shrinkWrap: true,
+            padding: const EdgeInsets.symmetric(vertical: Space.x3),
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(Space.x4, Space.x2, Space.x4, Space.x2),
+                child: Text('点了去哪页', style: Theme.of(context).textTheme.titleMedium),
+              ),
+              for (final p in ed.doc.pages)
+                ListTile(
+                  key: Key('lc-items-page-pick-${p.id}'),
+                  leading: Icon(Icons.description_outlined, color: c.textMuted),
+                  title: Text(p.id == ed.doc.page.id ? '${p.title}（就是这一页）' : p.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  trailing: p.id == now ? Icon(Icons.check, color: c.accent) : null,
+                  onTap: () => Navigator.pop(context, p.id),
+                ),
+              if (now != null)
+                ListTile(
+                  key: const Key('lc-items-page-pick-none'),
+                  title: Text('不跳转', style: TextStyle(color: c.danger)),
+                  onTap: () => Navigator.pop(context, ''),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+    if (picked == null || picked == (now ?? '') || !mounted) return;
+    ed.apply((n, _) => lcItemSet(n, kind, index, 'page', picked));
+  }
+
+  /// “点了去”后面那几个字：没设是强调色的“选一页”，设了是页名，页面已经删掉是红字。
+  Widget _pageLabel(String? pageId, TextStyle? style, AppColors c) {
+    final title = pageId == null ? null : ed.doc.pageTitle(pageId);
+    final (text, color) = pageId == null
+        ? ('选一页', c.accent)
+        : title == null
+        ? ('已经删掉的页面', c.danger)
+        : (title, c.text);
+    return Text(
+      text,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: style?.copyWith(color: color),
+    );
+  }
+
+  Future<void> _syncNav() async {
+    final targets = lcNavSyncTargets(ed.doc, ed.node.id);
+    if (targets.isEmpty) {
+      showEditorHint(context, '先给导航项选好“点了去”哪一页，再同步。');
+      return;
+    }
+    final names = [for (final p in targets) '「${p.title}」'].join('、');
+    final ok = await confirmDialog(context, title: '同步到其它页面', message: '把这条导航栏的导航项和样子抄到 $names。那一页已经有导航栏的会被改成和这条一样，没有的在页面最后加一条。做错了可以撤销。', confirmLabel: '同步');
+    if (!ok || !mounted) return;
+    var done = 0;
+    ed.editDoc!((d) => done = lcSyncBottomNav(d, ed.node.id));
+    if (mounted) showEditorHint(context, '已同步到 $done 个页面。');
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
     final t = Theme.of(context).textTheme;
     final node = ed.node;
+    final pages = kind == LcItemsKind.nav && ed.doc.isMultiPage;
     final all = lcObjects(node, kind.prop);
     final canRemove = lcItemsCanRemove(node, kind);
     Widget small(String key, IconData icon, String label, VoidCallback? onTap) => SizedBox(
@@ -165,6 +241,33 @@ class _LcItemsEditorState extends State<LcItemsEditor> {
                 small('lc-items-remove-$i', Icons.delete_outline, '删除', canRemove ? () => _remove(i) : null),
               ],
             ),
+            if (pages || (kind == LcItemsKind.nav && lcNavItemPage(all[i]) != null))
+              Padding(
+                padding: const EdgeInsets.only(left: 36),
+                child: Row(
+                  children: [
+                    Text('点了去：', style: t.bodySmall?.copyWith(color: c.textMuted)),
+                    Flexible(
+                      child: TextButton(
+                        key: Key('lc-items-page-$i'),
+                        onPressed: () => _pickPage(i, lcNavItemPage(all[i])),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: Space.x2),
+                          minimumSize: const Size(0, 36),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Flexible(child: _pageLabel(lcNavItemPage(all[i]), t.bodyMedium, c)),
+                            Icon(Icons.arrow_drop_down, size: 18, color: c.textMuted),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             if (_errors[i] != null)
               Padding(
                 padding: const EdgeInsets.only(left: 36, bottom: Space.x1),
@@ -175,6 +278,20 @@ class _LcItemsEditorState extends State<LcItemsEditor> {
                 ),
               ),
           ],
+          if (pages && ed.editDoc != null)
+            Padding(
+              padding: const EdgeInsets.only(top: Space.x2),
+              child: OutlinedButton(key: const Key('lc-items-sync-nav'), onPressed: _syncNav, child: const Text('同步到其它页面')),
+            ),
+          if (kind == LcItemsKind.nav && !ed.doc.isMultiPage)
+            Padding(
+              padding: const EdgeInsets.only(top: Space.x1),
+              child: Text(
+                '加了别的页面以后（右上角“页面”），这里可以给每一项选“点了去哪页”。',
+                key: const Key('lc-items-page-hint'),
+                style: t.bodySmall?.copyWith(color: c.textFaint),
+              ),
+            ),
           if (kind == LcItemsKind.options)
             Padding(
               padding: const EdgeInsets.only(top: Space.x1),

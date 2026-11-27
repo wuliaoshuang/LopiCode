@@ -25,6 +25,7 @@ const Map<String, String> _blockSentences = {
   'wait': '等 {ms} 毫秒，然后',
   'alert': '弹出提示 {message}',
   'navigate': '跳转到 {url}',
+  kLcGoPageOp: '去页面 {page}',
   'log': '写到控制台 {value}',
   'fetch': '用 {method} 请求 {url} 结果放进 {into} 成功后',
 };
@@ -199,6 +200,7 @@ class LogicBlockHost extends BlockHost {
       case LcArgKind.node:
         return _nodeOptions(null);
       case LcArgKind.choice:
+        if (block?.op == kLcGoPageOp && arg.name == 'page') return [for (final p in _doc.pages) BlockOption(p.id, p.title, hint: identical(p, _doc.pages.first) ? '首页' : '')];
         // 选“改什么 / 读什么”时，只列这个控件真有的属性。
         final nodeId = expr != null ? expr['node'] : block?.args['node'];
         final node = arg.name == 'prop' && nodeId is String ? _doc.find(nodeId) : null;
@@ -248,6 +250,7 @@ class LogicBlockHost extends BlockHost {
   @override
   String optionLabel(LcArgSpec arg, String value) => switch (arg.kind) {
     LcArgKind.node => _nodeName(value),
+    LcArgKind.choice when arg.name == 'page' && arg.choices.isEmpty => _doc.pageTitle(value) ?? (value.isEmpty ? '选页面' : '（已经删掉的页面）'),
     LcArgKind.choice => arg.name == 'op' ? (_opSigns[value] ?? value) : arg.choiceLabel(value).split('（').first,
     _ => value,
   };

@@ -61,7 +61,15 @@ class _LogicScreenState extends State<LogicScreen> {
   }();
 
   LcDocument? _restore(LcDocument? doc) {
-    if (doc != null) widget.onRestore?.call(doc);
+    if (doc == null) return null;
+    // 这里编的是一页的逻辑：撤销 / 重做退的可能是别的页上的修改，但人还留在这一页的逻辑里。
+    // 这一页被退没了（那一步就是新建它）：逻辑页没东西可编了，关掉回搭建页。
+    final here = doc.openPage(widget.doc.page.id);
+    widget.onRestore?.call(doc);
+    if (!here && mounted) {
+      showSnack(context, '这个页面已经退回到“还没新建”的时候了。');
+      Navigator.of(context).maybePop();
+    }
     return doc;
   }
 

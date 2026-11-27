@@ -80,10 +80,11 @@ class _FrameworkExportSheetState extends State<FrameworkExportSheet> {
 
   Future<void> _write() async {
     // 积木逻辑有“错误”：不导出（和 logic.js、后端代码一个规矩），说清楚去哪修。
-    final errors = lcLogicErrorCount(widget.doc);
+    final byPage = lcLogicErrorsByPage(widget.doc);
+    final errors = byPage.values.fold(0, (a, b) => a + b);
     if (errors > 0) {
       setState(() {
-        _result = lcExportBlockedText(errors);
+        _result = lcExportBlockedText(errors, widget.doc.isMultiPage ? byPage : null);
         _failed = true;
       });
       return;

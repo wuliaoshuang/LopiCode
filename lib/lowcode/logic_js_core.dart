@@ -91,6 +91,9 @@ abstract class JsTarget {
   /// 改控件属性（`prop` 一定在 [kWritableProps] 里）。
   List<String> writeProp(LcNode node, String prop, String valueJs);
 
+  /// “去页面”怎么写。普通网页：每页一个 .html，换地址就行；Vue / React 改地址栏里 # 后面那段，外壳跟着换页（各自覆盖）。
+  List<String> goPage(LcDocument doc, LcPage page) => ['location.href = ${jsString('${lcPageFileBase(doc, page.id)}.html')};'];
+
   /// input 事件里“输入的内容”。处理函数的参数名固定叫 `event`。
   String eventValue() => 'lcEventValue(event)';
 }
@@ -125,10 +128,15 @@ function lcEventValue(event) {
 
 /// 把积木 / 表达式翻成 JavaScript。一个实例翻一份文件（循环变量的编号在实例里累加，保证不重名）。
 class JsLogicWriter {
-  JsLogicWriter(this.doc, this.target);
+  JsLogicWriter(this.doc, this.target, {this.lookup});
 
   final LcDocument doc;
   final JsTarget target;
+
+  /// 按名字找变量。平常只找这一页的；用了项目级状态的导出给一个“先找这一页、再找项目级”的（第 5 期）。
+  /// 名字怎么找到状态：不给就只认这一页的变量；用了项目级状态的页面给一个“先页面、后项目”的找法。
+  final LcVariable? Function(String name)? lookup;
+  LcVariable? _variable(String name) => lookup == null ? doc.logic.variable(name) : lookup!(name);
   int _loops = 0;
 
   /// 翻一个表达式。`event` 是它所在处理的事件（只有 input 里才有“输入的内容”）。
@@ -170,8 +178,8 @@ class JsLogicWriter {
         return v == null ? _hole('“是 / 否”没填') : JsExpr('$v', LcType.boolean);
       case 'var':
         final name = exprString(e, 'name');
-        final v = name == null ? null : doc.logic.variable(name);
-        return v == null ? _hole('没有声明的变量 ${name ?? ''}') : JsExpr(target.readVar(v), LcVariable.types.contains(v.type) ? v.type : LcType.any);
+        final v = name == null ? null : _variable(name);
+        return v == null ? _hole('没有声明的变量 ${name ?? ''}') : JsExpr(target.readVar(v), LcVariable.types.contains(v.type) && !v.isDerived ? v.type : LcType.any);
       case 'prop':
         final id = exprString(e, 'node');
         final prop = exprString(e, 'prop');
@@ -246,7 +254,7 @@ class JsLogicWriter {
     List<String> inner(List<LcBlock> list) => _indent(_blocks(list, event, depth + 1));
     LcVariable? variable(String key) {
       final name = b.args[key];
-      return name is String ? doc.logic.variable(name) : null;
+      return name is String ? _variable(name) : null;
     }
 
     switch (b.op) {
@@ -283,6 +291,11 @@ class JsLogicWriter {
         return ['alert(${toText(arg('message')).code});'];
       case 'navigate':
         return ['location.href = ${toText(arg('url')).code};'];
+      case kLcGoPageOp:
+        final id = b.args['page'];
+        final page = id is String ? doc.pageById(id) : null;
+        if (page == null) return _skip(b, '要去的页面已经不在了');
+        return target.goPage(doc, page);
       case 'log':
         return ['console.log(${arg('value').code});'];
       case 'fetch':
@@ -296,7 +309,7 @@ class JsLogicWriter {
     final url = toText(_expr(b.args['url'], event, 0)).code;
     final method = b.args['method'] == 'POST' ? 'POST' : 'GET';
     final into = b.args['into'];
-    final v = into is String && into.isNotEmpty ? doc.logic.variable(into) : null;
+    final v = into is String && into.isNotEmpty ? _variable(into) : null;
     final store = v != null ? target.writeVar(v, coerce(const JsExpr('lcBody', LcType.text), v.type).code) : [if (into is String && into.isNotEmpty) '// ${jsComment('变量 $into 没有声明，结果没有存')}'];
     List<String> inner(List<LcBlock> list) => _indent(_indent(_blocks(list, event, depth + 1)));
     // 用 then 的两个参数分开“成功 / 失败”：这样“成功后”里的积木自己出错，不会再跑一遍“失败后”。

@@ -35,11 +35,15 @@ import 'package:lopicode/lowcode/logic_screen.dart';
 import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/lowcode/multi_select_widgets.dart';
 import 'package:lopicode/lowcode/node_actions.dart';
+import 'package:lopicode/lowcode/pages_sheet.dart';
 import 'package:lopicode/lowcode/palette_catalog.dart';
 import 'package:lopicode/lowcode/palette_widgets.dart';
+import 'package:lopicode/lowcode/responsive.dart';
 import 'package:lopicode/lowcode/save_queue.dart';
 import 'package:lopicode/lowcode/slots.dart';
+import 'package:lopicode/lowcode/state_screen.dart';
 import 'package:lopicode/lowcode/style_model.dart';
+import 'package:lopicode/lowcode/theme_vars_screen.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/app_backdrop.dart';
@@ -51,6 +55,8 @@ import 'package:material_ui/material_ui.dart';
 // 这两样原来就定义在这个文件里，别处（打包页等）还从这里引用。
 export 'package:lopicode/lowcode/code_sheet.dart' show CodeSheetBody;
 export 'package:lopicode/lowcode/palette_widgets.dart' show lcIcon;
+
+part 'builder_screen_actions.dart';
 
 class BuilderScreen extends StatefulWidget {
   const BuilderScreen({super.key, required this.session, this.initialSelection});
@@ -71,14 +77,22 @@ class _BuilderScreenState extends State<BuilderScreen> with WidgetsBindingObserv
   @override
   void multiSelectSingle(String? id) => setState(() => _selected = id);
 
+  /// 给拆出去的动作（builder_screen_actions.dart）用：它们不在这个类里面，不能直接调 setState。
+  void _mut(VoidCallback fn) => setState(fn);
+
   LcDocument? _doc;
   LcHistory? _history;
   String? _loadError;
   bool _missing = false;
   String? _selected;
   int _presetWidth = 0;
+
+  /// 画布现在按哪一档屏宽看（null＝手机）。不是手机时页面画成那一档的起算宽度，“样式”页改的只记成那一档的差别。
+  String? _bp;
   bool _showBoxModel = true;
-  final GlobalKey<EditorWorkbenchState> _bench = GlobalKey();
+  // 每一页一个工作台（各有各的缩放、滚到哪儿、开着的面板）：换页时整个换掉，不把上一页的状态带过来。
+  final Map<String, GlobalKey<EditorWorkbenchState>> _benches = {};
+  GlobalKey<EditorWorkbenchState> get _bench => _benches.putIfAbsent(_doc?.page.id ?? '', GlobalKey.new);
   late final PaletteRecents _recents = PaletteRecents(onChanged: _saveRecents);
   late final SaveQueue<LcDocument> _saver = SaveQueue<LcDocument>(
     snapshot: () => LcDocument.parse(_doc!.encode()),
@@ -185,6 +199,9 @@ class _BuilderScreenState extends State<BuilderScreen> with WidgetsBindingObserv
 
   void _restore(LcDocument? doc) {
     if (doc == null) return;
+    // 退掉 / 重做的那一步在别的页上：跟过去，并说一声（不然人看着当前页会以为没反应）。
+    final moved = doc.page.id != _doc!.page.id;
+    if (moved) showEditorHint(context, '已换到「${doc.title}」：刚才那一步是在这一页上做的。');
     setState(() {
       _doc = doc;
       if (_selected != null && doc.find(_selected!) == null) _selected = null;
@@ -268,66 +285,6 @@ class _BuilderScreenState extends State<BuilderScreen> with WidgetsBindingObserv
     _refresh();
   }
 
-  Future<void> _exportDart() async {
-    final code = exportDart(_doc!);
-    const path = 'export/page.dart';
-    try {
-      final file = File(widget.session.guard.resolve(path));
-      await file.parent.create(recursive: true);
-      await file.writeAsString(code);
-      widget.session.filesChanged();
-    } on FileSystemException catch (e) {
-      if (mounted) showSnack(context, '写入 $path 失败：${describeSaveError(e)}');
-      return;
-    }
-    if (!mounted) return;
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      builder: (context) => CodeSheetBody(title: 'Flutter 代码', note: '已保存到项目的 $path', code: code, language: 'dart'),
-    );
-  }
-
-  Future<void> _renamePage() async {
-    final name = await promptDialog(context, title: '页面标题', initial: _doc!.title, confirmLabel: '保存');
-    if (name == null || name.trim().isEmpty) return;
-    _apply((d) => d.title = name.trim());
-  }
-
-  /// 拖柄松手：把宽 / 高写进组件自己的样式。整次拖动只走这一次统一入口，所以只记一条撤销。
-  void _resize(String id, int? width, int? height) => _apply((d) {
-    final n = d.find(id);
-    if (n == null) return;
-    final style = LcStyle(n.style);
-    if (width != null) style.setLength('width', LcLength.px(width.toDouble()));
-    if (height != null) style.setLength('height', LcLength.px(height.toDouble()));
-  });
-
-  /// 删除组件。积木逻辑里还有地方在用它（或它里面的组件）时先问一句；
-  /// 清逻辑和删组件放在同一次修改里，撤销一次就能全部恢复。
-  Future<void> _delete(LcNode node) async {
-    final ids = <String>[];
-    void walk(LcNode n) {
-      ids.add(n.id);
-      n.children.forEach(walk);
-    }
-
-    walk(node);
-    final refs = ids.fold<int>(0, (sum, id) => sum + _doc!.logic.nodeRefCount(id));
-    if (refs > 0) {
-      final ok = await confirmDialog(context, title: '删除${node.spec.label}', message: '有 $refs 处积木逻辑在用这个组件，删除会一并清掉。', confirmLabel: '删除', danger: true);
-      if (!ok || !mounted) return;
-    }
-    _apply((d) {
-      if (d.find(node.id) == null) return;
-      for (final id in ids) {
-        d.logic.removeNodeRefs(id);
-      }
-      d.remove(node.id);
-    });
-    setState(() => _selected = null);
-  }
-
   // 面板 / 页面开着的时候文档可能被改过（甚至被撤销换成另一个对象）：关掉以后重画一遍，选中的组件没了就取消选中。
   void _refresh() {
     if (!mounted) return;
@@ -373,91 +330,6 @@ class _BuilderScreenState extends State<BuilderScreen> with WidgetsBindingObserv
     }
   }
 
-  Future<void> _openLogic([String? nodeId]) async {
-    await Navigator.push(
-      context,
-      MaterialPageRoute<void>(
-        // 逻辑页是另开的一页：也接上背景（跟“其它页面”开关走），不然“透出背景 › 积木画布”在这页不起作用
-        builder: (_) => AppBackdrop(
-          area: BackdropArea.pages,
-          builder: (_, _) => LogicScreen(doc: _doc!, onEdit: _apply, initialNodeId: nodeId, history: _history, onRestore: _restore),
-        ),
-      ),
-    );
-    _refresh();
-  }
-
-  Future<void> _openComponents() async {
-    final id = await showComponentSheet(context, doc: _doc!, onEdit: _apply, selectedNodeId: _selected, recents: _recents, images: _images);
-    if (!mounted) return;
-    if (id != null && _doc?.find(id) != null) _selected = id;
-    _refresh();
-  }
-
-  /// 选中操作条里和自定义组件有关的三项：存成组件、编辑组件（改它的内容）、拆开成普通控件。
-  Future<void> _componentAction(String action, LcNode node) async {
-    final doc = _doc!;
-    switch (action) {
-      case 'save':
-        final id = await saveAsComponentFlow(context, doc: doc, onEdit: _apply, nodeId: node.id);
-        if (id != null) _selected = id;
-      case 'edit':
-        await showComponentEditor(context, doc: doc, onEdit: _apply, componentId: node.strProp('ref') ?? '', recents: _recents, images: _images);
-      case 'detach':
-        await detachInstanceFlow(context, doc: doc, onEdit: _apply, instanceId: node.id);
-    }
-    _refresh();
-  }
-
-  Future<void> _openFrameworkExport() async {
-    await showFrameworkExport(context, doc: _doc!, session: widget.session);
-    _refresh();
-  }
-
-  /// 去预览：先把没存的存掉（预览读的是导出的网页文件）。
-  Future<void> _preview() async {
-    await _saver.flush();
-    if (!mounted) return;
-    final shell = ShellScope.maybeOf(context);
-    if (shell != null) {
-      shell.go(ShellDest.preview);
-    } else {
-      Navigator.pop(context, 'preview');
-    }
-  }
-
-  void _openView() {
-    final canvas = _bench.currentState?.canvas;
-    if (canvas == null) return;
-    unawaited(
-      showCanvasViewSheet(
-        context,
-        canvas: canvas,
-        presetWidth: () => _presetWidth,
-        onPresetWidth: (v) => setState(() => _presetWidth = v),
-        showBoxModel: () => _showBoxModel,
-        onShowBoxModel: (v) => setState(() => _showBoxModel = v),
-      ),
-    );
-  }
-
-  void _onMenu(String v) {
-    switch (v) {
-      case 'view':
-        _openView();
-      case 'dart':
-        unawaited(_exportDart());
-      case 'framework':
-        unawaited(_openFrameworkExport());
-      case 'logic':
-        unawaited(_openLogic());
-      case 'components':
-        unawaited(_openComponents());
-      case 'title':
-        unawaited(_renamePage());
-    }
-  }
-
   String get _saveLabel => switch (_saver.state) {
     SaveState.saved => '已保存',
     SaveState.pending => '正在保存…',
@@ -475,8 +347,16 @@ class _BuilderScreenState extends State<BuilderScreen> with WidgetsBindingObserv
       appBar: ShellAppBar(
         background: context.colors.surfaceMuted,
         title: doc?.title ?? '低代码搭建',
-        subtitle: doc == null ? null : '${canvasWidthLabel(_presetWidth)} · $_saveLabel',
-        actions: doc == null ? null : [BuilderMoreMenu(onSelected: _onMenu)],
+        subtitle: doc == null
+            ? null
+            : '${doc.isMultiPage ? '第 ${doc.pageIndex + 1}/${doc.pages.length} 页 · ' : ''}${_bp == null ? canvasWidthLabel(_presetWidth) : '${lcBpLabel(_bp)} ${kLcBpMinWidth[_bp]}'} · $_saveLabel',
+        actions: doc == null
+            ? null
+            : [
+                BuilderBpButton(bp: _bp, onChanged: (v) => setState(() => _bp = v)),
+                BuilderPagesButton(count: doc.pages.length, onTap: () => unawaited(_openPages())),
+                BuilderMoreMenu(onSelected: _onMenu),
+              ],
       ),
       body: _loadError != null
           ? BelowBar(
@@ -524,7 +404,8 @@ class _BuilderScreenState extends State<BuilderScreen> with WidgetsBindingObserv
                 onUndo: history!.canUndo ? () => _restore(history.undo()) : null,
                 onRedo: history.canRedo ? () => _restore(history.redo()) : null,
                 onPreview: () => unawaited(_preview()),
-                presetWidth: _presetWidth,
+                presetWidth: _bp == null ? _presetWidth : kLcBpMinWidth[_bp]!,
+                bp: _bp,
                 showBoxModel: _showBoxModel,
                 selectionBar: multiOn ? multiBar() : (node == null ? null : _selectionBar(node)),
               ),

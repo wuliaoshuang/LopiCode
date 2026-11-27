@@ -78,7 +78,32 @@ String writeCommon(LcNode n, String prop, Object? value) {
     _dropFromStyle(n, names);
     return 'props';
   }
+  if (value is String && value.startsWith('var(')) {
+    // 用主题变量：变量只能写在 style 里（简写属性放不了）。简写属性留着不动——反正被 style 盖着，
+    // 以后不用变量了它还在；Flutter 导出时会把变量现在的值放回简写属性（见 export_dart_theme.dart）。
+    final own = canonicalDeclarations(n.style);
+    for (final name in names) {
+      if (prop == 'width' && name != 'width') {
+        own.remove(name);
+      } else {
+        own[name] = value;
+      }
+    }
+    n.style
+      ..clear()
+      ..addAll(own);
+    return 'style';
+  }
   final css = names.isEmpty ? null : _cssValue(prop, value);
+  // style 里盖着它的全是主题变量（在“常用”页选的）：换成普通值时把变量那几条去掉，回到写简写属性。
+  if (css != null && n.style.isNotEmpty) {
+    final own = canonicalDeclarations(n.style);
+    final covering = [
+      for (final name in names)
+        if (own[name] != null) own[name]!,
+    ];
+    if (covering.isNotEmpty && covering.every((v) => v.startsWith('var('))) _dropFromStyle(n, names);
+  }
   if (css == null || !styleOverrides(n, prop)) {
     // 能用简写属性表达、style 里也没盖着它：照旧写简写属性。
     // （宽度的“撑满”只有简写属性能表达：这时把 style 里盖着它的条目去掉，不然不生效。）

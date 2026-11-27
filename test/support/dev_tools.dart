@@ -100,3 +100,47 @@ Future<({int code, String messages, String stdout})> compileAndRunTs(String sour
     dir.deleteSync(recursive: true);
   }
 }
+
+/// 装了 jsdom 的目录（在 Node 里当浏览器用，第 5 期的“真跑”要它）；没有返回 null。
+final String? webdevDomDir = () {
+  final home = Platform.environment['HOME'] ?? '';
+  for (final dir in [Platform.environment['LOPI_WEBDEV_DOM'] ?? '', '$home/workspace/tools/webdev-dom']) {
+    if (dir.isNotEmpty && File('$dir/node_modules/jsdom/package.json').existsSync()) return dir;
+  }
+  return null;
+}();
+
+/// “真跑”能不能做；不能时是跳过的原因。
+final Object skipWithoutDom = skipWithoutWebdev != false
+    ? skipWithoutWebdev
+    : webdevDomDir == null
+    ? '找不到 jsdom（LOPI_WEBDEV_DOM 或 ~/workspace/tools/webdev-dom），跳过真跑'
+    : false;
+
+/// 把导出的文件写进临时目录，在 jsdom 里照 [steps] 一步步做（tool/verify/run_dom.mjs）。[kind]：html / vue / react。
+/// 返回（成不成、错误、警告、做完了几步）。
+Future<({bool ok, List<String> errors, List<String> warnings, int done})> runInDom(String kind, Map<String, String> files, String entry, List<Map<String, Object?>> steps) async {
+  final dir = Directory.systemTemp.createTempSync('lopi_dom_');
+  try {
+    for (final f in files.entries) {
+      File('${dir.path}/${f.key}')
+        ..createSync(recursive: true)
+        ..writeAsStringSync(f.value);
+    }
+    File('${dir.path}/.lc-steps.json').writeAsStringSync(jsonEncode(steps));
+    final r = await Process.run('node', ['${Directory.current.path}/tool/verify/run_dom.mjs', kind, dir.path, entry], environment: {'LOPI_WEBDEV': webdevDir!, 'LOPI_WEBDEV_DOM': webdevDomDir!});
+    final out = (r.stdout as String).trim();
+    if (out.isEmpty || !out.startsWith('{')) {
+      return (ok: false, errors: ['脚本没有给出结果（退出码 ${r.exitCode}）：${r.stderr}'], warnings: const <String>[], done: 0);
+    }
+    final json = jsonDecode(out) as Map<String, Object?>;
+    return (
+      ok: json['ok'] == true,
+      errors: [for (final e in (json['errors'] as List?) ?? const []) '$e'],
+      warnings: [for (final e in (json['warnings'] as List?) ?? const []) '$e'],
+      done: json['done'] is int ? json['done']! as int : 0,
+    );
+  } finally {
+    dir.deleteSync(recursive: true);
+  }
+}

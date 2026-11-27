@@ -197,11 +197,13 @@ int stripSlots(LcNode root) {
 
 String? _refOf(LcNode n) => n.type == 'component' && n.props['ref'] is String ? n.props['ref'] as String : null;
 
-/// 走一遍这个组件的所有实例（页面里的、别的组件定义里的），连同它所在的那棵树的根。
+/// 走一遍这个组件的所有实例（**所有页面**里的、别的组件定义里的），连同它所在的那棵树的根。
 void _eachInstance(LcDocument doc, String componentId, void Function(LcNode inst, LcNode? parent, LcComponentDef? owner) visit) {
-  _walk(doc.root, (n, parent) {
-    if (_refOf(n) == componentId) visit(n, parent, null);
-  });
+  for (final p in doc.pages) {
+    _walk(p.root, (n, parent) {
+      if (_refOf(n) == componentId) visit(n, parent, null);
+    });
+  }
   for (final c in doc.components) {
     _walk(c.root, (n, parent) {
       if (_refOf(n) == componentId) visit(n, parent, c);

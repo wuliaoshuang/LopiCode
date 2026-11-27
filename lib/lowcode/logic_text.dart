@@ -116,6 +116,9 @@ String describeBlock(LcBlock b, LcDocument doc) {
       return '弹出提示 ${arg('message')}';
     case 'navigate':
       return '跳转到 ${arg('url')}';
+    case kLcGoPageOp:
+      final id = b.args['page'];
+      return '去页面 ${id is String && id.isNotEmpty ? '「${_clip(doc.pageTitle(id) ?? '已经删掉的页面')}」' : '（还没选）'}';
     case 'log':
       return '写到控制台 ${arg('value')}';
     case 'fetch':
@@ -169,5 +172,7 @@ String describeVarType(String type) => switch (type) {
   'number' => '数字',
   'bool' => '是 / 否',
   'text' => '文字',
+  'list' => '列表',
+  'record' => '记录',
   _ => type,
 };

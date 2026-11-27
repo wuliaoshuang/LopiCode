@@ -109,6 +109,12 @@ extension LcLogicEdit on LcLogic {
     if (oldName == newName) return true;
     if (variable(newName) != null) return false;
     v.name = newName;
+    renameVariableRefs(oldName, newName);
+    return true;
+  }
+
+  /// 只改“用到它的地方”（积木的参数和值），不动变量表。项目级状态改名时，各页的积木靠它跟着改。
+  void renameVariableRefs(String oldName, String newName) {
     for (final h in handlers) {
       _walk(h.body, (b) {
         for (final a in _argsOfKind(b, LcArgKind.variable)) {
@@ -119,7 +125,6 @@ extension LcLogicEdit on LcLogic {
         });
       });
     }
-    return true;
   }
 
   /// 删变量。用到它的积木**不动**（校验会把它们标成“变量还没有声明”，由人决定怎么改）。返回是否删了。
@@ -132,8 +137,8 @@ extension LcLogicEdit on LcLogic {
   /// 改变量的类型，初始值跟着换成新类型的默认值（原来的值能直接用就留着）。类型不认识返回 false。
   bool retypeVariable(String name, String type) {
     final i = variables.indexWhere((v) => v.name == name);
-    if (i < 0 || !LcVariable.types.contains(type)) return false;
-    variables[i] = LcVariable(name: name, type: type, initial: variables[i].initial);
+    if (i < 0 || !LcVariable.stateTypes.contains(type)) return false;
+    variables[i] = LcVariable(name: name, type: type, initial: variables[i].initial, derived: variables[i].derived);
     return true;
   }
 }

@@ -22,6 +22,7 @@ class _Ctx {
     required this.textColor,
     required this.buttonText,
     required this.styles,
+    required this.env,
   });
   final LcNode parent;
   final CssFlow flow;
@@ -47,7 +48,26 @@ class _Ctx {
   /// 这一次重搭里已经算过的最终样式（按组件对象记）：同一个组件不算第二遍。
   final Map<LcNode, Map<String, String>> styles;
 
-  Map<String, String> styleOf(LcNode n, LcNode? parent) => styles[n] ??= resolvedStyle(n, parent);
+  /// 按什么条件看（主题变量的值、现在是哪一档屏宽）。
+  final LcViewEnv env;
+
+  Map<String, String> styleOf(LcNode n, LcNode? parent) => styles[n] ??= resolvedStyle(lcViewNode(n, env), parent);
+
+  /// 进到“重复”的某一份里：换绑定环境；记着的样式另起一份（同一个组件在每一份里可以不一样）。
+  _Ctx inScope(LcBindEnv bind) => _Ctx(
+    parent: parent,
+    flow: flow,
+    boundedW: boundedW,
+    boundedH: boundedH,
+    availW: availW,
+    availH: availH,
+    scale: scale,
+    growCount: growCount,
+    textColor: textColor,
+    buttonText: buttonText,
+    styles: Map.identity(),
+    env: env.withBind(bind),
+  );
 }
 
 bool _has(Map<String, String> s, String prefix) => s.keys.any((k) => k.startsWith(prefix));
@@ -61,6 +81,16 @@ bool _hasRadius(Map<String, String> s) => s.keys.any((k) => k.startsWith('border
 ///   没填的画定义里的默认内容（只是样子）；连默认内容也没有，画一个空位提示。落点 id 是 `实例id#插槽名`。
 extension _CanvasSlots on CanvasPage {
   Widget _item(BuildContext context, LcNode container, Map<String, String> s, _Ctx inner, LcNode c) => c.type == 'slot' ? _slotBox(context, container, s, inner, c) : _node(context, c, inner);
+
+  /// 一个子项要画成哪几个：平常就是它自己；设了“重复”的按初值列表画几份（第 5 期）——
+  /// 第一份是活的（能选中、能改），后面几份只是样子（调淡、点不中）。列表是空的也画一份（不然选不中它），角标写明。
+  List<Widget> _items(BuildContext context, LcNode container, Map<String, String> s, _Ctx inner, LcNode c) {
+    final bind = inner.env.bind;
+    final scopes = bind == null || c.type == 'slot' ? null : lcRepeatScopes(c, bind);
+    if (scopes == null) return [_item(context, container, s, inner, c)];
+    if (scopes.isEmpty) return [_node(context, c, inner, badge: '重复 · 列表是空的')];
+    return [for (final (i, scope) in scopes.indexed) (i == 0 ? this : _inertCopy())._node(context, c, inner.inScope(scope), copy: i, badge: i == 0 ? '重复' : null)];
+  }
 
   Widget _slotBox(BuildContext context, LcNode container, Map<String, String> s, _Ctx inner, LcNode slot) {
     final hostId = slot.strProp('host');
@@ -111,5 +141,39 @@ extension _CanvasSlots on CanvasPage {
     if (inner.flow.wrap) return KeyedSubtree(key: key, child: body);
     if (row) return inner.boundedW ? Expanded(key: key, child: body) : KeyedSubtree(key: key, child: body);
     return inner.boundedW ? SizedBox(key: key, width: double.infinity, child: body) : KeyedSubtree(key: key, child: body);
+  }
+}
+
+/// 组件自带的插槽（列表行左右、导航栏左右、标签页的一页、弹窗的内容和底部）和“长按拿起”。
+extension _CanvasHostSlots on CanvasPage {
+  /// 画一个插槽（列表行左右、导航栏左右、标签页的一页、弹窗的内容和底部）。它的落点 id 是“宿主 id#插槽名”。
+  Widget _slot(BuildContext context, LcNode host, _Ctx base, String name, {required bool row, required double availW, bool end = false, CssScale? scale, Color? textColor}) {
+    final kids = lcSlotChildren(host, name);
+    final inner = _Ctx(
+      parent: host,
+      flow: CssFlow(row: row, reverse: false, wrap: false),
+      boundedW: !row,
+      boundedH: false,
+      availW: availW,
+      availH: null,
+      scale: scale ?? base.scale,
+      growCount: 0,
+      textColor: textColor ?? base.textColor,
+      buttonText: base.buttonText,
+      styles: base.styles,
+      env: base.env,
+    );
+    final style = row ? {'align-items': 'center', 'column-gap': '8px', if (end) 'justify-content': 'flex-end'} : const {'row-gap': '8px', 'align-items': 'stretch'};
+    final label = lcSlotsOf(host).where((s) => s.name == name).firstOrNull?.label ?? name;
+    final Widget body = kids.isEmpty
+        ? (inert ? const SizedBox.shrink() : CanvasSlotHint(key: ValueKey('lc-slot-hint-${host.id}-$name'), label: label, row: row, quiet: row && selected != host.id))
+        : _flex(context, host, style, inner, tightW: !row, tightH: false, only: kids);
+    return inert ? body : KeyedSubtree(key: boxKey(lcSlotBoxId(host.id, name)), child: body);
+  }
+
+  Widget _liftable(LcNode n, Widget child) {
+    final lift = onLift;
+    if (lift == null) return child;
+    return LcLiftDetector(onLift: (at) => lift(LcDrag.move(n.id), at), onMove: (at) => onLiftMove?.call(at), onDrop: () => onLiftDrop?.call(), onCancel: () => onLiftCancel?.call(), child: child);
   }
 }

@@ -124,7 +124,7 @@ bool lcItemMove(LcNode n, LcItemsKind kind, int index, int by) {
   return true;
 }
 
-/// 改第 [index] 项的一个键（`label` / `value` / `icon`）。不合规矩不写，返回给人看的原因；写了返回 null。
+/// 改第 [index] 项的一个键（`label` / `value` / `icon`；导航项还有 `page`＝点了去哪一页）。不合规矩不写，返回给人看的原因；写了返回 null。
 String? lcItemSet(LcNode n, LcItemsKind kind, int index, String key, String text) {
   final all = _read(n, kind);
   if (index < 0 || index >= all.length) return '这一项已经不在了';
@@ -137,6 +137,13 @@ String? lcItemSet(LcNode n, LcItemsKind kind, int index, String key, String text
     if (n.props['value'] == all[index]['value']) n.props['value'] = text;
   } else if (key == 'icon' && kind == LcItemsKind.nav) {
     if (text.isEmpty) return '导航项要有图标';
+  } else if (key == 'page' && kind == LcItemsKind.nav) {
+    // 点了去哪一页（页面 id）；空的＝不跳转，把这个键去掉。
+    if (text.isEmpty) {
+      all[index].remove('page');
+      n.props[kind.prop] = all;
+      return null;
+    }
   } else if (key != 'label') {
     return '这一项不能改';
   }

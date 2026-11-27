@@ -6,19 +6,24 @@
 // - 写到哪儿：见 inspector_write.dart（能用简写属性表达且样式里没盖着就写简写属性——四种导出和旧面板逐字一样）。
 // - 取用的 tokens：Space.x2/x3/x4、textMuted（名字）、textFaint（说明小字）。
 import 'package:lopicode/lowcode/component_values_widgets.dart';
+import 'package:lopicode/lowcode/edit_types.dart';
+import 'package:lopicode/lowcode/inspector_bind_widgets.dart';
 import 'package:lopicode/lowcode/inspector_presets_widgets.dart';
 import 'package:lopicode/lowcode/inspector_v3_components_widgets.dart';
 import 'package:lopicode/lowcode/inspector_v3_rows_widgets.dart';
 import 'package:lopicode/lowcode/inspector_write.dart';
 import 'package:lopicode/lowcode/model.dart';
+import 'package:lopicode/lowcode/responsive.dart';
 import 'package:lopicode/lowcode/style_controls_widgets.dart';
 import 'package:lopicode/lowcode/style_rows_widgets.dart';
+import 'package:lopicode/lowcode/theme_scope_widgets.dart';
+import 'package:lopicode/lowcode/theme_vars.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// 合一面板里“正在改的这个组件”。
 class InspectorEdit {
-  const InspectorEdit({required this.doc, required this.node, required this.parent, required this.apply, this.pickImage});
+  const InspectorEdit({required this.doc, required this.node, required this.parent, required this.apply, this.pickImage, this.editDoc, this.canBind = false});
   final LcDocument doc;
 
   /// 组件现在的样子（已经算上还没提交的改动）。只读；要改走 [apply]。
@@ -31,9 +36,18 @@ class InspectorEdit {
   /// 选一张图片：`gallery` 从相册、`project` 从项目文件。返回写进“图片地址”的值；没选返回 null。
   /// 不给＝这个地方不能选图（只能填网址）。
   final Future<String?> Function(String from)? pickImage;
+
+  /// 改整份文档（不只是这个组件；现在只有“把导航栏同步到其它页面”用）。不给＝这类操作不出现。
+  final LcEdit? editDoc;
+
+  /// 这里的设置能不能绑到状态（页面里的控件能；自定义组件里面的这一期不能）。
+  final bool canBind;
 }
 
 const Map<int, String> _zeroNone = {0: '无'};
+
+/// 颜色写进简写属性时一律大写（和旧面板一样）；主题变量原样。
+String? _colorValue(String? v) => v == null || v.startsWith('var(') ? v : v.toUpperCase();
 
 class InspectorCommonPage extends StatefulWidget {
   const InspectorCommonPage({super.key, required this.ed, this.only});
@@ -62,24 +76,38 @@ class _InspectorCommonPageState extends State<InspectorCommonPage> {
 
   void _set(String prop, Object? value, {bool merge = false}) => ed.apply((n, _) => writeCommon(n, prop, value), merge: merge);
 
-  num? _px(String cssName) => effectivePx(n, ed.parent, cssName);
+  /// 项目的主题变量；数值显示用“变量已经换成值”的那份（不然用了变量的项读不出数）。
+  LcTheme get _theme => lcThemeOf(ed.doc);
+  num? _px(String cssName) => effectivePx(lcViewNode(n, LcViewEnv(vars: _theme.values)), ed.parent, cssName);
+
+  /// 这一项现在用着哪个变量（没用是 null）。
+  String? _varOf(String cssName) {
+    final name = lcVarNameIn(_css(cssName));
+    return name != null && _theme.values.containsKey(name) ? name : null;
+  }
+
   String? _css(String cssName) => effectiveCss(n, ed.parent, cssName);
 
   // ───────────── 各种行 ─────────────
 
   Widget _textRow(String prop, String label, {int maxLines = 1, String? hint, TextInputType? keyboard}) {
     final c = _text.putIfAbsent(prop, () => TextEditingController(text: n.strProp(prop) ?? ''));
-    return InspectorRow(
+    return LcBindableRow(
+      ed: ed,
+      prop: prop,
       label: label,
-      scroll: false,
-      child: TextField(
-        key: Key('lc-common-$prop'),
-        controller: c,
-        minLines: 1,
-        maxLines: maxLines,
-        keyboardType: keyboard,
-        decoration: InputDecoration(isDense: true, hintText: hint),
-        onChanged: (v) => ed.apply((n, _) => n.props[prop] = v, merge: true),
+      child: InspectorRow(
+        label: label,
+        scroll: false,
+        child: TextField(
+          key: Key('lc-common-$prop'),
+          controller: c,
+          minLines: 1,
+          maxLines: maxLines,
+          keyboardType: keyboard,
+          decoration: InputDecoration(isDense: true, hintText: hint),
+          onChanged: (v) => ed.apply((n, _) => n.props[prop] = v, merge: true),
+        ),
       ),
     );
   }
@@ -94,6 +122,9 @@ class _InspectorCommonPageState extends State<InspectorCommonPage> {
         scale: scale,
         names: names,
         clearable: clearable,
+        vars: lcVarChoices(_theme, cssName),
+        varName: _varOf(cssName),
+        onVar: (name) => _set(prop, lcVarRef(name)),
         onChanged: (v, {typing = false}) => _set(prop, v, merge: typing),
       );
 
@@ -109,7 +140,7 @@ class _InspectorCommonPageState extends State<InspectorCommonPage> {
     scroll: false,
     child: Align(
       alignment: Alignment.centerLeft,
-      child: ColorButton(id: 'common-$prop', value: _css(cssName), title: label, onChanged: onChanged ?? (v) => _set(prop, v?.toUpperCase())),
+      child: ColorButton(id: 'common-$prop', value: _css(cssName), title: label, onChanged: onChanged ?? (v) => _set(prop, _colorValue(v))),
     ),
   );
 
@@ -300,7 +331,7 @@ class _InspectorCommonPageState extends State<InspectorCommonPage> {
             ),
             InspectorChoiceRow(id: 'size', label: '大小', options: const {'s': '小', 'm': '中', 'l': '大'}, selected: buttonSize(n, ed.parent), onChanged: (v) => ed.apply((n, _) => setButtonSize(n, v))),
             _width(),
-            _color('accent', '颜色', buttonVariant(n, ed.parent) == 'solid' ? 'background-color' : 'color', onChanged: (v) => ed.apply((n, p) => setButtonAccent(n, p, (v ?? '#058654').toUpperCase()))),
+            _color('accent', '颜色', buttonVariant(n, ed.parent) == 'solid' ? 'background-color' : 'color', onChanged: (v) => ed.apply((n, p) => setButtonAccent(n, p, _colorValue(v ?? '#058654')!))),
             ...lcButtonV3Rows(context, ed),
           ],
           {'text', 'width'},
@@ -335,16 +366,21 @@ class _InspectorCommonPageState extends State<InspectorCommonPage> {
         final c = _text.putIfAbsent('items', () => TextEditingController(text: ((n.props['items'] as List?) ?? const []).join('\n')));
         return (
           [
-            InspectorRow(
+            LcBindableRow(
+              ed: ed,
+              prop: 'items',
               label: '列表项',
-              scroll: false,
-              child: TextField(
-                key: const Key('lc-common-items'),
-                controller: c,
-                minLines: 3,
-                maxLines: 8,
-                decoration: const InputDecoration(isDense: true, hintText: '一行一项'),
-                onChanged: (v) => ed.apply((n, _) => n.props['items'] = v.split('\n').where((s) => s.trim().isNotEmpty).toList(), merge: true),
+              child: InspectorRow(
+                label: '列表项',
+                scroll: false,
+                child: TextField(
+                  key: const Key('lc-common-items'),
+                  controller: c,
+                  minLines: 3,
+                  maxLines: 8,
+                  decoration: const InputDecoration(isDense: true, hintText: '一行一项'),
+                  onChanged: (v) => ed.apply((n, _) => n.props['items'] = v.split('\n').where((s) => s.trim().isNotEmpty).toList(), merge: true),
+                ),
               ),
             ),
             _fontSize(),
@@ -435,6 +471,7 @@ class _InspectorCommonPageState extends State<InspectorCommonPage> {
       children: [
         ...rows,
         if (more.isNotEmpty && rows.isEmpty) ...more else if (more.isNotEmpty) MoreSection(id: 'common', children: more),
+        InspectorDataSection(ed: ed),
         const SizedBox(height: Space.x3),
         Text('更细的（四边分别设、边框、定位…）在“样式”页。', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: c.textFaint)),
       ],

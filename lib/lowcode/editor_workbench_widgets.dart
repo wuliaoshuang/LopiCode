@@ -21,6 +21,7 @@ import 'package:lopicode/lowcode/canvas_drag_widgets.dart';
 import 'package:lopicode/lowcode/canvas_view.dart';
 import 'package:lopicode/lowcode/edit_types.dart';
 import 'package:lopicode/lowcode/editor_selection_bar_widgets.dart';
+import 'package:lopicode/lowcode/editor_toolbar_widgets.dart';
 import 'package:lopicode/lowcode/inline_text_widgets.dart';
 import 'package:lopicode/lowcode/inspector_sheet.dart';
 import 'package:lopicode/lowcode/lift_gesture_widgets.dart';
@@ -34,25 +35,9 @@ import 'package:lopicode/ui/top_bar.dart';
 import 'package:material_ui/material_ui.dart';
 
 // 选中条的外壳原来就定义在这个文件里，别处还从这里引用。
+export 'package:lopicode/lowcode/editor_hint_widgets.dart' show showEditorHint;
 export 'package:lopicode/lowcode/editor_selection_bar_widgets.dart' show EditorSelectionBar, kEditorSelectionBarHeight;
-
-/// 工具条多高。
-const double kEditorToolbarHeight = 56;
-
-/// 搭建台里的一句提示（“已复制…”）：浮在工具条和选中条**上面**。
-/// 用全应用那种贴底的提示会把撤销 / 重做盖住好几秒（测试里点撤销点到了提示上才发现）。
-void showEditorHint(BuildContext context, String text) {
-  ScaffoldMessenger.of(context)
-    ..hideCurrentSnackBar()
-    ..showSnackBar(
-      SnackBar(
-        content: Text(text),
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 3),
-        margin: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, kEditorToolbarHeight + kEditorSelectionBarHeight + Space.x2),
-      ),
-    );
-}
+export 'package:lopicode/lowcode/editor_toolbar_widgets.dart' show kEditorToolbarHeight;
 
 class EditorWorkbench extends StatefulWidget {
   const EditorWorkbench({
@@ -74,6 +59,7 @@ class EditorWorkbench extends StatefulWidget {
     this.selectionBar,
     this.toolbarExtra = const [],
     this.presetWidth = 0,
+    this.bp,
     this.showBoxModel = true,
     this.onEdit,
     this.pickImage,
@@ -136,6 +122,9 @@ class EditorWorkbench extends StatefulWidget {
   final List<Widget> toolbarExtra;
 
   final int presetWidth;
+
+  /// 画布按哪一档屏宽看（null＝手机）；面板在“样式”页改的也只记成这一档的差别。
+  final String? bp;
   final bool showBoxModel;
 
   @override
@@ -395,6 +384,7 @@ class EditorWorkbenchState extends State<EditorWorkbench> {
                                   onLiftDrop: () => _end(cancelled: false),
                                   onLiftCancel: () => _end(cancelled: true),
                                   presetWidth: widget.presetWidth,
+                                  bp: widget.bp,
                                   showBoxModel: widget.showBoxModel,
                                   overlayId: dialog?.id,
                                   statePreview: _inspector != null && selected != null && _stateShown != null ? (nodeId: selected, state: _stateShown!) : null,
@@ -467,12 +457,26 @@ class EditorWorkbenchState extends State<EditorWorkbench> {
                         onOpenLogic: widget.onOpenLogic,
                         onAddLogic: widget.onAddLogic,
                         onState: (s) => setState(() => _stateShown = s),
+                        bp: widget.bp,
                       ),
                     ),
                 ],
               ),
             ),
-            KeyedSubtree(key: _zoneKey, child: drag == null ? _toolbar(context) : _dropZone(context, drag)),
+            KeyedSubtree(
+              key: _zoneKey,
+              child: drag == null
+                  ? EditorToolbar(
+                      adding: _paletteOpen && !(palette?.collapsed ?? false),
+                      onAdd: togglePalette,
+                      extra: widget.toolbarExtra,
+                      onLayers: widget.onLayers,
+                      onUndo: widget.onUndo,
+                      onRedo: widget.onRedo,
+                      onPreview: widget.onPreview,
+                    )
+                  : EditorDropZone(over: _overZone, moving: drag.nodeId != null, deletable: drag.nodeId != null && (widget.canDelete?.call(drag.nodeId!) ?? true)),
+            ),
           ],
         ),
         if (editing != null && canvas != null && inlineTextProp(editing) != null)
@@ -514,86 +518,6 @@ class EditorWorkbenchState extends State<EditorWorkbench> {
             ),
           ),
       ],
-    );
-  }
-
-  Widget _toolbar(BuildContext context) {
-    final c = context.colors;
-    Widget icon(String tip, IconData data, VoidCallback? onPressed) =>
-        IconButton(tooltip: tip, icon: Icon(data), onPressed: onPressed, constraints: const BoxConstraints.tightFor(width: 48, height: 48));
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: c.surface,
-        border: Border(top: BorderSide(color: c.border)),
-      ),
-      child: SafeArea(
-        top: false,
-        child: SizedBox(
-          key: const ValueKey('lc-toolbar'),
-          height: kEditorToolbarHeight,
-          child: Padding(
-            padding: const EdgeInsets.only(left: Space.x3, right: Space.x1),
-            child: Row(
-              children: [
-                FilledButton.icon(
-                  key: const ValueKey('lc-tool-add'),
-                  onPressed: togglePalette,
-                  icon: Icon(_paletteOpen && !(palette?.collapsed ?? false) ? Icons.keyboard_arrow_down : Icons.add, size: 20),
-                  label: const Text('添加'),
-                  style: FilledButton.styleFrom(
-                    minimumSize: const Size(0, 40),
-                    padding: const EdgeInsets.symmetric(horizontal: Space.x4),
-                  ),
-                ),
-                const Spacer(),
-                ...widget.toolbarExtra,
-                icon('图层', Icons.layers_outlined, widget.onLayers),
-                icon('撤销', Icons.undo, widget.onUndo),
-                icon('重做', Icons.redo, widget.onRedo),
-                if (widget.onPreview != null) icon('预览', Icons.play_arrow_outlined, widget.onPreview),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _dropZone(BuildContext context, LcDrag drag) {
-    final c = context.colors;
-    final t = Theme.of(context).textTheme;
-    final moving = drag.nodeId;
-    final deletable = moving != null && (widget.canDelete?.call(moving) ?? true);
-    final label = moving == null ? '拖到这里取消' : (deletable ? '拖到这里删除' : '这个不能删 · 拖到这里放回去');
-    return ValueListenableBuilder<bool>(
-      valueListenable: _overZone,
-      builder: (context, over, _) {
-        final hot = over && deletable;
-        final fg = hot ? c.danger : c.textMuted;
-        return DecoratedBox(
-          decoration: BoxDecoration(
-            color: hot ? c.dangerSoft : (over ? c.surfaceMuted : c.surface),
-            border: Border(
-              top: BorderSide(color: hot ? c.danger : c.border, width: hot ? 2 : 1),
-            ),
-          ),
-          child: SafeArea(
-            top: false,
-            child: SizedBox(
-              key: const ValueKey('lc-drop-zone'),
-              height: kEditorToolbarHeight,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(deletable ? Icons.delete_outline : Icons.close, size: 20, color: fg),
-                  const SizedBox(width: Space.x2),
-                  Text(label, style: t.labelLarge?.copyWith(color: fg)),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
     );
   }
 }

@@ -347,7 +347,11 @@ void main() {
       final doc = await saved(tester, session);
       expect(doc.find('n1')!.props['text'], '大标题');
       expect(doc.find('n4')!.props['placeholder'], '写点什么');
-      await tap(tester, node('n3'));
+      // 卡片的正中间落在里面还选中着的输入框的拖柄上（拖柄能按的范围比看到的大）：这一下走的是拖柄的“点穿”，
+      // 照样选中手指下面的卡片——所以按位置点，不用 tap(node)（那样测试框架会警告“点击可能没点中”）。
+      await tester.tapAt(tester.getCenter(node('n3')));
+      await settle(tester, rounds: 2);
+      expect(tester.widget<CanvasView>(find.byType(CanvasView)).selected, 'n3');
       await tester.tapAt(tester.getRect(node('n3')).topLeft + const Offset(4, 4));
       await settle(tester, rounds: 2);
       expect(k('lc-inline-edit'), findsNothing);

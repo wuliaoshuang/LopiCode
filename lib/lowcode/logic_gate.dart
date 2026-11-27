@@ -11,15 +11,47 @@ import 'package:lopicode/lowcode/model.dart';
 /// 逻辑里“错误”级的问题有几条。大于 0＝logic.js 不更新、框架导出被拦下。
 int lcLogicErrorCount(LcDocument doc) => logicErrors(doc).length;
 
-/// 导出被拦下时说的那句话（Vue / React 导出面板用）。
-String lcExportBlockedText(int errors) => '没有导出：积木逻辑里有 $errors 个错误，代码没有更新。回到“积木逻辑”，点右上角的“问题”，把标红的积木修好再导出。';
+/// 每一页逻辑里“错误”级的问题各有几条（只列有错误的页：页名 → 条数）。框架导出是整个项目一起导的，任何一页有错误都拦。
+Map<String, int> lcLogicErrorsByPage(LcDocument doc) {
+  final out = <String, int>{};
+  final keep = doc.pageIndex;
+  try {
+    for (var i = 0; i < doc.pages.length; i++) {
+      doc.openPageAt(i);
+      final n = lcLogicErrorCount(doc);
+      if (n > 0) out[doc.page.title] = (out[doc.page.title] ?? 0) + n;
+    }
+  } finally {
+    doc.openPageAt(keep);
+  }
+  return out;
+}
+
+/// 导出被拦下时说的那句话（Vue / React 导出面板用）。[pages] 给了（多页面）就说清楚是哪几页。
+String lcExportBlockedText(int errors, [Map<String, int>? pages]) {
+  final where = pages == null || pages.isEmpty ? '' : '（${[for (final e in pages.entries) '「${e.key}」${e.value} 个'].join('、')}）';
+  final how = where.isEmpty ? '回到“积木逻辑”' : '换到那一页，打开“积木逻辑”';
+  return '没有导出：积木逻辑里有 $errors 个错误$where，代码没有更新。$how，点右上角的“问题”，把标红的积木修好再导出。';
+}
 
 /// 给模型看的校验结果（接在页面工具的结果后面）。没有问题返回空字符串。
 /// 有错误时说清楚 logic.js 没有更新；每条带规则编号、在哪、什么问题、建议怎么改。
+///
+/// 多页面时每一页都查（逻辑是每页各一份）：每条前面带上是哪一页；“脚本没有更新”说的是出错的那几页各自的脚本。
 String lcLogicToolReport(LcDocument doc, {int limit = 20}) {
-  final issues = validateLogic(doc);
+  final issues = <LcLogicIssue>[];
+  final pageOf = <LcLogicIssue, String>{};
+  final keep = doc.pageIndex;
+  for (var i = 0; i < doc.pages.length; i++) {
+    doc.openPageAt(i);
+    for (final issue in validateLogic(doc)) {
+      issues.add(issue);
+      if (doc.isMultiPage) pageOf[issue] = '【${doc.page.title}】';
+    }
+  }
+  doc.openPageAt(keep);
   if (issues.isEmpty) return '';
-  String line(LcLogicIssue i) => '- [${i.rule}] ${i.where}——${i.problem}${i.advice.isEmpty ? '' : '（建议：${i.advice}）'}';
+  String line(LcLogicIssue i) => '- ${pageOf[i] ?? ''}[${i.rule}] ${i.where}——${i.problem}${i.advice.isEmpty ? '' : '（建议：${i.advice}）'}';
   final errors = [
     for (final i in issues)
       if (i.isError) i,

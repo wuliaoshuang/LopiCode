@@ -1,21 +1,64 @@
 import 'package:lopicode/lowcode/component_ops.dart';
+import 'package:lopicode/lowcode/export_dart_bind.dart';
+import 'package:lopicode/lowcode/export_dart_theme.dart';
 import 'package:lopicode/lowcode/export_dart_v3.dart';
 import 'package:lopicode/lowcode/icon_set.dart';
 import 'package:lopicode/lowcode/image_assets.dart';
 import 'package:lopicode/lowcode/model.dart';
+import 'package:lopicode/lowcode/quick_actions.dart';
 
 /// 把页面导出成一个可直接放进 Flutter 项目的 Dart 文件（一个 StatelessWidget）。
+///
+/// 多页面的项目：每页一个类，都写在这一个文件里（第一个是首页，[className] 是首页的类名）；底部导航项、
+/// “点击时去页面”的快捷操作用 Navigator 跳过去。别的积木逻辑这一份一直不导出（按钮的 `onPressed` 是空的）。
+/// 只有一页时和以前逐字节一样。
 String exportDart(LcDocument doc, {String? className}) {
-  final name = className ?? dartClassName(doc.title);
+  if (!doc.isMultiPage) return _file([_pageClass(doc, className ?? dartClassName(doc.title))], '', dartThemeHeader(doc) + dartBindHeader(doc));
+  final names = <String>[];
+  for (final p in doc.pages) {
+    final base = names.isEmpty && className != null ? className : dartClassName(p.title);
+    var name = base;
+    for (var k = 2; names.contains(name); k++) {
+      name = '$base$k';
+    }
+    names.add(name);
+  }
+  final classes = <String>[];
+  final keep = doc.pageIndex;
+  try {
+    for (var i = 0; i < doc.pages.length; i++) {
+      doc.openPageAt(i);
+      String? classOf(String id) {
+        final at = doc.pages.indexWhere((p) => p.id == id);
+        return at < 0 || at == i ? null : names[at];
+      }
+
+      dartPageJumps = DartPageJumps(classOf, (n) {
+        final id = lcQuickValue(doc, n.id, kLcGoPageQuick);
+        return id == null ? null : classOf(id);
+      });
+      classes.add(_pageClass(doc, names[i]));
+    }
+  } finally {
+    dartPageJumps = null;
+    doc.openPageAt(keep);
+  }
+  return _file(classes, kDartPageHelpers, dartThemeHeader(doc) + dartBindHeader(doc));
+}
+
+String _file(List<String> classes, String tail, String note) =>
+    '''// 由 LopiCode 低代码搭建器生成，重新导出会覆盖本文件。
+${note}import 'package:flutter/material.dart';
+
+${classes.join('\n')}$tail''';
+
+String _pageClass(LcDocument doc, String name) {
   // 自定义组件的实例先展开成普通控件再生成；展开不了的那个位置是一个空的 SizedBox。
-  final tree = expandedTree(doc);
+  final tree = dartThemeTree(dartBoundTree(expandedTree(doc), doc), doc);
   final body = _node(tree, null, 3);
   // 弹窗不在控件树里：每个弹窗一个静态方法（没有弹窗的页面一个字都不多）。
   final dialogs = [for (final d in dartDialogsOf(tree)) '\n${dartDialogMethodCode(d, _node)}'].join();
-  return '''// 由 LopiCode 低代码搭建器生成，重新导出会覆盖本文件。
-import 'package:flutter/material.dart';
-
-class $name extends StatelessWidget {
+  return '''class $name extends StatelessWidget {
   const $name({super.key});
 
   @override
@@ -42,7 +85,24 @@ String _color(String hex) => 'const Color(0xFF${hex.substring(1).toUpperCase()})
 
 String _ind(int n) => '  ' * n;
 
+/// 一个节点的代码。多页面时，设了“点击时去页面”的组件在这里接上跳转：
+/// 按钮直接写进 `onPressed`；别的组件外面包一层 GestureDetector（在行里被 Expanded / Flexible 包着的，包在它们里面）。
 String _node(LcNode n, LcNode? parent, int i) {
+  final code = _nodeCore(n, parent, i);
+  final to = dartPageJumps?.clickPage(n);
+  if (to == null) return code;
+  final go = '() => _lcGoTo(context, const $to())';
+  if (n.type == 'button') return code.replaceFirst('onPressed: () {}', 'onPressed: $go');
+  final m = RegExp(r'^(Expanded|Flexible)\(\n(\s*)child: ').firstMatch(code);
+  final tail = ',\n${_ind(i)})';
+  if (m != null && code.endsWith(tail)) {
+    final inner = code.substring(m.end, code.length - tail.length);
+    return '${m[1]}(\n${m[2]}child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: $go, child: $inner)$tail';
+  }
+  return 'GestureDetector(behavior: HitTestBehavior.opaque, onTap: $go, child: $code)';
+}
+
+String _nodeCore(LcNode n, LcNode? parent, int i) {
   final inRow = parent?.type == 'row';
   // 行里的容器类组件：没给固定宽度就用 Expanded 平分剩余空间。
   // 否则行套行、行里放“拉伸”的列会拿到无限宽度，Flutter 直接报布局错误。

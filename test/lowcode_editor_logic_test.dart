@@ -209,6 +209,33 @@ void main() {
       expect(q.state, SaveState.saved);
     });
 
+    testWidgets('第一次写完时第二次已经排上队了：还不算“已保存”，等第二次也写完才算（多页面存盘慢了才露出来的）', (tester) async {
+      var value = 1;
+      final written = <int>[];
+      final states = <SaveState>[];
+      final q = SaveQueue<int>(
+        snapshot: () => value,
+        write: (v) async {
+          await Future<void>.delayed(const Duration(seconds: 1));
+          written.add(v);
+        },
+        describeError: (e) => '$e',
+        onState: states.add,
+      );
+      q.markDirty();
+      await tester.pump(const Duration(milliseconds: 500)); // 第一次写开始了（400 毫秒时），要到 1400 毫秒才完
+      value = 2;
+      q.markDirty();
+      await tester.pump(const Duration(milliseconds: 450)); // 第二次到点了，排在第一次后面
+      await tester.pump(const Duration(milliseconds: 500)); // 第一次写完了，第二次刚开始
+      expect(written, [1]);
+      expect(q.state, SaveState.pending, reason: '还有一次没写完');
+      expect(states, [SaveState.pending]);
+      await tester.pump(const Duration(seconds: 2));
+      expect(written, [1, 2]);
+      expect(states, [SaveState.pending, SaveState.saved]);
+    });
+
     testWidgets('没存上：状态是 failed、原因写清；下一次修改照常再存；连着两次没存上每次都通知', (tester) async {
       var fail = true;
       final states = <SaveState>[];

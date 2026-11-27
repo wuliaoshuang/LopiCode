@@ -5,34 +5,9 @@
 /// JSON 结构的完整约定见 docs/lowcode-v2-design.md。
 library;
 
-/// 页面变量。`type`：text / number / bool。
-class LcVariable {
-  LcVariable({required this.name, this.type = 'text', Object? initial}) : initial = _coerce(type, initial);
+import 'package:lopicode/lowcode/logic_variable.dart';
 
-  String name;
-  String type;
-  Object initial;
-
-  static const List<String> types = ['text', 'number', 'bool'];
-  static final RegExp namePattern = RegExp(r'^[A-Za-z_][A-Za-z0-9_]{0,31}$');
-
-  static Object _coerce(String type, Object? v) => switch (type) {
-    'number' => v is num ? v : 0,
-    'bool' => v is bool && v,
-    _ => v is String ? v : '',
-  };
-
-  Map<String, dynamic> toJson() => {'name': name, 'type': type, 'initial': initial};
-
-  /// 字段不对就返回 null（调用方跳过这一条）。
-  static LcVariable? tryParse(Object? json) {
-    if (json is! Map) return null;
-    final name = json['name'];
-    if (name is! String || !namePattern.hasMatch(name)) return null;
-    final type = json['type'];
-    return LcVariable(name: name, type: type is String && types.contains(type) ? type : 'text', initial: json['initial']);
-  }
-}
+export 'package:lopicode/lowcode/logic_variable.dart';
 
 /// 多口积木里的一段（“否则如果 <条件> 那么 { … }”“是 (1) 时 { … }”“出错了 { … }”）：自己的参数 + 自己那个口里的积木。
 /// 一种积木有没有段、每段带哪些参数，由它的规格（`LcBlockSpec.arms`）说；这里只管存。
@@ -506,7 +481,7 @@ class LcLogic {
     return LcLogic(
       variables: [
         if (vars is List)
-          for (final v in vars) ?LcVariable.tryParse(v),
+          for (final v in vars) ?LcVariable.tryParse(v, wide: true),
       ],
       handlers: [
         if (hs is List)
@@ -569,14 +544,11 @@ class LcLogic {
 
   /// 加一个变量；名字不合规矩或重名返回 null。
   LcVariable? addVariable(String name, {String type = 'text', Object? initial}) {
-    if (!LcVariable.namePattern.hasMatch(name) || variable(name) != null || !LcVariable.types.contains(type)) return null;
+    if (!LcVariable.namePattern.hasMatch(name) || variable(name) != null || !LcVariable.stateTypes.contains(type)) return null;
     final v = LcVariable(name: name, type: type, initial: initial);
     variables.add(v);
     return v;
   }
 
-  LcLogic clone() => LcLogic(
-    variables: [for (final v in variables) LcVariable(name: v.name, type: v.type, initial: v.initial)],
-    handlers: [for (final h in handlers) h.clone()],
-  );
+  LcLogic clone() => LcLogic(variables: [for (final v in variables) v.clone()], handlers: [for (final h in handlers) h.clone()]);
 }

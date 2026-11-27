@@ -7,6 +7,8 @@
 // - 每个组件的最终样式一次重搭里只算一遍（_Ctx.styles 记着），父容器数“要放大的子项”和画子项用的是同一份。
 import 'dart:math' as math;
 
+import 'package:lopicode/lowcode/bind_eval.dart';
+import 'package:lopicode/lowcode/bind_preview.dart';
 import 'package:lopicode/lowcode/canvas_component_widgets.dart';
 import 'package:lopicode/lowcode/canvas_controls_widgets.dart';
 import 'package:lopicode/lowcode/canvas_css.dart';
@@ -20,6 +22,7 @@ import 'package:lopicode/lowcode/component_ops.dart';
 import 'package:lopicode/lowcode/lift_gesture_widgets.dart';
 import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/lowcode/palette_widgets.dart';
+import 'package:lopicode/lowcode/responsive.dart';
 import 'package:lopicode/lowcode/slots.dart';
 import 'package:lopicode/lowcode/states.dart';
 import 'package:lopicode/lowcode/style_resolve.dart';
@@ -48,6 +51,7 @@ class CanvasPage extends StatelessWidget {
     this.overlayId,
     this.statePreview,
     this.live,
+    this.bp,
   });
 
   /// 只画样子的页面（拖动时手指下面的缩略图、测试）：不能点、不能拖。
@@ -64,6 +68,7 @@ class CanvasPage extends StatelessWidget {
       overlayId = null,
       statePreview = null,
       live = null,
+      bp = null,
       inert = true;
 
   static void _ignoreSelect(String _) {}
@@ -108,12 +113,16 @@ class CanvasPage extends StatelessWidget {
   /// 只画样子的这一份是替哪张活页面画的（实例里填进插槽的内容交回给它画，见 canvas_render_slots.dart）。
   final CanvasPage? live;
 
-  CanvasPage _inertCopy() => CanvasPage(doc: doc, pageWidth: pageWidth, minHeight: minHeight, selected: null, onSelect: (_) {}, boxKey: boxKey, inert: true, live: inert ? live : this);
+  /// 按哪一档屏宽画（null＝手机；见 responsive.dart）。
+  final String? bp;
+
+  CanvasPage _inertCopy() => CanvasPage(doc: doc, pageWidth: pageWidth, minHeight: minHeight, selected: null, onSelect: (_) {}, boxKey: boxKey, inert: true, live: inert ? live : this, bp: bp);
 
   @override
   Widget build(BuildContext context) {
     debugBuilds++;
-    final root = doc.root;
+    final env = LcViewEnv.of(doc, bp);
+    final root = lcViewNode(doc.root, env);
     final s = resolvedStyle(root, null);
     final base = CssScale(pageWidth: pageWidth, pageHeight: minHeight);
     final scale = base.withFont(cssSizePx(s['font-size'], base) ?? 16);
@@ -132,6 +141,7 @@ class CanvasPage extends StatelessWidget {
       textColor: canvasArgb(s['color']) ?? Palette.neutral900,
       buttonText: Theme.of(context).textTheme.labelLarge,
       styles: Map.identity(),
+      env: env,
     );
     final dialog = overlayId == null ? null : doc.find(overlayId!);
     final page = dialog != null && dialog.type == 'dialog'
@@ -204,12 +214,16 @@ class CanvasPage extends StatelessWidget {
         textColor: inner.textColor,
         buttonText: inner.buttonText,
         styles: inner.styles,
+        env: inner.env,
       );
-      return canvasGrid(grid, [for (final c in kids) (span: canvasGridSpan(inner.styleOf(c, n)), child: _item(context, n, s, cell, c))]);
+      return canvasGrid(grid, [
+        for (final c in kids)
+          for (final w in _items(context, n, s, cell, c)) (span: canvasGridSpan(inner.styleOf(c, n)), child: w),
+      ]);
     }
     // 子项之间的间距由容器自己留（拖动时也不往里插东西），这样“两端对齐”之类的分布才准。
     // “编辑器里隐藏”的（图层面板的眼睛）不画、不占位；导出不受影响。
-    final children = [for (final c in kids) _item(context, n, s, inner, c)];
+    final children = [for (final c in kids) ..._items(context, n, s, inner, c)];
     final spacing = mainGap;
     final textDirection = flow.row && flow.reverse ? TextDirection.rtl : null;
     final verticalDirection = !flow.row && flow.reverse ? VerticalDirection.up : VerticalDirection.down;
@@ -268,7 +282,8 @@ class CanvasPage extends StatelessWidget {
 
   // ───────────── 一个组件 ─────────────
 
-  Widget _node(BuildContext context, LcNode node, _Ctx ctx) {
+  /// [copy]：“重复”画出来的第几份（0＝活的那一份）；[badge]：绑定给的角标。
+  Widget _node(BuildContext context, LcNode node, _Ctx ctx, {int copy = 0, String? badge}) {
     final parent = ctx.parent;
     // 拖柄拖动中：把临时尺寸当成这个组件自己的样式来算，“撑满”之类的规则才会跟着让路。
     final p = preview;
@@ -276,10 +291,11 @@ class CanvasPage extends StatelessWidget {
     // 展开不了、或者已经在别的实例里面了（inert）就不展开，下面画占位。
     final instance = node.type == 'component' && !inert;
     final shown = instance ? expandInstance(doc, node, markers: true) ?? node : node;
+    // 主题变量换成值、现在这一档屏宽的差别并进来（都没有时还是原来那个对象）。
     final n = canvasPreviewNode(
-      shown,
+      lcViewNode(shown, ctx.env),
       resize: p != null && p.nodeId == node.id ? (p.width, p.height) : null,
-      state: statePreview?.nodeId == node.id ? lcStateStyle(node, statePreview!.state) : const {},
+      state: statePreview?.nodeId == node.id ? lcSubstMap(lcStateStyle(node, statePreview!.state), ctx.env.vars) : const {},
     );
     // 没被改过的组件用这一轮记着的那份（父容器数“要放大的子项”时已经算过了）；展开的实例、拖柄预览是临时造的，现算。
     final s = identical(n, node) ? ctx.styleOf(n, parent) : resolvedStyle(n, parent);
@@ -295,6 +311,8 @@ class CanvasPage extends StatelessWidget {
     final self = cssAlign(s['align-self']);
     final position = s['position']?.trim().toLowerCase();
     final hidden = s['display']?.trim().toLowerCase() == 'none';
+    // 显示条件 / 存在条件按初值不成立：照样占位（不然选不中），调淡加角标。
+    final condOff = ctx.env.bind != null && !lcCondHolds(node, ctx.env.bind!);
 
     // 在父容器里怎么占位。和导出规则一致：行里撑满的组件、没给固定宽度的容器平分剩余空间；自适应的文本可以被压窄。
     final expanded = grow > 0 && !wrap && (inRow ? ctx.boundedW : ctx.boundedH);
@@ -336,6 +354,7 @@ class CanvasPage extends StatelessWidget {
           textColor: textColor,
           buttonText: ctx.buttonText,
           styles: ctx.styles,
+          env: ctx.env,
         );
         content = (instance ? _inertCopy() : this)._flex(context, n, s, inner, tightW: tightW, tightH: tightH);
         final align = canvasTextAlign(s);
@@ -471,10 +490,10 @@ class CanvasPage extends StatelessWidget {
     if (!inert) box = KeyedSubtree(key: boxKey(n.id), child: box);
 
     // 角标：隐藏的、脱离文档流的组件画布上照样占位（不然选不中），用角标说明。
-    final badge = hidden ? '已隐藏' : (position == 'absolute' || position == 'fixed' ? '绝对定位' : (position == 'sticky' ? '粘性定位' : null));
-    final opacity = cssOpacity(s['opacity']) * (hidden ? 0.35 : 1);
+    final tag = hidden ? '已隐藏' : (condOff ? '条件不成立' : (position == 'absolute' || position == 'fixed' ? '绝对定位' : (position == 'sticky' ? '粘性定位' : badge)));
+    final opacity = cssOpacity(s['opacity']) * (hidden || condOff ? 0.35 : 1) * (copy > 0 ? 0.5 : 1);
     if (opacity < 1) box = Opacity(opacity: opacity, child: box);
-    if (badge != null) box = canvasBadged(box, badge);
+    if (tag != null) box = canvasBadged(box, tag);
     if (!margin.isZero) box = Padding(padding: EdgeInsets.fromLTRB(margin.left, margin.top, margin.right, margin.bottom), child: box);
 
     // 选中框和拖柄由画布叠在上面画；这里只管点选和长按拖动。
@@ -514,39 +533,9 @@ class CanvasPage extends StatelessWidget {
       );
     }
     // key 放在最外层：拖动开始时兄弟之间会插进插入位，靠 key 认回原来的组件，拖动才不会断。
-    final key = ValueKey('lc-item-${n.id}');
+    final key = ValueKey(copy == 0 ? 'lc-item-${n.id}' : 'lc-item-${n.id}#$copy');
     if (expanded) return Expanded(key: key, flex: grow.round().clamp(1, 1000), child: wrapped);
     if (flexible) return Flexible(key: key, child: wrapped);
     return KeyedSubtree(key: key, child: wrapped);
-  }
-
-  /// 画一个插槽（列表行左右、导航栏左右、标签页的一页、弹窗的内容和底部）。它的落点 id 是“宿主 id#插槽名”。
-  Widget _slot(BuildContext context, LcNode host, _Ctx base, String name, {required bool row, required double availW, bool end = false, CssScale? scale, Color? textColor}) {
-    final kids = lcSlotChildren(host, name);
-    final inner = _Ctx(
-      parent: host,
-      flow: CssFlow(row: row, reverse: false, wrap: false),
-      boundedW: !row,
-      boundedH: false,
-      availW: availW,
-      availH: null,
-      scale: scale ?? base.scale,
-      growCount: 0,
-      textColor: textColor ?? base.textColor,
-      buttonText: base.buttonText,
-      styles: base.styles,
-    );
-    final style = row ? {'align-items': 'center', 'column-gap': '8px', if (end) 'justify-content': 'flex-end'} : const {'row-gap': '8px', 'align-items': 'stretch'};
-    final label = lcSlotsOf(host).where((s) => s.name == name).firstOrNull?.label ?? name;
-    final Widget body = kids.isEmpty
-        ? (inert ? const SizedBox.shrink() : CanvasSlotHint(key: ValueKey('lc-slot-hint-${host.id}-$name'), label: label, row: row, quiet: row && selected != host.id))
-        : _flex(context, host, style, inner, tightW: !row, tightH: false, only: kids);
-    return inert ? body : KeyedSubtree(key: boxKey(lcSlotBoxId(host.id, name)), child: body);
-  }
-
-  Widget _liftable(LcNode n, Widget child) {
-    final lift = onLift;
-    if (lift == null) return child;
-    return LcLiftDetector(onLift: (at) => lift(LcDrag.move(n.id), at), onMove: (at) => onLiftMove?.call(at), onDrop: () => onLiftDrop?.call(), onCancel: () => onLiftCancel?.call(), child: child);
   }
 }

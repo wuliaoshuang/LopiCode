@@ -17,21 +17,28 @@ import 'package:lopicode/lowcode/component_ops.dart';
 import 'package:lopicode/lowcode/css_codec.dart';
 import 'package:lopicode/lowcode/edit_types.dart';
 import 'package:lopicode/lowcode/grid_css.dart';
+import 'package:lopicode/lowcode/inspector_bp_widgets.dart';
 import 'package:lopicode/lowcode/inspector_common_widgets.dart';
 import 'package:lopicode/lowcode/inspector_events_widgets.dart';
+import 'package:lopicode/lowcode/inspector_header_widgets.dart';
 import 'package:lopicode/lowcode/inspector_state_widgets.dart';
 import 'package:lopicode/lowcode/inspector_style_widgets.dart';
 import 'package:lopicode/lowcode/model.dart';
+import 'package:lopicode/lowcode/responsive.dart';
 import 'package:lopicode/lowcode/states.dart';
 import 'package:lopicode/lowcode/style_controls_widgets.dart';
 import 'package:lopicode/lowcode/style_css_sheet.dart';
 import 'package:lopicode/lowcode/style_groups_widgets.dart';
 import 'package:lopicode/lowcode/style_model.dart';
 import 'package:lopicode/lowcode/style_resolve.dart';
+import 'package:lopicode/lowcode/theme_scope_widgets.dart';
+import 'package:lopicode/lowcode/theme_vars.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/shell.dart';
 import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
+
+export 'package:lopicode/lowcode/inspector_header_widgets.dart' show InspectorPage;
 
 /// 连续操作（打字、加减、拖动）停多久算“告一段落”、提交成一条撤销记录。
 const Duration kStyleCommitDelay = Duration(milliseconds: 400);
@@ -39,15 +46,6 @@ const Duration kStyleCommitDelay = Duration(milliseconds: 400);
 /// 合一面板的三页。
 /// 面板刚打开时占多高（占它能用的高度的几成）。
 const double kInspectorInitialSize = 0.5;
-
-enum InspectorPage {
-  common('常用'),
-  style('样式'),
-  events('事件');
-
-  const InspectorPage(this.label);
-  final String label;
-}
 
 class InspectorPanel extends StatefulWidget {
   const InspectorPanel({
@@ -62,6 +60,7 @@ class InspectorPanel extends StatefulWidget {
     this.onOpenLogic,
     this.onAddLogic,
     this.onState,
+    this.bp,
   });
   final LcDocument doc;
   final String nodeId;
@@ -83,6 +82,9 @@ class InspectorPanel extends StatefulWidget {
 
   /// “样式”页顶上选了哪个状态（null＝平时）：搭建台拿它让画布照这个状态画选中的组件。
   final ValueChanged<String?>? onState;
+
+  /// 画布现在看的是哪一档屏宽（null＝手机）：不是手机时，“样式”页改的只记成那一档的差别。
+  final String? bp;
 
   @override
   State<InspectorPanel> createState() => InspectorPanelState();
@@ -286,6 +288,13 @@ class InspectorPanelState extends State<InspectorPanel> {
     if (scroll != null && scroll.hasClients && scroll.offset > 0) scroll.jumpTo(0);
   }
 
+  /// 改整份文档（快捷操作、同步导航栏）：先把面板里还没提交的改动交掉，改完重新读这个组件。
+  void _editDoc(void Function(LcDocument d) change) {
+    flush();
+    widget.onEdit((d) => change(_doc = d));
+    if (mounted) setState(_reload);
+  }
+
   @override
   Widget build(BuildContext context) {
     final node = _node;
@@ -362,48 +371,79 @@ class InspectorPanelState extends State<InspectorPanel> {
     final parent = _doc.parentOf(node.id);
     _scroll = scroll;
     final state = _state;
-    final parentStyle = parent == null ? null : resolvedStyle(parent, _doc.parentOf(parent.id));
+    final parentStyle = parent == null ? null : resolvedStyle(lcViewNode(parent, LcViewEnv.of(_doc, widget.bp)), _doc.parentOf(parent.id));
     final parentColumns = parentStyle != null && lcIsGrid(parentStyle) ? lcGridColumns(parentStyle) : null;
     final stateOwn = state == null ? const <String, String>{} : lcStateStyle(preview, state);
+    final bp = widget.bp;
+    // 这一档看到的样子（手机的 + 更窄各档的 + 这一档的差别）；变量不换成值，控件上才看得出“这是变量”。
+    final seen = bp == null ? preview : lcViewNode(preview, LcViewEnv(bp: bp));
+    final bpOwn = bp == null ? const <String, String>{} : canonicalDeclarations(lcBpStyle(preview, bp));
+    final bpNote = bp == null
+        ? null
+        : LcBpNote(
+            bp: bp,
+            onStylePage: _page == InspectorPage.style,
+            filled: bpOwn.isNotEmpty,
+            stateLabel: state == null ? null : kLcStateLabels[state],
+            onClear: () => _apply((n, _) => lcReplaceBp(n, bp, const {})),
+            onGoStyle: () => showPage(InspectorPage.style),
+          );
     final Widget content = switch (_page) {
-      InspectorPage.common => InspectorCommonPage(
-        key: ValueKey('common-${node.id}'),
-        ed: InspectorEdit(doc: _doc, node: preview, parent: parent, apply: _apply, pickImage: widget.pickImage),
+      InspectorPage.common => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ?bpNote,
+          InspectorCommonPage(
+            key: ValueKey('common-${node.id}'),
+            ed: InspectorEdit(doc: _doc, node: preview, parent: parent, apply: _apply, pickImage: widget.pickImage, editDoc: _editDoc, canBind: _hasEvents),
+          ),
+        ],
       ),
       InspectorPage.style => InspectorStylePage(
         key: ValueKey('style-${node.id}'),
-        ed: state == null
-            ? StyleEdit(node: node, own: _style, resolved: resolvedStyle(preview, parent), apply: _applyStyle, parentColumns: parentColumns)
-            : StyleEdit(
+        ed: state != null
+            ? StyleEdit(
                 node: node,
                 own: stateOwn,
-                resolved: {...resolvedStyle(preview, parent), ...stateOwn},
+                resolved: {...resolvedStyle(seen, parent), ...stateOwn},
                 apply: (change, {merge = false}) => _applyState(state, change, merge: merge),
                 parentColumns: parentColumns,
-              ),
+              )
+            : bp != null
+            ? StyleEdit(
+                node: node,
+                own: bpOwn,
+                resolved: resolvedStyle(seen, parent),
+                apply: (change, {merge = false}) => _apply((n, _) => lcEditAtBp(n, bp, (m) => change(LcStyle(m))), merge: merge),
+                parentColumns: parentColumns,
+                inheritedHint: '跟手机一样',
+              )
+            : StyleEdit(node: node, own: _style, resolved: resolvedStyle(preview, parent), apply: _applyStyle, parentColumns: parentColumns),
         tab: _tab,
         dropped: _dropped,
         onDismissDropped: () => setState(() => _dropped = const []),
-        top: LcStateBar(
-          state: state,
-          filled: {
-            for (final s in kLcStateNames)
-              if (lcStateStyle(preview, s).isNotEmpty) s,
-          },
-          onPick: (s) => setState(() => _pickState(s)),
-          onClear: () => _apply((n, _) => lcReplaceState(n, state!, const {})),
-          caveat: lcStateCaveat(preview.type, state),
+        top: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ?bpNote,
+            LcStateBar(
+              state: state,
+              filled: {
+                for (final s in kLcStateNames)
+                  if (lcStateStyle(preview, s).isNotEmpty) s,
+              },
+              onPick: (s) => setState(() => _pickState(s)),
+              onClear: () => _apply((n, _) => lcReplaceState(n, state!, const {})),
+              caveat: lcStateCaveat(preview.type, state),
+            ),
+          ],
         ),
       ),
       InspectorPage.events => InspectorEventsPage(
         key: ValueKey('events-${node.id}'),
         doc: _doc,
         node: node,
-        onEdit: (change) {
-          flush();
-          widget.onEdit((d) => change(_doc = d));
-          if (mounted) setState(_reload);
-        },
+        onEdit: _editDoc,
         onOpen: () {
           flush();
           widget.onOpenLogic?.call(node.id);
@@ -414,123 +454,44 @@ class InspectorPanelState extends State<InspectorPanel> {
         },
       ),
     };
-    return CustomScrollView(
-      controller: scroll,
-      slivers: [
-        PinnedHeaderSliver(child: _header(context, node)),
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(Space.x4, Space.x2, Space.x4, Space.x6),
-          // 不用懒加载的列表：内容就这么几行，一次排好，滚动位置和“滚到被编辑的那一行”都更稳。
-          sliver: SliverToBoxAdapter(child: content),
-        ),
-      ],
-    );
-  }
-
-  Widget _header(BuildContext context, LcNode node) {
-    final c = context.colors;
-    final t = Theme.of(context).textTheme;
-    final quiet = TextButton.styleFrom(
-      foregroundColor: c.textMuted,
-      minimumSize: const Size(48, 40),
-      padding: const EdgeInsets.symmetric(horizontal: Space.x3),
-    );
-    final pages = [
-      for (final p in InspectorPage.values)
-        if (p != InspectorPage.events || _hasEvents) p,
-    ];
-    return ColoredBox(
-      color: c.surface,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (!widget.modal)
-            Center(
-              child: Container(
-                margin: const EdgeInsets.only(top: Space.x2),
-                width: 36,
-                height: 4,
-                decoration: BoxDecoration(color: c.border, borderRadius: BorderRadius.circular(2)),
-              ),
-            ),
-          Padding(
-            padding: const EdgeInsets.only(left: Space.x4, right: Space.x2),
-            child: SizedBox(
-              height: 44,
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      // 单独弹出来的那种（只为改样式开的）标题带“样式”两个字；搭建页里的合一面板只写名字，页签已经说了是哪一页。
-                      '${node.type == 'component' ? componentLabel(_doc, node) : node.spec.label}${widget.modal ? ' 样式' : ''}',
-                      key: const Key('lc-inspector-title'),
-                      style: t.titleLarge,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  if (_page == InspectorPage.style) ...[
-                    TextButton(
-                      key: const Key('lc-style-css'),
-                      onPressed: () => _openCss(node),
-                      style: TextButton.styleFrom(
-                        minimumSize: const Size(48, 40),
-                        padding: const EdgeInsets.symmetric(horizontal: Space.x3),
-                      ),
-                      child: const Text('CSS'),
-                    ),
-                    TextButton(key: const Key('lc-style-reset'), onPressed: _style.isEmpty ? null : _reset, style: quiet, child: const Text('重置')),
-                  ],
-                  if (!widget.modal) IconButton(key: const Key('lc-inspector-close'), tooltip: '收起', icon: const Icon(Icons.close, size: 20), onPressed: _close),
-                ],
-              ),
-            ),
+    return LcThemeScope(
+      theme: lcThemeOf(_doc),
+      child: CustomScrollView(
+        controller: scroll,
+        slivers: [
+          PinnedHeaderSliver(child: _header(context, node)),
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(Space.x4, Space.x2, Space.x4, Space.x6),
+            // 不用懒加载的列表：内容就这么几行，一次排好，滚动位置和“滚到被编辑的那一行”都更稳。
+            sliver: SliverToBoxAdapter(child: content),
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x2),
-            child: Container(
-              decoration: BoxDecoration(color: c.surfaceMuted, borderRadius: BorderRadius.circular(Radii.sm)),
-              padding: const EdgeInsets.all(2),
-              child: Row(children: [for (final p in pages) Expanded(child: _segment(context, p))]),
-            ),
-          ),
-          if (_page == InspectorPage.style)
-            StyleTabStrip(
-              tab: _tab,
-              own: _style,
-              onSelect: (tab) {
-                _jumpTop();
-                setState(() => _tab = tab);
-              },
-            ),
-          Divider(height: 1, color: c.border),
         ],
       ),
     );
   }
 
-  Widget _segment(BuildContext context, InspectorPage p) {
-    final c = context.colors;
-    final t = Theme.of(context).textTheme;
-    final on = p == _page;
-    return Material(
-      color: on ? c.surface : Colors.transparent,
-      borderRadius: BorderRadius.circular(Radii.sm - 2),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        key: Key('lc-page-${p.name}'),
-        onTap: () => showPage(p),
-        child: SizedBox(
-          height: 36,
-          child: Center(
-            child: Text(
-              p.label,
-              style: t.bodyMedium?.copyWith(color: on ? c.accent : c.textMuted, fontWeight: on ? FontWeight.w600 : FontWeight.w400, height: 1.2),
-            ),
+  Widget _header(BuildContext context, LcNode node) => InspectorHeader(
+    title: '${node.type == 'component' ? componentLabel(_doc, node) : node.spec.label}${widget.modal ? ' 样式' : ''}',
+    modal: widget.modal,
+    page: _page,
+    pages: [
+      for (final p in InspectorPage.values)
+        if (p != InspectorPage.events || _hasEvents) p,
+    ],
+    onPage: showPage,
+    // “CSS”“重置”改的是手机（默认）那份：画布切到别的屏宽时收起来，免得以为改的是这一档。
+    onCss: _page == InspectorPage.style && widget.bp == null ? () => _openCss(node) : null,
+    onReset: _style.isEmpty ? null : _reset,
+    onClose: _close,
+    strip: _page != InspectorPage.style
+        ? null
+        : StyleTabStrip(
+            tab: _tab,
+            own: widget.bp == null ? _style : canonicalDeclarations(lcBpStyle(_preview(node), widget.bp!)),
+            onSelect: (tab) {
+              _jumpTop();
+              setState(() => _tab = tab);
+            },
           ),
-        ),
-      ),
-    );
-  }
+  );
 }
