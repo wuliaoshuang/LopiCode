@@ -1,5 +1,5 @@
 // 第 4 期·多页面的界面（390×844）：顶栏的“页面”按钮、页面面板（换页、新建、改名、复制、设为首页、排序、删除）、
-// 导航项的“点了去”和“同步到其它页面”、事件页的“点击时去页面”、跨页撤销。
+// 导航项的“点了去”和“改成各页共用”（原来是“同步到其它页面”）、事件页的“点击时去页面”、跨页撤销。
 // 模型和导出在 lowcode_pages_test.dart / lowcode_pages_export_test.dart。
 //   LOPI_SHOTS=1 LOPI_SHOT_DIR=<目录> flutter test --no-pub test/lowcode_pages_ui_test.dart   # 同时出截图
 import 'dart:io';
@@ -218,7 +218,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('导航项：每项下面一行“点了去”，能改；指着已经删掉的页面标红；“同步到其它页面”把这条抄到它指向的各页', (tester) async {
+  testWidgets('导航项：每项下面一行“点了去”，能改；指着已经删掉的页面标红；“改成各页共用”各页不一样时先挑以哪一页为准', (tester) async {
     final doc = pagesSample();
     // 第三页的导航栏先弄得不一样，再加一页没有导航栏的。
     final nav3 = doc.pageById('p3')!.root.children.last;
@@ -241,30 +241,34 @@ void main() {
     await tap(tester, lbKey('lc-items-page-pick-$p4'));
     expect(find.descendant(of: lbKey('lc-items-page-1'), matching: find.text('购物车')), findsOneWidget);
 
-    // 同步：说清楚会改哪几页。
-    await lbTapShown(tester, lbKey('lc-items-sync-nav'));
-    expect(find.textContaining('「购物车」、「Me」'), findsOneWidget);
-    await shot(tester, 'pages-12-nav-sync-confirm');
-    await tap(tester, find.widgetWithText(TextButton, '同步'));
-    expect(find.text('已同步到 2 个页面。'), findsOneWidget);
-    await shot(tester, 'pages-12b-after-sync');
+    // 改成各页共用（第四轮 B1 起代替“同步到其它页面”）：各页不一样，先挑以哪一页为准。
+    expect(lbKey('lc-items-sync-nav'), findsNothing);
+    await lbTapShown(tester, lbKey('lc-nav-share'));
+    expect(lbKey('lc-nav-share-pick'), findsOneWidget);
+    expect(find.textContaining('别的页的导航栏会被换成它'), findsOneWidget);
+    await shot(tester, 'pages-12-nav-share-pick');
+    await tap(tester, lbKey('lc-nav-share-base-p1'));
+    expect(find.text('已改成共用：4 个页面在显示这一条。'), findsOneWidget);
+    await shot(tester, 'pages-12b-after-share');
     final saved = await lbSaved(tester, session);
     LcNode navOf(String id) => saved.pageById(id)!.root.children.lastWhere((n) => n.type == 'bottomNav');
     final home = navOf('p1');
-    for (final (id, current) in [(p4, 1), ('p3', 2)]) {
+    for (final (id, current) in [(p4, 1), ('p3', 2), ('p2', 0)]) {
       expect(saved.pageById(id)!.root.children.map((n) => n.type), contains('bottomNav'), reason: '$id：${saved.encode()}');
       final n = navOf(id);
       expect([for (final m in lcObjects(n, 'items')) '${m['label']}→${lcNavItemPage(m)}'], ['首页→p1', '商品→$p4', '我的→p3'], reason: id);
-      expect(n.props['current'], current, reason: '$id 的当前项是指向它自己的那一项');
+      expect(n.props['current'], current, reason: '$id 的当前项是指向它自己的那一项（没有哪一项指着它就是第一项）');
       expect(n.props['width'], home.props['width']);
     }
-    expect(navOf('p2').props['items'], pagesSample().pageById('p2')!.root.children.last.props['items'], reason: '没被指着的页不动');
-    // 一次同步是一条撤销。
+    expect(saved.sharedNav, isNotNull);
+    // 改成共用是一条撤销。
     await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
-    expect(find.byTooltip('撤销').hitTestable(), findsOneWidget, reason: '那句“已同步”的提示不能盖住撤销');
+    expect(find.byTooltip('撤销').hitTestable(), findsOneWidget, reason: '那句“已改成共用”的提示不能盖住撤销');
     await tap(tester, find.byTooltip('撤销'));
-    expect(lcObjects((await lbSaved(tester, session)).pageById('p3')!.root.children.last, 'items').single['label'], '旧的');
+    final undone = await lbSaved(tester, session);
+    expect(lcObjects(undone.pageById('p3')!.root.children.last, 'items').single['label'], '旧的');
+    expect(undone.sharedNav, isNull);
 
     // 指着的页面删掉了：红字。
     await openPages(tester);

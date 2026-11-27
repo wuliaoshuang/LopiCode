@@ -203,9 +203,35 @@ void lcSetRepeat(LcNode n, {required Map<String, dynamic>? listSrc, String? item
 // —— 类名开关 / 样式 ——
 
 class LcClassIf {
-  const LcClassIf(this.name, this.when);
+  const LcClassIf(this.name, this.when, [this.style = const {}]);
   final String name;
   final Map<String, dynamic> when;
+
+  /// 这条类名成立时的样子（CSS 属性 → 值；第四轮 B2 加的字段 `style`，没配是空的）。
+  final Map<String, String> style;
+}
+
+Map<String, String> _classStyle(Object? raw) => {
+  if (raw is Map)
+    for (final e in raw.entries)
+      if (e.key is String && e.value is String) e.key as String: e.value as String,
+};
+
+/// 给一条类名开关配“成立时的样子”（空的＝去掉）。没有这条类名时什么也不做。
+void lcSetClassIfStyle(LcNode n, String name, Map<String, String> style) {
+  final raw = n.more[kLcClassIf];
+  if (raw is! List) return;
+  n.more[kLcClassIf] = [
+    for (final item in raw)
+      if (item is Map && item['name'] == name)
+        {
+          for (final e in item.entries)
+            if (e.key != 'style') e.key: e.value,
+          if (style.isNotEmpty) 'style': {...style},
+        }
+      else
+        item,
+  ];
 }
 
 List<LcClassIf> lcClassIfOf(LcNode n) {
@@ -215,7 +241,7 @@ List<LcClassIf> lcClassIfOf(LcNode n) {
     if (raw is List)
       for (final item in raw)
         if (item is Map && item['name'] is String && kLcClassName.hasMatch(item['name'] as String) && seen.add(item['name'] as String))
-          if (lcSrcExprOf(item['when']) case final cond?) LcClassIf(item['name'] as String, cond),
+          if (lcSrcExprOf(item['when']) case final cond?) LcClassIf(item['name'] as String, cond, _classStyle(item['style'])),
   ];
 }
 
@@ -225,8 +251,12 @@ void lcSetClassIf(LcNode n, String name, Map<String, dynamic>? when) {
   final list = <dynamic>[
     if (raw is List)
       for (final item in raw)
-        if (!(item is Map && item['name'] == name)) item,
-    ?(when == null ? null : {'name': name, 'when': when}),
+        if (!(item is Map && item['name'] == name))
+          item
+        else if (when != null)
+          // 改条件：原地改，配好的样子（和别的读不懂的字段）留着。
+          {...item, 'when': when},
+    if (when != null && !(raw is List && raw.any((item) => item is Map && item['name'] == name))) {'name': name, 'when': when},
   ];
   if (list.isEmpty) {
     n.more.remove(kLcClassIf);

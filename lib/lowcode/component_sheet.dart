@@ -5,6 +5,7 @@
 // - 没有组件时显示怎么创建（在画布上选中一个控件 → 更多操作 → 存成组件）。
 // - 删除要确认；还有地方在用时让人选：把用到的地方拆成普通控件再删，还是连用到的地方一起删。
 // - 每次操作一条撤销记录。“插入”和“存成组件”做完就关面板，搭建页选中那个实例。
+import 'package:lopicode/lowcode/comp_lib.dart';
 import 'package:lopicode/lowcode/component_editor_sheet.dart';
 import 'package:lopicode/lowcode/component_model.dart';
 import 'package:lopicode/lowcode/component_ops.dart';
@@ -242,7 +243,11 @@ class _ComponentSheetState extends State<_ComponentSheet> {
               contentPadding: const EdgeInsets.only(left: Space.x4, right: Space.x1),
               leading: Icon(Icons.widgets_outlined, color: c.accent),
               title: Text(def.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-              subtitle: Text('用了 ${componentUseCount(_doc, def.id)} 次 · ${def.props.isEmpty ? '没有可配置属性' : '${def.props.length} 个可配置属性'}', maxLines: 1, overflow: TextOverflow.ellipsis),
+              subtitle: Text(
+                '${compLibOf(def) == null ? '' : '库「${compLibOf(def)!.name}」· '}用了 ${componentUseCount(_doc, def.id)} 次 · ${def.props.isEmpty ? '没有可配置属性' : '${def.props.length} 个可配置属性'}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -261,14 +266,17 @@ class _ComponentSheetState extends State<_ComponentSheet> {
                       'rename' => _rename(def),
                       'props' => _editProps(def),
                       'content' => _editContent(def),
+                      'fork' => _run((d) => compLibFork(d, def.id) == null ? const LcOpResult.fail('没复制成') : const LcOpResult.ok()),
                       _ => _delete(def),
                     },
-                    itemBuilder: (_) => const [
-                      PopupMenuItem(value: 'props', child: Text('编辑属性')),
-                      PopupMenuItem(value: 'content', child: Text('编辑内容')),
-                      PopupMenuItem(value: 'rename', child: Text('改名')),
-                      PopupMenuItem(value: 'delete', child: Text('删除')),
-                    ],
+                    itemBuilder: (_) => compLibOf(def) != null
+                        ? const [PopupMenuItem(value: 'fork', child: Text('复制一份来改'))]
+                        : const [
+                            PopupMenuItem(value: 'props', child: Text('编辑属性')),
+                            PopupMenuItem(value: 'content', child: Text('编辑内容')),
+                            PopupMenuItem(value: 'rename', child: Text('改名')),
+                            PopupMenuItem(value: 'delete', child: Text('删除')),
+                          ],
                   ),
                 ],
               ),

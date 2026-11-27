@@ -13,6 +13,7 @@ import 'package:lopicode/lowcode/bind_eval.dart';
 import 'package:lopicode/lowcode/bind_model.dart';
 import 'package:lopicode/lowcode/bind_preview.dart';
 import 'package:lopicode/lowcode/css_codec.dart';
+import 'package:lopicode/lowcode/export_live_doc.dart';
 import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/lowcode/theme_vars.dart';
 
@@ -111,7 +112,9 @@ class LcViewEnv {
   factory LcViewEnv.of(LcDocument doc, [String? bp]) {
     final vars = lcThemeOf(doc).values;
     // 这一页一个绑定都没有：不带绑定环境，画布走的还是原来那条路。
-    final bind = lcTreeHasBindings(doc.root) ? LcBindEnv.of(doc) : null;
+    // 页面里有“用了第 6 期新东西”的组件实例：绑定在定义里，状态要算上每个实例自己的那一份。
+    final live = lcTreeHasLiveInstance(doc, doc.root);
+    final bind = live ? LcBindEnv.of(lcExportDoc(doc)) : (lcTreeHasBindings(doc.root) ? LcBindEnv.of(doc) : null);
     return vars.isEmpty && bp == null && bind == null ? plain : LcViewEnv(vars: vars, bp: bp, bind: bind);
   }
 

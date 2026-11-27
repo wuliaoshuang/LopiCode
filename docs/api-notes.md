@@ -814,3 +814,14 @@ Flutter 导出在测试里真的跳了页（`test/lowcode_pages_export_test.dart
   `useRef` 的值在同一次挂载里是同一个，按理只做一次，这一段没有在 StrictMode 下验证。
 - **验证环境**：Node＋jsdom 31.0.1（`~/workspace/tools/webdev-dom/`）。jsdom 不排版、不真的换页、没有 `alert` 和 `fetch`——页面逻辑的真跑用假网络和假对话框
   （`tool/verify/run_dom.mjs` 的 `fake` 步骤）。没覆盖：真浏览器、真手机。
+
+## 第四轮 B4：组件文件用到的框架写法
+
+- **Vue 3 `defineProps` / `defineEmits`（`<script setup>`）、组件上的 `v-model:名字`**：`v-model:title="x"` 等于传属性 `title` 并监听 `update:title`；3.4 起官方推荐 `defineModel()`，
+  但“属性＋`update:名字` 事件”的老写法仍然有效（官方文档 vuejs.org/guide/components/v-model.html 的“Under the Hood”和“v-model Arguments”两节，2026-11-27 核对）。
+  这里用老写法（不依赖 3.4）。本机用官方编译器 `@vue/compiler-sfc` 真编译 0 错 0 警告、jsdom 真跑验证（`lowcode_comp_live_run_test`、`lowcode_comp_files_test`）。
+- **Vue 3 组件事件不冒泡**：所以套着的实例要往外发，得在外层组件里显式再 `emit` 一次（第三方课程讲义里的说法；**官方出处未核对**，行为由真跑测试“组件里套组件：里面的事件带着数据传到页面”验证（`lowcode_comp_files_test`））。
+- **React `useRef`**：返回 `{ current }`，同一个组件实例每次渲染拿到同一个对象，改它不触发重画（react.dev/learn/referencing-values-with-refs，2026-11-27 核对）。
+  **同一页官方提醒“渲染时不要读写 `ref.current`”**——导出的页面文件（第 5 期起）和组件文件都在渲染时读写 `lcVars`（靠 `lcRefresh()` 手动重画）。这是已知的出入：
+  在并发渲染（一次渲染被打断重做）下可能读到中间值。**未核对**：React 18/19 的 StrictMode、并发特性下的实际表现；现有验证只有 jsdom 里的同步渲染。
+- **React 事件回调属性**：父组件把函数当属性传给子组件、子组件调用它，是 React 的常规写法（react.dev“Responding to Events”一节；**这一条没单独打开核对**）。

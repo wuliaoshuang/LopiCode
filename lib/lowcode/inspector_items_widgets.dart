@@ -10,19 +10,22 @@
 // - 主次：名字是主角（正常字号、最宽）；值是次要的（窄、等宽感的小字）；三个小按钮用次要色。
 // - 第 4 期·多页面（只有导航项有）：项目里有别的页面时，每一项下面多一行“点了去：〔页面名 ▾〕”——一行只管“去哪页”这一件事，
 //   点开是一张单选的小单子（不跳转 / 各个页面）。指着的页面已经删掉的显示红字“已经删掉的页面”。
-//   整块最下面一个描边按钮“同步到其它页面”：把这条导航栏抄到它指向的各页（规矩见 nav_sync.dart），做之前说清楚会改哪几页。
+//   整块最下面是“共用”那一块（inspector_nav_shared_widgets.dart）：改成各页共用 / 这一页不显示 / 取消共用。
+//   共用的导航栏上，选中圈只是给看（亮哪一项按“指着哪一页”自动算）。
 //   只有一页的项目里这两样都不出现，只在最下面说一句“加了别的页面以后可以选去哪页”。
 // - 取用的 tokens：Space.x1/x2/x3、accent（选中圈）、textMuted / textFaint（小按钮、小标题）、danger（红字）。
 import 'package:lopicode/lowcode/editor_workbench_widgets.dart';
 import 'package:lopicode/lowcode/icon_set_widgets.dart';
+import 'package:lopicode/lowcode/inspector_bp_widgets.dart';
 import 'package:lopicode/lowcode/inspector_common_widgets.dart';
+import 'package:lopicode/lowcode/inspector_nav_shared_widgets.dart';
 import 'package:lopicode/lowcode/inspector_v3_rows_widgets.dart';
 import 'package:lopicode/lowcode/items_edit.dart';
 import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/lowcode/model_v3_components.dart';
+import 'package:lopicode/lowcode/nav_shared.dart';
 import 'package:lopicode/lowcode/nav_sync.dart';
 import 'package:lopicode/theme/tokens.dart';
-import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
 
 class LcItemsEditor extends StatefulWidget {
@@ -120,7 +123,20 @@ class _LcItemsEditorState extends State<LcItemsEditor> {
       },
     );
     if (picked == null || picked == (now ?? '') || !mounted) return;
-    ed.apply((n, _) => lcItemSet(n, kind, index, 'page', picked));
+    final edit = ed.editDoc;
+    if (edit == null || !lcIsSharedNav(ed.node) || picked.isEmpty) {
+      ed.apply((n, _) => lcItemSet(n, kind, index, 'page', picked));
+      return;
+    }
+    // 共用的那一条：指着的页还没显示它就顺手加上（同一次修改里，撤销一次都回去）。
+    var added = false;
+    edit((d) {
+      final n = d.find(ed.node.id);
+      if (n == null) return;
+      lcItemSet(n, kind, index, 'page', picked);
+      added = lcSetPageShowsSharedNav(d, picked, true);
+    });
+    if (added && mounted) showEditorHint(context, '「${ed.doc.pageTitle(picked) ?? ''}」也显示这条导航了。');
   }
 
   /// “点了去”后面那几个字：没设是强调色的“选一页”，设了是页名，页面已经删掉是红字。
@@ -139,20 +155,6 @@ class _LcItemsEditorState extends State<LcItemsEditor> {
     );
   }
 
-  Future<void> _syncNav() async {
-    final targets = lcNavSyncTargets(ed.doc, ed.node.id);
-    if (targets.isEmpty) {
-      showEditorHint(context, '先给导航项选好“点了去”哪一页，再同步。');
-      return;
-    }
-    final names = [for (final p in targets) '「${p.title}」'].join('、');
-    final ok = await confirmDialog(context, title: '同步到其它页面', message: '把这条导航栏的导航项和样子抄到 $names。那一页已经有导航栏的会被改成和这条一样，没有的在页面最后加一条。做错了可以撤销。', confirmLabel: '同步');
-    if (!ok || !mounted) return;
-    var done = 0;
-    ed.editDoc!((d) => done = lcSyncBottomNav(d, ed.node.id));
-    if (mounted) showEditorHint(context, '已同步到 $done 个页面。');
-  }
-
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
@@ -160,6 +162,7 @@ class _LcItemsEditorState extends State<LcItemsEditor> {
     final node = ed.node;
     final pages = kind == LcItemsKind.nav && ed.doc.isMultiPage;
     final all = lcObjects(node, kind.prop);
+    final shared = lcIsSharedNav(node);
     final canRemove = lcItemsCanRemove(node, kind);
     Widget small(String key, IconData icon, String label, VoidCallback? onTap) => SizedBox(
       width: 32,
@@ -179,6 +182,7 @@ class _LcItemsEditorState extends State<LcItemsEditor> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          const LcNoBpTag(block: true),
           Row(
             children: [
               Text(kind.label, style: t.labelLarge?.copyWith(color: c.textMuted)),
@@ -204,7 +208,8 @@ class _LcItemsEditorState extends State<LcItemsEditor> {
                     key: Key('lc-items-current-$i'),
                     padding: EdgeInsets.zero,
                     iconSize: 20,
-                    onPressed: () => ed.apply((n, _) => lcItemSetCurrent(n, kind, i)),
+                    // 共用的导航栏：亮哪一项是按“指着哪一页”自动算的，这里只是给看。
+                    onPressed: shared ? null : () => ed.apply((n, _) => lcItemSetCurrent(n, kind, i)),
                     icon: lcItemIsCurrent(node, kind, i)
                         ? Icon(Icons.radio_button_checked, color: c.accent, semanticLabel: '现在选中的是这一项')
                         : Icon(Icons.radio_button_unchecked, color: c.textFaint, semanticLabel: '选中这一项'),
@@ -278,11 +283,7 @@ class _LcItemsEditorState extends State<LcItemsEditor> {
                 ),
               ),
           ],
-          if (pages && ed.editDoc != null)
-            Padding(
-              padding: const EdgeInsets.only(top: Space.x2),
-              child: OutlinedButton(key: const Key('lc-items-sync-nav'), onPressed: _syncNav, child: const Text('同步到其它页面')),
-            ),
+          if (pages) LcNavShareBlock(ed: ed),
           if (kind == LcItemsKind.nav && !ed.doc.isMultiPage)
             Padding(
               padding: const EdgeInsets.only(top: Space.x1),

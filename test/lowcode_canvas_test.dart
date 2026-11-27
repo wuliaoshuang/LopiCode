@@ -690,7 +690,7 @@ void main() {
         await tester.dragFrom(view.center, const Offset(120, 400));
         await tester.pump(const Duration(seconds: 3));
       }
-      expect(tester.getRect(find.byKey(const ValueKey('lowcode-page'))).topLeft, view.topLeft + const Offset(0, PageBar.kHeight), reason: '顶边停在悬浮顶栏的下沿');
+      expect(tester.getRect(find.byKey(const ValueKey('lowcode-page'))).topLeft, view.topLeft + const Offset(0, PageBar.kHeight + BarScrim.kTail), reason: '顶边停在悬浮顶栏渐隐遮罩的下沿（第一行不被半透明地盖住）');
       expect(tester.takeException(), isNull);
     });
 

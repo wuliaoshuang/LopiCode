@@ -112,6 +112,7 @@ class _PropsSheetState extends State<_PropsSheet> {
 
   Future<void> _editDefault(LcComponentProp p) async {
     final name = p.name;
+    if (p.type == 'list') return tellComponentProblem(context, '列表属性的默认值是空列表。用这个组件的地方在“属性跟着状态变”里给它选一个列表状态。');
     final value = await askComponentValue(context, title: '$name 的默认值', type: p.type, initial: p.defaultValue);
     if (value == null || !mounted) return;
     await _run((d) => setComponentPropDefault(d, widget.componentId, name, value));

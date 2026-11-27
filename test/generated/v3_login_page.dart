@@ -7,19 +7,19 @@ class V3LoginPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-        backgroundColor: const Color(0xFFFFFFFF),
+        backgroundColor: Color(0xFFFFFFFF),
         appBar: AppBar(
           primary: true,
           automaticallyImplyLeading: false,
-          leading: const BackButton(),
+          leading: BackButton(),
           title: Text('登录'),
           centerTitle: true,
-          backgroundColor: const Color(0xFFFFFFFF),
-          foregroundColor: const Color(0xFF222435),
+          backgroundColor: Color(0xFFFFFFFF),
+          foregroundColor: Color(0xFF222435),
         ),
         body: SafeArea(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
+            padding: EdgeInsets.all(16),
             child: SizedBox(
               width: double.infinity,
               child: Column(
@@ -27,10 +27,10 @@ class V3LoginPage extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 spacing: 16,
                 children: [
-                  Icon(Icons.person, size: 56, color: const Color(0xFF058654)),
+                  Icon(Icons.person, size: 56, color: Color(0xFF058654)),
                   Text(
                     '欢迎回来',
-                    style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w600, height: 1.5),
+                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600, height: 1.5),
                   ),
                   SizedBox(
                     width: double.infinity,
@@ -74,7 +74,7 @@ class V3LoginPage extends StatelessWidget {
                         Flexible(
                           child: Text(
                             '忘记密码？',
-                            style: const TextStyle(fontSize: 14, color: const Color(0xFF058654), height: 1.5),
+                            style: TextStyle(fontSize: 14, color: Color(0xFF058654), height: 1.5),
                           ),
                         ),
                       ],
@@ -84,7 +84,7 @@ class V3LoginPage extends StatelessWidget {
                     width: double.infinity,
                     child: FilledButton(
                       onPressed: () {},
-                      style: FilledButton.styleFrom(backgroundColor: const Color(0xFF058654), foregroundColor: const Color(0xFFFFFFFF), padding: const EdgeInsets.all(12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+                      style: FilledButton.styleFrom(backgroundColor: Color(0xFF058654), foregroundColor: Color(0xFFFFFFFF), padding: EdgeInsets.all(12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))).copyWith(backgroundColor: WidgetStateProperty.resolveWith<Color?>((states) => states.contains(WidgetState.disabled) ? null : (states.contains(WidgetState.pressed) ? Color(0xFF046B43) : Color(0xFF058654)))),
                       child: Text('登录'),
                     ),
                   ),
@@ -92,7 +92,7 @@ class V3LoginPage extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Checkbox(value: false, onChanged: (value) {}),
-                      Flexible(child: Text('我已阅读并同意《用户协议》', style: const TextStyle(fontSize: 13, color: const Color(0xFF5C6479)))),
+                      Flexible(child: Text('我已阅读并同意《用户协议》', style: TextStyle(fontSize: 13, color: Color(0xFF5C6479)))),
                     ],
                   ),
                 ],

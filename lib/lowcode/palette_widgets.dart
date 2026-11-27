@@ -261,6 +261,8 @@ class PalettePanelState extends State<PalettePanel> {
                   ? Center(
                       child: Text(group == PaletteGroup.mine ? '还没有自定义组件' : '这一类还没有组件', style: t.bodySmall?.copyWith(color: c.textFaint)),
                     )
+                  : query.isEmpty && shown.any((e) => e.lib != null)
+                  ? _byLib(context, shown)
                   : GridView.builder(
                       key: const ValueKey('palette-grid'),
                       padding: const EdgeInsets.fromLTRB(Space.x3, Space.x1, Space.x3, Space.x3),
@@ -272,6 +274,41 @@ class PalettePanelState extends State<PalettePanel> {
           ],
         ),
       ),
+    );
+  }
+
+  /// “我的”里有组件库的时候：项目自己的一组，然后一个库一组（组名＝库的名字）。
+  Widget _byLib(BuildContext context, List<PaletteEntry> shown) {
+    final c = context.colors;
+    final t = Theme.of(context).textTheme;
+    final groups = <String?, List<PaletteEntry>>{};
+    for (final e in shown) {
+      groups.putIfAbsent(e.lib, () => []).add(e);
+    }
+    const grid = SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 4, mainAxisExtent: 72, crossAxisSpacing: Space.x2, mainAxisSpacing: Space.x2);
+    return CustomScrollView(
+      key: const ValueKey('palette-grid'),
+      slivers: [
+        for (final g in groups.entries) ...[
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(Space.x3, Space.x2, Space.x3, Space.x1),
+            sliver: SliverToBoxAdapter(
+              child: Text(
+                g.key == null ? '项目里的' : '库 · ${g.key}',
+                key: ValueKey('palette-lib-${g.key ?? ''}'),
+                style: t.labelMedium?.copyWith(color: c.textMuted),
+              ),
+            ),
+          ),
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(Space.x3, 0, Space.x3, Space.x2),
+            sliver: SliverGrid(
+              gridDelegate: grid,
+              delegate: SliverChildBuilderDelegate((context, i) => _cell(context, g.value[i]), childCount: g.value.length),
+            ),
+          ),
+        ],
+      ],
     );
   }
 

@@ -20,6 +20,9 @@ import 'package:lopicode/theme/tokens.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// “重复”面板的结果。
+/// 这张单子里名字那一栏的宽度：最长的名字“每项的标识”五个字（70），留出 18 的空再接右边的药丸。
+const double _labelWidth = 88;
+
 class LcRepeatDraft {
   const LcRepeatDraft({required this.list, required this.item, required this.index, this.key, this.empty, required this.preview}) : remove = false;
   const LcRepeatDraft.removed() : list = null, item = '', index = '', key = null, empty = null, preview = 3, remove = true;
@@ -101,6 +104,7 @@ class _RepeatSheetState extends State<_RepeatSheet> {
       child: expr == null ? InspectorChip(key: Key('lc-repeat-$id'), label: ask, selected: false, onTap: open) : LcVarBadge(key: Key('lc-repeat-$id'), label: lcDescribeExpr(expr), onTap: open),
     );
     Widget name(String id, String label, TextEditingController ctl) => InspectorRow(
+      labelWidth: _labelWidth,
       label: label,
       scroll: false,
       child: TextField(key: Key('lc-repeat-$id'), controller: ctl, decoration: const InputDecoration(isDense: true), onChanged: (_) => setState(() {})),
@@ -117,16 +121,18 @@ class _RepeatSheetState extends State<_RepeatSheet> {
               const SizedBox(height: Space.x1),
               Text('列表有几项，这个组件就出现几份；每一份里的控件可以用“这一项”。', style: t.bodySmall?.copyWith(color: c.textMuted)),
               const SizedBox(height: Space.x2),
-              InspectorRow(label: '列表', scroll: false, child: pick('list', '选一张列表', listExpr, _pickList)),
+              InspectorRow(labelWidth: _labelWidth, label: '列表', scroll: false, child: pick('list', '选一张列表', listExpr, _pickList)),
               name('item', '这一项叫', _item),
               name('index', '第几个叫', _index),
               InspectorRow(
+                labelWidth: _labelWidth,
                 label: '每项的标识',
                 scroll: false,
                 below: Text('选每一项里不会重复的那一格（比如 id）。列表增删、挪动时靠它认出谁是谁。', style: t.bodySmall?.copyWith(color: c.textFaint)),
                 child: pick('key', '选一格', keyExpr, _pickKey),
               ),
               InspectorRow(
+                labelWidth: _labelWidth,
                 label: '空的时候',
                 scroll: false,
                 child: TextField(
@@ -136,6 +142,7 @@ class _RepeatSheetState extends State<_RepeatSheet> {
                 ),
               ),
               InspectorRow(
+                labelWidth: _labelWidth,
                 label: '画布先画',
                 child: Row(
                   children: [

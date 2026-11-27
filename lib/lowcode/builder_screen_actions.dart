@@ -123,11 +123,36 @@ extension _BuilderActions on _BuilderScreenState {
         final id = await saveAsComponentFlow(context, doc: doc, onEdit: _apply, nodeId: node.id);
         if (id != null) _selected = id;
       case 'edit':
-        await showComponentEditor(context, doc: doc, onEdit: _apply, componentId: node.strProp('ref') ?? '', recents: _recents, images: _images);
+        final ref = node.strProp('ref') ?? '';
+        final def = doc.component(ref);
+        final from = def == null ? null : compLibOf(def);
+        if (from == null) {
+          await showComponentEditor(context, doc: doc, onEdit: _apply, componentId: ref, recents: _recents, images: _images);
+        } else if (await confirmDialog(context, title: '这是库里的组件', message: '「${def!.name}」来自组件库「${from.name}」，不能直接改。可以复制一份成项目自己的组件，这一处换成副本，再去改。', confirmLabel: '复制一份来改')) {
+          if (!mounted) return;
+          String? made;
+          _apply((d) {
+            made = compLibFork(d, ref);
+            if (made != null) d.find(node.id)?.props['ref'] = made;
+          });
+          if (made != null) await showComponentEditor(context, doc: _doc!, onEdit: _apply, componentId: made!, recents: _recents, images: _images);
+        }
+      case 'toLib':
+        await _openLibs(pick: node.strProp('ref'));
       case 'detach':
         await detachInstanceFlow(context, doc: doc, onEdit: _apply, instanceId: node.id);
     }
     _refresh();
+  }
+
+  Future<void> _openLibs({String? pick}) async {
+    final def = pick == null ? null : _doc!.component(pick);
+    if (def != null && compLibOf(def) != null) {
+      showSnack(context, '它本来就是库「${compLibOf(def)!.name}」里的组件');
+      return;
+    }
+    await showCompLibSheet(context, doc: () => _doc!, onEdit: _apply, images: _images, pickComponent: pick);
+    if (mounted) _refresh();
   }
 
   Future<void> _openFrameworkExport() async {
@@ -192,6 +217,8 @@ extension _BuilderActions on _BuilderScreenState {
         unawaited(_openLogic());
       case 'components':
         unawaited(_openComponents());
+      case 'libs':
+        unawaited(_openLibs());
       case 'pages':
         unawaited(_openPages());
       case 'title':

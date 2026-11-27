@@ -12,6 +12,7 @@ library;
 import 'package:lopicode/lowcode/component_expand.dart';
 import 'package:lopicode/lowcode/component_model.dart';
 import 'package:lopicode/lowcode/logic_edit.dart';
+import 'package:lopicode/lowcode/logic_model.dart';
 import 'package:lopicode/lowcode/model.dart';
 
 /// 上限：组件名的字数、组件套组件的层数（再深不展开）、一个组件的属性个数、
@@ -93,6 +94,7 @@ bool valueFitsProp(LcComponentProp p, Object? v) => _fit(p, v) != null;
 Object? _fit(LcComponentProp p, Object? v) => switch (p.type) {
   'number' => v is num && v.isFinite ? v : null,
   'bool' => v is bool ? v : null,
+  'list' => v is List ? v : null,
   'color' => v is String && _hex.hasMatch(v) ? v.toUpperCase() : null,
   _ => v is String ? v : null,
 };
@@ -291,16 +293,34 @@ bool _detachAt(LcDocument doc, List<LcNode> list, int index, String Function() m
   final inst = list[index];
   // 填进插槽的内容是页面里本来就有的节点：原样接到插槽的位置上，编号不换（挂在它们上面的积木逻辑还认得）。
   final own = Set<LcNode>.identity()..addAll(inst.children);
-  final flat = LcExpander(doc, deep: false).expand(inst);
+  final onPage = identical(doc.find(inst.id), inst);
+  final x = LcExpander(doc, deep: false);
+  final flat = x.expand(inst);
   if (flat == null) return false;
+  final renamed = <String, String>{};
   void renumber(LcNode n) {
     if (own.contains(n)) return;
-    n.id = mint();
+    final old = n.id;
+    renamed[old] = n.id = mint();
     n.children.forEach(renumber);
   }
 
   flat.children.forEach(renumber);
   list[index] = flat;
+  // 用了事件 / 自己的状态的实例（第四轮 B2）：拆开以后，它那一份状态落成这一页的状态、接的事件落成这一页的处理，
+  // 不然拆出来的控件绑着的状态就找不到了。只管当前这一页上的实例（别的页、组件定义里的拆不到这一步）。
+  if (onPage) {
+    final have = {for (final v in doc.logic.variables) v.name};
+    doc.logic.variables.addAll(x.hoisted.where((v) => have.add(v.name)));
+    final ids = {for (final h in doc.logic.handlers) h.id};
+    var k = 1;
+    for (final h in x.synth) {
+      while (!ids.add('hc$k')) {
+        k++;
+      }
+      doc.logic.handlers.add(LcHandler(id: 'hc$k', event: h.event, target: renamed[h.nodeId] ?? h.nodeId, body: [for (final b in h.body) b.clone()]));
+    }
+  }
   return true;
 }
 

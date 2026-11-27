@@ -35,6 +35,15 @@ class LcBindPlan {
     return LcBindPlan._(doc, states, LcBindEnv.of(doc));
   }
 
+  /// 不管用没用绑定都给一份（组件文件用：没有绑定的定义也要按这张表读属性）。
+  static LcBindPlan forced(LcDocument doc) {
+    final seen = <String>{};
+    return LcBindPlan._(doc, [
+      for (final s in lcStatesInScope(doc))
+        if (seen.add(s.name)) s,
+    ], LcBindEnv.of(doc));
+  }
+
   final LcDocument doc;
 
   /// 这一页看得到的状态（页面的在前；重名只留第一个）。

@@ -17,6 +17,8 @@ import 'package:lopicode/lowcode/logic_gate.dart';
 import 'package:lopicode/lowcode/logic_js.dart';
 import 'package:lopicode/lowcode/logic_js_core.dart';
 import 'package:lopicode/lowcode/model.dart';
+import 'package:lopicode/lowcode/nav_shared.dart';
+import 'package:lopicode/lowcode/top_shared.dart';
 
 /// Vue / React 多页面导出的外壳的名字（文件是 `LcApp.vue` / `LcApp.jsx`）。`Lc` 开头是我们自己的地盘。
 const String kLcShellName = 'LcApp';
@@ -56,10 +58,21 @@ class LcSitePlan {
       }
       componentNames[c.id] = name;
     }
+    // 各页共用的底部导航在 Vue / React 里抽成的公共部件（export_shared_parts.dart）：名字最后发，不抢页面和组件的。
+    if (doc.sharedNav != null) {
+      var name = 'LcBottomNav';
+      for (var k = 2; !used.add(name); k++) {
+        name = 'LcBottomNav$k';
+      }
+      navPart = name;
+    }
   }
 
   final List<LcPagePlan> pages = [];
   final Map<String, String> componentNames = {};
+
+  /// 共用底部导航的公共部件叫什么；项目里没有共用导航是 null。
+  String? navPart;
 }
 
 /// “点一下去这一页”的 JS 表达式（给底部导航项用；里面不带双引号，事件对象用 [kLcEv] 占位）。
@@ -160,6 +173,8 @@ class LcHtmlPageFiles {
 /// 把每一页导出成普通网页。首页的三个文件名和单页面时一样（index.html / style.css / logic.js）。
 /// 过程中会临时把 [doc] 换到各页上，结束时换回原来那页（同步做完，中间没有别人插得进来）。
 List<LcHtmlPageFiles> exportHtmlPages(LcDocument doc, {LcHtmlExport Function(LcHtmlExport e)? tidy}) {
+  lcSettleSharedNav(doc); // 共用的底部导航：各页都取“刚改过的那一份”（编辑器里每次修改后已经做过，这里是给直接调导出的人兜底）
+  lcSettleSharedTop(doc);
   final keep = doc.pageIndex;
   final out = <LcHtmlPageFiles>[];
   try {

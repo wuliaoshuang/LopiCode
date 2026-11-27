@@ -8,9 +8,11 @@
 ///   页面里“一开始就打开”（`open`）导不出来。
 /// - 页面级的栏（顶部导航栏是页面第一个、底部导航栏是最后一个）放进 Scaffold 的 `appBar` / `bottomNavigationBar`。
 /// - 底部导航栏每一项的 `page`（去哪一页）：多页面的项目里点了会换到那一页（[dartPageJumps]）；只有一页的项目点了没反应。
-/// - 状态样式（按下 / 禁用 / 聚焦）、网格布局、`style` 里的 CSS 这一份都不读（它一直只读简写属性）。
+/// - 状态样式（按下 / 禁用 / 聚焦）、网格布局、`style` 里的 CSS：没用主题变量 / 绑定 / 断点 / 状态样式 / 网格的项目这一份都不读
+///   （它一直只读简写属性）；用了的项目走“会动的那一路”（export_dart_live.dart），那里开关这些会写回状态、样式折回简写属性。
 library;
 
+import 'package:lopicode/lowcode/export_dart_hook.dart';
 import 'package:lopicode/lowcode/icon_set.dart';
 import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/lowcode/model_v3_components.dart';
@@ -91,6 +93,9 @@ String? dartV3Node(LcNode n, int i, DartChild child, {required bool inRow}) {
   final color = n.strProp('color'), bg = n.strProp('bg');
   final textStyle = [if (n.numProp('fontSize') != null) 'fontSize: ${_d(n.numProp('fontSize')!)}', if (color != null) 'color: ${_color(color)}'];
   String text(String v) => textStyle.isEmpty ? 'Text(${_s(v)})' : 'Text(${_s(v)}, style: const TextStyle(${textStyle.join(', ')}))';
+  // 双向绑定（只在“会动的那一路”里有）：现在的值、写回去的那句。
+  final read = dartLive?.modelRead(n);
+  String write(String value) => dartLive!.modelWrite(n, value);
   switch (n.type) {
     case 'icon':
       final size = _d(n.numProp('size') ?? 24);
@@ -98,8 +103,10 @@ String? dartV3Node(LcNode n, int i, DartChild child, {required bool inRow}) {
     case 'textarea':
       final value = n.strProp('value'), label = n.strProp('label');
       final rows = _d(n.numProp('rows') ?? 3);
-      return _call(value == null ? 'TextField' : 'TextFormField', [
-        if (value != null) 'initialValue: ${_s(value)}',
+      final live = dartLive?.fieldArgs(n);
+      return _call(value == null || live != null ? 'TextField' : 'TextFormField', [
+        ...?live,
+        if (value != null && live == null) 'initialValue: ${_s(value)}',
         if (flag('disabled')) 'enabled: false',
         if (flag('autoGrow')) ...['minLines: $rows', 'maxLines: null'] else 'maxLines: $rows',
         if (n.numProp('maxLength') != null) 'maxLength: ${_d(n.numProp('maxLength')!)}',
@@ -111,11 +118,11 @@ String? dartV3Node(LcNode n, int i, DartChild child, {required bool inRow}) {
         ], i + 1),
       ], i);
     case 'switch':
-      return 'Switch(value: ${flag('checked')}, onChanged: ${flag('disabled') ? 'null' : '(value) {}'})';
+      return 'Switch(value: ${read == null ? flag('checked') : '_lcBool($read)'}, onChanged: ${flag('disabled') ? 'null' : (read == null ? '(value) {}' : '(value) => ${write('value')}')})';
     case 'checkbox':
       return _call('Row', [
         'mainAxisSize: MainAxisSize.min',
-        'children: ${_list(['Checkbox(value: ${flag('checked')}, onChanged: ${flag('disabled') ? 'null' : '(value) {}'})', 'Flexible(child: ${text(n.strProp('text') ?? '')})'], i + 1)}',
+        'children: ${_list(['Checkbox(value: ${read == null ? flag('checked') : '_lcBool($read)'}, onChanged: ${flag('disabled') ? 'null' : (read == null ? '(value) {}' : '(value) => ${write('value == true')}')})', 'Flexible(child: ${text(n.strProp('text') ?? '')})'], i + 1)}',
       ], i);
     case 'radio':
       final options = lcObjects(n, 'options');
@@ -126,17 +133,24 @@ String? dartV3Node(LcNode n, int i, DartChild child, {required bool inRow}) {
           'showSelectedIcon: false',
           'emptySelectionAllowed: true',
           'segments: ${_list([for (final o in options) 'ButtonSegment(value: ${_s(o['value'] as String)}, label: Text(${_s(lcItemLabel(o, 'value'))}))'], i + 1)}',
-          'selected: ${options.any((o) => o['value'] == value) ? '{${_s(value!)}}' : 'const <String>{}'}',
-          'onSelectionChanged: ${flag('disabled') ? 'null' : '(value) {}'}',
+          if (read != null)
+            'selected: _lcPick($read, const [${[for (final o in options) _s(o['value'] as String)].join(', ')}])'
+          else
+            'selected: ${options.any((o) => o['value'] == value) ? '{${_s(value!)}}' : 'const <String>{}'}',
+          'onSelectionChanged: ${flag('disabled') ? 'null' : (read == null ? '(value) {}' : "(value) => ${write("value.isEmpty ? '' : value.first")}")}',
         ], i);
       }
       final dot = color == null ? '' : ', color: ${_color(color)}';
+      String mark(Map<String, dynamic> o) => read == null
+          ? 'Icons.${o['value'] == value ? 'radio_button_checked' : 'radio_button_unchecked'}'
+          : '_lcEq($read, ${_s(o['value'] as String)}) ? Icons.radio_button_checked : Icons.radio_button_unchecked';
+      String row(Map<String, dynamic> o) => _call('Row', [
+        'mainAxisSize: MainAxisSize.min',
+        'children: ${_list(['Icon(${mark(o)}, size: 20$dot)', 'const SizedBox(width: 8)', 'Flexible(child: ${text(lcItemLabel(o, 'value'))})'], i + 3)}',
+      ], i + 2);
       final items = [
         for (final o in options)
-          _call('Row', [
-            'mainAxisSize: MainAxisSize.min',
-            'children: ${_list(['Icon(Icons.${o['value'] == value ? 'radio_button_checked' : 'radio_button_unchecked'}, size: 20$dot)', 'const SizedBox(width: 8)', 'Flexible(child: ${text(lcItemLabel(o, 'value'))})'], i + 3)}',
-          ], i + 2),
+          if (read == null || flag('disabled')) row(o) else 'GestureDetector(behavior: HitTestBehavior.opaque, onTap: () => ${write(_s(o['value'] as String))}, child: ${row(o)})',
       ];
       final group = n.strProp('direction') == 'row'
           ? _call('Wrap', ['spacing: 16', 'runSpacing: 8', 'children: ${_list(items, i + 1)}'], i)
@@ -147,7 +161,11 @@ String? dartV3Node(LcNode n, int i, DartChild child, {required bool inRow}) {
       final value = n.strProp('value');
       final w = n.props['width'];
       return _call('DropdownMenu<String>', [
-        if (options.any((o) => o['value'] == value)) 'initialSelection: ${_s(value!)}',
+        if (read != null) ...[
+          'initialSelection: _lcPickOne($read, const [${[for (final o in options) _s(o['value'] as String)].join(', ')}])',
+          "onSelected: (value) => ${write("value ?? ''")}",
+        ] else if (options.any((o) => o['value'] == value))
+          'initialSelection: ${_s(value!)}',
         if (n.strProp('placeholder') != null) 'hintText: ${_s(n.strProp('placeholder')!)}',
         if (flag('disabled')) 'enabled: false',
         if (w is num) 'width: ${_d(w)}' else if (w == 'fill' && !inRow) 'expandedInsets: EdgeInsets.zero',

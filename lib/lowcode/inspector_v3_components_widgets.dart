@@ -10,6 +10,7 @@
 import 'package:lopicode/lowcode/inspector_common_widgets.dart';
 import 'package:lopicode/lowcode/inspector_items_widgets.dart';
 import 'package:lopicode/lowcode/inspector_presets_widgets.dart';
+import 'package:lopicode/lowcode/inspector_top_shared_widgets.dart';
 import 'package:lopicode/lowcode/inspector_v3_rows_widgets.dart';
 import 'package:lopicode/lowcode/items_edit.dart';
 import 'package:lopicode/lowcode/model_v3_components.dart';
@@ -146,7 +147,16 @@ Widget _text(InspectorEdit ed, String prop, String label, {String? hint, int max
       );
     case 'appBar':
       return (
-        [_text(ed, 'title', '标题'), _variant(ed), lcSwitchRow(ed, 'back', '返回箭头'), lcSwitchRow(ed, 'sticky', '固定顶部'), color('bg', '背景', 'background-color'), color('color', '文字颜色', 'color'), ...tail],
+        [
+          _text(ed, 'title', '标题'),
+          _variant(ed),
+          lcSwitchRow(ed, 'back', '返回箭头'),
+          lcSwitchRow(ed, 'sticky', '固定顶部'),
+          color('bg', '背景', 'background-color'),
+          color('color', '文字颜色', 'color'),
+          ...tail,
+          LcTopShareBlock(ed: ed),
+        ],
         {'bg', 'color'},
       );
     case 'bottomNav':

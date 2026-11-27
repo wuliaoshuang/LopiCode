@@ -13,6 +13,9 @@ enum InspectorPage {
   final String label;
 }
 
+/// 面板页签下面那段淡出的高度（正好盖住内容区上面留的那 8 的空）。
+const double kInspectorHeaderFade = Space.x2;
+
 class InspectorHeader extends StatelessWidget {
   const InspectorHeader({
     super.key,
@@ -102,6 +105,24 @@ class InspectorHeader extends StatelessWidget {
           ),
           ?strip,
           Divider(height: 1, color: c.border),
+          // 分隔线下面一小段由实到虚：滚动时被切掉一半的那一行是淡出去的，不会从页签下面露出一条硬边。
+          // 不占高度（画在自己的范围外面），也不挡点按。
+          SizedBox(
+            height: 0,
+            child: OverflowBox(
+              alignment: Alignment.topCenter,
+              minHeight: kInspectorHeaderFade,
+              maxHeight: kInspectorHeaderFade,
+              child: IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [c.surface, c.surface.withValues(alpha: 0)]),
+                  ),
+                  child: const SizedBox.expand(),
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );

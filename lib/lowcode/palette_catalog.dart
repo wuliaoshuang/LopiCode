@@ -6,6 +6,7 @@
 /// - “常用”＝最近用过的 [kPaletteRecentMax] 个（最新的在前）；不够就用内置的起步组件补齐。
 library;
 
+import 'package:lopicode/lowcode/comp_lib.dart';
 import 'package:lopicode/lowcode/component_model.dart';
 import 'package:lopicode/lowcode/model.dart';
 
@@ -83,7 +84,10 @@ const Map<String, List<String>> _aliases = {
 
 /// 组件盒里的一个条目。
 class PaletteEntry {
-  const PaletteEntry({required this.type, required this.label, required this.group, this.ref});
+  const PaletteEntry({required this.type, required this.label, required this.group, this.ref, this.lib});
+
+  /// 来自哪个组件库（库的名字）；项目自己的和内置的是 null。组件盒“我的”里一个库一组。
+  final String? lib;
 
   /// 组件类型；自定义组件是 `component`。
   final String type;
@@ -99,7 +103,10 @@ class PaletteEntry {
 /// 全部条目：内置的按固定顺序，自定义组件排在后面。
 List<PaletteEntry> paletteEntries(List<LcComponentDef> components) => [
   for (final type in lcPaletteTypes) PaletteEntry(type: type, label: lcSpecs[type]!.label, group: _groupOf[type] ?? PaletteGroup.basic),
-  for (final c in components) PaletteEntry(type: 'component', label: c.name, group: PaletteGroup.mine, ref: c.id),
+  for (final c in components)
+    if (compLibOf(c) == null) PaletteEntry(type: 'component', label: c.name, group: PaletteGroup.mine, ref: c.id),
+  for (final c in components)
+    if (compLibOf(c) != null) PaletteEntry(type: 'component', label: c.name, group: PaletteGroup.mine, ref: c.id, lib: compLibOf(c)!.name),
 ];
 
 /// “常用”里放哪些：最近用过的（已经不存在的跳过）在前，不够 [kPaletteRecentMax] 个用起步组件补。

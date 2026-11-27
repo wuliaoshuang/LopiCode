@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:lopicode/lowcode/bind_model.dart';
 import 'package:lopicode/lowcode/model.dart';
 
 /// 第 5 期的样例：两页，带页面级和项目级状态、派生值，8 种绑定各有一处。四种导出的真编译、真跑、画布、冒烟都用它。
@@ -313,3 +314,10 @@ Map<String, Object?> bindSampleJson() => {
 };
 
 LcDocument bindSample() => LcDocument.parse(jsonEncode(bindSampleJson()));
+
+/// 第四轮 B2：[bindSample] 的“提交”按钮上那条类名开关 ready 配了“成立时的样子”（底色、字色、字号，外加一条 Flutter 不认的）。
+LcDocument classStyleSample() {
+  final doc = bindSample();
+  lcSetClassIfStyle(doc.find('submit')!, 'ready', {'background-color': '#00AA00', 'color': '#FFFFFF', 'font-size': '18px', 'text-decoration': 'underline'});
+  return doc;
+}

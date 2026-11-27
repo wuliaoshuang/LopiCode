@@ -33,6 +33,7 @@ class LibImportView {
     this.nativeEnabled = false,
     this.nativeNotes = const [],
     this.listTitle = '积木',
+    this.unit = '块',
     this.items = const [],
     this.problems = const [],
   });
@@ -58,6 +59,9 @@ class LibImportView {
   /// 关于手写函数的补充说明（哪些要等、各有哪几种语言）。
   final List<String> nativeNotes;
   final String listTitle;
+
+  /// 清单的量词（积木论“块”，组件论“个”）。
+  final String unit;
   final List<String> items;
 
   /// 不能导入的原因；空＝可以。
@@ -139,7 +143,7 @@ class _ImportSheetState extends State<_ImportSheet> {
               onChanged: p.canImport ? (v) => setState(() => _seen = v ?? false) : null,
             ),
         ],
-        BeSheetSection('${p.listTitle}（${p.items.length} 块）'),
+        BeSheetSection('${p.listTitle}（${p.items.length} ${p.unit}）'),
         for (final b in p.items) BeSheetRow(label: b, muted: true),
       ],
     );

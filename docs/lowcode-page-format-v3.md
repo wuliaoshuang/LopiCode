@@ -221,7 +221,7 @@ Agent 用 `lowcode_update_page` 写页面时没写 `version` 的，按第 3 版�
 设计和理由在 `docs/blocks-v5-parts/E-editor-components.md` §10.8。**没用状态和绑定的文件，存出来和以前逐字节一样。**
 
 - 最外层新增可选 `state`：项目级状态（所有页面共用）的数组，每项和 `logic.variables` 的一项同一个写法。读不懂的项原样留在后面；空了字段去掉。
-- 状态 / 变量的一项：`{"name", "type", "initial"}`，`type` 现在可以是 `text` / `number` / `bool` / `list` / `record`（后两种是这次放开的，`initial` 是 JSON 数组 / 对象）。
+- 状态的一项（界面上一律叫“状态”，字段名 `variables` 没改）：`{"name", "type", "initial"}`，`type` 现在可以是 `text` / `number` / `bool` / `list` / `record`（后两种是这次放开的，`initial` 是 JSON 数组 / 对象）。
   可选 `derived`：一个式子（值积木的存法）——有它就是派生值，`initial` 不用。名字规矩不变。
   页面级状态就是这一页的 `logic.variables`；页面里和项目级重名时，用页面自己的。
 - 节点上的绑定字段（全部可缺省；写坏了的当没写，原样留着）：
@@ -235,3 +235,79 @@ Agent 用 `lowcode_update_page` 写页面时没写 `version` 的，按第 3 版�
   - `model`: `"状态名"`。双向（只有输入框、多行输入、开关、勾选框、单选组、下拉认）。这次新加。
 - 自己定的数：类名最长 48 个字符、重复里的名字最长 32 个字符；一层最多 64 个状态；式子最深 64 层；Flutter 导出重复最多展开 200 份。
 
+
+## 第四轮 B1 之后的补充说明（底部导航跨页共用、“常用”页分屏宽；版本号没动，只多了可选字段）
+
+设计和理由在 `docs/blocks-v5-parts/E-editor-components.md` §10.9。**没用这些的文件，存出来和以前逐字节一样。**
+
+- 最外层新增可选 `shared`：`{"bottomNav": {"props": {…}, "style": {…}, "states": {…}, "responsive": {…}, "data": …}}`。
+  这是跨页共用的那一条底部导航栏**唯一的一份**内容：`props`（导航项 `items`、样子 `variant`、颜色…，**不含** `current`）、`style`，
+  以及 `states` / `responsive` / `data` / `showIf` / `renderIf` / `classIf` / `styles`（有才写）。`shared` 里别的键不解释、原样留着。
+  `shared.bottomNav` 不是对象、或它的 `props` 不是对象：整个当看不懂，原样留着。
+- 节点新增可选 `shared: true`（只有 `bottomNav` 认）：这个节点显示的是共用的那一条。文件里它**只写自己的记号**（`id`、`type`、`name`、`locked`、`hidden`、`shared`、`slot`），
+  不写 `props` / `style` / `states` 这些——读的时候从最外层那一份填上。哪一页的树里有这样的节点，哪一页就显示共用导航；没有＝这一页不显示。
+- “当前项”不存：导航项的 `page` 指着哪一页，在那一页上就亮哪一项；没有哪一项指着这一页就亮第一项。
+- 容错：有节点带 `shared: true` 却没有最外层那一份——取第一个自己带着 `props` 的这种节点当那一份（都没带就用默认的三项）；
+  有最外层那一份却没有哪一页在用——留着不删；没有最外层那一份时节点上的 `shared` 存盘时去掉。
+- 老版本应用打开这种文件：不认识 `shared`，原样留着；它看到的是“没写属性的底部导航栏”（显示成默认的三项）。首页别的内容不受影响。
+
+## 第四轮 B2 之后的补充说明（组件的事件、变体、状态，类名开关的样子，组件库；版本号没动，只多了可选字段）
+
+老版本应用打开带这些字段的文件：不认识的字段原样留着、存盘时原样写回（组件定义、节点、文档三处都有“没读懂的字段原样带着”的 `more`），不会丢；只是那些功能不起作用。
+
+**组件定义上多的（都可选）**
+
+| 字段 | 写法 | 说明 |
+|---|---|---|
+| `events` | `[{name, label, params?: [{name, type}]}]` | 组件对外发的事件。最多 12 个；一个事件最多带 6 项数据 |
+| `variants` | `[{name, label, group?, groupLabel?, style?, nodes?: {<节点 id>: {style}}}]` | 变体。`style` 是最外层节点多出来／换掉的 CSS；`nodes` 是里面各节点的。没写 `group` 算 `variant` 组（叫“样子”）。最多 4 组、每组 8 个 |
+| `state` | 和页面的 `logic.variables` 一个写法 | 组件自己的状态，每个实例一份。最多 24 个 |
+| `lib` | `{id, name, version, component}` | 这个定义是从哪个组件库装进来的（`component` 是它在库里的 id）。带这一笔的定义在编辑器里只读 |
+
+属性（`props`）的类型多了 `list`（默认空列表）。
+
+**定义里的节点上多的**：`emit: {"click" 或 "input": {event: <组件事件名>, args?: {<数据名>: 来源}}}`——这个控件的这个动作往外发组件的哪个事件。
+
+**页面上的组件实例多的**
+
+| 字段 | 写法 | 说明 |
+|---|---|---|
+| `variant` | `{<组>: <变体名>}` | 每组选了哪个 |
+| `on` | `{<事件名>: [积木…]}` | 这个事件发生时做什么（积木的写法和页面逻辑里的一样） |
+| `data` | `{<属性名>: 来源}` | 属性绑页面状态（来源的写法和别处的 `data` 一样） |
+
+**类名开关**：`classIf` 里每一项多一个可选的 `style: {<CSS 属性>: 值}`——这条类名成立时的样子。
+
+**文档上多的**：`compLibs: {<库标识>: {name, version, author, components: [组件 id]}}`——这个项目自己做了哪些库、每个库里放了哪些组件（“再存一版”时用）。
+
+### 组件库在项目里怎么放
+
+- 每个库一个文件夹 `components/作者段/库名/`：
+  - `lib.json`：`{kind: "lopicode-complib", format: 1, id, name, version, author, side: "frontend", components: [{id, name}], images?: [路径], missing?: [没带上的图片路径]}`；
+  - `components.json`：`{components: [组件定义…], themeVars?: {<变量名>: 值}}`；
+  - `images.json`（有图片才有）：`{<项目里的相对路径>: <base64>}`。
+- 登记表 `components/libs.json`：`{format: 1, libs: [{id, version, from, sum}]}`。`from`：`project`＝在这个项目里存的，`file`＝从文件导入的；`sum` 是三个文件内容的 sha256。和积木库的 `blocks/libs.json` 是并列的两张，互不相干。
+- 导出文件：`exports/组件库-名字-版本.lopilib`，就是上面三个文件打成的 zip（和积木库同一种包、同一套防护）。
+- 装进文档：库里的定义拷进 `components`，id 换成 `lib_<库标识里的非字母数字换成下划线>_<原 id>`，带上 `lib` 那一笔；库带的主题变量项目里没有的补进 `theme.vars`，已有的不动；库带的图片写进项目里原来的路径，已有同名文件的不动。
+- 导入时拦下的：没有清单或清单不是 JSON；`kind` 不对（是积木库会单独说）；缺 `id`／`name`／`version`；标识、版本号写法不对；作者段是 `lopi`、`local`；`side` 不是 `frontend`（B2 那一版写的 `front` 也认）；带 `native/`（手写代码）；一个组件都没有、超过 64 个、有读不懂的、id 重复；用到库里没有的组件；组件互相套成圈；图片路径不对劲；项目里已有同标识同版本、内容却不一样的库；以及打包层的全部防护（超大小、文件太多、路径往外跳、不是压缩包、内容不是文字）。
+
+## 第四轮 B3 之后的补充说明（顶部导航跨页共用；版本号没动，只多了可选字段）
+
+- 最外层的 `shared` 里新增可选 `topBar`：`{"props": {…}, "style": {…}, "states": {…}, "responsive": {…}, "data": …, "children": […]}`。
+  它是跨页共用的那一条顶部导航栏**唯一的一份**：样子、样式，外加“默认的”标题（`props.title`）、返回箭头（`props.back`）、
+  左右两边放的控件（`children`，每个带 `slot: "left"` / `"right"`）。
+  `shared.topBar` 不是对象、或它的 `props` 不是对象：整个当看不懂，原样留着。`children` 里读不出来的项跳过。
+- 顶部导航栏节点（`appBar`）新增可选 `shared: true`：这个节点显示的是共用的那一条。还可以带可选 `own`
+  （`["title", "back", "slots"]` 的子集）：这一页自己说了算的是哪几样。文件里这个节点只写自己的记号（`id`、名字、锁定…）、
+  `shared`、`own`，以及 `own` 里那几样的值——`props.title`、`props.back`、`children`；别的都不写，读的时候从最外层那一份填上。
+- 有节点带 `shared: true` 却没有最外层那一份（手写的、Agent 写的）：取第一个自己带着整套 props 的这种节点当那一份，都没有就用默认的。
+- 最外层没有 `shared.topBar` 时，节点上的 `shared` / `own` 不算数，存盘时去掉（比如把共用的那条粘贴进了另一个项目）。
+- 没用共用顶栏的文件：没有这些字段，存出来和以前逐字节一样。规矩和同步点见 `lib/lowcode/top_shared.dart`。
+
+组件库清单（`lopilib.json`）的 `side` 写成 `frontend`（和积木库同一个写法）；第四轮 B2 写的 `front` 读的时候照样认。
+
+## 第四轮 B4 之后的补充说明（版本号没动，没有新字段）
+
+- 事件带的数据用的还是 B2 就有的字段：定义上 `events[].params`、定义里节点上 `emit.<click|input>.args`。B4 只是在面板上给了入口（一个事件配一项）。
+- 实例的 `on.<事件名>` 里，积木参数可以是 `{"e": "event"}`（“事件带来的值”＝事件带的第一项数据）。快捷动作“把一个状态设成事件带来的值”存的是 `{"op": "setVar", "args": {"name": <状态名>, "value": {"e": "event"}}}`。
+- 导出时临时加的记号节点（`<实例 id>__on_<事件名>`，`lcEvt` 字段）只在给导出看的那份拷贝里，不存盘。

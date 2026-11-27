@@ -68,6 +68,10 @@ const _exceptions = <String, Map<String, String>>{
     'style: const TextStyle(fontSize: 14, color: Color(0xFF5C6479))': '导出的 Flutter 代码里的字面量（列表行右侧文字、右箭头的颜色），不是应用界面',
     'indicator: BoxDecoration(color: const Color(0x14000000)': '导出的 Flutter 代码里的字面量（胶囊式页签的底色），不是应用界面',
   },
+  'lib/lowcode/export_dart_live_runtime.dart': {
+    'if (t.length == 6) return Color(0xFF000000 | n);': '导出的 Flutter 代码文本（运行时把 #RRGGBB 文字换成颜色的小函数），不是应用界面',
+    'color: const Color(0xFFD3DEE4), alignment: Alignment.center, child: Icon(Icons.image_outlined, semanticLabel: semanticLabel)': '导出的 Flutter 代码文本（图片占位的底色，和 export_dart.dart 里那份一致），不是应用界面',
+  },
   'lib/lowcode/export_dart.dart': {
     r"String _color(String hex) => 'const Color(0xFF${hex.substring(1).toUpperCase()})';": '生成的 Flutter 代码文本，不是界面',
     'color: const Color(0xFFD3DEE4), alignment: Alignment.center': '生成的 Flutter 代码文本',

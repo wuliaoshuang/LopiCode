@@ -1,19 +1,32 @@
 import 'package:lopicode/lowcode/component_ops.dart';
-import 'package:lopicode/lowcode/export_dart_bind.dart';
-import 'package:lopicode/lowcode/export_dart_theme.dart';
+import 'package:lopicode/lowcode/export_dart_hook.dart';
+import 'package:lopicode/lowcode/export_dart_live.dart';
 import 'package:lopicode/lowcode/export_dart_v3.dart';
+import 'package:lopicode/lowcode/export_live_doc.dart';
 import 'package:lopicode/lowcode/icon_set.dart';
 import 'package:lopicode/lowcode/image_assets.dart';
 import 'package:lopicode/lowcode/model.dart';
+import 'package:lopicode/lowcode/nav_shared.dart';
 import 'package:lopicode/lowcode/quick_actions.dart';
+import 'package:lopicode/lowcode/top_shared.dart';
 
 /// 把页面导出成一个可直接放进 Flutter 项目的 Dart 文件（一个 StatelessWidget）。
 ///
 /// 多页面的项目：每页一个类，都写在这一个文件里（第一个是首页，[className] 是首页的类名）；底部导航项、
 /// “点击时去页面”的快捷操作用 Navigator 跳过去。别的积木逻辑这一份一直不导出（按钮的 `onPressed` 是空的）。
 /// 只有一页时和以前逐字节一样。
-String exportDart(LcDocument doc, {String? className}) {
-  if (!doc.isMultiPage) return _file([_pageClass(doc, className ?? dartClassName(doc.title))], '', dartThemeHeader(doc) + dartBindHeader(doc));
+///
+/// 项目里用了主题变量、状态与绑定、断点、状态样式、网格中的任何一样，走“会动的那一路”（export_dart_live.dart）：
+/// 变量集中在一个类里、状态变了界面重画、按屏宽取样子。一样都没用的项目走原来的路，结果和以前逐字节一样。
+String exportDart(LcDocument source, {String? className}) {
+  lcSettleSharedNav(source); // 共用的底部导航：各页都取“刚改过的那一份”（编辑器里每次修改后已经做过，这里是给直接调导出的人兜底）
+  lcSettleSharedTop(source);
+  // 用了第 6 期新东西的组件实例先化成普通页面的样子（没有这种实例时就是原来的文档）。
+  final doc = lcExportDoc(source, allPages: true);
+  final live = dartLiveWanted(doc) ? DartLiveExport(doc) : null;
+  String page(String name) => live == null ? _pageClass(doc, name) : live.pageClass(name);
+  String file(List<String> classes, String tail) => live == null ? _file(classes, tail, '') : _file(classes, tail + live.tail(), live.header());
+  if (!doc.isMultiPage) return file([page(className ?? dartClassName(doc.title))], '');
   final names = <String>[];
   for (final p in doc.pages) {
     final base = names.isEmpty && className != null ? className : dartClassName(p.title);
@@ -37,13 +50,13 @@ String exportDart(LcDocument doc, {String? className}) {
         final id = lcQuickValue(doc, n.id, kLcGoPageQuick);
         return id == null ? null : classOf(id);
       });
-      classes.add(_pageClass(doc, names[i]));
+      classes.add(page(names[i]));
     }
   } finally {
     dartPageJumps = null;
     doc.openPageAt(keep);
   }
-  return _file(classes, kDartPageHelpers, dartThemeHeader(doc) + dartBindHeader(doc));
+  return file(classes, kDartPageHelpers);
 }
 
 String _file(List<String> classes, String tail, String note) =>
@@ -54,7 +67,7 @@ ${classes.join('\n')}$tail''';
 
 String _pageClass(LcDocument doc, String name) {
   // 自定义组件的实例先展开成普通控件再生成；展开不了的那个位置是一个空的 SizedBox。
-  final tree = dartThemeTree(dartBoundTree(expandedTree(doc), doc), doc);
+  final tree = expandedTree(doc);
   final body = _node(tree, null, 3);
   // 弹窗不在控件树里：每个弹窗一个静态方法（没有弹窗的页面一个字都不多）。
   final dialogs = [for (final d in dartDialogsOf(tree)) '\n${dartDialogMethodCode(d, _node)}'].join();
@@ -87,7 +100,12 @@ String _ind(int n) => '  ' * n;
 
 /// 一个节点的代码。多页面时，设了“点击时去页面”的组件在这里接上跳转：
 /// 按钮直接写进 `onPressed`；别的组件外面包一层 GestureDetector（在行里被 Expanded / Flexible 包着的，包在它们里面）。
-String _node(LcNode n, LcNode? parent, int i) {
+String _node(LcNode n, LcNode? parent, int i) => dartLive?.node(n, parent, i, _nodeJump) ?? _nodeJump(n, parent, i);
+
+/// 给“会动的那一路”用：生成一个节点（弹窗的内容、页面的根）。
+String dartNode(LcNode n, LcNode? parent, int indent) => _node(n, parent, indent);
+
+String _nodeJump(LcNode n, LcNode? parent, int i) {
   final code = _nodeCore(n, parent, i);
   final to = dartPageJumps?.clickPage(n);
   if (to == null) return code;
@@ -119,7 +137,8 @@ String _nodeCore(LcNode n, LcNode? parent, int i) {
       ];
       final top = flow.isNotEmpty && flow.first.type == 'appBar' ? flow.first : null;
       final bottom = flow.isNotEmpty && flow.last.type == 'bottomNav' ? flow.last : null;
-      String bar(LcNode b) => dartV3Node(b, i + 1, _node, inRow: false)!;
+      String gen(LcNode b) => dartV3Node(b, i + 1, _node, inRow: false)!;
+      String bar(LcNode b) => dartLive?.bar(b, gen) ?? gen(b);
       return 'Scaffold(\n'
           '${bg != null ? '${_ind(i + 1)}backgroundColor: ${_color(bg)},\n' : ''}'
           '${top == null ? '' : '${_ind(i + 1)}appBar: ${bar(top).replaceFirst('primary: false', 'primary: true')},\n'}'
@@ -175,7 +194,10 @@ String _nodeCore(LcNode n, LcNode? parent, int i) {
       final size =
           '${h != null ? 'height: ${_d(h)}, ' : ''}'
           '${n.props['width'] is num ? 'width: ${_d(n.props['width'] as num)}, ' : (n.fillWidth && !inRow ? 'width: double.infinity, ' : '')}';
-      final img = src == null
+      final liveSrc = dartLive?.boundText(n, 'src');
+      final img = liveSrc != null
+          ? '_lcImage($liveSrc, ${size}fit: BoxFit.cover, ${alt == null ? '' : 'semanticLabel: ${_s(alt)}, '}errorBuilder: (context, error, stack) => const Icon(Icons.broken_image_outlined))'
+          : src == null
           ? 'Container(${size}color: const Color(0xFFD3DEE4), alignment: Alignment.center, child: const Icon(Icons.image_outlined${alt == null ? '' : ', semanticLabel: ${_s(alt)}'}))'
           // 图片加载失败（没网、地址错）时显示占位，而不是抛异常。
           // 项目里的图片（相对地址）用 Image.asset：要在工程的 pubspec.yaml 的 assets 里列上这个文件。
@@ -187,9 +209,11 @@ String _nodeCore(LcNode n, LcNode? parent, int i) {
       final value = n.strProp('value');
       final label = n.strProp('label');
       final keyboard = const {'number': 'number', 'email': 'emailAddress', 'tel': 'phone'}[n.strProp('inputType')];
+      final live = dartLive?.fieldArgs(n);
       final field =
-          '${value == null ? 'TextField' : 'TextFormField'}(\n'
-          '${value == null ? '' : '${_ind(i + 1)}initialValue: ${_s(value)},\n'}'
+          '${value == null || live != null ? 'TextField' : 'TextFormField'}(\n'
+          '${live == null ? '' : [for (final a in live) '${_ind(i + 1)}$a,\n'].join()}'
+          '${value == null || live != null ? '' : '${_ind(i + 1)}initialValue: ${_s(value)},\n'}'
           '${n.props['disabled'] == true ? '${_ind(i + 1)}enabled: false,\n' : ''}'
           '${n.strProp('inputType') == 'password' ? '${_ind(i + 1)}obscureText: true,\n' : ''}'
           '${keyboard == null ? '' : '${_ind(i + 1)}keyboardType: TextInputType.$keyboard,\n'}'
@@ -206,7 +230,10 @@ String _nodeCore(LcNode n, LcNode? parent, int i) {
       return wrapFill(_sized(n, i, field, inRow: inRow));
     case 'list':
       final style = <String>[if (n.numProp('fontSize') != null) 'fontSize: ${_d(n.numProp('fontSize')!)}', if (n.strProp('color') != null) 'color: ${_color(n.strProp('color')!)}', 'height: 1.75'];
-      final items = [for (final item in (n.props['items'] as List?) ?? const []) '${_ind(i + 2)}Text(${_s('• $item')}, style: const TextStyle(${style.join(', ')})),\n'].join();
+      final liveItems = dartLive?.boundList(n);
+      final items = liveItems != null
+          ? "${_ind(i + 2)}for (final item in $liveItems) Text('• ' + _lcText(item), style: const TextStyle(${style.join(', ')})),\n"
+          : [for (final item in (n.props['items'] as List?) ?? const []) '${_ind(i + 2)}Text(${_s('• $item')}, style: const TextStyle(${style.join(', ')})),\n'].join();
       final col =
           'Column(\n${_ind(i + 1)}crossAxisAlignment: CrossAxisAlignment.start,\n'
           '${_ind(i + 1)}mainAxisSize: MainAxisSize.min,\n${_ind(i + 1)}children: [\n$items${_ind(i + 1)}],\n${_ind(i)})';
@@ -254,10 +281,11 @@ String _flex(LcNode n, int i, {required bool column, bool forceStretchWidth = fa
       '${j != null ? '${_ind(i + 1)}mainAxisAlignment: MainAxisAlignment.${main[j]},\n' : ''}'
       '${n.numProp('gap') != null ? '${_ind(i + 1)}spacing: ${_d(n.numProp('gap')!)},\n' : ''}'
       '${_ind(i + 1)}children: [\n$children${_ind(i + 1)}],\n${_ind(i)})';
+  final grid = dartLive?.grid(n, i, children);
   if (forceStretchWidth) {
-    return 'SizedBox(\n${_ind(i + 1)}width: double.infinity,\n${_ind(i + 1)}child: ${_reindent(flex, 1)},\n${_ind(i)})';
+    return 'SizedBox(\n${_ind(i + 1)}width: double.infinity,\n${_ind(i + 1)}child: ${_reindent(grid ?? flex, 1)},\n${_ind(i)})';
   }
-  return flex;
+  return grid ?? flex;
 }
 
 /// Container 包一层：尺寸、内外边距、背景、圆角、阴影。

@@ -354,7 +354,8 @@ class EditorWorkbenchState extends State<EditorWorkbench> {
   @override
   Widget build(BuildContext context) {
     final barInset = PageBar.insetOf(context);
-    final topInset = barInset + (_bannerHeight > 0 ? _bannerHeight + Space.x1 * 2 : 0);
+    // 顶栏的渐隐遮罩比顶栏下沿多伸出一段（BarScrim.kTail）：页面的顶边要让到它下面，不然第一行字被半透明地盖住一点。
+    final topInset = barInset + (_bannerHeight > 0 ? _bannerHeight + Space.x1 * 2 : BarScrim.kTail);
     final dialog = _overlay.sync(widget.doc, widget.selected);
     final drag = _drag;
     final selected = widget.selected, editing = _editing == null ? null : widget.doc.find(_editing!);

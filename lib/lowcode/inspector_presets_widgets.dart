@@ -9,6 +9,7 @@
 import 'dart:async';
 
 import 'package:flutter/services.dart';
+import 'package:lopicode/lowcode/inspector_bp_widgets.dart';
 import 'package:lopicode/lowcode/theme_scope_widgets.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/keyboard_tap_dismiss.dart';
@@ -16,11 +17,14 @@ import 'package:material_ui/material_ui.dart';
 
 /// 一行：名字在左，内容在右（内容太宽就横向滑）。[below] 是展开出来的第二行。
 class InspectorRow extends StatelessWidget {
-  const InspectorRow({super.key, required this.label, required this.child, this.below, this.scroll = true});
+  const InspectorRow({super.key, required this.label, required this.child, this.below, this.scroll = true, this.labelWidth = 72});
   final String label;
   final Widget child;
   final Widget? below;
   final bool scroll;
+
+  /// 名字那一栏的宽度。名字有五个字的单子（比如“重复”的设置）传宽一点，名字和右边的内容才不会贴在一起。
+  final double labelWidth;
 
   @override
   Widget build(BuildContext context) {
@@ -37,12 +41,20 @@ class InspectorRow extends StatelessWidget {
             child: Row(
               children: [
                 SizedBox(
-                  width: 72,
-                  child: Text(
-                    label,
-                    style: t.bodyMedium?.copyWith(color: c.textMuted),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  width: labelWidth,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        label,
+                        style: t.bodyMedium?.copyWith(color: c.textMuted),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      // 画布切到平板 / 桌面档时：内容类的行标一句“不分屏宽”（样子类的行包在 LcPerBp 里，不标）。
+                      const LcNoBpTag(),
+                    ],
                   ),
                 ),
                 Expanded(

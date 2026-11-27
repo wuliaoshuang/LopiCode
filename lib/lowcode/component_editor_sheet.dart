@@ -1,9 +1,11 @@
 // 设计约束（低代码 · 编辑组件的内容 · 390×844）
 // - 整页：和搭建页同一套排法，只是画布上放的不是页面，而是“这个组件的内容”（外面垫一张空白页当背景）。
-//   顶栏（沉浸式，悬浮在画布上面，没有底色）：标题“编辑组件”+ 组件名；右边“⋮”（可配置的属性、屏宽与缩放）和主操作“完成”。
+//   顶栏（沉浸式，悬浮在画布上面，没有底色）：标题“编辑组件”+ 组件名；右边“⋮”（可配置的属性、事件、变体、组件的状态、屏宽与缩放）和主操作“完成”。
+//   正在改某个变体的样子时：副标题换成“正在改变体：xx”，主操作换成“改完变体”（回到平时的样子），“⋮”里只剩屏宽与缩放。
 //   顶栏以下是和搭建页共用的搭建台（editor_workbench_widgets.dart）：画布 → 选中条（“选上一层”和名字在左；常用 / 样式 在右，
 //   打开同一张合一面板的两页；其余收进“更多操作”，和长按菜单同一份）→ 最底下的工具条（添加 / 图层 / 撤销 / 重做；这里没有预览）。
-// - 这里没有积木逻辑的入口：组件里面的控件不支持逻辑。
+// - 这里没有积木逻辑的入口：组件里面的控件不支持逻辑。组件要对外说“发生了什么”，用“⋮ › 事件”让某个控件把点击 / 输入往外发。
+// - 绑定：选中控件 › 常用 ›“数据”一节和页面上一样能用；能挑的是组件的属性和“组件的状态”（每个实例一份）。
 // - 组件最外层只能有一个控件：最外层不能删、不能移走，旁边也放不了别的控件（要放就放进它里面）。
 // - 插槽：选中一个容器 › 更多操作 ›“把内容设成插槽”（先起名）；选中插槽 › 更多操作 ›“改插槽名 / 取消插槽”。
 //   画布上插槽是一个带“插槽 · 名字”角标的框，里面放的是没填时显示的默认内容。
@@ -14,11 +16,14 @@ import 'package:lopicode/lowcode/builder_bars_widgets.dart';
 import 'package:lopicode/lowcode/canvas_parts_widgets.dart';
 import 'package:lopicode/lowcode/canvas_view_sheet.dart';
 import 'package:lopicode/lowcode/component_editing.dart';
+import 'package:lopicode/lowcode/component_extras.dart';
+import 'package:lopicode/lowcode/component_extras_sheet.dart';
 import 'package:lopicode/lowcode/component_ops.dart';
 import 'package:lopicode/lowcode/component_props_sheet.dart';
 import 'package:lopicode/lowcode/component_slot_sheet.dart';
 import 'package:lopicode/lowcode/component_slots.dart';
 import 'package:lopicode/lowcode/component_values_widgets.dart';
+import 'package:lopicode/lowcode/component_variant_edit.dart';
 import 'package:lopicode/lowcode/edit_types.dart';
 import 'package:lopicode/lowcode/editor_clipboard.dart';
 import 'package:lopicode/lowcode/editor_workbench_widgets.dart';
@@ -32,6 +37,7 @@ import 'package:lopicode/lowcode/palette_catalog.dart';
 import 'package:lopicode/lowcode/palette_widgets.dart';
 import 'package:lopicode/lowcode/responsive.dart';
 import 'package:lopicode/lowcode/slots.dart';
+import 'package:lopicode/lowcode/state_screen.dart';
 import 'package:lopicode/lowcode/style_model.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/shell.dart';
@@ -88,6 +94,11 @@ class _ComponentEditorState extends State<_ComponentEditor> with LcMultiSelectHo
   String? _selected;
   int _presetWidth = 0;
 
+  /// 正在改哪个变体的样子（`组/名字`）；null＝改的是平时的样子。[_base]：进去时每个控件平时的样式。
+  String? _variant;
+  Map<String, Map<String, String>> _base = const {};
+  Map<String, Map<String, dynamic>> _baseLook = const {};
+
   /// 现在看的是哪一档屏宽（null＝手机）。和搭建页一样：不是手机时，“样式”页改的只记成这一档的差别。
   String? _bp;
   bool _showBoxModel = true;
@@ -108,7 +119,60 @@ class _ComponentEditorState extends State<_ComponentEditor> with LcMultiSelectHo
           root: LcNode(id: kComponentEditRootId, type: 'page'),
         );
     _history = LcHistory(_temp);
+    _variant = null;
     if (_selected != null && _temp.find(_selected!) == null) _selected = null;
+  }
+
+  void _enterVariant(String key) {
+    final def = _real.component(widget.componentId);
+    final top = _top;
+    if (def == null || top == null) return;
+    for (final v in lcVariants(def)) {
+      if (v.key != key) continue;
+      setState(() {
+        _base = lcSnapshotStyles(top);
+        _baseLook = lcSnapshotLookProps(top);
+        lcOverlayVariant(top, v);
+        _variant = key;
+        _history = LcHistory(_temp);
+      });
+      showEditorHint(context, '现在改的是变体「${v.label}」：在“常用”“样式”页里改，只记和平时不一样的地方');
+      return;
+    }
+  }
+
+  void _leaveVariant() => setState(() {
+    final top = _top;
+    if (top != null) lcRestoreStyles(top, _base, _baseLook);
+    _variant = null;
+    _history = LcHistory(_temp);
+  });
+
+  String? get _variantLabel {
+    final def = _real.component(widget.componentId);
+    if (def == null || _variant == null) return null;
+    for (final v in lcVariants(def)) {
+      if (v.key == _variant) return v.label;
+    }
+    return null;
+  }
+
+  Future<void> _openEvents() async {
+    await showComponentEventsSheet(context, doc: _real, onEdit: (change) => widget.onEdit((d) => change(_real = d)), componentId: widget.componentId, selectedId: _selected);
+    if (mounted) setState(_reload);
+  }
+
+  Future<void> _openVariants() async {
+    final key = await showComponentVariantsSheet(context, doc: _real, onEdit: (change) => widget.onEdit((d) => change(_real = d)), componentId: widget.componentId);
+    if (!mounted) return;
+    setState(_reload);
+    if (key != null) _enterVariant(key);
+  }
+
+  /// 组件的状态：就是这张临时页面的“页面级状态”里不是属性的那些（写回时存进定义）。
+  Future<void> _openStates() async {
+    await showStateScreen(context, doc: () => _temp, onEdit: _apply);
+    if (mounted) setState(() {});
   }
 
   LcNode? get _top => _temp.root.children.length == 1 ? _temp.root.children.single : null;
@@ -119,7 +183,17 @@ class _ComponentEditorState extends State<_ComponentEditor> with LcMultiSelectHo
     widget.onEdit((d) {
       _real = d;
       before?.call(d);
-      result = applyComponentEditing(d, widget.componentId, _temp);
+      final key = _variant, top = _top;
+      if (key == null || top == null) {
+        result = applyComponentEditing(d, widget.componentId, _temp);
+        return;
+      }
+      // 正在改变体：定义本身按平时的样式写回，和平时不一样的那几条记成这个变体。
+      final diff = lcVariantDiff(top, _base, _baseLook);
+      final plain = LcDocument.parse(_temp.encode());
+      if (plain.root.children.length == 1) lcRestoreStyles(plain.root.children.single, _base, _baseLook);
+      result = applyComponentEditing(d, widget.componentId, plain);
+      if (result?.error == null) lcSaveVariantStyles(d, widget.componentId, key, diff);
     });
     return result?.error;
   }
@@ -367,15 +441,32 @@ class _ComponentEditorState extends State<_ComponentEditor> with LcMultiSelectHo
       appBar: ShellAppBar(
         background: context.colors.surfaceMuted,
         title: '编辑组件',
-        subtitle: name,
+        subtitle: _variant == null ? name : '正在改变体：${_variantLabel ?? ''}',
         actions: [
           BuilderBpButton(bp: _bp, onChanged: (v) => setState(() => _bp = v)),
           PopupMenuButton<String>(
             tooltip: '更多',
-            onSelected: (v) => v == 'view' ? _openView() : unawaited(_openComponentProps()),
-            itemBuilder: (_) => const [PopupMenuItem(value: 'props', child: Text('可配置的属性')), PopupMenuItem(value: 'view', child: Text('屏宽与缩放'))],
+            onSelected: (v) => switch (v) {
+              'view' => _openView(),
+              'events' => unawaited(_openEvents()),
+              'variants' => unawaited(_openVariants()),
+              'states' => unawaited(_openStates()),
+              _ => unawaited(_openComponentProps()),
+            },
+            itemBuilder: (_) => [
+              if (_variant == null) ...const [
+                PopupMenuItem(value: 'props', child: Text('可配置的属性')),
+                PopupMenuItem(value: 'events', child: Text('事件')),
+                PopupMenuItem(value: 'variants', child: Text('变体')),
+                PopupMenuItem(value: 'states', child: Text('组件的状态')),
+              ],
+              const PopupMenuItem(value: 'view', child: Text('屏宽与缩放')),
+            ],
           ),
-          TextButton(key: const ValueKey('comp-editor-done'), onPressed: () => Navigator.pop(context), child: const Text('完成')),
+          if (_variant == null)
+            TextButton(key: const ValueKey('comp-editor-done'), onPressed: () => Navigator.pop(context), child: const Text('完成'))
+          else
+            TextButton(key: const ValueKey('comp-editor-variant-done'), onPressed: _leaveVariant, child: const Text('改完变体')),
         ],
       ),
       body: LcImageScope(

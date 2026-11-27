@@ -34,6 +34,7 @@ class BuilderMoreMenu extends StatelessWidget {
       PopupMenuItem(value: 'state', child: Text('状态')),
       PopupMenuItem(value: 'logic', child: Text('积木逻辑')),
       PopupMenuItem(value: 'components', child: Text('自定义组件')),
+      PopupMenuItem(value: 'libs', child: Text('组件库')),
       PopupMenuItem(value: 'dart', child: Text('导出 Flutter 代码')),
       PopupMenuItem(value: 'framework', child: Text('导出 Vue / React')),
       PopupMenuItem(value: 'title', child: Text('修改页面标题')),
@@ -145,7 +146,11 @@ List<PopupMenuEntry<String>> lcNodeMenuItems(
     const PopupMenuDivider(),
     const PopupMenuItem(value: 'wrap', child: Text('包成容器')),
     if (canSlot) makeSlot,
-    if (componentActions && node.type == 'component') ...const [PopupMenuItem(value: 'edit', child: Text('编辑组件')), PopupMenuItem(value: 'detach', child: Text('拆开成普通控件'))] else if (componentActions)
+    if (componentActions && node.type == 'component') ...const [
+      PopupMenuItem(value: 'edit', child: Text('编辑组件')),
+      PopupMenuItem(value: 'toLib', child: Text('存进库…')),
+      PopupMenuItem(value: 'detach', child: Text('拆开成普通控件')),
+    ] else if (componentActions)
       const PopupMenuItem(value: 'save', child: Text('存成组件')),
     if (withMove) ...const [PopupMenuDivider(), PopupMenuItem(value: 'up', child: Text('上移')), PopupMenuItem(value: 'down', child: Text('下移'))],
     const PopupMenuDivider(),

@@ -21,6 +21,8 @@ import 'package:lopicode/lowcode/canvas_parts_widgets.dart';
 import 'package:lopicode/lowcode/canvas_view.dart';
 import 'package:lopicode/lowcode/canvas_view_sheet.dart';
 import 'package:lopicode/lowcode/code_sheet.dart';
+import 'package:lopicode/lowcode/comp_lib.dart';
+import 'package:lopicode/lowcode/comp_lib_sheet.dart';
 import 'package:lopicode/lowcode/component_sheet.dart';
 import 'package:lopicode/lowcode/edit_types.dart';
 import 'package:lopicode/lowcode/editor_recents.dart';
@@ -35,6 +37,7 @@ import 'package:lopicode/lowcode/logic_edit.dart';
 import 'package:lopicode/lowcode/logic_screen.dart';
 import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/lowcode/multi_select_widgets.dart';
+import 'package:lopicode/lowcode/nav_shared.dart';
 import 'package:lopicode/lowcode/node_actions.dart';
 import 'package:lopicode/lowcode/pages_sheet.dart';
 import 'package:lopicode/lowcode/palette_catalog.dart';
@@ -45,6 +48,7 @@ import 'package:lopicode/lowcode/slots.dart';
 import 'package:lopicode/lowcode/state_screen.dart';
 import 'package:lopicode/lowcode/style_model.dart';
 import 'package:lopicode/lowcode/theme_vars_screen.dart';
+import 'package:lopicode/lowcode/top_shared.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/app_backdrop.dart';
@@ -225,6 +229,8 @@ class _BuilderScreenState extends State<BuilderScreen> with WidgetsBindingObserv
     final node = doc.newNode(type);
     if (ref != null) node.props['ref'] = ref; // 自定义组件的实例
     _apply((d) {
+      lcAdoptNewNav(d, node);
+      lcAdoptNewTop(d, node);
       if (sel != null && sel.isContainer && type != 'dialog') {
         d.insert(sel.id, node);
       } else if (sel != null && sel.id != d.root.id && type != 'dialog') {
@@ -244,7 +250,11 @@ class _BuilderScreenState extends State<BuilderScreen> with WidgetsBindingObserv
     if (drag.type != null) {
       final node = _doc!.newNode(drag.type!);
       if (drag.ref != null) node.props['ref'] = drag.ref;
-      _apply((d) => lcInsertAt(d, parentId, node, index));
+      _apply((d) {
+        lcAdoptNewNav(d, node);
+        lcAdoptNewTop(d, node);
+        lcInsertAt(d, parentId, node, index);
+      });
       setState(() => _selected = node.id);
     } else {
       _apply((d) => lcMoveTo(d, drag.nodeId!, parentId, index));

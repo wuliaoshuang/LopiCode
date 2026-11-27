@@ -80,6 +80,15 @@ class LcReactBind {
     return s == null ? null : JsExpr(read(name)!, lcStateJsType(s.variable));
   }
 
+  /// 现在套着的“重复”带出来的名字。
+  List<String> get scopeNames => {..._localOf.values}.toList();
+
+  /// 这个名字是一个能直接写的状态（不是派生值、不是“重复”带出来的）。
+  bool writable(String name) {
+    final s = plan.state(name);
+    return s != null && !s.variable.isDerived && !_localOf.containsKey(name);
+  }
+
   /// 读一个状态的写法；没有这个状态返回 null。
   String? read(String name) {
     final s = plan.state(name);

@@ -7,6 +7,7 @@
 /// - 颜色是导出的网页里的默认色，和旧组件的基础样式同一套（#b1c0c8 边线、#5c6479 次要字、#058654 强调色）。
 library;
 
+import 'package:lopicode/lowcode/bind_model.dart';
 import 'package:lopicode/lowcode/css_codec.dart';
 import 'package:lopicode/lowcode/export_web_v3.dart';
 import 'package:lopicode/lowcode/model.dart';
@@ -157,6 +158,13 @@ List<String> lcStateRules(LcNode n, String selector) {
     final body = declarationsToCss(canonicalDeclarations(decl), multiline: false);
     if (body.isEmpty || RegExp(r'[{}<>\n\r\\]|\*/|/\*').hasMatch(body)) continue;
     out.add('$selector${kLcStatePseudo[state]} { $body }');
+  }
+  // 类名开关配的样子：`.控件.类名 { … }`（没配的不写）。
+  for (final c in lcClassIfOf(n)) {
+    if (c.style.isEmpty) continue;
+    final body = declarationsToCss(canonicalDeclarations(c.style), multiline: false);
+    if (body.isEmpty || RegExp(r'[{}<>\n\r\\]|\*/|/\*').hasMatch(body)) continue;
+    out.add('$selector.${c.name} { $body }');
   }
   return out;
 }
