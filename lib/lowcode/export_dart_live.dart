@@ -21,10 +21,13 @@ import 'package:lopicode/lowcode/component_ops.dart';
 import 'package:lopicode/lowcode/export_dart.dart';
 import 'package:lopicode/lowcode/export_dart_hook.dart';
 import 'package:lopicode/lowcode/export_dart_live_bind.dart';
+import 'package:lopicode/lowcode/export_dart_live_events.dart';
 import 'package:lopicode/lowcode/export_dart_live_runtime.dart';
 import 'package:lopicode/lowcode/export_dart_live_tree.dart';
 import 'package:lopicode/lowcode/export_dart_v3.dart';
+import 'package:lopicode/lowcode/export_live_doc.dart';
 import 'package:lopicode/lowcode/grid_css.dart';
+import 'package:lopicode/lowcode/logic_model.dart';
 import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/lowcode/responsive.dart';
 import 'package:lopicode/lowcode/state_model.dart';
@@ -65,7 +68,7 @@ class DartLiveExport {
   final DartLiveSubs subs;
   final Set<String> _notes = {};
   final StringBuffer _code = StringBuffer();
-  var _anyState = false, _anyBp = false, _anyProject = false;
+  var _anyState = false, _anyBp = false, _anyProject = false, _anyEvents = false;
 
   bool _usesBp(LcNode n, String bp, [int depth = 0]) => depth <= LcNode.maxDepth * 4 && (lcBpStyle(n, bp).isNotEmpty || n.children.any((c) => _usesBp(c, bp, depth + 1)));
 
@@ -83,6 +86,24 @@ class DartLiveExport {
         if (s.project) s.name: s.variable,
     };
     final gen = DartLiveGen(subs: subs, vars: vars, notes: _notes, pageStates: stateful ? pageStates : const {}, projectStates: stateful ? projectStates : const {});
+    // 组件里的控件往外发事件、实例上接了动作：摊开时合成出来的那几条处理，写到那个控件身上。
+    final synth = lcSynthHandlerIds(doc.logic);
+    final byNode = <String, List<LcHandler>>{};
+    for (final h in doc.logic.handlers) {
+      if (synth.contains(h.id) && h.target != null) byNode.putIfAbsent(h.target!, () => []).add(h);
+    }
+    final events = byNode.isEmpty
+        ? null
+        : DartLiveEvents(
+            handlers: byNode,
+            expr: gen.expr,
+            state: gen.stateOf,
+            isPageState: pageStates.containsKey,
+            read: gen.stateRead,
+            dialogs: {for (final d in dartDialogsOf(tree)) d.id: d},
+            notes: _notes,
+          );
+    gen.events = events;
     final tiers = <(String?, String)>[];
     final dialogs = StringBuffer();
     dartLive = gen;
@@ -112,6 +133,7 @@ class DartLiveExport {
       dartLive = null;
     }
     if (tiers.length > 1) _anyBp = true;
+    if (events?.wrote ?? false) _anyEvents = true;
 
     final build = StringBuffer('  @override\n  Widget build(BuildContext context) {\n');
     if (tiers.length == 1) {
@@ -217,8 +239,12 @@ $build$dialogs}
     if (!vars.isEmpty) '// 主题变量：集中在文件末尾的 LcVars 里，改那里一处，用到的地方全跟着变。\n',
     if (_anyState) ...[
       '// 状态与绑定：状态是页面 State 类里 s_ 开头的字段${_anyProject ? '（跨页共用的在 LcAppState 里）' : ''}，绑了它的地方跟着变；输入框、开关这些会把值写回去。\n',
-      '// 积木逻辑这一份不导出（按钮的 onPressed 是空的）：在自己的代码里用 update(() => s_xxx = 新值) 改状态。\n',
-    ],
+      if (_anyEvents)
+        '// 页面自己的积木逻辑这一份不导出（那些按钮的 onPressed 是空的）；组件事件接的动作导出了，写在那个控件的 onPressed / onTap 里。在自己的代码里用 update(() => s_xxx = 新值) 改状态。\n'
+      else
+        '// 积木逻辑这一份不导出（按钮的 onPressed 是空的）：在自己的代码里用 update(() => s_xxx = 新值) 改状态。\n',
+    ] else if (_anyEvents)
+      '// 组件事件接的动作导出了，写在那个控件的 onPressed / onTap 里；页面自己的积木逻辑这一份不导出。\n',
     if (_anyBp) '// 断点：按屏幕宽度取样子（平板 ≥768、桌面 ≥1024），见各页的 build。\n',
     if (_notes.isNotEmpty) '// 没有导出的：\n',
     for (final n in _notes) '// · $n\n',

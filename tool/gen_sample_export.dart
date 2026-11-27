@@ -5,6 +5,8 @@ import 'dart:io';
 import 'package:lopicode/lowcode/export_dart.dart';
 
 import '../test/support/bind_sample.dart';
+import '../test/support/builtin_p1_sample.dart';
+import '../test/support/comp_event_samples.dart';
 import '../test/support/comp_samples.dart';
 import '../test/support/dart_live_sample.dart';
 import '../test/support/pages_sample.dart';
@@ -37,5 +39,8 @@ void main() {
   File('test/generated/comp_login_page.dart').writeAsStringSync(exportDart(compUserDoc([loginFormDef()]), className: 'CompLoginPage'));
   File('test/generated/comp_tags_page.dart').writeAsStringSync(exportDart(compUserDoc([tagBarDef()]), className: 'CompTagsPage'));
   File('test/generated/class_style_page.dart').writeAsStringSync(exportDart(classStyleSample(), className: 'ClassStylePage'));
+  // 第四轮 B6：组件事件接的动作、变体、能滚的区域、下划线在 Flutter 里（test/lowcode_dart_events_test.dart 会 import 它们）。
+  File('test/generated/builtin_p1_page.dart').writeAsStringSync(exportDart(builtinP1Doc(), className: 'BuiltinP1Page'));
+  File('test/generated/comp_event_page.dart').writeAsStringSync(exportDart(compEventDoc(), className: 'CompEventPage'));
   stdout.writeln('ok');
 }

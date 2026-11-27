@@ -6,6 +6,7 @@ import 'package:lopicode/lowcode/bind_model.dart';
 import 'package:lopicode/lowcode/css_codec.dart';
 import 'package:lopicode/lowcode/css_color.dart';
 import 'package:lopicode/lowcode/export_dart_hook.dart';
+import 'package:lopicode/lowcode/export_dart_live_events.dart';
 import 'package:lopicode/lowcode/export_dart_live_tree.dart';
 import 'package:lopicode/lowcode/grid_css.dart';
 import 'package:lopicode/lowcode/logic_expr.dart';
@@ -103,6 +104,13 @@ const Map<String, String> _styleBindProps = {
 /// 生成一页（一档屏宽）时的接入点实现。
 class DartLiveGen implements DartLiveHook {
   DartLiveGen({required this.subs, required this.vars, required this.notes, required this.pageStates, required this.projectStates});
+
+  /// 组件事件接的动作（export_dart_live_events.dart）；这一页没有就是 null。
+  DartLiveEvents? events;
+
+  /// 读一个状态的那句 Dart、它的声明（给 [events] 用）。
+  String? stateRead(String name) => pageStates.containsKey(name) ? dartStateIdent(name) : (projectStates.containsKey(name) ? 'LcAppState.$name' : null);
+  LcVariable? stateOf(String name) => _state(name);
 
   final DartLiveSubs subs;
   final DartLiveVars vars;
@@ -342,7 +350,11 @@ class DartLiveGen implements DartLiveHook {
       if (conds.isNotEmpty) prefix += 'if (${conds.map((c) => '_lcBool(${expr(c)})').join(' && ')}) ';
       final shown = _shown(n);
       final off = lcBindable(n.type, 'disabled') == null ? null : lcDataExpr(n, 'disabled');
-      String make(LcNode x) => _withStates(n, core(x, parent, indent));
+      String make(LcNode x) {
+        final code = dartLiveExtras(n, _withStates(n, core(x, parent, indent)), indent, notes);
+        return events?.attach(n, code, indent) ?? code;
+      }
+
       var widget = off == null
           ? make(shown)
           // 禁用绑了状态：禁用的、没禁用的各生成一份，运行时挑。

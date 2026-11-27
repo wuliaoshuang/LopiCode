@@ -4,6 +4,8 @@
 /// 算术一律按数字算（转不了的当 0，除以 0 当 0）；等于＝类型一样直接比，不一样都转成文字再比。
 library;
 
+import 'package:lopicode/lowcode/export_dart_live_events.dart';
+
 /// 名字 → 源码。
 const Map<String, String> kDartLiveRuntime = {
   '_lcNum': r'''
@@ -145,6 +147,7 @@ String? _lcPickOne(Object? v, List<String> options) {
   return null;
 }
 ''',
+  '_lcAlert': kDartLiveAlert,
 };
 
 /// [code] 里用到的小函数（连它们自己用到的），按上面的先后排。

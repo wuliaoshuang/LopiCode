@@ -1,6 +1,6 @@
 // 由 LopiCode 低代码搭建器生成，重新导出会覆盖本文件。
 // 状态与绑定：状态是页面 State 类里 s_ 开头的字段，绑了它的地方跟着变；输入框、开关这些会把值写回去。
-// 积木逻辑这一份不导出（按钮的 onPressed 是空的）：在自己的代码里用 update(() => s_xxx = 新值) 改状态。
+// 页面自己的积木逻辑这一份不导出（那些按钮的 onPressed 是空的）；组件事件接的动作导出了，写在那个控件的 onPressed / onTap 里。在自己的代码里用 update(() => s_xxx = 新值) 改状态。
 import 'package:flutter/material.dart';
 
 class CompLoginPage extends StatefulWidget {
@@ -116,7 +116,7 @@ class CompLoginPageState extends State<CompLoginPage> {
                           style: FilledButton.styleFrom(),
                           child: Text('登录'),
                         ) : FilledButton(
-                          onPressed: () {},
+                          onPressed: () { update(() => s_logged = _lcNum((_lcNum(s_logged) + _lcNum(1)))); },
                           style: FilledButton.styleFrom(),
                           child: Text('登录'),
                         )),

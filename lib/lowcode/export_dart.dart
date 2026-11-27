@@ -23,9 +23,12 @@ String exportDart(LcDocument source, {String? className}) {
   lcSettleSharedTop(source);
   // 用了第 6 期新东西的组件实例先化成普通页面的样子（没有这种实例时就是原来的文档）。
   final doc = lcExportDoc(source, allPages: true);
-  final live = dartLiveWanted(doc) ? DartLiveExport(doc) : null;
+  // 摊开过实例的（[doc] 不是原来那一份）也走“会动的那一路”：选的变体是叠在样式上的，组件事件接的动作也只有那一路会写。
+  final live = dartLiveWanted(doc) || !identical(doc, source) ? DartLiveExport(doc) : null;
+  // 新的页面逻辑（积木）：语言核心没有 Dart 的生成器，这一份不导出，文件开头说一句。旧页面没有这一句。
+  final front = doc.pages.any((p) => p.logic.front != null) ? kDartFrontNote : '';
   String page(String name) => live == null ? _pageClass(doc, name) : live.pageClass(name);
-  String file(List<String> classes, String tail) => live == null ? _file(classes, tail, '') : _file(classes, tail + live.tail(), live.header());
+  String file(List<String> classes, String tail) => live == null ? _file(classes, tail, front) : _file(classes, tail + live.tail(), live.header() + front);
   if (!doc.isMultiPage) return file([page(className ?? dartClassName(doc.title))], '');
   final names = <String>[];
   for (final p in doc.pages) {
@@ -58,6 +61,9 @@ String exportDart(LcDocument source, {String? className}) {
   }
   return file(classes, kDartPageHelpers);
 }
+
+/// 项目里有哪一页用了新的页面逻辑时，导出文件开头的那句话。
+const String kDartFrontNote = '// 新的页面逻辑（积木）这一份不导出：语言核心还没有 Dart 的生成器。界面、状态、绑定照常导出；逻辑里做的事（点了按钮以后……）要在自己的代码里接。\n';
 
 String _file(List<String> classes, String tail, String note) =>
     '''// 由 LopiCode 低代码搭建器生成，重新导出会覆盖本文件。
