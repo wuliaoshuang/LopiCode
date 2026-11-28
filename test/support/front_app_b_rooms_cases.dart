@@ -6,9 +6,16 @@ import 'front_libs_samples.dart';
 
 /// 假服务的会议室世界。[listFaults] / [bookFaults]＝头几次出的岔子（'hang' 拖着不回、'500' 报错）；同一间同一时段订过了回 409。
 class RmWorld {
-  RmWorld(List<(String title, int seats, List<String> taken)> start, {List<String> listFaults = const [], List<String> bookFaults = const []}) : _listFaults = [...listFaults], _bookFaults = [...bookFaults] {
+  RmWorld(List<(String title, int seats, List<String> taken)> start, {List<String> listFaults = const [], List<String> bookFaults = const []})
+    : _listFaults = [...listFaults],
+      _bookFaults = [...bookFaults] {
     for (final (title, seats, taken) in start) {
-      rooms.add({'id': rooms.length + 1, 'title': title, 'seats': seats, 'slots': [...taken]});
+      rooms.add({
+        'id': rooms.length + 1,
+        'title': title,
+        'seats': seats,
+        'slots': [...taken],
+      });
     }
   }
   final List<Map<String, Object?>> rooms = [];

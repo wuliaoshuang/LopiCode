@@ -162,7 +162,14 @@ void main() {
         'login',
         'h1',
         emitHat('lgf', 'submit', [
-          iff(ex(beLibOp(kSess, 'submit'), {'路径': tx('/x'), '数据': cat([toText(emit('user')), toText(emit('pass'))])}), [show('lg_msg', tx('成'))], noElse: true),
+          iff(
+            ex(beLibOp(kSess, 'submit'), {
+              '路径': tx('/x'),
+              '数据': cat([toText(emit('user')), toText(emit('pass'))]),
+            }),
+            [show('lg_msg', tx('成'))],
+            noElse: true,
+          ),
         ]),
       );
       expect(appIssues(doc), isNotEmpty);

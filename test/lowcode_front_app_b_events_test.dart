@@ -57,22 +57,33 @@ void main() {
   // 报“要 0 个参数，给了 1 个”。现在库积木展开出来的名字指明是库里的，两边各走各的。
   test('自己的积木和自带库里的函数同名：库积木还是库里的那个', () {
     final doc = appDoc([
-      AppPage('p', [btn('b1', '点'), txt('t1')], const [], frontDoc(
-        uses: [useLib('i18n')],
-        functions: [
-          tfn('f1', '换语言', const [], [
-            lb('i18n', 'use', {'lang': tx('English')}),
-          ]),
-        ],
-        hats: [
-          onClick('h1', 'b1', [
-            lb('i18n', 'table', {'lang': tx('中文'), 'table': dc({'a': tx('甲')})}),
-            lb('i18n', 'table', {'lang': tx('English'), 'table': dc({'a': tx('A')})}),
-            callS('f1'),
-            show('t1', lx('i18n', 't', {'key': tx('a')})),
-          ]),
-        ],
-      )),
+      AppPage(
+        'p',
+        [btn('b1', '点'), txt('t1')],
+        const [],
+        frontDoc(
+          uses: [useLib('i18n')],
+          functions: [
+            tfn('f1', '换语言', const [], [
+              lb('i18n', 'use', {'lang': tx('English')}),
+            ]),
+          ],
+          hats: [
+            onClick('h1', 'b1', [
+              lb('i18n', 'table', {
+                'lang': tx('中文'),
+                'table': dc({'a': tx('甲')}),
+              }),
+              lb('i18n', 'table', {
+                'lang': tx('English'),
+                'table': dc({'a': tx('A')}),
+              }),
+              callS('f1'),
+              show('t1', lx('i18n', 't', {'key': tx('a')})),
+            ]),
+          ],
+        ),
+      ),
     ]);
     expect(appIssues(doc), isEmpty);
   });
@@ -102,25 +113,39 @@ void main() {
       'rules': ls([rule]),
     });
     test('对照：写对的不拦', () {
-      final doc = _one([rules(range(toNum(valOf('in1')))), show('t1', lx('i18n', 't', {'key': tx('a')}))]);
+      final doc = _one([
+        rules(range(toNum(valOf('in1')))),
+        show('t1', lx('i18n', 't', {'key': tx('a')})),
+      ]);
       expect(appIssues(doc), isEmpty);
     });
     test('类型放错：人数上限填了字（要数）', () => _blocked(_one([rules(range(tx('三')))])));
     test('类型放错：路由的路径拿了一个数', () {
-      _blocked(_one([
-        lb('router', 'go', {'path': nm(3)}),
-      ]));
+      _blocked(
+        _one([
+          lb('router', 'go', {'path': nm(3)}),
+        ]),
+      );
     });
     test('类型放错：语言表里的一句话填了数（要字）', () {
-      _blocked(_one([
-        lb('i18n', 'table', {
-          'lang': tx('中文'),
-          'table': dc({'a': nm(1)}),
-        }),
-      ]));
+      _blocked(
+        _one([
+          lb('i18n', 'table', {
+            'lang': tx('中文'),
+            'table': dc({'a': nm(1)}),
+          }),
+        ]),
+      );
     });
     test('没把“国际化”用上就拖了它的积木', () {
-      _blocked(_one([show('t1', lx('i18n', 't', {'key': tx('a')}))], libs: const ['http', 'storage', 'form', 'router']));
+      _blocked(
+        _one(
+          [
+            show('t1', lx('i18n', 't', {'key': tx('a')})),
+          ],
+          libs: const ['http', 'storage', 'form', 'router'],
+        ),
+      );
     });
     test('“新的语言”用在“当语言变了”外面', () => _blocked(_one([show('t1', lx('i18n', 'newLang'))])));
     test('去报名页没带上它要的参数', () {

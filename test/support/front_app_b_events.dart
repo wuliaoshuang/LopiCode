@@ -208,13 +208,34 @@ AppPage _events(String base) {
       boundBtn('ev_out', 'tOut'),
       txt('ev_err'),
       boundBtn('ev_retry', 'tRetry'),
-      section('ev_list', [
-        repeatRow('ev_row', 'items', [boundText('ev_title', 'it', ['title']), boundText('ev_left', 'it', ['left']), boundBtn('ev_open', 'tOpen')]),
-        txt('ev_sum'),
-      ], showWhen: ('pg', '列表')),
+      section(
+        'ev_list',
+        [
+          repeatRow('ev_row', 'items', [
+            boundText('ev_title', 'it', ['title']),
+            boundText('ev_left', 'it', ['left']),
+            boundBtn('ev_open', 'tOpen'),
+          ]),
+          txt('ev_sum'),
+        ],
+        showWhen: ('pg', '列表'),
+      ),
       section('ev_detail', [txt('dt_title'), txt('dt_desc'), txt('dt_left'), boundBtn('dt_go', 'tSign'), boundBtn('dt_back', 'tBack'), txt('dt_err')], showWhen: ('pg', '详情')),
     ],
-    [textVar('pg'), listVar('items'), textVar('tTitle'), textVar('tLang'), textVar('tOut'), textVar('tRetry'), textVar('tOpen'), textVar('tSign'), textVar('tBack'), textVar('eid'), textVar('etitle'), numVar('eleft')],
+    [
+      textVar('pg'),
+      listVar('items'),
+      textVar('tTitle'),
+      textVar('tLang'),
+      textVar('tOut'),
+      textVar('tRetry'),
+      textVar('tOpen'),
+      textVar('tSign'),
+      textVar('tBack'),
+      textVar('eid'),
+      textVar('etitle'),
+      numVar('eleft'),
+    ],
     frontDoc(
       uses: _libs(['http', 'storage', 'store', 'i18n', 'router']),
       functions: [

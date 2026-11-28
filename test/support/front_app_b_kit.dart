@@ -45,7 +45,14 @@ class AppPage {
 /// 多页面的文档：头一页是首页。
 /// [libs]＝项目里装着的用户库（交给每一页的逻辑）；[components]＝项目里的自定义组件（文档最外层那一节，原样放进去）。
 LcDocument appDoc(List<AppPage> pages, {List<LibLibrary> libs = const [], J extra = const {}}) {
-  final doc = LcDocument.parse(jsonEncode({'version': 3, ...pages.first._json(), 'pages': [for (final p in pages.skip(1)) p._json()], ...extra}));
+  final doc = LcDocument.parse(
+    jsonEncode({
+      'version': 3,
+      ...pages.first._json(),
+      'pages': [for (final p in pages.skip(1)) p._json()],
+      ...extra,
+    }),
+  );
   for (final p in doc.pages) {
     if (libs.isNotEmpty) p.logic.loaded = libs;
     lcFrontStore(p.logic, lcFrontOf(p.logic)!);
@@ -191,13 +198,22 @@ Future<void> appCheck(String kind, LcDocument doc, Steps steps, {Duration limit 
         ..writeAsStringSync(f.value);
     }
     File('${dir.path}/.lc-steps.json').writeAsStringSync(jsonEncode(steps));
-    final r = await runBounded('node', ['${Directory.current.path}/tool/verify/run_dom.mjs', kind, dir.path, entry], environment: {'LOPI_WEBDEV': webdevDir!, 'LOPI_WEBDEV_DOM': webdevDomDir!}, limit: limit);
+    final r = await runBounded(
+      'node',
+      ['${Directory.current.path}/tool/verify/run_dom.mjs', kind, dir.path, entry],
+      environment: {'LOPI_WEBDEV': webdevDir!, 'LOPI_WEBDEV_DOM': webdevDomDir!},
+      limit: limit,
+    );
     final out = '${r.stdout}'.trim();
     expect(out, startsWith('{'), reason: '脚本没有给出结果（退出码 ${r.exitCode}）：${r.stderr}');
     final json = jsonDecode(out) as Map<String, Object?>;
     expect(json['errors'], isEmpty, reason: out);
     expect(json['warnings'], isEmpty, reason: out);
-    expect(json['done'], steps.length, reason: '走到第 ${json['done']} 步（共 ${steps.length} 步）停在：${json['done'] is int && (json['done']! as int) < steps.length ? steps[json['done']! as int] : '-'}\n$out');
+    expect(
+      json['done'],
+      steps.length,
+      reason: '走到第 ${json['done']} 步（共 ${steps.length} 步）停在：${json['done'] is int && (json['done']! as int) < steps.length ? steps[json['done']! as int] : '-'}\n$out',
+    );
     expect(json['ok'], isTrue, reason: out);
   } finally {
     dir.deleteSync(recursive: true);
@@ -296,4 +312,5 @@ J resStatus(String res) => toText(lx('http', 'status', {'res': vr(res)}));
 
 /// 换页的那几步。[wait]＝纯网页要先等旧页面上这一步成立（请求回来、逻辑说了“去”）再开新文件；
 /// [ready]＝新页面放好了的记号。Vue / React 是先等新页面的记号，再看井号。
-Steps arriveAt(String kind, String page, {Map<String, Object?>? wait, required Map<String, Object?> ready, bool home = false}) => kind == 'html' ? [?wait, ...arrive(kind, page, home: home), ready] : [ready, ...arrive(kind, page, home: home)];
+Steps arriveAt(String kind, String page, {Map<String, Object?>? wait, required Map<String, Object?> ready, bool home = false}) =>
+    kind == 'html' ? [?wait, ...arrive(kind, page, home: home), ready] : [ready, ...arrive(kind, page, home: home)];

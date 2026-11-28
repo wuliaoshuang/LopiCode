@@ -88,7 +88,9 @@ List<J> sessionFns() => [
     ],
     returns: tBool,
   ),
-  tfn('s2', '已登录', const [], [ret(lx('storage', 'has', {'key': tx(kTkToken)}))], returns: tBool),
+  tfn('s2', '已登录', const [], [
+    ret(lx('storage', 'has', {'key': tx(kTkToken)})),
+  ], returns: tBool),
   tfn('s3', '退出', const [], [
     lb('storage', 'remove', {'key': tx(kTkToken)}),
   ]),
@@ -132,7 +134,14 @@ List<J> sessionFns() => [
       tryB(
         [
           let('res', authReq(kTkToken, 'POST', _url(pm('路径')), data: pm('数据'), timeout: 250)),
-          iff(resOk('res'), [_sErr(tx('')), ret(ex('bool', {'v': true}))], orElse: [_bad('res')]),
+          iff(
+            resOk('res'),
+            [
+              _sErr(tx('')),
+              ret(ex('bool', {'v': true})),
+            ],
+            orElse: [_bad('res')],
+          ),
         ],
         [_caught()],
       ),
@@ -152,14 +161,54 @@ J sessionLib() => frontLib(
   uses: const ['http', 'storage', 'store'],
   functions: sessionFns(),
   blocks: [
-    def('connect', 'call', fn: 's0', look: look('连到服务', '连到服务 {地址}', shape: 'statement')),
-    def('login', 'call', fn: 's1', look: look('登录', '用 {名} 和 {密码} 登录成了', shape: 'value')),
-    def('authed', 'call', fn: 's2', look: look('已登录', '已经登录了', shape: 'value')),
-    def('logout', 'call', fn: 's3', look: look('退出', '退出登录', shape: 'statement')),
-    def('list', 'call', fn: 's4', look: look('取列表', '从 {路径} 取到的列表', shape: 'value')),
-    def('one', 'call', fn: 's5', look: look('取一条', '从 {路径} 取到的一条', shape: 'value')),
-    def('submit', 'call', fn: 's6', look: look('提交', '往 {路径} 提交 {数据} 成了', shape: 'value')),
-    def('err', 'call', fn: 's7', look: look('上次的错', '上次的错', shape: 'value')),
+    def(
+      'connect',
+      'call',
+      fn: 's0',
+      look: look('连到服务', '连到服务 {地址}', shape: 'statement'),
+    ),
+    def(
+      'login',
+      'call',
+      fn: 's1',
+      look: look('登录', '用 {名} 和 {密码} 登录成了', shape: 'value'),
+    ),
+    def(
+      'authed',
+      'call',
+      fn: 's2',
+      look: look('已登录', '已经登录了', shape: 'value'),
+    ),
+    def(
+      'logout',
+      'call',
+      fn: 's3',
+      look: look('退出', '退出登录', shape: 'statement'),
+    ),
+    def(
+      'list',
+      'call',
+      fn: 's4',
+      look: look('取列表', '从 {路径} 取到的列表', shape: 'value'),
+    ),
+    def(
+      'one',
+      'call',
+      fn: 's5',
+      look: look('取一条', '从 {路径} 取到的一条', shape: 'value'),
+    ),
+    def(
+      'submit',
+      'call',
+      fn: 's6',
+      look: look('提交', '往 {路径} 提交 {数据} 成了', shape: 'value'),
+    ),
+    def(
+      'err',
+      'call',
+      fn: 's7',
+      look: look('上次的错', '上次的错', shape: 'value'),
+    ),
   ],
 );
 
@@ -184,10 +233,7 @@ J moneyLib() => frontLib(
       [
         let('sum', nm(0)),
         forIn(pm('单子'), 'x', [
-          setv(
-            'sum',
-            op2('+', vr('sum'), toNum(toText(ex('index', {'of': vr('x'), 'key': pm('栏')})))),
-          ),
+          setv('sum', op2('+', vr('sum'), toNum(toText(ex('index', {'of': vr('x'), 'key': pm('栏')}))))),
         ]),
         ret(vr('sum')),
       ],
@@ -196,9 +242,24 @@ J moneyLib() => frontLib(
     tfn('m3', '超了', [tpar('钱', tNum), tpar('上限', tNum)], [ret(op2('>', pm('钱'), pm('上限')))], returns: tBool),
   ],
   blocks: [
-    def('label', 'call', fn: 'm1', look: look('标价', '{钱} 的标价', shape: 'value')),
-    def('total', 'call', fn: 'm2', look: look('合计', '{单子} 里 {栏} 的合计', shape: 'value')),
-    def('over', 'call', fn: 'm3', look: look('超了', '{钱} 超过 {上限}', shape: 'value')),
+    def(
+      'label',
+      'call',
+      fn: 'm1',
+      look: look('标价', '{钱} 的标价', shape: 'value'),
+    ),
+    def(
+      'total',
+      'call',
+      fn: 'm2',
+      look: look('合计', '{单子} 里 {栏} 的合计', shape: 'value'),
+    ),
+    def(
+      'over',
+      'call',
+      fn: 'm3',
+      look: look('超了', '{钱} 超过 {上限}', shape: 'value'),
+    ),
   ],
 );
 
@@ -214,7 +275,9 @@ J noticeLib() => frontLib(
         'initial': dc({'n': nm(0)}),
       }),
     ]),
-    tfn('n2', '发过几条', const [], [ret(toNum(toText(lx('store', 'get', {'store': tx('通知'), 'key': tx('n')}))))], returns: tNum),
+    tfn('n2', '发过几条', const [], [
+      ret(toNum(toText(lx('store', 'get', {'store': tx('通知'), 'key': tx('n')})))),
+    ], returns: tNum),
     tfn(
       'n1',
       '发通知',
@@ -226,9 +289,24 @@ J noticeLib() => frontLib(
     ),
   ],
   blocks: [
-    def('ready', 'call', fn: 'n0', look: look('准备通知', '准备好发通知', shape: 'statement')),
-    def('send', 'call', fn: 'n1', look: look('发通知', '发一条通知 {话}', shape: 'statement')),
-    def('count', 'call', fn: 'n2', look: look('发过几条', '发过几条通知', shape: 'value')),
+    def(
+      'ready',
+      'call',
+      fn: 'n0',
+      look: look('准备通知', '准备好发通知', shape: 'statement'),
+    ),
+    def(
+      'send',
+      'call',
+      fn: 'n1',
+      look: look('发通知', '发一条通知 {话}', shape: 'statement'),
+    ),
+    def(
+      'count',
+      'call',
+      fn: 'n2',
+      look: look('发过几条', '发过几条通知', shape: 'value'),
+    ),
   ],
 );
 
@@ -284,7 +362,12 @@ AppPage _tickets(TkKit k, String base) => AppPage(
     txt('tk_err'),
     btn('tk_retry', '重试'),
     btn('tk_out', '退出'),
-    repeatRow('tk_row', 'items', [boundText('tk_title', 'it', ['title']), boundText('tk_n', 'it', ['n']), if (k.rich) boundText('tk_fee', 'it', ['fee']), btn('tk_open', '看看')]),
+    repeatRow('tk_row', 'items', [
+      boundText('tk_title', 'it', ['title']),
+      boundText('tk_n', 'it', ['n']),
+      if (k.rich) boundText('tk_fee', 'it', ['fee']),
+      btn('tk_open', '看看'),
+    ]),
     txt('tk_sum'),
   ],
   [listVar('items')],
@@ -321,7 +404,12 @@ AppPage _tickets(TkKit k, String base) => AppPage(
                     tx('共 '),
                     toText(lenOf(vr('xs'))),
                     tx(' 张'),
-                    if (k.rich) ...[tx('，合计 '), k.mx('label', {'钱': k.mx('total', {'单子': vr('xs'), '栏': tx('fee')})})],
+                    if (k.rich) ...[
+                      tx('，合计 '),
+                      k.mx('label', {
+                        '钱': k.mx('total', {'单子': vr('xs'), '栏': tx('fee')}),
+                      }),
+                    ],
                   ]),
                 ),
               ],
@@ -338,7 +426,9 @@ AppPage _tickets(TkKit k, String base) => AppPage(
         show('tk_rdy', tx('好了')),
       ]),
       onClick('h1', 'tk_open', [
-        goWith('ticket', {'id': ex(pg('eventItemField'), {'key': tx('id')})}),
+        goWith('ticket', {
+          'id': ex(pg('eventItemField'), {'key': tx('id')}),
+        }),
       ]),
       onClick('h2', 'tk_retry', [callS('f1')]),
       onClick('h3', 'tk_out', [k.s('logout'), show('tk_err', tx('已退出')), goTo('login')]),
@@ -353,7 +443,9 @@ AppPage _ticket(TkKit k, String base) => AppPage(
     txt('tt_title'),
     txt('tt_body'),
     if (k.rich) ...[txt('tt_fee'), txt('tt_flag'), txt('tt_note'), txt('tt_cnt')],
-    repeatRow('tt_row', 'replies', [boundText('tt_reply', 'it', ['text'])]),
+    repeatRow('tt_row', 'replies', [
+      boundText('tt_reply', 'it', ['text']),
+    ]),
     inp('tt_in'),
     btn('tt_go', '提交回复'),
     btn('tt_back', '返回'),
@@ -400,10 +492,16 @@ AppPage _ticket(TkKit k, String base) => AppPage(
         show('tt_rdy', tx('好了')),
       ]),
       if (k.rich)
-        libHat('h9', 'bus', 'on', {'name': '通知'}, [
-          show('tt_note', toText(lx('bus', 'data'))),
-          show('tt_cnt', cat([toText(ex(beLibOp(kNotice, 'count'))), tx(' 条通知')])),
-        ]),
+        libHat(
+          'h9',
+          'bus',
+          'on',
+          {'name': '通知'},
+          [
+            show('tt_note', toText(lx('bus', 'data'))),
+            show('tt_cnt', cat([toText(ex(beLibOp(kNotice, 'count'))), tx(' 条通知')])),
+          ],
+        ),
       onClick('h1', 'tt_go', [
         iff(
           op2('==', toText(valOf('tt_in')), tx('')),

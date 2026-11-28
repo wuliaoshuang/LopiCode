@@ -18,7 +18,6 @@
 /// 所以现成的“输入的内容”积木（`{e: event}`）在这种处理里读到的就是事件带的第一项数据。
 library;
 
-
 import 'package:lopicode/lowcode/bind_model.dart';
 import 'package:lopicode/lowcode/comp_self_wire.dart';
 import 'package:lopicode/lowcode/component_extras.dart';

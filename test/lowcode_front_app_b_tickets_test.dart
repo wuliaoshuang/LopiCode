@@ -145,7 +145,15 @@ void main() {
     test('用了“会话与接口”却没把它靠的“状态仓库”用上', () async {
       final libs = await libsFor(const TkKit());
       blocked(
-        one(libs, [show('t1', sx('err'))], uses: [useLib('http'), useLib('storage'), {'id': kSess}]),
+        one(
+          libs,
+          [show('t1', sx('err'))],
+          uses: [
+            useLib('http'),
+            useLib('storage'),
+            {'id': kSess},
+          ],
+        ),
         '要靠库「状态仓库」',
       );
     });
@@ -167,7 +175,11 @@ void main() {
     });
     test('用了库里没公开的积木', () async {
       final libs = await libsFor(const TkKit());
-      blocked(one(libs, [show('t1', sx('url', {'路径': tx('/x')}))]));
+      blocked(
+        one(libs, [
+          show('t1', sx('url', {'路径': tx('/x')})),
+        ]),
+      );
     });
     test('库自己写错：说好交回数的函数交回了字——存库时就不让过', () async {
       final bad = frontLib(
@@ -177,7 +189,12 @@ void main() {
           tfn('f1', '算', const [], [ret(tx('字'))], returns: tNum),
         ],
         blocks: [
-          {'id': 'calc', 'how': 'call', 'fn': 'f1', 'look': {'name': '算', 'shape': 'value', 'template': '算一下'}},
+          {
+            'id': 'calc',
+            'how': 'call',
+            'fn': 'f1',
+            'look': {'name': '算', 'shape': 'value', 'template': '算一下'},
+          },
         ],
       );
       final made = await beLibCreate(a, id: 'shuang/bad', name: '坏库', author: '霜霜', side: LibSide.frontend);

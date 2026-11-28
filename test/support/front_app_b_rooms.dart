@@ -24,12 +24,24 @@ J _emitTo(String event, Map<String, Object?> args) => {
     'click': {'event': event, 'args': args},
   },
 };
-J _model(String id, String state, String hint) => cn(id, 'input', {'placeholder': hint}, const [], {
-  'model': {'state': state},
-});
-J _bound(String id, String prop) => cn(id, 'text', {'text': '-'}, const [], {
-  'data': {'text': cFrom(prop)},
-});
+J _model(String id, String state, String hint) => cn(
+  id,
+  'input',
+  {'placeholder': hint},
+  const [],
+  {
+    'model': {'state': state},
+  },
+);
+J _bound(String id, String prop) => cn(
+  id,
+  'text',
+  {'text': '-'},
+  const [],
+  {
+    'data': {'text': cFrom(prop)},
+  },
+);
 
 /// 登录块：两个输入框双向到属性，按钮发“要登录”，带上名字和密码。
 J loginBlockDef() => {
@@ -39,11 +51,16 @@ J loginBlockDef() => {
     {'name': 'user', 'type': 'text', 'default': ''},
     {'name': 'pass', 'type': 'text', 'default': ''},
   ],
-  'root': cn('box', 'column', {'gap': 8, 'padding': 12}, [
-    _model('userIn', 'user', '用户名'),
-    _model('passIn', 'pass', '密码'),
-    cn('go', 'button', {'text': '登录'}, const [], _emitTo('submit', {'user': cFrom('user'), 'pass': cFrom('pass')})),
-  ]),
+  'root': cn(
+    'box',
+    'column',
+    {'gap': 8, 'padding': 12},
+    [
+      _model('userIn', 'user', '用户名'),
+      _model('passIn', 'pass', '密码'),
+      cn('go', 'button', {'text': '登录'}, const [], _emitTo('submit', {'user': cFrom('user'), 'pass': cFrom('pass')})),
+    ],
+  ),
   'events': [
     {
       'name': 'submit',
@@ -65,11 +82,16 @@ J roomItemDef() => {
     {'name': 'note', 'type': 'text', 'default': ''},
     {'name': 'rid', 'type': 'text', 'default': ''},
   ],
-  'root': cn('line', 'row', {'gap': 8}, [
-    _bound('name', 'title'),
-    _bound('note', 'note'),
-    cn('open', 'button', {'text': '看看'}, const [], _emitTo('open', {'id': cFrom('rid')})),
-  ]),
+  'root': cn(
+    'line',
+    'row',
+    {'gap': 8},
+    [
+      _bound('name', 'title'),
+      _bound('note', 'note'),
+      cn('open', 'button', {'text': '看看'}, const [], _emitTo('open', {'id': cFrom('rid')})),
+    ],
+  ),
   'events': [
     {
       'name': 'open',
@@ -89,13 +111,18 @@ J infoCardDef() => {
     {'name': 'title', 'type': 'text', 'default': ''},
     {'name': 'body', 'type': 'text', 'default': ''},
   ],
-  'root': cn('card', 'card', {'padding': 12, 'gap': 8}, [
-    _bound('head', 'title'),
-    _bound('text', 'body'),
-    cn('more', 'slot', const {}, [
-      cn('moreText', 'text', {'text': '（没有别的）'}),
-    ]),
-  ]),
+  'root': cn(
+    'card',
+    'card',
+    {'padding': 12, 'gap': 8},
+    [
+      _bound('head', 'title'),
+      _bound('text', 'body'),
+      cn('more', 'slot', const {}, [
+        cn('moreText', 'text', {'text': '（没有别的）'}),
+      ]),
+    ],
+  ),
 };
 
 /// 预订块：谁订、哪个时段（双向到属性），按钮发“要订”，带上这两样。
@@ -106,11 +133,16 @@ J bookBlockDef() => {
     {'name': 'who', 'type': 'text', 'default': ''},
     {'name': 'slot', 'type': 'text', 'default': ''},
   ],
-  'root': cn('box', 'column', {'gap': 8}, [
-    _model('whoIn', 'who', '谁订'),
-    _model('slotIn', 'slot', '时段'),
-    cn('go', 'button', {'text': '预订'}, const [], _emitTo('book', {'who': cFrom('who'), 'slot': cFrom('slot')})),
-  ]),
+  'root': cn(
+    'box',
+    'column',
+    {'gap': 8},
+    [
+      _model('whoIn', 'who', '谁订'),
+      _model('slotIn', 'slot', '时段'),
+      cn('go', 'button', {'text': '预订'}, const [], _emitTo('book', {'who': cFrom('who'), 'slot': cFrom('slot')})),
+    ],
+  ),
   'events': [
     {
       'name': 'book',
@@ -129,10 +161,8 @@ String rmDef(String id) => compLibDefId(kRoomsUi, id);
 /// 各实例用的是哪个定义（Vue / React 里组件是单独的文件，找元素的写法要用）。
 Map<String, String> get kRoomsDefs => {'lgf': rmDef('c1'), 'rm': rmDef('c2'), 'info': rmDef('c3'), 'bk': rmDef('c4')};
 
-J _inst(String id, String def, {Map<String, Object?> data = const {}, List<J> children = const [], Map<String, Object?> more = const {}}) => cn(id, 'component', {'ref': rmDef(def)}, children, {
-  if (data.isNotEmpty) 'data': data,
-  ...more,
-});
+J _inst(String id, String def, {Map<String, Object?> data = const {}, List<J> children = const [], Map<String, Object?> more = const {}}) =>
+    cn(id, 'component', {'ref': rmDef(def)}, children, {if (data.isNotEmpty) 'data': data, ...more});
 J _sx(String block, [J args = const {}]) => ex(beLibOp(kSess, block), args);
 J _ss(String block, [J args = const {}]) => blk(beLibOp(kSess, block), args);
 J _emit(String name) => toText(ex(pg('emitData'), {'name': tx(name)}));
@@ -185,7 +215,15 @@ AppPage _rooms(String base) => AppPage(
     btn('rm_retry', '重试'),
     btn('rm_out', '退出'),
     repeatRow('rm_row', 'items', [
-      _inst('rm', 'c2', data: {'title': fromVar('it', ['title']), 'note': fromVar('it', ['note']), 'rid': fromVar('it', ['id'])}),
+      _inst(
+        'rm',
+        'c2',
+        data: {
+          'title': fromVar('it', ['title']),
+          'note': fromVar('it', ['note']),
+          'rid': fromVar('it', ['id']),
+        },
+      ),
     ]),
     txt('rm_sum'),
   ],
@@ -247,9 +285,15 @@ AppPage _room(String base) => AppPage(
       'c3',
       data: {'title': fromVar('title'), 'body': fromVar('body')},
       children: [
-        cn('ro_taken', 'text', {'text': '-'}, const [], {
-          'data': {'text': fromVar('taken')},
-        }),
+        cn(
+          'ro_taken',
+          'text',
+          {'text': '-'},
+          const [],
+          {
+            'data': {'text': fromVar('taken')},
+          },
+        ),
       ],
     ),
     _inst('bk', 'c4', data: {'who': fromVar('who'), 'slot': fromVar('slot')}),
