@@ -6,6 +6,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lopicode/backend/backend_validate.dart';
+import 'package:lopicode/backend/front_code.dart';
 import 'package:lopicode/backend/front_doc.dart';
 import 'package:lopicode/lang/types.dart';
 import 'package:lopicode/lowcode/front_check.dart';
@@ -130,7 +131,7 @@ List<String> appIssues(LcDocument doc) {
     out.addAll([for (final x in lcFrontPageIssues(doc, page, front)) '${page.title}：${x.where} ${x.problem}']);
     doc.openPageAt(i);
     final n = lcLogicErrorCount(doc);
-    if (n != 0) out.add('${page.title}：导出前的检查数出 $n 处');
+    if (n != 0) out.add('${page.title}：导出前的检查数出 $n 处${lcFrontProgram(front).problems.isEmpty ? '' : '（程序出不来：${lcFrontProgram(front).problems.join('；')}）'}');
   }
   doc.openPageAt(keep);
   return out;

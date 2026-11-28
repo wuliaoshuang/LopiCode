@@ -6,10 +6,13 @@ library;
 
 import 'package:flutter_test/flutter_test.dart';
 
+import 'support/backend_lang_blocks.dart';
 import 'support/dev_tools.dart';
 import 'support/front_app_a_kit.dart';
 import 'support/front_app_a_shop.dart';
+import 'support/front_libs_samples.dart';
 import 'support/page_front_check.dart';
+import 'support/page_front_samples.dart';
 
 void main() {
   FakeApi? api;
@@ -39,5 +42,44 @@ void main() {
         timeout: const Timeout(Duration(minutes: 6)),
       );
     }
+  }
+
+  // 搭这个应用时撞上的一件事，钉在这里（现在就是这样；要不要改等定）：
+  // 页面放上时就在的那条路由——哪怕是“页面放上时”帽子里刚“换成”的——不算“变了”，“当路由变了”不会来；之后再“去”才来。
+  // 所以上面的应用在“页面放上时”里自己叫了一次“到了这一页”。
+  for (final kind in kFrontKinds.entries) {
+    test(
+      '路由·页面放上时已经在的路由不算“变了”·${kind.value}',
+      () async {
+        final doc = frontPage(
+          [btn('b1', '去'), txt('t1')],
+          const [],
+          frontDoc(
+            uses: [useLib('router')],
+            hats: [
+              mounted([
+                lb('router', 'route', {'pattern': tx('/a'), 'name': tx('甲')}),
+                lb('router', 'replace', {'path': tx('/a')}),
+              ]),
+              libHat('hr', 'router', 'onChange', const {}, [
+                show('t1', cat([tx('到 '), lx('router', 'newPath')])),
+              ]),
+              onClick('h1', 'b1', [
+                lb('router', 'go', {'path': tx('/b')}),
+              ]),
+            ],
+          ),
+        );
+        await appCheck(kind.key, doc, [
+          {'op': 'wait', 'ms': 150},
+          {'op': 'hash', 'is': '#/a'},
+          textIs('t1', '-'),
+          click('b1'),
+          untilText('t1', '到 /b'),
+        ]);
+      },
+      skip: skipWithoutDom,
+      timeout: const Timeout(Duration(minutes: 6)),
+    );
   }
 }

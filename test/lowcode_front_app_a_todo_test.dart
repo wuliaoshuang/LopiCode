@@ -40,4 +40,29 @@ void main() {
       );
     }
   }
+
+  // 证明真跑不是空过：同一组步骤，只把一处期望改错（列表有 2 件说成 5 件），真跑就得报出来。
+  for (final kind in kFrontKinds.entries) {
+    test(
+      '待办·步骤故意写错一处·${kind.value}：真跑抓得到',
+      () async {
+        final c = todoCases()[0];
+        final server = api = await FakeApi.start(c.world.handle);
+        final steps = c.steps(kind.key);
+        final at = steps.indexWhere((s) => s['op'] == 'count' && s['sel'] == '.n-ls_title');
+        expect(at, greaterThan(0));
+        steps[at] = {...steps[at], 'is': 5};
+        Object? caught;
+        try {
+          await appCheck(kind.key, appDoc(todoPages(server.base)), steps);
+        } on TestFailure catch (e) {
+          caught = e;
+        }
+        expect(caught, isNotNull, reason: '写错的步骤居然过了');
+        expect('$caught', contains('应该是 5，实际是 2'));
+      },
+      skip: skipWithoutDom,
+      timeout: const Timeout(Duration(minutes: 6)),
+    );
+  }
 }

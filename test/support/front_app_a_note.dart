@@ -1,7 +1,8 @@
 // 小应用甲组·第 3 种形状“笔记”：登录 → 列表 → 详情 → 编辑提交。突出类型：
-// 记录“笔记”、类“草稿”（带“创建时”和两个方法）、两种自己的错误（带字段）、模块（类型们／取数／页面，带模块顶上的变量）、
+// 记录“笔记”、类“草稿”（带“创建时”和两个方法）、两种自己的错误（带字段）、模块（类型们／取数／这一页，带模块顶上的变量）、
 // 函数（写了参数和结果的类型）、试着做／出错时（按错误种类分开接）、“要等的事”（两件同时开始、最多等多久）。
 import 'package:lopicode/lang/types.dart';
+import 'package:lopicode/lang/types_json.dart';
 
 import 'backend_core_samples.dart';
 import 'backend_func_blocks.dart';
@@ -66,7 +67,8 @@ J _req(String method, J url, {J? data, num timeout = 2000}) => authReq(kNoteToke
 J _errTo(String node) => catchArm('错误', 'e', [
   show(node, cat([tx('出错：'), getF(vr('e'), '消息')])),
 ]);
-J _status(String res) => lx('http', 'status', {'res': vr(res)});
+// 状态码这个字段写的是整数，请求库给的状态码是“数”（可能带小数）：得取整了才放得进去——不取整会被检查拦下。
+J _status(String res) => ex('toInt', {'x': lx('http', 'status', {'res': vr(res)})});
 
 // —— 两页共用的类型 ——
 J noteRecord() => typeDef('t1', 'record', '笔记', fields: [field('编号', tInt), field('标题', tText), field('正文', tText)]);
@@ -130,7 +132,7 @@ AppPage _login(String base) => AppPage(
   ),
 );
 
-/// 列表页的逻辑。三个模块：类型们（记录、错误）、取数（两个函数）、页面（帽子和“加载”）。
+/// 列表页的逻辑。三个模块：类型们（记录、错误）、取数（三个函数）、这一页（帽子和“加载”；叫“页面”会和自带的“页面”库撞名）。
 J noteListFront(String base) => noteFront(
   uses: [useLib('http'), useLib('storage')],
   types: [noteRecord(), noteFetchError()],
@@ -141,16 +143,16 @@ J noteListFront(String base) => noteFront(
     },
     {
       'name': '取数',
-      'uses': ['类型们'],
+      'uses': ['类型们', '请求', '本地保存'],
       'owns': ['f1', 'f2', 'f3'],
     },
     {
-      'name': '页面',
-      'uses': ['取数', '类型们'],
+      'name': '这一页',
+      'uses': ['取数', '类型们', '页面', '请求', '本地保存'],
       'owns': ['f4'],
     },
   ],
-  entry: '页面',
+  entry: '这一页',
   public: ['t1', 't2', 'f1', 'f2', 'f3'],
   functions: [
     noteOfFn('f1'),
@@ -271,14 +273,14 @@ J noteGetFn(String base) => tfn(
   returns: tRef('笔记'),
 );
 
-J noteSaveFn(String base, {J? idArg, J? returnsType}) => tfn(
+J noteSaveFn(String base, {J? code, J? returnsType}) => tfn(
   'f3',
   '存上',
   [tpar('id', tText), tpar('d', tRef('草稿'))],
   [
     let('res', _req('PUT', cat([tx('$base/notes/'), pm('id')]), data: dc({'title': getF(pm('d'), '标题'), 'body': getF(pm('d'), '正文')}))),
     iff(notB(resOk('res')), [
-      thro(errNew('没存上', tx('没存上'), [pair('状态码', _status('res'))])),
+      thro(errNew('没存上', tx('没存上'), [pair('状态码', code ?? _status('res'))])),
     ], noElse: true),
     setv('saves', op2('+', vr('saves'), nm(1))),
     ret(call('f1', {'d': asDict(resJson('res'))})),
@@ -330,16 +332,16 @@ J noteEditFront(String base, {List<J>? saveBody, J? saveFn, List<J> mountedExtra
     },
     {
       'name': '取数',
-      'uses': ['类型们'],
+      'uses': ['类型们', '请求', '本地保存'],
       'owns': ['g:saves', 'f1', 'f2', 'f3'],
     },
     {
-      'name': '页面',
-      'uses': ['取数', '类型们'],
+      'name': '这一页',
+      'uses': ['取数', '类型们', '页面', '请求', '本地保存'],
       'owns': <String>[],
     },
   ],
-  entry: '页面',
+  entry: '这一页',
   public: ['t1', 't2', 't3', 't4', 'g:saves', 'f1', 'f2', 'f3'],
   functions: [noteOfFn('f1'), noteGetFn(base), saveFn ?? noteSaveFn(base)],
   hats: [
