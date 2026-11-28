@@ -7,7 +7,6 @@ import 'dart:async';
 
 import 'package:lopicode/backend/backend_block_host.dart';
 import 'package:lopicode/backend/backend_lib_doc.dart';
-import 'package:lopicode/backend/backend_lib_pack.dart';
 import 'package:lopicode/backend/backend_lib_table.dart';
 import 'package:lopicode/lang/lib_model.dart';
 import 'package:lopicode/lowcode/lib_front_builtin.dart';
@@ -83,7 +82,8 @@ class _FrontBuiltinSheetState extends State<_FrontBuiltinSheet> {
           },
         ),
         BeSheetSection('积木（${lib.blocks.length} 块）'),
-        for (final b in lib.blocks) BeSheetRow(label: beLibBlockLine(b), muted: true),
+        // 槽的名字是给程序看的英文短名，这里不念出来：只留一个空槽的样子，前后的字本身读得通。
+        for (final b in lib.blocks) BeSheetRow(label: b.look.template.replaceAll(RegExp(r'\{[^{}]+\}'), '〔 〕'), muted: true),
       ],
     );
   }

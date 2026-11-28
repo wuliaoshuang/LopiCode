@@ -9,6 +9,7 @@ library;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lopicode/appearance/theme_builtin.dart';
 import 'package:lopicode/blocks/block_canvas_view.dart';
+import 'package:lopicode/blocks/block_geometry.dart';
 import 'package:lopicode/blocks/block_look.dart';
 import 'package:lopicode/lang/rules.dart';
 import 'package:lopicode/lowcode/lib_front_builtin.dart';
@@ -59,7 +60,12 @@ void main() {
     await tester.pumpAndSettle();
     expect(fk('be-lib-view'), findsNothing);
 
-    // 4 在这份文档里用它
+    // 4 看完回来（面板在去看的时候收起了）：再点开“本地保存” › 在这份文档里用它
+    if (fk('be-libs').evaluate().isEmpty) {
+      await fuMore(tester, 'libs');
+      await fuUntil(tester, () => fk('be-lib-new').evaluate().isNotEmpty, '积木库面板读完项目里的库');
+    }
+    await fuTap(tester, 'be-lib-builtin-storage');
     await fuTap(tester, 'be-lib-use');
     await fuUntil(tester, () => page.doc.use('lopi/storage') != null, '用上这个库');
     expect(tester.widget<SwitchListTile>(fk('be-lib-use')).value, isTrue);
@@ -132,7 +138,12 @@ void main() {
     await tester.tap(fk('bk-param-ok'));
     await tester.pumpAndSettle();
     expect(fn()[kExprParamTypes], ['整数']);
-    expect(find.textContaining('x：整数'), findsWidgets, reason: '小块上写着类型');
+    final ed = fuEd(tester);
+    final chips = [
+      for (final (b, x) in ed.layout.placed('h1')!.layout.allSlots)
+        if (x.look == BkSlotLook.param && !b.isHat) x.text,
+    ];
+    expect(chips, ['x：整数'], reason: '小块上写着类型');
     expect(fuErrors(tester), isEmpty);
     await _shot(tester, 'param-3-typed');
 

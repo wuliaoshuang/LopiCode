@@ -258,12 +258,12 @@ void main() {
       ),
     );
     test(
-      '“有几个在听”（一个数）直接当字显示',
+      '发消息的名字填了数',
       () => _blocked(
         _page(
           ['bus'],
           [
-            show('t1', _x('bus', 'count', {'name': tx('好了')})),
+            _b('bus', 'emit', {'name': nm(1), 'value': nm(1)}),
           ],
         ),
       ),
