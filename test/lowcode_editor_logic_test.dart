@@ -43,7 +43,8 @@ void main() {
 
     test('全部条目：内置的一个不少、顺序不变，自定义组件排在后面', () {
       // 第四轮 B5：原生控件后面多了内置组件库里进组件盒的六个
-      expect(keysOf(all), [...lcPaletteTypes, ...builtinKeys, 'component:c1', 'component:c2']);
+      // 第四轮 B8：弹窗后面多了“轻提示”一格（是样子为轻提示的弹窗，不是新组件，所以不在 lcPaletteTypes 里）
+      expect(keysOf(all), [...lcPaletteTypes, 'toast', ...builtinKeys, 'component:c1', 'component:c2']);
       expect(all.last.label, '价格表');
       expect(all.last.group, PaletteGroup.mine);
     });
@@ -57,7 +58,7 @@ void main() {
         expect(grouped.intersection(inGroup.toSet()), isEmpty, reason: '一个组件只在一类里');
         grouped.addAll(inGroup);
       }
-      expect(grouped, {...lcPaletteTypes, ...builtinKeys});
+      expect(grouped, {...lcPaletteTypes, 'toast', ...builtinKeys});
       expect(keysOf(paletteInGroup(all, PaletteGroup.layout, const [])), [
         'container',
         'row',
@@ -65,6 +66,7 @@ void main() {
         'card',
         'spacer',
         'dialog',
+        'toast',
         'component:lib_lopi_builtin_grid',
         'component:lib_lopi_builtin_scroll',
       ]);

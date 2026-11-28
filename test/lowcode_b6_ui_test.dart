@@ -59,7 +59,7 @@ void main() {
     expect(describeNode(doc, 'b2'), '「按钮“第二个买”」');
   });
 
-  testWidgets('组件盒“表单”：九个一眼看全，不用滑；换到“布局”面板回到原来的高度', (tester) async {
+  testWidgets('组件盒“表单”：九个一眼看全，不用滑；换到“基础”面板回到原来的高度', (tester) async {
     await lbOpen(
       tester,
       doc: _page([
@@ -84,7 +84,10 @@ void main() {
     await _tap(tester, lbPaletteItem(keys.last));
     expect(lbCanvas(tester).widget.doc.root.children.last.props['ref'], lcBuiltinDefId('formItem'));
     await _tap(tester, lbKey('lc-tool-add').last);
+    // 第四轮 B8 以后“布局”也是 9 个（多了“轻提示”），照同一条规矩露三行；“基础”6 个，回到原来的高度
     await _tap(tester, lbKey('palette-group-layout'));
+    expect(tester.state<PalettePanelState>(find.byType(PalettePanel)).height, 360);
+    await _tap(tester, lbKey('palette-group-basic'));
     expect(tester.state<PalettePanelState>(find.byType(PalettePanel)).height, kPaletteNormalHeight);
     expect(tester.takeException(), isNull);
   });
