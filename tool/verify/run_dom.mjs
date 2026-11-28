@@ -38,7 +38,7 @@ function consoleFor() {
 }
 
 // —— 纯网页：把 .css / .js 直接塞进网页里（不走网络、不走文件加载器）——
-function openHtml(file, carry) {
+function openHtml(file, carry, local) {
   let html = fs.readFileSync(path.join(dir, file), 'utf8');
   html = html.replace(/<link rel="stylesheet" href="([^"]+)">/g, (_, f) => `<style>${fs.readFileSync(path.join(dir, f), 'utf8')}</style>`);
   const scripts = [];
@@ -48,6 +48,7 @@ function openHtml(file, carry) {
   });
   const dom = new JSDOM(html, { url: `https://lopi.test/${file}`, runScripts: 'outside-only', pretendToBeVisual: true, virtualConsole: consoleFor() });
   for (const [k, v] of Object.entries(carry || {})) dom.window.sessionStorage.setItem(k, v);
+  for (const [k, v] of Object.entries(local || {})) dom.window.localStorage.setItem(k, v);
   for (const f of scripts) {
     try {
       dom.window.eval(fs.readFileSync(path.join(dir, f), 'utf8'));
@@ -61,7 +62,7 @@ function openHtml(file, carry) {
 }
 
 // —— Vue / React：用 esbuild 打成一个给浏览器用的包，放进 jsdom 里挂到页面上 ——
-async function openBundle() {
+async function openBundle(local) {
   const esbuild = requireDev('esbuild');
   const wrapper = path.join(dir, kind === 'vue' ? '.lc-dom-entry.js' : '.lc-dom-entry.jsx');
   fs.writeFileSync(
@@ -105,6 +106,7 @@ async function openBundle() {
     return null;
   }
   const dom = new JSDOM('<!doctype html><html><body><div id="app"></div></body></html>', { url: 'https://lopi.test/', runScripts: 'outside-only', pretendToBeVisual: true, virtualConsole: consoleFor() });
+  for (const [k, v] of Object.entries(local || {})) dom.window.localStorage.setItem(k, v);
   try {
     dom.window.eval(fs.readFileSync(outfile, 'utf8'));
   } catch (e) {
@@ -114,6 +116,13 @@ async function openBundle() {
 }
 
 let dom = kind === 'html' ? openHtml(entry) : await openBundle();
+// 现在开着的是哪个网页文件（纯网页换页以后会变；“关掉再开”要重开它）。
+let current = entry;
+const storageOf = (st) => {
+  const out = {};
+  for (let i = 0; i < st.length; i++) out[st.key(i)] = st.getItem(st.key(i));
+  return out;
+};
 if (!dom) finish();
 await tick();
 
@@ -187,8 +196,10 @@ for (const s of steps) {
             const k = dom.window.sessionStorage.key(i);
             carry[k] = dom.window.sessionStorage.getItem(k);
           }
+          const local = storageOf(dom.window.localStorage);
           dom.window.close();
-          dom = openHtml(s.html, carry);
+          dom = openHtml(s.html, carry, local);
+          current = s.html;
         } else {
           dom.window.location.hash = s.hash;
         }
@@ -206,6 +217,66 @@ for (const s of steps) {
           const status = r.status || 200;
           return Promise.resolve({ ok: status >= 200 && status < 300, status, headers: new Map(), text: () => Promise.resolve(String(r.body)) });
         };
+        break;
+      }
+      case 'net': {
+        // 真网络（“请求”库对着本地假服务测）：页面里的 fetch 交给 Node 自带的 fetch；页面那边中止了，这边跟着中止。
+        const w = dom.window;
+        w.fetch = (url, init) => {
+          const ctl = new AbortController();
+          const sig = init && init.signal;
+          if (sig) {
+            if (sig.aborted) ctl.abort();
+            else sig.addEventListener('abort', () => ctl.abort());
+          }
+          return fetch(String(url), { method: (init && init.method) || 'GET', headers: (init && init.headers) || {}, body: init && init.body, signal: ctl.signal }).then((res) => ({
+            ok: res.ok,
+            status: res.status,
+            headers: res.headers,
+            text: () => res.text(),
+          }));
+        };
+        break;
+      }
+      case 'until': {
+        // 等到这段字变成要的样子（定时器到点、请求回来）：成立就往下走，最多等 10 秒。
+        const limit = Date.now() + 10000;
+        let got = null;
+        for (;;) {
+          got = all(s.sel).length > (s.at || 0) ? textOf(one(s.sel, s.at)) : null;
+          if (got === s.is || Date.now() > limit) break;
+          await new Promise((r) => setTimeout(r, 15));
+        }
+        same(got);
+        break;
+      }
+      case 'storedUntil': {
+        // 等到本地存储里这个名字下存的变成要的样子，最多等 10 秒。
+        const limit = Date.now() + 10000;
+        let got = null;
+        for (;;) {
+          got = dom.window.localStorage.getItem(s.key);
+          if (got === s.is || Date.now() > limit) break;
+          await new Promise((r) => setTimeout(r, 15));
+        }
+        same(got);
+        break;
+      }
+      case 'stored':
+        // 本地存储里这个名字下存的原文（没有＝null）。
+        same(dom.window.localStorage.getItem(s.key));
+        break;
+      case 'store':
+        dom.window.localStorage.setItem(s.key, String(s.value));
+        break;
+      case 'reload': {
+        // 关掉再开：本地存储留着（本次存储也留着），页面从头来。
+        const local = storageOf(dom.window.localStorage);
+        const carry = storageOf(dom.window.sessionStorage);
+        dom.window.close();
+        dom = kind === 'html' ? openHtml(current, carry, local) : await openBundle(local);
+        if (!dom) throw new Error('重开没成');
+        await tick();
         break;
       }
       case 'alerts':

@@ -19,7 +19,7 @@ import 'package:lopicode/blocks/block_panels_sheet.dart';
 import 'package:lopicode/core/crash_log.dart';
 import 'package:lopicode/lowcode/edit_types.dart';
 import 'package:lopicode/lowcode/front_check.dart';
-import 'package:lopicode/lowcode/lib_page.dart';
+import 'package:lopicode/lowcode/lib_front_builtin.dart';
 import 'package:lopicode/lowcode/logic_blocks.dart';
 import 'package:lopicode/lowcode/logic_text.dart';
 import 'package:lopicode/lowcode/logic_vars_sheet.dart';
@@ -136,7 +136,7 @@ class _LogicFrontScreenState extends State<LogicFrontScreen> {
     widget.onEdit((d) {
       d.logic.loaded = [
         for (final l in doc.loaded)
-          if (l.id != kLcPageLibId) l,
+          if (!lcIsFrontBuiltin(l.id)) l,
       ];
       lcFrontStore(d.logic, doc);
     });
@@ -170,7 +170,7 @@ class _LogicFrontScreenState extends State<LogicFrontScreen> {
       if (!mounted) return;
       _page.logic.loaded = [
         for (final l in _host.doc.loaded)
-          if (l.id != kLcPageLibId) l,
+          if (!lcIsFrontBuiltin(l.id)) l,
       ];
       _host.canvasChanged();
     } on Object catch (e, st) {
@@ -186,7 +186,7 @@ class _LogicFrontScreenState extends State<LogicFrontScreen> {
     // 文档在外面变了（搭建页的撤销、Agent 改了页面）：新逻辑和手上的不一样才换，免得自己刚提交的改动把撤销记录冲掉。
     final front = lcFrontOf(_page.logic);
     if (front != null && _stored != jsonEncode(_host.doc.toJson())) {
-      _host.replaceDoc(front.clone()..loaded = _host.doc.loaded.where((l) => l.id != kLcPageLibId).toList());
+      _host.replaceDoc(front.clone()..loaded = _host.doc.loaded.where((l) => !lcIsFrontBuiltin(l.id)).toList());
     } else {
       _host.canvasChanged(); // 控件、状态可能变了：下拉重新问
     }

@@ -4,6 +4,7 @@ library;
 
 import 'package:lopicode/lang/lib_model.dart';
 import 'package:lopicode/lowcode/lib_blocks.dart';
+import 'package:lopicode/lowcode/lib_front_builtin.dart';
 import 'package:lopicode/lowcode/logic_expr.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 import 'package:lopicode/lowcode/model.dart';
@@ -30,7 +31,8 @@ class LcLogicUser implements LibUser {
   @override
   Iterable<String> get libHatOps => const [];
 
-  LibLibrary? lib(String id) => loaded.where((l) => l.id == id).firstOrNull;
+  /// 项目里的库，或者自带的那五个要用才用的前端库（它们不用项目里有）。
+  LibLibrary? lib(String id) => loaded.where((l) => l.id == id).firstOrNull ?? (lcIsFrontOptional(id) ? lcFrontBuiltinLib(id) : null);
   bool hasUse(String id) => logic.uses.any((u) => u['id'] == id);
 
   /// 用上一个库（已经用上了就不动）。
@@ -61,7 +63,7 @@ List<LibLibrary> lcUsedLibs(LcLogic logic, [List<String>? problems]) {
   }
   for (final l in out) {
     for (final r in l.requires) {
-      if (!out.any((x) => x.id == r)) problems?.add('库「${l.name}」要靠库「$r」，请把「$r」也用上');
+      if (!out.any((x) => x.id == r)) problems?.add('库「${l.name}」要靠库「${lcFrontBuiltinLib(r)?.name ?? r}」，请把「${lcFrontBuiltinLib(r)?.name ?? r}」也用上');
     }
   }
   return out;

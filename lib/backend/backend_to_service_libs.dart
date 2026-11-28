@@ -7,6 +7,7 @@ import 'package:lopicode/backend/lib_service.dart';
 import 'package:lopicode/lang/ast.dart';
 import 'package:lopicode/lang/lib_model.dart';
 import 'package:lopicode/lang/link.dart';
+import 'package:lopicode/lowcode/lib_front_builtin.dart';
 
 /// 库的定义画布上那两块积木翻出来的记号（只在翻库的时候出现，写出器把它们写成模板里的洞；见 backend_lib_build.dart）。
 const String kBeLibMouthMark = '@口';
@@ -52,7 +53,7 @@ List<LibLibrary> beUsedLibs(BeDocument doc, [List<String>? problems]) {
   }
   for (final l in out) {
     for (final r in l.requires) {
-      if (r != kBeServiceLibId && !out.any((x) => x.id == r)) problems?.add('库「${l.name}」要靠库「$r」，请把「$r」也用上');
+      if (r != kBeServiceLibId && !out.any((x) => x.id == r)) problems?.add('库「${l.name}」要靠库「${lcFrontBuiltinLib(r)?.name ?? r}」，请把「${lcFrontBuiltinLib(r)?.name ?? r}」也用上');
     }
   }
   return out;
