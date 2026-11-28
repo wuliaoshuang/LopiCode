@@ -11,6 +11,8 @@
 /// （每一份该各记各的，一个状态记不下）；组件里面套着的实例；“值”绑在拼出来、比出来的式子上的。
 library;
 
+import 'dart:convert';
+
 import 'package:lopicode/lowcode/bind_model.dart';
 import 'package:lopicode/lowcode/component_extras.dart';
 import 'package:lopicode/lowcode/component_model.dart';
