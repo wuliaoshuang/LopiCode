@@ -868,6 +868,7 @@ void main() {
       await waitLowcodeSaved(tester);
       await settle(tester, rounds: 1);
       expect(find.textContaining('保存失败：'), findsOneWidget);
+      await settle(tester, rounds: 6); // 等提示条滑进来停稳
       lbHintAbove(tester, '保存失败：'); // 第四轮 B8：这句提示看得见、没被挡、在工具条上面
       final message = tester.widget<Text>(find.textContaining('保存失败：')).data!;
       expect(message, contains('index.html'), reason: '写了是哪个文件');
