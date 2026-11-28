@@ -6,7 +6,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/core/templates.dart';
 import 'package:lopicode/project_session.dart';
+import 'package:lopicode/templates/project_templates.dart';
 import 'package:lopicode/theme/breakpoints.dart';
+import 'package:lopicode/ui/backend_screen.dart';
 import 'package:lopicode/ui/chrome.dart';
 import 'package:lopicode/ui/nav_rail.dart';
 import 'package:lopicode/ui/preview_tab.dart';
@@ -29,7 +31,7 @@ Future<(TestEnv, Project, ProjectSession)> _open(WidgetTester tester, Size size,
   late ProjectSession session;
   await tester.runAsync(() async {
     e = await TestEnv.create();
-    project = await e.services.projects.create('我的小站', template);
+    project = template == ProjectTemplate.lowcode ? await e.services.projects.create('我的小站', template) : await createProjectFromTemplate(e.services.projects, '小后端', template, language: 'node');
     session = ProjectSession(e.services, project);
     await session.loadChat();
     await Future<void>.delayed(const Duration(milliseconds: 150));
@@ -147,6 +149,45 @@ void main() {
       }
       await _nav(tester, ShellDest.chat);
       _noError(tester, '回到对话页');
+    });
+
+    testWidgets('积木 $tag：后端积木页和页面逻辑页都排得下——画布在、积木盒在，不溢出', (tester) async {
+      // 后端积木页
+      var (env, project, session) = await _open(tester, size, template: ProjectTemplate.backendBlocks);
+      await tester.pumpWidget(
+        appFor(
+          env,
+          ProjectShell(project: project, session: session, initial: ShellDest.builder),
+          font: lbFontsLoaded ? kTestFont : null,
+        ),
+      );
+      await settle(tester, rounds: 8);
+      _noError(tester, '后端积木页');
+      expect(find.byType(BackendScreen), findsOneWidget);
+      final canvas = tester.getRect(find.byKey(const ValueKey('bk-canvas')));
+      expect(canvas.left, greaterThanOrEqualTo(Breakpoints.rail), reason: '画布在竖排导航右边');
+      expect(canvas.right, size.width, reason: '画布用满右边的宽度');
+      expect(canvas.height, greaterThan(size.height / 3), reason: '积木盒没把画布挤没');
+      await lbShot(tester, _dir, 'blocks-backend-$tag');
+
+      // 页面逻辑页：搭建页 ⋮ › 积木逻辑
+      await tester.pumpWidget(const SizedBox());
+      (env, project, session) = await _open(tester, size);
+      await tester.pumpWidget(
+        appFor(
+          env,
+          ProjectShell(project: project, session: session, initial: ShellDest.builder),
+          font: lbFontsLoaded ? kTestFont : null,
+        ),
+      );
+      await settle(tester, rounds: 8);
+      await tester.tap(find.byTooltip('更多').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('积木逻辑'));
+      await settle(tester, rounds: 8);
+      _noError(tester, '页面逻辑页');
+      expect(find.byKey(const ValueKey('bk-canvas')), findsOneWidget);
+      await lbShot(tester, _dir, 'blocks-logic-$tag');
     });
 
     testWidgets('对话 $tag：底部弹层限宽居中，不横向拉满', (tester) async {
