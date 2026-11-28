@@ -237,4 +237,13 @@ void _navItems(LcNode n, void Function(Map<Object?, Object?> item) visit) {
 }
 
 /// 只看其中一页的一份副本：导出每一页时用（各导出器只认“当前页”）。和原文档互不影响。
-LcDocument lcPageView(LcDocument doc, int index) => LcDocument.fromJson(jsonDecode(jsonEncode(doc.toJson())) as Map<String, dynamic>)..openPageAt(index);
+LcDocument lcPageView(LcDocument doc, int index) => lcDocCopy(doc)..openPageAt(index);
+
+/// 整份深拷贝。每一页挂着的积木库（不存盘的那一格 `loaded`）照样带过去：不带的话，导出时用了自己的库的页面会说“项目里找不到它”。
+LcDocument lcDocCopy(LcDocument doc) {
+  final copy = LcDocument.fromJson(jsonDecode(jsonEncode(doc.toJson())) as Map<String, dynamic>);
+  for (final p in copy.pages) {
+    p.logic.loaded = (doc.pageById(p.id) ?? doc.pages.first).logic.loaded;
+  }
+  return copy;
+}

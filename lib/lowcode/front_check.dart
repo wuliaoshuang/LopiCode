@@ -82,6 +82,37 @@ Set<String> lcComponentEvents(LcComponentDef def) {
   return out;
 }
 
+/// 组件的这个事件带出来的数据名：定义上写的参数，加上定义里各控件发它时带的。
+Set<String> lcComponentEventData(LcComponentDef def, String event) {
+  final out = <String>{};
+  final events = def.more['events'];
+  if (events is List) {
+    for (final e in events) {
+      final params = e is Map && e['name'] == event ? e['params'] : null;
+      if (params is! List) continue;
+      for (final x in params) {
+        if (x is Map && x['name'] is String) out.add(x['name'] as String);
+      }
+    }
+  }
+  void walk(LcNode n, int depth) {
+    final emit = n.more['emit'];
+    if (emit is Map) {
+      for (final v in emit.values) {
+        final args = v is Map && v['event'] == event ? v['args'] : null;
+        if (args is Map) out.addAll([for (final k in args.keys) '$k']);
+      }
+    }
+    if (depth > 64) return;
+    for (final c in n.children) {
+      walk(c, depth + 1);
+    }
+  }
+
+  walk(def.root, 0);
+  return out;
+}
+
 /// 这一页的新逻辑里读了哪些“这次带来的参数”（名字是写死的那些）。
 Set<String> lcFrontParamsRead(BeDocument front) {
   final out = <String>{};
@@ -177,6 +208,9 @@ class _Check {
   final List<LcLogicIssue> issues = [];
 
   String _scope = '';
+
+  /// 正在查的这顶“当〔组件〕发出〔事件〕”帽子：那个事件叫什么、带了哪些数据（别处是 null）。
+  ({String event, Set<String> data})? _emitOf;
   String? _tree;
   LcBlockPath _path = const [];
 
@@ -212,10 +246,17 @@ class _Check {
           _error(LcIssueCode.nodeNotFound, '这顶帽子挂的控件不在这一页了（可能已经删掉）', arg: 'node');
         } else if (node != null) {
           repeated = _inRepeat(page.root, node.id);
-          if (id == 'onEmit') emits = _emit(node, _lit(h.args['event']));
+          if (id == 'onEmit') {
+            final event = _lit(h.args['event']);
+            emits = _emit(node, event);
+            final ref = node.props['ref'];
+            final def = emits && ref is String ? doc.component(ref) : null;
+            if (def != null) _emitOf = (event: event, data: lcComponentEventData(def, event));
+          }
         }
       }
       _blocks(h.body, const [], repeated: repeated, emits: emits, inHat: true);
+      _emitOf = null;
     }
     _scope = '';
     _tree = null;
@@ -283,6 +324,10 @@ class _Check {
       _error(LcIssueCode.badArg, '“${lcPageLibrary().block(id)?.look.name ?? '这一项'}”只能用在“重复”出来的控件的事件里：这顶帽子挂的控件不是重复出来的');
     }
     if (id == 'emitData' && !emits) _error(LcIssueCode.badArg, '“事件带来的…”只能用在“当〔组件〕发出〔事件〕”下面');
+    final from = _emitOf, want = id == 'emitData' ? _lit(arg('name')) : '';
+    if (from != null && want.isNotEmpty && !from.data.contains(want)) {
+      _error(LcIssueCode.badArg, '事件「${from.event}」没带叫「$want」的数据${from.data.isEmpty ? '（它什么都没带）' : '（它带了：${from.data.join('、')}）'}', arg: 'name');
+    }
     if (id == 'goPage' || id == 'goPageWith') _go(id, _lit(arg('page')), arg('params'));
   }
 
