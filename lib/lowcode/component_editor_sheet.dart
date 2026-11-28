@@ -32,6 +32,7 @@ import 'package:lopicode/lowcode/image_pick_sheet.dart';
 import 'package:lopicode/lowcode/inspector_sheet.dart';
 import 'package:lopicode/lowcode/layers_sheet.dart';
 import 'package:lopicode/lowcode/model.dart';
+import 'package:lopicode/lowcode/model_v3_components.dart' show kLcToastPaletteType;
 import 'package:lopicode/lowcode/multi_select_widgets.dart';
 import 'package:lopicode/lowcode/node_actions.dart';
 import 'package:lopicode/lowcode/palette_catalog.dart';
@@ -253,7 +254,7 @@ class _ComponentEditorState extends State<_ComponentEditor> with LcMultiSelectHo
     final sel = _selected == null ? null : _temp.find(_selected!);
     final target = sel ?? top;
     if (target == null) return null;
-    if (type == 'dialog') {
+    if (type == 'dialog' || type == kLcToastPaletteType) {
       unawaited(tellComponentProblem(context, _noDialog));
       return null;
     }
@@ -274,7 +275,7 @@ class _ComponentEditorState extends State<_ComponentEditor> with LcMultiSelectHo
 
   void _drop(LcDrag drag, String parentId, int index) {
     if (multiDrop(drag, parentId, index)) return;
-    if (drag.type == 'dialog') {
+    if (drag.type == 'dialog' || drag.type == kLcToastPaletteType) {
       unawaited(tellComponentProblem(context, _noDialog));
       return;
     }

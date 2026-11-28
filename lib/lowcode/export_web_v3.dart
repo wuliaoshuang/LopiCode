@@ -274,6 +274,18 @@ LcEl? lcWebElement(LcNode n, LcWebCtx ctx) {
       final bound = ctx.closeExpr(n);
       final close = bound ?? (ctx.plainHtml ? "$kLcEv.currentTarget.closest('.lc-dialog').style.display = 'none'" : "$kLcEv.currentTarget.closest('.lc-dialog').hidden = true");
       final shut = bound == null && !flag('open');
+      if (variant == 'toast') {
+        // 轻提示：一句话，没有遮罩和按钮；出现、停留、淡出是一段 CSS 动画，动画放完就照“关闭”那样收起来。
+        return LcEl(
+          'div',
+          host: true,
+          attrs: {'role': 'status', 'data-variant': variant, 'data-seconds': '${lcToastSeconds(n)}', if (shut && ctx.plainHtml) 'style': 'display: none', if (shut && !ctx.plainHtml) 'hidden': null},
+          kids: [
+            LcEl('p', attrs: {'class': 'lc-toast-text'}, text: n.strProp('text') ?? ''),
+          ],
+          on: {'animationend': close},
+        );
+      }
       final content = slot('content'), footer = slot('footer');
       LcEl button(String text) => LcEl('button', attrs: {'type': 'button', 'class': 'lc-dialog-btn'}, text: text, on: {'click': close});
       return LcEl(
@@ -301,6 +313,9 @@ LcEl? lcWebElement(LcNode n, LcWebCtx ctx) {
   }
   return null;
 }
+
+/// React 里名字不是“on＋首字母大写”的事件。
+const Map<String, String> _reactEvents = {'animationend': 'onAnimationEnd'};
 
 // —— 写成三种代码 ——
 
@@ -355,7 +370,7 @@ List<LcWebPiece> lcRenderEl(LcEl root, LcWebDialect d, {required String hostAttr
       b.write(switch (d) {
         LcWebDialect.html => ' on$event="$code"',
         LcWebDialect.vue => ' @$event="$code"',
-        LcWebDialect.react => ' on${event[0].toUpperCase()}${event.substring(1)}={(event) => $code}',
+        LcWebDialect.react => ' ${_reactEvents[event] ?? 'on${event[0].toUpperCase()}${event.substring(1)}'}={(event) => $code}',
       });
     });
     final inner = areaText ?? e.text;

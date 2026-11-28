@@ -11,6 +11,7 @@ import 'package:lopicode/lowcode/export_dart_hook.dart';
 import 'package:lopicode/lowcode/export_dart_live_events.dart';
 import 'package:lopicode/lowcode/export_dart_live_tree.dart';
 import 'package:lopicode/lowcode/grid_css.dart';
+import 'package:lopicode/lowcode/inspector_write.dart';
 import 'package:lopicode/lowcode/logic_expr.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 import 'package:lopicode/lowcode/model.dart';
@@ -189,7 +190,7 @@ class DartLiveGen implements DartLiveHook {
 
   /// 绑了的文字属性、绑了的样式换成占位值。
   LcNode _shown(LcNode n) {
-    if (n.isUnknown || !lcHasBindings(n)) return n;
+    if (n.isUnknown || (!lcHasBindings(n) && _pressProps(n).isEmpty)) return n;
     Map<String, dynamic>? props;
     for (final prop in lcBoundProps(n)) {
       final spec = lcBindable(n.type, prop);
@@ -243,10 +244,70 @@ class DartLiveGen implements DartLiveHook {
         }
       }
     }
+    // “按下”时的样子（按钮走它自己的口子，见 _withStates）：按着的时候换一组属性，外面包一层记“按没按着”的壳。
+    for (final e in _pressProps(n).entries) {
+      final old = (props ?? n.props)[e.key];
+      if (e.key == 'bg' || e.key == 'color') {
+        final fallback = subs.colorCode(old) ?? (old is String && cssColorToArgb(old) != null ? dartLiveColor(cssColorToArgb(old)!) : 'null');
+        (props ??= {...n.props})[e.key] = subs.color('(lcDown ? ${e.value} : $fallback)');
+      } else {
+        final fallback = subs.numberCode(old) ?? (old is num ? dartLiveNum(old) : null);
+        if (fallback == null && (e.key == 'width' || e.key == 'height' || e.key == 'fontSize')) {
+          (props ??= {...n.props})[e.key] = subs.number('(lcDown ? ${e.value} : null)');
+        } else {
+          (props ??= {...n.props})[e.key] = subs.number('(lcDown ? ${e.value} : ${fallback ?? '0'})');
+        }
+      }
+    }
     return props == null ? n : dartLiveCopy(n, props: props);
   }
 
   // —— 状态样式 ——
+
+  /// 这个组件（不是按钮、输入框）“按下”时要换的属性 → 按着时的值（已经是 Dart 写法）。只认和样式绑定一样的那几条。
+  final Map<String, Map<String, String>> _pressCache = {};
+  static const Set<String> _pressTypes = {'container', 'row', 'column', 'card', 'text', 'image', 'icon', 'list', 'listItem'};
+
+  Map<String, String> _pressProps(LcNode n) => _pressCache[n.id] ??= () {
+    // 只管经 node() 画出来的这几种（那里才包得上壳）；按钮有自己的写法；顶栏、弹窗、输入类不在这条路上。
+    if (!_pressTypes.contains(n.type)) return const <String, String>{};
+    final pressed = canonicalDeclarations(lcStateStyle(n, 'pressed'));
+    if (pressed.isEmpty) return const <String, String>{};
+    final out = <String, String>{};
+    final left = {...pressed};
+    for (final prop in const ['bg', 'color', 'fontSize', 'padding', 'margin', 'radius', 'gap', 'width', 'height']) {
+      final names = prop == 'width' ? const ['width'] : legacyPropCssNames(prop);
+      final values = {for (final name in names) pressed[name]};
+      if (values.length != 1 || values.single == null) continue; // 四个角 / 四条边不一样的：没有对得上的一个数
+      final raw = values.single!;
+      final String? code;
+      if (prop == 'bg' || prop == 'color') {
+        code = _colorOf(raw);
+      } else {
+        final m = RegExp(r'^(-?\d+(?:\.\d+)?)(px)?$').firstMatch(lcSubstVars(raw, vars.values).trim());
+        code = m == null ? null : dartLiveNum(num.parse(m[1]!));
+      }
+      if (code == null) continue;
+      out[prop] = code;
+      names.forEach(left.remove);
+    }
+    if (left.isNotEmpty && out.isNotEmpty) {
+      notes.add('“按下”时的样子里的 ${left.keys.join('、')}（Flutter 这边按下时只换底色、文字颜色、字号、内外边距、圆角、间距、宽、高这几条）。');
+    }
+    return out;
+  }();
+
+  /// 包一层记“按没按着”的壳（撑满用的 Expanded / Flexible 留在最外面）。
+  String _pressWrap(LcNode n, String code, int indent) {
+    // 这时候按下的值还是占位记号（最后才换成 lcDown 那句），所以只看有没有，不看代码里的字。
+    if (_pressProps(n).isEmpty) return code;
+    final m = RegExp(r'^(Expanded|Flexible)\(\n(\s*)child: ').firstMatch(code);
+    final tail = ',\n${_ind(indent)})';
+    if (m != null && code.endsWith(tail)) {
+      return '${m[1]}(\n${m[2]}child: _LcPress(builder: (context, lcDown) => ${code.substring(m.end, code.length - tail.length)})$tail';
+    }
+    return '_LcPress(builder: (context, lcDown) => $code)';
+  }
 
   String? _colorOf(String? css) {
     if (css == null) return null;
@@ -262,6 +323,8 @@ class DartLiveGen implements DartLiveHook {
   String _withStates(LcNode n, String code) {
     if (lcHasBpStates(n)) notes.add('有些状态样式是分屏宽设的（平板 / 桌面上按下、禁用、聚焦时另一个样子）：Flutter 这边没有导出这一部分，各种屏宽上都用手机的那一份。');
     if (!lcHasStates(n)) return code;
+    // 不是按钮的：按下时那几条已经在 _shown / _pressWrap 里接上了。
+    final viaPress = _pressProps(n).isNotEmpty;
     final pressed = canonicalDeclarations(lcStateStyle(n, 'pressed')), disabled = canonicalDeclarations(lcStateStyle(n, 'disabled')), focused = canonicalDeclarations(lcStateStyle(n, 'focused'));
     var handled = false;
     var out = code;
@@ -288,6 +351,7 @@ class DartLiveGen implements DartLiveHook {
         handled = true;
       }
     }
+    if (viaPress && disabled.isEmpty && focused.isEmpty) handled = true;
     if (!handled) {
       notes.add('有些状态样式（Flutter 这边导出的是：按钮“按下 / 禁用”时的底色和文字颜色、输入框“聚焦”时的边框颜色。别的组件、别的属性在 Flutter 里没有现成的“某个状态下换样子”的口子，要给每个控件包一层自己记“按下没有”的壳，这一版没有做）。');
     }
@@ -361,7 +425,8 @@ class DartLiveGen implements DartLiveHook {
       String make(LcNode x) {
         final code = dartLiveExtras(n, _withStates(n, core(x, parent, indent)), indent, notes);
         final tip = lcBoxCanOff(x) ? lcDataExpr(n, 'alt') : null;
-        return dartBoxExtras(x, events?.attach(n, code, indent, off: lcBoxOff(x)) ?? code, indent, labelCode: tip == null ? null : '_lcText(${expr(tip)})');
+        final boxed = dartBoxExtras(x, events?.attach(n, code, indent, off: lcBoxOff(x)) ?? code, indent, labelCode: tip == null ? null : '_lcText(${expr(tip)})');
+        return _pressWrap(n, boxed, indent);
       }
 
       var widget = off == null

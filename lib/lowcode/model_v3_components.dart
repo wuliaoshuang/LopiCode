@@ -79,8 +79,23 @@ const Map<String, List<String>> lcVariants = {
   'appBar': ['left', 'center'],
   'bottomNav': ['labeled', 'iconOnly'],
   'tabs': ['underline', 'pill'],
-  'dialog': ['alert', 'confirm'],
+  'dialog': ['alert', 'confirm', 'toast'],
 };
+
+/// 轻提示：弹窗的第三种样子——屏幕下方一句话，过几秒自己消失；没有遮罩、标题、按钮，里面也不放组件。
+bool lcIsToast(LcNode n) => n.type == 'dialog' && lcVariantOf(n) == 'toast';
+
+/// 组件盒里“轻提示”那一格的名字（不是一种新组件：放出来的是样子为“轻提示”的弹窗）。
+const String kLcToastPaletteType = 'toast';
+
+/// 新放出来的轻提示带的属性。
+const Map<String, dynamic> kLcToastDefaults = {'variant': 'toast', 'text': '已保存'};
+
+/// 轻提示几秒后消失（1–5，不写是 2）。
+int lcToastSeconds(LcNode n) {
+  final v = n.props['seconds'];
+  return v is num ? v.round().clamp(1, 5) : 2;
+}
 
 /// 这个组件现在是哪种样子。
 String lcVariantOf(LcNode n) {
@@ -111,6 +126,7 @@ const Map<String, List<String>> _keyTypes = {
   'dismissible': ['dialog'],
   'okText': ['dialog'],
   'cancelText': ['dialog'],
+  'seconds': ['dialog'],
 };
 
 /// 新组件带来的键（都只在第 3 版的文件里算数）。
@@ -134,6 +150,7 @@ const Set<String> lcV3ComponentKeys = {
   'dismissible',
   'okText',
   'cancelText',
+  'seconds',
 };
 
 /// 这个键归不归这里管（[lcCleanV3] 说了算，model_props.dart 不再往下看）。
@@ -184,6 +201,8 @@ Object? lcCleanV3(String type, String key, Object? value) {
       return value is bool ? value : null;
     case 'title' || 'subtitle' || 'trailing' || 'okText' || 'cancelText':
       return value is String ? value : null;
+    case 'seconds':
+      return value is num && value >= 1 && value <= 5 ? value.round() : null;
     case 'direction':
       return value == 'row' || value == 'column' ? value : null;
     case 'variant':

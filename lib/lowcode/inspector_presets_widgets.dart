@@ -10,6 +10,7 @@ import 'dart:async';
 
 import 'package:flutter/services.dart';
 import 'package:lopicode/lowcode/inspector_bp_widgets.dart';
+import 'package:lopicode/lowcode/number_drag_widgets.dart';
 import 'package:lopicode/lowcode/theme_scope_widgets.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/keyboard_tap_dismiss.dart';
@@ -269,24 +270,36 @@ class _PresetRowState extends State<PresetRow> {
                       SizedBox(
                         width: 72,
                         height: 40,
-                        child: TextField(
-                          key: Key('lc-num-${widget.id}'),
-                          controller: _text,
+                        child: NumberDragArea(
+                          id: widget.id,
                           focusNode: _focus,
-                          textAlign: TextAlign.center,
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                          inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
-                          style: t.bodyMedium,
-                          decoration: InputDecoration(
-                            isDense: true,
-                            hintText: '默认',
-                            contentPadding: const EdgeInsets.symmetric(horizontal: Space.x2, vertical: 10),
-                            suffixText: widget.unit.isEmpty ? null : widget.unit,
-                          ),
-                          onChanged: (s) {
-                            final n = num.tryParse(s);
-                            if (n != null) widget.onChanged(n, typing: true);
+                          value: (widget.value ?? 0).toDouble(),
+                          min: 0,
+                          max: 9999,
+                          onChanged: (n) {
+                            final next = n == n.roundToDouble() ? n.toInt() : n;
+                            widget.onChanged(next, typing: true);
+                            _text.text = _fmt(next);
                           },
+                          child: TextField(
+                            key: Key('lc-num-${widget.id}'),
+                            controller: _text,
+                            focusNode: _focus,
+                            textAlign: TextAlign.center,
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
+                            style: t.bodyMedium,
+                            decoration: InputDecoration(
+                              isDense: true,
+                              hintText: '默认',
+                              contentPadding: const EdgeInsets.symmetric(horizontal: Space.x2, vertical: 10),
+                              suffixText: widget.unit.isEmpty ? null : widget.unit,
+                            ),
+                            onChanged: (s) {
+                              final n = num.tryParse(s);
+                              if (n != null) widget.onChanged(n, typing: true);
+                            },
+                          ),
                         ),
                       ),
                       _stepButton(context, 'plus', Icons.add, 1),

@@ -12,6 +12,7 @@ library;
 import 'package:lopicode/lowcode/logic_expr.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 import 'package:lopicode/lowcode/model.dart';
+import 'package:lopicode/lowcode/model_v3_components.dart';
 
 class LcQuickAction {
   const LcQuickAction(this.op, this.arg, this.label, this.hint, {this.dialogShown, this.picksPage = false});
@@ -65,7 +66,7 @@ List<LcNode> lcDialogsOf(LcDocument doc) {
 }
 
 /// 弹窗在界面上叫什么：标题；没写标题就叫“弹窗”。
-String lcDialogName(LcNode dialog) => dialog.strProp('title') ?? '弹窗';
+String lcDialogName(LcNode dialog) => lcIsToast(dialog) ? '轻提示“${dialog.strProp('text') ?? ''}”' : (dialog.strProp('title') ?? '弹窗');
 
 /// 这种组件有没有快捷动作（能被“点击”的才有；页面本身没有）。
 bool lcHasQuickActions(LcNode n) => n.type != 'page' && !n.isUnknown;

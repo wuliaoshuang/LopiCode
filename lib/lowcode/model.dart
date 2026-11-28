@@ -5,6 +5,7 @@ import 'package:lopicode/lowcode/logic_model.dart';
 import 'package:lopicode/lowcode/model_pages.dart';
 import 'package:lopicode/lowcode/model_props.dart';
 import 'package:lopicode/lowcode/model_specs.dart';
+import 'package:lopicode/lowcode/model_v3_components.dart';
 import 'package:lopicode/lowcode/nav_shared.dart';
 import 'package:lopicode/lowcode/slots.dart';
 import 'package:lopicode/lowcode/top_shared.dart';
@@ -285,7 +286,9 @@ class LcDocument {
     }
   }
 
-  LcNode newNode(String type) => LcNode(id: 'n${_nextId++}', type: type, props: jsonDecode(jsonEncode(lcSpecs[type]!.defaults)) as Map<String, dynamic>);
+  LcNode newNode(String type) => type == kLcToastPaletteType
+      ? LcNode(id: 'n${_nextId++}', type: 'dialog', props: {...kLcToastDefaults})
+      : LcNode(id: 'n${_nextId++}', type: type, props: jsonDecode(jsonEncode(lcSpecs[type]!.defaults)) as Map<String, dynamic>);
 
   LcNode? find(String id) {
     LcNode? walk(LcNode n) {

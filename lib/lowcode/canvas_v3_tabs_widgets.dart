@@ -123,8 +123,11 @@ class _CanvasTabsState extends State<CanvasTabs> {
 
 /// 弹窗在页面里留的小标签（它平时不显示，不占页面的位置；点它进“只看这个弹层”）。
 class _DialogChip extends StatelessWidget {
-  const _DialogChip({required this.title});
+  const _DialogChip({required this.title, this.toast});
   final String? title;
+
+  /// 是轻提示的话：它那句话。
+  final String? toast;
 
   @override
   Widget build(BuildContext context) {
@@ -143,7 +146,7 @@ class _DialogChip extends StatelessWidget {
           const SizedBox(width: 6),
           Flexible(
             child: Text(
-              '弹窗 · ${title ?? '没有标题'} · 点一下编辑',
+              toast != null ? '轻提示 · $toast · 点一下编辑' : '弹窗 · ${title ?? '没有标题'} · 点一下编辑',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(fontSize: 12, height: 1.4, fontWeight: FontWeight.w400, color: ui.lowcodeColor(LowcodeKey.dropText)),
