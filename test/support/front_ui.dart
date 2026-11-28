@@ -72,11 +72,13 @@ Future<void> fuUntil(WidgetTester tester, bool Function() done, String what) asy
 /// 面板是按需搭的：滚不到的那几行还不存在。把最上面那张面板滚到看得见 [key]。
 Future<void> fuSee(WidgetTester tester, String key) async {
   if (fk(key).evaluate().isNotEmpty || find.byType(BottomSheet).evaluate().isEmpty) return;
-  await tester.scrollUntilVisible(
-    fk(key),
-    120,
-    scrollable: find.descendant(of: find.byType(BottomSheet).last, matching: find.byType(Scrollable)).first,
-  );
+  final scrollable = find.descendant(of: find.byType(BottomSheet).last, matching: find.byType(Scrollable)).first;
+  try {
+    await tester.scrollUntilVisible(fk(key), 120, scrollable: scrollable);
+  } on StateError {
+    // 往下滚到底也没有：面板长了以后，上面那几行滚出去就不在了，往回滚着找。
+    await tester.scrollUntilVisible(fk(key), -120, scrollable: scrollable);
+  }
   await tester.pumpAndSettle();
 }
 

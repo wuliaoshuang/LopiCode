@@ -856,3 +856,19 @@ Flutter 导出在测试里真的跳了页（`test/lowcode_pages_export_test.dart
   10 秒、15 毫秒是自己定的数。
 - **测试里的本地假服务**：`dart:io` 的 `HttpServer.bind(InternetAddress.loopbackIPv4, 0)`（端口让系统挑），和测试在同一个进程里，不另起子进程；
   每条测试结束（成、败都算）在 `tearDown` 里 `close(force: true)`。验证用的 Node 子进程沿用 `page_front_check.dart` 里原有的收尾（超时按进程号杀）。
+
+## 前端库第二批用到的浏览器行为（积木第 5 版·前端 2·A5a，2026-11-28）
+
+这一段没有给浏览器小库加新接口；路由、表单校验、国际化、动画四个库靠的还是前面那些。补记新靠上的几条事实：
+
+- **`popstate` 事件（已核对，2026-11-28 抓取 MDN “Window: popstate event”，https://developer.mozilla.org/en-US/docs/Web/API/Window/popstate_event ）**：
+  只调 `history.pushState()` / `replaceState()` **不会**触发；用户点后退前进、或代码调 `history.back()` / `go()` 才触发；同一次跳转里它排在 `hashchange` 前面。
+  所以“路由”库的“去”“换成”改完历史以后，自己把现在的路径写进库里的一个状态格子（在看这个格子的人就收到了），不指望浏览器来叫。
+- **`hashchange` 事件（已核对，同日抓取 MDN “Window: hashchange event”，https://developer.mozilla.org/en-US/docs/Web/API/Window/hashchange_event ）**：
+  井号后面那一段变了就触发；用 `pushState` / `replaceState` 改井号不触发。所以手改地址栏、点 `<a href="#/x">` 这两种由它送到“当路由变了”。
+  后退前进时 `popstate` 和 `hashchange` 都会来：两边都只是把现在的路径再写一遍进那个格子，格子里的值没变就不会叫第二遍。
+- **`history.back()` 不是马上退完**：“后退一步”积木的提示里写了“要过一小会儿才退完”，样例里用“等到”来等。**这一条没有打开官方文档核对**，是照 jsdom 里的实际表现写的。
+- **`requestAnimationFrame`**：“动画”库用定时库同一个 `timer.frame`，没有新靠上什么。回调给的时刻这个库不用，过了多久是拿 `time.now` 自己算的
+  （两者的起点不一样，混着用会错）。jsdom 里（`pretendToBeVisual: true`）一帧大约 16 毫秒；**真浏览器里页面在后台时不出帧，动画会停在半路、回到前台才接着走——未核对、没验证**。
+- **没有用的**：`Intl`（各地写法的数字、日期）、CSS 过渡、Web Animations、History 的 `state` 对象（路由参数都从路径里来）。
+
