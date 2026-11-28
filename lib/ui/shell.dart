@@ -52,8 +52,11 @@ List<BottomNavItem> shellNavItems() => [
 
 /// 外壳把“打开侧边栏”“去某一页”交给里面的页面用。
 class ShellScope extends InheritedWidget {
-  const ShellScope({super.key, required this.openDrawer, required this.go, required this.projectName, this.backClaims, required super.child});
+  const ShellScope({super.key, this.docked = false, required this.openDrawer, required this.go, required this.projectName, this.backClaims, required super.child});
   final VoidCallback openDrawer;
+
+  /// 侧边栏现在是不是常驻在左边（宽屏的对话页）：是的话顶栏不放“打开侧边栏”的按钮。
+  final bool docked;
 
   /// 页面里“返回键先收我”的东西（比如搭建页的合一面板）在这儿挂一个问话：返回 true＝这一下返回键它自己接了，
   /// 外壳就不再“回聊天页”。同一页上的几个返回键拦截会一起被叫到，不这样问一声，面板收起的同时人也被带回聊天页了。
@@ -64,13 +67,13 @@ class ShellScope extends InheritedWidget {
   static ShellScope? maybeOf(BuildContext context) => context.dependOnInheritedWidgetOfExactType<ShellScope>();
 
   @override
-  bool updateShouldNotify(ShellScope old) => projectName != old.projectName;
+  bool updateShouldNotify(ShellScope old) => projectName != old.projectName || docked != old.docked;
 }
 
 /// 顶栏左边的按钮：在外壳里是汉堡按钮；单独打开的页面（能返回）是返回箭头。
 Widget? shellLeading(BuildContext context) {
   final shell = ShellScope.maybeOf(context);
-  if (shell != null) return _MenuButton(onPressed: shell.openDrawer);
+  if (shell != null) return shell.docked ? null : _MenuButton(onPressed: shell.openDrawer);
   // 问的是“这一页自己能不能返回”，不是“导航栈上有没有东西”：不然在最底下那一页上弹个菜单 / 对话框，顶栏会冒出一个返回箭头。
   if (ModalRoute.of(context)?.canPop ?? Navigator.canPop(context)) {
     return RoundIconButton(icon: Icons.arrow_back_ios_new_rounded, tooltip: '返回', onPressed: () => Navigator.maybePop(context));

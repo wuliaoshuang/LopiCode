@@ -17,6 +17,7 @@ import 'package:lopicode/agent/background_tools.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/state/code_font.dart';
 import 'package:lopicode/state/workspace_background.dart';
+import 'package:lopicode/theme/breakpoints.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/code_view.dart';
 import 'package:lopicode/ui/top_bar.dart';
@@ -289,89 +290,91 @@ class _BackgroundLogScreenState extends ConsumerState<BackgroundLogScreen> with 
         titleText: '后台命令 #${widget.taskId}',
         actions: [IconButton(key: const ValueKey('bg-log-copy'), tooltip: '复制日志', onPressed: task == null ? null : _copy, icon: const Icon(Icons.copy_outlined, size: 20))],
       ),
-      body: BelowBar(
-        child: task == null
-            ? Center(
-                child: Text('这条后台命令的记录已经清掉了', style: t.bodyMedium?.copyWith(color: c.textMuted)),
-              )
-            : Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(Space.x4, Space.x2, Space.x4, Space.x1),
-                    child: Text(
-                      task.command,
-                      style: TextStyle(fontFamily: kMonoFont, fontFamilyFallback: kMonoFallback, fontSize: FontSize.sm, color: c.text, fontWeight: FontWeight.w600),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
+      body: ContentWidth(
+        child: BelowBar(
+          child: task == null
+              ? Center(
+                  child: Text('这条后台命令的记录已经清掉了', style: t.bodyMedium?.copyWith(color: c.textMuted)),
+                )
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(Space.x4, Space.x2, Space.x4, Space.x1),
+                      child: Text(
+                        task.command,
+                        style: TextStyle(fontFamily: kMonoFont, fontFamilyFallback: kMonoFallback, fontSize: FontSize.sm, color: c.text, fontWeight: FontWeight.w600),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x2),
-                    child: Row(
-                      children: [
-                        _Dot(task),
-                        const SizedBox(width: Space.x2),
-                        Expanded(
-                          child: Text(
-                            backgroundRowStatus(task, DateTime.now()),
-                            key: const ValueKey('bg-log-status'),
-                            style: t.bodySmall?.copyWith(color: _failed(task) ? c.danger : c.textMuted),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x2),
+                      child: Row(
+                        children: [
+                          _Dot(task),
+                          const SizedBox(width: Space.x2),
+                          Expanded(
+                            child: Text(
+                              backgroundRowStatus(task, DateTime.now()),
+                              key: const ValueKey('bg-log-status'),
+                              style: t.bodySmall?.copyWith(color: _failed(task) ? c.danger : c.textMuted),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                  Expanded(
-                    child: Container(
-                      margin: const EdgeInsets.symmetric(horizontal: Space.x4),
-                      decoration: BoxDecoration(color: c.codeBg, borderRadius: BorderRadius.circular(Radii.md)),
-                      clipBehavior: Clip.antiAlias,
-                      child: _log.isEmpty
-                          ? Center(
-                              child: Text(task.running ? '还没有输出' : '没有输出', style: t.bodySmall?.copyWith(color: c.textFaint)),
-                            )
-                          : CodeZoom(
-                              child: SingleChildScrollView(
-                                key: const ValueKey('bg-log-scroll'),
-                                controller: _scroll,
-                                padding: const EdgeInsets.all(Space.x3),
-                                child: SelectableText(
-                                  _log,
-                                  key: const ValueKey('bg-log-text'),
-                                  // 字号跟着“代码字号”走、小一号（默认 12）；双指捏合可调。
-                                  style: TextStyle(fontFamily: kMonoFont, fontFamilyFallback: kMonoFallback, fontSize: ref.watch(compactCodeFontProvider), height: 1.45, color: c.text),
+                    Expanded(
+                      child: Container(
+                        margin: const EdgeInsets.symmetric(horizontal: Space.x4),
+                        decoration: BoxDecoration(color: c.codeBg, borderRadius: BorderRadius.circular(Radii.md)),
+                        clipBehavior: Clip.antiAlias,
+                        child: _log.isEmpty
+                            ? Center(
+                                child: Text(task.running ? '还没有输出' : '没有输出', style: t.bodySmall?.copyWith(color: c.textFaint)),
+                              )
+                            : CodeZoom(
+                                child: SingleChildScrollView(
+                                  key: const ValueKey('bg-log-scroll'),
+                                  controller: _scroll,
+                                  padding: const EdgeInsets.all(Space.x3),
+                                  child: SelectableText(
+                                    _log,
+                                    key: const ValueKey('bg-log-text'),
+                                    // 字号跟着“代码字号”走、小一号（默认 12）；双指捏合可调。
+                                    style: TextStyle(fontFamily: kMonoFont, fontFamilyFallback: kMonoFallback, fontSize: ref.watch(compactCodeFontProvider), height: 1.45, color: c.text),
+                                  ),
                                 ),
                               ),
-                            ),
+                      ),
                     ),
-                  ),
-                  SafeArea(
-                    top: false,
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(Space.x4, Space.x3, Space.x4, Space.x3),
-                      child: task.running
-                          ? OutlinedButton.icon(
-                              key: const ValueKey('bg-log-stop'),
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: c.danger,
-                                side: BorderSide(color: c.danger),
+                    SafeArea(
+                      top: false,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(Space.x4, Space.x3, Space.x4, Space.x3),
+                        child: task.running
+                            ? OutlinedButton.icon(
+                                key: const ValueKey('bg-log-stop'),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: c.danger,
+                                  side: BorderSide(color: c.danger),
+                                ),
+                                onPressed: _stopping ? null : _stop,
+                                icon: const Icon(Icons.stop_rounded, size: 20),
+                                label: Text(_stopping ? '正在停止…' : '停止'),
+                              )
+                            : Text(
+                                '完整日志在工作区的 ${task.log}',
+                                style: t.bodySmall?.copyWith(color: c.textFaint),
+                                textAlign: TextAlign.center,
                               ),
-                              onPressed: _stopping ? null : _stop,
-                              icon: const Icon(Icons.stop_rounded, size: 20),
-                              label: Text(_stopping ? '正在停止…' : '停止'),
-                            )
-                          : Text(
-                              '完整日志在工作区的 ${task.log}',
-                              style: t.bodySmall?.copyWith(color: c.textFaint),
-                              textAlign: TextAlign.center,
-                            ),
+                      ),
                     ),
-                  ),
-                ],
-              ),
+                  ],
+                ),
+        ),
       ),
     );
   }

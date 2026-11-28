@@ -20,6 +20,11 @@ import 'wait.dart';
 export 'wait.dart';
 
 const Size kPhone = Size(390, 844);
+
+/// 平板尺寸（2026-11-28 平板适配）：竖屏、横屏，再加一个刚够“中”档的小平板 / 分屏。
+const Size kTabletPortrait = Size(800, 1280);
+const Size kTabletLandscape = Size(1280, 800);
+const Size kTabletSmall = Size(600, 960);
 const String kTestFont = 'LopiCJK';
 
 /// 测试用的应用环境：临时目录里的设置和项目仓库，内存密钥。
@@ -70,6 +75,13 @@ Future<bool> loadRealFonts() async {
 
 void usePhoneViewport(WidgetTester tester, {double pixelRatio = 1}) {
   tester.view.physicalSize = kPhone * pixelRatio;
+  tester.view.devicePixelRatio = pixelRatio;
+  addTearDown(tester.view.reset);
+}
+
+/// 把测试窗口设成 [size]（逻辑像素）。测试中途再调一次＝拖窗口 / 转屏。
+void useViewport(WidgetTester tester, Size size, {double pixelRatio = 1}) {
+  tester.view.physicalSize = size * pixelRatio;
   tester.view.devicePixelRatio = pixelRatio;
   addTearDown(tester.view.reset);
 }

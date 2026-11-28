@@ -21,6 +21,7 @@ import 'package:lopicode/project_session.dart';
 import 'package:lopicode/session/file_mentions.dart';
 import 'package:lopicode/state/theme_hooks.dart';
 import 'package:lopicode/state/themes_state.dart';
+import 'package:lopicode/theme/breakpoints.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/app_backdrop.dart';
 import 'package:lopicode/ui/keyboard_tap_dismiss.dart';
@@ -145,77 +146,79 @@ class _ThemeImportScreenState extends State<ThemeImportScreen> {
             child: FilledButton(key: const Key('theme-import-check'), onPressed: has ? _check : null, child: const Text('检查并预览')),
           ),
         ),
-        body: SingleChildScrollView(
-          padding: EdgeInsets.fromLTRB(Space.x4, PageBar.insetOf(context) + Space.x2, Space.x4, Space.x6),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('把别人发来的主题文本粘贴到下面，或者从工作区里选一个主题文件。只会读里面的颜色和数值，不会运行任何东西，也不联网。', style: t.bodySmall?.copyWith(color: c.textMuted)),
-              const SizedBox(height: Space.x3),
-              if (_fileLabel != null)
-                Container(
-                  key: const Key('theme-import-file'),
-                  padding: const EdgeInsets.all(Space.x3),
-                  decoration: BoxDecoration(
-                    color: c.surface,
-                    borderRadius: BorderRadius.circular(c.radius(Radii.md)),
-                    border: Border.all(color: c.border, width: c.hairline),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.description_outlined, size: 20, color: c.textMuted),
-                      const SizedBox(width: Space.x2),
-                      Expanded(child: Text(_fileLabel!, style: t.bodyMedium)),
-                      IconButton(
-                        icon: const Icon(Icons.close, size: 18),
-                        tooltip: '不用这个文件',
-                        onPressed: () => setState(() {
-                          _fileText = null;
-                          _fileLabel = null;
-                          _error = null;
-                        }),
-                      ),
-                    ],
-                  ),
-                )
-              else
-                TextField(
-                  key: const Key('theme-import-text'),
-                  controller: _text,
-                  minLines: 6,
-                  maxLines: 10,
-                  autocorrect: false,
-                  enableSuggestions: false,
-                  style: t.bodySmall?.copyWith(fontFamily: kMonoFont, fontFamilyFallback: kMonoFallback),
-                  decoration: const InputDecoration(hintText: '在这里粘贴主题文本（以 { 开头的一大段）', alignLabelWithHint: true),
-                  onChanged: (_) => setState(() => _error = null),
-                ),
-              if (_error != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: Space.x2),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(Icons.error_outline, size: 16, color: c.danger),
-                      const SizedBox(width: Space.x1),
-                      Expanded(
-                        child: Text(
-                          _error!,
-                          key: const Key('theme-import-error'),
-                          style: t.bodySmall?.copyWith(color: c.danger),
+        body: ContentWidth(
+          child: SingleChildScrollView(
+            padding: EdgeInsets.fromLTRB(Space.x4, PageBar.insetOf(context) + Space.x2, Space.x4, Space.x6),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('把别人发来的主题文本粘贴到下面，或者从工作区里选一个主题文件。只会读里面的颜色和数值，不会运行任何东西，也不联网。', style: t.bodySmall?.copyWith(color: c.textMuted)),
+                const SizedBox(height: Space.x3),
+                if (_fileLabel != null)
+                  Container(
+                    key: const Key('theme-import-file'),
+                    padding: const EdgeInsets.all(Space.x3),
+                    decoration: BoxDecoration(
+                      color: c.surface,
+                      borderRadius: BorderRadius.circular(c.radius(Radii.md)),
+                      border: Border.all(color: c.border, width: c.hairline),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.description_outlined, size: 20, color: c.textMuted),
+                        const SizedBox(width: Space.x2),
+                        Expanded(child: Text(_fileLabel!, style: t.bodyMedium)),
+                        IconButton(
+                          icon: const Icon(Icons.close, size: 18),
+                          tooltip: '不用这个文件',
+                          onPressed: () => setState(() {
+                            _fileText = null;
+                            _fileLabel = null;
+                            _error = null;
+                          }),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
+                  )
+                else
+                  TextField(
+                    key: const Key('theme-import-text'),
+                    controller: _text,
+                    minLines: 6,
+                    maxLines: 10,
+                    autocorrect: false,
+                    enableSuggestions: false,
+                    style: t.bodySmall?.copyWith(fontFamily: kMonoFont, fontFamilyFallback: kMonoFallback),
+                    decoration: const InputDecoration(hintText: '在这里粘贴主题文本（以 { 开头的一大段）', alignLabelWithHint: true),
+                    onChanged: (_) => setState(() => _error = null),
                   ),
+                if (_error != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: Space.x2),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.error_outline, size: 16, color: c.danger),
+                        const SizedBox(width: Space.x1),
+                        Expanded(
+                          child: Text(
+                            _error!,
+                            key: const Key('theme-import-error'),
+                            style: t.bodySmall?.copyWith(color: c.danger),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                const SizedBox(height: Space.x3),
+                KeyboardKeep(
+                  child: OutlinedButton.icon(key: const Key('theme-import-paste'), onPressed: _paste, icon: const Icon(Icons.content_paste, size: 18), label: const Text('从剪贴板粘贴')),
                 ),
-              const SizedBox(height: Space.x3),
-              KeyboardKeep(
-                child: OutlinedButton.icon(key: const Key('theme-import-paste'), onPressed: _paste, icon: const Icon(Icons.content_paste, size: 18), label: const Text('从剪贴板粘贴')),
-              ),
-              const SizedBox(height: Space.x2),
-              OutlinedButton.icon(key: const Key('theme-import-file-pick'), onPressed: _pickFile, icon: const Icon(Icons.folder_open_outlined, size: 18), label: const Text('从工作区文件里选')),
-            ],
+                const SizedBox(height: Space.x2),
+                OutlinedButton.icon(key: const Key('theme-import-file-pick'), onPressed: _pickFile, icon: const Icon(Icons.folder_open_outlined, size: 18), label: const Text('从工作区文件里选')),
+              ],
+            ),
           ),
         ),
       ),
@@ -429,71 +432,73 @@ class _ThemeImportPreviewScreenState extends ConsumerState<ThemeImportPreviewScr
             ),
           ),
         ),
-        body: SingleChildScrollView(
-          key: const Key('theme-import-preview-scroll'),
-          padding: EdgeInsets.fromLTRB(Space.x4, PageBar.insetOf(context) + Space.x2, Space.x4, Space.x6),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(theme.name, key: const Key('theme-import-name'), style: t.titleLarge, maxLines: 2, overflow: TextOverflow.ellipsis),
-              const SizedBox(height: Space.x1),
-              Text(
-                '${theme.author == null || theme.author!.isEmpty ? '没写作者' : '作者 ${theme.author}'} · ${theme.dark ? '深色主题' : '浅色主题'}',
-                key: const Key('theme-import-meta'),
-                style: t.bodyMedium?.copyWith(color: c.textMuted),
-              ),
-              const SizedBox(height: Space.x3),
-              ThemePreview(spec: theme, kind: _kind),
-              const SizedBox(height: Space.x2),
-              SegmentedButton<ThemePreviewKind>(
-                key: const Key('theme-import-kind'),
-                showSelectedIcon: false,
-                style: const ButtonStyle(visualDensity: VisualDensity.compact),
-                segments: [for (final k in ThemePreviewKind.values) ButtonSegment(value: k, label: Text(k.label))],
-                selected: {_kind},
-                onSelectionChanged: (s) => setState(() => _kind = s.first),
-              ),
-              section('对比度检查', [
-                if (issues.isEmpty)
-                  line(Icons.check_circle_outline, c.success, '字和底的对比度都达标。', key: const Key('theme-import-contrast'))
-                else ...[
-                  line(Icons.warning_amber_rounded, c.warning, '${issues.length} 项对比度偏低（字和底太接近，看着会费劲）。照样可以加入，加进来以后能在编辑器里改。', key: const Key('theme-import-contrast')),
-                  for (final i in shown) line(Icons.remove, c.textFaint, i.message),
-                  if (issues.length > 3)
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: TextButton(
-                        key: const Key('theme-import-issues-more'),
-                        onPressed: () => setState(() => _showAllIssues = !_showAllIssues),
-                        child: Text(_showAllIssues ? '收起' : '看全部 ${issues.length} 项'),
+        body: ContentWidth(
+          child: SingleChildScrollView(
+            key: const Key('theme-import-preview-scroll'),
+            padding: EdgeInsets.fromLTRB(Space.x4, PageBar.insetOf(context) + Space.x2, Space.x4, Space.x6),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(theme.name, key: const Key('theme-import-name'), style: t.titleLarge, maxLines: 2, overflow: TextOverflow.ellipsis),
+                const SizedBox(height: Space.x1),
+                Text(
+                  '${theme.author == null || theme.author!.isEmpty ? '没写作者' : '作者 ${theme.author}'} · ${theme.dark ? '深色主题' : '浅色主题'}',
+                  key: const Key('theme-import-meta'),
+                  style: t.bodyMedium?.copyWith(color: c.textMuted),
+                ),
+                const SizedBox(height: Space.x3),
+                ThemePreview(spec: theme, kind: _kind),
+                const SizedBox(height: Space.x2),
+                SegmentedButton<ThemePreviewKind>(
+                  key: const Key('theme-import-kind'),
+                  showSelectedIcon: false,
+                  style: const ButtonStyle(visualDensity: VisualDensity.compact),
+                  segments: [for (final k in ThemePreviewKind.values) ButtonSegment(value: k, label: Text(k.label))],
+                  selected: {_kind},
+                  onSelectionChanged: (s) => setState(() => _kind = s.first),
+                ),
+                section('对比度检查', [
+                  if (issues.isEmpty)
+                    line(Icons.check_circle_outline, c.success, '字和底的对比度都达标。', key: const Key('theme-import-contrast'))
+                  else ...[
+                    line(Icons.warning_amber_rounded, c.warning, '${issues.length} 项对比度偏低（字和底太接近，看着会费劲）。照样可以加入，加进来以后能在编辑器里改。', key: const Key('theme-import-contrast')),
+                    for (final i in shown) line(Icons.remove, c.textFaint, i.message),
+                    if (issues.length > 3)
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: TextButton(
+                          key: const Key('theme-import-issues-more'),
+                          onPressed: () => setState(() => _showAllIssues = !_showAllIssues),
+                          child: Text(_showAllIssues ? '收起' : '看全部 ${issues.length} 项'),
+                        ),
                       ),
+                  ],
+                ]),
+                section('检查时的提示', [
+                  if (notes.isEmpty)
+                    line(Icons.check_circle_outline, c.success, '文件完整，没有要提醒的。', key: const Key('theme-import-notes'))
+                  else
+                    for (final (i, n) in notes.indexed) line(Icons.info_outline, c.info, n, key: Key('theme-import-note-$i')),
+                ]),
+                section('背景图', [
+                  if (!hasImage)
+                    line(Icons.image_not_supported_outlined, c.textFaint, '这个主题没带背景图。', key: const Key('theme-import-image'))
+                  else if (bridge == null)
+                    line(Icons.image_outlined, c.textFaint, '这个主题带了一张背景图，但这个版本还用不了背景图，只会加入颜色。', key: const Key('theme-import-image'))
+                  else
+                    CheckboxListTile(
+                      key: const Key('theme-import-image-use'),
+                      contentPadding: EdgeInsets.zero,
+                      controlAffinity: ListTileControlAffinity.leading,
+                      title: const Text('同时使用附带的背景图'),
+                      subtitle: Text(theme.dark ? '会换掉深色外观现在的背景图，并打开“深色外观单独设置”' : '会换掉现在的背景图'),
+                      value: _useImage,
+                      onChanged: _busy ? null : (v) => setState(() => _useImage = v ?? false),
                     ),
-                ],
-              ]),
-              section('检查时的提示', [
-                if (notes.isEmpty)
-                  line(Icons.check_circle_outline, c.success, '文件完整，没有要提醒的。', key: const Key('theme-import-notes'))
-                else
-                  for (final (i, n) in notes.indexed) line(Icons.info_outline, c.info, n, key: Key('theme-import-note-$i')),
-              ]),
-              section('背景图', [
-                if (!hasImage)
-                  line(Icons.image_not_supported_outlined, c.textFaint, '这个主题没带背景图。', key: const Key('theme-import-image'))
-                else if (bridge == null)
-                  line(Icons.image_outlined, c.textFaint, '这个主题带了一张背景图，但这个版本还用不了背景图，只会加入颜色。', key: const Key('theme-import-image'))
-                else
-                  CheckboxListTile(
-                    key: const Key('theme-import-image-use'),
-                    contentPadding: EdgeInsets.zero,
-                    controlAffinity: ListTileControlAffinity.leading,
-                    title: const Text('同时使用附带的背景图'),
-                    subtitle: Text(theme.dark ? '会换掉深色外观现在的背景图，并打开“深色外观单独设置”' : '会换掉现在的背景图'),
-                    value: _useImage,
-                    onChanged: _busy ? null : (v) => setState(() => _useImage = v ?? false),
-                  ),
-              ]),
-            ],
+                ]),
+              ],
+            ),
           ),
         ),
       ),

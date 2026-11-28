@@ -5,6 +5,7 @@
 // - 已保存的密码 / 私钥不回显，只说“已保存，留空表示不改”。
 import 'package:lopicode/core/stores.dart';
 import 'package:lopicode/ssh/ssh_config.dart';
+import 'package:lopicode/theme/breakpoints.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/app_ref.dart';
 import 'package:lopicode/ui/chrome.dart';
@@ -121,116 +122,118 @@ class _SshConnectScreenState extends State<SshConnectScreen> {
       backgroundColor: context.colors.canvas,
       extendBodyBehindAppBar: true,
       appBar: PageBar(background: context.colors.canvas, title: const Text('SSH 主机')),
-      body: SectionedList(
-        inner: const EdgeInsets.all(Space.x4),
-        children: [
-          Text('终端的 SSH 会话和 SSH 构建机共用这一台主机。', style: t.bodySmall?.copyWith(color: c.textMuted)),
-          const SizedBox(height: Space.x4),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: TextField(
-                  key: const Key('ssh-host'),
-                  controller: _host,
-                  keyboardType: TextInputType.url,
-                  autocorrect: false,
-                  decoration: const InputDecoration(labelText: '主机地址', hintText: '域名或 IP'),
+      body: ContentWidth(
+        child: SectionedList(
+          inner: const EdgeInsets.all(Space.x4),
+          children: [
+            Text('终端的 SSH 会话和 SSH 构建机共用这一台主机。', style: t.bodySmall?.copyWith(color: c.textMuted)),
+            const SizedBox(height: Space.x4),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: TextField(
+                    key: const Key('ssh-host'),
+                    controller: _host,
+                    keyboardType: TextInputType.url,
+                    autocorrect: false,
+                    decoration: const InputDecoration(labelText: '主机地址', hintText: '域名或 IP'),
+                  ),
                 ),
-              ),
-              const SizedBox(width: Space.x3),
-              SizedBox(
-                width: 88,
-                child: TextField(
-                  key: const Key('ssh-port'),
-                  controller: _port,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: '端口'),
+                const SizedBox(width: Space.x3),
+                SizedBox(
+                  width: 88,
+                  child: TextField(
+                    key: const Key('ssh-port'),
+                    controller: _port,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: '端口'),
+                  ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: Space.x3),
-          TextField(
-            key: const Key('ssh-user'),
-            controller: _user,
-            autocorrect: false,
-            enableSuggestions: false,
-            decoration: const InputDecoration(labelText: '用户名'),
-          ),
-          const SizedBox(height: Space.x4),
-          SegmentedButton<bool>(
-            showSelectedIcon: false,
-            segments: const [
-              ButtonSegment(value: false, label: Text('密码登录')),
-              ButtonSegment(value: true, label: Text('私钥登录')),
-            ],
-            selected: {_useKey},
-            onSelectionChanged: (s) => setState(() {
-              _useKey = s.first;
-              _error = null;
-            }),
-          ),
-          const SizedBox(height: Space.x3),
-          if (!_useKey)
-            TextField(
-              key: const Key('ssh-password'),
-              controller: _password,
-              obscureText: true,
-              autocorrect: false,
-              enableSuggestions: false,
-              decoration: InputDecoration(labelText: '密码', hintText: _hasPassword ? '已保存，留空表示不改' : null),
-            )
-          else ...[
-            TextField(
-              key: const Key('ssh-key'),
-              controller: _key,
-              minLines: 3,
-              maxLines: 5,
-              autocorrect: false,
-              enableSuggestions: false,
-              style: const TextStyle(fontFamily: kMonoFont, fontFamilyFallback: kMonoFallback, fontSize: FontSize.xs),
-              decoration: InputDecoration(labelText: '私钥', alignLabelWithHint: true, hintText: _hasKey ? '已保存，留空表示不改' : '粘贴整段私钥（-----BEGIN … PRIVATE KEY----- 开头）'),
+              ],
             ),
             const SizedBox(height: Space.x3),
             TextField(
-              controller: _passphrase,
-              obscureText: true,
+              key: const Key('ssh-user'),
+              controller: _user,
               autocorrect: false,
               enableSuggestions: false,
-              decoration: const InputDecoration(labelText: '私钥的密码短语（没有就留空）'),
+              decoration: const InputDecoration(labelText: '用户名'),
             ),
+            const SizedBox(height: Space.x4),
+            SegmentedButton<bool>(
+              showSelectedIcon: false,
+              segments: const [
+                ButtonSegment(value: false, label: Text('密码登录')),
+                ButtonSegment(value: true, label: Text('私钥登录')),
+              ],
+              selected: {_useKey},
+              onSelectionChanged: (s) => setState(() {
+                _useKey = s.first;
+                _error = null;
+              }),
+            ),
+            const SizedBox(height: Space.x3),
+            if (!_useKey)
+              TextField(
+                key: const Key('ssh-password'),
+                controller: _password,
+                obscureText: true,
+                autocorrect: false,
+                enableSuggestions: false,
+                decoration: InputDecoration(labelText: '密码', hintText: _hasPassword ? '已保存，留空表示不改' : null),
+              )
+            else ...[
+              TextField(
+                key: const Key('ssh-key'),
+                controller: _key,
+                minLines: 3,
+                maxLines: 5,
+                autocorrect: false,
+                enableSuggestions: false,
+                style: const TextStyle(fontFamily: kMonoFont, fontFamilyFallback: kMonoFallback, fontSize: FontSize.xs),
+                decoration: InputDecoration(labelText: '私钥', alignLabelWithHint: true, hintText: _hasKey ? '已保存，留空表示不改' : '粘贴整段私钥（-----BEGIN … PRIVATE KEY----- 开头）'),
+              ),
+              const SizedBox(height: Space.x3),
+              TextField(
+                controller: _passphrase,
+                obscureText: true,
+                autocorrect: false,
+                enableSuggestions: false,
+                decoration: const InputDecoration(labelText: '私钥的密码短语（没有就留空）'),
+              ),
+            ],
+            const SizedBox(height: Space.x3),
+            if (_error != null)
+              InfoBanner(
+                _error!,
+                tone: BannerTone.danger,
+                margin: const EdgeInsets.only(bottom: Space.x3),
+              ),
+            if (!app.secrets.persistent)
+              const InfoBanner(
+                '这台设备上安全存储不可用，密码 / 私钥只保存在内存里，关掉应用后要重新填写。',
+                tone: BannerTone.warning,
+                margin: EdgeInsets.only(bottom: Space.x3),
+              )
+            else
+              const InfoBanner('密码和私钥加密保存在系统安全存储里，不会写进普通设置文件或日志。', margin: EdgeInsets.only(bottom: Space.x3)),
+            FilledButton(key: const Key('ssh-submit'), onPressed: _submit, child: Text(widget.submitLabel)),
+            if (_knownFingerprint != null) ...[
+              const SizedBox(height: Space.x6),
+              Text('已记住的主机指纹', style: t.labelLarge?.copyWith(color: c.textMuted)),
+              const SizedBox(height: Space.x1),
+              Text(
+                _knownFingerprint!,
+                style: TextStyle(fontFamily: kMonoFont, fontFamilyFallback: kMonoFallback, fontSize: FontSize.xs, color: c.textMuted),
+              ),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton(onPressed: _forgetFingerprint, child: const Text('忘记这台主机的指纹')),
+              ),
+            ],
           ],
-          const SizedBox(height: Space.x3),
-          if (_error != null)
-            InfoBanner(
-              _error!,
-              tone: BannerTone.danger,
-              margin: const EdgeInsets.only(bottom: Space.x3),
-            ),
-          if (!app.secrets.persistent)
-            const InfoBanner(
-              '这台设备上安全存储不可用，密码 / 私钥只保存在内存里，关掉应用后要重新填写。',
-              tone: BannerTone.warning,
-              margin: EdgeInsets.only(bottom: Space.x3),
-            )
-          else
-            const InfoBanner('密码和私钥加密保存在系统安全存储里，不会写进普通设置文件或日志。', margin: EdgeInsets.only(bottom: Space.x3)),
-          FilledButton(key: const Key('ssh-submit'), onPressed: _submit, child: Text(widget.submitLabel)),
-          if (_knownFingerprint != null) ...[
-            const SizedBox(height: Space.x6),
-            Text('已记住的主机指纹', style: t.labelLarge?.copyWith(color: c.textMuted)),
-            const SizedBox(height: Space.x1),
-            Text(
-              _knownFingerprint!,
-              style: TextStyle(fontFamily: kMonoFont, fontFamilyFallback: kMonoFallback, fontSize: FontSize.xs, color: c.textMuted),
-            ),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton(onPressed: _forgetFingerprint, child: const Text('忘记这台主机的指纹')),
-            ),
-          ],
-        ],
+        ),
       ),
     );
   }

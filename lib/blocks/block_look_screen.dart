@@ -16,6 +16,7 @@ import 'package:lopicode/blocks/block_host.dart';
 import 'package:lopicode/blocks/block_look_form_widgets.dart';
 import 'package:lopicode/blocks/block_look_preview.dart';
 import 'package:lopicode/blocks/block_script_view.dart';
+import 'package:lopicode/theme/breakpoints.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/top_bar.dart';
 import 'package:lopicode/ui/widgets.dart';
@@ -244,126 +245,128 @@ class _BlockLookScreenState extends State<BlockLookScreen> with BkKitHolder {
           ),
         ],
       ),
-      body: BelowBar(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            BkLookPreview(layout: preview, kit: kit, revision: _rev),
-            Expanded(
-              child: ListView(
-                key: const ValueKey('bk-look-form'),
-                controller: _scroll,
-                keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-                padding: EdgeInsets.fromLTRB(Space.x4, Space.x1, Space.x4, Space.x8 + MediaQuery.paddingOf(context).bottom),
-                children: [
-                  TextField(
-                    key: const ValueKey('bk-look-name'),
-                    controller: _name,
-                    autofocus: widget.editing == null,
-                    textInputAction: TextInputAction.next,
-                    decoration: const InputDecoration(labelText: '名字', hintText: '如：问好'),
-                    onChanged: (_) => _changed(),
-                  ),
-                  BkLookErrors(nameErrors, id: 'name'),
-                  const SizedBox(height: Space.x3),
-                  TextField(
-                    key: const ValueKey('bk-look-template'),
-                    controller: _template,
-                    focusNode: _templateFocus,
-                    minLines: 1,
-                    maxLines: 3,
-                    decoration: const InputDecoration(labelText: '积木上写的字', hintText: '向 {名字} 问好', helperText: '花括号里写参数名就是一个槽。不写＝名字后面跟着每个参数。'),
-                    onChanged: (_) => _changed(),
-                  ),
-                  if (missing.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: Space.x2),
-                      child: Wrap(
-                        spacing: Space.x2,
-                        runSpacing: Space.x1,
-                        children: [
-                          for (final n in missing)
-                            ActionChip(
-                              key: ValueKey('bk-look-insert-$n'),
-                              visualDensity: VisualDensity.compact,
-                              avatar: const Icon(Icons.add_rounded, size: 16),
-                              label: Text('{$n}'),
-                              onPressed: () => _insertSlot(n),
-                            ),
+      body: ContentWidth(
+        child: BelowBar(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              BkLookPreview(layout: preview, kit: kit, revision: _rev),
+              Expanded(
+                child: ListView(
+                  key: const ValueKey('bk-look-form'),
+                  controller: _scroll,
+                  keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                  padding: EdgeInsets.fromLTRB(Space.x4, Space.x1, Space.x4, Space.x8 + MediaQuery.paddingOf(context).bottom),
+                  children: [
+                    TextField(
+                      key: const ValueKey('bk-look-name'),
+                      controller: _name,
+                      autofocus: widget.editing == null,
+                      textInputAction: TextInputAction.next,
+                      decoration: const InputDecoration(labelText: '名字', hintText: '如：问好'),
+                      onChanged: (_) => _changed(),
+                    ),
+                    BkLookErrors(nameErrors, id: 'name'),
+                    const SizedBox(height: Space.x3),
+                    TextField(
+                      key: const ValueKey('bk-look-template'),
+                      controller: _template,
+                      focusNode: _templateFocus,
+                      minLines: 1,
+                      maxLines: 3,
+                      decoration: const InputDecoration(labelText: '积木上写的字', hintText: '向 {名字} 问好', helperText: '花括号里写参数名就是一个槽。不写＝名字后面跟着每个参数。'),
+                      onChanged: (_) => _changed(),
+                    ),
+                    if (missing.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: Space.x2),
+                        child: Wrap(
+                          spacing: Space.x2,
+                          runSpacing: Space.x1,
+                          children: [
+                            for (final n in missing)
+                              ActionChip(
+                                key: ValueKey('bk-look-insert-$n'),
+                                visualDensity: VisualDensity.compact,
+                                avatar: const Icon(Icons.add_rounded, size: 16),
+                                label: Text('{$n}'),
+                                onPressed: () => _insertSlot(n),
+                              ),
+                          ],
+                        ),
+                      ),
+                    BkLookErrors(of(BlockLookField.template), id: 'template'),
+                    BkLookCaption('参数', note: _wrapping ? (_params.isEmpty ? '这一段没用到外面的变量' : '这一段用到的外面的变量') : '积木上的槽，用的时候往里填'),
+                    for (final (i, p) in _params.indexed)
+                      BkLookParamCard(
+                        key: ObjectKey(p),
+                        index: i,
+                        draft: p,
+                        errors: [
+                          if (nameBad[i] != null) nameBad[i]!,
+                          if (nameBad[i] == null) ...of(BlockLookField.options, slot: p.trimmed),
+                          if (nameBad[i] == null) ...of(BlockLookField.slot, slot: p.trimmed),
                         ],
+                        onChanged: _changed,
+                        onRename: () => _renamed(p),
+                        onDelete: p.locked ? null : () => unawaited(_deleteParam(i)),
+                      ),
+                    if (!_wrapping && _params.length < kCustomBlockMaxSlots)
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: TextButton.icon(key: const ValueKey('bk-look-param-add'), onPressed: _addParam, icon: const Icon(Icons.add_rounded, size: 18), label: const Text('加一个参数')),
+                      ),
+                    const BkLookCaption('形状'),
+                    SegmentedButton<CustomBlockShape>(
+                      key: const ValueKey('bk-look-shape'),
+                      showSelectedIcon: false,
+                      segments: [
+                        if (!_wrapping) const ButtonSegment(value: CustomBlockShape.auto, label: Text('自动')),
+                        const ButtonSegment(value: CustomBlockShape.statement, label: Text('语句')),
+                        if (!_wrapping) const ButtonSegment(value: CustomBlockShape.value, label: Text('值')),
+                        if (!_wrapping) const ButtonSegment(value: CustomBlockShape.boolean, label: Text('是否')),
+                      ],
+                      selected: {_shape},
+                      onSelectionChanged: (s) {
+                        _shape = s.first;
+                        _changed();
+                      },
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6, left: Space.x1),
+                      child: Text(
+                        switch (_shape) {
+                          CustomBlockShape.statement => _wrapping ? '包起来的是一段语句，所以是语句积木' : '一块能上下拼的语句积木',
+                          CustomBlockShape.value => '一个能放进槽里的值（它的定义里要有“返回”）',
+                          CustomBlockShape.boolean => '一个“是 / 否”的值，能放进条件槽',
+                          _ => '定义里有“返回”就是值，没有就是语句',
+                        },
+                        key: const ValueKey('bk-look-shape-note'),
+                        style: t.bodySmall?.copyWith(color: c.textMuted),
                       ),
                     ),
-                  BkLookErrors(of(BlockLookField.template), id: 'template'),
-                  BkLookCaption('参数', note: _wrapping ? (_params.isEmpty ? '这一段没用到外面的变量' : '这一段用到的外面的变量') : '积木上的槽，用的时候往里填'),
-                  for (final (i, p) in _params.indexed)
-                    BkLookParamCard(
-                      key: ObjectKey(p),
-                      index: i,
-                      draft: p,
-                      errors: [
-                        if (nameBad[i] != null) nameBad[i]!,
-                        if (nameBad[i] == null) ...of(BlockLookField.options, slot: p.trimmed),
-                        if (nameBad[i] == null) ...of(BlockLookField.slot, slot: p.trimmed),
-                      ],
-                      onChanged: _changed,
-                      onRename: () => _renamed(p),
-                      onDelete: p.locked ? null : () => unawaited(_deleteParam(i)),
-                    ),
-                  if (!_wrapping && _params.length < kCustomBlockMaxSlots)
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: TextButton.icon(key: const ValueKey('bk-look-param-add'), onPressed: _addParam, icon: const Icon(Icons.add_rounded, size: 18), label: const Text('加一个参数')),
-                    ),
-                  const BkLookCaption('形状'),
-                  SegmentedButton<CustomBlockShape>(
-                    key: const ValueKey('bk-look-shape'),
-                    showSelectedIcon: false,
-                    segments: [
-                      if (!_wrapping) const ButtonSegment(value: CustomBlockShape.auto, label: Text('自动')),
-                      const ButtonSegment(value: CustomBlockShape.statement, label: Text('语句')),
-                      if (!_wrapping) const ButtonSegment(value: CustomBlockShape.value, label: Text('值')),
-                      if (!_wrapping) const ButtonSegment(value: CustomBlockShape.boolean, label: Text('是否')),
-                    ],
-                    selected: {_shape},
-                    onSelectionChanged: (s) {
-                      _shape = s.first;
-                      _changed();
-                    },
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.only(top: 6, left: Space.x1),
-                    child: Text(
-                      switch (_shape) {
-                        CustomBlockShape.statement => _wrapping ? '包起来的是一段语句，所以是语句积木' : '一块能上下拼的语句积木',
-                        CustomBlockShape.value => '一个能放进槽里的值（它的定义里要有“返回”）',
-                        CustomBlockShape.boolean => '一个“是 / 否”的值，能放进条件槽',
-                        _ => '定义里有“返回”就是值，没有就是语句',
+                    const BkLookCaption('颜色'),
+                    BkLookColorRow(
+                      palette: kit.palette,
+                      selected: _color,
+                      onPick: (k) {
+                        _color = k;
+                        _changed();
                       },
-                      key: const ValueKey('bk-look-shape-note'),
-                      style: t.bodySmall?.copyWith(color: c.textMuted),
                     ),
-                  ),
-                  const BkLookCaption('颜色'),
-                  BkLookColorRow(
-                    palette: kit.palette,
-                    selected: _color,
-                    onPick: (k) {
-                      _color = k;
-                      _changed();
-                    },
-                  ),
-                  const BkLookCaption('说明', note: '可不填'),
-                  TextField(
-                    key: const ValueKey('bk-look-hint'),
-                    controller: _hint,
-                    textInputAction: TextInputAction.done,
-                    decoration: const InputDecoration(hintText: '一句话说它是干什么的'),
-                    onChanged: (_) => _changed(),
-                  ),
-                ],
+                    const BkLookCaption('说明', note: '可不填'),
+                    TextField(
+                      key: const ValueKey('bk-look-hint'),
+                      controller: _hint,
+                      textInputAction: TextInputAction.done,
+                      decoration: const InputDecoration(hintText: '一句话说它是干什么的'),
+                      onChanged: (_) => _changed(),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

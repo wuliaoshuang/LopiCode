@@ -17,7 +17,9 @@ import 'package:lopicode/core/templates.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/ssh/ssh_config.dart';
 import 'package:lopicode/ssh/ssh_connect_screen.dart';
+import 'package:lopicode/theme/breakpoints.dart';
 import 'package:lopicode/ui/chrome.dart';
+import 'package:lopicode/ui/nav_rail.dart';
 import 'package:lopicode/ui/preview_tab.dart';
 import 'package:lopicode/ui/project_list_screen.dart';
 import 'package:lopicode/ui/project_shell.dart';
@@ -287,7 +289,7 @@ void main() {
       await shot(tester, '07-chat-done-$suffix');
     });
 
-    testWidgets('宽屏：应用居中且最大 720px，底部导航仍有短标签 ($suffix)', (tester) async {
+    testWidgets('宽屏：应用铺满窗口，导航在左边竖排、仍有短标签，对话限宽 ($suffix)', (tester) async {
       final (env, project, session) = await open(tester, ProjectTemplate.web);
       tester.view.physicalSize = const Size(1200, 900);
       tester.view.devicePixelRatio = 1;
@@ -300,10 +302,12 @@ void main() {
         ),
       );
       await settle(tester);
+      // 2026-11-28 平板适配：宽屏不再把应用卡在 720 宽的一列里；导航换到左边竖排，短标签还在；对话的输入栏限宽居中。
       final shell = find.byType(ProjectShell);
-      expect(tester.getRect(shell).width, 720);
-      expect(tester.getRect(shell).center.dx, 600);
-      expect(find.descendant(of: find.byType(IconBottomNav), matching: find.text('聊天')), findsOneWidget);
+      expect(tester.getRect(shell).width, 1200);
+      expect(find.byType(IconBottomNav), findsNothing);
+      expect(find.descendant(of: find.byType(IconNavRail), matching: find.text('聊天')), findsOneWidget);
+      expect(tester.getRect(find.byKey(const ValueKey('chat-input'))).width, lessThanOrEqualTo(Breakpoints.reading));
       expect(tester.takeException(), isNull);
       await shot(tester, '04b-chat-wide-$suffix');
     });

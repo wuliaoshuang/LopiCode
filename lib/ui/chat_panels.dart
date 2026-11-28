@@ -13,6 +13,7 @@ import 'package:lopicode/agent/presets.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/state/workspace_chat.dart';
 import 'package:lopicode/state/workspace_conversations.dart';
+import 'package:lopicode/theme/breakpoints.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/chat_cards.dart';
 import 'package:lopicode/ui/chat_row_view.dart';
@@ -513,45 +514,47 @@ class _SubConversationScreenState extends ConsumerState<SubConversationScreen> {
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: PageBar(backTooltip: '返回上级', titleText: conv?.agentName ?? '子代理', subtitle: '子代理 · 上级：$parentName · ${s.modelOf(conv ?? s.activeConversation)?.model.name ?? '未设置模型'}'),
-      body: SafeArea(
-        top: false,
-        child: Column(
-          children: [
-            Expanded(
-              child: conv == null
-                  ? const EmptyState(icon: Icons.account_tree_outlined, title: '这段子代理对话已经删除', message: '上级对话被删除时，它派出的子代理对话会一起删掉。')
-                  : run == null
-                  ? const Center(child: CircularProgressIndicator())
-                  : ListView(
-                      padding: EdgeInsets.fromLTRB(Space.x4, PageBar.insetOf(context) + Space.x2, Space.x4, Space.x4),
-                      children: [
-                        for (final row in chatRowsOf(ref, run.items, busy: run.busy))
-                          ChatRowView(
-                            row: row,
-                            onOpenChild: (id) => Navigator.of(context).push(
-                              MaterialPageRoute<void>(
-                                builder: (_) => SubConversationScreen(session: s, conversationId: id),
+      body: ContentWidth(
+        child: SafeArea(
+          top: false,
+          child: Column(
+            children: [
+              Expanded(
+                child: conv == null
+                    ? const EmptyState(icon: Icons.account_tree_outlined, title: '这段子代理对话已经删除', message: '上级对话被删除时，它派出的子代理对话会一起删掉。')
+                    : run == null
+                    ? const Center(child: CircularProgressIndicator())
+                    : ListView(
+                        padding: EdgeInsets.fromLTRB(Space.x4, PageBar.insetOf(context) + Space.x2, Space.x4, Space.x4),
+                        children: [
+                          for (final row in chatRowsOf(ref, run.items, busy: run.busy))
+                            ChatRowView(
+                              row: row,
+                              onOpenChild: (id) => Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder: (_) => SubConversationScreen(session: s, conversationId: id),
+                                ),
                               ),
                             ),
-                          ),
-                        if (run.busy)
-                          Padding(
-                            padding: const EdgeInsets.symmetric(vertical: Space.x2),
-                            child: Text('进行中…', style: t.bodySmall),
-                          ),
-                      ],
-                    ),
-            ),
-            PendingArea(session: s),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x3),
-              child: Text(
-                '子代理的对话只能看。要改方向，回到上级对话里说。',
-                style: t.bodySmall?.copyWith(color: c.textFaint),
-                textAlign: TextAlign.center,
+                          if (run.busy)
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: Space.x2),
+                              child: Text('进行中…', style: t.bodySmall),
+                            ),
+                        ],
+                      ),
               ),
-            ),
-          ],
+              PendingArea(session: s),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x3),
+                child: Text(
+                  '子代理的对话只能看。要改方向，回到上级对话里说。',
+                  style: t.bodySmall?.copyWith(color: c.textFaint),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

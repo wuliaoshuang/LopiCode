@@ -10,6 +10,7 @@ import 'package:lopicode/agent/automation.dart';
 import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/session/automation_tools.dart';
 import 'package:lopicode/state/automations_state.dart';
+import 'package:lopicode/theme/breakpoints.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/app_ref.dart';
 import 'package:lopicode/ui/chat_panels.dart';
@@ -56,44 +57,46 @@ class _AutomationListScreenState extends ConsumerState<AutomationListScreen> {
       extendBodyBehindAppBar: true,
       appBar: PageBar(background: context.colors.canvas, title: const Text('自动化任务')),
       floatingActionButton: items.isEmpty ? null : FloatingActionButton.extended(onPressed: _new, elevation: 2, shape: const StadiumBorder(), icon: const Icon(Icons.add), label: const Text('新建任务')),
-      body: SectionedList(
-        bottom: 96,
-        children: [
-          const InfoBanner(kAutomationHonesty, tone: BannerTone.warning, margin: EdgeInsets.fromLTRB(Space.x4, Space.x3, Space.x4, Space.x2)),
-          if (items.isEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: Space.x8),
-              child: EmptyState(
-                icon: Icons.event_repeat,
-                title: '还没有自动化任务',
-                message: '到时间后，在指定的工作区里自动开一段对话执行你写好的指令。\n也可以在对话里直接让 Agent 帮你安排。',
-                action: FilledButton.icon(onPressed: _new, icon: const Icon(Icons.add), label: const Text('新建任务')),
+      body: ContentWidth(
+        child: SectionedList(
+          bottom: 96,
+          children: [
+            const InfoBanner(kAutomationHonesty, tone: BannerTone.warning, margin: EdgeInsets.fromLTRB(Space.x4, Space.x3, Space.x4, Space.x2)),
+            if (items.isEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: Space.x8),
+                child: EmptyState(
+                  icon: Icons.event_repeat,
+                  title: '还没有自动化任务',
+                  message: '到时间后，在指定的工作区里自动开一段对话执行你写好的指令。\n也可以在对话里直接让 Agent 帮你安排。',
+                  action: FilledButton.icon(onPressed: _new, icon: const Icon(Icons.add), label: const Text('新建任务')),
+                ),
               ),
-            ),
-          for (final a in items)
-            ListTile(
-              key: Key('automation-${a.id}'),
-              title: Text(a.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-              subtitle: Text(
-                [
-                  a.rule.describe(),
-                  _names == null ? '工作区：读取中…' : (_names![a.workspaceId] == null ? '工作区已不在' : '工作区：${_names![a.workspaceId]}'),
-                  if (autos.isRunning(a.id)) '正在运行' else if (!a.enabled) '已停用' else if (a.nextRun(now) case final next?) '下一次 ${formatLocalTime(next, a.rule.tzOffsetMinutes)}' else '不会再触发',
-                ].join('\n'),
-                style: t.bodySmall?.copyWith(color: a.enabled ? null : c.textFaint),
+            for (final a in items)
+              ListTile(
+                key: Key('automation-${a.id}'),
+                title: Text(a.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+                subtitle: Text(
+                  [
+                    a.rule.describe(),
+                    _names == null ? '工作区：读取中…' : (_names![a.workspaceId] == null ? '工作区已不在' : '工作区：${_names![a.workspaceId]}'),
+                    if (autos.isRunning(a.id)) '正在运行' else if (!a.enabled) '已停用' else if (a.nextRun(now) case final next?) '下一次 ${formatLocalTime(next, a.rule.tzOffsetMinutes)}' else '不会再触发',
+                  ].join('\n'),
+                  style: t.bodySmall?.copyWith(color: a.enabled ? null : c.textFaint),
+                ),
+                isThreeLine: true,
+                trailing: Switch(value: a.enabled, onChanged: (v) => ref.read(automationsProvider.notifier).setEnabled(a.id, v)),
+                onTap: () async {
+                  await Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => AutomationDetailScreen(id: a.id, workspaceName: _names?[a.workspaceId], workspaceKnown: _names != null),
+                    ),
+                  );
+                  if (mounted) setState(() {});
+                },
               ),
-              isThreeLine: true,
-              trailing: Switch(value: a.enabled, onChanged: (v) => ref.read(automationsProvider.notifier).setEnabled(a.id, v)),
-              onTap: () async {
-                await Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => AutomationDetailScreen(id: a.id, workspaceName: _names?[a.workspaceId], workspaceKnown: _names != null),
-                  ),
-                );
-                if (mounted) setState(() {});
-              },
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -130,8 +133,10 @@ class _AutomationDetailScreenState extends ConsumerState<AutomationDetailScreen>
         backgroundColor: context.colors.canvas,
         extendBodyBehindAppBar: true,
         appBar: PageBar(background: context.colors.canvas, title: const Text('自动化任务')),
-        body: const BelowBar(
-          child: EmptyState(icon: Icons.event_busy, title: '这个任务已经删除', message: ''),
+        body: const ContentWidth(
+          child: BelowBar(
+            child: EmptyState(icon: Icons.event_busy, title: '这个任务已经删除', message: ''),
+          ),
         ),
       );
     }
@@ -161,75 +166,77 @@ class _AutomationDetailScreenState extends ConsumerState<AutomationDetailScreen>
           ),
         ],
       ),
-      body: SectionedList(
-        inner: const EdgeInsets.all(Space.x4),
-        children: [
-          Text(a.rule.describe(), style: t.titleMedium),
-          const SizedBox(height: Space.x1),
-          Text(
-            '工作区：${widget.workspaceName ?? (widget.workspaceKnown ? '已不在' : '读取中…')} · 权限：${PermissionLevel.byId(a.permission).label}\n'
-            '${!a.enabled
-                ? '已停用'
-                : next == null
-                ? '不会再触发'
-                : '下一次：${formatLocalTime(next, a.rule.tzOffsetMinutes)}'}',
-            style: t.bodySmall?.copyWith(height: 1.6),
-          ),
-          const SizedBox(height: Space.x3),
-          const InfoBanner(kAutomationHonesty, tone: BannerTone.warning),
-          const SizedBox(height: Space.x4),
-          Text('完整指令', style: t.labelMedium),
-          const SizedBox(height: Space.x2),
-          Container(
-            padding: const EdgeInsets.all(Space.x3),
-            decoration: BoxDecoration(
-              color: c.surface,
-              borderRadius: BorderRadius.circular(Radii.md),
-              border: Border.all(color: c.border),
+      body: ContentWidth(
+        child: SectionedList(
+          inner: const EdgeInsets.all(Space.x4),
+          children: [
+            Text(a.rule.describe(), style: t.titleMedium),
+            const SizedBox(height: Space.x1),
+            Text(
+              '工作区：${widget.workspaceName ?? (widget.workspaceKnown ? '已不在' : '读取中…')} · 权限：${PermissionLevel.byId(a.permission).label}\n'
+              '${!a.enabled
+                  ? '已停用'
+                  : next == null
+                  ? '不会再触发'
+                  : '下一次：${formatLocalTime(next, a.rule.tzOffsetMinutes)}'}',
+              style: t.bodySmall?.copyWith(height: 1.6),
             ),
-            child: SelectableText(a.instruction, style: t.bodyMedium),
-          ),
-          const SizedBox(height: Space.x4),
-          FilledButton(
-            key: const Key('automation-edit'),
-            onPressed: () async {
-              await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => AutomationEditScreen(existing: a)));
-              if (mounted) setState(() {});
-            },
-            child: const Text('修改'),
-          ),
-          const SizedBox(height: Space.x2),
-          OutlinedButton(onPressed: running ? null : () => _runNow(a), child: Text(running ? '正在运行…' : '立即运行一次')),
-          const SizedBox(height: Space.x6),
-          Text('运行历史（最近 ${AutomationStore.maxHistory} 次）', style: t.labelMedium),
-          const SizedBox(height: Space.x2),
-          if (a.history.isEmpty) Text('还没有运行过。', style: t.bodySmall),
-          for (final r in a.history)
-            Padding(
-              padding: const EdgeInsets.only(bottom: Space.x3),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '${formatLocalTime(r.at, a.rule.tzOffsetMinutes)} · ${r.statusLabel}',
-                    style: t.bodySmall?.copyWith(
-                      color: switch (r.status) {
-                        'ok' => c.accent,
-                        'failed' => c.danger,
-                        _ => c.warning,
-                      },
-                    ),
-                  ),
-                  Text(
-                    r.summary,
-                    style: t.bodySmall?.copyWith(color: c.text),
-                    maxLines: 4,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
+            const SizedBox(height: Space.x3),
+            const InfoBanner(kAutomationHonesty, tone: BannerTone.warning),
+            const SizedBox(height: Space.x4),
+            Text('完整指令', style: t.labelMedium),
+            const SizedBox(height: Space.x2),
+            Container(
+              padding: const EdgeInsets.all(Space.x3),
+              decoration: BoxDecoration(
+                color: c.surface,
+                borderRadius: BorderRadius.circular(Radii.md),
+                border: Border.all(color: c.border),
               ),
+              child: SelectableText(a.instruction, style: t.bodyMedium),
             ),
-        ],
+            const SizedBox(height: Space.x4),
+            FilledButton(
+              key: const Key('automation-edit'),
+              onPressed: () async {
+                await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => AutomationEditScreen(existing: a)));
+                if (mounted) setState(() {});
+              },
+              child: const Text('修改'),
+            ),
+            const SizedBox(height: Space.x2),
+            OutlinedButton(onPressed: running ? null : () => _runNow(a), child: Text(running ? '正在运行…' : '立即运行一次')),
+            const SizedBox(height: Space.x6),
+            Text('运行历史（最近 ${AutomationStore.maxHistory} 次）', style: t.labelMedium),
+            const SizedBox(height: Space.x2),
+            if (a.history.isEmpty) Text('还没有运行过。', style: t.bodySmall),
+            for (final r in a.history)
+              Padding(
+                padding: const EdgeInsets.only(bottom: Space.x3),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${formatLocalTime(r.at, a.rule.tzOffsetMinutes)} · ${r.statusLabel}',
+                      style: t.bodySmall?.copyWith(
+                        color: switch (r.status) {
+                          'ok' => c.accent,
+                          'failed' => c.danger,
+                          _ => c.warning,
+                        },
+                      ),
+                    ),
+                    Text(
+                      r.summary,
+                      style: t.bodySmall?.copyWith(color: c.text),
+                      maxLines: 4,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -387,101 +394,103 @@ class _AutomationEditScreenState extends ConsumerState<AutomationEditScreen> {
       backgroundColor: context.colors.canvas,
       extendBodyBehindAppBar: true,
       appBar: PageBar(background: context.colors.canvas, title: Text(widget.existing == null ? '新建自动化任务' : '修改自动化任务')),
-      body: SectionedList(
-        inner: const EdgeInsets.all(Space.x4),
-        children: [
-          TextField(
-            key: const Key('automation-title'),
-            controller: _title,
-            decoration: const InputDecoration(labelText: '任务名', hintText: '如：每天早上检查依赖更新'),
-          ),
-          const SizedBox(height: Space.x3),
-          TextField(
-            key: const Key('automation-instruction'),
-            controller: _instruction,
-            minLines: 4,
-            maxLines: 10,
-            decoration: const InputDecoration(labelText: '指令', hintText: '到时间后要 Agent 做什么。那时是一段全新的对话，要写全。', alignLabelWithHint: true),
-          ),
-          const SizedBox(height: Space.x3),
-          DropdownButtonFormField<String>(
-            key: ValueKey('ws-$_workspaceId-${_workspaces.length}'),
-            initialValue: _workspaces.any((p) => p.id == _workspaceId) ? _workspaceId : null,
-            isExpanded: true,
-            decoration: const InputDecoration(labelText: '在哪个工作区里运行'),
-            items: [
-              for (final p in _workspaces)
-                DropdownMenuItem(
-                  value: p.id,
-                  child: Text(p.name, overflow: TextOverflow.ellipsis),
-                ),
-            ],
-            onChanged: (v) => setState(() => _workspaceId = v),
-          ),
-          const SizedBox(height: Space.x3),
-          DropdownButtonFormField<RuleKind>(
-            key: const Key('automation-kind'),
-            initialValue: _kind,
-            decoration: const InputDecoration(labelText: '多久一次'),
-            items: [for (final k in RuleKind.values) DropdownMenuItem(value: k, child: Text(k.label))],
-            onChanged: (v) => setState(() => _kind = v ?? _kind),
-          ),
-          const SizedBox(height: Space.x3),
-          if (_kind == RuleKind.once)
-            Padding(
-              padding: const EdgeInsets.only(bottom: Space.x3),
-              child: TextField(
-                controller: _date,
-                readOnly: true,
-                onTap: _pickDate,
-                decoration: const InputDecoration(labelText: '哪一天', suffixIcon: Icon(Icons.calendar_today_outlined, size: 18)),
-              ),
-            ),
-          if (_kind == RuleKind.weekly) ...[
-            Text('星期几', style: t.labelMedium),
-            const SizedBox(height: Space.x2),
-            Wrap(
-              spacing: Space.x1,
-              children: [
-                for (var d = 1; d <= 7; d++)
-                  FilterChip(label: Text(_weekdayNames[d - 1]), showCheckmark: false, selected: _weekdays.contains(d), onSelected: (v) => setState(() => v ? _weekdays.add(d) : _weekdays.remove(d))),
-              ],
+      body: ContentWidth(
+        child: SectionedList(
+          inner: const EdgeInsets.all(Space.x4),
+          children: [
+            TextField(
+              key: const Key('automation-title'),
+              controller: _title,
+              decoration: const InputDecoration(labelText: '任务名', hintText: '如：每天早上检查依赖更新'),
             ),
             const SizedBox(height: Space.x3),
-          ],
-          if (_kind == RuleKind.interval)
             TextField(
-              controller: _every,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: '每隔多少分钟', suffixText: '分钟', helperText: '最短 ${TimeRule.minInterval} 分钟'),
-            )
-          else
-            TextField(
-              key: const Key('automation-time'),
-              controller: _time,
-              readOnly: true,
-              onTap: _pickTime,
-              decoration: const InputDecoration(labelText: '几点（24 小时制）', suffixIcon: Icon(Icons.schedule, size: 18)),
+              key: const Key('automation-instruction'),
+              controller: _instruction,
+              minLines: 4,
+              maxLines: 10,
+              decoration: const InputDecoration(labelText: '指令', hintText: '到时间后要 Agent 做什么。那时是一段全新的对话，要写全。', alignLabelWithHint: true),
             ),
-          const SizedBox(height: Space.x3),
-          DropdownButtonFormField<int>(
-            initialValue: _tz,
-            decoration: const InputDecoration(labelText: '时区', helperText: '固定的时差，不会自动调夏令时'),
-            items: [for (final o in _tzChoices) DropdownMenuItem(value: o, child: Text('${TimeRule.tzLabel(o)}${o == deviceTzOffset ? '（手机当前时区）' : ''}'))],
-            onChanged: (v) => setState(() => _tz = v ?? _tz),
-          ),
-          const SizedBox(height: Space.x3),
-          DropdownButtonFormField<PermissionLevel>(
-            initialValue: _permission,
-            decoration: const InputDecoration(labelText: '运行时的权限', helperText: '运行时没人在场：需要你点确认的操作会被自动拒绝'),
-            items: [for (final l in PermissionLevel.values) DropdownMenuItem(value: l, child: Text(l.label))],
-            onChanged: (v) => setState(() => _permission = v ?? _permission),
-          ),
-          const SizedBox(height: Space.x4),
-          const InfoBanner(kAutomationHonesty, tone: BannerTone.warning),
-          const SizedBox(height: Space.x4),
-          FilledButton(key: const Key('automation-save'), onPressed: _save, child: const Text('下一步：核对并确认')),
-        ],
+            const SizedBox(height: Space.x3),
+            DropdownButtonFormField<String>(
+              key: ValueKey('ws-$_workspaceId-${_workspaces.length}'),
+              initialValue: _workspaces.any((p) => p.id == _workspaceId) ? _workspaceId : null,
+              isExpanded: true,
+              decoration: const InputDecoration(labelText: '在哪个工作区里运行'),
+              items: [
+                for (final p in _workspaces)
+                  DropdownMenuItem(
+                    value: p.id,
+                    child: Text(p.name, overflow: TextOverflow.ellipsis),
+                  ),
+              ],
+              onChanged: (v) => setState(() => _workspaceId = v),
+            ),
+            const SizedBox(height: Space.x3),
+            DropdownButtonFormField<RuleKind>(
+              key: const Key('automation-kind'),
+              initialValue: _kind,
+              decoration: const InputDecoration(labelText: '多久一次'),
+              items: [for (final k in RuleKind.values) DropdownMenuItem(value: k, child: Text(k.label))],
+              onChanged: (v) => setState(() => _kind = v ?? _kind),
+            ),
+            const SizedBox(height: Space.x3),
+            if (_kind == RuleKind.once)
+              Padding(
+                padding: const EdgeInsets.only(bottom: Space.x3),
+                child: TextField(
+                  controller: _date,
+                  readOnly: true,
+                  onTap: _pickDate,
+                  decoration: const InputDecoration(labelText: '哪一天', suffixIcon: Icon(Icons.calendar_today_outlined, size: 18)),
+                ),
+              ),
+            if (_kind == RuleKind.weekly) ...[
+              Text('星期几', style: t.labelMedium),
+              const SizedBox(height: Space.x2),
+              Wrap(
+                spacing: Space.x1,
+                children: [
+                  for (var d = 1; d <= 7; d++)
+                    FilterChip(label: Text(_weekdayNames[d - 1]), showCheckmark: false, selected: _weekdays.contains(d), onSelected: (v) => setState(() => v ? _weekdays.add(d) : _weekdays.remove(d))),
+                ],
+              ),
+              const SizedBox(height: Space.x3),
+            ],
+            if (_kind == RuleKind.interval)
+              TextField(
+                controller: _every,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: '每隔多少分钟', suffixText: '分钟', helperText: '最短 ${TimeRule.minInterval} 分钟'),
+              )
+            else
+              TextField(
+                key: const Key('automation-time'),
+                controller: _time,
+                readOnly: true,
+                onTap: _pickTime,
+                decoration: const InputDecoration(labelText: '几点（24 小时制）', suffixIcon: Icon(Icons.schedule, size: 18)),
+              ),
+            const SizedBox(height: Space.x3),
+            DropdownButtonFormField<int>(
+              initialValue: _tz,
+              decoration: const InputDecoration(labelText: '时区', helperText: '固定的时差，不会自动调夏令时'),
+              items: [for (final o in _tzChoices) DropdownMenuItem(value: o, child: Text('${TimeRule.tzLabel(o)}${o == deviceTzOffset ? '（手机当前时区）' : ''}'))],
+              onChanged: (v) => setState(() => _tz = v ?? _tz),
+            ),
+            const SizedBox(height: Space.x3),
+            DropdownButtonFormField<PermissionLevel>(
+              initialValue: _permission,
+              decoration: const InputDecoration(labelText: '运行时的权限', helperText: '运行时没人在场：需要你点确认的操作会被自动拒绝'),
+              items: [for (final l in PermissionLevel.values) DropdownMenuItem(value: l, child: Text(l.label))],
+              onChanged: (v) => setState(() => _permission = v ?? _permission),
+            ),
+            const SizedBox(height: Space.x4),
+            const InfoBanner(kAutomationHonesty, tone: BannerTone.warning),
+            const SizedBox(height: Space.x4),
+            FilledButton(key: const Key('automation-save'), onPressed: _save, child: const Text('下一步：核对并确认')),
+          ],
+        ),
       ),
     );
   }

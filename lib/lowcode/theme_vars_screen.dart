@@ -18,6 +18,7 @@ import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/lowcode/style_color_sheet.dart';
 import 'package:lopicode/lowcode/style_model.dart';
 import 'package:lopicode/lowcode/theme_vars.dart';
+import 'package:lopicode/theme/breakpoints.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/top_bar.dart';
 import 'package:lopicode/ui/widgets.dart';
@@ -163,37 +164,39 @@ class _ThemeVarsScreenState extends State<ThemeVarsScreen> {
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: const PageBar(titleText: '主题变量'),
-      body: theme.isEmpty
-          ? BelowBar(
-              child: EmptyState(
-                icon: Icons.palette_outlined,
-                title: '还没有主题变量',
-                message: '把常用的颜色、字号、间距、圆角起个名字存成变量，\n各个页面都用它；以后改一处，用到的地方一起变。',
-                action: FilledButton(key: const Key('lc-var-starter'), onPressed: () => _edit(lcAddStarterVars), child: const Text('加一套起步的变量')),
+      body: ContentWidth(
+        child: theme.isEmpty
+            ? BelowBar(
+                child: EmptyState(
+                  icon: Icons.palette_outlined,
+                  title: '还没有主题变量',
+                  message: '把常用的颜色、字号、间距、圆角起个名字存成变量，\n各个页面都用它；以后改一处，用到的地方一起变。',
+                  action: FilledButton(key: const Key('lc-var-starter'), onPressed: () => _edit(lcAddStarterVars), child: const Text('加一套起步的变量')),
+                ),
+              )
+            : ListView(
+                key: const Key('lc-var-list'),
+                padding: EdgeInsets.only(top: PageBar.insetOf(context) + Space.x2, bottom: Space.x6 + MediaQuery.paddingOf(context).bottom),
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x2),
+                    child: Text('整个项目共用：每个页面、每个自定义组件都能用。改了值，用到的地方一起变。', style: t.bodySmall?.copyWith(color: c.textMuted)),
+                  ),
+                  for (final kind in LcVarKind.values)
+                    if (theme.namesOf(kind).isNotEmpty) ...[
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(Space.x4, Space.x4, Space.x4, Space.x1),
+                        child: Text(kind.label, style: t.labelLarge?.copyWith(color: c.textMuted)),
+                      ),
+                      for (final name in theme.namesOf(kind)) row(name),
+                    ],
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(Space.x4, Space.x6, Space.x4, 0),
+                    child: OutlinedButton.icon(key: const Key('lc-var-add'), onPressed: full ? null : _add, icon: const Icon(Icons.add, size: 18), label: Text(full ? '最多 $kLcMaxVars 个变量' : '加一个变量')),
+                  ),
+                ],
               ),
-            )
-          : ListView(
-              key: const Key('lc-var-list'),
-              padding: EdgeInsets.only(top: PageBar.insetOf(context) + Space.x2, bottom: Space.x6 + MediaQuery.paddingOf(context).bottom),
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x2),
-                  child: Text('整个项目共用：每个页面、每个自定义组件都能用。改了值，用到的地方一起变。', style: t.bodySmall?.copyWith(color: c.textMuted)),
-                ),
-                for (final kind in LcVarKind.values)
-                  if (theme.namesOf(kind).isNotEmpty) ...[
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(Space.x4, Space.x4, Space.x4, Space.x1),
-                      child: Text(kind.label, style: t.labelLarge?.copyWith(color: c.textMuted)),
-                    ),
-                    for (final name in theme.namesOf(kind)) row(name),
-                  ],
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(Space.x4, Space.x6, Space.x4, 0),
-                  child: OutlinedButton.icon(key: const Key('lc-var-add'), onPressed: full ? null : _add, icon: const Icon(Icons.add, size: 18), label: Text(full ? '最多 $kLcMaxVars 个变量' : '加一个变量')),
-                ),
-              ],
-            ),
+      ),
     );
   }
 }

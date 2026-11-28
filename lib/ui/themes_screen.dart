@@ -11,6 +11,7 @@ import 'package:lopicode/appearance/theme_fields.dart';
 import 'package:lopicode/backdrop/backdrop_model.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/state/themes_state.dart';
+import 'package:lopicode/theme/breakpoints.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/app_backdrop.dart';
 import 'package:lopicode/ui/settings_widgets.dart';
@@ -195,46 +196,48 @@ class _ThemesScreenState extends ConsumerState<ThemesScreen> {
         backgroundColor: on ? Colors.transparent : c.canvas,
         extendBodyBehindAppBar: true,
         appBar: PageBar(background: c.canvas, titleText: '管理主题'),
-        body: SingleChildScrollView(
-          key: const Key('themes-list'),
-          padding: EdgeInsets.fromLTRB(Space.x4, PageBar.insetOf(context) + Space.x2, Space.x4, Space.x8),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              SegmentedButton<bool>(
-                key: const Key('themes-brightness'),
-                showSelectedIcon: false,
-                segments: const [
-                  ButtonSegment(value: false, label: Text('浅色'), icon: Icon(Icons.light_mode_outlined, size: 18)),
-                  ButtonSegment(value: true, label: Text('深色'), icon: Icon(Icons.dark_mode_outlined, size: 18)),
-                ],
-                selected: {dark},
-                onSelectionChanged: (s) => setState(() => _dark = s.first),
-              ),
-              const SizedBox(height: Space.x4),
-              SettingsGroup(
-                iconRows: true,
-                children: [
-                  SettingsRow(key: const Key('themes-new'), icon: Icons.add, title: '新建主题', subtitle: '从一套现有的开始改', accent: true, onTap: () => _create(dark, choices)),
-                  SettingsRow(key: const Key('themes-import'), icon: Icons.file_download_outlined, title: '导入主题', subtitle: '粘贴别人给的主题文本，或从工作区选文件', onTap: _import),
-                ],
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(Space.x1, 0, Space.x1, Space.x2),
-                child: Text(dark ? '颜色模式是深色（或跟随系统且手机是深色）时用选中的这套。点一张卡就换上。' : '颜色模式是浅色（或跟随系统且手机是浅色）时用选中的这套。点一张卡就换上。', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: c.textMuted)),
-              ),
-              for (final t in choices)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: Space.x2),
-                  child: _ThemeCard(
-                    theme: t,
-                    inUse: t.id == current.id,
-                    onTap: () => _select(t),
-                    onMore: () => _more(t, inUse: t.id == current.id),
-                  ),
+        body: ContentWidth(
+          child: SingleChildScrollView(
+            key: const Key('themes-list'),
+            padding: EdgeInsets.fromLTRB(Space.x4, PageBar.insetOf(context) + Space.x2, Space.x4, Space.x8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SegmentedButton<bool>(
+                  key: const Key('themes-brightness'),
+                  showSelectedIcon: false,
+                  segments: const [
+                    ButtonSegment(value: false, label: Text('浅色'), icon: Icon(Icons.light_mode_outlined, size: 18)),
+                    ButtonSegment(value: true, label: Text('深色'), icon: Icon(Icons.dark_mode_outlined, size: 18)),
+                  ],
+                  selected: {dark},
+                  onSelectionChanged: (s) => setState(() => _dark = s.first),
                 ),
-            ],
+                const SizedBox(height: Space.x4),
+                SettingsGroup(
+                  iconRows: true,
+                  children: [
+                    SettingsRow(key: const Key('themes-new'), icon: Icons.add, title: '新建主题', subtitle: '从一套现有的开始改', accent: true, onTap: () => _create(dark, choices)),
+                    SettingsRow(key: const Key('themes-import'), icon: Icons.file_download_outlined, title: '导入主题', subtitle: '粘贴别人给的主题文本，或从工作区选文件', onTap: _import),
+                  ],
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(Space.x1, 0, Space.x1, Space.x2),
+                  child: Text(dark ? '颜色模式是深色（或跟随系统且手机是深色）时用选中的这套。点一张卡就换上。' : '颜色模式是浅色（或跟随系统且手机是浅色）时用选中的这套。点一张卡就换上。', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: c.textMuted)),
+                ),
+                for (final t in choices)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: Space.x2),
+                    child: _ThemeCard(
+                      theme: t,
+                      inUse: t.id == current.id,
+                      onTap: () => _select(t),
+                      onMore: () => _more(t, inUse: t.id == current.id),
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
       ),

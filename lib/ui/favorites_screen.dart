@@ -12,6 +12,7 @@ import 'package:lopicode/backdrop/backdrop_model.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/session/favorites.dart';
 import 'package:lopicode/state/workspace_favorites.dart';
+import 'package:lopicode/theme/breakpoints.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/app_backdrop.dart';
 import 'package:lopicode/ui/top_bar.dart';
@@ -82,27 +83,29 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
         backgroundColor: on ? Colors.transparent : null,
         extendBodyBehindAppBar: true,
         appBar: const PageBar(titleText: '收藏的消息'),
-        body: !state.loaded
-            ? const SizedBox.shrink()
-            : items.isEmpty
-            ? const BelowBar(
-                child: EmptyState(icon: Icons.bookmark_border, title: '还没有收藏', message: '在聊天里点一条消息下面的“⋯”，选“收藏”，\n它就会出现在这里。'),
-              )
-            : ListView.separated(
-                padding: EdgeInsets.fromLTRB(Space.x4, PageBar.insetOf(context) + Space.x2, Space.x4, Space.x8),
-                itemCount: items.length,
-                separatorBuilder: (_, _) => const SizedBox(height: Space.x3),
-                itemBuilder: (context, i) {
-                  final f = items[i];
-                  return _FavoriteCard(
-                    key: ValueKey('favorite-${f.key}'),
-                    item: f,
-                    missing: s.messageOps.favoriteMissing(f),
-                    onTap: () => _open(f),
-                    onRemove: () => ref.read(favoritesProvider(s).notifier).remove(f.key),
-                  );
-                },
-              ),
+        body: ContentWidth(
+          child: !state.loaded
+              ? const SizedBox.shrink()
+              : items.isEmpty
+              ? const BelowBar(
+                  child: EmptyState(icon: Icons.bookmark_border, title: '还没有收藏', message: '在聊天里点一条消息下面的“⋯”，选“收藏”，\n它就会出现在这里。'),
+                )
+              : ListView.separated(
+                  padding: EdgeInsets.fromLTRB(Space.x4, PageBar.insetOf(context) + Space.x2, Space.x4, Space.x8),
+                  itemCount: items.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: Space.x3),
+                  itemBuilder: (context, i) {
+                    final f = items[i];
+                    return _FavoriteCard(
+                      key: ValueKey('favorite-${f.key}'),
+                      item: f,
+                      missing: s.messageOps.favoriteMissing(f),
+                      onTap: () => _open(f),
+                      onRemove: () => ref.read(favoritesProvider(s).notifier).remove(f.key),
+                    );
+                  },
+                ),
+        ),
       ),
     );
   }

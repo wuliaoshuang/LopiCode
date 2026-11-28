@@ -14,6 +14,7 @@
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/session/message_actions.dart';
 import 'package:lopicode/session/reply_edit.dart';
+import 'package:lopicode/theme/breakpoints.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/message_action_bar.dart';
 import 'package:lopicode/ui/top_bar.dart';
@@ -189,73 +190,75 @@ class _ReplyEditorScreenState extends State<ReplyEditorScreen> {
           titleText: '编辑回复',
           leading: RoundIconButton(icon: Icons.arrow_back_ios_new_rounded, tooltip: '取消', onPressed: _leave),
         ),
-        body: BelowBar(
-          child: SafeArea(
-            top: false,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x3),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Expanded(
-                    child: TextField(
-                      key: const ValueKey('reply-edit-input'),
-                      controller: _text,
-                      enabled: !_saving,
-                      expands: true,
-                      maxLines: null,
-                      keyboardType: TextInputType.multiline,
-                      textAlignVertical: TextAlignVertical.top,
-                      style: t.bodyLarge,
-                      decoration: const InputDecoration(hintText: '这段回复的文字'),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.only(top: Space.x2),
-                    child: Text(
-                      note,
-                      key: const ValueKey('reply-edit-note'),
-                      style: t.bodySmall?.copyWith(color: problem == null ? c.textMuted : c.danger, height: 1.45),
-                    ),
-                  ),
-                  if (original != null && _text.text != original)
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: TextButton.icon(
-                        key: const ValueKey('reply-edit-restore'),
-                        onPressed: _saving ? null : _restore,
-                        style: TextButton.styleFrom(
-                          foregroundColor: c.textMuted,
-                          minimumSize: const Size(0, 44),
-                          padding: const EdgeInsets.symmetric(horizontal: Space.x2),
-                        ),
-                        icon: const Icon(Icons.undo, size: 18),
-                        label: const Text('恢复原文'),
+        body: ContentWidth(
+          child: BelowBar(
+            child: SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x3),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        key: const ValueKey('reply-edit-input'),
+                        controller: _text,
+                        enabled: !_saving,
+                        expands: true,
+                        maxLines: null,
+                        keyboardType: TextInputType.multiline,
+                        textAlignVertical: TextAlignVertical.top,
+                        style: t.bodyLarge,
+                        decoration: const InputDecoration(hintText: '这段回复的文字'),
                       ),
                     ),
-                  const SizedBox(height: Space.x2),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextButton(
-                          key: const ValueKey('reply-edit-cancel'),
-                          onPressed: _saving ? null : _leave,
-                          style: TextButton.styleFrom(foregroundColor: c.textMuted, minimumSize: const Size.fromHeight(48)),
-                          child: const Text('取消'),
+                    Padding(
+                      padding: const EdgeInsets.only(top: Space.x2),
+                      child: Text(
+                        note,
+                        key: const ValueKey('reply-edit-note'),
+                        style: t.bodySmall?.copyWith(color: problem == null ? c.textMuted : c.danger, height: 1.45),
+                      ),
+                    ),
+                    if (original != null && _text.text != original)
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: TextButton.icon(
+                          key: const ValueKey('reply-edit-restore'),
+                          onPressed: _saving ? null : _restore,
+                          style: TextButton.styleFrom(
+                            foregroundColor: c.textMuted,
+                            minimumSize: const Size(0, 44),
+                            padding: const EdgeInsets.symmetric(horizontal: Space.x2),
+                          ),
+                          icon: const Icon(Icons.undo, size: 18),
+                          label: const Text('恢复原文'),
                         ),
                       ),
-                      const SizedBox(width: Space.x3),
-                      Expanded(
-                        child: FilledButton(
-                          key: const ValueKey('reply-edit-save'),
-                          onPressed: _saving || _empty || !_dirty ? null : _save,
-                          style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
-                          child: Text(_saving ? '正在保存…' : '保存'),
+                    const SizedBox(height: Space.x2),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextButton(
+                            key: const ValueKey('reply-edit-cancel'),
+                            onPressed: _saving ? null : _leave,
+                            style: TextButton.styleFrom(foregroundColor: c.textMuted, minimumSize: const Size.fromHeight(48)),
+                            child: const Text('取消'),
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                ],
+                        const SizedBox(width: Space.x3),
+                        Expanded(
+                          child: FilledButton(
+                            key: const ValueKey('reply-edit-save'),
+                            onPressed: _saving || _empty || !_dirty ? null : _save,
+                            style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+                            child: Text(_saving ? '正在保存…' : '保存'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

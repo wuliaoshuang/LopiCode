@@ -172,24 +172,40 @@ class _BuilderHubScreenState extends ConsumerState<BuilderHubScreen> {
             child: IndexedStack(index: side == 'page' ? 0 : 1, children: [_built.contains('page') ? page() : const SizedBox.shrink(), _built.contains('backend') ? back() : const SizedBox.shrink()]),
           ),
           Positioned(
-            left: Space.x4,
-            right: Space.x4,
+            left: 0,
+            right: 0,
             top: mq.viewPadding.top + PageBar.kHeight,
             height: kHubSwitchHeight,
-            child: DecoratedBox(
-              // 自己带一块卡片色的底：下面有积木 / 控件滑过时字还看得清。
-              decoration: BoxDecoration(color: c.surface, borderRadius: BorderRadius.circular(kHubSwitchHeight / 2)),
-              child: SegmentedButton<String>(
-                key: const ValueKey('hub-switch'),
-                showSelectedIcon: false,
-                // 和外面那块底一样高，选中的那一半才填得满。
-                style: const ButtonStyle(visualDensity: VisualDensity.standard, tapTargetSize: MaterialTapTargetSize.shrinkWrap, minimumSize: WidgetStatePropertyAll(Size(0, kHubSwitchHeight))),
-                segments: const [
-                  ButtonSegment(value: 'page', label: Text('页面'), icon: Icon(Icons.dashboard_customize_outlined, size: 18)),
-                  ButtonSegment(value: 'backend', label: Text('后端'), icon: Icon(Icons.dns_outlined, size: 18)),
-                ],
-                selected: {side},
-                onSelectionChanged: (v) => setState(() => _lastSide[_s] = v.first),
+            // 平板上切换条不横跨整屏：最宽 kHubSwitchMaxWidth、居中（手机宽度不到上限，和原来一样左右各留 16）。
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: kHubSwitchMaxWidth, minHeight: kHubSwitchHeight, maxHeight: kHubSwitchHeight),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: Space.x4),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: DecoratedBox(
+                      // 自己带一块卡片色的底：下面有积木 / 控件滑过时字还看得清。
+                      decoration: BoxDecoration(color: c.surface, borderRadius: BorderRadius.circular(kHubSwitchHeight / 2)),
+                      child: SegmentedButton<String>(
+                        key: const ValueKey('hub-switch'),
+                        showSelectedIcon: false,
+                        // 和外面那块底一样高，选中的那一半才填得满。
+                        style: const ButtonStyle(
+                          visualDensity: VisualDensity.standard,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          minimumSize: WidgetStatePropertyAll(Size(0, kHubSwitchHeight)),
+                        ),
+                        segments: const [
+                          ButtonSegment(value: 'page', label: Text('页面'), icon: Icon(Icons.dashboard_customize_outlined, size: 18)),
+                          ButtonSegment(value: 'backend', label: Text('后端'), icon: Icon(Icons.dns_outlined, size: 18)),
+                        ],
+                        selected: {side},
+                        onSelectionChanged: (v) => setState(() => _lastSide[_s] = v.first),
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ),
           ),
@@ -201,3 +217,6 @@ class _BuilderHubScreenState extends ConsumerState<BuilderHubScreen> {
 
 /// “页面 / 后端”切换条多高。
 const double kHubSwitchHeight = 40;
+
+/// 切换条最宽多少（含左右各 16 的留白）。
+const double kHubSwitchMaxWidth = 480;

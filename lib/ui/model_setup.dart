@@ -6,6 +6,7 @@
 //   列表最下面是“自定义”，走原来的全手填。
 import 'package:lopicode/agent/model_config.dart';
 import 'package:lopicode/agent/provider_presets.dart';
+import 'package:lopicode/theme/breakpoints.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/app_ref.dart';
 import 'package:lopicode/ui/chrome.dart';
@@ -67,32 +68,34 @@ class ProviderPickerScreen extends StatelessWidget {
       backgroundColor: c.canvas,
       extendBodyBehindAppBar: true,
       appBar: PageBar(background: c.canvas, title: const Text('选择服务商')),
-      body: ListView(
-        key: const Key('provider-list'),
-        padding: EdgeInsets.fromLTRB(Space.x4, PageBar.insetOf(context) + Space.x2, Space.x4, Space.x8),
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x3),
-            child: Text('选一个就自动填好名称、协议和接口地址，你只需要填 API Key。', style: t.bodySmall?.copyWith(color: c.textFaint)),
-          ),
-          GroupCard(
-            children: [
-              for (final p in kProviderPresets)
-                _ProviderRow(
-                  key: ValueKey('preset-${p.id}'),
-                  icon: ProviderIcon(preset: p),
-                  title: p.name,
-                  subtitle: p.host,
-                  onTap: () => _pick(context, p),
-                ),
-            ],
-          ),
-          GroupCard(
-            children: [
-              _ProviderRow(key: const ValueKey('preset-custom'), icon: const ProviderIcon(preset: null), title: '自定义', subtitle: '中转站、自建服务或列表里没有的：自己填协议和接口地址', onTap: () => _pick(context, null)),
-            ],
-          ),
-        ],
+      body: ContentWidth(
+        child: ListView(
+          key: const Key('provider-list'),
+          padding: EdgeInsets.fromLTRB(Space.x4, PageBar.insetOf(context) + Space.x2, Space.x4, Space.x8),
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x3),
+              child: Text('选一个就自动填好名称、协议和接口地址，你只需要填 API Key。', style: t.bodySmall?.copyWith(color: c.textFaint)),
+            ),
+            GroupCard(
+              children: [
+                for (final p in kProviderPresets)
+                  _ProviderRow(
+                    key: ValueKey('preset-${p.id}'),
+                    icon: ProviderIcon(preset: p),
+                    title: p.name,
+                    subtitle: p.host,
+                    onTap: () => _pick(context, p),
+                  ),
+              ],
+            ),
+            GroupCard(
+              children: [
+                _ProviderRow(key: const ValueKey('preset-custom'), icon: const ProviderIcon(preset: null), title: '自定义', subtitle: '中转站、自建服务或列表里没有的：自己填协议和接口地址', onTap: () => _pick(context, null)),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -44,6 +44,7 @@ import 'package:lopicode/ui/settings_memory.dart';
 import 'package:lopicode/ui/settings_overview.dart';
 import 'package:lopicode/ui/settings_pages.dart';
 import 'package:lopicode/ui/settings_quota.dart';
+import 'package:lopicode/ui/settings_split.dart';
 import 'package:lopicode/ui/settings_widgets.dart';
 import 'package:lopicode/ui/third_party_screen.dart';
 import 'package:material_ui/material_ui.dart';
@@ -57,8 +58,12 @@ class SettingsScreen extends ConsumerWidget {
   /// 从哪个工作区进来的（技能页据此列出这个工作区自己的技能）。
   final Project? workspace;
 
+  // 宽屏两栏（settings_split.dart）：这一页在左边当清单，点开的项显示在右边；窄、中屏原样。
+  // 清单要在分栏的里面搭（它点开下一页时要找得到“右边那一栏”），所以包一层 Consumer。
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context, WidgetRef ref) => SettingsSplit(master: Consumer(builder: (context, ref, _) => _list(context, ref)));
+
+  Widget _list(BuildContext context, WidgetRef ref) {
     ref
       ..watch(settingsAnyRevProvider)
       ..watch(modelsProvider)

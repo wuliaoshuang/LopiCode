@@ -10,6 +10,7 @@ import 'package:lopicode/agent/quota.dart';
 import 'package:lopicode/app_services.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/state/models_state.dart';
+import 'package:lopicode/theme/breakpoints.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/agents_md_status.dart';
 import 'package:lopicode/ui/app_ref.dart';
@@ -114,188 +115,193 @@ class _QuotaScreenState extends ConsumerState<QuotaScreen> {
       backgroundColor: c.canvas,
       extendBodyBehindAppBar: true,
       appBar: PageBar(background: c.canvas, titleText: '额度与余额'),
-      body: ch == null || !isDeepSeekOfficial(ch.baseUrl)
-          ? const BelowBar(
-              child: Padding(padding: EdgeInsets.all(Space.x4), child: InfoBanner('这个渠道不是 DeepSeek 官方接口（api.deepseek.com），查不了余额，也就设不了额度上限。')),
-            )
-          : QuotaBuilder(
-              builder: (context, _) {
-                final state = app.quota.stateOf(ch.id);
-                final q = app.quota.quotaOf(ch.id);
-                final infos = state.result?.infos ?? const <BalanceInfo>[];
-                final currencies = [for (final i in infos) i.currency];
-                final currency = _currency != null && (currencies.isEmpty || currencies.contains(_currency) || q?.currency == _currency)
-                    ? _currency!
-                    : (q?.currency ?? currencies.firstOrNull ?? 'CNY');
-                final dirtyCurrency = q != null && q.currency != currency;
-                return ListView(
-                  key: const Key('quota-list'),
-                  padding: EdgeInsets.fromLTRB(Space.x4, PageBar.insetOf(context) + Space.x2, Space.x4, Space.x8),
-                  children: [
-                    SettingsGroup(
-                      title: '余额 · ${ch.name}',
-                      padded: true,
-                      children: [
-                        if (infos.isEmpty)
-                          Text(
-                            state.loading ? '正在查余额…' : (state.keyInvalid ? 'Key 无效，查不到余额' : (state.error != null ? '余额没查到' : '还没查过余额')),
-                            key: const Key('quota-balance'),
-                            style: t.titleLarge?.copyWith(fontWeight: FontWeight.w400, fontSize: FontSize.xl),
-                          )
-                        else
-                          for (final info in infos) ...[
+      body: ContentWidth(
+        child: ch == null || !isDeepSeekOfficial(ch.baseUrl)
+            ? const BelowBar(
+                child: Padding(padding: EdgeInsets.all(Space.x4), child: InfoBanner('这个渠道不是 DeepSeek 官方接口（api.deepseek.com），查不了余额，也就设不了额度上限。')),
+              )
+            : QuotaBuilder(
+                builder: (context, _) {
+                  final state = app.quota.stateOf(ch.id);
+                  final q = app.quota.quotaOf(ch.id);
+                  final infos = state.result?.infos ?? const <BalanceInfo>[];
+                  final currencies = [for (final i in infos) i.currency];
+                  final currency = _currency != null && (currencies.isEmpty || currencies.contains(_currency) || q?.currency == _currency)
+                      ? _currency!
+                      : (q?.currency ?? currencies.firstOrNull ?? 'CNY');
+                  final dirtyCurrency = q != null && q.currency != currency;
+                  return ListView(
+                    key: const Key('quota-list'),
+                    padding: EdgeInsets.fromLTRB(Space.x4, PageBar.insetOf(context) + Space.x2, Space.x4, Space.x8),
+                    children: [
+                      SettingsGroup(
+                        title: '余额 · ${ch.name}',
+                        padded: true,
+                        children: [
+                          if (infos.isEmpty)
                             Text(
-                              formatMoney(info.currency, info.total),
-                              key: Key('quota-balance-${info.currency}'),
+                              state.loading ? '正在查余额…' : (state.keyInvalid ? 'Key 无效，查不到余额' : (state.error != null ? '余额没查到' : '还没查过余额')),
+                              key: const Key('quota-balance'),
                               style: t.titleLarge?.copyWith(fontWeight: FontWeight.w400, fontSize: FontSize.xl),
+                            )
+                          else
+                            for (final info in infos) ...[
+                              Text(
+                                formatMoney(info.currency, info.total),
+                                key: Key('quota-balance-${info.currency}'),
+                                style: t.titleLarge?.copyWith(fontWeight: FontWeight.w400, fontSize: FontSize.xl),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                [
+                                  '${info.currency} 余额',
+                                  if (info.toppedUp != null) '充值 ${formatMoney(info.currency, info.toppedUp!)}',
+                                  if (info.granted != null) '赠送 ${formatMoney(info.currency, info.granted!)}',
+                                ].join(' · '),
+                                style: t.bodyMedium?.copyWith(color: c.textFaint),
+                              ),
+                              const SizedBox(height: Space.x3),
+                            ],
+                          if (state.error != null)
+                            InfoBanner(
+                              '余额没查到：${state.error}${infos.isEmpty ? '' : '\n上面是上一次查到的数。'}',
+                              key: const Key('quota-error'),
+                              tone: BannerTone.warning,
+                              margin: const EdgeInsets.only(top: Space.x1, bottom: Space.x2),
                             ),
-                            const SizedBox(height: 2),
+                          if (state.result != null && !state.result!.isAvailable)
+                            const InfoBanner(
+                              'DeepSeek 说这个账号的余额已经不够调用接口了。',
+                              tone: BannerTone.warning,
+                              margin: EdgeInsets.only(bottom: Space.x2),
+                            ),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  state.at == null ? '数字来自 DeepSeek 的余额接口' : '${state.error == null ? '更新于' : '上次尝试'} ${_clock(state.at!)}',
+                                  style: t.bodySmall?.copyWith(color: c.textFaint),
+                                ),
+                              ),
+                              TextButton.icon(
+                                key: const Key('quota-refresh'),
+                                onPressed: state.loading ? null : () => app.quota.refresh(ch, force: true),
+                                icon: const Icon(Icons.refresh, size: 18),
+                                label: Text(state.loading ? '正在查…' : '刷新'),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                      if (q != null) ...[
+                        SettingsGroup(
+                          title: '已用',
+                          padded: true,
+                          children: [
                             Text(
-                              [
-                                '${info.currency} 余额',
-                                if (info.toppedUp != null) '充值 ${formatMoney(info.currency, info.toppedUp!)}',
-                                if (info.granted != null) '赠送 ${formatMoney(info.currency, info.granted!)}',
-                              ].join(' · '),
-                              style: t.bodyMedium?.copyWith(color: c.textFaint),
+                              '已使用 ${q.percent}%（剩余 ${formatMoney(q.currency, q.remaining)}）',
+                              key: const Key('quota-used'),
+                              style: t.bodyLarge?.copyWith(fontSize: FontSize.lg, color: q.reached ? c.danger : c.text),
                             ),
                             const SizedBox(height: Space.x3),
-                          ],
-                        if (state.error != null)
-                          InfoBanner(
-                            '余额没查到：${state.error}${infos.isEmpty ? '' : '\n上面是上一次查到的数。'}',
-                            key: const Key('quota-error'),
-                            tone: BannerTone.warning,
-                            margin: const EdgeInsets.only(top: Space.x1, bottom: Space.x2),
-                          ),
-                        if (state.result != null && !state.result!.isAvailable)
-                          const InfoBanner(
-                            'DeepSeek 说这个账号的余额已经不够调用接口了。',
-                            tone: BannerTone.warning,
-                            margin: EdgeInsets.only(bottom: Space.x2),
-                          ),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(state.at == null ? '数字来自 DeepSeek 的余额接口' : '${state.error == null ? '更新于' : '上次尝试'} ${_clock(state.at!)}', style: t.bodySmall?.copyWith(color: c.textFaint)),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(3),
+                              child: LinearProgressIndicator(value: q.fraction, minHeight: 6, color: q.reached ? c.danger : c.accentFill, backgroundColor: c.border),
                             ),
-                            TextButton.icon(
-                              key: const Key('quota-refresh'),
-                              onPressed: state.loading ? null : () => app.quota.refresh(ch, force: true),
-                              icon: const Icon(Icons.refresh, size: 18),
-                              label: Text(state.loading ? '正在查…' : '刷新'),
-                            ),
+                            const SizedBox(height: Space.x3),
+                            Text('已用 ${formatMoney(q.currency, q.used)} / 上限 ${formatMoney(q.currency, q.limit)} · 从 ${_day(q.since)} 算起', style: t.bodySmall?.copyWith(color: c.textFaint)),
+                            if (q.lastBalance == null)
+                              const InfoBanner(
+                                '还没查到过余额，起点没记上；查到第一次余额后才开始算已用。',
+                                tone: BannerTone.warning,
+                                margin: EdgeInsets.only(top: Space.x3),
+                              ),
+                            if (q.reached)
+                              const InfoBanner(
+                                '已达到你设的额度上限，这个渠道的新请求现在会被拦住。调高上限或“从现在重新算”后恢复。',
+                                tone: BannerTone.danger,
+                                margin: EdgeInsets.only(top: Space.x3),
+                              ),
+                            if (q.recharge)
+                              const InfoBanner(
+                                '余额比上次查到的变多了（可能充值了）。已用没有因此减少；想从现在的余额重新开始算，点下面的“从现在重新算”。',
+                                key: Key('quota-recharge'),
+                                margin: EdgeInsets.only(top: Space.x3),
+                              ),
                           ],
                         ),
                       ],
-                    ),
-                    if (q != null) ...[
                       SettingsGroup(
-                        title: '已用',
+                        title: q == null ? '设置额度上限' : '修改上限',
                         padded: true,
                         children: [
-                          Text(
-                            '已使用 ${q.percent}%（剩余 ${formatMoney(q.currency, q.remaining)}）',
-                            key: const Key('quota-used'),
-                            style: t.bodyLarge?.copyWith(fontSize: FontSize.lg, color: q.reached ? c.danger : c.text),
+                          TextField(
+                            key: const Key('quota-limit'),
+                            controller: _limit,
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            decoration: InputDecoration(labelText: '额度上限', prefixText: '${currencySymbol(currency)} ', helperText: '用到这个金额就拦住这个渠道的新请求'),
                           ),
-                          const SizedBox(height: Space.x3),
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(3),
-                            child: LinearProgressIndicator(value: q.fraction, minHeight: 6, color: q.reached ? c.danger : c.accentFill, backgroundColor: c.border),
-                          ),
-                          const SizedBox(height: Space.x3),
-                          Text('已用 ${formatMoney(q.currency, q.used)} / 上限 ${formatMoney(q.currency, q.limit)} · 从 ${_day(q.since)} 算起', style: t.bodySmall?.copyWith(color: c.textFaint)),
-                          if (q.lastBalance == null)
+                          if (currencies.length > 1) ...[
+                            const SizedBox(height: Space.x3),
+                            SegmentedButton<String>(
+                              showSelectedIcon: false,
+                              segments: [for (final cur in currencies) ButtonSegment(value: cur, label: Text(cur))],
+                              selected: {currency},
+                              onSelectionChanged: (v) => setState(() => _currency = v.first),
+                            ),
+                          ],
+                          if (dirtyCurrency)
                             const InfoBanner(
-                              '还没查到过余额，起点没记上；查到第一次余额后才开始算已用。',
+                              '换币种会把已用清零，按新币种的余额重新开始算。',
                               tone: BannerTone.warning,
                               margin: EdgeInsets.only(top: Space.x3),
                             ),
-                          if (q.reached)
-                            const InfoBanner(
-                              '已达到你设的额度上限，这个渠道的新请求现在会被拦住。调高上限或“从现在重新算”后恢复。',
+                          const SizedBox(height: Space.x3),
+                          TextField(
+                            key: const Key('quota-warn'),
+                            controller: _warn,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(labelText: '提醒阈值', suffixText: '%', helperText: '用到这个比例时在聊天里提醒一次，不拦。填 0 不提醒'),
+                          ),
+                          if (_formError != null)
+                            InfoBanner(
+                              _formError!,
                               tone: BannerTone.danger,
-                              margin: EdgeInsets.only(top: Space.x3),
+                              margin: const EdgeInsets.only(top: Space.x3),
                             ),
-                          if (q.recharge)
-                            const InfoBanner(
-                              '余额比上次查到的变多了（可能充值了）。已用没有因此减少；想从现在的余额重新开始算，点下面的“从现在重新算”。',
-                              key: Key('quota-recharge'),
-                              margin: EdgeInsets.only(top: Space.x3),
-                            ),
+                          const SizedBox(height: Space.x4),
+                          FilledButton(key: const Key('quota-save'), onPressed: () => _save(app, ch, currency), child: const Text('保存')),
+                        ],
+                      ),
+                      if (q != null)
+                        SettingsGroup(
+                          title: '重来 / 取消',
+                          footer: '这两项点了都会先问一遍。',
+                          children: [
+                            SettingsRow(key: const Key('quota-restart'), icon: Icons.restart_alt, title: '从现在重新算', subtitle: '已用清零，以现在的余额为起点', onTap: () => _restart(app, ch)),
+                            SettingsRow(key: const Key('quota-clear'), icon: Icons.block, title: '取消上限', subtitle: '不再拦截，也不再提醒', danger: true, onTap: () => _clear(app)),
+                          ],
+                        ),
+                      SettingsGroup(
+                        title: '怎么算的',
+                        padded: true,
+                        children: [
+                          Text(
+                            '· DeepSeek 的接口只告诉我们“还剩多少余额”，没有“限额”这个概念。上限是你自己在这里定的，只在 LopiCode 里生效。\n'
+                            '· 已用 = 设上限之后余额减少了多少（每次查到余额时累加）。同一个 Key 在别的软件里花的钱、赠送余额过期，也会算进来。\n'
+                            '· 余额变多（充值）不会让已用变少。\n'
+                            '· 查余额的时机：打开聊天或设置、打开用量弹层、每轮对话结束后、发请求前（最多每分钟查一次），以及你点“刷新”；换 Key 后马上重查。\n'
+                            '· 余额查不到（没网、Key 没权限）时不拦截，按上一次查到的数算。\n'
+                            '· 已用是两次查询之间的差，所以可能在一段对话中途才发现超了，会略微超过上限。',
+                            style: t.bodySmall?.copyWith(color: c.textMuted, height: 1.7),
+                          ),
                         ],
                       ),
                     ],
-                    SettingsGroup(
-                      title: q == null ? '设置额度上限' : '修改上限',
-                      padded: true,
-                      children: [
-                        TextField(
-                          key: const Key('quota-limit'),
-                          controller: _limit,
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                          decoration: InputDecoration(labelText: '额度上限', prefixText: '${currencySymbol(currency)} ', helperText: '用到这个金额就拦住这个渠道的新请求'),
-                        ),
-                        if (currencies.length > 1) ...[
-                          const SizedBox(height: Space.x3),
-                          SegmentedButton<String>(
-                            showSelectedIcon: false,
-                            segments: [for (final cur in currencies) ButtonSegment(value: cur, label: Text(cur))],
-                            selected: {currency},
-                            onSelectionChanged: (v) => setState(() => _currency = v.first),
-                          ),
-                        ],
-                        if (dirtyCurrency)
-                          const InfoBanner(
-                            '换币种会把已用清零，按新币种的余额重新开始算。',
-                            tone: BannerTone.warning,
-                            margin: EdgeInsets.only(top: Space.x3),
-                          ),
-                        const SizedBox(height: Space.x3),
-                        TextField(
-                          key: const Key('quota-warn'),
-                          controller: _warn,
-                          keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(labelText: '提醒阈值', suffixText: '%', helperText: '用到这个比例时在聊天里提醒一次，不拦。填 0 不提醒'),
-                        ),
-                        if (_formError != null)
-                          InfoBanner(
-                            _formError!,
-                            tone: BannerTone.danger,
-                            margin: const EdgeInsets.only(top: Space.x3),
-                          ),
-                        const SizedBox(height: Space.x4),
-                        FilledButton(key: const Key('quota-save'), onPressed: () => _save(app, ch, currency), child: const Text('保存')),
-                      ],
-                    ),
-                    if (q != null)
-                      SettingsGroup(
-                        title: '重来 / 取消',
-                        footer: '这两项点了都会先问一遍。',
-                        children: [
-                          SettingsRow(key: const Key('quota-restart'), icon: Icons.restart_alt, title: '从现在重新算', subtitle: '已用清零，以现在的余额为起点', onTap: () => _restart(app, ch)),
-                          SettingsRow(key: const Key('quota-clear'), icon: Icons.block, title: '取消上限', subtitle: '不再拦截，也不再提醒', danger: true, onTap: () => _clear(app)),
-                        ],
-                      ),
-                    SettingsGroup(
-                      title: '怎么算的',
-                      padded: true,
-                      children: [
-                        Text(
-                          '· DeepSeek 的接口只告诉我们“还剩多少余额”，没有“限额”这个概念。上限是你自己在这里定的，只在 LopiCode 里生效。\n'
-                          '· 已用 = 设上限之后余额减少了多少（每次查到余额时累加）。同一个 Key 在别的软件里花的钱、赠送余额过期，也会算进来。\n'
-                          '· 余额变多（充值）不会让已用变少。\n'
-                          '· 查余额的时机：打开聊天或设置、打开用量弹层、每轮对话结束后、发请求前（最多每分钟查一次），以及你点“刷新”；换 Key 后马上重查。\n'
-                          '· 余额查不到（没网、Key 没权限）时不拦截，按上一次查到的数算。\n'
-                          '· 已用是两次查询之间的差，所以可能在一段对话中途才发现超了，会略微超过上限。',
-                          style: t.bodySmall?.copyWith(color: c.textMuted, height: 1.7),
-                        ),
-                      ],
-                    ),
-                  ],
-                );
-              },
-            ),
+                  );
+                },
+              ),
+      ),
     );
   }
 }

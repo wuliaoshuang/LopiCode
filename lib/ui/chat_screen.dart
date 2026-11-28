@@ -23,6 +23,7 @@ import 'package:lopicode/state/ui_prefs.dart';
 import 'package:lopicode/state/workspace_chat.dart';
 import 'package:lopicode/state/workspace_conversations.dart';
 import 'package:lopicode/state/workspace_favorites.dart';
+import 'package:lopicode/theme/breakpoints.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/app_backdrop.dart';
 import 'package:lopicode/ui/chat_background.dart';
@@ -428,80 +429,88 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       ),
       body: SafeArea(
         top: false,
-        child: Column(
-          children: [
-            Expanded(
-              child: s.chat.isEmpty
-                  ? Padding(
-                      padding: EdgeInsets.only(top: topInset),
-                      child: _EmptyChat(configured: model != null, showIdeas: prefs.suggestions, onPick: _send),
-                    )
-                  : ChatRowActions(
-                      readOutput: s.readCommandOutput,
-                      onResume: s.resumeInterrupted,
-                      onDismissInterrupted: s.dismissInterrupted,
-                      child: MessageOpsHost(
-                        session: s,
-                        flash: _jump.flash,
-                        child: ListView.builder(
-                          controller: _scroll,
-                          padding: EdgeInsets.fromLTRB(Space.x4, topInset + Space.x2, Space.x4, Space.x4),
-                          itemCount: rows.length + (working ? 1 : 0),
-                          itemBuilder: (context, i) {
-                            if (i >= rows.length) return const _Working();
-                            return _jump.wrap(rows[i], ChatRowView(row: rows[i], onOpenChild: _openChild, onOpenQuota: _openQuota, onOpenTurn: _showTurn));
-                          },
+        // 平板上消息和输入栏限宽居中，一行字不横跨整个屏幕（手机宽度不到上限，原样）。
+        child: ContentWidth(
+          maxWidth: Breakpoints.reading,
+          child: Column(
+            children: [
+              Expanded(
+                child: s.chat.isEmpty
+                    ? Padding(
+                        padding: EdgeInsets.only(top: topInset),
+                        child: _EmptyChat(configured: model != null, showIdeas: prefs.suggestions, onPick: _send),
+                      )
+                    : ChatRowActions(
+                        readOutput: s.readCommandOutput,
+                        onResume: s.resumeInterrupted,
+                        onDismissInterrupted: s.dismissInterrupted,
+                        child: MessageOpsHost(
+                          session: s,
+                          flash: _jump.flash,
+                          child: ListView.builder(
+                            controller: _scroll,
+                            padding: EdgeInsets.fromLTRB(Space.x4, topInset + Space.x2, Space.x4, Space.x4),
+                            itemCount: rows.length + (working ? 1 : 0),
+                            itemBuilder: (context, i) {
+                              if (i >= rows.length) return const _Working();
+                              return _jump.wrap(rows[i], ChatRowView(row: rows[i], onOpenChild: _openChild, onOpenQuota: _openQuota, onOpenTurn: _showTurn));
+                            },
+                          ),
                         ),
                       ),
-                    ),
-            ),
-            const KeyboardDock(), // 这条线以下是输入区：点了不收键盘；拖动线以上的聊天内容会收（见 keyboard_tap_dismiss.dart）
-            if (todos != null && todos.isNotEmpty) TodoBar(todos: todos),
-            BackgroundBar(session: s),
-            PendingArea(session: s),
-            if (s.queue.isNotEmpty) QueueStrip(session: s),
-            if (s.autoAllowActive && s.permission != PermissionLevel.full)
-              StatusChipRow(key: const ValueKey('auto-allow-chip'), icon: Icons.bolt, text: '自动允许中：本对话的命令和删除不再逐次问你', action: '关闭', tone: BannerTone.warning, onTap: s.clearAutoAllow),
-            if (s.mcpAllowCount > 0)
-              StatusChipRow(
-                key: const ValueKey('mcp-allow-chip'),
-                icon: Icons.extension_outlined,
-                text: '有 ${s.mcpAllowCount} 个 MCP 工具在本对话里不再逐次问你',
-                action: '恢复询问',
-                tone: BannerTone.warning,
-                onTap: s.clearMcpAllow,
               ),
-            if (s.planMode) StatusChipRow(key: const ValueKey('plan-chip'), icon: Icons.map_outlined, text: '计划模式：只出计划，不改文件、不跑命令', action: '退出', tone: BannerTone.info, onTap: _togglePlan),
-            MessageEditBar(session: s),
-            if (_attachments.isNotEmpty)
-              AttachmentStrip(paths: [for (final a in _attachments) '${s.project.dir}/${a['path']}'], canSee: model?.model.vision ?? false, onRemove: (i) => setState(() => _attachments.removeAt(i))),
-            if (slash.isNotEmpty)
-              SlashSuggestions(
-                commands: slash,
-                onPick: (cmd) {
-                  _input.clear();
-                  _runSlash(cmd);
-                },
+              const KeyboardDock(), // 这条线以下是输入区：点了不收键盘；拖动线以上的聊天内容会收（见 keyboard_tap_dismiss.dart）
+              if (todos != null && todos.isNotEmpty) TodoBar(todos: todos),
+              BackgroundBar(session: s),
+              PendingArea(session: s),
+              if (s.queue.isNotEmpty) QueueStrip(session: s),
+              if (s.autoAllowActive && s.permission != PermissionLevel.full)
+                StatusChipRow(key: const ValueKey('auto-allow-chip'), icon: Icons.bolt, text: '自动允许中：本对话的命令和删除不再逐次问你', action: '关闭', tone: BannerTone.warning, onTap: s.clearAutoAllow),
+              if (s.mcpAllowCount > 0)
+                StatusChipRow(
+                  key: const ValueKey('mcp-allow-chip'),
+                  icon: Icons.extension_outlined,
+                  text: '有 ${s.mcpAllowCount} 个 MCP 工具在本对话里不再逐次问你',
+                  action: '恢复询问',
+                  tone: BannerTone.warning,
+                  onTap: s.clearMcpAllow,
+                ),
+              if (s.planMode) StatusChipRow(key: const ValueKey('plan-chip'), icon: Icons.map_outlined, text: '计划模式：只出计划，不改文件、不跑命令', action: '退出', tone: BannerTone.info, onTap: _togglePlan),
+              MessageEditBar(session: s),
+              if (_attachments.isNotEmpty)
+                AttachmentStrip(
+                  paths: [for (final a in _attachments) '${s.project.dir}/${a['path']}'],
+                  canSee: model?.model.vision ?? false,
+                  onRemove: (i) => setState(() => _attachments.removeAt(i)),
+                ),
+              if (slash.isNotEmpty)
+                SlashSuggestions(
+                  commands: slash,
+                  onPick: (cmd) {
+                    _input.clear();
+                    _runSlash(cmd);
+                  },
+                ),
+              if (model != null) LowBalanceStrip(channel: model.channel),
+              ChatComposer(
+                context_: s.contextUsage,
+                onContext: _showUsage,
+                controller: _input,
+                focusNode: _focus,
+                mentionGuard: s.guard,
+                busy: s.agentBusy,
+                canSend: _canSend,
+                modelName: model == null ? '选择模型' : model.model.name,
+                permission: s.permission,
+                onPlus: _openPlus,
+                onModel: _pickModel,
+                onPermission: _pickPermission,
+                onSend: _send,
+                onLongSend: _pickSendMode,
+                onStop: s.stopAgent,
               ),
-            if (model != null) LowBalanceStrip(channel: model.channel),
-            ChatComposer(
-              context_: s.contextUsage,
-              onContext: _showUsage,
-              controller: _input,
-              focusNode: _focus,
-              mentionGuard: s.guard,
-              busy: s.agentBusy,
-              canSend: _canSend,
-              modelName: model == null ? '选择模型' : model.model.name,
-              permission: s.permission,
-              onPlus: _openPlus,
-              onModel: _pickModel,
-              onPermission: _pickPermission,
-              onSend: _send,
-              onLongSend: _pickSendMode,
-              onStop: s.stopAgent,
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
