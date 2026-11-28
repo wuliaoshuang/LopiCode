@@ -58,7 +58,8 @@ void main() {
     await fuTap(tester, 'be-lib-view-summary');
     expect(fk('be-lib-view-detail'), findsOneWidget);
     expect(find.textContaining('局部变量换了名字'), findsOneWidget);
-    expect(find.textContaining('没有对应积木的地方（4 处）'), findsOneWidget);
+    expect(find.textContaining('没有对应积木的地方（0 处）'), findsOneWidget);
+    expect(find.text('没有，全部翻成了积木'), findsOneWidget);
     await fuShot(tester, 'view-5-page-detail');
     await fuCloseSheets(tester, 'be-lib-view-detail');
 
@@ -70,7 +71,7 @@ void main() {
     expect(fk('be-lib-builtin-fork'), findsNothing, reason: '默认状态没有“复制一份来改”');
     await fuTap(tester, 'be-lib-builtin-view');
     expect(fk('be-lib-view'), findsOneWidget);
-    expect(find.textContaining('处没有对应的积木'), findsOneWidget);
+    expect(find.textContaining('全部翻成了积木'), findsOneWidget);
     expect(tester.takeException(), isNull);
     await settle(tester, rounds: 8);
     await fuShot(tester, 'view-6-service-canvas');

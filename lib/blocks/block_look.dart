@@ -14,8 +14,12 @@ export 'package:lopicode/lang/custom_block.dart';
 
 /// 帽子上的一个参数。
 class BlockParam {
-  const BlockParam(this.name, {this.defaultValue, this.rest = false});
+  const BlockParam(this.name, {this.defaultValue, this.rest = false, this.type, this.typeLabel});
   final String name;
+
+  /// 标的类型（存进模型的那个字）和给人看的名字；null＝没标。只有匿名函数的参数、而且宿主给了类型的选择表时才有。
+  final String? type;
+  final String? typeLabel;
 
   /// 默认值（文字 / 数字 / 是否）；null＝没有默认值。
   final Object? defaultValue;
@@ -24,13 +28,16 @@ class BlockParam {
   final bool rest;
 
   BlockParam copyWith({String? name, Object? defaultValue, bool clearDefault = false, bool? rest}) =>
-      BlockParam(name ?? this.name, defaultValue: clearDefault ? null : (defaultValue ?? this.defaultValue), rest: rest ?? this.rest);
+      BlockParam(name ?? this.name, defaultValue: clearDefault ? null : (defaultValue ?? this.defaultValue), rest: rest ?? this.rest, type: type, typeLabel: typeLabel);
+
+  /// 换一个类型（null＝不标）。
+  BlockParam withType(String? type, String? label) => BlockParam(name, defaultValue: defaultValue, rest: rest, type: type, typeLabel: type == null ? null : label);
 
   /// 小块上写的字：`名字`、`次数＝1`、`…其余`。
   String get chipText {
     final d = defaultValue;
     final shown = d == null ? '' : '＝${d is bool ? (d ? '是' : '否') : (d is num ? bkLookNumber(d) : (d is String && d.isEmpty ? '“”' : '$d'))}';
-    return '${rest ? '…' : ''}$name$shown';
+    return '${rest ? '…' : ''}$name$shown${type == null ? '' : '：${typeLabel ?? type}'}';
   }
 }
 
@@ -74,6 +81,17 @@ List<String> bkExprParams(Map<String, dynamic> expr, LcExprSpec spec) {
             if (x is String && x.isNotEmpty) x,
         ]
       : const [];
+}
+
+/// 匿名函数的参数标的类型存在表达式对象的这一格里：和参数表一样长的一张表，一格一个类型的字，没标的是空字。
+/// 整张表都没标就不存这一格（老文档里本来就没有）。
+const String kExprParamTypes = 'ptypes';
+
+/// 带参数表的值的第 [index] 个参数标的类型；没标＝null。
+String? bkExprParamType(Map<dynamic, dynamic> expr, int index) {
+  final v = expr[kExprParamTypes];
+  final t = v is List && index < v.length ? v[index] : null;
+  return t is String && t.isNotEmpty ? t : null;
 }
 
 // ———————————————————————— 自定义积木 ————————————————————————

@@ -56,13 +56,23 @@ mixin BkEditorFn on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Ticker
     final field = spec?.paramsArg;
     if (expr == null || spec == null || field == null) return null;
     return _ParamList(
-      params: [for (final n in bkExprParams(expr, spec)) BlockParam(n)],
+      params: [
+        for (final (i, n) in bkExprParams(expr, spec).indexed)
+          if (bkExprParamType(expr, i) case final t?) BlockParam(n, type: t, typeLabel: host.paramTypeLabel(t)) else BlockParam(n),
+      ],
       max: kExprParamMax,
+      types: host.paramTypeOptions,
       write: (next, renamed) {
         final t = host.script(scriptId), owner = t?.blockAt(block.path);
         final e = owner == null ? null : asExpr(bkExprAt(owner, slot.arg, slot.exprPath));
         if (t == null || owner == null || e == null) return false;
         e[field] = [for (final p in next) p.name];
+        // 标的类型跟着参数走（一格一个，没标的是空字）；一个都没标就不留这一格。
+        if (next.any((p) => p.type != null)) {
+          e[kExprParamTypes] = [for (final p in next) p.type ?? ''];
+        } else {
+          e.remove(kExprParamTypes);
+        }
         if (renamed != null) host.exprParamRenamed(t, e, renamed.from, renamed.to);
         host.argChanged(t, owner, slot.arg, slot.exprPath);
         return true;
@@ -127,6 +137,7 @@ mixin BkEditorFn on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Ticker
       ],
       canDefault: list.canDefault,
       canRest: list.canRest && index == list.params.length - 1,
+      types: list.types,
     );
     if (!mounted || choice == null) return;
     // 小卡开着的时候内容可能被换了（外面撤销）：照现在的再取一次。
@@ -142,7 +153,7 @@ mixin BkEditorFn on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Ticker
       _writeParams(scriptId, now, [...now.params]..removeAt(index));
       return;
     }
-    if (next.name == old.name && next.defaultValue == old.defaultValue && next.rest == old.rest) return;
+    if (next.name == old.name && next.defaultValue == old.defaultValue && next.rest == old.rest && next.type == old.type) return;
     _writeParams(scriptId, now, [...now.params]..[index] = next, renamed: next.name == old.name ? null : (from: old.name, to: next.name));
   }
 
@@ -286,7 +297,10 @@ mixin BkEditorFn on State<BlockEditorView>, BkKitHolder<BlockEditorView>, Ticker
 
 /// 一张参数表现在的样子，和怎么写回去。
 class _ParamList {
-  _ParamList({required this.params, this.canDefault = false, this.canRest = false, this.max = 12, this.uses = _noUses, required this.write});
+  _ParamList({required this.params, this.canDefault = false, this.canRest = false, this.max = 12, this.uses = _noUses, this.types = const [], required this.write});
+
+  /// 参数能标的类型；空的＝这种参数不标类型。
+  final List<BlockOption> types;
   final List<BlockParam> params;
   final bool canDefault;
   final bool canRest;

@@ -7,6 +7,7 @@
 /// 做成 mixin 混进 `BeBlockHost`。类型检查本身和“问题对回哪一格”在 backend_type_bridge.dart；`validateBackend` 用的也是那一份。
 library;
 
+import 'package:lopicode/backend/backend_blocks_strict.dart';
 import 'package:lopicode/backend/backend_core_fix.dart';
 import 'package:lopicode/backend/backend_function.dart';
 import 'package:lopicode/backend/backend_lib_doc.dart';
@@ -56,6 +57,8 @@ BlockCategory beStrictOperatorCategory(BlockCategory c) => BlockCategory(
   groups: [
     ...c.groups,
     const BlockGroup('空和整数', exprs: ['parseInt', 'orElse', 'must']),
+    const BlockGroup('文字和个数', exprs: kBeStrictTextKinds),
+    const BlockGroup('整数和看类型', exprs: kBeStrictNumberKinds),
   ],
 );
 

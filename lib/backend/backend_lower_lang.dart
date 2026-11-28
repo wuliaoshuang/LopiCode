@@ -12,6 +12,7 @@ library;
 
 import 'package:lopicode/backend/backend_blocks.dart';
 import 'package:lopicode/backend/backend_blocks_strict.dart';
+import 'package:lopicode/backend/backend_blocks_typeops.dart';
 import 'package:lopicode/backend/backend_core.dart';
 import 'package:lopicode/backend/backend_function.dart';
 import 'package:lopicode/backend/backend_ir.dart';
@@ -19,6 +20,7 @@ import 'package:lopicode/backend/backend_lang.dart';
 import 'package:lopicode/backend/backend_lower_core.dart';
 import 'package:lopicode/backend/backend_model.dart';
 import 'package:lopicode/backend/backend_text.dart';
+import 'package:lopicode/blocks/block_look.dart';
 import 'package:lopicode/lang/ast.dart';
 import 'package:lopicode/lang/ast_util.dart';
 import 'package:lopicode/lang/types.dart';
@@ -255,6 +257,22 @@ class BeLangLower {
     if (c2 != null) return lang(c2);
     final strict = kBeStrictRtArgs[kind];
     if (strict != null) return lang(LRt(kind, [for (final a in strict) sub(a)], src: _src()));
+    switch (kind) {
+      case kBeSizeOf:
+        return lang(LRt('size', [sub('x')], src: _src()));
+      case kBeJoinText:
+        final items = exprField(e, 'items');
+        return lang(
+          LRt('join', [
+            if (items is List)
+              for (final (i, item) in items.indexed) _lx(item, depth + 1, items, i),
+          ], src: _src()),
+        );
+      case kBeIntDiv:
+        return lang(LBinary('//', sub('l'), sub('r'), src: _src()));
+      case kBeIsTypeNamed:
+        return lang(LRt('isType', [sub('x'), sub('name')], src: _src()));
+    }
     final func = _funcExpr(kind, e!, depth, sub);
     if (func != null) return lang(func);
     final family = _families[kind];

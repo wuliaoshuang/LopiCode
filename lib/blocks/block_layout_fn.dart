@@ -45,7 +45,15 @@ extension _FnLayout on BlockLayoutEngine {
 
   List<BkSlot> _exprParamSlots(Map<String, dynamic> expr, LcExprSpec spec, String arg, BkExprPath path) {
     final names = bkExprParams(expr, spec);
-    return _paramSlots([for (final n in names) BlockParam(n)], arg, path, canAdd: _controls && names.length < kExprParamMax);
+    return _paramSlots(
+      [
+        for (final (i, n) in names.indexed)
+          if (bkExprParamType(expr, i) case final t?) BlockParam(n, type: t, typeLabel: host.paramTypeLabel(t)) else BlockParam(n),
+      ],
+      arg,
+      path,
+      canAdd: _controls && names.length < kExprParamMax,
+    );
   }
 
   /// 给一个已经排好头那一行的值加上口：口里的积木排在 [BkExpr.inner] 里（相对这个值的左上角）。

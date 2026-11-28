@@ -7,12 +7,19 @@ extension _BeLangLowerFunc on BeLangLower {
   List<LParam> _lambdaParams(Object? e) {
     final raw = exprField(e, 'params');
     final names = <String>[];
+    final types = <LType?>[];
     if (raw is List) {
-      for (final p in raw) {
-        if (p is String && p.trim().isNotEmpty && !names.contains(beIdent(p))) names.add(beIdent(p));
+      for (final (i, p) in raw.indexed) {
+        if (p is! String || p.trim().isEmpty || names.contains(beIdent(p))) continue;
+        names.add(beIdent(p));
+        // 参数小块上标的类型（只有严格规矩的文档里才标得上，见 block_look.dart 的 kExprParamTypes）。
+        final key = e is Map ? bkExprParamType(e, i) : null;
+        final t = key == null ? null : beTypeOfKey(key);
+        if (key != null && t == null) host.addNote('参数“$p”标的类型读不出来，当成没标');
+        types.add(t);
       }
     }
-    return [for (final n in names) LParam(n)];
+    return [for (final (i, n) in names.indexed) LParam(n, type: types[i])];
   }
 
   /// 调用的实参表：按定义的参数顺序一个个取（实参按参数名存）。“剩下的全收”的槽里放的是“列表”积木就把每一项各当一个实参，放别的就当一个。

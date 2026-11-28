@@ -33,6 +33,13 @@ BlockHat _methodHat(String name, {bool isStatic = false}) =>
     BlockHat([BlockHatPart.text(isStatic ? '类本身的方法' : '方法'), BlockHatPart.slot('name', name, kind: LcArgKind.literalText)], colorKey: BlockColorKey.classes);
 
 mixin BeCoreHost on BlockHost {
+  /// 匿名函数的参数能标的类型：只有严格规矩的文档里才有（参数小卡里多一行“类型”）。
+  @override
+  List<BlockOption> get paramTypeOptions => langRulesStrict(doc.rules) ? beTypeOptions(core) : const [];
+
+  @override
+  String? paramTypeLabel(String type) => beTypeLabel(type);
+
   BeDocument get doc;
   void Function(String message)? get onNotice;
 

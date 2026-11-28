@@ -1,11 +1,18 @@
 /// 第 2 阶段的积木（函数、调用、匿名函数、拿函数当参数的列表操作）读成人话。backend_text.dart 认不出的会来问这里。
 library;
 
+import 'package:lopicode/backend/backend_blocks_typeops.dart';
 import 'package:lopicode/backend/backend_function.dart';
+import 'package:lopicode/blocks/block_look.dart';
 import 'package:lopicode/lowcode/logic_expr.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 
-String _params(Object? raw) => raw is List ? raw.whereType<String>().join('、') : '';
+String _params(Object? raw, [Object? expr]) => raw is List
+    ? [
+        for (final (i, p) in raw.indexed)
+          if (p is String) '$p${expr is Map && bkExprParamType(expr, i) != null ? '：${beTypeLabel(bkExprParamType(expr, i)) ?? '（读不出来的类型）'}' : ''}',
+      ].join('、')
+    : '';
 
 String _fnLabel(String id, String? Function(String id)? fnName) {
   final name = fnName?.call(id);
@@ -34,9 +41,9 @@ String? describeBeFuncExpr(Object? expr, String Function(String key) sub, [Strin
       return name == null || name.isEmpty ? '（还没选参数）' : '参数 $name';
     case 'lambda':
       final n = lcExprBody(expr)?.length ?? 0;
-      return '函数（${_params(expr['params'])}）{${n == 0 ? '' : '…$n 块'}}';
+      return '函数（${_params(expr['params'], expr)}）{${n == 0 ? '' : '…$n 块'}}';
     case 'lambdaExpr':
-      return '函数（${_params(expr['params'])}）→ ${sub('body')}';
+      return '函数（${_params(expr['params'], expr)}）→ ${sub('body')}';
     case 'funcRef':
       return '${_fnLabel(exprString(expr, 'fn') ?? '', fnName)}这块积木本身';
     case 'callValue':
