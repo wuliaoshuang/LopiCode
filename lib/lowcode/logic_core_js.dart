@@ -16,7 +16,9 @@ import 'package:lopicode/backend/front_doc.dart';
 import 'package:lopicode/lang/gen2_browser.dart';
 import 'package:lopicode/lang/gen_support.dart';
 import 'package:lopicode/lang/rt2_browser.dart';
+import 'package:lopicode/lowcode/bind_model.dart';
 import 'package:lopicode/lowcode/export_framework_common.dart' show lcInitialLiteral;
+import 'package:lopicode/lowcode/export_html_repeat.dart';
 import 'package:lopicode/lowcode/export_live_doc.dart';
 import 'package:lopicode/lowcode/front_check.dart';
 import 'package:lopicode/lowcode/front_emit_bridge.dart';
@@ -198,10 +200,26 @@ LcCoreJs? lcCoreJsFor(LcDocument doc, JsTarget target, List<String>? notes, {LcV
     if (bridge != null) {
       // 组件实例发出来的事件（front_emit_bridge.dart）：转给页面宿主，帽子“当〔实例〕发出〔事件〕”登记在 (实例, "emit:事件名") 上。
       // 组件文件发的：数据在事件对象的 detail 里；摊开的实例：数据是一个个式子，当场算。
-      final data = bridge.data;
-      final writer = JsLogicWriter(doc, target, lookup: lookup);
+      // 纯网页里摊开的实例放在“重复”里：式子里读“这一项 / 第几个”的地方，从点到的那一份元素上记着的（`el.lcAt`）读。
+      final rep = hash || bridge.data == null ? null : _repeatAround(doc, h.target);
+      final sb = rep == null ? null : lcScopedBody([LcBlock(op: kLcEmitBridgeOp, args: bridge.data!)], {rep.item, rep.index});
+      final scoped = sb != null && sb.used;
+      final data = scoped ? sb.body.single.args : bridge.data;
+      final writer = scoped ? JsLogicWriter(doc, LcScopedDomTarget(sb.code), lookup: (name) => sb.vars[name] ?? find(name)) : JsLogicWriter(doc, target, lookup: lookup);
       final lcData = data == null ? '(event && event.detail) || {}' : '{ ${[for (final d in data.entries) '${jsString(d.key)}: ${writer.expr(d.value).code}'].join(', ')} }';
-      bodies.add(['lcPage.emit(${jsString(bridge.instance)}, ${jsString('emit:${bridge.event}')}, { lcData: $lcData });']);
+      bodies.add([
+        if (scoped) ...[
+          'const lcS = Object.create(null);',
+          'for (let el = event && event.target; el; el = el.parentNode) {',
+          '  if (el.lcAt) {',
+          '    lcS[${jsString(rep!.item)}] = el.lcAt.item;',
+          '    lcS[${jsString(rep.index)}] = el.lcAt.index;',
+          '    break;',
+          '  }',
+          '}',
+        ],
+        'lcPage.emit(${jsString(bridge.instance)}, ${jsString('emit:${bridge.event}')}, { lcData: $lcData });',
+      ]);
       continue;
     }
     if (h.event == 'load') {
@@ -290,4 +308,23 @@ String exportCoreLogicJs(LcDocument doc, {List<String>? notes}) {
     ..writeln('  lcStart();')
     ..writeln('}');
   return out.toString();
+}
+
+/// 这个控件外面最近的那层“重复”带出的名字（没在“重复”里：null）。
+({String item, String index})? _repeatAround(LcDocument doc, String? id) {
+  if (id == null) return null;
+  ({String item, String index})? hit;
+  bool walk(LcNode n, ({String item, String index})? at, int depth) {
+    if (depth > 64) return false;
+    final rep = lcCanWrapBind(n) ? lcRepeatOf(n) : null;
+    final here = rep == null ? at : (item: rep.item, index: rep.index);
+    if (n.id == id) {
+      hit = here;
+      return true;
+    }
+    return n.children.any((c) => walk(c, here, depth + 1));
+  }
+
+  walk(doc.root, null, 0);
+  return hit;
 }

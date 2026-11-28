@@ -18,8 +18,6 @@
 /// 所以现成的“输入的内容”积木（`{e: event}`）在这种处理里读到的就是事件带的第一项数据。
 library;
 
-import 'dart:convert';
-
 import 'package:lopicode/lowcode/bind_model.dart';
 import 'package:lopicode/lowcode/comp_self_wire.dart';
 import 'package:lopicode/lowcode/component_extras.dart';
@@ -155,7 +153,7 @@ LcDocument lcFrameworkDoc(LcDocument source) {
     doc.openPageAt(at);
   }
   if (!any) return doc;
-  final copy = LcDocument.fromJson(jsonDecode(jsonEncode(doc.toJson())) as Map<String, dynamic>);
+  final copy = lcDocCopy(doc); // 连每一页挂着的积木库一起拷
   for (var i = 0; i < copy.pages.length; i++) {
     copy.openPageAt(i);
     _markEvents(copy);

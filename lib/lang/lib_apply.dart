@@ -153,7 +153,8 @@ LibApplied libApply(LibLibrary lib, LibBlock b, LibUse use, LibCx cx) {
       final stmts = r.stmts(forms);
       return LibApplied(stmts: q == null ? stmts : q.mainBody(stmts));
     }
-    String of(String name) => lib.builtin ? name : _owner(lib, b, name);
+    // 自带的库也一样指明是哪个模块的：用的人有一块同名的“我的积木”（比如也叫“换语言”），不会被认成库里那个。
+    String of(String name) => _owner(lib, b, name);
     final args = [for (final a in b.args) _argExpr(lib, b, a, use, cx)];
     final LExpr call;
     switch (b.how) {

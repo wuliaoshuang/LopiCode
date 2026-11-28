@@ -11,8 +11,6 @@
 /// （每一份该各记各的，一个状态记不下）；组件里面套着的实例；“值”绑在拼出来、比出来的式子上的。
 library;
 
-import 'dart:convert';
-
 import 'package:lopicode/lowcode/bind_model.dart';
 import 'package:lopicode/lowcode/component_extras.dart';
 import 'package:lopicode/lowcode/component_model.dart';
@@ -112,7 +110,7 @@ LcDocument lcSelfWired(LcDocument doc) {
   }
   if (!any) return doc;
   lcSelfWiredCopies++;
-  final copy = LcDocument.fromJson(jsonDecode(jsonEncode(doc.toJson())) as Map<String, dynamic>);
+  final copy = lcDocCopy(doc); // 连每一页挂着的积木库一起拷
   for (var i = 0; i < copy.pages.length; i++) {
     copy.openPageAt(i);
     for (final t in _todos(copy)) {
