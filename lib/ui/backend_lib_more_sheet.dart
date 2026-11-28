@@ -22,6 +22,7 @@ import 'package:lopicode/lang/rules.dart';
 import 'package:lopicode/lowcode/lib_page_module.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/state/code_font.dart';
+import 'package:lopicode/theme/breakpoints.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/backend_core_sheet.dart';
 import 'package:lopicode/ui/backend_lib_import_sheet.dart';
@@ -247,44 +248,52 @@ class _TextPageState extends ConsumerState<_TextPage> {
           TextButton(key: const ValueKey('be-lib-text-save'), onPressed: _busy ? null : () => unawaited(_save()), child: const Text('存')),
         ],
       ),
-      body: BelowBar(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            if (_problem != null)
-              Container(
-                key: const ValueKey('be-lib-text-problem'),
-                constraints: const BoxConstraints(maxHeight: 160),
-                color: c.surfaceMuted,
-                padding: const EdgeInsets.all(Space.x3),
-                child: SingleChildScrollView(
-                  child: Text('$_problem', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: c.danger)),
+      body: ContentWidth(
+        child: BelowBar(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (_problem != null)
+                Container(
+                  key: const ValueKey('be-lib-text-problem'),
+                  constraints: const BoxConstraints(maxHeight: 160),
+                  color: c.surfaceMuted,
+                  padding: const EdgeInsets.all(Space.x3),
+                  child: SingleChildScrollView(
+                    child: Text('$_problem', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: c.danger)),
+                  ),
+                ),
+              if (_fine && _problem == null)
+                Container(
+                  key: const ValueKey('be-lib-text-fine'),
+                  color: c.surfaceMuted,
+                  padding: const EdgeInsets.all(Space.x3),
+                  child: Text('查过了，没有问题（还没存）。', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: c.textMuted)),
+                ),
+              Expanded(
+                child: TextField(
+                  key: const ValueKey('be-lib-text-field'),
+                  onChanged: (_) {
+                    if (_fine) setState(() => _fine = false);
+                  },
+                  controller: _text,
+                  maxLines: null,
+                  expands: true,
+                  textAlignVertical: TextAlignVertical.top,
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  style: TextStyle(fontFamily: kMonoFont, fontFamilyFallback: kMonoFallback, fontSize: ref.watch(compactCodeFontProvider), color: c.text, height: 1.4),
+                  decoration: const InputDecoration(
+                    border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    filled: false,
+                    contentPadding: EdgeInsets.all(Space.x3),
+                  ),
                 ),
               ),
-            if (_fine && _problem == null)
-              Container(
-                key: const ValueKey('be-lib-text-fine'),
-                color: c.surfaceMuted,
-                padding: const EdgeInsets.all(Space.x3),
-                child: Text('查过了，没有问题（还没存）。', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: c.textMuted)),
-              ),
-            Expanded(
-              child: TextField(
-                key: const ValueKey('be-lib-text-field'),
-                onChanged: (_) {
-                  if (_fine) setState(() => _fine = false);
-                },
-                controller: _text,
-                maxLines: null,
-                expands: true,
-                textAlignVertical: TextAlignVertical.top,
-                autocorrect: false,
-                enableSuggestions: false,
-                style: TextStyle(fontFamily: kMonoFont, fontFamilyFallback: kMonoFallback, fontSize: ref.watch(compactCodeFontProvider), color: c.text, height: 1.4),
-                decoration: const InputDecoration(border: InputBorder.none, enabledBorder: InputBorder.none, focusedBorder: InputBorder.none, filled: false, contentPadding: EdgeInsets.all(Space.x3)),
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

@@ -12,6 +12,7 @@ import 'package:lopicode/core/path_guard.dart';
 import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/state/workspace_files.dart';
+import 'package:lopicode/theme/breakpoints.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/backend_screen.dart';
 import 'package:lopicode/ui/code_editor.dart';
@@ -59,6 +60,11 @@ class FilesTab extends ConsumerStatefulWidget {
 class _FilesTabState extends ConsumerState<FilesTab> {
   List<String>? _files;
   final List<_OpenFile> _open = [];
+
+  /// 现在是不是两栏（宽屏）。
+  bool _split = false;
+  final _listKey = GlobalKey();
+  final _editorKey = GlobalKey();
   int _active = -1; // -1 = 显示文件列表
   bool _wordWrap = true;
 
@@ -293,7 +299,31 @@ class _FilesTabState extends ConsumerState<FilesTab> {
 
   @override
   // 编辑器那一页整页都是输入区（页签、保存、菜单、查找框、编辑区）：点哪里都不收键盘。
-  Widget build(BuildContext context) => _active >= 0 ? KeyboardKeep(child: _buildEditor(context)) : _buildList(context);
+  Widget build(BuildContext context) {
+    // 宽屏：文件树常驻在左、编辑器在右（中屏和手机还是一次看一样）。
+    _split = Breakpoints.of(context).isExpanded;
+    // 列表和编辑器各挂一个全局 key：一栏和两栏之间换位置时原样挪过去，不重建（编辑器重建会丢光标、滚动位置，
+    // 而且 re_editor 的控制器不能在旧编辑器还没拆完时接到新编辑器上）。
+    final list = KeyedSubtree(key: _listKey, child: _buildList(context));
+    if (_split && _active < 0 && _open.isNotEmpty) _active = 0; // 两栏时没有“回到文件列表”这一说：开着文件就一直显示编辑器
+    final editor = _active >= 0
+        ? KeyedSubtree(
+            key: _editorKey,
+            child: KeyboardKeep(child: _buildEditor(context)),
+          )
+        : null;
+    if (!_split) return editor ?? list;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(key: const ValueKey('files-side'), width: Breakpoints.side, child: list),
+        VerticalDivider(width: 1, thickness: 1, color: context.colors.border),
+        Expanded(
+          child: editor ?? const EmptyState(icon: Icons.description_outlined, title: '还没打开文件', message: '在左边点一个文件，就在这里打开。'),
+        ),
+      ],
+    );
+  }
 
   Widget _buildList(BuildContext context) {
     final c = context.colors;
@@ -306,7 +336,7 @@ class _FilesTabState extends ConsumerState<FilesTab> {
           child: Row(
             children: [
               Expanded(child: Text(files == null ? '文件' : '${files.where((f) => !f.endsWith('/')).length} 个文件', style: t.labelMedium)),
-              if (_open.isNotEmpty) TextButton(onPressed: () => setState(() => _active = 0), child: Text('回到编辑器（${_open.length}）')),
+              if (_open.isNotEmpty && !_split) TextButton(onPressed: () => setState(() => _active = 0), child: Text('回到编辑器（${_open.length}）')),
               PopupMenuButton<String>(
                 tooltip: '新建',
                 onSelected: (v) => _create(folder: v == 'folder'),
@@ -343,25 +373,30 @@ class _FilesTabState extends ConsumerState<FilesTab> {
                     final path = files[i];
                     final isDir = path.endsWith('/');
                     final parts = (isDir ? path.substring(0, path.length - 1) : path).split('/');
-                    return InkWell(
-                      onTap: isDir ? null : () => _openFile(path),
-                      onLongPress: () => _showItemMenu(path),
-                      child: Padding(
-                        padding: EdgeInsets.fromLTRB(Space.x4 + (parts.length - 1) * Space.x4, 10, Space.x2, 10),
-                        child: Row(
-                          children: [
-                            FileIcon(path, isDir: isDir, open: isDir),
-                            const SizedBox(width: Space.x3),
-                            Expanded(
-                              child: Text(parts.last, style: isDir ? t.titleSmall : t.bodyMedium, maxLines: 1, overflow: TextOverflow.ellipsis),
-                            ),
-                            IconButton(
-                              tooltip: '更多',
-                              visualDensity: VisualDensity.compact,
-                              icon: Icon(Icons.more_horiz, size: 20, color: c.textFaint),
-                              onPressed: () => _showItemMenu(path),
-                            ),
-                          ],
+                    return Material(
+                      // 两栏时左边标出右边正开着的那个文件
+                      color: _split && _active >= 0 && _open[_active].path == path ? c.selectedBg : Colors.transparent,
+                      child: InkWell(
+                        key: ValueKey('file-row-$path'),
+                        onTap: isDir ? null : () => _openFile(path),
+                        onLongPress: () => _showItemMenu(path),
+                        child: Padding(
+                          padding: EdgeInsets.fromLTRB(Space.x4 + (parts.length - 1) * Space.x4, 10, Space.x2, 10),
+                          child: Row(
+                            children: [
+                              FileIcon(path, isDir: isDir, open: isDir),
+                              const SizedBox(width: Space.x3),
+                              Expanded(
+                                child: Text(parts.last, style: isDir ? t.titleSmall : t.bodyMedium, maxLines: 1, overflow: TextOverflow.ellipsis),
+                              ),
+                              IconButton(
+                                tooltip: '更多',
+                                visualDensity: VisualDensity.compact,
+                                icon: Icon(Icons.more_horiz, size: 20, color: c.textFaint),
+                                onPressed: () => _showItemMenu(path),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     );
@@ -385,7 +420,7 @@ class _FilesTabState extends ConsumerState<FilesTab> {
           ),
           child: Row(
             children: [
-              IconButton(tooltip: '文件列表', icon: const Icon(Icons.menu_open), onPressed: () => setState(() => _active = -1)),
+              if (!_split) IconButton(tooltip: '文件列表', icon: const Icon(Icons.menu_open), onPressed: () => setState(() => _active = -1)),
               Expanded(
                 child: ListView.builder(
                   scrollDirection: Axis.horizontal,

@@ -3,6 +3,7 @@
 // - 校验值和地址很长：默认收起，展开后可以长按复制。
 // - 许可证全文单独一页，原文不翻译、不删改。
 import 'package:lopicode/core/third_party.dart';
+import 'package:lopicode/theme/breakpoints.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/chrome.dart';
 import 'package:lopicode/ui/shell.dart';
@@ -20,94 +21,99 @@ class ThirdPartyScreen extends StatelessWidget {
       backgroundColor: context.colors.canvas,
       extendBodyBehindAppBar: true,
       appBar: ShellAppBar(background: context.colors.canvas, title: '第三方声明', subtitle: '随安装包带的开源组件'),
-      body: SectionedList(
-        listKey: const Key('third-party-list'),
-        children: [
-          const Padding(
-            padding: EdgeInsets.fromLTRB(Space.x4, Space.x4, Space.x4, 0),
-            child: InfoBanner('前三个组件用来进入 Ubuntu 环境。它们是 Termux 官方软件源里的原样文件，内容没有改动，只改了文件名。每个组件有自己的许可证，全文在各自那一组里。后面两组是图标：服务商图标和文件图标。'),
-          ),
-          for (final component in bundledComponents) ...[
-            SectionLabel('${component.name} ${component.version}'),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: Space.x4),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+      body: ContentWidth(
+        child: SectionedList(
+          listKey: const Key('third-party-list'),
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(Space.x4, Space.x4, Space.x4, 0),
+              child: InfoBanner('前三个组件用来进入 Ubuntu 环境。它们是 Termux 官方软件源里的原样文件，内容没有改动，只改了文件名。每个组件有自己的许可证，全文在各自那一组里。后面两组是图标：服务商图标和文件图标。'),
+            ),
+            for (final component in bundledComponents) ...[
+              SectionLabel('${component.name} ${component.version}'),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: Space.x4),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(component.purpose, style: t.bodyMedium?.copyWith(height: 1.5)),
+                    const SizedBox(height: Space.x2),
+                    Text('许可证：${component.license}', style: t.bodySmall?.copyWith(color: c.textMuted)),
+                    const SizedBox(height: Space.x1),
+                    Text(component.copyright, style: t.bodySmall?.copyWith(color: c.textMuted, height: 1.5)),
+                  ],
+                ),
+              ),
+              for (final asset in component.licenseAssets)
+                ListTile(
+                  key: Key('license-$asset'),
+                  leading: const Icon(Icons.description_outlined),
+                  title: Text(licenseTitle(asset)),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => LicenseTextScreen(asset: asset))),
+                ),
+              ExpansionTile(
+                key: Key('source-${component.name}'),
+                leading: const Icon(Icons.link),
+                title: const Text('来源、校验值和源码'),
+                childrenPadding: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x3),
+                expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(component.purpose, style: t.bodyMedium?.copyWith(height: 1.5)),
-                  const SizedBox(height: Space.x2),
-                  Text('许可证：${component.license}', style: t.bodySmall?.copyWith(color: c.textMuted)),
-                  const SizedBox(height: Space.x1),
-                  Text(component.copyright, style: t.bodySmall?.copyWith(color: c.textMuted, height: 1.5)),
+                  _Fact('二进制来自（Termux 官方软件源）', component.packageUrl),
+                  _Fact('这个包的 sha256', component.packageSha256),
+                  for (final binary in component.binaries) ...[
+                    _Fact('安装包里的文件', '${binary.fileName}（原名 ${binary.originalPath}，${binary.size} 字节）'),
+                    _Fact('${binary.fileName} 的 sha256', binary.sha256),
+                  ],
+                  _Fact('对应源码', component.sourceUrl),
+                  Text(component.sourceNote, style: t.bodySmall?.copyWith(color: c.textMuted, height: 1.5)),
                 ],
               ),
-            ),
-            for (final asset in component.licenseAssets)
+            ],
+            for (final pack in bundledIconPacks) ...[
+              SectionLabel('${pack.name} ${pack.version}'),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: Space.x4),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(pack.purpose, style: t.bodyMedium?.copyWith(height: 1.5)),
+                    const SizedBox(height: Space.x2),
+                    Text('许可证：${pack.license}', style: t.bodySmall?.copyWith(color: c.textMuted)),
+                    const SizedBox(height: Space.x1),
+                    Text(pack.copyright, style: t.bodySmall?.copyWith(color: c.textMuted, height: 1.5)),
+                    const SizedBox(height: Space.x2),
+                    Text(
+                      pack.trademarkNote,
+                      key: pack == providerIconPack ? const Key('third-party-trademark') : null,
+                      style: t.bodySmall?.copyWith(color: c.textMuted, height: 1.5),
+                    ),
+                  ],
+                ),
+              ),
               ListTile(
-                key: Key('license-$asset'),
+                key: Key('license-${pack.licenseAsset}'),
                 leading: const Icon(Icons.description_outlined),
-                title: Text(licenseTitle(asset)),
+                title: Text(licenseTitle(pack.licenseAsset)),
                 trailing: const Icon(Icons.chevron_right),
-                onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => LicenseTextScreen(asset: asset))),
+                onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => LicenseTextScreen(asset: pack.licenseAsset))),
               ),
-            ExpansionTile(
-              key: Key('source-${component.name}'),
-              leading: const Icon(Icons.link),
-              title: const Text('来源、校验值和源码'),
-              childrenPadding: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x3),
-              expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _Fact('二进制来自（Termux 官方软件源）', component.packageUrl),
-                _Fact('这个包的 sha256', component.packageSha256),
-                for (final binary in component.binaries) ...[_Fact('安装包里的文件', '${binary.fileName}（原名 ${binary.originalPath}，${binary.size} 字节）'), _Fact('${binary.fileName} 的 sha256', binary.sha256)],
-                _Fact('对应源码', component.sourceUrl),
-                Text(component.sourceNote, style: t.bodySmall?.copyWith(color: c.textMuted, height: 1.5)),
-              ],
-            ),
-          ],
-          for (final pack in bundledIconPacks) ...[
-            SectionLabel('${pack.name} ${pack.version}'),
+              ExpansionTile(
+                key: Key(pack == providerIconPack ? 'source-lobe-icons' : 'source-${pack.name}'),
+                leading: const Icon(Icons.link),
+                title: const Text('来源和校验值'),
+                childrenPadding: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x3),
+                expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [_Fact('图标包（npm 镜像）', pack.packageUrl), _Fact('这个包的完整性校验值', pack.packageIntegrity), _Fact('项目仓库', pack.sourceUrl)],
+              ),
+            ],
+            const SectionLabel('怎么拿到源码'),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: Space.x4),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(pack.purpose, style: t.bodyMedium?.copyWith(height: 1.5)),
-                  const SizedBox(height: Space.x2),
-                  Text('许可证：${pack.license}', style: t.bodySmall?.copyWith(color: c.textMuted)),
-                  const SizedBox(height: Space.x1),
-                  Text(pack.copyright, style: t.bodySmall?.copyWith(color: c.textMuted, height: 1.5)),
-                  const SizedBox(height: Space.x2),
-                  Text(
-                    pack.trademarkNote,
-                    key: pack == providerIconPack ? const Key('third-party-trademark') : null,
-                    style: t.bodySmall?.copyWith(color: c.textMuted, height: 1.5),
-                  ),
-                ],
-              ),
-            ),
-            ListTile(
-              key: Key('license-${pack.licenseAsset}'),
-              leading: const Icon(Icons.description_outlined),
-              title: Text(licenseTitle(pack.licenseAsset)),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => LicenseTextScreen(asset: pack.licenseAsset))),
-            ),
-            ExpansionTile(
-              key: Key(pack == providerIconPack ? 'source-lobe-icons' : 'source-${pack.name}'),
-              leading: const Icon(Icons.link),
-              title: const Text('来源和校验值'),
-              childrenPadding: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x3),
-              expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [_Fact('图标包（npm 镜像）', pack.packageUrl), _Fact('这个包的完整性校验值', pack.packageIntegrity), _Fact('项目仓库', pack.sourceUrl)],
+              child: Text('每个组件的源码都可以从它那一组“对应源码”的地址下载。地址打不开时，可以向 LopiCode 的发布者索取这些组件的对应源码。', key: const Key('third-party-source-offer'), style: t.bodySmall?.copyWith(height: 1.6)),
             ),
           ],
-          const SectionLabel('怎么拿到源码'),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: Space.x4),
-            child: Text('每个组件的源码都可以从它那一组“对应源码”的地址下载。地址打不开时，可以向 LopiCode 的发布者索取这些组件的对应源码。', key: const Key('third-party-source-offer'), style: t.bodySmall?.copyWith(height: 1.6)),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -153,27 +159,29 @@ class LicenseTextScreen extends StatelessWidget {
       backgroundColor: context.colors.canvas,
       extendBodyBehindAppBar: true,
       appBar: ShellAppBar(background: context.colors.canvas, title: licenseTitle(asset), subtitle: '英文原文'),
-      body: FutureBuilder<String>(
-        future: (bundle ?? DefaultAssetBundle.of(context)).loadString(asset),
-        builder: (context, snapshot) {
-          if (snapshot.hasError) {
-            return const BelowBar(
-              child: Padding(
-                padding: EdgeInsets.all(Space.x4),
-                child: InfoBanner('许可证全文读不出来。这是安装包的问题，请告诉 LopiCode 的发布者。', tone: BannerTone.danger),
+      body: ContentWidth(
+        child: FutureBuilder<String>(
+          future: (bundle ?? DefaultAssetBundle.of(context)).loadString(asset),
+          builder: (context, snapshot) {
+            if (snapshot.hasError) {
+              return const BelowBar(
+                child: Padding(
+                  padding: EdgeInsets.all(Space.x4),
+                  child: InfoBanner('许可证全文读不出来。这是安装包的问题，请告诉 LopiCode 的发布者。', tone: BannerTone.danger),
+                ),
+              );
+            }
+            if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+            return SingleChildScrollView(
+              key: const Key('license-text'),
+              padding: EdgeInsets.fromLTRB(Space.x4, PageBar.insetOf(context) + Space.x4, Space.x4, Space.x4),
+              child: SelectableText(
+                snapshot.data!,
+                style: t.bodySmall?.copyWith(fontFamily: 'monospace', fontFamilyFallback: const ['sans-serif'], fontSize: 11, height: 1.45),
               ),
             );
-          }
-          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-          return SingleChildScrollView(
-            key: const Key('license-text'),
-            padding: EdgeInsets.fromLTRB(Space.x4, PageBar.insetOf(context) + Space.x4, Space.x4, Space.x4),
-            child: SelectableText(
-              snapshot.data!,
-              style: t.bodySmall?.copyWith(fontFamily: 'monospace', fontFamilyFallback: const ['sans-serif'], fontSize: 11, height: 1.45),
-            ),
-          );
-        },
+          },
+        ),
       ),
     );
   }

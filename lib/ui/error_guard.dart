@@ -11,6 +11,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:lopicode/core/crash_log.dart';
 import 'package:lopicode/theme/app_theme.dart';
+import 'package:lopicode/theme/breakpoints.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/chrome.dart';
 import 'package:lopicode/ui/widgets.dart';
@@ -254,33 +255,35 @@ class _ErrorLogScreenState extends State<ErrorLogScreen> {
       backgroundColor: c.canvas,
       extendBodyBehindAppBar: true,
       appBar: PageBar(background: c.canvas, title: const Text('错误日志')),
-      body: text == null
-          ? const Center(child: CircularProgressIndicator())
-          : empty
-          ? const BelowBar(
-              child: EmptyState(icon: Icons.check_circle_outline, title: '没有记录到错误', message: '应用出错时会记在这里，\n可以复制出来发给开发者。'),
-            )
-          : ListView(
-              padding: EdgeInsets.fromLTRB(Space.x4, PageBar.insetOf(context) + Space.x2, Space.x4, Space.x8),
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x3),
-                  child: Text('只存在这台手机上，不会上传。里面像 Key 的内容已经抹掉。', style: t.bodySmall?.copyWith(color: c.textFaint)),
-                ),
-                FilledButton.icon(key: const Key('error-log-copy'), onPressed: _copy, icon: const Icon(Icons.copy_rounded, size: 18), label: const Text('复制全部')),
-                const SizedBox(height: Space.x3),
-                GroupCard(
-                  padding: const EdgeInsets.all(Space.x4),
-                  children: [SelectableText(text, key: const Key('error-log-text'), style: t.bodySmall?.copyWith(height: 1.5))],
-                ),
-                TextButton(
-                  key: const Key('error-log-clear'),
-                  onPressed: _clear,
-                  style: TextButton.styleFrom(foregroundColor: c.danger),
-                  child: const Text('清空错误日志'),
-                ),
-              ],
-            ),
+      body: ContentWidth(
+        child: text == null
+            ? const Center(child: CircularProgressIndicator())
+            : empty
+            ? const BelowBar(
+                child: EmptyState(icon: Icons.check_circle_outline, title: '没有记录到错误', message: '应用出错时会记在这里，\n可以复制出来发给开发者。'),
+              )
+            : ListView(
+                padding: EdgeInsets.fromLTRB(Space.x4, PageBar.insetOf(context) + Space.x2, Space.x4, Space.x8),
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x3),
+                    child: Text('只存在这台手机上，不会上传。里面像 Key 的内容已经抹掉。', style: t.bodySmall?.copyWith(color: c.textFaint)),
+                  ),
+                  FilledButton.icon(key: const Key('error-log-copy'), onPressed: _copy, icon: const Icon(Icons.copy_rounded, size: 18), label: const Text('复制全部')),
+                  const SizedBox(height: Space.x3),
+                  GroupCard(
+                    padding: const EdgeInsets.all(Space.x4),
+                    children: [SelectableText(text, key: const Key('error-log-text'), style: t.bodySmall?.copyWith(height: 1.5))],
+                  ),
+                  TextButton(
+                    key: const Key('error-log-clear'),
+                    onPressed: _clear,
+                    style: TextButton.styleFrom(foregroundColor: c.danger),
+                    child: const Text('清空错误日志'),
+                  ),
+                ],
+              ),
+      ),
     );
   }
 }

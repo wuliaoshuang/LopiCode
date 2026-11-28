@@ -8,6 +8,7 @@ import 'package:lopicode/agent/team.dart';
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/state/team_state.dart';
 import 'package:lopicode/state/workspace_conversations.dart';
+import 'package:lopicode/theme/breakpoints.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/chrome.dart';
 import 'package:lopicode/ui/widgets.dart';
@@ -66,107 +67,109 @@ class _TeamScreenState extends ConsumerState<TeamScreen> {
             ],
           ),
         ),
-        body: board == null
-            ? const Center(child: CircularProgressIndicator())
-            // 页签条固定在顶栏下面；三页各自的列表从页签条下沿开始，不钻到它下面。
-            : BelowBar(
-                child: TabBarView(
-                  children: [
-                    // 成员
-                    ListView(
-                      padding: const EdgeInsets.symmetric(vertical: Space.x2),
-                      children: [
-                        for (final m in board.members)
-                          ListTile(
-                            leading: Icon(m.name == TeamBoard.lead ? Icons.star_outline : Icons.smart_toy_outlined, color: c.accent),
-                            title: Text(m.name),
-                            subtitle: Text(
-                              [if (m.role.isNotEmpty) m.role, '负责 ${board.tasks.where((x) => x.owner == m.name && x.status != TaskStatus.done).length} 个未完成任务'].join(' · '),
-                              style: t.bodySmall,
-                            ),
-                          ),
-                        Padding(
-                          padding: const EdgeInsets.all(Space.x4),
-                          child: Text('成员是主智能体派出的子代理，派出时自动加进来。', style: t.bodySmall),
-                        ),
-                      ],
-                    ),
-                    // 任务
-                    ListView(
-                      padding: const EdgeInsets.only(bottom: Space.x8),
-                      children: [
-                        for (final w in board.overlapWarnings()) InfoBanner(w, tone: BannerTone.warning, margin: const EdgeInsets.fromLTRB(Space.x4, Space.x3, Space.x4, 0)),
-                        if (board.tasks.isEmpty)
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(Space.x4, Space.x6, Space.x4, Space.x2),
-                            child: Text('任务板还是空的。让主智能体拆任务，或者自己新建。', style: t.bodyMedium?.copyWith(color: c.textMuted)),
-                          ),
-                        for (final status in TaskStatus.values)
-                          if (board.tasks.any((x) => x.status == status)) ...[
-                            SectionLabel('${status.label}（${board.tasks.where((x) => x.status == status).length}）'),
-                            for (final task in board.tasks.where((x) => x.status == status))
-                              ListTile(
-                                key: Key('task-${task.id}'),
-                                title: Text('${task.id}  ${task.title}', maxLines: 2, overflow: TextOverflow.ellipsis),
-                                subtitle: Text(
-                                  [
-                                    '负责人：${task.owner.isEmpty ? '还没人' : task.owner}',
-                                    if (task.deps.isNotEmpty) '依赖：${task.deps.join('、')}${board.blockers(task).isEmpty ? '' : '（还没完成）'}',
-                                    '写入范围：${task.scope.isEmpty ? '不限' : task.scope.join('、')}',
-                                    if (task.note.isNotEmpty) '备注：${task.note}',
-                                  ].join('\n'),
-                                  style: t.bodySmall,
-                                ),
-                                trailing: PopupMenuButton<String>(
-                                  tooltip: '更多',
-                                  icon: Icon(Icons.more_vert, color: c.textFaint),
-                                  onSelected: (v) => _run(() async {
-                                    if (v == 'delete') {
-                                      await _team.removeTask(task.id);
-                                    } else {
-                                      if (TaskStatus.byId(v) case final status?) await _team.setStatus(task.id, status);
-                                    }
-                                  }),
-                                  itemBuilder: (_) => [
-                                    for (final s in TaskStatus.values)
-                                      if (s != task.status) PopupMenuItem(value: s.id, child: Text('改为${s.label}')),
-                                    PopupMenuItem(
-                                      value: 'delete',
-                                      child: Text('删除', style: TextStyle(color: c.danger)),
-                                    ),
-                                  ],
-                                ),
+        body: ContentWidth(
+          child: board == null
+              ? const Center(child: CircularProgressIndicator())
+              // 页签条固定在顶栏下面；三页各自的列表从页签条下沿开始，不钻到它下面。
+              : BelowBar(
+                  child: TabBarView(
+                    children: [
+                      // 成员
+                      ListView(
+                        padding: const EdgeInsets.symmetric(vertical: Space.x2),
+                        children: [
+                          for (final m in board.members)
+                            ListTile(
+                              leading: Icon(m.name == TeamBoard.lead ? Icons.star_outline : Icons.smart_toy_outlined, color: c.accent),
+                              title: Text(m.name),
+                              subtitle: Text(
+                                [if (m.role.isNotEmpty) m.role, '负责 ${board.tasks.where((x) => x.owner == m.name && x.status != TaskStatus.done).length} 个未完成任务'].join(' · '),
+                                style: t.bodySmall,
                               ),
-                          ],
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(Space.x4, Space.x4, Space.x4, 0),
-                          child: FilledButton.icon(key: const Key('team-new-task'), onPressed: _newTask, icon: const Icon(Icons.add, size: 18), label: const Text('新建任务')),
-                        ),
-                      ],
-                    ),
-                    // 消息
-                    board.messages.isEmpty
-                        ? const EmptyState(icon: Icons.forum_outlined, title: '还没有消息', message: '智能体之间互相留的话会出现在这里。')
-                        : ListView(
+                            ),
+                          Padding(
                             padding: const EdgeInsets.all(Space.x4),
-                            children: [
-                              for (final m in board.messages.reversed)
-                                Padding(
-                                  padding: const EdgeInsets.only(bottom: Space.x3),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text('${m.from} → ${m.to.isEmpty ? '所有人' : m.to} · ${_hm(m.at)}', style: t.bodySmall?.copyWith(color: c.accent)),
-                                      const SizedBox(height: 2),
-                                      SelectableText(m.text, style: t.bodyMedium),
+                            child: Text('成员是主智能体派出的子代理，派出时自动加进来。', style: t.bodySmall),
+                          ),
+                        ],
+                      ),
+                      // 任务
+                      ListView(
+                        padding: const EdgeInsets.only(bottom: Space.x8),
+                        children: [
+                          for (final w in board.overlapWarnings()) InfoBanner(w, tone: BannerTone.warning, margin: const EdgeInsets.fromLTRB(Space.x4, Space.x3, Space.x4, 0)),
+                          if (board.tasks.isEmpty)
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(Space.x4, Space.x6, Space.x4, Space.x2),
+                              child: Text('任务板还是空的。让主智能体拆任务，或者自己新建。', style: t.bodyMedium?.copyWith(color: c.textMuted)),
+                            ),
+                          for (final status in TaskStatus.values)
+                            if (board.tasks.any((x) => x.status == status)) ...[
+                              SectionLabel('${status.label}（${board.tasks.where((x) => x.status == status).length}）'),
+                              for (final task in board.tasks.where((x) => x.status == status))
+                                ListTile(
+                                  key: Key('task-${task.id}'),
+                                  title: Text('${task.id}  ${task.title}', maxLines: 2, overflow: TextOverflow.ellipsis),
+                                  subtitle: Text(
+                                    [
+                                      '负责人：${task.owner.isEmpty ? '还没人' : task.owner}',
+                                      if (task.deps.isNotEmpty) '依赖：${task.deps.join('、')}${board.blockers(task).isEmpty ? '' : '（还没完成）'}',
+                                      '写入范围：${task.scope.isEmpty ? '不限' : task.scope.join('、')}',
+                                      if (task.note.isNotEmpty) '备注：${task.note}',
+                                    ].join('\n'),
+                                    style: t.bodySmall,
+                                  ),
+                                  trailing: PopupMenuButton<String>(
+                                    tooltip: '更多',
+                                    icon: Icon(Icons.more_vert, color: c.textFaint),
+                                    onSelected: (v) => _run(() async {
+                                      if (v == 'delete') {
+                                        await _team.removeTask(task.id);
+                                      } else {
+                                        if (TaskStatus.byId(v) case final status?) await _team.setStatus(task.id, status);
+                                      }
+                                    }),
+                                    itemBuilder: (_) => [
+                                      for (final s in TaskStatus.values)
+                                        if (s != task.status) PopupMenuItem(value: s.id, child: Text('改为${s.label}')),
+                                      PopupMenuItem(
+                                        value: 'delete',
+                                        child: Text('删除', style: TextStyle(color: c.danger)),
+                                      ),
                                     ],
                                   ),
                                 ),
                             ],
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(Space.x4, Space.x4, Space.x4, 0),
+                            child: FilledButton.icon(key: const Key('team-new-task'), onPressed: _newTask, icon: const Icon(Icons.add, size: 18), label: const Text('新建任务')),
                           ),
-                  ],
+                        ],
+                      ),
+                      // 消息
+                      board.messages.isEmpty
+                          ? const EmptyState(icon: Icons.forum_outlined, title: '还没有消息', message: '智能体之间互相留的话会出现在这里。')
+                          : ListView(
+                              padding: const EdgeInsets.all(Space.x4),
+                              children: [
+                                for (final m in board.messages.reversed)
+                                  Padding(
+                                    padding: const EdgeInsets.only(bottom: Space.x3),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text('${m.from} → ${m.to.isEmpty ? '所有人' : m.to} · ${_hm(m.at)}', style: t.bodySmall?.copyWith(color: c.accent)),
+                                        const SizedBox(height: 2),
+                                        SelectableText(m.text, style: t.bodyMedium),
+                                      ],
+                                    ),
+                                  ),
+                              ],
+                            ),
+                    ],
+                  ),
                 ),
-              ),
+        ),
       ),
     );
   }

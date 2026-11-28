@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lopicode/agent/skills.dart';
 import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/state/skills_state.dart';
+import 'package:lopicode/theme/breakpoints.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/app_ref.dart';
 import 'package:lopicode/ui/chrome.dart';
@@ -53,16 +54,18 @@ class _SkillsScreenState extends ConsumerState<SkillsScreen> {
         backgroundColor: c.canvas,
         extendBodyBehindAppBar: true,
         appBar: PageBar(background: c.canvas, titleText: '技能'),
-        body: skills == null
-            ? const Center(child: CircularProgressIndicator())
-            : BelowBar(
-                child: EmptyState(
-                  icon: Icons.menu_book_outlined,
-                  title: '还没有技能',
-                  message: '技能是一份写给 Agent 的做事说明书（SKILL.md）。\nAgent 平时只看到名字和描述，用得上时再读全文。',
-                  action: FilledButton.icon(onPressed: _create, icon: const Icon(Icons.add), label: const Text('新建技能')),
+        body: ContentWidth(
+          child: skills == null
+              ? const Center(child: CircularProgressIndicator())
+              : BelowBar(
+                  child: EmptyState(
+                    icon: Icons.menu_book_outlined,
+                    title: '还没有技能',
+                    message: '技能是一份写给 Agent 的做事说明书（SKILL.md）。\nAgent 平时只看到名字和描述，用得上时再读全文。',
+                    action: FilledButton.icon(onPressed: _create, icon: const Icon(Icons.add), label: const Text('新建技能')),
+                  ),
                 ),
-              ),
+        ),
       );
     }
     return SettingsPage(

@@ -13,6 +13,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/services.dart' show SystemUiOverlayStyle;
+import 'package:lopicode/theme/breakpoints.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -301,7 +302,7 @@ class BarPage extends StatelessWidget {
       backgroundColor: background,
       extendBodyBehindAppBar: true,
       appBar: PageBar(background: background, title: title),
-      body: body,
+      body: ContentWidth(child: body),
     );
   }
 }

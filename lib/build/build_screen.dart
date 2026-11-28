@@ -34,6 +34,7 @@ import 'package:lopicode/ssh/ssh_config.dart';
 import 'package:lopicode/state/deploy_busy.dart';
 import 'package:lopicode/state/deploy_run.dart';
 import 'package:lopicode/state/local_pack.dart';
+import 'package:lopicode/theme/breakpoints.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/app_backdrop.dart';
 import 'package:lopicode/ui/app_ref.dart';
@@ -114,10 +115,12 @@ class _BuildScreenState extends ConsumerState<BuildScreen> {
           backgroundColor: on ? Colors.transparent : c.canvas,
           extendBodyBehindAppBar: true,
           appBar: ShellAppBar(title: '构建与部署', background: c.canvas),
-          body: BackdropPlates(
-            child: ListView(
-              padding: EdgeInsets.fromLTRB(Space.x4, PageBar.insetOf(context) + Space.x2, Space.x4, Space.x8),
-              children: [DeployPanel(session: widget.session, project: project)],
+          body: ContentWidth(
+            child: BackdropPlates(
+              child: ListView(
+                padding: EdgeInsets.fromLTRB(Space.x4, PageBar.insetOf(context) + Space.x2, Space.x4, Space.x8),
+                children: [DeployPanel(session: widget.session, project: project)],
+              ),
             ),
           ),
         ),
@@ -151,52 +154,54 @@ class _BuildScreenState extends ConsumerState<BuildScreen> {
           ],
         ),
         // 有背景图片时，这一页里各组的小标题和脚注也垫底（见 SettingsGroup）。
-        body: BackdropPlates(
-          child: ListView(
-            padding: EdgeInsets.fromLTRB(Space.x4, PageBar.insetOf(context) + Space.x2, Space.x4, Space.x8),
-            children: [
-              BuildModePicker(mode: _mode, onChanged: busy ? null : _setMode),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(Space.x1, Space.x3, Space.x1, Space.x6),
-                child: BackdropPlate(
-                  child: Text(
-                    about,
-                    key: const Key('pack-mode-about'),
-                    style: t.bodySmall?.copyWith(color: c.textFaint, height: 1.6),
-                  ),
-                ),
-              ),
-              section(BuildMode.local, LocalPackView(session: widget.session, onUseRemote: _useRemote)),
-              section(
-                BuildMode.github,
-                GithubBuildView(
-                  session: widget.session,
-                  job: _githubJob,
-                  onJob: (job) {
-                    _githubJob?.onChanged = null;
-                    setState(() => _githubJob = job..onChanged = _onJob);
-                  },
-                ),
-              ),
-              section(
-                BuildMode.ssh,
-                SshBuildView(
-                  session: widget.session,
-                  job: _sshJob,
-                  onJob: (job) {
-                    _sshJob?.onChanged = null;
-                    setState(() => _sshJob = job..onChanged = _onJob);
-                  },
-                ),
-              ),
-              if (_mode != BuildMode.local && widget.session.project.template == ProjectTemplate.lowcode)
+        body: ContentWidth(
+          child: BackdropPlates(
+            child: ListView(
+              padding: EdgeInsets.fromLTRB(Space.x4, PageBar.insetOf(context) + Space.x2, Space.x4, Space.x8),
+              children: [
+                BuildModePicker(mode: _mode, onChanged: busy ? null : _setMode),
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(Space.x1, Space.x3, Space.x1, 0),
+                  padding: const EdgeInsets.fromLTRB(Space.x1, Space.x3, Space.x1, Space.x6),
                   child: BackdropPlate(
-                    child: Text('低代码页面会按“网页套壳”的方式打包（用导出的 index.html）。', style: t.bodySmall?.copyWith(color: c.textFaint)),
+                    child: Text(
+                      about,
+                      key: const Key('pack-mode-about'),
+                      style: t.bodySmall?.copyWith(color: c.textFaint, height: 1.6),
+                    ),
                   ),
                 ),
-            ],
+                section(BuildMode.local, LocalPackView(session: widget.session, onUseRemote: _useRemote)),
+                section(
+                  BuildMode.github,
+                  GithubBuildView(
+                    session: widget.session,
+                    job: _githubJob,
+                    onJob: (job) {
+                      _githubJob?.onChanged = null;
+                      setState(() => _githubJob = job..onChanged = _onJob);
+                    },
+                  ),
+                ),
+                section(
+                  BuildMode.ssh,
+                  SshBuildView(
+                    session: widget.session,
+                    job: _sshJob,
+                    onJob: (job) {
+                      _sshJob?.onChanged = null;
+                      setState(() => _sshJob = job..onChanged = _onJob);
+                    },
+                  ),
+                ),
+                if (_mode != BuildMode.local && widget.session.project.template == ProjectTemplate.lowcode)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(Space.x1, Space.x3, Space.x1, 0),
+                    child: BackdropPlate(
+                      child: Text('低代码页面会按“网页套壳”的方式打包（用导出的 index.html）。', style: t.bodySmall?.copyWith(color: c.textFaint)),
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
       ),

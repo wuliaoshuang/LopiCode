@@ -24,6 +24,7 @@ import 'package:lopicode/lowcode/logic_model.dart';
 import 'package:lopicode/lowcode/logic_vars_sheet.dart';
 import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/lowcode/state_model.dart';
+import 'package:lopicode/theme/breakpoints.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/top_bar.dart';
 import 'package:lopicode/ui/widgets.dart';
@@ -303,34 +304,36 @@ class _StateScreenState extends State<StateScreen> {
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: const PageBar(titleText: '状态'),
-      body: own.isEmpty && shared.isEmpty
-          ? BelowBar(
-              child: EmptyState(
-                icon: Icons.data_object,
-                title: '还没有状态',
-                message: '状态是页面记着的一个值：点了几次、输入的字、一张列表…\n控件绑上它以后，它一变，界面跟着变。',
-                action: FilledButton(key: const Key('lc-state-first'), onPressed: () => _create(false), child: const Text('新建状态')),
-              ),
-            )
-          : ListView(
-              key: const Key('lc-state-list'),
-              padding: EdgeInsets.only(top: PageBar.insetOf(context) + Space.x2, bottom: Space.x6 + MediaQuery.paddingOf(context).bottom),
-              children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: Space.x4),
-                  child: Text('状态是页面记着的值。控件绑上它（面板里每一项行尾的链环），它一变界面跟着变；积木也能读它、改它。', style: t.bodySmall?.copyWith(color: c.textMuted)),
+      body: ContentWidth(
+        child: own.isEmpty && shared.isEmpty
+            ? BelowBar(
+                child: EmptyState(
+                  icon: Icons.data_object,
+                  title: '还没有状态',
+                  message: '状态是页面记着的一个值：点了几次、输入的字、一张列表…\n控件绑上它以后，它一变，界面跟着变。',
+                  action: FilledButton(key: const Key('lc-state-first'), onPressed: () => _create(false), child: const Text('新建状态')),
                 ),
-                if (issues.isNotEmpty)
-                  InfoBanner(
-                    key: const Key('lc-state-issues'),
-                    '这一页有 ${issues.length} 处要处理：\n${issues.take(kLcIssuesShown).map((i) => '· ${i.message}').join('\n')}${issues.length > kLcIssuesShown ? '\n· …还有 ${issues.length - kLcIssuesShown} 处' : ''}',
-                    tone: issues.any((i) => !i.warning) ? BannerTone.warning : BannerTone.info,
-                    margin: const EdgeInsets.fromLTRB(Space.x4, Space.x3, Space.x4, 0),
+              )
+            : ListView(
+                key: const Key('lc-state-list'),
+                padding: EdgeInsets.only(top: PageBar.insetOf(context) + Space.x2, bottom: Space.x6 + MediaQuery.paddingOf(context).bottom),
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: Space.x4),
+                    child: Text('状态是页面记着的值。控件绑上它（面板里每一项行尾的链环），它一变界面跟着变；积木也能读它、改它。', style: t.bodySmall?.copyWith(color: c.textMuted)),
                   ),
-                ...section('这一页（${doc.title.isEmpty ? '没起名' : doc.title}）', '只有这一页用得到。积木编辑器里看到的也是这一份。', own, false),
-                ...section('整个项目', '所有页面共用，换页不丢。这一页有同名的时候，用这一页的。', shared, true),
-              ],
-            ),
+                  if (issues.isNotEmpty)
+                    InfoBanner(
+                      key: const Key('lc-state-issues'),
+                      '这一页有 ${issues.length} 处要处理：\n${issues.take(kLcIssuesShown).map((i) => '· ${i.message}').join('\n')}${issues.length > kLcIssuesShown ? '\n· …还有 ${issues.length - kLcIssuesShown} 处' : ''}',
+                      tone: issues.any((i) => !i.warning) ? BannerTone.warning : BannerTone.info,
+                      margin: const EdgeInsets.fromLTRB(Space.x4, Space.x3, Space.x4, 0),
+                    ),
+                  ...section('这一页（${doc.title.isEmpty ? '没起名' : doc.title}）', '只有这一页用得到。积木编辑器里看到的也是这一份。', own, false),
+                  ...section('整个项目', '所有页面共用，换页不丢。这一页有同名的时候，用这一页的。', shared, true),
+                ],
+              ),
+      ),
     );
   }
 }

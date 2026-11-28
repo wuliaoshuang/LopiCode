@@ -47,9 +47,8 @@ class _LopiCodeAppState extends State<LopiCodeApp> {
               child: ThemeTextScale(
                 child: ColoredBox(
                   color: context.colors.canvas,
-                  child: Center(
-                    child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 720), child: child ?? const SizedBox.shrink()),
-                  ),
+                  // 不再把整个应用卡在 720 宽的一列里（平板适配）：要限宽的页面自己限（theme/breakpoints.dart 的 ContentWidth）。
+                  child: child ?? const SizedBox.shrink(),
                 ),
               ),
             ),

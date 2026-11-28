@@ -6,9 +6,11 @@ import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/core/templates.dart';
 import 'package:lopicode/lowcode/builder_screen.dart';
 import 'package:lopicode/project_session.dart';
+import 'package:lopicode/theme/breakpoints.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/chrome.dart';
 import 'package:lopicode/ui/home_gate.dart';
+import 'package:lopicode/ui/nav_rail.dart';
 import 'package:lopicode/ui/preview_tab.dart';
 import 'package:lopicode/ui/project_shell.dart';
 import 'package:lopicode/ui/push_drawer.dart';
@@ -136,19 +138,23 @@ void main() {
     }
   });
 
-  testWidgets('宽屏里应用保持 readable 最大宽度并居中，不把手机布局拉成长条', (tester) async {
+  testWidgets('宽屏里应用铺满窗口、导航在左边，对话保持 readable 最大宽度并居中，不把手机布局拉成长条', (tester) async {
     final (env, project, session) = await openProject(tester);
     tester.view.physicalSize = const Size(1200, 900);
     tester.view.devicePixelRatio = 1;
     await tester.pumpWidget(appFor(env, ProjectShell(project: project, session: session)));
     await settle(tester);
 
+    // 2026-11-28 平板适配：宽屏不再把应用卡在 720 宽的一列里；导航换到左边竖排，消息和输入栏限宽居中（不拉成长条）。
     final shell = find.byType(ProjectShell);
     final rect = tester.getRect(shell);
-    expect(rect.width, 720);
-    expect(rect.center.dx, 600);
+    expect(rect.width, 1200);
     expect(rect.height, 900);
-    expect(tester.getRect(find.byType(IconBottomNav)).bottom, 900);
+    expect(find.byType(IconBottomNav), findsNothing);
+    final rail = tester.getRect(find.byType(IconNavRail));
+    expect(rail.left, 0);
+    expect(rail.bottom, 900);
+    expect(tester.getRect(find.byKey(const ValueKey('chat-input'))).width, lessThanOrEqualTo(Breakpoints.reading));
     expect(tester.takeException(), isNull);
   });
 

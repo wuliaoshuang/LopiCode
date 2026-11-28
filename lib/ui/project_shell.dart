@@ -15,6 +15,7 @@ import 'package:lopicode/project_session.dart';
 import 'package:lopicode/runtime/runtime_screen.dart';
 import 'package:lopicode/state/workspace_chat.dart';
 import 'package:lopicode/state/workspace_conversations.dart';
+import 'package:lopicode/theme/breakpoints.dart';
 import 'package:lopicode/ui/app_backdrop.dart';
 import 'package:lopicode/ui/app_ref.dart';
 import 'package:lopicode/ui/builder_hub_screen.dart';
@@ -22,6 +23,7 @@ import 'package:lopicode/ui/chat_screen.dart';
 import 'package:lopicode/ui/chrome.dart';
 import 'package:lopicode/ui/favorites_screen.dart';
 import 'package:lopicode/ui/files_tab.dart';
+import 'package:lopicode/ui/nav_rail.dart';
 import 'package:lopicode/ui/pinned_nav_layout.dart';
 import 'package:lopicode/ui/preview_tab.dart';
 import 'package:lopicode/ui/project_list_screen.dart';
@@ -48,6 +50,7 @@ class ProjectShell extends ConsumerStatefulWidget {
 
 class _ProjectShellState extends ConsumerState<ProjectShell> {
   final _drawer = PushDrawerController();
+  final _pagesKey = GlobalKey();
   final List<bool Function()> _backClaims = [];
   ProjectSession? _session;
   late ShellDest _dest = widget.initial;
@@ -165,7 +168,42 @@ class _ProjectShellState extends ConsumerState<ProjectShell> {
       ),
       ShellDest.runtime => RuntimeScreen(projectDir: session.project.dir),
     };
+    final wide = Breakpoints.of(context);
+    // 宽屏的对话页：侧边栏（工作区、对话列表、设置）常驻在左边，不用再点开。
+    final docked = wide.isExpanded && _dest == ShellDest.chat;
+    final navIndex = _dest.inBottomNav ? _dest.index : -1;
+    final pages = KeyedSubtree(
+      key: _pagesKey,
+      child: IndexedStack(index: _dest.index, children: [for (final d in ShellDest.values) lazy(d, () => build1(d))]),
+    );
+    final drawer = AppDrawer(
+      project: widget.project,
+      session: session,
+      current: _dest,
+      onClose: _closeDrawer,
+      onDest: (d) {
+        _closeDrawer();
+        _go(d);
+      },
+      onNewConversation: () async {
+        _closeDrawer();
+        await session.newConversation();
+        _go(ShellDest.chat);
+      },
+      onConversation: (id) async {
+        _closeDrawer();
+        await session.selectConversation(id);
+        _go(ShellDest.chat);
+      },
+      onFavorites: () {
+        _closeDrawer();
+        openFavorites(context, session, goChat: () => _go(ShellDest.chat));
+      },
+      onProjects: _openProjects,
+      onSettings: _openSettings,
+    );
     return ShellScope(
+      docked: docked,
       openDrawer: _drawer.open,
       go: _go,
       projectName: widget.project.name,
@@ -187,39 +225,22 @@ class _ProjectShellState extends ConsumerState<ProjectShell> {
           controller: _drawer,
           handleBack: false,
           // 终端里要左右滑光标、画布上要拖组件：这两页不让边缘右滑抢手势。
-          edgeDragEnabled: _dest != ShellDest.terminal && _dest != ShellDest.builder,
-          drawer: AppDrawer(
-            project: widget.project,
-            session: session,
-            current: _dest,
-            onClose: _closeDrawer,
-            onDest: (d) {
-              _closeDrawer();
-              _go(d);
-            },
-            onNewConversation: () async {
-              _closeDrawer();
-              await session.newConversation();
-              _go(ShellDest.chat);
-            },
-            onConversation: (id) async {
-              _closeDrawer();
-              await session.selectConversation(id);
-              _go(ShellDest.chat);
-            },
-            onFavorites: () {
-              _closeDrawer();
-              openFavorites(context, session, goChat: () => _go(ShellDest.chat));
-            },
-            onProjects: _openProjects,
-            onSettings: _openSettings,
-          ),
-          // 底部导航和页面在同一层里，所以会跟着主界面一起被推走；导航钉在屏幕底，键盘盖在它上面（pinned_nav_layout.dart）。
-          child: PinnedNavLayout(
-            navHeight: IconBottomNav.kHeight,
-            nav: IconBottomNav(items: shellNavItems(), current: _dest.inBottomNav ? _dest.index : -1, onTap: (i) => _go(ShellDest.bottom[i])),
-            body: IndexedStack(index: _dest.index, children: [for (final d in ShellDest.values) lazy(d, () => build1(d))]),
-          ),
+          edgeDragEnabled: !docked && _dest != ShellDest.terminal && _dest != ShellDest.builder,
+          drawer: docked ? const SizedBox.shrink() : drawer,
+          // 页面那一摞挂着全局 key：窗口从窄拉到宽（底部导航换成左侧导航、侧边栏变常驻）时整摞原样挪过去，不重建、不丢状态。
+          // 窄屏：底部导航和页面在同一层里，跟着主界面一起被推走；导航钉在屏幕底，键盘盖在它上面（pinned_nav_layout.dart）。
+          // 中屏、宽屏：左侧竖排导航（nav_rail.dart）；宽屏的对话页侧边栏常驻。
+          child: wide.isCompact
+              ? PinnedNavLayout(
+                  navHeight: IconBottomNav.kHeight,
+                  nav: IconBottomNav(items: shellNavItems(), current: navIndex, onTap: (i) => _go(ShellDest.bottom[i])),
+                  body: pages,
+                )
+              : RailNavLayout(
+                  nav: IconNavRail(items: shellNavItems(), current: navIndex, onTap: (i) => _go(ShellDest.bottom[i])),
+                  side: docked ? drawer : null,
+                  body: pages,
+                ),
         ),
       ),
     );

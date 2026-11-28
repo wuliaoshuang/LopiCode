@@ -1,4 +1,5 @@
 import 'package:lopicode/appearance/theme_builtin.dart';
+import 'package:lopicode/theme/breakpoints.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -147,6 +148,8 @@ ThemeData _build(ThemeSpec spec, String? fontFamily) {
       surfaceTintColor: Colors.transparent,
       showDragHandle: true,
       dragHandleColor: c.border,
+      // 平板上底部弹层不横向拉满（手机宽度不到这个数，不受影响）。
+      constraints: const BoxConstraints(maxWidth: Breakpoints.sheet),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(r(Radii.card)))),
     ),
     dialogTheme: DialogThemeData(

@@ -10,6 +10,7 @@ import 'package:lopicode/backdrop/backdrop_model.dart';
 import 'package:lopicode/core/project_store.dart';
 import 'package:lopicode/core/templates.dart';
 import 'package:lopicode/templates/project_templates.dart';
+import 'package:lopicode/theme/breakpoints.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/app_backdrop.dart';
 import 'package:lopicode/ui/app_ref.dart';
@@ -205,59 +206,61 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
         floatingActionButton: projects != null && projects.isNotEmpty
             ? FloatingActionButton.extended(onPressed: _add, elevation: 2, shape: const StadiumBorder(), icon: const Icon(Icons.add), label: const Text('添加工作区'))
             : null,
-        body: _error != null
-            ? BelowBar(
-                child: EmptyState(icon: Icons.error_outline, title: '读取工作区失败', message: _error!),
-              )
-            : projects == null
-            ? const Center(child: CircularProgressIndicator())
-            : projects.isEmpty
-            ? BelowBar(
-                child: EmptyState(
-                  icon: Icons.rocket_launch_outlined,
-                  title: '还没有工作区',
-                  message: '工作区就是一个放代码的目录。添加一个，\n然后让 Agent 帮你写代码、拖拽搭页面、实时预览。',
-                  action: FilledButton.icon(onPressed: _add, icon: const Icon(Icons.add), label: const Text('添加工作区')),
-                ),
-              )
-            : ListView(
-                padding: EdgeInsets.fromLTRB(Space.x4, PageBar.insetOf(context) + Space.x2, Space.x4, 96),
-                children: [
-                  for (final g in groups) ...[
-                    if (g.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(0, Space.x4, 0, Space.x2),
-                        child: Text(g, style: Theme.of(context).textTheme.labelMedium),
-                      ),
-                    for (final p in projects.where((p) => p.group == g))
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: Space.x3),
-                        child: _ProjectCard(
-                          project: p,
-                          count: _counts[p.id] ?? 0,
-                          current: p.id == widget.currentProjectId,
-                          onOpen: () => _open(p),
-                          onAction: (v) {
-                            switch (v) {
-                              case 'chat':
-                                _open(p, newConversation: true);
-                              case 'pin':
-                                _guard(() => store.setPinned(p, !p.pinned));
-                              case 'group':
-                                _group(p);
-                              case 'rename':
-                                _rename(p);
-                              case 'remove':
-                                _remove(p);
-                              case 'delete':
-                                _delete(p);
-                            }
-                          },
+        body: ContentWidth(
+          child: _error != null
+              ? BelowBar(
+                  child: EmptyState(icon: Icons.error_outline, title: '读取工作区失败', message: _error!),
+                )
+              : projects == null
+              ? const Center(child: CircularProgressIndicator())
+              : projects.isEmpty
+              ? BelowBar(
+                  child: EmptyState(
+                    icon: Icons.rocket_launch_outlined,
+                    title: '还没有工作区',
+                    message: '工作区就是一个放代码的目录。添加一个，\n然后让 Agent 帮你写代码、拖拽搭页面、实时预览。',
+                    action: FilledButton.icon(onPressed: _add, icon: const Icon(Icons.add), label: const Text('添加工作区')),
+                  ),
+                )
+              : ListView(
+                  padding: EdgeInsets.fromLTRB(Space.x4, PageBar.insetOf(context) + Space.x2, Space.x4, 96),
+                  children: [
+                    for (final g in groups) ...[
+                      if (g.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(0, Space.x4, 0, Space.x2),
+                          child: Text(g, style: Theme.of(context).textTheme.labelMedium),
                         ),
-                      ),
+                      for (final p in projects.where((p) => p.group == g))
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: Space.x3),
+                          child: _ProjectCard(
+                            project: p,
+                            count: _counts[p.id] ?? 0,
+                            current: p.id == widget.currentProjectId,
+                            onOpen: () => _open(p),
+                            onAction: (v) {
+                              switch (v) {
+                                case 'chat':
+                                  _open(p, newConversation: true);
+                                case 'pin':
+                                  _guard(() => store.setPinned(p, !p.pinned));
+                                case 'group':
+                                  _group(p);
+                                case 'rename':
+                                  _rename(p);
+                                case 'remove':
+                                  _remove(p);
+                                case 'delete':
+                                  _delete(p);
+                              }
+                            },
+                          ),
+                        ),
+                    ],
                   ],
-                ],
-              ),
+                ),
+        ),
       ),
     );
     // 从别的页面点进来挑工作区时（能返回）不带侧边栏。
