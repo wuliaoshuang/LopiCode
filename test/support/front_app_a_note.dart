@@ -17,7 +17,9 @@ const String kNoteToken = 'note_token';
 
 /// 假服务这一头的笔记本。[listFaults]、[saveFaults]＝头几次出什么岔子（'hang' 拖着不回、'500' 报错），用完就正常。
 class NoteWorld {
-  NoteWorld(List<(String, String)> start, {List<String> listFaults = const [], List<String> saveFaults = const [], this.gone = const {}}) : _listFaults = [...listFaults], _saveFaults = [...saveFaults] {
+  NoteWorld(List<(String, String)> start, {List<String> listFaults = const [], List<String> saveFaults = const [], this.gone = const {}})
+    : _listFaults = [...listFaults],
+      _saveFaults = [...saveFaults] {
     for (final (title, body) in start) {
       notes.add({'id': notes.length + 1, 'title': title, 'body': body});
     }
@@ -68,7 +70,9 @@ J _errTo(String node) => catchArm('错误', 'e', [
   show(node, cat([tx('出错：'), getF(vr('e'), '消息')])),
 ]);
 // 状态码这个字段写的是整数，请求库给的状态码是“数”（可能带小数）：得取整了才放得进去——不取整会被检查拦下。
-J _status(String res) => ex('toInt', {'x': lx('http', 'status', {'res': vr(res)})});
+J _status(String res) => ex('toInt', {
+  'x': lx('http', 'status', {'res': vr(res)}),
+});
 
 // —— 两页共用的类型 ——
 J noteRecord() => typeDef('t1', 'record', '笔记', fields: [field('编号', tInt), field('标题', tText), field('正文', tText)]);
@@ -156,19 +160,13 @@ J noteListFront(String base) => noteFront(
   public: ['t1', 't2', 'f1', 'f2', 'f3'],
   functions: [
     noteOfFn('f1'),
-    tfn(
-      'f2',
-      '取列表',
-      const [],
-      [
-        let('res', _req('GET', tx('$base/notes'), timeout: 250)),
-        iff(notB(resOk('res')), [
-          thro(errNew('取不到', tx('列表取不到'), [pair('状态码', _status('res'))])),
-        ], noElse: true),
-        ret(asDicts(resJson('res'))),
-      ],
-      returns: lTypeToJson(const LType.listOf(LType.dictOf(LType.any))),
-    ),
+    tfn('f2', '取列表', const [], [
+      let('res', _req('GET', tx('$base/notes'), timeout: 250)),
+      iff(notB(resOk('res')), [
+        thro(errNew('取不到', tx('列表取不到'), [pair('状态码', _status('res'))])),
+      ], noElse: true),
+      ret(asDicts(resJson('res'))),
+    ], returns: lTypeToJson(const LType.listOf(LType.dictOf(LType.any)))),
     tfn('f3', '我是谁', const [], [
       let('res', _req('GET', tx('$base/me'))),
       iff(notB(resOk('res')), [ret(tx('？'))], noElse: true),
@@ -202,15 +200,13 @@ J noteListFront(String base) => noteFront(
   ],
   hats: [
     mounted([
-      iff(
-        notB(lx('storage', 'has', {'key': tx(kNoteToken)})),
-        [goTo('login')],
-        orElse: [callS('f4'), show('ls_rdy', tx('好了'))],
-      ),
+      iff(notB(lx('storage', 'has', {'key': tx(kNoteToken)})), [goTo('login')], orElse: [callS('f4'), show('ls_rdy', tx('好了'))]),
     ]),
     onClick('h1', 'ls_retry', [callS('f4')]),
     onClick('h2', 'ls_open', [
-      goWith('edit', {'id': toText(ex(pg('eventItemField'), {'key': tx('id')}))}),
+      goWith('edit', {
+        'id': toText(ex(pg('eventItemField'), {'key': tx('id')})),
+      }),
     ]),
     onClick('h3', 'ls_out', [
       lb('storage', 'remove', {'key': tx(kNoteToken)}),
@@ -225,7 +221,10 @@ AppPage _list(String base) => AppPage(
     txt('ls_rdy'),
     txt('ls_err'),
     btn('ls_retry', '重试'),
-    repeatRow('ls_row', 'items', [boundText('ls_title', 'it', ['title']), btn('ls_open', '看')]),
+    repeatRow('ls_row', 'items', [
+      boundText('ls_title', 'it', ['title']),
+      btn('ls_open', '看'),
+    ]),
     txt('ls_sum'),
     btn('ls_out', '退出'),
   ],
@@ -242,19 +241,13 @@ J draftClass() => typeDef(
   ctor: method('m1', '创建时', [tpar('title', tText), tpar('body', tText)], [setF(me(), '标题', pm('title')), setF(me(), '正文', pm('body'))]),
   methods: [
     method('m2', '字数', const [], [ret(lenOf(getF(me(), '正文')))], returns: tInt),
-    method(
-      'm3',
-      '毛病',
-      const [],
-      [
-        iff(op2('==', getF(me(), '标题'), tx('')), [ret(tx('标题不能空'))], noElse: true),
-        iff(op2('>', send(me(), '字数'), nm(20)), [
-          ret(cat([tx('正文太长（'), toText(send(me(), '字数')), tx(' 个字，最多 20）')])),
-        ], noElse: true),
-        ret(tx('')),
-      ],
-      returns: tText,
-    ),
+    method('m3', '毛病', const [], [
+      iff(op2('==', getF(me(), '标题'), tx('')), [ret(tx('标题不能空'))], noElse: true),
+      iff(op2('>', send(me(), '字数'), nm(20)), [
+        ret(cat([tx('正文太长（'), toText(send(me(), '字数')), tx(' 个字，最多 20）')])),
+      ], noElse: true),
+      ret(tx('')),
+    ], returns: tText),
   ],
 );
 J noteSaveError() => typeDef('t4', 'error', '没存上', parent: '错误', fields: [field('状态码', tInt)]);
@@ -386,11 +379,5 @@ J noteFront({
   List<J> uses = const [],
 }) => {
   ...frontDoc(functions: functions, hats: hats, uses: uses),
-  'core': {
-    if (types.isNotEmpty) 'types': types,
-    if (globals.isNotEmpty) 'globals': globals,
-    if (modules.isNotEmpty) 'modules': modules,
-    'entry': ?entry,
-    if (public.isNotEmpty) 'public': public,
-  },
+  'core': {if (types.isNotEmpty) 'types': types, if (globals.isNotEmpty) 'globals': globals, if (modules.isNotEmpty) 'modules': modules, 'entry': ?entry, if (public.isNotEmpty) 'public': public},
 };

@@ -94,7 +94,11 @@ LcDocument shopApp(String base) => frontPage(
     _section('s_login', '登录', [inp('lg_user'), inp('lg_pass'), btn('lg_go', '登录'), boundText('lg_msg', 'msg')]),
     _section('s_shop', '商品', [
       btn('sp_retry', '重试'),
-      repeatRow('sp_row', 'goods', [boundText('sp_name', 'it', ['name']), boundText('sp_stock', 'it', ['stock']), btn('sp_open', '看')]),
+      repeatRow('sp_row', 'goods', [
+        boundText('sp_name', 'it', ['name']),
+        boundText('sp_stock', 'it', ['stock']),
+        btn('sp_open', '看'),
+      ]),
     ]),
     _section('s_item', '详情', [
       boundText('od_name', 'pname'),
@@ -109,7 +113,21 @@ LcDocument shopApp(String base) => frontPage(
     _section('s_ok', '成功', [boundText('ok_no', 'okno'), boundText('ok_total', 'oktotal'), btn('ok_again', '再逛逛')]),
     btn('out', '退出'),
   ],
-  [textVar('rdy', '-'), textVar('pg', '-'), textVar('err'), textVar('msg', '请登录'), listVar('goods'), textVar('pname'), textVar('pinfo'), numVar('pstock'), textVar('pid'), textVar('qtyErr'), textVar('addrErr'), textVar('okno'), textVar('oktotal')],
+  [
+    textVar('rdy', '-'),
+    textVar('pg', '-'),
+    textVar('err'),
+    textVar('msg', '请登录'),
+    listVar('goods'),
+    textVar('pname'),
+    textVar('pinfo'),
+    numVar('pstock'),
+    textVar('pid'),
+    textVar('qtyErr'),
+    textVar('addrErr'),
+    textVar('okno'),
+    textVar('oktotal'),
+  ],
   frontDoc(
     uses: [useLib('http'), useLib('storage'), useLib('form'), useLib('router')],
     functions: [
@@ -255,7 +273,12 @@ LcDocument shopApp(String base) => frontPage(
       ]),
       onClick('h2', 'sp_retry', [callS('f1')]),
       onClick('h3', 'sp_open', [
-        _go(cat([tx('/item/'), toText(ex(pg('eventItemField'), {'key': tx('id')}))])),
+        _go(
+          cat([
+            tx('/item/'),
+            toText(ex(pg('eventItemField'), {'key': tx('id')})),
+          ]),
+        ),
       ]),
       onClick('h4', 'od_go', [
         iff(

@@ -122,21 +122,11 @@ void main() {
   });
 
   test('“存上”说好交回“笔记”，却交回一段字', () {
-    _blocked(
-      _edit(
-        saveFn: tfn('f3', '存上', [tpar('id', tText), tpar('d', tRef('草稿'))], [ret(tx('好了'))], returns: tRef('笔记')),
-      ),
-      '结果类型对不上',
-    );
+    _blocked(_edit(saveFn: tfn('f3', '存上', [tpar('id', tText), tpar('d', tRef('草稿'))], [ret(tx('好了'))], returns: tRef('笔记'))), '结果类型对不上');
   });
 
   test('错误的“状态码”（整数）直接放了请求给的状态码（数，没取整）', () {
-    _blocked(
-      _edit(
-        saveFn: noteSaveFn(_base, code: lx('http', 'status', {'res': vr('res')})),
-      ),
-      '整数的位置给了没取整的数',
-    );
+    _blocked(_edit(saveFn: noteSaveFn(_base, code: lx('http', 'status', {'res': vr('res')}))), '整数的位置给了没取整的数');
   });
 
   test('“出错时”接一种没有的错误', () {
@@ -144,11 +134,6 @@ void main() {
   });
 
   test('改记录的字段（记录建好以后不能改）', () {
-    _blocked(
-      _edit(
-        extra: [setF(vr('n'), '标题', tx('改'))],
-      ),
-      '改记录',
-    );
+    _blocked(_edit(extra: [setF(vr('n'), '标题', tx('改'))]), '改记录');
   });
 }

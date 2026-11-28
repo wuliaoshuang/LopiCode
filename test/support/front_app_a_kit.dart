@@ -42,7 +42,13 @@ class AppPage {
 
 /// 多页面的文档：头一页是首页。
 LcDocument appDoc(List<AppPage> pages) {
-  final doc = LcDocument.parse(jsonEncode({'version': 3, ...pages.first._json(), 'pages': [for (final p in pages.skip(1)) p._json()]}));
+  final doc = LcDocument.parse(
+    jsonEncode({
+      'version': 3,
+      ...pages.first._json(),
+      'pages': [for (final p in pages.skip(1)) p._json()],
+    }),
+  );
   for (final p in doc.pages) {
     lcFrontStore(p.logic, lcFrontOf(p.logic)!);
   }
@@ -157,7 +163,12 @@ Future<void> appCheck(String kind, LcDocument doc, Steps steps, {Duration limit 
         ..writeAsStringSync(f.value);
     }
     File('${dir.path}/.lc-steps.json').writeAsStringSync(jsonEncode(steps));
-    final r = await runBounded('node', ['${Directory.current.path}/tool/verify/run_dom.mjs', kind, dir.path, entry], environment: {'LOPI_WEBDEV': webdevDir!, 'LOPI_WEBDEV_DOM': webdevDomDir!}, limit: limit);
+    final r = await runBounded(
+      'node',
+      ['${Directory.current.path}/tool/verify/run_dom.mjs', kind, dir.path, entry],
+      environment: {'LOPI_WEBDEV': webdevDir!, 'LOPI_WEBDEV_DOM': webdevDomDir!},
+      limit: limit,
+    );
     final out = '${r.stdout}'.trim();
     expect(out, startsWith('{'), reason: '脚本没有给出结果（退出码 ${r.exitCode}）：${r.stderr}');
     final json = jsonDecode(out) as Map<String, Object?>;
@@ -262,4 +273,5 @@ J resStatus(String res) => toText(lx('http', 'status', {'res': vr(res)}));
 
 /// 换页的那几步。[wait]＝纯网页要先等旧页面上这一步成立（请求回来、逻辑说了“去”）再开新文件；
 /// [ready]＝新页面放好了的记号。Vue / React 是先等新页面的记号，再看井号。
-Steps arriveAt(String kind, String page, {Map<String, Object?>? wait, required Map<String, Object?> ready, bool home = false}) => kind == 'html' ? [?wait, ...arrive(kind, page, home: home), ready] : [ready, ...arrive(kind, page, home: home)];
+Steps arriveAt(String kind, String page, {Map<String, Object?>? wait, required Map<String, Object?> ready, bool home = false}) =>
+    kind == 'html' ? [?wait, ...arrive(kind, page, home: home), ready] : [ready, ...arrive(kind, page, home: home)];

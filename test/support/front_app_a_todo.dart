@@ -111,7 +111,11 @@ AppPage _list(String base) => AppPage(
     btn('ls_retry', '重试'),
     inp('ls_new'),
     btn('ls_add', '加'),
-    repeatRow('ls_row', 'items', [boundText('ls_title', 'it', ['title']), boundText('ls_mark', 'it', ['mark']), btn('ls_open', '看')]),
+    repeatRow('ls_row', 'items', [
+      boundText('ls_title', 'it', ['title']),
+      boundText('ls_mark', 'it', ['mark']),
+      btn('ls_open', '看'),
+    ]),
     txt('ls_sum'),
     btn('ls_out', '退出'),
   ],
