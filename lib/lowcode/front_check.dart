@@ -11,8 +11,11 @@
 /// 不依赖界面；任何输入都不抛异常。
 library;
 
+import 'package:lopicode/backend/backend_blocks_typeops.dart';
 import 'package:lopicode/backend/backend_model.dart';
+import 'package:lopicode/backend/backend_type_bridge.dart';
 import 'package:lopicode/backend/front_doc.dart';
+import 'package:lopicode/lang/lang.dart';
 import 'package:lopicode/lowcode/bind_model.dart';
 import 'package:lopicode/lowcode/component_model.dart';
 import 'package:lopicode/lowcode/lib_blocks.dart' show libOpOf;
@@ -116,6 +119,53 @@ Set<String> lcFrontParamsRead(BeDocument front) {
   for (final body in front.libBodies) {
     walk(body, 0);
   }
+  return out;
+}
+
+/// 那一页说了每个带来的参数要是什么类型：把“这次带来的参数〔名字〕”直接放进“当成某类型用”或“标上类型”里就算说了。
+/// 名字 → 类型（存在积木里的那个字）。同一个参数说了两种的、说成“任意”的、说成那一页自己定义的类型的，都不算（这边查不了）。
+Map<String, String> lcFrontParamTypes(BeDocument front) {
+  final out = <String, String>{};
+  final clash = <String>{};
+  final own = {for (final t in front.core.types) t.name};
+  void expr(Object? v, int depth) {
+    if (depth > kMaxExprDepth * 2 + 4) return;
+    if (v is List<LcBlock>) return;
+    if (v is List) {
+      for (final x in v) {
+        expr(x, depth + 1);
+      }
+    } else if (v is Map) {
+      final x = v['x'], to = v['to'];
+      if ((v['e'] == kBeCast || v['e'] == kBeAscribe) && x is Map && _pageBlock(x['e']) == 'pageParam' && to is String) {
+        final name = _lit(x['name']);
+        final type = beTypeOfKey(to);
+        final usable = name.isNotEmpty && type != null && to != beTypeKey(LType.any) && !own.any(to.contains);
+        if (usable && out.putIfAbsent(name, () => to) != to) clash.add(name);
+      }
+      for (final x in v.values) {
+        expr(x, depth + 1);
+      }
+    }
+  }
+
+  void walk(List<LcBlock> list, int depth) {
+    if (depth > LcBlock.maxDepth + 2) return;
+    for (final b in list) {
+      expr(b.args, 0);
+      for (final a in b.arms) {
+        expr(a.args, 0);
+        walk(a.body, depth + 1);
+      }
+      walk(b.body, depth + 1);
+      walk(b.orElse, depth + 1);
+    }
+  }
+
+  for (final body in front.libBodies) {
+    walk(body, 0);
+  }
+  clash.forEach(out.remove);
   return out;
 }
 
@@ -260,6 +310,35 @@ class _Check {
     }
     final missing = wants.difference(given);
     if (missing.isNotEmpty) _error(LcIssueCode.missingArg, '「${target.title}」那一页要读带来的参数 ${missing.join('、')}，这里没带', arg: id == 'goPage' ? 'page' : 'params');
+    if (params is! Map || params['fields'] is! List) return;
+    final types = lcFrontParamTypes(targetFront);
+    if (types.isEmpty) return;
+    for (final f in params['fields'] as List) {
+      final type = f is Map ? types[f['key']] : null;
+      if (f is! Map || type == null || f['value'] is! Map) continue;
+      if (_fits(f, type) == false) {
+        _error(LcIssueCode.badArg, '「${target.title}」那一页把带来的参数 ${f['key']} 当成${beTypeLabel(type) ?? type}用，这里带的不是${beTypeLabel(type) ?? type}', arg: 'params');
+      }
+    }
+  }
+
+  int? _base;
+  int? _mismatches() => beTypeCheck(front)?.findings.where((f) => f.issue.code == 'T01').length;
+
+  /// 这一格的值放不放得进 [type]：临时给它套一层“标上类型”，看类型检查会不会多报一条“放不进去”。查不了（不是严格规矩…）＝null。
+  bool? _fits(Map<dynamic, dynamic> field, String type) {
+    final base = _base ??= _mismatches();
+    if (base == null) return null;
+    final old = field['value'];
+    field['value'] = <String, dynamic>{'e': kBeAscribe, 'x': old, 'to': type};
+    try {
+      final now = _mismatches();
+      return now == null ? null : now <= base;
+    } on Object {
+      return null;
+    } finally {
+      field['value'] = old;
+    }
   }
 }
 

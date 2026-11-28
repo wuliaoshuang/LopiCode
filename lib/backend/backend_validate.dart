@@ -7,6 +7,7 @@ library;
 
 import 'package:lopicode/backend/backend_blocks.dart';
 import 'package:lopicode/backend/backend_blocks_core.dart';
+import 'package:lopicode/backend/backend_blocks_raw.dart';
 import 'package:lopicode/backend/backend_blocks_typeops.dart';
 import 'package:lopicode/backend/backend_core.dart';
 import 'package:lopicode/backend/backend_func_edit.dart';
@@ -390,6 +391,7 @@ class _Validator {
       final why = beHostCallProblem(doc, b.args['name']);
       if (why != null) _error(BeIssueCode.badLibrary, why, fix: '删掉这一块，换成语言核心的积木来做；要碰宿主的事，等这条路放开以后再做。');
     }
+    if (b.op == kBeRawStmt) _raw(b.args['src'], isExpr: false);
     if (b.op == 'fetch') _url(b);
     // 库文档里的函数可以公开成拿着“这次请求”的积木，能不能回响应由库的类型检查说。
     final misplaced = doc.library != null && b.op != 'fetch' ? null : beHostOnlyProblem(b.op, inFunction: _inFn, inLambda: _lambdas > 0);

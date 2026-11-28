@@ -148,6 +148,12 @@ abstract interface class BePageCx {
   /// 项目里的页面。
   List<BlockOption> get pages;
 
+  /// 页面上的自定义组件实例（“当组件发出事件”只能挂在它们上面）。
+  List<BlockOption> get instances;
+
+  /// 这个组件实例往外发的事件（在“编辑组件”里定的）。
+  List<BlockOption> events(String? node);
+
   /// 这个值在积木上显示成什么（控件的名字、页面的标题）；不认识＝null。
   String? label(String pick, String value);
 }

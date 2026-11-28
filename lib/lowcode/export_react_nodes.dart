@@ -8,6 +8,8 @@ LcFrameworkExport _exportSite(LcDocument doc) {
   final files = <LcExportFile>[lcFormatted('$kLcShellName.jsx', lcReactShell(site), 'jsx')];
   final components = <LcExportFile>[];
   final done = <String>{};
+  // 走新路的页面有两页以上：小库和页面宿主抽成一个共用文件（线 A 的接入点，logic_core_js.dart）。
+  final coreShared = lcMarkCoreShared([for (final p in site.pages) p.view]);
   for (final p in site.pages) {
     final plans = LcComponentPlans.build(p.view, pageName: p.name, notes: notes, fixedNames: site.componentNames);
     if (site.navPart != null) lcNavPartOf[p.view.root] = site.navPart!;
@@ -35,6 +37,9 @@ LcFrameworkExport _exportSite(LcDocument doc) {
   }
   final shared = LcBindPlan.of(doc, doc.root);
   if (shared != null && shared.hasProject) files.add(LcExportFile(path: kLcReactStateFile, content: lcReactStateFile(shared)));
+  if (coreShared && files.any((f) => f.content.contains("'./$kLcCoreSharedFile'") || f.content.contains('"./$kLcCoreSharedFile"'))) {
+    files.add(LcExportFile(path: kLcCoreSharedFile, content: lcCoreSharedSource()));
+  }
   return LcFrameworkExport(files: [...files, ...components], notes: lcLiveNotes(notes));
 }
 

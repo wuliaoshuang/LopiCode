@@ -9,6 +9,8 @@ LcFrameworkExport _exportSite(LcDocument doc) {
   final components = <LcExportFile>[];
   final done = <String>{};
   final nav = site.navPart, top = site.topPart;
+  // 走新路的页面有两页以上：小库和页面宿主抽成一个共用文件（线 A 的接入点，logic_core_js.dart）。
+  final coreShared = lcMarkCoreShared([for (final p in site.pages) p.view]);
   for (final p in site.pages) {
     if (nav != null) lcNavPartOf[p.view.root] = nav;
     if (top != null) lcTopPartOf[p.view.root] = top;
@@ -28,6 +30,8 @@ LcFrameworkExport _exportSite(LcDocument doc) {
       if (navFile != null) lcFormatted('components/$nav.vue', navFile, 'vue'),
       if (topFile != null) lcFormatted('components/$top.vue', topFile, 'vue'),
       if (shared != null && shared.hasProject) LcExportFile(path: kLcStateFile, content: lcVueStateFile(shared)),
+      if (coreShared && files.any((f) => f.content.contains("'./$kLcCoreSharedFile'") || f.content.contains('"./$kLcCoreSharedFile"')))
+        LcExportFile(path: kLcCoreSharedFile, content: lcCoreSharedSource()),
     ],
     notes: lcLiveNotes(notes),
   );

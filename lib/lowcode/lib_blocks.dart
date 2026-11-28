@@ -286,7 +286,7 @@ BlockHat libHatLook(LibEntry e, Map<String, dynamic> args, {String? Function(Str
 ], colorKey: e.lib.id == kLcPageLibId ? BlockColorKey.event : BlockColorKey.custom);
 
 /// “从页面里挑一个”的槽还空着时写的字。
-const Map<String, String> kLibPickHints = {'node': '选控件', 'state': '选状态', 'prop': '选属性', 'page': '选页面'};
+const Map<String, String> kLibPickHints = {'node': '选控件', 'state': '选状态', 'prop': '选属性', 'page': '选页面', 'instance': '选组件', 'event': '选事件'};
 
 String _picked(String pick, Object? v, String? Function(String pick, String value)? label) {
   final value = libHatShow(v, '');

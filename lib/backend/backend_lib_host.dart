@@ -38,6 +38,8 @@ mixin BeLibHost on BlockHost, BeFuncHost {
           'state' => cx?.states,
           'prop' => cx?.props(node is String ? node : null),
           'page' => cx?.pages,
+          'instance' => cx?.instances,
+          'event' => cx?.events(node is String ? node : null),
           _ => null,
         } ??
         const <BlockOption>[];

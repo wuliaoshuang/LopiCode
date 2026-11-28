@@ -6,6 +6,7 @@
 library;
 
 import 'package:lopicode/backend/backend_blocks.dart';
+import 'package:lopicode/backend/backend_blocks_raw.dart';
 import 'package:lopicode/backend/backend_blocks_typeops.dart';
 import 'package:lopicode/backend/backend_blocks_wait.dart';
 import 'package:lopicode/backend/backend_core.dart';
@@ -45,6 +46,7 @@ const Map<String, LcBlockSpec> beCoreBlockSpecs = {
   'superCallStmt': LcBlockSpec('superCallStmt', '调父类的方法', kBeCatType, [_member, _args], hint: '重写的方法里，接着做父类原来的那一段'),
   ...beWaitBlockSpecs,
   ...beTypeOpBlockSpecs,
+  ...beRawBlockSpecs,
 };
 
 const Map<String, LcExprSpec> beCoreExprSpecs = {
@@ -66,6 +68,7 @@ const Map<String, LcExprSpec> beCoreExprSpecs = {
   'classRef': LcExprSpec('classRef', '类本身', kBeCatType, [_type], hint: '读、改、调“类本身的”字段和方法时放在“谁”那一格'),
   ...beWaitExprSpecs,
   ...beTypeOpExprSpecs,
+  ...beRawExprSpecs,
 };
 
 const Map<String, String> beCoreBlockSentences = {
@@ -78,6 +81,7 @@ const Map<String, String> beCoreBlockSentences = {
   'superCallStmt': '调父类的 {name} {args}',
   ...beWaitBlockSentences,
   ...beTypeOpBlockSentences,
+  ...beRawBlockSentences,
 };
 
 const Map<String, String> beCoreArmSentences = {'try': '出错时 只接 {kind} 放进 {name}', 'match': '是 {case} 时 带出 {binds}'};
@@ -97,6 +101,7 @@ const Map<String, String> beCoreExprSentences = {
   'classRef': '{type} 这个类',
   ...beWaitExprSentences,
   ...beTypeOpExprSentences,
+  ...beRawExprSentences,
 };
 
 bool beIsCoreOp(Object? op) => beCoreBlockSpecs.containsKey(op);
@@ -271,7 +276,7 @@ String? describeBeCoreExpr(Object? expr, String Function(String key) sub) {
     'this' => '我自己',
     'isA' => '${sub('x')} 是不是 ${_label(e['type'])}',
     'classRef' => '${_label(e['type'])} 这个类',
-    _ => describeBeWaitExpr(expr, sub) ?? describeBeTypeOpExpr(expr, sub),
+    _ => describeBeWaitExpr(expr, sub) ?? describeBeTypeOpExpr(expr, sub) ?? describeBeRawExpr(expr),
   };
 }
 
@@ -283,5 +288,5 @@ String? describeBeCoreBlock(LcBlock b, String Function(String name) arg) => swit
   'callMethodStmt' => '让 ${arg('of')} 做 ${_label(b.args['name'])}',
   'superInit' => '调父类的创建时',
   'superCallStmt' => '调父类的 ${_label(b.args['name'])}',
-  _ => describeBeWaitBlock(b, arg) ?? describeBeTypeOpBlock(b),
+  _ => describeBeWaitBlock(b, arg) ?? describeBeTypeOpBlock(b) ?? describeBeRawBlock(b, arg),
 };

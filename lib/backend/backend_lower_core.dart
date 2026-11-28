@@ -6,6 +6,7 @@
 library;
 
 import 'package:lopicode/backend/backend_blocks_core.dart';
+import 'package:lopicode/backend/backend_blocks_raw.dart';
 import 'package:lopicode/backend/backend_blocks_typeops.dart';
 import 'package:lopicode/backend/backend_core.dart';
 import 'package:lopicode/backend/backend_function.dart';
@@ -128,7 +129,7 @@ LExpr? beCoreExpr(String kind, Object? e, BeCoreCx cx) {
       final t = pick('type', '类');
       return t == null ? hole : LName(t, src: cx.src());
   }
-  return beWaitExpr(kind, e, cx) ?? beTypeOpExpr(kind, e, cx);
+  return beWaitExpr(kind, e, cx) ?? beTypeOpExpr(kind, e, cx) ?? beRawExpr(kind, e, cx);
 }
 
 const Map<String, LType?> _isTypes = {'number': null, 'text': LType.text, 'bool': LType.boolean, 'list': LType.listOf(LType.any), 'dict': LType.dictOf(LType.any)};
@@ -204,7 +205,7 @@ List<LStmt>? beCoreBlock(LcBlock b, BeCoreCx cx, List<LStmt> Function(List<LcBlo
         ),
       ];
   }
-  return beWaitBlock(b, cx, inner, varName) ?? beTypeOpBlock(b, cx);
+  return beWaitBlock(b, cx, inner, varName) ?? beTypeOpBlock(b, cx) ?? beRawBlock(b, cx, inner, varName);
 }
 
 List<LStmt> _match(LcBlock b, BeCoreCx cx, List<LStmt> Function(List<LcBlock> list, {bool inElse, int arm}) inner, LExpr subject, String? Function(Object?) varName) {
