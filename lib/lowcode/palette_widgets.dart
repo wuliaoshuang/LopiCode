@@ -50,6 +50,14 @@ IconData lcIcon(String type) => switch (type) {
   'bottomNav' => Icons.video_label,
   'tabs' => Icons.tab,
   'dialog' => Icons.chat_bubble_outline,
+  // 内置组件库里进组件盒的那几个（comp_lib_builtin.dart）和滑块。
+  'iconButton' => Icons.add_circle_outline,
+  'link' => Icons.link,
+  'grid' => Icons.grid_view,
+  'scroll' => Icons.swap_vert,
+  'stepper' => Icons.exposure,
+  'formItem' => Icons.short_text,
+  'slider' => Icons.linear_scale,
   _ => Icons.widgets_outlined,
 };
 
@@ -58,6 +66,16 @@ const double kPaletteHandleHeight = 28;
 
 /// 组件盒默认多高。
 const double kPaletteNormalHeight = 304;
+
+/// 一类里有 [count] 个条目时，默认那一档多高：两行以内就是 [kPaletteNormalHeight]（两行半，露半行表示下面还有）；
+/// 三行、四行的把这几行整个露出来（第四轮 B6：“表单”有 9 个，第 9 个原来只露一条边）；再多的露四行，其余往下滑。
+double paletteNormalHeight(int count) {
+  final rows = (count / 4).ceil();
+  if (rows <= 2) return kPaletteNormalHeight;
+  final shownRows = rows > 4 ? 4 : rows;
+  // 手柄 28 ＋ 搜索 48 ＋ 分类 36 ＋ 格子上边距 4 ＋ 行（72 一行、行间 8）＋ 下边距 12
+  return kPaletteHandleHeight + 48 + 36 + Space.x1 + shownRows * 72 + (shownRows - 1) * Space.x2 + Space.x3;
+}
 
 class PalettePanel extends StatefulWidget {
   const PalettePanel({
@@ -105,7 +123,20 @@ class PalettePanelState extends State<PalettePanel> {
   double _height = kPaletteNormalHeight;
   bool _dragging = false;
 
-  BkDockStops get _stops => BkDockStops.of(handle: kPaletteHandleHeight, normal: kPaletteNormalHeight, area: widget.maxHeight);
+  BkDockStops get _stops => BkDockStops.of(handle: kPaletteHandleHeight, normal: paletteNormalHeight(_shownGroup.$2.length), area: widget.maxHeight);
+
+  /// 现在看的是哪一类、这一类里有哪些（不算搜索）。
+  (PaletteGroup, List<PaletteEntry>) get _shownGroup {
+    final group = paletteGroups(widget.entries).contains(_group) ? _group : PaletteGroup.recent;
+    return (group, paletteInGroup(widget.entries, group, widget.recent));
+  }
+
+  /// 换一类看。面板正停在默认那一档时跟着新的一类调高矮（这一类有三四行就高一点，一眼看全）；她自己拖过的不动。
+  void _pick(PaletteGroup g) => setState(() {
+    final atNormal = (height - _stops.normal).abs() < 0.5;
+    _group = g;
+    if (atNormal) _height = _stops.normal;
+  });
 
   /// 现在多高（测试用）。
   double get height => _stops.clamp(_height);
@@ -137,8 +168,8 @@ class PalettePanelState extends State<PalettePanel> {
     final height = stops.clamp(_height);
     final query = _query.text.trim();
     final groups = paletteGroups(widget.entries);
-    final group = groups.contains(_group) ? _group : PaletteGroup.recent;
-    final shown = query.isEmpty ? paletteInGroup(widget.entries, group, widget.recent) : paletteSearch(widget.entries, query);
+    final (group, inGroup) = _shownGroup;
+    final shown = query.isEmpty ? inGroup : paletteSearch(widget.entries, query);
     // 里面的内容按“至少默认那么高”排好，外面只是裁掉露不出来的部分：收起时格子还在（见文件开头）。
     final contentHeight = height < stops.normal ? stops.normal : height;
     return AnimatedContainer(
@@ -242,7 +273,7 @@ class PalettePanelState extends State<PalettePanel> {
                             child: InkWell(
                               key: ValueKey('palette-group-${g.name}'),
                               borderRadius: BorderRadius.circular(16),
-                              onTap: () => setState(() => _group = g),
+                              onTap: () => _pick(g),
                               child: Padding(
                                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                 child: Text(
@@ -315,7 +346,7 @@ class PalettePanelState extends State<PalettePanel> {
   Widget _cell(BuildContext context, PaletteEntry e) {
     final c = context.colors;
     final t = Theme.of(context).textTheme;
-    final mine = e.ref != null;
+    final mine = e.ref != null && e.builtin == null;
     return LcLiftDetector(
       key: ValueKey('palette-item-${e.key}'),
       onLift: (at) => widget.onLift(e, at),
@@ -333,7 +364,7 @@ class PalettePanelState extends State<PalettePanel> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(lcIcon(e.type), size: 22, color: mine ? c.accent : c.text),
+                Icon(lcIcon(e.icon), size: 22, color: mine ? c.accent : c.text),
                 const SizedBox(height: 6),
                 Text(
                   e.label,

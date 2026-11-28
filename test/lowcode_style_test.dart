@@ -324,7 +324,7 @@ void main() {
           }
         }
       }
-      expect(checked, 25 * 6 * 16);
+      expect(checked, 26 * 6 * 16); // 第四轮 B5：多了滑块，25 种变 26 种
     });
 
     test('翻出来的是拆开的单项', () {

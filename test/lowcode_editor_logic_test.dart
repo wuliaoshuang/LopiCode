@@ -16,6 +16,15 @@ import 'package:lopicode/lowcode/save_queue.dart';
 
 List<String> keysOf(List<PaletteEntry> list) => [for (final e in list) e.key];
 
+const builtinKeys = [
+  'component:lib_lopi_builtin_iconButton',
+  'component:lib_lopi_builtin_link',
+  'component:lib_lopi_builtin_grid',
+  'component:lib_lopi_builtin_scroll',
+  'component:lib_lopi_builtin_stepper',
+  'component:lib_lopi_builtin_formItem',
+];
+
 void main() {
   group('组件盒目录', () {
     final mine = [
@@ -33,7 +42,8 @@ void main() {
     final all = paletteEntries(mine);
 
     test('全部条目：内置的一个不少、顺序不变，自定义组件排在后面', () {
-      expect(keysOf(all), [...lcPaletteTypes, 'component:c1', 'component:c2']);
+      // 第四轮 B5：原生控件后面多了内置组件库里进组件盒的六个
+      expect(keysOf(all), [...lcPaletteTypes, ...builtinKeys, 'component:c1', 'component:c2']);
       expect(all.last.label, '价格表');
       expect(all.last.group, PaletteGroup.mine);
     });
@@ -47,8 +57,17 @@ void main() {
         expect(grouped.intersection(inGroup.toSet()), isEmpty, reason: '一个组件只在一类里');
         grouped.addAll(inGroup);
       }
-      expect(grouped, lcPaletteTypes.toSet());
-      expect(keysOf(paletteInGroup(all, PaletteGroup.layout, const [])), ['container', 'row', 'column', 'card', 'spacer', 'dialog']);
+      expect(grouped, {...lcPaletteTypes, ...builtinKeys});
+      expect(keysOf(paletteInGroup(all, PaletteGroup.layout, const [])), [
+        'container',
+        'row',
+        'column',
+        'card',
+        'spacer',
+        'dialog',
+        'component:lib_lopi_builtin_grid',
+        'component:lib_lopi_builtin_scroll',
+      ]);
       expect(keysOf(paletteInGroup(all, PaletteGroup.mine, const [])), ['component:c1', 'component:c2']);
       expect([for (final g in paletteGroups(all)) g.label], ['常用', '布局', '基础', '表单', '展示', '导航', '我的']);
       expect([for (final g in paletteGroups(paletteEntries(const []))) g.label], ['常用', '布局', '基础', '表单', '展示', '导航']);
@@ -91,10 +110,11 @@ void main() {
     });
 
     test('搜索：按名字、中文别名、英文、拼音；不分大小写、去首尾空格；自定义组件按名字', () {
-      expect(keysOf(paletteSearch(all, '按钮')), ['button']);
-      expect(keysOf(paletteSearch(all, ' BUTTON ')), ['button']);
+      // 第四轮 B5：多了“图标按钮”，搜“按钮”它也在
+      expect(keysOf(paletteSearch(all, '按钮')), ['button', 'component:lib_lopi_builtin_iconButton']);
+      expect(keysOf(paletteSearch(all, ' BUTTON ')), ['button', 'component:lib_lopi_builtin_iconButton']);
       expect(keysOf(paletteSearch(all, 'btn')), ['button']);
-      expect(keysOf(paletteSearch(all, 'anniu')), ['button']);
+      expect(keysOf(paletteSearch(all, 'anniu')), ['button', 'component:lib_lopi_builtin_iconButton']);
       expect(keysOf(paletteSearch(all, '图')), contains('image'));
       expect(keysOf(paletteSearch(all, '输入')), ['input', 'textarea']);
       expect(keysOf(paletteSearch(all, '问候')), ['component:c1']);
@@ -442,6 +462,40 @@ void main() {
     // 第 3 期第 3 段：看图发现标签盖住了旁边的组件（网格里跨两列的格子下面那一格、小按钮上面那行字）。
     Rect box(Offset at, String text) => at & Size(text.length * 7.0 + 12, 19);
 
+    test('B5：选中贴着屏幕顶的顶栏，右边放着按钮：标签不压在按钮上', () {
+      const bar = Rect.fromLTWH(0, 0, 390, 56);
+      const t = '390 × 56';
+      const right = Rect.fromLTWH(318, 8, 64, 40), below = Rect.fromLTWH(0, 56, 390, 40);
+      final at = box(sizeLabelOrigin(bar, visible, 1, t, avoid: const [right, below]), t);
+      expect(at.overlaps(right), isFalse, reason: '$at');
+      expect(at.overlaps(below), isFalse, reason: '$at');
+      // 左右都放着按钮：放正中间
+      const left = Rect.fromLTWH(8, 8, 64, 40);
+      final mid = box(sizeLabelOrigin(bar, visible, 1, t, avoid: const [left, right, below]), t);
+      expect(mid.overlaps(left) || mid.overlaps(right) || mid.overlaps(below), isFalse, reason: '$mid');
+    });
+
+    test('B6：顶栏标题居中、左右都放着按钮：标签不压在标题上（标题那一块是算出来的）', () {
+      const bar = Rect.fromLTWH(0, 0, 390, 56);
+      const t = '390 × 56';
+      final n = LcDocument.starter('x').newNode('appBar')..props['title'] = '我的首页';
+      expect(appBarTitleBox(n, bar), isNull, reason: '标题靠左的不用算');
+      n.props['variant'] = 'center';
+      final title = appBarTitleBox(n, bar)!;
+      expect(title.center, bar.center);
+      expect(title.width, greaterThan(56));
+      expect(title.left >= 72 && title.right <= 390 - 72, isTrue);
+      n.props['title'] = '';
+      expect(appBarTitleBox(n, bar), isNull);
+      const left = Rect.fromLTWH(8, 8, 64, 40), right = Rect.fromLTWH(318, 8, 64, 40), below = Rect.fromLTWH(0, 56, 390, 40);
+      final at = box(sizeLabelOrigin(bar, visible, 1, t, avoid: [left, right, below, title]), t);
+      expect(at.overlaps(title), isFalse, reason: '$at 压在标题 $title 上了');
+      expect(at.overlaps(left) || at.overlaps(right), isFalse, reason: '$at');
+      // 只有右边放着按钮：左头空着，放左头，也不压标题
+      final onlyRight = box(sizeLabelOrigin(bar, visible, 1, t, avoid: [right, below, title]), t);
+      expect(onlyRight.overlaps(title) || onlyRight.overlaps(right) || onlyRight.overlaps(below), isFalse, reason: '$onlyRight');
+    });
+
     test('上方有别的组件：换到下方；上下都有：换到左右；都不盖住旁边的', () {
       const rect = Rect.fromLTWH(16, 116, 64, 48);
       const t = '64 × 48';
@@ -487,6 +541,8 @@ void main() {
       expect(sizeLabelAvoids(doc, a.id, ra, b.id, rb), isTrue);
       expect(sizeLabelAvoids(doc, a.id, ra, 'inst__k5', rb), isTrue, reason: '自定义组件里面画出来的东西也算');
       expect(sizeLabelAvoids(doc, a.id, ra, '${col.id}#left', rb), isFalse);
+      // 第四轮 B5：选中的是容器，它里面的叶子组件也要避（顶栏右边放的按钮）
+      expect(sizeLabelAvoids(doc, col.id, rc, b.id, rb), isTrue);
     });
 
     test('贴着屏幕边：整个标签都在看得见的那一块里', () {

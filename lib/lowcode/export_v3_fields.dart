@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:lopicode/lowcode/box_off.dart';
 import 'package:lopicode/lowcode/export_web_v3_css.dart';
 import 'package:lopicode/lowcode/icon_set.dart';
 import 'package:lopicode/lowcode/model.dart';
@@ -51,11 +52,12 @@ String lcFieldRule(LcNode n, LcNode? parent, String selector) {
 
 /// 这棵树用到了哪些新属性，就补哪几条公共 CSS；一个都没用到返回空串。
 String lcV3ExtraCss(LcNode root) {
-  var icon = false, disabled = false, field = false, required = false;
+  var icon = false, disabled = false, field = false, required = false, boxOff = false;
   void walk(LcNode n, int depth) {
     if (depth > LcNode.maxDepth * 4) return;
     icon = icon || lcButtonIcon(n) != null;
     disabled = disabled || lcIsDisabled(n);
+    boxOff = boxOff || lcBoxGuarded(n);
     field = field || lcInputLabel(n) != null;
     required = required || (lcInputLabel(n) != null && lcInputRequired(n));
     for (final c in n.children) {
@@ -71,6 +73,7 @@ String lcV3ExtraCss(LcNode root) {
       ..writeln('.lc-icon-solo { margin-right: 0; }');
   }
   if (disabled) out.writeln('.lc-button:disabled, .lc-input:disabled { opacity: .5; cursor: not-allowed; }');
+  if (boxOff) out.writeln(kLcBoxOffCss);
   if (field) {
     out
       ..writeln('.lc-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }')

@@ -296,7 +296,7 @@ void lcSetModel(LcNode n, String? state) {
 
 /// 双向绑的是这个控件的哪个属性；这种控件不能双向返回 null。
 String? lcModelProp(String type) => switch (type) {
-  'input' || 'textarea' || 'radio' || 'select' => 'value',
+  'input' || 'textarea' || 'radio' || 'select' || 'slider' => 'value',
   'switch' || 'checkbox' => 'checked',
   _ => null,
 };
@@ -329,10 +329,11 @@ class LcBindable {
 List<LcBindable> lcBindablesOf(String type) => switch (type) {
   'text' => const [LcBindable('text', '文字', 'text')],
   'button' => const [LcBindable('text', '文字', 'text'), LcBindable('disabled', '禁用', 'bool')],
+  'container' => const [LcBindable('disabled', '禁用', 'bool'), LcBindable('alt', '说明文字', 'text')],
   'image' => const [LcBindable('src', '图片地址', 'text'), LcBindable('alt', '说明文字', 'text')],
   'input' || 'textarea' => const [LcBindable('placeholder', '提示文字', 'text'), LcBindable('disabled', '禁用', 'bool')],
   'checkbox' => const [LcBindable('text', '文字', 'text'), LcBindable('disabled', '禁用', 'bool')],
-  'switch' || 'radio' || 'select' => const [LcBindable('disabled', '禁用', 'bool')],
+  'switch' || 'radio' || 'select' || 'slider' => const [LcBindable('disabled', '禁用', 'bool')],
   'list' => const [LcBindable('items', '列表内容', 'list')],
   'listItem' => const [LcBindable('title', '标题', 'text'), LcBindable('subtitle', '副标题', 'text'), LcBindable('trailing', '右侧文字', 'text')],
   'appBar' => const [LcBindable('title', '标题', 'text')],

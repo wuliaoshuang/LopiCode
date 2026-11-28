@@ -22,6 +22,7 @@ import 'package:lopicode/lowcode/canvas_view.dart';
 import 'package:lopicode/lowcode/canvas_view_sheet.dart';
 import 'package:lopicode/lowcode/code_sheet.dart';
 import 'package:lopicode/lowcode/comp_lib.dart';
+import 'package:lopicode/lowcode/comp_lib_builtin.dart';
 import 'package:lopicode/lowcode/comp_lib_sheet.dart';
 import 'package:lopicode/lowcode/component_sheet.dart';
 import 'package:lopicode/lowcode/edit_types.dart';
@@ -155,7 +156,7 @@ class _BuilderScreenState extends State<BuilderScreen> with WidgetsBindingObserv
   void _onSaveState(SaveState state) {
     if (!mounted) return;
     setState(() {});
-    if (state == SaveState.failed) showSnack(context, '保存失败：${_saver.lastError}');
+    if (state == SaveState.failed) showEditorHint(context, '保存失败：${_saver.lastError}');
   }
 
   Future<void> _load() async {
@@ -167,6 +168,7 @@ class _BuilderScreenState extends State<BuilderScreen> with WidgetsBindingObserv
         return;
       }
       final doc = LcDocument.parse(await _file.readAsString());
+      lcUpgradeBuiltins(doc); // 内置组件库出了新版：装着的旧定义原地换新
       await lcAttachLibs(widget.session.guard, doc); // 项目里的积木库：页面逻辑用上的库从这里找
       if (!mounted) return;
       setState(() {
@@ -187,7 +189,7 @@ class _BuilderScreenState extends State<BuilderScreen> with WidgetsBindingObserv
     try {
       await saveLowcodePage(widget.session.guard, doc);
     } on FileSystemException catch (e) {
-      if (mounted) showSnack(context, '新建页面失败：${describeSaveError(e)}');
+      if (mounted) showEditorHint(context, '新建页面失败：${describeSaveError(e)}');
       return;
     }
     widget.session.filesChanged();
@@ -229,6 +231,7 @@ class _BuilderScreenState extends State<BuilderScreen> with WidgetsBindingObserv
     final node = doc.newNode(type);
     if (ref != null) node.props['ref'] = ref; // 自定义组件的实例
     _apply((d) {
+      lcEnsureBuiltin(d, ref); // 内置组件库里的组件：第一次用才把定义装进来
       lcAdoptNewNav(d, node);
       lcAdoptNewTop(d, node);
       if (sel != null && sel.isContainer && type != 'dialog') {
@@ -251,6 +254,7 @@ class _BuilderScreenState extends State<BuilderScreen> with WidgetsBindingObserv
       final node = _doc!.newNode(drag.type!);
       if (drag.ref != null) node.props['ref'] = drag.ref;
       _apply((d) {
+        lcEnsureBuiltin(d, drag.ref);
         lcAdoptNewNav(d, node);
         lcAdoptNewTop(d, node);
         lcInsertAt(d, parentId, node, index);

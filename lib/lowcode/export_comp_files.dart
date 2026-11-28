@@ -21,6 +21,7 @@ library;
 import 'dart:convert';
 
 import 'package:lopicode/lowcode/bind_model.dart';
+import 'package:lopicode/lowcode/comp_self_wire.dart';
 import 'package:lopicode/lowcode/component_extras.dart';
 import 'package:lopicode/lowcode/component_model.dart';
 import 'package:lopicode/lowcode/component_ops.dart';
@@ -141,7 +142,8 @@ bool _selfContained(LcComponentDef def) {
 
 /// 给 Vue / React 导出看的文档（见文件开头）。没有用了新东西的实例：原样返回 [doc]（旧页面逐字节不变）。
 /// 出不了组件文件的（[lcLiveFilesOk] 为否）：照 B2 的做法把实例摊开。
-LcDocument lcFrameworkDoc(LcDocument doc) {
+LcDocument lcFrameworkDoc(LcDocument source) {
+  final doc = lcSelfWired(source); // 步进器这类“没人接就自己记着”的先补好线
   if (!lcLiveFilesOk(doc)) return lcExportDoc(doc, allPages: true);
   final at = doc.pageIndex;
   var any = false;

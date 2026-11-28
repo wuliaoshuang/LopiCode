@@ -301,6 +301,8 @@ class CanvasViewState extends State<CanvasView> with SingleTickerProviderStateMi
     final avoid = [
       for (final id in _keys.keys)
         if (_rectOf(id, pageBox) case final box? when sizeLabelAvoids(doc, node.id, rect, id, box)) box,
+      // 顶栏居中的标题不是单独的组件：算出它占的那一块，标签收进框里时别压在标题上
+      ?appBarTitleBox(lcViewNode(node, env), rect),
     ];
     _selection.value = CanvasSelection.of(lcViewNode(node, env), parent, rect, base: base, page: _pageSize, avoid: avoid);
   }

@@ -11,7 +11,7 @@ extension _BuilderActions on _BuilderScreenState {
       await file.writeAsString(code);
       widget.session.filesChanged();
     } on FileSystemException catch (e) {
-      if (mounted) showSnack(context, '写入 $path 失败：${describeSaveError(e)}');
+      if (mounted) showEditorHint(context, '写入 $path 失败：${describeSaveError(e)}');
       return;
     }
     if (!mounted) return;
@@ -148,7 +148,7 @@ extension _BuilderActions on _BuilderScreenState {
   Future<void> _openLibs({String? pick}) async {
     final def = pick == null ? null : _doc!.component(pick);
     if (def != null && compLibOf(def) != null) {
-      showSnack(context, '它本来就是库「${compLibOf(def)!.name}」里的组件');
+      showEditorHint(context, '它本来就是库「${compLibOf(def)!.name}」里的组件');
       return;
     }
     await showCompLibSheet(context, doc: () => _doc!, onEdit: _apply, images: _images, pickComponent: pick);

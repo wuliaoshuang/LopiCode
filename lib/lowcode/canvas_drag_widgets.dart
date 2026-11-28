@@ -8,6 +8,7 @@
 // - 手指下面的缩略图：就是这个组件自己的样子，垫一张带阴影的小白卡片，略透明，最宽 160、最高 120（放不下就按比例缩小），不挡手指。
 //   它跟着手指走，由搭建台放在最上面一层（见 editor_workbench_widgets.dart）。
 import 'package:lopicode/lowcode/canvas_render_widgets.dart';
+import 'package:lopicode/lowcode/comp_lib_builtin.dart';
 import 'package:lopicode/lowcode/component_model.dart';
 import 'package:lopicode/lowcode/component_ops.dart';
 import 'package:lopicode/lowcode/editor_drag.dart';
@@ -121,6 +122,8 @@ Widget? buildDragGhost(LcDocument doc, LcDrag drag, {required double layoutWidth
   );
   // 主题变量也带上（缩略图里用到变量的颜色才对）。
   if (doc.more['theme'] != null) temp.more['theme'] = doc.more['theme'];
+  // 从组件盒拖出来的是内置组件库里的组件、文档里还没装：缩略图这份里先装上。
+  lcEnsureBuiltin(temp, drag.ref);
   final width = layoutWidth.clamp(48.0, 1200.0).toDouble();
   return IgnorePointer(
     child: Opacity(

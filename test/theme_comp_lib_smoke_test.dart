@@ -107,6 +107,11 @@ void main() {
       await menu(tester, '组件库');
       await until(tester, find.text('项目里还没有组件库'), '空的组件库面板');
       await shot(tester, 'lib-empty');
+      // 第四轮 B5：最上面一行“内置组件库”，点开是只读的清单（每个组件带一句说明）
+      await tap(tester, lbKey('complib-builtin'));
+      await until(tester, lbKey('complib-peek'), '内置组件库里的组件');
+      await shot(tester, 'lib-builtin');
+      await back(tester);
       await tap(tester, lbKey('complib-new'));
       await tester.enterText(lbKey('complib-form-name'), '商城组件');
       await tester.enterText(lbKey('complib-form-id'), 'Shop');

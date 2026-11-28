@@ -1,6 +1,6 @@
 // 由 LopiCode 低代码搭建器生成，重新导出会覆盖本文件。
 // 状态与绑定：状态是页面 State 类里 s_ 开头的字段，绑了它的地方跟着变；输入框、开关这些会把值写回去。
-// 积木逻辑这一份不导出（按钮的 onPressed 是空的）：在自己的代码里用 update(() => s_xxx = 新值) 改状态。
+// 页面自己的积木逻辑这一份不导出（那些按钮的 onPressed 是空的）；组件事件接的动作导出了，写在那个控件的 onPressed / onTap 里。在自己的代码里用 update(() => s_xxx = 新值) 改状态。
 // 没有导出的：
 // · 类名开关 on 的样子里的 font-weight（Flutter 这边只认底色、文字颜色、字号、内外边距、圆角、间距、宽、高这几条）。
 import 'package:flutter/material.dart';
@@ -64,7 +64,7 @@ class CompTagsPageState extends State<CompTagsPage> {
                       spacing: 6,
                       children: [
                         if (_lcList(s_tagList).isEmpty) Text('还没有标签'),
-                        for (final (v_i, v_it) in _lcList(s_tagList).indexed) Flexible(
+                        for (final v_it in _lcList(s_tagList)) Flexible(
                           child: Text(
                             _lcText(v_it),
                             style: TextStyle(color: _lcColor(_lcBool(_lcEq(v_it, s_cur)) ? '#1565C0' : null), height: 1.5),
@@ -77,7 +77,7 @@ class CompTagsPageState extends State<CompTagsPage> {
                           ),
                         ),
                         FilledButton(
-                          onPressed: () {},
+                          onPressed: () { update(() => s_cur = _lcText('')); },
                           style: FilledButton.styleFrom(),
                           child: Text('清空'),
                         ),

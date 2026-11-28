@@ -272,17 +272,6 @@ class LowcodePage extends StatelessWidget {
   }
 }
 
-/// 去另一页（叠在当前页上面，系统的返回能回来）。
-void _lcGoTo(BuildContext context, Widget page) {
-  Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => page));
-}
-
-/// 换成另一页（底部导航用：不往上叠）。page 是 null＝这一项没设去哪页，什么都不做。
-void _lcSwitchTo(BuildContext context, Widget? page) {
-  if (page == null) return;
-  Navigator.of(context).pushReplacement(MaterialPageRoute<void>(builder: (_) => page));
-}
-
 /// 主题变量：全应用只此一处。改这里的值，用到它的地方都跟着变。
 abstract final class LcVars {
   /// 品牌绿（--color-primary）

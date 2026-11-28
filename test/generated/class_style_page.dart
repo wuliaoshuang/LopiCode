@@ -260,12 +260,6 @@ void _lcGoTo(BuildContext context, Widget page) {
   Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => page));
 }
 
-/// 换成另一页（底部导航用：不往上叠）。page 是 null＝这一项没设去哪页，什么都不做。
-void _lcSwitchTo(BuildContext context, Widget? page) {
-  if (page == null) return;
-  Navigator.of(context).pushReplacement(MaterialPageRoute<void>(builder: (_) => page));
-}
-
 /// 跨页共用的状态。改它：`LcAppState.update(() => LcAppState.xxx = 新值)`，开着的页面都跟着变。
 abstract final class LcAppState {
   static Object? user = '小塔塔';

@@ -6,8 +6,11 @@
 // - “存进库”是一张表，一行一项：名字、标识、版本、作者、要放进去的组件（勾选）。标识写错当场说怎么写。
 // - 导入一定先看预览（和积木库同一页：lib/ui/lib_import_sheet.dart），点了头才落盘；导入以后把“重查”的结果说出来。
 // - 库里的组件不能直接改：看定义里给“复制一份来改”。颜色全取主题值。
+// - 清单最上面固定一行“内置组件库”（应用自带、只读，第四轮 B5）：点开看里面每个组件是什么、有哪些属性插槽事件变体，
+//   每个都能“复制一份来改”。它没有“⋮”——导出、拿掉这些对它都不成立。
 import 'package:lopicode/lang/lib_native.dart';
 import 'package:lopicode/lowcode/comp_lib.dart';
+import 'package:lopicode/lowcode/comp_lib_builtin.dart';
 import 'package:lopicode/lowcode/comp_lib_store.dart';
 import 'package:lopicode/lowcode/component_extras.dart';
 import 'package:lopicode/lowcode/component_model.dart';
@@ -247,6 +250,26 @@ class _LibSheetState extends State<_LibSheet> {
     _say(context, made == null ? '没复制成' : '已复制成项目自己的组件，在“自定义组件”里能改');
   }
 
+  /// 点开内置组件库；在里面点了“复制一份来改”就把那个组件另存成项目自己的。
+  Future<void> _peekBuiltin() async {
+    final lib = lcBuiltinCompLib();
+    final forked = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => _LibPeek(
+        lib: CompStoredLib(kBuiltinCompLibId, const {}, lib, from: 'builtin'),
+        installed: true,
+        notes: {for (final b in kBuiltinComps) b.id: b.note},
+      ),
+    );
+    if (forked == null || !mounted) return;
+    String? made;
+    widget.onEdit((d) => made = lcForkBuiltin(d, forked));
+    setState(() {});
+    final name = made == null ? null : _doc.component(made!)?.name;
+    _say(context, name == null ? '没复制成' : '已复制成项目自己的「$name」：右上角 ⋮ ›“自定义组件”› 它右边的 ⋮ ›“编辑内容”，就能在画布上改');
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
@@ -278,6 +301,15 @@ class _LibSheetState extends State<_LibSheet> {
           Padding(
             padding: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x2),
             child: OutlinedButton.icon(key: const ValueKey('complib-import-open'), onPressed: _import, icon: const Icon(Icons.file_open_outlined, size: 18), label: const Text('从文件导入')),
+          ),
+          ListTile(
+            key: const ValueKey('complib-builtin'),
+            contentPadding: const EdgeInsets.only(left: Space.x4, right: Space.x3),
+            leading: Icon(Icons.widgets_outlined, color: c.accent),
+            title: const Text(kBuiltinCompLibName),
+            subtitle: Text('应用自带 · 只读 · ${lcBuiltinCompLib().defs.length} 个组件 · 点开看，能复制一份来改', maxLines: 2, overflow: TextOverflow.ellipsis),
+            trailing: Icon(Icons.chevron_right, color: c.textFaint),
+            onTap: _peekBuiltin,
           ),
           if (libs == null)
             const Padding(
@@ -338,9 +370,12 @@ class _LibSheetState extends State<_LibSheet> {
 
 /// 看一个库里有什么；点“复制一份来改”返回那个组件在库里的 id。
 class _LibPeek extends StatelessWidget {
-  const _LibPeek({required this.lib, required this.installed});
+  const _LibPeek({required this.lib, required this.installed, this.notes = const {}});
   final CompStoredLib lib;
   final bool installed;
+
+  /// 每个组件的一句话说明（组件在库里的 id → 说明）；内置组件库才有。
+  final Map<String, String> notes;
 
   @override
   Widget build(BuildContext context) {
@@ -369,6 +404,11 @@ class _LibPeek extends StatelessWidget {
             const SizedBox(height: Space.x4),
             Text(d.name, style: t.titleSmall),
             const SizedBox(height: 2),
+            if (notes[d.id] != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 2),
+                child: Text(notes[d.id]!, style: t.bodySmall),
+              ),
             Text(line(d), style: t.bodySmall?.copyWith(color: c.textMuted)),
             Align(
               alignment: Alignment.centerLeft,

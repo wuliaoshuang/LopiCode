@@ -13,6 +13,7 @@ import 'package:lopicode/lowcode/bind_model.dart';
 import 'package:lopicode/lowcode/bind_picker_sheet.dart';
 import 'package:lopicode/lowcode/bind_repeat_sheet.dart';
 import 'package:lopicode/lowcode/bind_simple.dart';
+import 'package:lopicode/lowcode/editor_hint_widgets.dart';
 import 'package:lopicode/lowcode/inspector_common_widgets.dart';
 import 'package:lopicode/lowcode/inspector_presets_widgets.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
@@ -172,7 +173,7 @@ class InspectorDataSection extends StatelessWidget {
     if (name == null || !context.mounted) return;
     final key = name.trim();
     if (!ok.hasMatch(key)) {
-      ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(content: Text('“$key”不能用：$hint')));
+      showEditorHint(context, '“$key”不能用：$hint');
       return;
     }
     final r = await lcPickBinding(context, ed, title: key, want: want);
@@ -206,7 +207,7 @@ class InspectorDataSection extends StatelessWidget {
       final src = r.source;
       final name = src != null && src['from'] == 'var' && lcPathOf(src['path']).isEmpty ? src['name'] : null;
       if (!r.clear && name is! String) {
-        if (context.mounted) ScaffoldMessenger.maybeOf(context)?.showSnackBar(const SnackBar(content: Text('跟状态同步要选一个状态本身（不能是拼出来的、比出来的，也不能是记录里的一格）')));
+        if (context.mounted) showEditorHint(context, '跟状态同步要选一个状态本身（不能是拼出来的、比出来的，也不能是记录里的一格）');
         return;
       }
       ed.apply((n, _) => lcSetModel(n, r.clear ? null : name as String));

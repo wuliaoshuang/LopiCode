@@ -71,7 +71,7 @@ class LcWebCtx {
   final LcNode? pageRoot;
 }
 
-const Set<String> lcWebV3Types = {'icon', 'textarea', 'switch', 'checkbox', 'radio', 'select', 'listItem', 'appBar', 'bottomNav', 'tabs', 'dialog'};
+const Set<String> lcWebV3Types = {'icon', 'textarea', 'switch', 'slider', 'checkbox', 'radio', 'select', 'listItem', 'appBar', 'bottomNav', 'tabs', 'dialog'};
 
 /// 组件最外层元素的类型 class。图标用 `lc-glyph`：`lc-icon` 已经是按钮里那个小图标的类了，规则不一样。
 String lcTypeClass(String type) => type == 'icon' ? 'lc-glyph' : 'lc-$type';
@@ -145,6 +145,9 @@ LcEl? lcWebElement(LcNode n, LcWebCtx ctx) {
       );
     case 'switch':
       return LcEl('input', host: true, attrs: {'type': 'checkbox', 'role': 'switch', if (flag('checked')) '@checked': null, if (flag('disabled')) 'disabled': null});
+    case 'slider':
+      final s = lcSliderOf(n);
+      return LcEl('input', host: true, attrs: {'type': 'range', 'min': _n(s.min), 'max': _n(s.max), 'step': _n(s.step), if (flag('disabled')) 'disabled': null, '@value': _n(s.value)});
     case 'checkbox':
       return LcEl(
         'label',
@@ -334,7 +337,7 @@ List<LcWebPiece> lcRenderEl(LcEl root, LcWebDialect d, {required String hostAttr
           } else {
             pick = value ?? '';
           }
-        } else if (d == LcWebDialect.html) {
+        } else if (d == LcWebDialect.html && e.tag != 'input') {
           areaText = value;
         } else {
           b.write(attr(react ? 'defaultValue' : 'value', value ?? ''));

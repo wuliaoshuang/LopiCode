@@ -1,6 +1,7 @@
 /// “编辑组件的内容”用的临时文档：怎么造、怎么写回定义（不带界面；界面在 component_editor_sheet.dart）。
 library;
 
+import 'package:lopicode/lowcode/comp_lib_builtin.dart';
 import 'package:lopicode/lowcode/component_extras.dart';
 import 'package:lopicode/lowcode/component_model.dart';
 import 'package:lopicode/lowcode/component_ops.dart';
@@ -119,6 +120,8 @@ LcOpResult applyComponentEditing(LcDocument doc, String componentId, LcDocument 
   if (blocked != null) return LcOpResult.fail(blocked);
   renameSlotsInInstances(doc, componentId, renames);
   def.root = root;
+  // 组件里用到了内置组件库里的组件、而文档里还没有那个定义：这时候装进来。
+  _walk(root, (n) => lcEnsureBuiltin(doc, n.type == 'component' && n.props['ref'] is String ? n.props['ref'] as String : null));
   // 临时页面里不是属性的那些状态＝组件自己的状态（每个实例一份）。
   final propNames = {for (final p in def.props) p.name};
   lcSetCompStates(def, [

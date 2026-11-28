@@ -11,10 +11,13 @@ import 'package:lopicode/theme/tokens.dart';
 import 'package:material_ui/material_ui.dart';
 
 class LcStateBar extends StatelessWidget {
-  const LcStateBar({super.key, required this.state, required this.filled, required this.onPick, required this.onClear, this.caveat, this.classes = const []});
+  const LcStateBar({super.key, required this.state, required this.filled, required this.onPick, required this.onClear, this.caveat, this.classes = const [], this.note});
 
   /// 这个控件上的类名开关（第四轮 B2）：每条多一个药丸“类名 xx”，选了改的是它成立时的样子。
   final List<String> classes;
+
+  /// 顶替“现在改的是…”那条提示的东西（画布在平板 / 桌面档时，屏宽和状态并成一条说，见 inspector_bp_widgets.dart）。
+  final Widget? note;
 
   /// 这个状态在这种组件上不生效时的一句说明（灰字，写在提示条下面）。
   final String? caveat;
@@ -86,7 +89,8 @@ class LcStateBar extends StatelessWidget {
             ),
           ],
         ),
-        if (now != null) ...[
+        if (now != null && note != null) ...[const SizedBox(height: Space.x2), note!],
+        if (now != null && note == null) ...[
           const SizedBox(height: Space.x2),
           Container(
             key: const Key('lc-state-note'),
@@ -111,7 +115,7 @@ class LcStateBar extends StatelessWidget {
               style: t.bodySmall?.copyWith(color: c.textMuted),
             ),
           ),
-        const SizedBox(height: Space.x3),
+        if (now == null || note == null) const SizedBox(height: Space.x3),
       ],
     );
   }

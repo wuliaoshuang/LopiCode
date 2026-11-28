@@ -7,6 +7,7 @@
 import 'dart:io';
 
 import 'package:lopicode/core/path_guard.dart';
+import 'package:lopicode/lowcode/editor_hint_widgets.dart';
 import 'package:lopicode/lowcode/image_assets.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/chat_panels.dart';
@@ -33,12 +34,12 @@ class LcImages {
       onImported?.call();
       return rel;
     } on FileSystemException catch (e) {
-      if (context.mounted) showSnack(context, '图片存不进项目：${e.osError?.message ?? e.message}');
+      if (context.mounted) showEditorHint(context, '图片存不进项目：${e.osError?.message ?? e.message}');
     } on PathGuardException catch (e) {
-      if (context.mounted) showSnack(context, '图片存不进项目：${e.message}');
+      if (context.mounted) showEditorHint(context, '图片存不进项目：${e.message}');
     } on Exception catch (e) {
       // 系统的选图界面打不开（很少见）：说出原因，不装作没事。
-      if (context.mounted) showSnack(context, '打不开相册：$e');
+      if (context.mounted) showEditorHint(context, '打不开相册：$e');
     }
     return null;
   }

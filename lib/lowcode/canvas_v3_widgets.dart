@@ -80,7 +80,7 @@ class CanvasV3 {
 }
 
 /// 这几种自己画底色、边框和内边距，外面的盒子不重复画。
-const Set<String> kCanvasV3SelfBoxed = {'textarea', 'select', 'switch'};
+const Set<String> kCanvasV3SelfBoxed = {'textarea', 'select', 'switch', 'slider'};
 
 /// 画一个新组件；不是新组件返回 null。
 Widget? canvasV3Content(BuildContext context, CanvasV3 a) {
@@ -89,6 +89,7 @@ Widget? canvasV3Content(BuildContext context, CanvasV3 a) {
     'icon' => Icon(lcIconData[n.strProp('icon')] ?? Icons.help_outline, size: (n.numProp('size') ?? 24).toDouble(), color: a.textColor),
     'textarea' => _textarea(a),
     'switch' => _switch(n),
+    'slider' => _sized(a, _slider(n)),
     'checkbox' => _checkbox(a),
     'radio' => _radio(a),
     'select' => _select(a),
@@ -143,6 +144,42 @@ Widget _switch(LcNode n) {
     child: const DecoratedBox(
       decoration: BoxDecoration(color: kLcPageWhite, shape: BoxShape.circle),
       child: SizedBox(width: 20, height: 20),
+    ),
+  );
+}
+
+/// 滑块：一条 4 高的轨道（走过的那段是强调色）加一个 20 见方的圆钮，整个 28 高。只是画出来，画布上不能拖。
+Widget _slider(LcNode n) {
+  final s = lcSliderOf(n);
+  final at = ((s.value - s.min) / (s.max - s.min)).clamp(0.0, 1.0).toDouble();
+  return SizedBox(
+    height: 28,
+    child: LayoutBuilder(
+      builder: (context, box) {
+        final w = box.maxWidth.isFinite ? box.maxWidth : 160.0;
+        final x = (w - 20) * at;
+        return Stack(
+          alignment: Alignment.centerLeft,
+          children: [
+            Container(
+              height: 4,
+              decoration: BoxDecoration(color: kLcPageLine, borderRadius: BorderRadius.circular(2)),
+            ),
+            Container(
+              width: x + 10,
+              height: 4,
+              decoration: BoxDecoration(color: kLcPageAccent, borderRadius: BorderRadius.circular(2)),
+            ),
+            Positioned(
+              left: x,
+              child: const DecoratedBox(
+                decoration: BoxDecoration(color: kLcPageAccent, shape: BoxShape.circle),
+                child: SizedBox(width: 20, height: 20),
+              ),
+            ),
+          ],
+        );
+      },
     ),
   );
 }

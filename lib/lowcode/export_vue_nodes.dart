@@ -8,9 +8,10 @@ LcFrameworkExport _exportSite(LcDocument doc) {
   final files = <LcExportFile>[lcFormatted('$kLcShellName.vue', lcVueShell(site, themeCss: lcThemeCssIfUsed(doc)), 'vue')];
   final components = <LcExportFile>[];
   final done = <String>{};
-  final nav = site.navPart;
+  final nav = site.navPart, top = site.topPart;
   for (final p in site.pages) {
     if (nav != null) lcNavPartOf[p.view.root] = nav;
+    if (top != null) lcTopPartOf[p.view.root] = top;
     final plans = LcComponentPlans.build(p.view, pageName: p.name, notes: notes, fixedNames: site.componentNames);
     files.add(lcFormatted('${p.name}.vue', _page(p.view, plans, notes), 'vue'));
     for (final plan in plans.all) {
@@ -18,12 +19,14 @@ LcFrameworkExport _exportSite(LcDocument doc) {
     }
   }
   final navFile = nav != null && files.any((f) => f.content.contains('import $nav from')) ? lcVueNavPart(doc, site, text: vueText, attr: vueAttr) : null;
+  final topFile = top != null && files.any((f) => f.content.contains('import $top from')) ? lcVueTopPart(doc, site, text: vueText, attr: vueAttr) : null;
   final shared = LcBindPlan.of(doc, doc.root);
   return LcFrameworkExport(
     files: [
       ...files,
       ...components,
       if (navFile != null) lcFormatted('components/$nav.vue', navFile, 'vue'),
+      if (topFile != null) lcFormatted('components/$top.vue', topFile, 'vue'),
       if (shared != null && shared.hasProject) LcExportFile(path: kLcStateFile, content: lcVueStateFile(shared)),
     ],
     notes: lcLiveNotes(notes),
@@ -40,10 +43,28 @@ extension _TemplateNodes on _Template {
     }
     final a = _attrs(n);
     // 各页共用的底部导航：引用公共部件（export_shared_parts.dart）。
-    final part = lcNavPartFor(pageRoot, n, attrs: a, plain: ' class="${lcNodeClass(n, prefix)}"');
+    final part = lcNavPartFor(pageRoot, n, attrs: a, plain: ' class="${lcNodeClass(n, prefix)}"', scoped: true);
     if (part != null) {
       parts.add(part);
       return out.writeln('$pad<$part$a${lcIsPageBar(pageRoot, n) ? ' data-page=""' : ''} :current="${lcNavPartCurrent(n)}" />');
+    }
+    // 各页共用的顶部导航栏：同理；这一页的标题、返回箭头当属性传，左右按钮从插槽传。
+    final topPart = lcTopPartFor(pageRoot, n, attrs: a, plain: ' class="${lcNodeClass(n, prefix)}"', scoped: true);
+    if (topPart != null) {
+      parts.add(topPart);
+      final head = '<$topPart$a${lcIsPageBar(pageRoot, n) ? ' data-page=""' : ''}${vueAttr('title', lcTopPartTitle(n))}${lcTopPartBack(n) ? ' back' : ''}';
+      final left = lcTopPartSlot(n, 'left'), right = lcTopPartSlot(n, 'right');
+      if (left.isEmpty && right.isEmpty) return out.writeln('$pad$head />');
+      out.writeln('$pad$head>');
+      for (final (side, kids) in [('left', left), ('right', right)]) {
+        if (kids.isEmpty) continue;
+        out.writeln('$pad  <template #$side>');
+        for (final c in kids) {
+          node(c, depth + 2);
+        }
+        out.writeln('$pad  </template>');
+      }
+      return out.writeln('$pad</$topPart>');
     }
     // 第 3 版的新组件：元素树三种导出共用（export_web_v3.dart）。
     final el = bind == null ? lcWebElement(n, web) : lcBoundWebElement(n, web);
@@ -152,7 +173,7 @@ extension _TemplateNodes on _Template {
         if (real) out.writeln('$pad</slot>');
       default:
         final tag = n.type == 'page' ? 'main' : 'div';
-        out.writeln('$pad<$tag$a>');
+        out.writeln('$pad<$tag$a${lcBoxVueAttrs(n, off: bind?.value(n, 'disabled'), label: bind?.value(n, 'alt'), attr: vueAttr)}>');
         for (final c in n.children) {
           node(c, depth + 1);
         }

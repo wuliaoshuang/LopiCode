@@ -4,7 +4,6 @@
 import 'package:flutter/services.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:lopicode/ui/code_view.dart';
-import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// 显示一段代码 + “复制”按钮的底部面板内容（APK 打包页的工作流模板也用它）。
@@ -62,16 +61,7 @@ class CodeSheetBody extends StatelessWidget {
               child: Row(
                 children: [
                   if (extraAction != null) ...[Expanded(child: extraAction!), const SizedBox(width: Space.x2)],
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed: () async {
-                        await Clipboard.setData(ClipboardData(text: code));
-                        if (context.mounted) showSnack(context, '已复制');
-                      },
-                      icon: const Icon(Icons.copy, size: 18),
-                      label: const Text('复制全部'),
-                    ),
-                  ),
+                  Expanded(child: _CopyAllButton(code: code)),
                 ],
               ),
             ),
@@ -80,4 +70,34 @@ class CodeSheetBody extends StatelessWidget {
       ),
     );
   }
+}
+
+/// “复制全部”：复制完按钮自己变成“已复制”。
+/// 这个面板是盖在页面上面的，页面上的提示条会被它挡住（点了像没反应），所以不用提示条。
+class _CopyAllButton extends StatefulWidget {
+  const _CopyAllButton({required this.code});
+  final String code;
+
+  @override
+  State<_CopyAllButton> createState() => _CopyAllButtonState();
+}
+
+class _CopyAllButtonState extends State<_CopyAllButton> {
+  bool _done = false;
+
+  @override
+  void didUpdateWidget(_CopyAllButton old) {
+    super.didUpdateWidget(old);
+    if (old.code != widget.code) _done = false;
+  }
+
+  @override
+  Widget build(BuildContext context) => FilledButton.icon(
+    onPressed: () async {
+      await Clipboard.setData(ClipboardData(text: widget.code));
+      if (mounted) setState(() => _done = true);
+    },
+    icon: Icon(_done ? Icons.check : Icons.copy, size: 18),
+    label: Text(_done ? '已复制' : '复制全部'),
+  );
 }

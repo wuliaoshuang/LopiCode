@@ -9,6 +9,7 @@ import 'dart:math' as math;
 
 import 'package:lopicode/lowcode/bind_eval.dart';
 import 'package:lopicode/lowcode/bind_preview.dart';
+import 'package:lopicode/lowcode/box_off.dart';
 import 'package:lopicode/lowcode/canvas_component_widgets.dart';
 import 'package:lopicode/lowcode/canvas_controls_widgets.dart';
 import 'package:lopicode/lowcode/canvas_css.dart';
@@ -24,7 +25,7 @@ import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/lowcode/palette_widgets.dart';
 import 'package:lopicode/lowcode/responsive.dart';
 import 'package:lopicode/lowcode/slots.dart';
-import 'package:lopicode/lowcode/states.dart';
+import 'package:lopicode/lowcode/states_bp.dart';
 import 'package:lopicode/lowcode/style_resolve.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:material_ui/material_ui.dart';
@@ -194,7 +195,8 @@ class CanvasPage extends StatelessWidget {
     final justify = cssJustify(s['justify-content']) ?? CssJustify.start;
     final kids = [
       for (final c in only ?? n.children)
-        if (!c.hidden) c,
+        // 实例里面条件不成立的：反正点不中，不画也不占位（和导出来的样子一致）；页面上、组件编辑里的照旧调淡带角标。
+        if (!c.hidden && !(inert && inner.env.bind != null && !lcCondHolds(c, inner.env.bind!))) c,
     ];
     if ((only ?? n.children).isEmpty) {
       return inert ? const SizedBox.shrink() : const CanvasEmptyHint();
@@ -295,7 +297,7 @@ class CanvasPage extends StatelessWidget {
     final n = canvasPreviewNode(
       lcViewNode(shown, ctx.env),
       resize: p != null && p.nodeId == node.id ? (p.width, p.height) : null,
-      state: statePreview?.nodeId == node.id ? lcSubstMap(lcStateStyle(node, statePreview!.state), ctx.env.vars) : const {},
+      state: statePreview?.nodeId == node.id ? lcSubstMap(lcStateStyleAt(node, statePreview!.state, ctx.env.bp), ctx.env.vars) : const {},
     );
     // 没被改过的组件用这一轮记着的那份（父容器数“要放大的子项”时已经算过了）；展开的实例、拖柄预览是临时造的，现算。
     final s = identical(n, node) ? ctx.styleOf(n, parent) : resolvedStyle(n, parent);
@@ -491,7 +493,7 @@ class CanvasPage extends StatelessWidget {
 
     // 角标：隐藏的、脱离文档流的组件画布上照样占位（不然选不中），用角标说明。
     final tag = hidden ? '已隐藏' : (condOff ? '条件不成立' : (position == 'absolute' || position == 'fixed' ? '绝对定位' : (position == 'sticky' ? '粘性定位' : badge)));
-    final opacity = cssOpacity(s['opacity']) * (hidden || condOff ? 0.35 : 1) * (copy > 0 ? 0.5 : 1);
+    final opacity = cssOpacity(s['opacity']) * (hidden || condOff ? 0.35 : 1) * (copy > 0 ? 0.5 : 1) * (lcBoxOff(n) ? 0.5 : 1);
     if (opacity < 1) box = Opacity(opacity: opacity, child: box);
     if (tag != null) box = canvasBadged(box, tag);
     if (!margin.isZero) box = Padding(padding: EdgeInsets.fromLTRB(margin.left, margin.top, margin.right, margin.bottom), child: box);

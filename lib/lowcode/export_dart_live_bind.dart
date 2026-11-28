@@ -3,15 +3,19 @@
 library;
 
 import 'package:lopicode/lowcode/bind_model.dart';
+import 'package:lopicode/lowcode/box_off.dart';
 import 'package:lopicode/lowcode/css_codec.dart';
 import 'package:lopicode/lowcode/css_color.dart';
+import 'package:lopicode/lowcode/export_dart.dart';
 import 'package:lopicode/lowcode/export_dart_hook.dart';
+import 'package:lopicode/lowcode/export_dart_live_events.dart';
 import 'package:lopicode/lowcode/export_dart_live_tree.dart';
 import 'package:lopicode/lowcode/grid_css.dart';
 import 'package:lopicode/lowcode/logic_expr.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/lowcode/states.dart';
+import 'package:lopicode/lowcode/states_bp.dart';
 import 'package:lopicode/lowcode/theme_vars.dart';
 
 String _ind(int n) => '  ' * n;
@@ -103,6 +107,13 @@ const Map<String, String> _styleBindProps = {
 class DartLiveGen implements DartLiveHook {
   DartLiveGen({required this.subs, required this.vars, required this.notes, required this.pageStates, required this.projectStates});
 
+  /// 组件事件接的动作（export_dart_live_events.dart）；这一页没有就是 null。
+  DartLiveEvents? events;
+
+  /// 读一个状态的那句 Dart、它的声明（给 [events] 用）。
+  String? stateRead(String name) => pageStates.containsKey(name) ? dartStateIdent(name) : (projectStates.containsKey(name) ? 'LcAppState.$name' : null);
+  LcVariable? stateOf(String name) => _state(name);
+
   final DartLiveSubs subs;
   final DartLiveVars vars;
   final Set<String> notes;
@@ -112,9 +123,15 @@ class DartLiveGen implements DartLiveHook {
 
   final List<Set<String>> _locals = [];
 
+  /// 和 [_locals] 一层对一层：这一层“重复”带出的名字里，真被读到过的那几个。
+  final List<Set<String>> _localsUsed = [];
+
   String? _resolve(String name) {
-    for (final scope in _locals.reversed) {
-      if (scope.contains(name)) return 'v_$name';
+    for (var i = _locals.length - 1; i >= 0; i--) {
+      if (_locals[i].contains(name)) {
+        _localsUsed[i].add(name);
+        return 'v_$name';
+      }
     }
     if (pageStates.containsKey(name)) return dartStateIdent(name);
     if (projectStates.containsKey(name)) return 'LcAppState.$name';
@@ -243,6 +260,7 @@ class DartLiveGen implements DartLiveHook {
   static final RegExp _border = RegExp(r'( *)border: OutlineInputBorder\(borderRadius: (BorderRadius\.circular\([^\n]*\))\),\n');
 
   String _withStates(LcNode n, String code) {
+    if (lcHasBpStates(n)) notes.add('有些状态样式是分屏宽设的（平板 / 桌面上按下、禁用、聚焦时另一个样子）：Flutter 这边没有导出这一部分，各种屏宽上都用手机的那一份。');
     if (!lcHasStates(n)) return code;
     final pressed = canonicalDeclarations(lcStateStyle(n, 'pressed')), disabled = canonicalDeclarations(lcStateStyle(n, 'disabled')), focused = canonicalDeclarations(lcStateStyle(n, 'focused'));
     var handled = false;
@@ -329,18 +347,23 @@ class DartLiveGen implements DartLiveHook {
     final rep = wrap ? lcRepeatOf(n) : null;
     var prefix = '';
     String? empty;
+    final list = rep == null ? '' : '_lcList(${expr(rep.list)})';
     if (rep != null) {
-      final list = '_lcList(${expr(rep.list)})';
-      prefix = 'for (final (v_${rep.index}, v_${rep.item}) in $list.indexed) ';
       if (rep.empty != null) empty = 'if ($list.isEmpty) Text(${dartLiveStr(rep.empty!)})';
       _locals.add({rep.index, rep.item});
+      _localsUsed.add({});
     }
     try {
       final conds = wrap ? [?lcShowIfExpr(n), ?lcRenderIfExpr(n)] : const <Map<String, dynamic>>[];
       if (conds.isNotEmpty) prefix += 'if (${conds.map((c) => '_lcBool(${expr(c)})').join(' && ')}) ';
       final shown = _shown(n);
       final off = lcBindable(n.type, 'disabled') == null ? null : lcDataExpr(n, 'disabled');
-      String make(LcNode x) => _withStates(n, core(x, parent, indent));
+      String make(LcNode x) {
+        final code = dartLiveExtras(n, _withStates(n, core(x, parent, indent)), indent, notes);
+        final tip = lcBoxCanOff(x) ? lcDataExpr(n, 'alt') : null;
+        return dartBoxExtras(x, events?.attach(n, code, indent, off: lcBoxOff(x)) ?? code, indent, labelCode: tip == null ? null : '_lcText(${expr(tip)})');
+      }
+
       var widget = off == null
           ? make(shown)
           // 禁用绑了状态：禁用的、没禁用的各生成一份，运行时挑。
@@ -350,9 +373,18 @@ class DartLiveGen implements DartLiveHook {
         final span = lcGridSpan(n.style).clamp(1, g.$1);
         widget = 'SizedBox(width: _lcCell(lcGridW, $span, ${g.$2}), child: $widget)';
       }
+      if (rep != null) {
+        // 序号、这一项没读到的不声明（不然导出的文件里有“写了没用上”的警告）。
+        final used = _localsUsed.last;
+        final item = used.contains(rep.item) ? 'v_${rep.item}' : '_';
+        prefix = (used.contains(rep.index) ? 'for (final (v_${rep.index}, $item) in $list.indexed) ' : 'for (final $item in $list) ') + prefix;
+      }
       return [?empty, '$prefix$widget'].join(',\n${_ind(indent)}');
     } finally {
-      if (rep != null) _locals.removeLast();
+      if (rep != null) {
+        _locals.removeLast();
+        _localsUsed.removeLast();
+      }
     }
   }
 }

@@ -9,6 +9,8 @@ library;
 import 'package:lopicode/lowcode/css_codec.dart';
 import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/lowcode/responsive.dart';
+import 'package:lopicode/lowcode/states.dart';
+import 'package:lopicode/lowcode/states_bp.dart';
 import 'package:lopicode/lowcode/style_resolve.dart';
 import 'package:lopicode/lowcode/theme_vars.dart';
 
@@ -40,10 +42,22 @@ String lcThemeCssIfUsed(LcDocument doc) => lcProjectUsesVars(doc) ? lcThemeRootC
 /// 一棵树导出时攒着的断点规则。
 class LcBpCss {
   final Map<String, List<String>> _rules = {};
+  final Map<String, List<String>> _stateRules = {};
 
   /// 记下 [n] 在各档的规则（没有断点样式的节点什么都不记）。[parent] 的意思同 resolvedStyle。
   void add(LcNode n, LcNode? parent, String selector) {
-    if (n.more['responsive'] == null || !lcHasBp(n)) return;
+    if (n.more['responsive'] == null) return;
+    // 状态样式分屏宽（states_bp.dart）：每档里每个状态一条带伪类的规则，内容就是这一档记的那几条。
+    for (final bp in kLcBreakpoints) {
+      for (final state in kLcStateNames) {
+        final own = lcBpStateStyle(n, bp, state);
+        if (own.isEmpty) continue;
+        final body = declarationsToCss(canonicalDeclarations(own), multiline: false);
+        if (body.isEmpty || _unsafe.hasMatch(body)) continue;
+        (_stateRules[bp] ??= []).add('$selector${kLcStatePseudo[state]} { $body }');
+      }
+    }
+    if (!lcHasBp(n)) return;
     var prev = resolvedStyle(n, parent);
     var acc = n.style;
     for (final bp in kLcBreakpoints) {
@@ -65,14 +79,15 @@ class LcBpCss {
     }
   }
 
-  bool get isEmpty => _rules.isEmpty;
+  bool get isEmpty => _rules.isEmpty && _stateRules.isEmpty;
 
   /// 攒下来的规则写成 CSS（没有是空串）。
   String css() {
     final out = StringBuffer();
     for (final bp in kLcBreakpoints) {
-      final rules = _rules[bp];
-      if (rules == null) continue;
+      // 状态的规则排在这一档普通规则的后面（同一个控件：按下时的样子要盖过平时的）。
+      final rules = [...?_rules[bp], ...?_stateRules[bp]];
+      if (rules.isEmpty) continue;
       out.writeln('/* ${kLcBpLabels[bp]}及更宽（≥${kLcBpMinWidth[bp]}px） */');
       out.writeln('@media (min-width: ${kLcBpMinWidth[bp]}px) {');
       for (final r in rules) {

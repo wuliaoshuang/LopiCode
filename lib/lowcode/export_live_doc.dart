@@ -62,6 +62,11 @@ LcLivePage lcLivePage(LcDocument doc) {
 }
 
 final Expando<LcDocument> _sourceOf = Expando('lcExportSource');
+final Expando<Set<String>> _synthOf = Expando('lcExportSynth');
+
+/// [lcExportDoc] 交回的文档里，这一页的处理中哪几条是“组件里的控件往外发事件、实例上接了动作”合成出来的（处理的 id）。
+/// 不是它化出来的逻辑＝空的。Flutter 导出只把这几条翻成代码（页面自己的积木逻辑它一直不导出）。
+Set<String> lcSynthHandlerIds(LcLogic logic) => _synthOf[logic] ?? const {};
 
 /// [lcExportDoc] 交回的文档是从哪份文档化出来的（不是它化出来的就交回自己）。
 /// 新的页面逻辑“对着页面的检查”要对着原来的页面查：摊开以后实例已经不是实例了，帽子“当〔实例〕发出〔事件〕”会被误判成挂错了地方。
@@ -93,6 +98,7 @@ LcDocument lcExportDoc(LcDocument doc, {bool allPages = false}) {
         uses: p.logic.uses,
         front: p.logic.front,
       )..loaded = p.logic.loaded;
+      _synthOf[logic] = {for (final h in live.handlers) h.id};
       pages.add(LcPage(id: p.id, title: p.title, root: live.tree, logic: logic, more: p.more));
       changed = true;
     }

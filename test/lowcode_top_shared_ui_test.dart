@@ -92,6 +92,23 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('B5：手机上点“改成各页共用”以后，存下来的文件导出 Vue / React 多一个 components/LcTopBar，两页都引用它', (tester) async {
+    final session = await lbOpen(tester, doc: pagesSample());
+    await tap(tester, lbNode('bar'));
+    await lbOpenCommon(tester);
+    await lbTapShown(tester, lbKey('lc-top-share'));
+    await tap(tester, find.widgetWithText(TextButton, '改成共用'));
+    await back(tester);
+    final saved = await lbSaved(tester, session);
+    for (final (ex, ext, title) in [(exportVue(saved), 'vue', 'title="商品" back'), (exportReact(saved), 'jsx', 'title={"商品"} back')]) {
+      final files = {for (final f in ex.files) f.path: f.content};
+      expect(files.keys, contains('components/LcTopBar.$ext'));
+      expect(files['Home.$ext'], contains('<LcTopBar '));
+      expect(files['LcPage.$ext'], contains(title), reason: '“商品”页自己的标题和返回箭头当属性传进去');
+      expect(files['Home.$ext'], isNot(contains('<header')));
+    }
+  });
+
   testWidgets('这一页不显示 → 页面面板里写着、能再显示；取消共用后各改各的', (tester) async {
     final doc = pagesSample();
     lcShareTop(doc, 'p1');

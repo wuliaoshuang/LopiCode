@@ -1,6 +1,8 @@
 import 'dart:convert';
 
 import 'package:lopicode/lowcode/bind_model.dart';
+import 'package:lopicode/lowcode/box_off.dart';
+import 'package:lopicode/lowcode/comp_self_wire.dart';
 import 'package:lopicode/lowcode/component_ops.dart';
 import 'package:lopicode/lowcode/export_bind_plan.dart';
 import 'package:lopicode/lowcode/export_html_bind.dart';
@@ -61,7 +63,7 @@ const String kLowcodeLogicMarker = '// 由 LopiCode 低代码搭建器生成';
 /// [cssFile] / [jsFile]：这一页引用的样式和脚本文件名（多页面时除首页外每页各有一份，见 export_pages.dart）。
 LcHtmlExport exportHtml(LcDocument source, {String cssFile = 'style.css', String jsFile = kLowcodeLogicFile}) {
   // 用了第 6 期新东西的组件实例先化成普通页面的样子（没有这种实例时就是原来的文档）。
-  final doc = lcExportDoc(source);
+  final doc = lcExportDoc(lcSelfWired(source));
   final css = StringBuffer();
   final body = StringBuffer();
   final bp = LcBpCss();
@@ -145,7 +147,7 @@ LcHtmlExport exportHtml(LcDocument source, {String cssFile = 'style.css', String
         body.writeln('$pad</div>');
       default:
         final tag = n.type == 'page' ? 'main' : 'div';
-        body.writeln('$pad<$tag class="$cls">');
+        body.writeln('$pad<$tag class="$cls"${lcBoxHtmlAttrs(n, (k, v) => ' $k="${_escAttr.convert(v)}"')}>');
         for (final c in n.children) {
           walk(c, n, depth + 1);
         }
@@ -179,7 +181,9 @@ LcHtmlExport exportHtml(LcDocument source, {String cssFile = 'style.css', String
   final rules = css.toString();
   final cssText = '$_baseCss${rules.contains('var(--') ? lcThemeRootCss(doc) : ''}$rules';
   final bound = plan;
-  final js = bound == null ? exportLogicJs(doc) : exportBoundLogicJs(bound, tree);
+  final logic = bound == null ? exportLogicJs(doc) : exportBoundLogicJs(bound, tree);
+  // 有会禁用的容器、又有逻辑：末尾带一小段“禁用着就不算点了”（box_off.dart）。
+  final js = logic.isEmpty || !lcTreeHasBoxGuard(tree) ? logic : '$logic\n$kLcBoxOffGuardJs';
   // 没有逻辑的页面一个字节都不多（和第 1 版导出的一样）。
   final script = js.isEmpty ? '' : '  <script src="$jsFile" defer></script>\n';
 

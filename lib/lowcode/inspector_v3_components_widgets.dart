@@ -112,6 +112,18 @@ Widget _text(InspectorEdit ed, String prop, String label, {String? hint, int max
       );
     case 'switch':
       return ([lcSwitchRow(ed, 'checked', '默认打开'), lcSwitchRow(ed, 'disabled', '禁用')], const {});
+    case 'slider':
+      return (
+        [
+          LcPropTextRow(key: ValueKey('${n.id}-value'), ed: ed, prop: 'value', label: '现在的值', hint: '不填＝最小值', number: true, lowest: -100000),
+          LcPropTextRow(key: ValueKey('${n.id}-min'), ed: ed, prop: 'min', label: '最小', hint: '不填＝0', number: true, lowest: -100000),
+          LcPropTextRow(key: ValueKey('${n.id}-max'), ed: ed, prop: 'max', label: '最大', hint: '不填＝100', number: true, lowest: -100000),
+          LcPropTextRow(key: ValueKey('${n.id}-step'), ed: ed, prop: 'step', label: '一步走多少', hint: '不填＝1', number: true),
+          lcSwitchRow(ed, 'disabled', '禁用'),
+          ?more('width'),
+        ],
+        {'width'},
+      );
     case 'checkbox':
       return ([_text(ed, 'text', '文字'), lcSwitchRow(ed, 'checked', '默认勾上'), lcSwitchRow(ed, 'disabled', '禁用'), ?more('fontSize'), color('color', '文字颜色', 'color')], {'fontSize', 'color'});
     case 'radio':

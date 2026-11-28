@@ -7,13 +7,16 @@ library;
 
 import 'package:lopicode/lowcode/bind_js.dart';
 import 'package:lopicode/lowcode/bind_model.dart';
+import 'package:lopicode/lowcode/box_off.dart';
 import 'package:lopicode/lowcode/export_bind_plan.dart';
 import 'package:lopicode/lowcode/export_framework_common.dart';
 import 'package:lopicode/lowcode/export_html_bind_runtime.dart';
+import 'package:lopicode/lowcode/export_html_repeat.dart';
 import 'package:lopicode/lowcode/export_web_v3.dart';
 import 'package:lopicode/lowcode/logic_core_js.dart';
 import 'package:lopicode/lowcode/logic_expr.dart';
 import 'package:lopicode/lowcode/logic_js.dart';
+import 'package:lopicode/lowcode/logic_libs.dart';
 import 'package:lopicode/lowcode/logic_text.dart';
 import 'package:lopicode/lowcode/model.dart';
 
@@ -41,11 +44,6 @@ LcBindResolve lcHtmlResolve(LcBindPlan plan, Set<String> locals) => (name) {
 /// 这一页所有绑定的清单（`lcBinds` 的每一项是几行代码）。[notes]：导出说明。
 List<List<String>> lcHtmlBindEntries(LcBindPlan plan, LcNode tree, List<String> notes) {
   final out = <List<String>>[];
-  var repeatedHandlers = false;
-  final handled = {
-    for (final h in plan.doc.logic.handlers)
-      if (h.target != null) h.target!,
-  };
   void walk(LcNode n, String? owner, Set<String> locals, int depth) {
     if (depth > 64) return;
     var inner = owner;
@@ -83,7 +81,10 @@ List<List<String>> lcHtmlBindEntries(LcBindPlan plan, LcNode tree, List<String> 
         final spec = lcBindable(n.type, prop);
         final e = lcDataExpr(n, prop);
         if (spec == null || e == null) continue;
-        if (spec.type == 'list') {
+        if (lcBoxCanOff(n)) {
+          // 容器的禁用 / 说明文字：落在元素的属性上（box_off.dart）。
+          attrs.addAll(prop == 'disabled' ? ['"aria-disabled": ${fn(e, scope, flag: true)},'] : ['"aria-label": ${fn(e, scope, text: true)},', 'title: ${fn(e, scope, text: true)},']);
+        } else if (spec.type == 'list') {
           lines.add('items: ${fn(e, scope)},');
         } else if (spec.type == 'bool') {
           attrs.add('$prop: ${fn(e, scope, flag: true)},');
@@ -111,14 +112,12 @@ List<List<String>> lcHtmlBindEntries(LcBindPlan plan, LcNode tree, List<String> 
       }
       if (lines.isNotEmpty) out.add(['id: ${jsString(n.id)},', if (inner != null) 'in: ${jsString(inner)},', ...lines]);
     }
-    if (inner != null && handled.contains(n.id)) repeatedHandlers = true;
     for (final c in n.children) {
       walk(c, inner, scope, depth + 1);
     }
   }
 
   walk(tree, null, const {}, 0);
-  if (repeatedHandlers) notes.add(kNoteBindRepeatEvents);
   return out;
 }
 
@@ -130,6 +129,16 @@ String exportBoundLogicJs(LcBindPlan plan, LcNode tree, {List<String>? notes}) {
   final writer = JsLogicWriter(doc, target, lookup: plan.lookup);
   final names = logicHandlerNames(doc);
   final out = StringBuffer(_header)..writeln();
+  // 挂在“重复”里的控件上的处理：读“这一项 / 第几个”的地方先换好（export_html_repeat.dart）。新的页面逻辑不走这里。
+  final scoped = <int, LcScopedBody>{};
+  if (!lcDocUsesCore(doc)) {
+    final scopes = lcRepeatScopes(tree);
+    for (var i = 0; i < logic.handlers.length; i++) {
+      final locals = scopes[logic.handlers[i].target];
+      final body = locals == null ? null : lcScopedBody(logic.handlers[i].body, locals);
+      if (body != null && body.used) scoped[i] = body;
+    }
+  }
 
   out.writeln('// 状态现在的值（开始时是初值）');
   out.writeln('const lcData = {');
@@ -154,7 +163,9 @@ String exportBoundLogicJs(LcBindPlan plan, LcNode tree, {List<String>? notes}) {
 
   out.writeln('// —— 小工具（每份导出都一样）——');
   // 新的页面逻辑：“重复”出来的每一份元素上记着“这一项、第几项”，事件来了页面宿主顺着往上找（旧页面这份小工具一字不变）。
-  final bindRuntime = doc.logic.front == null ? lcJsBindRuntime : lcJsBindRuntime.replaceFirst('    lcApply(el, b.id, sc);', '    el.lcAt = { item: list[i], index: i };\n    lcApply(el, b.id, sc);');
+  final bindRuntime = doc.logic.front != null
+      ? lcJsBindRuntime.replaceFirst('    lcApply(el, b.id, sc);', '    el.lcAt = { item: list[i], index: i };\n    lcApply(el, b.id, sc);')
+      : (scoped.isEmpty ? lcJsBindRuntime : '${lcJsBindRuntime.replaceFirst('    lcApply(el, b.id, sc);', '    el.lcS = sc;\n    lcApply(el, b.id, sc);').trim()}\n\n$kLcScopeAtJs');
   for (final block in [lcJsRuntime, lcBindJsRuntime, lcJsDomRuntime.substring(0, lcJsDomRuntime.indexOf('// 给控件挂事件。')), lcJsDelegatedOn, bindRuntime]) {
     out.writeln(block.trim());
     out.writeln();
@@ -171,7 +182,12 @@ String exportBoundLogicJs(LcBindPlan plan, LcNode tree, {List<String>? notes}) {
     final name = names[i];
     out.writeln('// ${jsComment(describeHandler(h, doc))}');
     out.writeln('function $name(${h.event == 'load' ? '' : 'event'}) {');
-    for (final line in core?.body(i) ?? writer.blocks(h.body, event: h.event)) {
+    final sb = core == null ? scoped[i] : null;
+    if (sb != null) out.writeln('  const lcS = lcScopeAt(event);');
+    final lines = sb == null
+        ? (core?.body(i) ?? writer.blocks(h.body, event: h.event))
+        : JsLogicWriter(doc, LcScopedDomTarget(sb.code), lookup: (name) => sb.vars[name] ?? plan.lookup(name)).blocks(sb.body, event: h.event);
+    for (final line in lines) {
       out.writeln('  $line');
     }
     out.writeln('}');

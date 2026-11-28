@@ -1,6 +1,6 @@
 // 由 LopiCode 低代码搭建器生成，重新导出会覆盖本文件。
 // 状态与绑定：状态是页面 State 类里 s_ 开头的字段，绑了它的地方跟着变；输入框、开关这些会把值写回去。
-// 积木逻辑这一份不导出（按钮的 onPressed 是空的）：在自己的代码里用 update(() => s_xxx = 新值) 改状态。
+// 页面自己的积木逻辑这一份不导出（那些按钮的 onPressed 是空的）；组件事件接的动作导出了，写在那个控件的 onPressed / onTap 里。在自己的代码里用 update(() => s_xxx = 新值) 改状态。
 import 'package:flutter/material.dart';
 
 class CompCardPage extends StatefulWidget {
@@ -103,7 +103,7 @@ class CompCardPageState extends State<CompCardPage> {
                           ),
                         ),
                         FilledButton(
-                          onPressed: () {},
+                          onPressed: () { update(() => s_cart = _lcNum((_lcNum(s_cart) + _lcNum(1)))); },
                           style: FilledButton.styleFrom(),
                           child: Text('加入购物车'),
                         ),
@@ -151,7 +151,7 @@ class CompCardPageState extends State<CompCardPage> {
                           ),
                         ),
                         FilledButton(
-                          onPressed: () {},
+                          onPressed: () { update(() => s_cart = _lcNum((_lcNum(s_cart) + _lcNum(10)))); },
                           style: FilledButton.styleFrom(),
                           child: Text('加入购物车'),
                         ),
@@ -165,6 +165,18 @@ class CompCardPageState extends State<CompCardPage> {
         ),
       );
   }
+}
+
+/// 当成数字（转不了的当 0）。
+num _lcNum(Object? v) {
+  final n = switch (v) {
+    final num x => x,
+    final String s => num.tryParse(s.trim()),
+    true => 1,
+    false => 0,
+    _ => null,
+  };
+  return n != null && n.isFinite ? n : 0;
 }
 
 /// 当成文字（整数不带小数点，空的是空串）。

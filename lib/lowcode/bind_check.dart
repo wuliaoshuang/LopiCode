@@ -86,11 +86,13 @@ List<LcBindIssue> lcCheckBindings(LcDocument doc) {
       final prop = lcModelProp(n.type);
       final s = scope[state];
       if (prop == null) {
-        out.add(LcBindIssue('${_label(n)}不能双向绑定（只有输入框、多行输入、开关、勾选框、单选组、下拉可以）', nodeId: n.id));
+        out.add(LcBindIssue('${_label(n)}不能双向绑定（只有输入框、多行输入、开关、滑块、勾选框、单选组、下拉可以）', nodeId: n.id));
       } else if (s == null || locals.contains(state)) {
         out.add(LcBindIssue('${_label(n)}双向绑到了 $state，但没有这个状态', nodeId: n.id));
       } else if (s.variable.isDerived) {
         out.add(LcBindIssue('${_label(n)}双向绑到了派生值 $state：派生值是算出来的，不能往里写', nodeId: n.id));
+      } else if (n.type == 'slider' && s.variable.type != 'number') {
+        out.add(LcBindIssue('${_label(n)}要绑一个“数字”的状态，$state 是${lcStateTypeLabel(s.variable.type)}', nodeId: n.id));
       } else if (prop == 'checked' ? s.variable.type != 'bool' : (s.variable.type != 'text' && s.variable.type != 'number')) {
         out.add(LcBindIssue('${_label(n)}要绑一个“${prop == 'checked' ? '是 / 否' : '文字或数字'}”的状态，$state 是${lcStateTypeLabel(s.variable.type)}', nodeId: n.id));
       }

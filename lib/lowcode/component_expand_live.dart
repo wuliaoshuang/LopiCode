@@ -14,6 +14,7 @@ library;
 
 import 'package:lopicode/lowcode/bind_model.dart';
 import 'package:lopicode/lowcode/bind_refs.dart';
+import 'package:lopicode/lowcode/box_off.dart';
 import 'package:lopicode/lowcode/component_extras.dart';
 import 'package:lopicode/lowcode/component_model.dart';
 import 'package:lopicode/lowcode/component_ops.dart';
@@ -135,7 +136,12 @@ class LcLiveScope {
         // 没接到一个状态本身上：只是初值。
         lcSetModel(n, null);
         final prop = lcModelProp(n.type);
-        if (prop != null && e == null) n.props[prop] = prop == 'checked' ? values[state] == true : componentValueText(values[state]);
+        if (prop == null || e != null) return;
+        if (n.type == 'slider') {
+          if (values[state] is num) n.props[prop] = values[state]; // 滑块的值是数
+        } else {
+          n.props[prop] = prop == 'checked' ? values[state] == true : componentValueText(values[state]);
+        }
       },
     );
     void emitArgs(LcNode n) {
@@ -157,6 +163,7 @@ class LcLiveScope {
     }
 
     emitArgs(copy);
+    lcBoxFoldLiterals(copy);
     return copy;
   }
 

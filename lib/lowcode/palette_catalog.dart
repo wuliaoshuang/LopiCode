@@ -7,6 +7,7 @@
 library;
 
 import 'package:lopicode/lowcode/comp_lib.dart';
+import 'package:lopicode/lowcode/comp_lib_builtin.dart';
 import 'package:lopicode/lowcode/component_model.dart';
 import 'package:lopicode/lowcode/model.dart';
 
@@ -45,6 +46,7 @@ const Map<String, PaletteGroup> _groupOf = {
   'icon': PaletteGroup.basic,
   'textarea': PaletteGroup.form,
   'switch': PaletteGroup.form,
+  'slider': PaletteGroup.form,
   'checkbox': PaletteGroup.form,
   'radio': PaletteGroup.form,
   'select': PaletteGroup.form,
@@ -72,6 +74,7 @@ const Map<String, List<String>> _aliases = {
   'icon': ['图标', '小图', '符号', 'icon', 'tubiao'],
   'textarea': ['多行', '文本域', '留言', '备注', 'textarea', 'duohang'],
   'switch': ['开关', '切换', 'switch', 'toggle', 'kaiguan'],
+  'slider': ['滑块', '滑动条', '拖动条', '范围', 'slider', 'range', 'huakuai'],
   'checkbox': ['勾选', '复选', '多选', '打勾', 'checkbox', 'gouxuan'],
   'radio': ['单选', '选项', 'radio', 'danxuan'],
   'select': ['下拉', '选择', '菜单', 'select', 'dropdown', 'xiala'],
@@ -84,7 +87,14 @@ const Map<String, List<String>> _aliases = {
 
 /// 组件盒里的一个条目。
 class PaletteEntry {
-  const PaletteEntry({required this.type, required this.label, required this.group, this.ref, this.lib});
+  const PaletteEntry({required this.type, required this.label, required this.group, this.ref, this.lib, this.builtin});
+
+  /// 内置组件库里的组件（图标按钮、步进器…）：它在库里的那一条。别的条目是 null。
+  /// 这种条目的 [ref] 是定义装进文档以后的 id——文档里可能还没有，放上画布的那一刻才装（[lcEnsureBuiltin]）。
+  final BuiltinComp? builtin;
+
+  /// 格子上画哪个图标（palette_widgets.dart 的 `lcIcon` 认的名字）。
+  String get icon => builtin?.icon ?? type;
 
   /// 来自哪个组件库（库的名字）；项目自己的和内置的是 null。组件盒“我的”里一个库一组。
   final String? lib;
@@ -100,14 +110,22 @@ class PaletteEntry {
   String get key => ref == null ? type : 'component:$ref';
 }
 
-/// 全部条目：内置的按固定顺序，自定义组件排在后面。
-List<PaletteEntry> paletteEntries(List<LcComponentDef> components) => [
-  for (final type in lcPaletteTypes) PaletteEntry(type: type, label: lcSpecs[type]!.label, group: _groupOf[type] ?? PaletteGroup.basic),
-  for (final c in components)
-    if (compLibOf(c) == null) PaletteEntry(type: 'component', label: c.name, group: PaletteGroup.mine, ref: c.id),
-  for (final c in components)
-    if (compLibOf(c) != null) PaletteEntry(type: 'component', label: c.name, group: PaletteGroup.mine, ref: c.id, lib: compLibOf(c)!.name),
-];
+const Map<String, PaletteGroup> _builtinGroup = {'layout': PaletteGroup.layout, 'basic': PaletteGroup.basic, 'form': PaletteGroup.form};
+
+/// 全部条目：内置的按固定顺序（原生控件，然后是内置组件库里进组件盒的那几个），自定义组件排在后面。
+List<PaletteEntry> paletteEntries(List<LcComponentDef> components) {
+  final names = {for (final d in lcBuiltinCompLib().defs) d.id: d.name};
+  return [
+    for (final type in lcPaletteTypes) PaletteEntry(type: type, label: lcSpecs[type]!.label, group: _groupOf[type] ?? PaletteGroup.basic),
+    for (final b in kBuiltinComps)
+      if (_builtinGroup[b.group] case final g? when names[b.id] != null) PaletteEntry(type: 'component', label: names[b.id]!, group: g, ref: lcBuiltinDefId(b.id), builtin: b),
+    for (final c in components)
+      if (compLibOf(c) == null) PaletteEntry(type: 'component', label: c.name, group: PaletteGroup.mine, ref: c.id),
+    // 内置组件库装进来的不在“我的”里再列一遍：进组件盒的那几个已经在各自的分类里了。
+    for (final c in components)
+      if (compLibOf(c) != null && !lcIsBuiltinDef(c)) PaletteEntry(type: 'component', label: c.name, group: PaletteGroup.mine, ref: c.id, lib: compLibOf(c)!.name),
+  ];
+}
 
 /// “常用”里放哪些：最近用过的（已经不存在的跳过）在前，不够 [kPaletteRecentMax] 个用起步组件补。
 List<PaletteEntry> paletteRecent(List<PaletteEntry> all, List<String> recentKeys) {
@@ -143,6 +161,7 @@ List<PaletteEntry> paletteSearch(List<PaletteEntry> all, String query) {
   if (q.isEmpty) return all;
   bool hit(PaletteEntry e) {
     if (e.label.toLowerCase().contains(q)) return true;
+    if (e.builtin != null) return e.builtin!.aliases.any((a) => a.contains(q));
     if (e.ref != null) return false;
     return (_aliases[e.type] ?? const <String>[]).any((a) => a.contains(q));
   }
