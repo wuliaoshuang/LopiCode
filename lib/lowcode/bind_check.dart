@@ -10,6 +10,7 @@ import 'package:lopicode/lowcode/bind_model.dart';
 import 'package:lopicode/lowcode/bind_refs.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 import 'package:lopicode/lowcode/model.dart';
+import 'package:lopicode/lowcode/slot_gives.dart';
 import 'package:lopicode/lowcode/state_model.dart';
 
 class LcBindIssue {
@@ -77,7 +78,7 @@ List<LcBindIssue> lcCheckBindings(LcDocument doc) {
     (site) {
       final n = site.node;
       for (final name in lcExprNames(site.expr)..addAll([if (site.expr['from'] == 'var' && site.expr['name'] is String) site.expr['name'] as String])) {
-        if (!site.locals.contains(name) && !scope.containsKey(name)) {
+        if (!site.locals.contains(name) && !scope.containsKey(name) && !lcGivenNamesAt(doc, n.id).contains(name)) {
           out.add(LcBindIssue('${_label(n)}的“${site.what}”用到了 $name，但没有这个状态', nodeId: n.id));
         }
       }

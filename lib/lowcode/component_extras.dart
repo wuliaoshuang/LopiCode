@@ -324,7 +324,7 @@ bool lcDefIsLive(LcComponentDef def) {
   if (lcCompEvents(def).isNotEmpty || lcVariants(def).isNotEmpty || lcCompStates(def).isNotEmpty) return true;
   var any = false;
   void walk(LcNode n) {
-    any = any || lcHasBindings(n) || n.more[kLcEmit] != null;
+    any = any || lcHasBindings(n) || n.more[kLcEmit] != null || (n.type == 'slot' && n.more['gives'] is Map); // gives：插槽给外面的数据（slot_gives.dart）
     for (final c in n.children) {
       if (!any) walk(c);
     }

@@ -21,6 +21,7 @@ import 'package:lopicode/lowcode/component_ops.dart';
 import 'package:lopicode/lowcode/front_emit_bridge.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 import 'package:lopicode/lowcode/model.dart';
+import 'package:lopicode/lowcode/slot_gives.dart';
 import 'package:lopicode/lowcode/slots.dart';
 
 final RegExp _hex = RegExp(r'^#[0-9a-fA-F]{6}$');
@@ -133,10 +134,12 @@ class LcExpander {
       budget--;
       if (src.type == 'slot') {
         final name = lcSlotNameOf(src);
+        // 导出时：内容里读“插槽给的名字”的地方换成那个式子（slot_gives.dart）。画布、拆开用的是页面里的原节点，不动。
+        final given = live != null && deep && !markers ? lcSlotGives(src) : const <String, Map<String, dynamic>>{};
         final mine = placedSlots.add(name)
             ? [
                 for (final c in filled)
-                  if (slotOf(c) == name) c,
+                  if (slotOf(c) == name) lcWithGiven(c, given),
               ]
             : const <LcNode>[];
         final inside = mine.isNotEmpty
