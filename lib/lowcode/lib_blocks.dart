@@ -7,6 +7,7 @@ library;
 
 import 'package:lopicode/blocks/block_host.dart';
 import 'package:lopicode/lang/lib_model.dart';
+import 'package:lopicode/lowcode/lib_front_builtin.dart';
 import 'package:lopicode/lowcode/lib_page.dart';
 import 'package:lopicode/lowcode/logic_blocks.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
@@ -283,7 +284,7 @@ BlockHat libHatLook(LibEntry e, Map<String, dynamic> args, {String? Function(Str
           empty: libHatShow(args[part.text], '').isEmpty,
           kind: args[part.text] is num ? LcArgKind.literalNumber : LcArgKind.literalText,
         ),
-], colorKey: e.lib.id == kLcPageLibId ? BlockColorKey.event : BlockColorKey.custom);
+], colorKey: e.lib.id == kLcPageLibId ? BlockColorKey.event : (lcIsFrontOptional(e.lib.id) ? e.block.look.colorKey : BlockColorKey.custom));
 
 /// “从页面里挑一个”的槽还空着时写的字。
 const Map<String, String> kLibPickHints = {'node': '选控件', 'state': '选状态', 'prop': '选属性', 'page': '选页面', 'instance': '选组件', 'event': '选事件'};

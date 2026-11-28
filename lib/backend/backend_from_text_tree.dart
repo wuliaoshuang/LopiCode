@@ -154,6 +154,7 @@ class _Tree {
         return op == 'not' ? _x('not', {'x': expr(x)}) : (op == 'neg' ? _x('neg', {'x': expr(x)}) : null);
       case LBinary(:final op, :final l, :final r):
         if (op == '**') return _x('pow', {'a': expr(l), 'b': expr(r)});
+        if (op == '//') return _x(kBeIntDiv, {'l': expr(l), 'r': expr(r)});
         return kArithmeticOps.contains(op) || kCompareOps.contains(op) ? _x('bin', {'op': op, 'l': expr(l), 'r': expr(r)}) : null;
       case LLogic(:final op, :final l, :final r):
         return _x('logic', {'op': op, 'l': expr(l), 'r': expr(r)});
@@ -185,12 +186,16 @@ class _Tree {
       case LNative(name: final n, :final args):
         return _x(kBeHostCall, {'name': n, 'args': exprs(args)});
       case LLambda():
-        if (e.waits || e.params.any((p) => p.type != null || p.defaultValue != null || p.rest || beIdent(p.name) != p.name)) return null;
+        if (e.waits || e.params.any((p) => p.defaultValue != null || p.rest || beIdent(p.name) != p.name)) return null;
         final names = [for (final p in e.params) p.name];
+        // 参数标了类型的：类型写得出来就标在参数小块上（一格一个，没标的是空字）。
+        final types = [for (final p in e.params) p.type == null ? '' : _typeKey(p.type!)];
+        if (types.contains(null)) return null;
+        final typed = types.any((t) => t != '') ? {kExprParamTypes: types} : const <String, dynamic>{};
         if (names.toSet().length != names.length || names.any(w.rename.containsKey)) return null;
         final added = names.where(params.add).toList();
         try {
-          return e.expr != null ? _x('lambdaExpr', {'params': names, 'body': expr(e.expr!)}) : _x('lambda', {'params': names, kLcExprBody: stmts(e.body)});
+          return e.expr != null ? _x('lambdaExpr', {'params': names, ...typed, 'body': expr(e.expr!)}) : _x('lambda', {'params': names, ...typed, kLcExprBody: stmts(e.body)});
         } finally {
           params.removeAll(added);
         }
@@ -207,8 +212,11 @@ class _Tree {
     if (strict != null) return named(fn, strict);
     if (fn == 'isType') {
       final t = args.length == 2 && args[1] is LLit ? (args[1] as LLit).value : null;
-      return kBeTypeNames.contains(t) ? _x('isType', {'x': expr(args[0]), 'type': t}) : null;
+      if (kBeTypeNames.contains(t)) return _x('isType', {'x': expr(args[0]), 'type': t});
+      return named(kBeIsTypeNamed, const ['x', 'name']);
     }
+    if (fn == 'size') return named(kBeSizeOf, const ['x']);
+    if (fn == 'join') return _x(kBeJoinText, {'items': exprs(args)});
     for (final f in kBeRtFamilies.entries) {
       if (f.value.$1.contains(fn)) return named(f.key, f.value.$2, {'fn': fn});
     }

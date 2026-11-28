@@ -19,6 +19,7 @@ import 'package:lopicode/backend/lib_service_fork.dart';
 import 'package:lopicode/core/path_guard.dart';
 import 'package:lopicode/lang/lib_model.dart';
 import 'package:lopicode/lang/rules.dart';
+import 'package:lopicode/lowcode/lib_front_builtin.dart';
 import 'package:lopicode/lowcode/lib_page.dart' show kLcPageLibId, lcPageLibrary;
 import 'package:lopicode/project_session.dart';
 import 'package:lopicode/theme/tokens.dart';
@@ -27,6 +28,7 @@ import 'package:lopicode/ui/backend_lib_import_sheet.dart';
 import 'package:lopicode/ui/backend_lib_info_sheet.dart';
 import 'package:lopicode/ui/backend_lib_more_sheet.dart';
 import 'package:lopicode/ui/backend_screen.dart';
+import 'package:lopicode/ui/front_builtin_lib_sheet.dart';
 import 'package:lopicode/ui/widgets.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -220,6 +222,15 @@ class _LibsSheetState extends State<_LibsSheet> {
             muted: b.sideProblem(doc.libSide) != null,
             onTap: () => unawaited(b.id == kLcPageLibId ? showBePageLib(context, b, why: b.sideProblem(doc.libSide)) : showBeServiceLib(context, fork: _forkService, why: b.sideProblem(doc.libSide))),
           ),
+          // 页面逻辑、前端的库：自带的五个要用才用的前端库排在“页面”后面，点开有开关。
+          if (b.id == kLcPageLibId && doc.isFront)
+            for (final f in lcFrontBuiltinLibs())
+              BeSheetRow(
+                key: ValueKey('be-lib-builtin-${f.id.split('/').last}'),
+                label: f.name,
+                value: '${f.blocks.length} 块积木 · 自带${doc.use(f.id) != null ? ' · 用上了' : ''}',
+                onTap: () => unawaited(showFrontBuiltinLib(context, host, f).then((_) => mounted ? setState(() {}) : null)),
+              ),
           if (b.sideProblem(doc.libSide) case final why?)
             Padding(
               key: ValueKey(b.id == kLcPageLibId ? 'be-lib-builtin-page-why' : 'be-lib-builtin-why'),

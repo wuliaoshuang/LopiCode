@@ -18,6 +18,7 @@ import 'package:lopicode/core/safe_file.dart';
 import 'package:lopicode/lang/lib_model.dart';
 import 'package:lopicode/lang/rules.dart';
 import 'package:lopicode/lowcode/lib_blocks.dart';
+import 'package:lopicode/lowcode/lib_front_builtin.dart';
 import 'package:lopicode/lowcode/lib_page.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 
@@ -208,9 +209,9 @@ class BeDocument implements LibUser {
 
   /// [uses] 里的库读进来的样子（不存盘：打开文档的人从项目的 `blocks/` 里读好了放进来，见 backend_lib_store.dart）。
   /// 翻译、检查、生成都从这里找库；[uses] 里写了、这里没有的＝“库不在项目里”。
-  /// 前端这一边的文档永远带着内置库“页面”（排第一个），不用项目里有。
+  /// 前端这一边的文档永远带着自带的前端库（“页面”排第一个，后面是定时、请求……那五个要用才用的），不用项目里有。
   @override
-  List<LibLibrary> get loaded => isFront ? [lcPageLibrary(), ..._loaded.where((l) => l.id != kLcPageLibId)] : _loaded;
+  List<LibLibrary> get loaded => isFront ? [...lcFrontBuiltinAll(), ..._loaded.where((l) => !lcIsFrontBuiltin(l.id))] : _loaded;
   @override
   set loaded(List<LibLibrary> value) => _loaded = value;
   List<LibLibrary> _loaded;
@@ -219,7 +220,7 @@ class BeDocument implements LibUser {
   void syncSide() {
     final has = uses.any((u) => u.id == kLcPageLibId);
     if (isFront && !has) uses.insert(0, BeLibUse(kLcPageLibId));
-    if (!isFront && has) uses.removeWhere((u) => u.id == kLcPageLibId);
+    if (!isFront) uses.removeWhere((u) => lcIsFrontBuiltin(u.id));
   }
 
   // —— “会用库的文档”（lib/lowcode/lib_blocks.dart 的 [LibUser]）要的几样 ——

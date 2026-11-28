@@ -240,7 +240,7 @@ class BeBlockHost extends BlockHost with BeFuncHost, BeCoreHost, BeTypeHost, BeL
   String? exprSentence(String kind) => funcTable.sentenceOf(kind) ?? beExprSentences[kind] ?? coreExprSentence(kind);
 
   @override
-  bool isBooleanExpr(Map<String, dynamic> expr) => funcTable.isBool(expr) || beExprIsBool(expr);
+  bool isBooleanExpr(Map<String, dynamic> expr) => funcTable.isBool(expr) || beExprIsBool(expr) || kBeStrictBoolKinds.contains(expr['e']);
 
   // —— 脚本 ——
 

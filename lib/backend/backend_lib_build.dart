@@ -28,6 +28,7 @@ import 'package:lopicode/lang/link.dart';
 import 'package:lopicode/lang/rename.dart';
 import 'package:lopicode/lang/rules.dart';
 import 'package:lopicode/lang/typecheck.dart';
+import 'package:lopicode/lowcode/lib_front_builtin.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 
 /// 出库文件的结果：成了是文件表（相对路径 → 内容）和读好的库；不成是一串原因。
@@ -284,7 +285,8 @@ BeLibBuilt _build(BeDocument source, BeLibInfo info, List<String> problems) {
   final requires = [
     if (built.service) kBeServiceLibId,
     for (final l in built.libs)
-      if (!l.builtin) l.id,
+      // 自带库里，自动带上的（“页面”）不用写；要用才用的那五个前端库要写，用这个库的文档才知道得把它们也用上。
+      if (!l.builtin || lcIsFrontOptional(l.id)) l.id,
   ];
   files[kLibManifestFile] = const JsonEncoder.withIndent('  ').convert({
     'kind': kLibKind,

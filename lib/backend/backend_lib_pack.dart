@@ -21,6 +21,8 @@ import 'package:lopicode/backend/lib_service.dart';
 import 'package:lopicode/lang/host_v2.dart';
 import 'package:lopicode/lang/lib_model.dart';
 import 'package:lopicode/lang/rules.dart';
+import 'package:lopicode/lowcode/lib_front_builtin.dart';
+import 'package:lopicode/lowcode/lib_page.dart';
 
 /// 导出文件的扩展名。
 const String kBeLibFileSuffix = '.lopilib';
@@ -164,6 +166,9 @@ BeLibPreview beLibPreview(Map<String, String> files, {List<LibLibrary> others = 
   for (final r in lib.requires) {
     if (r == kBeServiceLibId) {
       needs.add('要靠应用自带的“${service.name}”库（${[for (final h in service.hosts) _hostWords[h] ?? h].join('、')}）');
+    } else if (lcIsFrontOptional(r)) {
+      // 自带的前端库（定时、请求……）：不用项目里有；用这个库的页面逻辑要把它也用上。
+      needs.add('要靠应用自带的“${lcFrontBuiltinLib(r)!.name}”库（用这个库的时候，在“积木库…”里把它也打开）');
     } else {
       final have = others.where((l) => l.id == r).firstOrNull;
       needs.add(have == null ? '要靠库「$r」（项目里还没有，要先把它导进来）' : '要靠库「${have.name}」（$r）');
@@ -176,10 +181,14 @@ BeLibPreview beLibPreview(Map<String, String> files, {List<LibLibrary> others = 
   if (lib.ok && problems.isEmpty) {
     final deps = [
       if (lib.requires.contains(kBeServiceLibId)) service,
+      // 给前端用的库自动带着“页面”库（不写进 requires）。
+      if (lib.side == LibSide.frontend) lcPageLibrary(),
+      for (final r in lib.requires)
+        if (lcIsFrontOptional(r)) lcFrontBuiltinLib(r)!,
       for (final l in others)
-        if (lib.requires.contains(l.id)) l,
+        if (lib.requires.contains(l.id) && !lcIsFrontBuiltin(l.id)) l,
     ];
-    final missing = lib.requires.where((r) => r != kBeServiceLibId && !others.any((l) => l.id == r));
+    final missing = lib.requires.where((r) => r != kBeServiceLibId && !lcIsFrontOptional(r) && !others.any((l) => l.id == r));
     if (missing.isEmpty) problems.addAll(beLibCheckWith(lib, deps));
   }
   return BeLibPreview(

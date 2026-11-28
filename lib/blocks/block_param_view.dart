@@ -3,18 +3,28 @@
 // - 层级：名字输入框是主角（一打开光标就在里面、全选，直接打字就是改名）；下面的都是次要的，用小字和中性色。
 // - 一行只做一件事，从上到下：名字 → 默认值（这种参数能给才有；填了“剩下的全收”就没有）→ “剩下的全收”开关（只有最后一个参数有）
 //   → 最底下一行：左边“删除”（危险色的字，不是大红按钮），右边“好”。
+// - 类型（2026-11-28，第四轮·A4）：宿主给了可选的类型才有这一行，排在默认值后面、“剩下的全收”前面；一行里左边是“类型”、右边是现在标的
+//   （没标写“不标”，中性色），点一下弹一张单选的小表（第一项“不标”＝让检查自己推）。不占第二行，不抢名字的位置。
 // - 名字不合适（空的、重名、带花括号）就在输入框下面用危险色说清原因，“好”按不动；不弹对话框。
 // - 键盘弹起时小卡整个挪到键盘上面，不被挡住。
 import 'dart:math' as math;
 
-import 'package:lopicode/blocks/block_look.dart';
+import 'package:lopicode/blocks/block_host.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// 小卡的结果：`param == null`＝删掉这个参数；否则是改好的参数。
 typedef BkParamChoice = ({BlockParam? param});
 
-Future<BkParamChoice?> showBlockParamCard(BuildContext context, {required Rect anchor, required BlockParam param, required List<String> others, bool canDefault = false, bool canRest = false}) {
+Future<BkParamChoice?> showBlockParamCard(
+  BuildContext context, {
+  required Rect anchor,
+  required BlockParam param,
+  required List<String> others,
+  bool canDefault = false,
+  bool canRest = false,
+  List<BlockOption> types = const [],
+}) {
   return showGeneralDialog<BkParamChoice>(
     context: context,
     barrierDismissible: true,
@@ -28,7 +38,7 @@ Future<BkParamChoice?> showBlockParamCard(BuildContext context, {required Rect a
         child: child,
       ),
     ),
-    pageBuilder: (context, _, _) => BlockParamCardView(anchor: anchor, param: param, others: others, canDefault: canDefault, canRest: canRest),
+    pageBuilder: (context, _, _) => BlockParamCardView(anchor: anchor, param: param, others: others, canDefault: canDefault, canRest: canRest, types: types),
   );
 }
 
@@ -46,8 +56,10 @@ Object? bkParseDefault(String text) {
 String bkDefaultText(Object? v) => v == null ? '' : (v is bool ? (v ? '是' : '否') : (v is num ? bkLookNumber(v) : '$v'));
 
 class BlockParamCardView extends StatefulWidget {
-  const BlockParamCardView({super.key, required this.anchor, required this.param, required this.others, this.canDefault = false, this.canRest = false});
+  const BlockParamCardView({super.key, required this.anchor, required this.param, required this.others, this.canDefault = false, this.canRest = false, this.types = const []});
 
+  /// 能标的类型；空的＝没有“类型”那一行。
+  final List<BlockOption> types;
   final Rect anchor;
   final BlockParam param;
   final List<String> others;
@@ -62,6 +74,38 @@ class _BlockParamCardViewState extends State<BlockParamCardView> {
   late final TextEditingController _name = TextEditingController(text: widget.param.name)..selection = TextSelection(baseOffset: 0, extentOffset: widget.param.name.length);
   late final TextEditingController _default = TextEditingController(text: bkDefaultText(widget.param.defaultValue));
   late bool _rest = widget.param.rest;
+  late String? _type = widget.param.type;
+
+  String? get _typeLabel {
+    final t = _type;
+    if (t == null) return null;
+    for (final o in widget.types) {
+      if (o.value == t) return o.label;
+    }
+    return widget.param.typeLabel ?? t;
+  }
+
+  Future<void> _pickType() async {
+    final c = context.colors;
+    final picked = await showDialog<String>(
+      context: context,
+      builder: (d) => SimpleDialog(
+        key: const ValueKey('bk-param-types'),
+        title: const Text('参数的类型'),
+        children: [
+          SimpleDialogOption(key: const ValueKey('bk-param-type-none'), onPressed: () => Navigator.pop(d, ''), child: const Text('不标')),
+          for (final o in widget.types)
+            SimpleDialogOption(
+              key: ValueKey('bk-param-type-${o.value}'),
+              onPressed: () => Navigator.pop(d, o.value),
+              child: Text(o.hint.isEmpty ? o.label : '${o.label}（${o.hint}）', style: TextStyle(color: o.value == _type ? c.accent : null)),
+            ),
+        ],
+      ),
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _type = picked.isEmpty ? null : picked);
+  }
 
   @override
   void dispose() {
@@ -75,7 +119,7 @@ class _BlockParamCardViewState extends State<BlockParamCardView> {
   void _done() {
     if (_problem != null) return;
     final d = widget.canDefault && !_rest ? bkParseDefault(_default.text) : null;
-    Navigator.pop<BkParamChoice>(context, (param: BlockParam(_name.text.trim(), defaultValue: d, rest: _rest)));
+    Navigator.pop<BkParamChoice>(context, (param: BlockParam(_name.text.trim(), defaultValue: d, rest: _rest, type: _type, typeLabel: _typeLabel)));
   }
 
   @override
@@ -140,6 +184,27 @@ class _BlockParamCardViewState extends State<BlockParamCardView> {
               const SizedBox(height: 14),
               caption('默认值（不填＝调用时必须给）'),
               TextField(key: const ValueKey('bk-param-default'), controller: _default, textInputAction: TextInputAction.done, decoration: field('没有默认值'), onSubmitted: (_) => _done()),
+            ],
+            if (widget.types.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              caption('类型（不标＝让检查自己推）'),
+              InkWell(
+                key: const ValueKey('bk-param-type'),
+                borderRadius: BorderRadius.circular(10),
+                onTap: _pickType,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(color: c.surfaceMuted, borderRadius: BorderRadius.circular(10)),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(_typeLabel ?? '不标', style: t.bodyMedium?.copyWith(color: _type == null ? c.textMuted : null)),
+                      ),
+                      Icon(Icons.expand_more, size: 18, color: c.textMuted),
+                    ],
+                  ),
+                ),
+              ),
             ],
             if (widget.canRest) ...[
               const SizedBox(height: 8),

@@ -5,6 +5,7 @@
 library;
 
 import 'package:lopicode/backend/backend_blocks.dart';
+import 'package:lopicode/backend/backend_blocks_strict.dart';
 import 'package:lopicode/backend/backend_blocks_typeops.dart';
 import 'package:lopicode/blocks/block_host.dart';
 
@@ -326,8 +327,9 @@ const Map<String, List<String>> _variantAliases = {
   'dictPart:dictPairs': ['键值对', 'entries', 'items', 'pairs'],
 };
 
-List<String> beAliasesOf(BlockItemRef item) =>
-    item.preset.isEmpty ? (beAliases[item.token] ?? beFuncAliases[item.token] ?? beTypeOpAliases[item.token] ?? const []) : (_variantAliases['${item.id}:${item.preset.values.first}'] ?? const []);
+List<String> beAliasesOf(BlockItemRef item) => item.preset.isEmpty
+    ? (beAliases[item.token] ?? beFuncAliases[item.token] ?? beTypeOpAliases[item.token] ?? beStrictAliases[item.token] ?? const [])
+    : (_variantAliases['${item.id}:${item.preset.values.first}'] ?? const []);
 
 List<BlockItemRef> beVariantsOf(BlockItemRef item) {
   if (item.kind != BlockPaletteKind.expr) return const [];

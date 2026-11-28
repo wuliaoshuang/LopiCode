@@ -23,6 +23,7 @@ import 'package:lopicode/backend/backend_function.dart';
 import 'package:lopicode/backend/backend_lower_lang.dart';
 import 'package:lopicode/backend/backend_model.dart';
 import 'package:lopicode/backend/backend_to_service.dart';
+import 'package:lopicode/blocks/block_look.dart';
 import 'package:lopicode/lang/ast.dart';
 import 'package:lopicode/lang/ast_util.dart';
 import 'package:lopicode/lang/lc_text.dart';
@@ -97,6 +98,9 @@ class BeFromText {
   final Map<String, LType> aliases = {};
   final Set<String> _names = {};
 
+  /// 模块里的变量：原来的名字 → 积木文档里的名字（汉字起的换成 g1、g2…）。
+  final Map<String, String> globalNames = {};
+
   bool localOk(String n) => n != '_' && beNamePattern.hasMatch(n);
   bool isLocalName(String n) => _names.contains(n);
 
@@ -170,9 +174,17 @@ class BeFromText {
       rename[l] = to;
       taken.add(to);
     }
+    // 模块里的变量：没被这个函数自己的名字盖住的，照文档里的名字写。
+    final outer = <String>[];
+    for (final g in globalNames.entries) {
+      if (locals.contains(g.key) || d.params.any((p) => p.name == g.key) || lambdaParams.contains(g.key)) continue;
+      outer.add(g.key);
+      if (g.value != g.key) rename[g.key] = g.value;
+    }
     _names
       ..clear()
-      ..addAll(locals);
+      ..addAll(locals)
+      ..addAll(outer);
     return BeCanonWriter(rename: rename, aliases: aliases);
   }
 
@@ -190,7 +202,7 @@ class BeFromText {
     };
   }
 
-  Map<String, dynamic> _docJson(List<Map<String, dynamic>> fns, List<Map<String, dynamic>> types, List<String> public) => {
+  Map<String, dynamic> _docJson(List<Map<String, dynamic>> fns, List<Map<String, dynamic>> types, List<String> public, [List<Map<String, dynamic>> globals = const []]) => {
     'version': 5,
     'kind': 'backend',
     'name': name,
@@ -198,7 +210,7 @@ class BeFromText {
     'language': 'node',
     'rules': 2,
     if (fns.isNotEmpty) 'functions': fns,
-    'core': {if (types.isNotEmpty) 'types': types, if (public.isNotEmpty) 'public': public},
+    'core': {if (types.isNotEmpty) 'types': types, if (globals.isNotEmpty) 'globals': globals, if (public.isNotEmpty) 'public': public},
     'library': {'id': id, 'version': '1.0.0', if (side != LibSide.backend) 'for': side.name},
   };
 
@@ -240,6 +252,7 @@ class BeFromText {
   BeFromTextResult run() {
     final problems = <String>[], skipped = <String>[], types = <Map<String, dynamic>>[], public = <String>[];
     final fnDecls = <LFuncDecl>[];
+    final varDecls = <LVarDecl>[];
     var tn = 0;
     for (final d in module.decls) {
       switch (d) {
@@ -247,6 +260,8 @@ class BeFromText {
           aliases[d.name] = d.target;
         case LFuncDecl():
           fnDecls.add(d);
+        case LVarDecl():
+          varDecls.add(d);
         case LNativeDecl():
           break;
         case LRecordDecl() when d.typeParams.isEmpty:
@@ -270,6 +285,28 @@ class BeFromText {
       if (d.isPublic) public.add('f${i + 1}');
     }
 
+    // 模块里的变量：进文档的“变量”（汉字起的名字换成 g1、g2…）；初始值翻不成积木的不带过来。
+    final globals = <Map<String, dynamic>>[];
+    final fnNames = {for (final d in fnDecls) d.name};
+    var gn = 0;
+    for (final d in varDecls) {
+      var to = d.name;
+      if (!localOk(to)) {
+        do {
+          to = 'g${++gn}';
+        } while (fnNames.contains(to) || varDecls.any((x) => x.name == to));
+      }
+      final t = _Tree(this, BeCanonWriter(aliases: aliases), const {});
+      final init = t.expr(d.init);
+      if (t.raws.isNotEmpty) {
+        skipped.add('「${d.name}」（模块里的变量，初始值没有对应的积木，没带过来）');
+        continue;
+      }
+      globalNames[d.name] = to;
+      globals.add({'name': to, 'init': init, if (d.isConst) 'const': true, if (d.type != null) 'type': lTypeToJson(head.expand(d.type!))});
+      if (d.isPublic) public.add('g:$to');
+    }
+
     // 第一遍：能翻的都翻。
     final writers = <String, BeCanonWriter>{}, want = <String, List<String>>{}, bodies = <String, List<Map<String, dynamic>>>{};
     final trees = <String, _Tree>{};
@@ -285,7 +322,7 @@ class BeFromText {
       final t = trees[f.decl.name] = _Tree(this, w, {...f.params});
       bodies[f.decl.name] = t.stmts(real);
     }
-    Map<String, dynamic> docOf() => _docJson([for (final f in funcs.values) _fnJson(f, bodies[f.decl.name]!)], types, public);
+    Map<String, dynamic> docOf() => _docJson([for (final f in funcs.values) _fnJson(f, bodies[f.decl.name]!)], types, public, globals);
 
     // 翻回去逐句对：头一回对不上的那一句换成文字原样；第二回还对不上的函数整个换；第三回还有对不上的＝报出来。
     final whole = <String>{};

@@ -406,6 +406,12 @@ abstract class BlockHost {
   /// 参数小块拖出来变成的那个值（“读这个参数”）。返回 null＝参数小块不能拖出来。
   Map<String, dynamic>? paramExpr(String name) => null;
 
+  /// 匿名函数的参数能标的类型（参数小卡里的选择表）。空的（默认）＝这个宿主的匿名函数参数不标类型。
+  List<BlockOption> get paramTypeOptions => const [];
+
+  /// 类型的字给人看的名字；不认识＝null。
+  String? paramTypeLabel(String type) => null;
+
   /// 带参数表的值（[LcExprSpec.paramsArg]，匿名函数）改了某个参数的名字：宿主顺手把它里面用到这个参数的地方一起改。
   /// 在 [edit] 里被调（参数表已经改好了）。默认什么都不做。
   void exprParamRenamed(LcBlockTree tree, Map<String, dynamic> expr, String from, String to) {}
