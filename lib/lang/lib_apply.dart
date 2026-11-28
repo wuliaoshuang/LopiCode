@@ -153,8 +153,10 @@ LibApplied libApply(LibLibrary lib, LibBlock b, LibUse use, LibCx cx) {
       final stmts = r.stmts(forms);
       return LibApplied(stmts: q == null ? stmts : q.mainBody(stmts));
     }
-    // 自带的库也一样指明是哪个模块的：用的人有一块同名的“我的积木”（比如也叫“换语言”），不会被认成库里那个。
-    String of(String name) => _owner(lib, b, name);
+    // 自带的前端库也一样指明是哪个模块的：用的人有一块同名的“我的积木”（比如也叫“换语言”），不会被认成库里那个。
+    // 自带的后端库（接口服务）照旧不指明：后端的类型检查查的是没合并的那一份（backend_type_bridge.dart 的 _viaLibrary），
+    // 带着模块记号的名字它认不出来，会把“网址参数”这类结果当成“任意”，可空、类型不对都查不出来了。
+    String of(String name) => lib.builtin && lib.side == LibSide.backend ? name : _owner(lib, b, name);
     final args = [for (final a in b.args) _argExpr(lib, b, a, use, cx)];
     final LExpr call;
     switch (b.how) {
