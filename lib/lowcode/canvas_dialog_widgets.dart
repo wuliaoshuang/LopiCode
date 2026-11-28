@@ -36,7 +36,7 @@ Widget canvasDialogStage(
       key: panelKey,
       constraints: BoxConstraints(maxWidth: math.max(0, pageWidth - 48)),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      decoration: BoxDecoration(color: kLcToastBg, borderRadius: BorderRadius.circular(8)),
+      decoration: BoxDecoration(color: lcToastBg(), borderRadius: BorderRadius.circular(8)),
       child: Text(node.strProp('text') ?? '', style: const TextStyle(color: kLcPageWhite, fontSize: 14, height: 1.4)),
     );
     return Container(

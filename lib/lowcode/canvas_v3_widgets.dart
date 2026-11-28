@@ -10,10 +10,12 @@ import 'dart:math' as math;
 
 import 'package:lopicode/lowcode/canvas_controls_widgets.dart';
 import 'package:lopicode/lowcode/canvas_parts_widgets.dart';
+import 'package:lopicode/lowcode/canvas_style_widgets.dart';
 import 'package:lopicode/lowcode/icon_set_widgets.dart';
 import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/lowcode/model_v3_components.dart';
 import 'package:lopicode/lowcode/slots.dart';
+import 'package:lopicode/lowcode/theme_vars.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -27,8 +29,9 @@ const Color kLcPageFaint = Color(0xFF8B93A7);
 const Color kLcPageAccent = Color(0xFF058654);
 const Color kLcPageWhite = Color(0xFFFFFFFF);
 
-/// 轻提示那颗小胶囊的底色（同导出网页里的 rgba(34, 36, 53, .92)）。
-const Color kLcToastBg = Color(0xEB222435);
+/// 轻提示那颗小胶囊的底色：页面主题变量起步那一套的正文色（color-text）盖上 92% 的不透明度，
+/// 和导出网页里的 rgba(34, 36, 53, .92) 是同一个色。
+Color lcToastBg() => (canvasArgb(kLcStarterVars['color-text']) ?? kLcPageMuted).withValues(alpha: 0.92);
 const Color kLcPagePill = Color(0x14000000);
 
 /// 画一个插槽：[name] 插槽名，[row] 里面是不是横着排，[availW] 里面大概多宽，[end] 横排时靠右。
