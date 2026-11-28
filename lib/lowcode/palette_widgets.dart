@@ -50,6 +50,7 @@ IconData lcIcon(String type) => switch (type) {
   'bottomNav' => Icons.video_label,
   'tabs' => Icons.tab,
   'dialog' => Icons.chat_bubble_outline,
+  'toast' => Icons.notifications_none,
   // 内置组件库里进组件盒的那几个（comp_lib_builtin.dart）和滑块。
   'iconButton' => Icons.add_circle_outline,
   'link' => Icons.link,

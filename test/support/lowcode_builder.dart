@@ -114,3 +114,22 @@ Future<void> lbTapShown(WidgetTester tester, Finder f) async {
   await lbShow(tester, f);
   await lbTap(tester, f);
 }
+
+/// 搭建台里的一句提示条（字里含 [text]）：在界面上、点得到（没被面板、弹层挡住），整条在工具条上面，撤销、重做没被它盖住。
+/// [undoShown]＝这个界面上此刻本来就有撤销、重做（盖着确认框、组件编辑页的时候没有，就不查这一条）。
+void lbHintAbove(WidgetTester tester, String text, {bool undoShown = true}) {
+  final hint = find.textContaining(text);
+  expect(hint, findsOneWidget, reason: '“$text”：提示没出来');
+  expect(hint.hitTestable(), findsOneWidget, reason: '“$text”：提示被别的东西挡住了');
+  final bar = lbKey('lc-toolbar');
+  if (bar.evaluate().isNotEmpty) {
+    expect(tester.getRect(hint).bottom, lessThanOrEqualTo(tester.getRect(bar.last).top), reason: '“$text”：提示盖到工具条上了');
+  }
+  final size = tester.view.physicalSize / tester.view.devicePixelRatio;
+  final r = tester.getRect(hint);
+  expect(r.left >= 0 && r.right <= size.width && r.top >= 0 && r.bottom <= size.height, isTrue, reason: '“$text”：提示有一部分在屏幕外 $r');
+  if (!undoShown) return;
+  for (final tip in ['撤销', '重做']) {
+    expect(find.byTooltip(tip).hitTestable(), findsWidgets, reason: '“$text”：$tip 被挡住了');
+  }
+}

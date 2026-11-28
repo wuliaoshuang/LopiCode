@@ -11,6 +11,7 @@ import 'package:lopicode/lowcode/bind_model.dart';
 import 'package:lopicode/lowcode/css_codec.dart';
 import 'package:lopicode/lowcode/export_web_v3.dart';
 import 'package:lopicode/lowcode/model.dart';
+import 'package:lopicode/lowcode/model_v3_components.dart';
 import 'package:lopicode/lowcode/states.dart';
 import 'package:lopicode/lowcode/style_resolve.dart';
 
@@ -100,6 +101,14 @@ const Map<String, List<String>> _rules = {
   ],
 };
 
+/// 轻提示（弹窗的“轻提示”样子）：贴着屏幕下方的一颗深色小胶囊，不挡点击；淡入 → 停着 → 淡出是一段动画，放完由页面收起来。
+const List<String> _toastRules = [
+  '.lc-dialog[data-variant="toast"] { inset: auto 0 72px 0; padding: 0 24px; pointer-events: none; animation: lc-toast 2s ease both; }',
+  '.lc-dialog[data-variant="toast"][hidden] { display: none; }',
+  ':where(.lc-toast-text) { margin: 0; max-width: 100%; padding: 10px 16px; border-radius: 8px; background: rgba(34, 36, 53, .92); color: #fff; font-size: 14px; line-height: 1.4; }',
+  '@keyframes lc-toast { 0% { opacity: 0; transform: translateY(8px); } 12% { opacity: 1; transform: none; } 85% { opacity: 1; } 100% { opacity: 0; } }',
+];
+
 /// 插槽那一层（列表行、顶部导航栏用）。
 const String _slotRule = ':where(.lc-slot) { flex: none; display: flex; flex-direction: row; align-items: center; gap: 8px; }';
 
@@ -117,10 +126,12 @@ final Expando<bool> lcPartExtracted = Expando<bool>('lcPartExtracted');
 /// 这棵树用到了哪些新组件，就写哪些的公共 CSS；一个都没用到返回空串。[root] 是页面时顺带写“页面级的栏”贴边的规则。
 String lcV3ComponentsCss(LcNode root) {
   final used = <String>{};
+  final toastSeconds = <int>{};
   void walk(LcNode n, int depth) {
     if (depth > LcNode.maxDepth * 4) return;
     // Vue 页面里已经写成“引用公共部件”的导航：它那一类的通用规则在部件文件里，页面这份用不上（样式只在本文件生效）。
     if (lcWebV3Types.contains(n.type) && !(depth > 0 && lcPartExtracted[n] == true)) used.add(n.type);
+    if (lcIsToast(n)) toastSeconds.add(lcToastSeconds(n));
     for (final c in n.children) {
       walk(c, depth + 1);
     }
@@ -140,6 +151,13 @@ String lcV3ComponentsCss(LcNode root) {
     _rules[type]!.forEach(out.writeln);
   }
   if (used.contains('listItem') || used.contains('appBar')) out.writeln(_slotRule);
+  // 轻提示：页面里有才写（没有的页面一个字不多）。
+  if (toastSeconds.isNotEmpty) {
+    _toastRules.forEach(out.writeln);
+    for (final sec in toastSeconds.toList()..sort()) {
+      if (sec != 2) out.writeln('.lc-dialog[data-variant="toast"][data-seconds="$sec"] { animation-duration: ${sec}s; }');
+    }
+  }
   if (root.type == 'page') {
     final page = resolvedStyle(root, null);
     final id = RegExp(r'^[A-Za-z0-9_]+$');

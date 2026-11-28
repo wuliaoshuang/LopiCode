@@ -283,6 +283,18 @@ String? dartV3Node(LcNode n, int i, DartChild child, {required bool inRow}) {
 /// 一个弹窗对应的静态方法（两级缩进，放在页面类里）。
 String dartDialogMethodCode(LcNode n, DartChild child) {
   final variant = lcVariantOf(n);
+  if (variant == 'toast') {
+    final words = (n.strProp('text') ?? '').replaceAll(RegExp(r'[\r\n]'), ' ');
+    return '''
+  /// 轻提示${words.isEmpty ? '' : '「$words」'}：要它出现的时候调用（屏幕下方一句话，${lcToastSeconds(n)} 秒后自己消失）。
+  static Future<void> ${dartDialogMethod(n)}(BuildContext context) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(${_s(n.strProp('text') ?? '')}), duration: const Duration(seconds: ${lcToastSeconds(n)}), behavior: SnackBarBehavior.floating));
+    return Future<void>.value();
+  }
+''';
+  }
   List<String> slot(String name, int at) => [
     for (final c in lcSlotChildren(n, name))
       if (c.type != 'dialog') child(c, n, at),

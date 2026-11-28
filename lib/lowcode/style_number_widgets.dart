@@ -1,7 +1,9 @@
 // 设计约束（样式面板的数字类小控件；390×844，浅色 + 深色）——从 style_controls_widgets.dart 拆出来的，规矩同那边：
 // - 一行只做一件事；可点的目标至少 40px 高；非法输入用危险色描边。
 // - 不直接改模型，只把新值交给回调；`merge` 为 true 表示“连续操作的一步”。
+// - 数字框（第四轮 B8）：长按住再左右拖＝加减，见 number_drag_widgets.dart。
 import 'package:flutter/services.dart';
+import 'package:lopicode/lowcode/number_drag_widgets.dart';
 import 'package:lopicode/lowcode/style_controls_widgets.dart';
 import 'package:lopicode/lowcode/style_model.dart';
 import 'package:lopicode/lowcode/theme_scope_widgets.dart';
@@ -24,6 +26,8 @@ class NumberBox extends StatefulWidget {
     this.faint = false,
     this.width = 60,
     this.placeholder,
+    this.step = 1,
+    this.start = 0,
   });
   final String id;
   final double? value;
@@ -36,6 +40,10 @@ class NumberBox extends StatefulWidget {
   final bool faint;
   final double width;
   final String? placeholder;
+
+  /// 长按拖动时一步加减多少；还没有值时从 [start] 算起。
+  final double step;
+  final double start;
 
   @override
   State<NumberBox> createState() => _NumberBoxState();
@@ -110,32 +118,40 @@ class _NumberBoxState extends State<NumberBox> {
       borderSide: BorderSide(color: color, width: w),
     );
     final pattern = widget.integer ? (widget.allowNegative ? r'[0-9-]' : r'[0-9]') : (widget.allowNegative ? r'[0-9.-]' : r'[0-9.]');
+    final field = TextField(
+      key: Key('lc-num-${widget.id}'),
+      controller: _text,
+      focusNode: _focus,
+      enabled: widget.enabled,
+      textAlign: TextAlign.center,
+      keyboardType: TextInputType.numberWithOptions(decimal: !widget.integer, signed: widget.allowNegative),
+      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(pattern)), LengthLimitingTextInputFormatter(8)],
+      // 键盘弹出时把这一行滚进视野，底下多留一点，别贴着键盘。
+      scrollPadding: const EdgeInsets.all(Space.x12),
+      style: t.bodyMedium?.copyWith(color: !widget.enabled ? c.textFaint : (_invalid ? c.danger : (widget.faint ? c.textMuted : c.text)), fontWeight: widget.faint ? FontWeight.w400 : FontWeight.w600),
+      decoration: InputDecoration(
+        hintText: widget.placeholder ?? '–',
+        contentPadding: const EdgeInsets.symmetric(horizontal: Space.x1, vertical: 10),
+        fillColor: widget.enabled ? c.surface : c.surfaceMuted,
+        enabledBorder: border(_invalid ? c.danger : c.border, _invalid ? 2 : 1),
+        disabledBorder: border(c.border),
+        focusedBorder: border(_invalid ? c.danger : c.accentFill, 2),
+      ),
+      onChanged: _onChanged,
+    );
     return SizedBox(
       width: widget.width,
       height: 40,
-      child: TextField(
-        key: Key('lc-num-${widget.id}'),
-        controller: _text,
+      child: NumberDragArea(
+        id: widget.id,
         focusNode: _focus,
         enabled: widget.enabled,
-        textAlign: TextAlign.center,
-        keyboardType: TextInputType.numberWithOptions(decimal: !widget.integer, signed: widget.allowNegative),
-        inputFormatters: [FilteringTextInputFormatter.allow(RegExp(pattern)), LengthLimitingTextInputFormatter(8)],
-        // 键盘弹出时把这一行滚进视野，底下多留一点，别贴着键盘。
-        scrollPadding: const EdgeInsets.all(Space.x12),
-        style: t.bodyMedium?.copyWith(
-          color: !widget.enabled ? c.textFaint : (_invalid ? c.danger : (widget.faint ? c.textMuted : c.text)),
-          fontWeight: widget.faint ? FontWeight.w400 : FontWeight.w600,
-        ),
-        decoration: InputDecoration(
-          hintText: widget.placeholder ?? '–',
-          contentPadding: const EdgeInsets.symmetric(horizontal: Space.x1, vertical: 10),
-          fillColor: widget.enabled ? c.surface : c.surfaceMuted,
-          enabledBorder: border(_invalid ? c.danger : c.border, _invalid ? 2 : 1),
-          disabledBorder: border(c.border),
-          focusedBorder: border(_invalid ? c.danger : c.accentFill, 2),
-        ),
-        onChanged: _onChanged,
+        value: widget.value ?? widget.start,
+        step: widget.step,
+        min: widget.allowNegative ? null : 0,
+        integer: widget.integer,
+        onChanged: widget.onChanged,
+        child: field,
       ),
     );
   }
@@ -303,6 +319,7 @@ class _LengthFieldState extends State<LengthField> {
           faint: widget.inherited,
           width: widget.stepper ? 56 : 64,
           placeholder: isAuto ? 'auto' : null,
+          step: _step,
           onChanged: (n) => widget.onChanged(LcLength(n, _unit), merge: true),
         ),
         if (widget.stepper)
@@ -354,7 +371,7 @@ class NumberField extends StatelessWidget {
       KeyboardKeep(
         child: StyleIconButton(key: Key('lc-num-$id-minus'), icon: Icons.remove, semantic: '减', onTap: () => _bump(-1)),
       ),
-      NumberBox(id: id, value: value, allowNegative: min == null, integer: integer, faint: inherited, width: 56, onChanged: (n) => onChanged(n, merge: true)),
+      NumberBox(id: id, value: value, allowNegative: min == null, integer: integer, faint: inherited, width: 56, step: step, start: start, onChanged: (n) => onChanged(n, merge: true)),
       KeyboardKeep(
         child: StyleIconButton(key: Key('lc-num-$id-plus'), icon: Icons.add, semantic: '加', onTap: () => _bump(1)),
       ),

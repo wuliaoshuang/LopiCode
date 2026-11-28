@@ -21,6 +21,7 @@ import 'package:lopicode/lowcode/component_ops.dart';
 import 'package:lopicode/lowcode/logic_expr.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 import 'package:lopicode/lowcode/model.dart';
+import 'package:lopicode/lowcode/slot_gives.dart';
 
 /// 展开出来的一条事件处理：[nodeId] 这个控件的 [event]（click / input）发生时做 [body]。
 class LcSynthHandler {
@@ -163,6 +164,17 @@ class LcLiveScope {
     }
 
     emitArgs(copy);
+    // 插槽给外面的数据（slot_gives.dart）：式子在定义里算，一样按这个实例改写；占位外面那层“重复”带出来的名字不动。
+    void gives(LcNode n, Set<String> locals) {
+      final rep = lcRepeatOf(n);
+      final inner = rep == null ? locals : {...locals, rep.item, rep.index};
+      if (n.type == 'slot' && n.more[kLcGives] is Map) _rewrite(n.more[kLcGives], inner);
+      for (final c in n.children) {
+        gives(c, inner);
+      }
+    }
+
+    gives(copy, const {});
     lcBoxFoldLiterals(copy);
     return copy;
   }

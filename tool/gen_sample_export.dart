@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:lopicode/lowcode/export_dart.dart';
 
 import '../test/support/b7_live_sample.dart';
+import '../test/support/b8_sample.dart';
 import '../test/support/bind_sample.dart';
 import '../test/support/box_off_sample.dart';
 import '../test/support/builtin_p1_sample.dart';
@@ -48,5 +49,7 @@ void main() {
   File('test/generated/box_off_page.dart').writeAsStringSync(exportDart(boxOffDoc(), className: 'BoxOffPage'));
   // 第四轮 B7：步进器开箱即用、“重复”里的事件、重复几次 / 等一会儿 / 打印（test/lowcode_b7_live_test.dart 会 import 它）。
   File('test/generated/b7_live_page.dart').writeAsStringSync(exportDart(b7LiveDoc(), className: 'B7LivePage'));
+  // 第四轮 B8：不是按钮的组件“按下”时换样子、“重复”为空时显示一块内容、轻提示（test/lowcode_b8_export_test.dart 会 import 它）。
+  File('test/generated/b8_page.dart').writeAsStringSync(exportDart(b8Doc(), className: 'B8Page'));
   stdout.writeln('ok');
 }

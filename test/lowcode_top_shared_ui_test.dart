@@ -54,6 +54,7 @@ void main() {
     await shot(tester, 'topshare-01-confirm');
     await tap(tester, find.widgetWithText(TextButton, '改成共用'));
     expect(find.text('已改成共用：2 个页面在显示这一条。'), findsOneWidget);
+    lbHintAbove(tester, '已改成共用：2 个页面'); // 第四轮 B8：这句提示看得见、没被挡、在工具条上面
     await lbShow(tester, lbKey('lc-top-shared'));
     expect(find.textContaining('各页共用 · 2 个页面在显示'), findsOneWidget);
     expect(tester.widget<Switch>(lbKey('lc-top-own-title')).value, isFalse);
@@ -117,6 +118,7 @@ void main() {
     await lbOpenCommon(tester);
     await lbTapShown(tester, lbKey('lc-top-hide-here'));
     expect(find.textContaining('不显示顶部导航了'), findsOneWidget);
+    lbHintAbove(tester, '不显示顶部导航了'); // 第四轮 B8：这句提示看得见、没被挡、在工具条上面
     expect(lbNode('bar'), findsNothing);
     var saved = await lbSaved(tester, session);
     expect(lcPageShowsSharedTop(saved.pageById('p1')!), isFalse);
@@ -141,6 +143,7 @@ void main() {
     await lbTapShown(tester, lbKey('lc-top-unshare'));
     await shot(tester, 'topshare-06-unshare-confirm');
     await tap(tester, find.widgetWithText(TextButton, '取消共用'));
+    lbHintAbove(tester, '已取消共用。'); // 第四轮 B8：这句提示看得见、没被挡、在工具条上面
     await lbShow(tester, lbKey('lc-top-share'));
     await lbTapShown(tester, lbKey('lc-common-variant-center'));
     await back(tester);

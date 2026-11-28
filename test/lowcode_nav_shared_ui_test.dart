@@ -55,6 +55,7 @@ void main() {
     await shot(tester, 'navshare-01-confirm');
     await tap(tester, find.widgetWithText(TextButton, '改成共用'));
     expect(find.text('已改成共用：3 个页面在显示这一条。'), findsOneWidget);
+    lbHintAbove(tester, '已改成共用：3 个页面'); // 第四轮 B8：这句提示看得见、没被挡、在工具条上面
     await lbShow(tester, lbKey('lc-nav-shared'));
     expect(find.textContaining('各页共用 · 3 个页面在显示'), findsOneWidget);
     await shot(tester, 'navshare-02-shared-block');
@@ -101,6 +102,7 @@ void main() {
     await lbOpenCommon(tester);
     await lbTapShown(tester, lbKey('lc-nav-hide-here'));
     expect(find.textContaining('不显示底部导航了'), findsOneWidget);
+    lbHintAbove(tester, '不显示底部导航了'); // 第四轮 B8：这句提示看得见、没被挡、在工具条上面
     expect(lbNode('nav'), findsNothing);
     var saved = await lbSaved(tester, session);
     expect(lcPageShowsSharedNav(saved.pageById('p1')!), isFalse);
@@ -125,6 +127,7 @@ void main() {
     await lbTapShown(tester, lbKey('lc-nav-unshare'));
     await shot(tester, 'navshare-06-unshare-confirm');
     await tap(tester, find.widgetWithText(TextButton, '取消共用'));
+    lbHintAbove(tester, '已取消共用。'); // 第四轮 B8：这句提示看得见、没被挡、在工具条上面
     await lbShow(tester, lbKey('lc-nav-share'));
     expect(tester.widget<IconButton>(lbKey('lc-items-current-1')).onPressed, isNotNull);
     await lbShow(tester, lbKey('lc-items-label-0'));
@@ -148,6 +151,7 @@ void main() {
     await lbTapShown(tester, lbKey('lc-items-page-1'));
     await tap(tester, lbKey('lc-items-page-pick-$p4'));
     expect(find.text('「购物车」也显示这条导航了。'), findsOneWidget);
+    lbHintAbove(tester, '也显示这条导航了'); // 第四轮 B8：这句提示看得见、没被挡、在工具条上面
     var saved = await lbSaved(tester, session);
     expect(navOf(saved, p4).props['current'], 1);
     await back(tester);

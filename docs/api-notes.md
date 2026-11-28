@@ -872,3 +872,21 @@ Flutter 导出在测试里真的跳了页（`test/lowcode_pages_export_test.dart
   （两者的起点不一样，混着用会错）。jsdom 里（`pretendToBeVisual: true`）一帧大约 16 毫秒；**真浏览器里页面在后台时不出帧，动画会停在半路、回到前台才接着走——未核对、没验证**。
 - **没有用的**：`Intl`（各地写法的数字、日期）、CSS 过渡、Web Animations、History 的 `state` 对象（路由参数都从路径里来）。
 
+
+## 第四轮 B8（2026-11-28）
+
+- **Flutter `debugDisableShadows`**（**核对过** API 文档页的原文）：“Whether to replace all shadows with solid color blocks”，
+  测试绑定（`AutomatedTestWidgetsFlutterBinding`）里默认是 true，测试改了它必须在结束前改回，否则测试失败。
+  所以测试截图里提示条外面那圈粗黑边是“投影被画成实心色块”，不是真有一圈边。B8 的截图在拍之前设成 false、拍完改回 true。
+- **CSS 动画结束事件 `animationend`**（**核对过** MDN“Element: animationend event”）：动画放完时发，可以 `addEventListener("animationend", …)`，也可以用 `onanimationend` 处理属性；
+  动画被中途拿掉（元素移出文档、动画被去掉）不发。同页的兼容表写着 Chrome 43–79 一类的老版本不支持 `onanimationend` 这个属性（只能 `addEventListener`）。
+  导出的普通网页用的是写在标签上的 `onanimationend="…"`：很老的浏览器 / WebView 上轻提示会停在淡出后的透明状态（不挡点击，因为 `pointer-events: none`），再点一次不会重放。**没有在真浏览器里看过**。
+  jsdom 不认这个标签属性、也不放 CSS 动画：`tool/verify/run_dom.mjs` 新加的 `fire` 步骤照浏览器的规矩替它跑一遍——所以“几秒后真的自己消失”**没有被验证**，验证到的只是“动画结束事件来了以后会收起来、再点还能再出来”。
+- **React 的 `onAnimationEnd`**：React 的事件属性名是驼峰写法（不是 `onAnimationend`）。**官方文档这次没有打开核对**；用 React 真编译 0 错 0 警告、jsdom 里发事件真跑验证。
+- **Vue 3 `@animationend`**：原生事件直接 `@事件名`。**官方文档没有打开核对**；`@vue/compiler-sfc` 真编译、jsdom 真跑验证。
+- **Flutter `ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:, duration:, behavior: SnackBarBehavior.floating))`、`hideCurrentSnackBar()`**：
+  **官方文档这次没有打开核对**；检入样本过静态分析 0 错 0 警告，并在测试里真装进界面：点了出来、到时间消失。
+- **Flutter `Listener`（`onPointerDown` / `onPointerUp` / `onPointerCancel`）**：只“听”指针事件、不参加手势竞争，所以包在外面不会抢里面按钮的点击。
+  **官方文档没有打开核对**；测试里真装进界面按住 / 松开 / 取消都验证了，里面的按钮照样点得动。
+- **Flutter `GestureDetector` 的 `onLongPressStart` / `onLongPressMoveUpdate`（`details.offsetFromOrigin`）/ `onLongPressEnd` / `onLongPressCancel`**、
+  **`OverlayPortal` + `CompositedTransformFollower`**（气泡跟着数字框）：**官方文档没有打开核对**；界面测试里长按、拖动、松手、气泡位置都断言了。真机手感没验证。

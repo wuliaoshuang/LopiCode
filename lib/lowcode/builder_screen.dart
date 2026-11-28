@@ -234,9 +234,9 @@ class _BuilderScreenState extends State<BuilderScreen> with WidgetsBindingObserv
       lcEnsureBuiltin(d, ref); // 内置组件库里的组件：第一次用才把定义装进来
       lcAdoptNewNav(d, node);
       lcAdoptNewTop(d, node);
-      if (sel != null && sel.isContainer && type != 'dialog') {
+      if (sel != null && sel.isContainer && node.type != 'dialog') {
         d.insert(sel.id, node);
-      } else if (sel != null && sel.id != d.root.id && type != 'dialog') {
+      } else if (sel != null && sel.id != d.root.id && node.type != 'dialog') {
         // 弹窗是整页的东西：永远加在页面最后
         final parent = d.parentOf(sel.id)!;
         d.insert(parent.id, node, parent.children.indexOf(sel) + 1);

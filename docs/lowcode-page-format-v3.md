@@ -321,3 +321,14 @@ Agent 用 `lowcode_update_page` 写页面时没写 `version` 的，按第 3 版�
 - 内置组件库装进来的定义和别的库装进来的一样带 `lib: {id: "lopi/builtin", name: "内置组件库", version: "1.0.0"}`，定义 id 是 `lib_lopi_builtin_<名字>`。
 - 没用这些新东西的旧文件：存出来和以前逐字节一样。
 
+
+## 第四轮 B8 之后的补充说明（版本号没动，只多了可选字段）
+
+- 节点上新增可选 `emptyOf: "<另一个节点的 id>"`：只给编辑器看的记号，意思是“这个容器是那个被重复的控件在列表为空时显示的那一块”。
+  它自己就是一个带存在条件（`renderIf`：那张列表有 0 项）的普通容器，紧跟在被重复的控件后面；导出不看这个字段。规矩见 `lib/lowcode/repeat_empty.dart`。
+  `repeat.empty`（一句文字）照旧可用；用了那一块以后编辑器会把这句话搬进去并去掉 `repeat.empty`。
+- 弹窗（`dialog`）的 `props.variant` 多一个值 `toast`（轻提示）：只用 `props.text`（那句话）、`props.seconds`（几秒后消失，1–5 的整数，不写＝2）、`props.open`；
+  标题、按钮文字、`dismissible`、子节点在这种样子下都不画、不导出。`seconds` 是新键，只在 `dialog` 上算数。
+- 组件定义里的插槽占位节点（`type: "slot"`）新增可选 `gives: {名字: 来源}`：这个插槽给填进来的内容的数据。来源在定义里那个位置算；
+  内容的绑定里按名字读。名字不合规矩、来源读不懂的那几条不算数（原样留着）；最多 8 样。规矩见 `lib/lowcode/slot_gives.dart`。
+- 没用这些新东西的旧文件：存出来和以前逐字节一样；四种导出也一样。

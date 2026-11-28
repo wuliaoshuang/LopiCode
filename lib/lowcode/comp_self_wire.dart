@@ -75,6 +75,29 @@ List<_Todo> _todos(LcDocument doc) {
   return out;
 }
 
+final Expando<({String sig, LcDocument wired})> _hereCache = Expando('lcSelfWiredHere');
+
+/// 画布用的：只看**现在这一页**，该补线的补上（画布和导出看到的是同一份状态，步进器的数跟着它自己记的那个状态走）。
+/// 没有要补的原样交回 [doc]。整份拷文档很贵，所以记着上一次的结果：这一页要补的线、页面里的状态都没变就直接用
+/// （画布只拿它算“状态现在是多少”，别的改动不影响）。不改 [doc]、不换页。
+LcDocument lcSelfWiredHere(LcDocument doc) {
+  final todos = _todos(doc);
+  if (todos.isEmpty) return doc;
+  final sig = jsonEncode([
+    doc.pageIndex,
+    for (final t in todos) [t.inst.id, t.inst.props['ref'], t.prop, t.event, t.toState, t.inst.props['values']],
+    for (final s in lcStatesInScope(doc)) s.variable.toJson(),
+  ]);
+  final hit = _hereCache[doc];
+  if (hit != null && hit.sig == sig) return hit.wired;
+  final wired = lcSelfWired(doc);
+  _hereCache[doc] = (sig: sig, wired: wired);
+  return wired;
+}
+
+/// 测试用：[lcSelfWired] 一共真的拷了几次文档。
+int lcSelfWiredCopies = 0;
+
 /// 给导出看的文档：该补线的补上。没有要补的原样交回 [doc]（所以别的页面导出一个字不变）。不改 [doc]。
 LcDocument lcSelfWired(LcDocument doc) {
   final at = doc.pageIndex;
@@ -88,6 +111,7 @@ LcDocument lcSelfWired(LcDocument doc) {
     doc.openPageAt(at);
   }
   if (!any) return doc;
+  lcSelfWiredCopies++;
   final copy = LcDocument.fromJson(jsonDecode(jsonEncode(doc.toJson())) as Map<String, dynamic>);
   for (var i = 0; i < copy.pages.length; i++) {
     copy.openPageAt(i);

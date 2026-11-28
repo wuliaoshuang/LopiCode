@@ -148,6 +148,32 @@ String? _lcPickOne(Object? v, List<String> options) {
 }
 ''',
   '_lcAlert': kDartLiveAlert,
+  '_LcPress': r'''
+/// 记着“手指按没按着”，按着时里面的东西换成“按下”的样子（只是看，不抢点击、滑动）。
+class _LcPress extends StatefulWidget {
+  const _LcPress({required this.builder});
+  final Widget Function(BuildContext context, bool lcDown) builder;
+
+  @override
+  State<_LcPress> createState() => _LcPressState();
+}
+
+class _LcPressState extends State<_LcPress> {
+  bool _down = false;
+
+  void _set(bool v) {
+    if (_down != v && mounted) setState(() => _down = v);
+  }
+
+  @override
+  Widget build(BuildContext context) => Listener(
+    onPointerDown: (_) => _set(true),
+    onPointerUp: (_) => _set(false),
+    onPointerCancel: (_) => _set(false),
+    child: widget.builder(context, _down),
+  );
+}
+''',
 };
 
 /// [code] 里用到的小函数（连它们自己用到的），按上面的先后排。

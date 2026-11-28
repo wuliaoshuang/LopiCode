@@ -10,6 +10,7 @@ import 'package:lopicode/lowcode/comp_lib.dart';
 import 'package:lopicode/lowcode/comp_lib_builtin.dart';
 import 'package:lopicode/lowcode/component_model.dart';
 import 'package:lopicode/lowcode/model.dart';
+import 'package:lopicode/lowcode/model_v3_components.dart';
 
 /// “常用”里最多放几个。
 const int kPaletteRecentMax = 8;
@@ -83,6 +84,7 @@ const Map<String, List<String>> _aliases = {
   'bottomNav': ['底栏', '底部导航', '标签栏', 'tabbar', 'bottomnav', 'dibu'],
   'tabs': ['标签页', '页签', '选项卡', 'tabs', 'tab', 'biaoqianye'],
   'dialog': ['弹窗', '对话框', '提示框', '弹层', 'dialog', 'modal', 'tanchuang'],
+  kLcToastPaletteType: ['轻提示', '提示', '吐司', '消息', 'toast', 'snackbar', 'qingtishi'],
 };
 
 /// 组件盒里的一个条目。
@@ -117,6 +119,8 @@ List<PaletteEntry> paletteEntries(List<LcComponentDef> components) {
   final names = {for (final d in lcBuiltinCompLib().defs) d.id: d.name};
   return [
     for (final type in lcPaletteTypes) PaletteEntry(type: type, label: lcSpecs[type]!.label, group: _groupOf[type] ?? PaletteGroup.basic),
+    // 轻提示：不是新组件，是样子为“轻提示”的弹窗；单列一格好找（紧跟在弹窗后面）。
+    const PaletteEntry(type: kLcToastPaletteType, label: '轻提示', group: PaletteGroup.layout),
     for (final b in kBuiltinComps)
       if (_builtinGroup[b.group] case final g? when names[b.id] != null) PaletteEntry(type: 'component', label: names[b.id]!, group: g, ref: lcBuiltinDefId(b.id), builtin: b),
     for (final c in components)

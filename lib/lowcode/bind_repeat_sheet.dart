@@ -5,7 +5,8 @@
 //     列表（必填）：没选＝灰药丸“选一张列表”；选了＝强调色小牌子。
 //     这一项叫什么（默认 item）｜第几个叫什么（默认 i）：两个短输入框各占一行。里面的控件绑定时用这两个名字。
 //     每项的标识：小牌子或灰药丸“选一格”。下面一句灰字：选每一项里不会重复的那一格（比如 id），增删挪动时才认得准。
-//     列表是空的时候显示：一句文字（可不填）。
+//     列表是空的时候显示：一句文字（可不填）；下面一颗文字按钮“换成一块内容（能放图、按钮）”——点了＝保存，并在这个组件后面
+//       加一块只在列表是空的时候出现的容器（repeat_empty.dart）。已经有那一块了：这一行换成一句说明＋“去改它”。
 //     画布上先画几份：1–5 一排药丸。
 //   底部：左“不重复了”（红字；本来没设就没有），右“取消”“保存”（唯一实心；没选列表、名字写得不对时是灰的，上方一句红字）。
 // - 取用的 tokens：Space.x2/x3/x4、textMuted / textFaint、danger。
@@ -24,8 +25,8 @@ import 'package:material_ui/material_ui.dart';
 const double _labelWidth = 88;
 
 class LcRepeatDraft {
-  const LcRepeatDraft({required this.list, required this.item, required this.index, this.key, this.empty, required this.preview}) : remove = false;
-  const LcRepeatDraft.removed() : list = null, item = '', index = '', key = null, empty = null, preview = 3, remove = true;
+  const LcRepeatDraft({required this.list, required this.item, required this.index, this.key, this.empty, required this.preview, this.emptyBlock = false}) : remove = false;
+  const LcRepeatDraft.removed() : list = null, item = '', index = '', key = null, empty = null, preview = 3, remove = true, emptyBlock = false;
   final Map<String, dynamic>? list;
   final String item;
   final String index;
@@ -33,18 +34,23 @@ class LcRepeatDraft {
   final String? empty;
   final int preview;
   final bool remove;
+
+  /// 保存以后还要：给它加一块“空的时候显示”的内容（已经有了就是选中那一块）。
+  final bool emptyBlock;
 }
 
-Future<LcRepeatDraft?> showLcRepeatSheet(BuildContext context, {required InspectorEdit ed, LcRepeat? current}) => showModalBottomSheet<LcRepeatDraft>(
+/// [emptyBlock]：null＝这里不能加“空的时候显示的一块内容”（改不了整份文档的地方）；true＝已经有那一块了；false＝还没有。
+Future<LcRepeatDraft?> showLcRepeatSheet(BuildContext context, {required InspectorEdit ed, LcRepeat? current, bool? emptyBlock}) => showModalBottomSheet<LcRepeatDraft>(
   context: context,
   isScrollControlled: true,
-  builder: (_) => _RepeatSheet(ed: ed, current: current),
+  builder: (_) => _RepeatSheet(ed: ed, current: current, emptyBlock: emptyBlock),
 );
 
 class _RepeatSheet extends StatefulWidget {
-  const _RepeatSheet({required this.ed, this.current});
+  const _RepeatSheet({required this.ed, this.current, this.emptyBlock});
   final InspectorEdit ed;
   final LcRepeat? current;
+  final bool? emptyBlock;
 
   @override
   State<_RepeatSheet> createState() => _RepeatSheetState();
@@ -73,6 +79,16 @@ class _RepeatSheetState extends State<_RepeatSheet> {
     if (item == index) return '“这一项”和“第几个”不能叫同一个名字';
     return null;
   }
+
+  LcRepeatDraft _draft({bool emptyBlock = false}) => LcRepeatDraft(
+    list: _list,
+    item: _item.text.trim(),
+    index: _index.text.trim(),
+    key: _key,
+    empty: _empty.text.trim().isEmpty ? null : _empty.text.trim(),
+    preview: _preview,
+    emptyBlock: emptyBlock,
+  );
 
   Future<void> _pickList() async {
     // 列表从外面来：这一层自己带出来的名字还不能用。
@@ -135,11 +151,27 @@ class _RepeatSheetState extends State<_RepeatSheet> {
                 labelWidth: _labelWidth,
                 label: '空的时候',
                 scroll: false,
-                child: TextField(
-                  key: const Key('lc-repeat-empty'),
-                  controller: _empty,
-                  decoration: const InputDecoration(isDense: true, hintText: '列表是空的时候显示的一句话（可不填）'),
-                ),
+                below: widget.emptyBlock == null
+                    ? null
+                    : Align(
+                        alignment: Alignment.centerLeft,
+                        child: TextButton(
+                          key: const Key('lc-repeat-empty-block'),
+                          onPressed: problem != null ? null : () => Navigator.pop(context, _draft(emptyBlock: true)),
+                          child: Text(widget.emptyBlock! ? '保存，并去改那一块' : '换成一块内容（能放图、按钮）'),
+                        ),
+                      ),
+                child: widget.emptyBlock == true
+                    ? Text(
+                        '显示它后面那一块内容（画布上角标“条件”、颜色淡的那个容器）。',
+                        key: const Key('lc-repeat-empty-has-block'),
+                        style: t.bodySmall?.copyWith(color: c.textMuted),
+                      )
+                    : TextField(
+                        key: const Key('lc-repeat-empty'),
+                        controller: _empty,
+                        decoration: const InputDecoration(isDense: true, hintText: '列表是空的时候显示的一句话（可不填）'),
+                      ),
               ),
               InspectorRow(
                 labelWidth: _labelWidth,
@@ -171,16 +203,7 @@ class _RepeatSheetState extends State<_RepeatSheet> {
                   const Spacer(),
                   TextButton(onPressed: () => Navigator.pop(context), child: const Text('取消')),
                   const SizedBox(width: Space.x2),
-                  FilledButton(
-                    key: const Key('lc-repeat-save'),
-                    onPressed: problem != null
-                        ? null
-                        : () => Navigator.pop(
-                            context,
-                            LcRepeatDraft(list: _list, item: _item.text.trim(), index: _index.text.trim(), key: _key, empty: _empty.text.trim().isEmpty ? null : _empty.text.trim(), preview: _preview),
-                          ),
-                    child: const Text('保存'),
-                  ),
+                  FilledButton(key: const Key('lc-repeat-save'), onPressed: problem != null ? null : () => Navigator.pop(context, _draft()), child: const Text('保存')),
                 ],
               ),
             ],

@@ -12,6 +12,7 @@ library;
 import 'package:lopicode/lowcode/bind_eval.dart';
 import 'package:lopicode/lowcode/bind_model.dart';
 import 'package:lopicode/lowcode/bind_preview.dart';
+import 'package:lopicode/lowcode/comp_self_wire.dart';
 import 'package:lopicode/lowcode/css_codec.dart';
 import 'package:lopicode/lowcode/export_live_doc.dart';
 import 'package:lopicode/lowcode/model.dart';
@@ -113,8 +114,9 @@ class LcViewEnv {
     final vars = lcThemeOf(doc).values;
     // 这一页一个绑定都没有：不带绑定环境，画布走的还是原来那条路。
     // 页面里有“用了第 6 期新东西”的组件实例：绑定在定义里，状态要算上每个实例自己的那一份。
+    // 步进器这类“没人接就自己记着”的先补好线（comp_self_wire.dart；有缓存），画布上的数才和导出、预览里的是同一个状态。
     final live = lcTreeHasLiveInstance(doc, doc.root);
-    final bind = live ? LcBindEnv.of(lcExportDoc(doc)) : (lcTreeHasBindings(doc.root) ? LcBindEnv.of(doc) : null);
+    final bind = live ? LcBindEnv.of(lcExportDoc(lcSelfWiredHere(doc))) : (lcTreeHasBindings(doc.root) ? LcBindEnv.of(doc) : null);
     return vars.isEmpty && bp == null && bind == null ? plain : LcViewEnv(vars: vars, bp: bp, bind: bind);
   }
 

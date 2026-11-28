@@ -29,6 +29,7 @@ import 'package:lopicode/project_session.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'support/harness.dart';
+import 'support/lowcode_builder.dart' show lbHintAbove;
 
 final bool writeShots = Platform.environment['LOPI_SHOTS'] == '1';
 final String shotDir = Platform.environment['LOPI_SHOT_DIR'] ?? '.tmp/editor-b1-shots';
@@ -601,6 +602,7 @@ void main() {
       // 复制。
       await tap(tester, k('lc-multi-copy'));
       expect(find.textContaining('已复制 2 个'), findsOneWidget);
+      lbHintAbove(tester, '已复制 2 个'); // 第四轮 B8：这句提示看得见、没被挡、在工具条上面
       expect(lcClipboardCount, 2);
       await tester.pump(const Duration(seconds: 4));
       await tester.pumpAndSettle();

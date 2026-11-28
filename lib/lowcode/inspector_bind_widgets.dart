@@ -18,6 +18,7 @@ import 'package:lopicode/lowcode/inspector_common_widgets.dart';
 import 'package:lopicode/lowcode/inspector_presets_widgets.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
 import 'package:lopicode/lowcode/model.dart';
+import 'package:lopicode/lowcode/repeat_empty.dart';
 import 'package:lopicode/lowcode/style_controls_widgets.dart';
 import 'package:lopicode/lowcode/theme_scope_widgets.dart';
 import 'package:lopicode/theme/tokens.dart';
@@ -156,9 +157,39 @@ class InspectorDataSection extends StatelessWidget {
 
   Future<void> _repeat(BuildContext context) async {
     final rep = lcRepeatOf(n);
-    final r = await showLcRepeatSheet(context, ed: ed, current: rep);
+    final id = n.id;
+    final editDoc = ed.editDoc;
+    final r = await showLcRepeatSheet(context, ed: ed, current: rep, emptyBlock: editDoc == null ? null : lcRepeatEmptyBlock(ed.doc, id) != null);
     if (r == null) return;
-    ed.apply((n, _) => r.remove ? lcSetRepeat(n, listSrc: null) : lcSetRepeat(n, listSrc: r.list, item: r.item, index: r.index, keySrc: r.key, empty: r.empty, preview: r.preview));
+    void set(LcNode n) => r.remove ? lcSetRepeat(n, listSrc: null) : lcSetRepeat(n, listSrc: r.list, item: r.item, index: r.index, keySrc: r.key, empty: r.empty, preview: r.preview);
+    if (editDoc == null) return ed.apply((n, _) => set(n));
+    // 连同“空的时候显示的那一块”一起改，算一步（撤销一下全回去）。
+    var added = false;
+    editDoc((d) {
+      final node = d.find(id);
+      if (node == null) return;
+      set(node);
+      if (r.emptyBlock && !r.remove) {
+        added = lcRepeatEmptyBlock(d, id) == null;
+        lcAddRepeatEmptyBlock(d, id);
+      }
+      lcSyncRepeatEmptyBlock(d, id);
+    });
+    if (r.emptyBlock && context.mounted) {
+      showEditorHint(context, added ? '已在它后面加了一块：列表是空的时候才出现。在画布上点它，往里放东西。' : '那一块就在它后面（角标“条件”的那个容器），在画布上点它来改。');
+    }
+  }
+
+  /// 不重复了：它的“空的时候显示的那一块”一起拿掉（算一步）。
+  void _unrepeat() {
+    final editDoc = ed.editDoc, id = n.id;
+    if (editDoc == null) return ed.apply((n, _) => lcSetRepeat(n, listSrc: null));
+    editDoc((d) {
+      final node = d.find(id);
+      if (node == null) return;
+      lcSetRepeat(node, listSrc: null);
+      lcSyncRepeatEmptyBlock(d, id);
+    });
   }
 
   Future<void> _addNamed(
@@ -232,7 +263,7 @@ class InspectorDataSection extends StatelessWidget {
             scroll: false,
             child: rep == null
                 ? _unset('repeat', '按一张列表重复', () => _repeat(context))
-                : LcBoundPill(id: 'repeat', text: '${lcDescribeExpr(rep.list)} 的每一项（${rep.item}）', onTap: () => _repeat(context), onClear: () => ed.apply((n, _) => lcSetRepeat(n, listSrc: null))),
+                : LcBoundPill(id: 'repeat', text: '${lcDescribeExpr(rep.list)} 的每一项（${rep.item}）', onTap: () => _repeat(context), onClear: _unrepeat),
           ),
           _cond(context, 'showIf', '显示条件', kLcShowIf, '设一个条件'),
           MoreSection(

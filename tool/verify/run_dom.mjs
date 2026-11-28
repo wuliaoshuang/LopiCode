@@ -164,6 +164,20 @@ for (const s of steps) {
         el.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
         break;
       }
+      case 'fire':
+        // 发一个事件（jsdom 不放 CSS 动画：轻提示的“动画放完”要自己发）。
+        {
+          const el = one(s.sel, s.at);
+          const ev = new dom.window.Event(s.name, { bubbles: true });
+          // jsdom 不认 onanimationend 这类写在标签上的处理（浏览器认）：这里照浏览器的规矩替它跑一遍。
+          const inline = el.getAttribute('on' + s.name);
+          if (inline && !(('on' + s.name) in el)) el.addEventListener(s.name, new dom.window.Function('event', inline), { once: true });
+          el.dispatchEvent(ev);
+          // jsdom 没有 AnimationEvent：React 这时改听带 webkit 前缀的老名字（真浏览器里它听的就是 animationend）。
+          const old = { animationend: 'webkitAnimationEnd' }[s.name];
+          if (old && !('AnimationEvent' in dom.window)) el.dispatchEvent(new dom.window.Event(old, { bubbles: true }));
+        }
+        break;
       case 'text':
         same(textOf(one(s.sel, s.at)));
         break;

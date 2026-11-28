@@ -6,6 +6,7 @@
 //   一行只做这一件事；标题太长就省略。
 // - 取用的 tokens：Space.x1/x2/x3、Radii.sm、accentSoft（底）、accent（图标）、text。
 import 'package:lopicode/lowcode/model.dart';
+import 'package:lopicode/lowcode/model_v3_components.dart';
 import 'package:lopicode/lowcode/newer_notice_widgets.dart';
 import 'package:lopicode/theme/tokens.dart';
 import 'package:material_ui/material_ui.dart';
@@ -63,7 +64,7 @@ class _CanvasBannersState extends State<CanvasBanners> {
                     const SizedBox(width: Space.x2),
                     Expanded(
                       child: Text(
-                        '正在编辑弹窗：${dialog.name.isNotEmpty ? dialog.name : dialog.strProp('title') ?? '没有标题'}',
+                        lcIsToast(dialog) ? '正在编辑轻提示：${dialog.strProp('text') ?? ''}' : '正在编辑弹窗：${dialog.name.isNotEmpty ? dialog.name : dialog.strProp('title') ?? '没有标题'}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: t.bodyMedium?.copyWith(color: c.text),

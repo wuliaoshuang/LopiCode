@@ -26,6 +26,9 @@ const Color kLcPageMuted = Color(0xFF5C6479);
 const Color kLcPageFaint = Color(0xFF8B93A7);
 const Color kLcPageAccent = Color(0xFF058654);
 const Color kLcPageWhite = Color(0xFFFFFFFF);
+
+/// 轻提示那颗小胶囊的底色（同导出网页里的 rgba(34, 36, 53, .92)）。
+const Color kLcToastBg = Color(0xEB222435);
 const Color kLcPagePill = Color(0x14000000);
 
 /// 画一个插槽：[name] 插槽名，[row] 里面是不是横着排，[availW] 里面大概多宽，[end] 横排时靠右。
@@ -97,7 +100,7 @@ Widget? canvasV3Content(BuildContext context, CanvasV3 a) {
     'appBar' => _appBar(a),
     'bottomNav' => _bottomNav(a),
     'tabs' => CanvasTabs(args: a),
-    'dialog' => a.inert ? const SizedBox.shrink() : _DialogChip(title: n.strProp('title')),
+    'dialog' => a.inert ? const SizedBox.shrink() : _DialogChip(title: n.strProp('title'), toast: lcIsToast(n) ? n.strProp('text') ?? '' : null),
     _ => null,
   };
   if (out == null) return null;

@@ -209,7 +209,7 @@ class EditorWorkbenchState extends State<EditorWorkbench> {
     }
   }
 
-  /// 画布上点了一个组件（或空白）。点的是已经选中的文字 / 按钮 / 输入框＝就地改字。
+  /// 画布上点了一个组件（或空白）。点的是已经选中的文字 / 按钮 / 输入框 / 列表 / 图片＝就地改字。
   void _tapNode(String? id) {
     // 正在编辑弹窗时点到了弹窗外面（遮罩）：算点空白，不选中页面（选中页面＝退出这个状态）。
     if (id == widget.doc.root.id && _overlay.sync(widget.doc, widget.selected) != null) id = null;
@@ -233,8 +233,7 @@ class EditorWorkbenchState extends State<EditorWorkbench> {
     if (text == null) return;
     widget.onEdit?.call((d) {
       final n = d.find(id);
-      final prop = n == null ? null : inlineTextProp(n);
-      if (prop != null) n!.props[prop] = text;
+      if (n != null) inlineTextWrite(n, text);
     });
   }
 

@@ -249,6 +249,7 @@ void main() {
     await shot(tester, 'pages-12-nav-share-pick');
     await tap(tester, lbKey('lc-nav-share-base-p1'));
     expect(find.text('已改成共用：4 个页面在显示这一条。'), findsOneWidget);
+    lbHintAbove(tester, '已改成共用：4 个页面'); // 第四轮 B8：这句提示看得见、没被挡、在工具条上面
     await shot(tester, 'pages-12b-after-share');
     final saved = await lbSaved(tester, session);
     LcNode navOf(String id) => saved.pageById(id)!.root.children.lastWhere((n) => n.type == 'bottomNav');
@@ -339,6 +340,7 @@ void main() {
     await tap(tester, find.byTooltip('撤销'));
     expect(find.textContaining('第 2/3 页'), findsOneWidget);
     expect(find.textContaining('已换到「商品列表」'), findsOneWidget);
+    lbHintAbove(tester, '已换到「商品列表」'); // 第四轮 B8：这句提示看得见、没被挡、在工具条上面
     await shot(tester, 'pages-18-undo-jumps');
     await tap(tester, find.byTooltip('重做'));
     expect(find.textContaining('第 2/3 页'), findsOneWidget);

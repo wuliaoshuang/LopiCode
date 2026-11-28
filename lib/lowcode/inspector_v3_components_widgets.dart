@@ -24,7 +24,7 @@ const Map<String, Map<String, String>> kLcVariantLabels = {
   'appBar': {'left': '居左', 'center': '居中'},
   'bottomNav': {'labeled': '有字', 'iconOnly': '只有图标'},
   'tabs': {'underline': '下划线', 'pill': '胶囊'},
-  'dialog': {'alert': '一个按钮', 'confirm': '两个按钮'},
+  'dialog': {'alert': '一个按钮', 'confirm': '两个按钮', 'toast': '轻提示'},
 };
 
 /// 带插槽的组件：那句“还能往里拖什么”。
@@ -176,6 +176,32 @@ Widget _text(InspectorEdit ed, String prop, String label, {String? hint, int max
     case 'tabs':
       return ([...items, _variant(ed), color('color', '选中颜色', 'color'), ...tail], {'color'});
     case 'dialog':
+      if (lcIsToast(n)) {
+        // 轻提示：只有一句话和“几秒后消失”；没有标题、按钮，里面也不放组件。
+        return (
+          [
+            _text(ed, 'text', '提示的话', maxLines: 2),
+            _variant(ed),
+            InspectorChoiceRow(
+              id: 'seconds',
+              label: '几秒消失',
+              options: const {'1': '1 秒', '2': '2 秒', '3': '3 秒', '5': '5 秒'},
+              selected: '${lcToastSeconds(n)}',
+              onChanged: (v) => ed.apply((n, _) => lcSetOrDrop(n, 'seconds', v == '2' ? null : int.parse(v))),
+            ),
+            lcSwitchRow(ed, 'open', '进页就出'),
+            Padding(
+              padding: const EdgeInsets.only(top: Space.x2),
+              child: Text(
+                '怎么让它出现：选中一个按钮 ›“常用”页的快捷动作 ›“点击时打开弹窗”› 选这个轻提示。',
+                key: const Key('lc-toast-how'),
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: context.colors.textFaint),
+              ),
+            ),
+          ],
+          const {},
+        );
+      }
       final confirm = lcVariantOf(n) == 'confirm';
       return (
         [
