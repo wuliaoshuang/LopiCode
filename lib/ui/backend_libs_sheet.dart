@@ -263,11 +263,27 @@ class _LibSheetState extends State<_LibSheet> {
   LibLibrary get lib => s.lib;
   PathGuard get guard => widget.session.guard;
 
-  void _toggle(bool on) {
+  Future<void> _toggle(bool on) async {
     final doc = host.doc;
     if (on) {
-      if (doc.uses.length >= kBeMaxLibUses) return setState(() => _problem = '一份文档最多用 $kBeMaxLibUses 个库。');
-      host.edit(() => doc.uses.add(BeLibUse(s.id)));
+      // 它靠着、这份文档还没用上的自带前端库：问一句，点一下一起用上（不问就用上的话，积木盒里会悄悄多出几页）。
+      final more = [
+        for (final r in lib.requires)
+          if (lcFrontBuiltinLib(r) case final b? when doc.use(r) == null) b,
+      ];
+      if (doc.uses.length + 1 + more.length > kBeMaxLibUses) return setState(() => _problem = '一份文档最多用 $kBeMaxLibUses 个库。');
+      if (more.isNotEmpty) {
+        final names = [for (final b in more) '「${b.name}」'].join('、');
+        final yes = await confirmDialog(context, title: '它要靠$names，一起用上吗', message: '「${s.name}」的积木要靠应用自带的$names才能用。一起用上以后，积木盒里会多出$names那一页；不一起用上，「${s.name}」也先不用。', confirmLabel: '一起用上');
+        if (!mounted) return;
+        if (!yes) return setState(() => _problem = '没有用上：「${s.name}」要靠$names。');
+      }
+      host.edit(() {
+        for (final b in more) {
+          doc.uses.add(BeLibUse(b.id));
+        }
+        doc.uses.add(BeLibUse(s.id));
+      });
       return setState(() => _problem = null);
     }
     final n = BeLibTable(doc).usesOfLib(s.id);
@@ -419,7 +435,7 @@ class _LibSheetState extends State<_LibSheet> {
             subtitle: Text(sideWhy ?? (use != null ? '它的积木在积木盒的「${s.name}」那一页' : '打开以后，它的积木会出现在积木盒里')),
             value: use != null,
             // 给谁用对不上：灰掉，原因写在下面那行小字里。已经用上的还许关。
-            onChanged: sideWhy != null && use == null ? null : _toggle,
+            onChanged: sideWhy != null && use == null ? null : (on) => unawaited(_toggle(on)),
           ),
         // 没有画布原样的库（复制自带库得到的、别人给的文字写法的库）：改它就是改文字，入口放在最上面，不埋在积木清单底下。
         if (!s.hasSource) BeSheetAdd(key: const ValueKey('be-lib-text-open'), label: '改库的文字（清单、模块、积木表）', onTap: () => unawaited(_editText())),
