@@ -37,6 +37,25 @@ function consoleFor() {
   return vc;
 }
 
+// “接真网络”（net 步骤）开没开；开了以后每个新开的页面都先接好再跑脚本。
+let netOn = false;
+function wireNet(w) {
+  w.fetch = (url, init) => {
+    const ctl = new AbortController();
+    const sig = init && init.signal;
+    if (sig) {
+      if (sig.aborted) ctl.abort();
+      else sig.addEventListener('abort', () => ctl.abort());
+    }
+    return fetch(String(url), { method: (init && init.method) || 'GET', headers: (init && init.headers) || {}, body: init && init.body, signal: ctl.signal }).then((res) => ({
+      ok: res.ok,
+      status: res.status,
+      headers: res.headers,
+      text: () => res.text(),
+    }));
+  };
+}
+
 // —— 纯网页：把 .css / .js 直接塞进网页里（不走网络、不走文件加载器）——
 function openHtml(file, carry, local) {
   let html = fs.readFileSync(path.join(dir, file), 'utf8');
@@ -49,6 +68,7 @@ function openHtml(file, carry, local) {
   const dom = new JSDOM(html, { url: `https://lopi.test/${file}`, runScripts: 'outside-only', pretendToBeVisual: true, virtualConsole: consoleFor() });
   for (const [k, v] of Object.entries(carry || {})) dom.window.sessionStorage.setItem(k, v);
   for (const [k, v] of Object.entries(local || {})) dom.window.localStorage.setItem(k, v);
+  if (netOn) wireNet(dom.window);
   for (const f of scripts) {
     try {
       dom.window.eval(fs.readFileSync(path.join(dir, f), 'utf8'));
@@ -107,6 +127,7 @@ async function openBundle(local) {
   }
   const dom = new JSDOM('<!doctype html><html><body><div id="app"></div></body></html>', { url: 'https://lopi.test/', runScripts: 'outside-only', pretendToBeVisual: true, virtualConsole: consoleFor() });
   for (const [k, v] of Object.entries(local || {})) dom.window.localStorage.setItem(k, v);
+  if (netOn) wireNet(dom.window);
   try {
     dom.window.eval(fs.readFileSync(outfile, 'utf8'));
   } catch (e) {
@@ -219,25 +240,12 @@ for (const s of steps) {
         };
         break;
       }
-      case 'net': {
+      case 'net':
         // 真网络（“请求”库对着本地假服务测）：页面里的 fetch 交给 Node 自带的 fetch；页面那边中止了，这边跟着中止。
-        const w = dom.window;
-        w.fetch = (url, init) => {
-          const ctl = new AbortController();
-          const sig = init && init.signal;
-          if (sig) {
-            if (sig.aborted) ctl.abort();
-            else sig.addEventListener('abort', () => ctl.abort());
-          }
-          return fetch(String(url), { method: (init && init.method) || 'GET', headers: (init && init.headers) || {}, body: init && init.body, signal: ctl.signal }).then((res) => ({
-            ok: res.ok,
-            status: res.status,
-            headers: res.headers,
-            text: () => res.text(),
-          }));
-        };
+        // 一经打开就一直开着：换页、关掉再开以后的新页面，在它的脚本开跑以前就接好（一放上就发请求的页面要它）。
+        netOn = true;
+        wireNet(dom.window);
         break;
-      }
       case 'until': {
         // 等到这段字变成要的样子（定时器到点、请求回来）：成立就往下走，最多等 10 秒。
         const limit = Date.now() + 10000;
