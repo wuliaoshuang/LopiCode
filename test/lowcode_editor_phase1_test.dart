@@ -27,6 +27,7 @@ import 'package:lopicode/ui/top_bar.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'support/harness.dart';
+import 'support/lowcode_builder.dart' show lbHintAbove;
 
 final bool writeShots = Platform.environment['LOPI_SHOTS'] == '1';
 bool fontsLoaded = false;
@@ -867,6 +868,7 @@ void main() {
       await waitLowcodeSaved(tester);
       await settle(tester, rounds: 1);
       expect(find.textContaining('保存失败：'), findsOneWidget);
+      lbHintAbove(tester, '保存失败：'); // 第四轮 B8：这句提示看得见、没被挡、在工具条上面
       final message = tester.widget<Text>(find.textContaining('保存失败：')).data!;
       expect(message, contains('index.html'), reason: '写了是哪个文件');
       expect(message.length, greaterThan('保存失败：'.length + 'index.html'.length + 4), reason: '带系统给的原因：$message');
