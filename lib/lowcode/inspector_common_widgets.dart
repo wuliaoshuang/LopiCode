@@ -55,11 +55,14 @@ const Map<int, String> _zeroNone = {0: '无'};
 String? _colorValue(String? v) => v == null || v.startsWith('var(') ? v : v.toUpperCase();
 
 class InspectorCommonPage extends StatefulWidget {
-  const InspectorCommonPage({super.key, required this.ed, this.only});
+  const InspectorCommonPage({super.key, required this.ed, this.only, this.wrap});
   final InspectorEdit ed;
 
   /// 只放这几项简写属性（多选“一起改样式”用：只列几个组件都有的）；不给＝按组件类型放整页。
   final List<String>? only;
+
+  /// 给 [only] 里每一行再套一层（多选时值不一样的那几行先显示“多个值”）；不给＝原样。
+  final Widget Function(String field, Widget row)? wrap;
 
   @override
   State<InspectorCommonPage> createState() => _InspectorCommonPageState();
@@ -488,7 +491,14 @@ class _InspectorCommonPageState extends State<InspectorCommonPage> {
     final c = context.colors;
     final only = widget.only;
     if (only != null) {
-      return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [for (final f in only) ?_more(f)]);
+      final wrap = widget.wrap;
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final f in only)
+            if (_more(f) case final row?) wrap == null ? row : wrap(f, row),
+        ],
+      );
     }
     if (n.type == 'slot') {
       return Text(

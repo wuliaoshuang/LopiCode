@@ -258,6 +258,9 @@ class _MultiStyleSheet extends StatefulWidget {
 }
 
 class _MultiStyleSheetState extends State<_MultiStyleSheet> {
+  /// 值不一样、但她已经点开要改的那几项（点开以后显示第一个的值，改了几个一起变）。
+  final Set<String> _opened = {};
+
   void _apply(void Function(LcNode n, LcNode? parent) change, {bool merge = false}) {
     final ids = widget.ids();
     widget.onEdit((d) {
@@ -275,6 +278,7 @@ class _MultiStyleSheetState extends State<_MultiStyleSheet> {
     final doc = widget.doc(), ids = widget.ids();
     final nodes = lcMultiOrdered(doc, ids);
     final fields = lcMultiCommonFields(doc, ids);
+    final mixed = lcMultiMixed(doc, ids, fields);
     return SafeArea(
       child: SingleChildScrollView(
         padding: EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x4 + MediaQuery.viewInsetsOf(context).bottom),
@@ -284,16 +288,57 @@ class _MultiStyleSheetState extends State<_MultiStyleSheet> {
           children: [
             Text('一起改样式 · ${nodes.length} 个', style: t.titleLarge),
             const SizedBox(height: Space.x1),
-            Text(fields.isEmpty ? '这几个组件没有都能改的样式项，分开选中再改。' : '只列这几个都有的项；显示的是第一个的值，改了以后几个一起变。', style: t.bodySmall?.copyWith(color: c.textFaint)),
+            Text(
+              fields.isEmpty ? '这几个组件没有都能改的样式项，分开选中再改。' : (mixed.isEmpty ? '只列这几个都有的项；改了以后几个一起变。' : '只列这几个都有的项；改了以后几个一起变。几个的值不一样的那一行写着“多个值”，点它再改。'),
+              style: t.bodySmall?.copyWith(color: c.textFaint),
+            ),
             const SizedBox(height: Space.x2),
             if (nodes.isNotEmpty && fields.isNotEmpty)
               InspectorCommonPage(
                 key: const ValueKey('lc-multi-style-rows'),
                 ed: InspectorEdit(doc: doc, node: nodes.first, parent: doc.parentOf(nodes.first.id), apply: _apply),
                 only: fields,
+                wrap: (f, row) => mixed.contains(f) && !_opened.contains(f) ? MultiMixedRow(field: f, row: row, onOpen: () => setState(() => _opened.add(f))) : row,
               ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// 多选“一起改样式”里，几个组件的值不一样的那一行：原来的控件压淡、点不到，右边一颗“多个值”。
+/// 点一下这一行＝“我要把它们改成一样的”：控件恢复（显示的是第一个的值），之后改了几个一起变。
+class MultiMixedRow extends StatelessWidget {
+  const MultiMixedRow({super.key, required this.field, required this.row, required this.onOpen});
+  final String field;
+  final Widget row;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final t = Theme.of(context).textTheme;
+    return InkWell(
+      key: ValueKey('lc-multi-mixed-$field'),
+      onTap: onOpen,
+      child: Stack(
+        alignment: Alignment.centerRight,
+        children: [
+          // 原来的控件还在原位（这一行多高、叫什么一眼看得出），只是压淡、点不到、读屏不念它的值。
+          ExcludeSemantics(
+            child: IgnorePointer(child: Opacity(opacity: 0.28, child: row)),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: Space.x3, vertical: Space.x1),
+            decoration: BoxDecoration(
+              color: c.surface,
+              borderRadius: BorderRadius.circular(Radii.xl),
+              border: Border.all(color: c.border),
+            ),
+            child: Text('多个值 · 点这里改', style: t.labelMedium?.copyWith(color: c.textMuted)),
+          ),
+        ],
       ),
     );
   }

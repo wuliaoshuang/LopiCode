@@ -7,6 +7,7 @@
 //   （去页面 / 打开网址 / 弹出提示 / 打开弹窗 / 关闭弹窗 / 让一个数字加 1；带数据的事件多一样“把一个状态设成事件带来的值”），再填 / 选它要的那一样东西；最下面一行“不要这个动作”。
 // - 没有主操作。取用的 tokens：Space.x2/x3/x4、accent、textMuted、textFaint、danger、border。
 import 'package:lopicode/lowcode/bind_model.dart';
+import 'package:lopicode/lowcode/comp_lib_builtin.dart';
 import 'package:lopicode/lowcode/component_extras.dart';
 import 'package:lopicode/lowcode/component_model.dart';
 import 'package:lopicode/lowcode/logic_model.dart';
@@ -142,7 +143,7 @@ class ComponentInstanceExtras extends StatelessWidget {
       final cur = lcDataExpr(node, p.name);
       final v = await lcPickFromList(
         context,
-        title: '${p.name} 跟着哪个状态变',
+        title: '${lcBuiltinPropLabel(def, p.name) ?? p.name} 跟着哪个状态变',
         choices: [
           for (final s in lcStatesInScope(doc))
             if (s.variable.type == want || want == 'text') (s.name, '${s.name} · ${lcStateTypeLabel(s.variable.type)}${s.project ? ' · 项目级' : ''}'),
@@ -247,7 +248,7 @@ class ComponentInstanceExtras extends StatelessWidget {
           for (final p in def.props)
             row(
               'comp-bind-${p.name}',
-              p.name,
+              lcBuiltinPropLabel(def, p.name) ?? p.name,
               () {
                 final e = lcDataExpr(node, p.name);
                 return e == null ? null : (e['e'] == 'var' ? '跟着 ${e['name']}' : '跟着一个式子');

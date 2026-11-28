@@ -7,6 +7,7 @@
 library;
 
 import 'package:lopicode/lowcode/editor_clipboard.dart';
+import 'package:lopicode/lowcode/inspector_write.dart';
 import 'package:lopicode/lowcode/logic_edit.dart';
 import 'package:lopicode/lowcode/model.dart';
 import 'package:lopicode/lowcode/slots.dart';
@@ -169,4 +170,21 @@ List<String> lcMultiCommonFields(LcDocument doc, Set<String> ids) {
     for (final f in nodes.first.spec.fields)
       if (nodes.every((n) => n.spec.fields.contains(f))) f,
   ];
+}
+
+/// [fields] 里哪几项在这几个组件上的值不一样（面板上那一行先显示“多个值”，不拿第一个的值冒充大家的）。
+/// 比的是最后生效的样子（简写属性和样式页里写的都算）；宽度还要比“撑满”。
+Set<String> lcMultiMixed(LcDocument doc, Set<String> ids, List<String> fields) {
+  final nodes = lcMultiOrdered(doc, ids);
+  if (nodes.length < 2) return const {};
+  String sig(LcNode n, String f) {
+    final parent = doc.parentOf(n.id);
+    final names = legacyPropCssNames(f);
+    return [for (final name in names) effectiveCss(n, parent, name) ?? '', if (names.isEmpty || f == 'width' || f == 'bold') '${n.props[f]}'].join('\u0000');
+  }
+
+  return {
+    for (final f in fields)
+      if (nodes.skip(1).any((n) => sig(n, f) != sig(nodes.first, f))) f,
+  };
 }
